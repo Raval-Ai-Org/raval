@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /login
+Disallow: /signup
+Disallow: /onboarding
+Disallow: /projects
+Disallow: /agency
+Disallow: /auth/
+Disallow: /reset-password
+Disallow: /api/
+
+Sitemap: https://raval6.lovable.app/sitemap.xml

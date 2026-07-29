@@ -1,0 +1,58 @@
+{
+  "path": "/app",
+  "title": "Studio · Raval AI",
+  "description": "Your Marketing Intelligence Layer — chat with Ravi to plan, create, optimize and grow content, SEO/AEO/GEO and social for the active brand.",
+  "ogTitle": "Studio · Raval AI",
+  "ogDescription": "Your Marketing Intelligence Layer — chat with Ravi to plan, create, optimize and grow content, SEO/AEO/GEO and social for the active brand.",
+  "ogType": "website",
+  "ogSiteName": "Raval AI",
+  "ogUrl": "https://raval6.lovable.app/app",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Studio · Raval AI",
+  "twitterDescription": "Your Marketing Intelligence Layer — chat with Ravi to plan, create, optimize and grow content, SEO/AEO/GEO and social for the active brand.",
+  "canonical": "https://raval6.lovable.app/app",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": "Raval AI Workspace",
+  "jsonLdTypes": [
+    "Organization",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval6.lovable.app/#organization",
+      "url": "https://raval6.lovable.app",
+      "name": "Raval AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval6.lovable.app/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval6.lovable.app/#website",
+      "url": "https://raval6.lovable.app",
+      "name": "Raval AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval6.lovable.app/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "AEO",
+    "GEO",
+    "Ravi",
+    "Raval AI"
+  ]
+}

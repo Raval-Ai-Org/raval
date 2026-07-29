@@ -1,0 +1,14 @@
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
+DROP FUNCTION IF EXISTS public.is_workspace_member(uuid,uuid) CASCADE;
+DROP FUNCTION IF EXISTS public.create_workspace(text,text) CASCADE;
+DROP TABLE IF EXISTS public.client_shares CASCADE;
+DROP TABLE IF EXISTS public.workspace_invites CASCADE;
+DROP TABLE IF EXISTS public.content_items CASCADE;
+DROP TABLE IF EXISTS public.audit_logs CASCADE;
+DROP TABLE IF EXISTS public.approvals CASCADE;
+DROP TABLE IF EXISTS public.chat_messages CASCADE;
+DROP TABLE IF EXISTS public.workspace_members CASCADE;
+DROP TABLE IF EXISTS public.workspaces CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+DROP TYPE IF EXISTS public.app_role CASCADE;

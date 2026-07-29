@@ -1,0 +1,12 @@
+{
+  "start": "/app/content",
+  "redirectChain": [
+    "/app?tab=content"
+  ],
+  "finalPath": "/app",
+  "finalSearch": {
+    "tab": "content"
+  },
+  "canonical": "https://raval6.lovable.app/app",
+  "robots": "noindex,nofollow"
+}

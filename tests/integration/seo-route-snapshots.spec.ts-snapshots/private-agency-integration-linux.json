@@ -1,0 +1,71 @@
+{
+  "path": "/agency",
+  "title": "Agency HQ · Raval AI",
+  "description": "Manage all clients at once. Approvals, schedules, activity and combined analytics — one Marketing Intelligence Layer across every brand.",
+  "ogTitle": "Agency HQ · Raval AI",
+  "ogDescription": "Manage all clients at once. Approvals, schedules, activity and combined analytics — one Marketing Intelligence Layer across every brand.",
+  "ogType": "website",
+  "ogSiteName": "Raval AI",
+  "ogUrl": "https://raval6.lovable.app/agency",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Agency HQ · Raval AI",
+  "twitterDescription": "Manage all clients at once. Approvals, schedules, activity and combined analytics — one Marketing Intelligence Layer across every brand.",
+  "canonical": "https://raval6.lovable.app/agency",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": "Hello.",
+  "jsonLdTypes": [
+    "Organization",
+    "WebPage",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval6.lovable.app/#organization",
+      "url": "https://raval6.lovable.app",
+      "name": "Raval AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval6.lovable.app/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebPage",
+      "id": null,
+      "url": "https://raval6.lovable.app/agency",
+      "name": "Agency HQ · Raval AI",
+      "hasDescription": true,
+      "publisherRef": "Raval AI",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval6.lovable.app/#website",
+      "url": "https://raval6.lovable.app",
+      "name": "Raval AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval6.lovable.app/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "AEO",
+    "Raval AI"
+  ]
+}

@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.create_workspace(text, text) FROM anon, public;

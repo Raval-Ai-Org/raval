@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS persona text, ADD COLUMN IF NOT EXISTS persona_set_at timestamptz;

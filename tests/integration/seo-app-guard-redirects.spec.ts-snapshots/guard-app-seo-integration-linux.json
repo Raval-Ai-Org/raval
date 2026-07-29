@@ -1,0 +1,12 @@
+{
+  "start": "/app/seo",
+  "redirectChain": [
+    "/app?tab=organic"
+  ],
+  "finalPath": "/app",
+  "finalSearch": {
+    "tab": "organic"
+  },
+  "canonical": "https://raval6.lovable.app/app",
+  "robots": "noindex,nofollow"
+}

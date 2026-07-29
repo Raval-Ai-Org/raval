@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.create_missing_workspace_for_current_user();

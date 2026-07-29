@@ -1,0 +1,62 @@
+[
+  {
+    "entryId": "canonical",
+    "start": "/",
+    "redirectChain": [
+      "/"
+    ],
+    "finalPath": "/",
+    "finalSearch": {},
+    "canonical": "https://raval6.lovable.app/",
+    "robots": null
+  },
+  {
+    "entryId": "trailing-slash",
+    "start": "/",
+    "redirectChain": [
+      "/"
+    ],
+    "finalPath": "/",
+    "finalSearch": {},
+    "canonical": "https://raval6.lovable.app/",
+    "robots": null
+  },
+  {
+    "entryId": "utm-params",
+    "start": "/?utm_source=ci&utm_campaign=seo",
+    "redirectChain": [
+      "/?utm_source=ci&utm_campaign=seo"
+    ],
+    "finalPath": "/",
+    "finalSearch": {
+      "utm_source": "ci",
+      "utm_campaign": "seo"
+    },
+    "canonical": "https://raval6.lovable.app/",
+    "robots": null
+  },
+  {
+    "entryId": "ref-param",
+    "start": "/?ref=twitter",
+    "redirectChain": [
+      "/?ref=twitter"
+    ],
+    "finalPath": "/",
+    "finalSearch": {
+      "ref": "twitter"
+    },
+    "canonical": "https://raval6.lovable.app/",
+    "robots": null
+  },
+  {
+    "entryId": "hash-fragment",
+    "start": "/#section",
+    "redirectChain": [
+      "/"
+    ],
+    "finalPath": "/",
+    "finalSearch": {},
+    "canonical": "https://raval6.lovable.app/",
+    "robots": null
+  }
+]

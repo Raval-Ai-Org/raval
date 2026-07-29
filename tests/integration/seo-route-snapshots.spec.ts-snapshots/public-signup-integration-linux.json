@@ -1,0 +1,59 @@
+{
+  "path": "/signup",
+  "title": "Create account · Raval AI",
+  "description": "Create your Raval AI workspace — the Marketing Intelligence Layer for brands and agencies.",
+  "ogTitle": "Create account · Raval AI",
+  "ogDescription": "Start your Raval AI workspace and get visible inside LLMs with AEO/GEO, Brand DNA and multi-client operations.",
+  "ogType": "website",
+  "ogSiteName": "Raval AI",
+  "ogUrl": "https://raval6.lovable.app/signup",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Create account · Raval AI",
+  "twitterDescription": "Start your Raval AI workspace and get visible inside LLMs with AEO/GEO, Brand DNA and multi-client operations.",
+  "canonical": "https://raval6.lovable.app/signup",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": "Your AI marketing team.",
+  "jsonLdTypes": [
+    "Organization",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval6.lovable.app/#organization",
+      "url": "https://raval6.lovable.app",
+      "name": "Raval AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval6.lovable.app/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval6.lovable.app/#website",
+      "url": "https://raval6.lovable.app",
+      "name": "Raval AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval6.lovable.app/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "Get visible inside LLMs",
+    "Brand DNA",
+    "AEO",
+    "GEO",
+    "Raval AI"
+  ]
+}

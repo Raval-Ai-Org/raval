@@ -1,0 +1,73 @@
+{
+  "path": "/projects",
+  "title": "Clients · Raval AI",
+  "description": "Every client brand in one Marketing Intelligence Layer — onboard, orchestrate and grow with Brand DNA, AEO/GEO and shared operations.",
+  "ogTitle": "Clients · Raval AI",
+  "ogDescription": "Every client brand in one Marketing Intelligence Layer — onboard, orchestrate and grow with Brand DNA, AEO/GEO and shared operations.",
+  "ogType": "website",
+  "ogSiteName": "Raval AI",
+  "ogUrl": "https://raval6.lovable.app/projects",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Clients · Raval AI",
+  "twitterDescription": "Every client brand in one Marketing Intelligence Layer — onboard, orchestrate and grow with Brand DNA, AEO/GEO and shared operations.",
+  "canonical": "https://raval6.lovable.app/projects",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": "Which client today?",
+  "jsonLdTypes": [
+    "Organization",
+    "WebPage",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval6.lovable.app/#organization",
+      "url": "https://raval6.lovable.app",
+      "name": "Raval AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval6.lovable.app/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebPage",
+      "id": null,
+      "url": "https://raval6.lovable.app/projects",
+      "name": "Clients · Raval AI",
+      "hasDescription": true,
+      "publisherRef": "Raval AI",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval6.lovable.app/#website",
+      "url": "https://raval6.lovable.app",
+      "name": "Raval AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval6.lovable.app/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "Brand DNA",
+    "AEO",
+    "GEO",
+    "Raval AI"
+  ]
+}
