@@ -13,7 +13,7 @@
   "canonical": "https://raval6.lovable.app/app",
   "hreflang": [],
   "robots": "noindex,nofollow",
-  "h1": "Raval AI Workspace",
+  "h1": null,
   "jsonLdTypes": [
     "Organization",
     "WebSite"

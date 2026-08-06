@@ -4,6 +4,13 @@ import { TABS, type AnalyticsTab } from "@/components/app/AnalyticsTabs";
 const VALID = new Set(TABS.map((t) => t.id));
 
 export const Route = createFileRoute("/app/analytics")({
+  // Private studio deep-link — must never be indexable. The redirect lands on
+  // /app (noindex), so pin the same noindex + canonical here in case a crawler
+  // or the redirect chain reads this route's shell directly.
+  head: () => ({
+    meta: [{ name: "robots", content: "noindex,nofollow" }],
+    links: [{ rel: "canonical", href: "https://raval6.lovable.app/app" }],
+  }),
   validateSearch: (s: Record<string, unknown>): { tab: AnalyticsTab } => {
     const t = typeof s.tab === "string" && VALID.has(s.tab as AnalyticsTab) ? (s.tab as AnalyticsTab) : "overview";
     return { tab: t };

@@ -13,7 +13,7 @@
   "canonical": "https://raval6.lovable.app/onboarding",
   "hreflang": [],
   "robots": "noindex,nofollow",
-  "h1": "What's your first marketing move?",
+  "h1": null,
   "jsonLdTypes": [
     "Organization",
     "WebSite"

@@ -13,7 +13,7 @@
   "canonical": "https://raval6.lovable.app/projects",
   "hreflang": [],
   "robots": "noindex,nofollow",
-  "h1": "Which client today?",
+  "h1": null,
   "jsonLdTypes": [
     "Organization",
     "WebPage",

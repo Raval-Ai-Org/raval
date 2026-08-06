@@ -466,11 +466,15 @@ test.describe("SEO route snapshots — approved pitch-deck text", () => {
       const res = await page.goto(path, { waitUntil: "domcontentloaded" });
       expect(res, "navigation response for not-found route").not.toBeNull();
       // Give the client-side NotFoundComponent effect a tick to inject
-      // the runtime noindex meta and strip stale canonicals.
+      // the runtime noindex meta, strip stale canonicals, and set the 404
+      // title — wait for the full deterministic end state so the snapshot
+      // never races the hydration effect.
       await page.waitForFunction(
-        () => !!document.querySelector('meta[name="robots"]'),
+        () =>
+          !!document.querySelector('meta[name="robots"]') &&
+          document.title.includes("Page not found"),
         null,
-        { timeout: 5000 },
+        { timeout: 15000 },
       ).catch(() => { /* fall through to assertion for a clearer failure */ });
       const snap = await collectSnapshot(page, "/__not_found__");
 

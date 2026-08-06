@@ -20,25 +20,43 @@ import faviconAsset from "@/assets/favicon.svg.asset.json";
 
 function NotFoundComponent() {
   // Inject noindex + a safe canonical at runtime so unmatched URLs never
-  // become indexable and never claim to be another page.
-  if (typeof document !== "undefined") {
-    const ensure = (selector: string, create: () => HTMLElement) => {
-      let el = document.head.querySelector(selector) as HTMLElement | null;
-      if (!el) { el = create(); document.head.appendChild(el); }
-      return el;
+  // become indexable and never claim to be another page. Runs in an effect
+  // (after the router's head sync on hydration) so the 404 title sticks
+  // instead of racing back to the shell title.
+  useEffect(() => {
+    let cancelled = false;
+    // Apply the runtime 404 head immediately and re-assert it a few times so
+    // the router's hydration head-sync (which can land after this effect)
+    // can't clobber the title back to the shell title. Deterministic end
+    // state: robots=noindex, no canonical, 404 title.
+    const apply = () => {
+      if (cancelled) return;
+      const ensure = (selector: string, create: () => HTMLElement) => {
+        let el = document.head.querySelector(selector) as HTMLElement | null;
+        if (!el) { el = create(); document.head.appendChild(el); }
+        return el;
+      };
+      const robots = ensure('meta[name="robots"][data-nf="1"]', () => {
+        const m = document.createElement("meta");
+        m.setAttribute("name", "robots");
+        m.setAttribute("data-nf", "1");
+        return m;
+      });
+      robots.setAttribute("content", "noindex,nofollow");
+      // Remove any pre-existing canonical so we don't self-attribute this 404
+      // to another route's URL.
+      document.head.querySelectorAll('link[rel="canonical"]').forEach((n) => n.remove());
+      document.title = "Page not found · Raval AI";
     };
-    const robots = ensure('meta[name="robots"][data-nf="1"]', () => {
-      const m = document.createElement("meta");
-      m.setAttribute("name", "robots");
-      m.setAttribute("data-nf", "1");
-      return m;
-    });
-    robots.setAttribute("content", "noindex,nofollow");
-    // Remove any pre-existing canonical so we don't self-attribute this 404
-    // to another route's URL.
-    document.head.querySelectorAll('link[rel="canonical"]').forEach((n) => n.remove());
-    document.title = "Page not found · Raval AI";
-  }
+    apply();
+    const t1 = setTimeout(apply, 100);
+    const t2 = setTimeout(apply, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
@@ -105,7 +123,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Raval AI — The Marketing Intelligence Layer" },
-      { name: "twitter:description", content: "Get visible inside LLMs. The AI-native marketing platform for brands and agencies." },
+      { name: "twitter:description", content: "Get visible inside LLMs. Raval AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA." },
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp" },
       { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp" },
     ],
