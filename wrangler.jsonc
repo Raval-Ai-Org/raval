@@ -1,7 +1,14 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "tanstack-start-app",
+  "name": "raval",
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".output/public"
+  },
+  "build": {
+    "command": "npm run build"
+  },
 }
