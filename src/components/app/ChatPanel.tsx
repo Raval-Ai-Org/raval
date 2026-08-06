@@ -344,13 +344,13 @@ export function ChatPanel({ workspaceId, variant = "rail", mobileAccessory }: { 
     } catch { /* noop */ }
     // Competitor alerts — recent unread.
     supabase.from("competitor_alerts")
-      .select("kind,summary,competitor_name,detected_at,read_at")
+      .select("kind,title,detail,detected_at,read_at")
       .eq("workspace_id", workspaceId)
       .order("detected_at", { ascending: false })
       .limit(6)
       .then(({ data }) => {
         if (!data?.length) return;
-        const lines = data.map((a: any) => `- [${a.kind}] ${a.competitor_name ?? "competitor"}: ${a.summary ?? ""}`);
+        const lines = data.map((a: any) => `- [${a.kind}] ${a.title}: ${a.detail ?? ""}`);
         setCompetitorSummary(lines.join("\n"));
       });
   }, [workspaceId, firstPromptLockKey]);
