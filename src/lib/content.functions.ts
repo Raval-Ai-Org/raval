@@ -25,6 +25,7 @@ const ChannelEnum = z.enum([
   "instagram",
   "x",
   "linkedin",
+  "facebook",
   "tiktok",
   "youtube",
   "blog",
@@ -39,6 +40,7 @@ const StatusEnum = z.enum([
   "approved",
   "rejected",
   "scheduled",
+  "publishing",
   "published",
 ]);
 

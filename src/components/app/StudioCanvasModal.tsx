@@ -18,6 +18,9 @@ import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
 import { genQueue, newJobId } from "@/lib/generation-queue";
 import { PLATFORMS, PLATFORM_ORDER, DEFAULT_PLATFORMS, type PlatformId } from "@/lib/social-platforms";
+import { publishContentItems, scheduleContentItems } from "@/lib/sdr.functions";
+import { StudioDestinationPicker } from "@/components/app/StudioDestinationPicker";
+import type { PublishSelection } from "@/lib/sdr.handlers";
 
 type SocialVariant = { platform: PlatformId; title: string; body: string; hashtags: string[]; chars: number };
 
@@ -193,6 +196,7 @@ export function StudioCanvasModal({
   const isSocial = canvas?.type === "social-post" || canvas?.type === "design-asset";
   const [platforms, setPlatforms] = useState<PlatformId[]>(DEFAULT_PLATFORMS);
   const [variants, setVariants] = useState<SocialVariant[]>([]);
+  const [publishSelection, setPublishSelection] = useState<PublishSelection>({ type: "all" });
   const [activePlatform, setActivePlatform] = useState<PlatformId>(DEFAULT_PLATFORMS[0]);
   // Explicit review gate — user must confirm captions before Publish/Schedule enable.
   const [captionsConfirmed, setCaptionsConfirmed] = useState(false);
@@ -567,7 +571,7 @@ export function StudioCanvasModal({
             : v.platform === "threads"
               ? "x"
               : v.platform === "facebook"
-                ? "web"
+                ? "facebook"
                 : v.platform) as never;
           const row = await createItem({
             data: {
@@ -856,29 +860,50 @@ export function StudioCanvasModal({
       scheduledAt.setHours(9, 0, 0, 0);
 
       const ids = await ensureDraftIds();
-      // Push latest edits + schedule, staggered by 15 min per item.
-      let offset = 0;
-      for (const id of ids) {
-        const when = new Date(scheduledAt.getTime() + offset * 15 * 60 * 1000);
-        const variantBody = isSocial && variants[offset] ? variants[offset].body : null;
-        await runUpdate({
-          data: {
-            id,
-            patch: {
-              status: "scheduled",
-              scheduled_at: when.toISOString(),
-              ...(variantBody ? { body: variantBody } : {}),
-              ...(!isSocial && result.trim() ? { body: result.trim() } : {}),
-            },
+      if (isSocial && ids.length) {
+        // US3: real SDR schedule — each variant scheduled (staggered) to its
+        // platform's selected accounts; the SDR beat fires at each time.
+        const items = ids.map((id, i) => ({
+          contentItemId: id,
+          scheduledAt: new Date(scheduledAt.getTime() + i * 15 * 60 * 1000).toISOString(),
+        }));
+        const res = await scheduleContentItems(workspaceId, items, publishSelection);
+        const scheduled = res.results.filter((r) => r.status === "publishing");
+        const skipped = res.results.filter((r) => r.status === "skipped");
+        draftIdsRef.current = [];
+        toast.success(
+          scheduled.length ? `Scheduled ${scheduled.length} post${scheduled.length === 1 ? "" : "s"}` : "Nothing scheduled",
+          {
+            description: skipped.length
+              ? `${skipped.length} skipped (${skipped[0].reason ?? "no active target"})`
+              : `Queued for ${scheduledAt.toLocaleString()}`,
           },
-        });
-        offset++;
+        );
+      } else {
+        // Non-social canvases keep the existing behavior.
+        let offset = 0;
+        for (const id of ids) {
+          const when = new Date(scheduledAt.getTime() + offset * 15 * 60 * 1000);
+          const variantBody = isSocial && variants[offset] ? variants[offset].body : null;
+          await runUpdate({
+            data: {
+              id,
+              patch: {
+                status: "scheduled",
+                scheduled_at: when.toISOString(),
+                ...(variantBody ? { body: variantBody } : {}),
+                ...(!isSocial && result.trim() ? { body: result.trim() } : {}),
+              },
+            },
+          });
+          offset++;
+        }
+        draftIdsRef.current = [];
+        toast.success(
+          ids.length > 1 ? `Scheduled ${ids.length} posts` : "Scheduled",
+          { description: `Queued for ${scheduledAt.toLocaleString()}` },
+        );
       }
-      draftIdsRef.current = [];
-      toast.success(
-        ids.length > 1 ? `Scheduled ${ids.length} posts` : "Scheduled",
-        { description: `Queued for ${scheduledAt.toLocaleString()}` },
-      );
       try { window.dispatchEvent(new CustomEvent("content:changed")); } catch {}
       onClose();
     } catch (e: unknown) {
@@ -892,28 +917,48 @@ export function StudioCanvasModal({
     if (!canvas || !workspaceId) { onClose(); return; }
     setPublishing(true);
     try {
-      const nowIso = new Date().toISOString();
       const ids = await ensureDraftIds();
-      for (let i = 0; i < ids.length; i++) {
-        const variantBody = isSocial && variants[i] ? variants[i].body : null;
-        await runUpdate({
-          data: {
-            id: ids[i],
-            patch: {
-              status: "published",
-              scheduled_at: nowIso,
-              ...(variantBody ? { body: variantBody } : {}),
-              ...(!isSocial && result.trim() ? { body: result.trim() } : {}),
-            },
+      if (isSocial && ids.length) {
+        // US2: real SDR publish — each variant goes to its platform's selected
+        // accounts. Terminal confirmation arrives via webhook (US4).
+        const res = await publishContentItems(workspaceId, ids, publishSelection);
+        const publishing = res.results.filter((r) => r.status === "publishing");
+        const skipped = res.results.filter((r) => r.status === "skipped");
+        draftIdsRef.current = [];
+        toast.success(
+          publishing.length ? `Publishing ${publishing.length} post${publishing.length === 1 ? "" : "s"}…` : "Nothing to publish",
+          {
+            description: skipped.length
+              ? `${skipped.length} skipped (${skipped[0].reason ?? "no active target"})`
+              : "You'll see the live link as each platform confirms.",
           },
+        );
+        try { window.dispatchEvent(new CustomEvent("content:changed")); } catch {}
+        onClose();
+      } else {
+        // Non-social canvases keep the existing behavior (no SDR involvement).
+        const nowIso = new Date().toISOString();
+        for (let i = 0; i < ids.length; i++) {
+          const variantBody = isSocial && variants[i] ? variants[i].body : null;
+          await runUpdate({
+            data: {
+              id: ids[i],
+              patch: {
+                status: "published",
+                scheduled_at: nowIso,
+                ...(variantBody ? { body: variantBody } : {}),
+                ...(!isSocial && result.trim() ? { body: result.trim() } : {}),
+              },
+            },
+          });
+        }
+        draftIdsRef.current = [];
+        toast.success(ids.length > 1 ? `Published ${ids.length} posts` : "Published", {
+          description: "Live now — visible in Recent and the client portal.",
         });
+        try { window.dispatchEvent(new CustomEvent("content:changed")); } catch {}
+        onClose();
       }
-      draftIdsRef.current = [];
-      toast.success(ids.length > 1 ? `Published ${ids.length} posts` : "Published", {
-        description: "Live now — visible in Recent and the client portal.",
-      });
-      try { window.dispatchEvent(new CustomEvent("content:changed")); } catch {}
-      onClose();
     } catch (e: unknown) {
       toast.error("Couldn't publish", { description: e instanceof Error ? e.message : "Please try again." });
     } finally {
@@ -1223,6 +1268,12 @@ export function StudioCanvasModal({
                     )}
                   </AnimatePresence>
                 </div>
+
+                {isSocial && generated && captionsConfirmed && variants.length > 0 && (
+                  <div className="px-5 pb-1">
+                    <StudioDestinationPicker workspaceId={workspaceId} value={publishSelection} onChange={setPublishSelection} />
+                  </div>
+                )}
 
                 {/* Footer */}
                 <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">

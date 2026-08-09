@@ -29,6 +29,13 @@ import { Route as ApiGeoAuditRouteImport } from './routes/api.geo-audit'
 import { Route as ApiMemoryExtractRouteImport } from './routes/api.memory-extract'
 import { Route as ApiSharesRouteImport } from './routes/api.shares'
 import { Route as ApiSocialMultiRouteImport } from './routes/api.social-multi'
+import { Route as ApiSdrAccountsRouteImport } from './routes/api.sdr.accounts'
+import { Route as ApiSdrDisconnectRouteImport } from './routes/api.sdr.disconnect'
+import { Route as ApiSdrOauthStartRouteImport } from './routes/api.sdr.oauth.start'
+import { Route as ApiSdrPublishRouteImport } from './routes/api.sdr.publish'
+import { Route as ApiSdrPublicationsRouteImport } from './routes/api.sdr.publications'
+import { Route as ApiSdrCancelRouteImport } from './routes/api.sdr.cancel'
+import { Route as ApiSdrScheduleRouteImport } from './routes/api.sdr.schedule'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAnalyticsRouteImport } from './routes/app.analytics'
 import { Route as AppContentRouteImport } from './routes/app.content'
@@ -38,6 +45,8 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ShareSlugRouteImport } from './routes/share.$slug'
 import { Route as ApiPublicHooksCompetitorWatchRouteImport } from './routes/api/public/hooks/competitor-watch'
 import { Route as ApiPublicHooksRunSchedulesRouteImport } from './routes/api/public/hooks/run-schedules'
+import { Route as ApiPublicHooksSdrRouteImport } from './routes/api.public.hooks.sdr'
+import { Route as ApiPublicHooksSdrReconcileRouteImport } from './routes/api.public.hooks.sdr-reconcile'
 import { Route as ApiPublicShareSlugRouteImport } from './routes/api/public/share.$slug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -140,6 +149,41 @@ const ApiSocialMultiRoute = ApiSocialMultiRouteImport.update({
   path: '/api/social-multi',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSdrAccountsRoute = ApiSdrAccountsRouteImport.update({
+  id: '/api/sdr/accounts',
+  path: '/api/sdr/accounts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSdrDisconnectRoute = ApiSdrDisconnectRouteImport.update({
+  id: '/api/sdr/disconnect',
+  path: '/api/sdr/disconnect',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSdrOauthStartRoute = ApiSdrOauthStartRouteImport.update({
+  id: '/api/sdr/oauth/start',
+  path: '/api/sdr/oauth/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSdrPublishRoute = ApiSdrPublishRouteImport.update({
+  id: '/api/sdr/publish',
+  path: '/api/sdr/publish',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSdrPublicationsRoute = ApiSdrPublicationsRouteImport.update({
+  id: '/api/sdr/publications',
+  path: '/api/sdr/publications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSdrCancelRoute = ApiSdrCancelRouteImport.update({
+  id: '/api/sdr/cancel',
+  path: '/api/sdr/cancel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSdrScheduleRoute = ApiSdrScheduleRouteImport.update({
+  id: '/api/sdr/schedule',
+  path: '/api/sdr/schedule',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -187,6 +231,18 @@ const ApiPublicHooksRunSchedulesRoute =
     path: '/api/public/hooks/run-schedules',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksSdrRoute =
+  ApiPublicHooksSdrRouteImport.update({
+    id: '/api/public/hooks/sdr',
+    path: '/api/public/hooks/sdr',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksSdrReconcileRoute =
+  ApiPublicHooksSdrReconcileRouteImport.update({
+    id: '/api/public/hooks/sdr-reconcile',
+    path: '/api/public/hooks/sdr-reconcile',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicShareSlugRoute = ApiPublicShareSlugRouteImport.update({
   id: '/api/public/share/$slug',
   path: '/api/public/share/$slug',
@@ -214,6 +270,13 @@ export interface FileRoutesByFullPath {
   '/api/memory-extract': typeof ApiMemoryExtractRoute
   '/api/shares': typeof ApiSharesRoute
   '/api/social-multi': typeof ApiSocialMultiRoute
+  '/api/sdr/accounts': typeof ApiSdrAccountsRoute
+  '/api/sdr/disconnect': typeof ApiSdrDisconnectRoute
+  '/api/sdr/oauth/start': typeof ApiSdrOauthStartRoute
+  '/api/sdr/publish': typeof ApiSdrPublishRoute
+  '/api/sdr/publications': typeof ApiSdrPublicationsRoute
+  '/api/sdr/cancel': typeof ApiSdrCancelRoute
+  '/api/sdr/schedule': typeof ApiSdrScheduleRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/content': typeof AppContentRoute
   '/app/seo': typeof AppSeoRoute
@@ -223,6 +286,8 @@ export interface FileRoutesByFullPath {
   '/app/': typeof AppIndexRoute
   '/api/public/hooks/competitor-watch': typeof ApiPublicHooksCompetitorWatchRoute
   '/api/public/hooks/run-schedules': typeof ApiPublicHooksRunSchedulesRoute
+  '/api/public/hooks/sdr': typeof ApiPublicHooksSdrRoute
+  '/api/public/hooks/sdr-reconcile': typeof ApiPublicHooksSdrReconcileRoute
   '/api/public/share/$slug': typeof ApiPublicShareSlugRoute
 }
 export interface FileRoutesByTo {
@@ -245,6 +310,13 @@ export interface FileRoutesByTo {
   '/api/memory-extract': typeof ApiMemoryExtractRoute
   '/api/shares': typeof ApiSharesRoute
   '/api/social-multi': typeof ApiSocialMultiRoute
+  '/api/sdr/accounts': typeof ApiSdrAccountsRoute
+  '/api/sdr/disconnect': typeof ApiSdrDisconnectRoute
+  '/api/sdr/oauth/start': typeof ApiSdrOauthStartRoute
+  '/api/sdr/publish': typeof ApiSdrPublishRoute
+  '/api/sdr/publications': typeof ApiSdrPublicationsRoute
+  '/api/sdr/cancel': typeof ApiSdrCancelRoute
+  '/api/sdr/schedule': typeof ApiSdrScheduleRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/content': typeof AppContentRoute
   '/app/seo': typeof AppSeoRoute
@@ -254,6 +326,8 @@ export interface FileRoutesByTo {
   '/app': typeof AppIndexRoute
   '/api/public/hooks/competitor-watch': typeof ApiPublicHooksCompetitorWatchRoute
   '/api/public/hooks/run-schedules': typeof ApiPublicHooksRunSchedulesRoute
+  '/api/public/hooks/sdr': typeof ApiPublicHooksSdrRoute
+  '/api/public/hooks/sdr-reconcile': typeof ApiPublicHooksSdrReconcileRoute
   '/api/public/share/$slug': typeof ApiPublicShareSlugRoute
 }
 export interface FileRoutesById {
@@ -278,6 +352,13 @@ export interface FileRoutesById {
   '/api/memory-extract': typeof ApiMemoryExtractRoute
   '/api/shares': typeof ApiSharesRoute
   '/api/social-multi': typeof ApiSocialMultiRoute
+  '/api/sdr/accounts': typeof ApiSdrAccountsRoute
+  '/api/sdr/disconnect': typeof ApiSdrDisconnectRoute
+  '/api/sdr/oauth/start': typeof ApiSdrOauthStartRoute
+  '/api/sdr/publish': typeof ApiSdrPublishRoute
+  '/api/sdr/publications': typeof ApiSdrPublicationsRoute
+  '/api/sdr/cancel': typeof ApiSdrCancelRoute
+  '/api/sdr/schedule': typeof ApiSdrScheduleRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/content': typeof AppContentRoute
   '/app/seo': typeof AppSeoRoute
@@ -287,6 +368,8 @@ export interface FileRoutesById {
   '/app/': typeof AppIndexRoute
   '/api/public/hooks/competitor-watch': typeof ApiPublicHooksCompetitorWatchRoute
   '/api/public/hooks/run-schedules': typeof ApiPublicHooksRunSchedulesRoute
+  '/api/public/hooks/sdr': typeof ApiPublicHooksSdrRoute
+  '/api/public/hooks/sdr-reconcile': typeof ApiPublicHooksSdrReconcileRoute
   '/api/public/share/$slug': typeof ApiPublicShareSlugRoute
 }
 export interface FileRouteTypes {
@@ -408,10 +491,19 @@ export interface RootRouteChildren {
   ApiMemoryExtractRoute: typeof ApiMemoryExtractRoute
   ApiSharesRoute: typeof ApiSharesRoute
   ApiSocialMultiRoute: typeof ApiSocialMultiRoute
+  ApiSdrAccountsRoute: typeof ApiSdrAccountsRoute
+  ApiSdrDisconnectRoute: typeof ApiSdrDisconnectRoute
+  ApiSdrOauthStartRoute: typeof ApiSdrOauthStartRoute
+  ApiSdrPublishRoute: typeof ApiSdrPublishRoute
+  ApiSdrPublicationsRoute: typeof ApiSdrPublicationsRoute
+  ApiSdrCancelRoute: typeof ApiSdrCancelRoute
+  ApiSdrScheduleRoute: typeof ApiSdrScheduleRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ShareSlugRoute: typeof ShareSlugRoute
   ApiPublicHooksCompetitorWatchRoute: typeof ApiPublicHooksCompetitorWatchRoute
   ApiPublicHooksRunSchedulesRoute: typeof ApiPublicHooksRunSchedulesRoute
+  ApiPublicHooksSdrRoute: typeof ApiPublicHooksSdrRoute
+  ApiPublicHooksSdrReconcileRoute: typeof ApiPublicHooksSdrReconcileRoute
   ApiPublicShareSlugRoute: typeof ApiPublicShareSlugRoute
 }
 
@@ -557,6 +649,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSocialMultiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/sdr/accounts': {
+      id: '/api/sdr/accounts'
+      path: '/api/sdr/accounts'
+      fullPath: '/api/sdr/accounts'
+      preLoaderRoute: typeof ApiSdrAccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sdr/disconnect': {
+      id: '/api/sdr/disconnect'
+      path: '/api/sdr/disconnect'
+      fullPath: '/api/sdr/disconnect'
+      preLoaderRoute: typeof ApiSdrDisconnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sdr/oauth/start': {
+      id: '/api/sdr/oauth/start'
+      path: '/api/sdr/oauth/start'
+      fullPath: '/api/sdr/oauth/start'
+      preLoaderRoute: typeof ApiSdrOauthStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sdr/publish': {
+      id: '/api/sdr/publish'
+      path: '/api/sdr/publish'
+      fullPath: '/api/sdr/publish'
+      preLoaderRoute: typeof ApiSdrPublishRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sdr/publications': {
+      id: '/api/sdr/publications'
+      path: '/api/sdr/publications'
+      fullPath: '/api/sdr/publications'
+      preLoaderRoute: typeof ApiSdrPublicationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sdr/cancel': {
+      id: '/api/sdr/cancel'
+      path: '/api/sdr/cancel'
+      fullPath: '/api/sdr/cancel'
+      preLoaderRoute: typeof ApiSdrCancelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sdr/schedule': {
+      id: '/api/sdr/schedule'
+      path: '/api/sdr/schedule'
+      fullPath: '/api/sdr/schedule'
+      preLoaderRoute: typeof ApiSdrScheduleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/': {
       id: '/app/'
       path: '/'
@@ -620,6 +761,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksRunSchedulesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/sdr': {
+      id: '/api/public/hooks/sdr'
+      path: '/api/public/hooks/sdr'
+      fullPath: '/api/public/hooks/sdr'
+      preLoaderRoute: typeof ApiPublicHooksSdrRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/sdr-reconcile': {
+      id: '/api/public/hooks/sdr-reconcile'
+      path: '/api/public/hooks/sdr-reconcile'
+      fullPath: '/api/public/hooks/sdr-reconcile'
+      preLoaderRoute: typeof ApiPublicHooksSdrReconcileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/share/$slug': {
       id: '/api/public/share/$slug'
       path: '/api/public/share/$slug'
@@ -669,10 +824,19 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMemoryExtractRoute: ApiMemoryExtractRoute,
   ApiSharesRoute: ApiSharesRoute,
   ApiSocialMultiRoute: ApiSocialMultiRoute,
+  ApiSdrAccountsRoute: ApiSdrAccountsRoute,
+  ApiSdrDisconnectRoute: ApiSdrDisconnectRoute,
+  ApiSdrOauthStartRoute: ApiSdrOauthStartRoute,
+  ApiSdrPublishRoute: ApiSdrPublishRoute,
+  ApiSdrPublicationsRoute: ApiSdrPublicationsRoute,
+  ApiSdrCancelRoute: ApiSdrCancelRoute,
+  ApiSdrScheduleRoute: ApiSdrScheduleRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ShareSlugRoute: ShareSlugRoute,
   ApiPublicHooksCompetitorWatchRoute: ApiPublicHooksCompetitorWatchRoute,
   ApiPublicHooksRunSchedulesRoute: ApiPublicHooksRunSchedulesRoute,
+  ApiPublicHooksSdrRoute: ApiPublicHooksSdrRoute,
+  ApiPublicHooksSdrReconcileRoute: ApiPublicHooksSdrReconcileRoute,
   ApiPublicShareSlugRoute: ApiPublicShareSlugRoute,
 }
 export const routeTree = rootRouteImport

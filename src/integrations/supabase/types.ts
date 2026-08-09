@@ -858,6 +858,125 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_sdr: {
+        Row: {
+          created_at: string
+          encrypted_api_key: string
+          id: string
+          last_provisioned_at: string | null
+          sdr_base_url: string
+          sdr_workspace_id: string
+          status: string
+          updated_at: string
+          webhook_secret: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          encrypted_api_key: string
+          id?: string
+          last_provisioned_at?: string | null
+          sdr_base_url: string
+          sdr_workspace_id: string
+          status?: string
+          updated_at?: string
+          webhook_secret?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          encrypted_api_key?: string
+          id?: string
+          last_provisioned_at?: string | null
+          sdr_base_url?: string
+          sdr_workspace_id?: string
+          status?: string
+          updated_at?: string
+          webhook_secret?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_sdr_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_publications: {
+        Row: {
+          account_id: string
+          attempt: number
+          content_item_id: string
+          created_at: string
+          delivered_at: string | null
+          error_category: string | null
+          id: string
+          last_error: string | null
+          platform: string
+          platform_post_id: string | null
+          platform_post_url: string | null
+          sdr_post_id: string
+          sdr_target_id: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          account_id: string
+          attempt?: number
+          content_item_id: string
+          created_at?: string
+          delivered_at?: string | null
+          error_category?: string | null
+          id?: string
+          last_error?: string | null
+          platform: string
+          platform_post_id?: string | null
+          platform_post_url?: string | null
+          sdr_post_id: string
+          sdr_target_id: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string
+          attempt?: number
+          content_item_id?: string
+          created_at?: string
+          delivered_at?: string | null
+          error_category?: string | null
+          id?: string
+          last_error?: string | null
+          platform?: string
+          platform_post_id?: string | null
+          platform_post_url?: string | null
+          sdr_post_id?: string
+          sdr_target_id?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_publications_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_publications_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
