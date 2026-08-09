@@ -51,6 +51,10 @@ function createSupabaseClient() {
       storage: typeof window !== 'undefined' ? localStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
+      // PKCE so Google OAuth and email-confirmation links return `?code=` and
+      // are exchanged via exchangeCodeForSession in /auth/callback (implicit
+      // hash flow is not used). signInWithPassword is unaffected by this.
+      flowType: 'pkce',
     }
   });
 }

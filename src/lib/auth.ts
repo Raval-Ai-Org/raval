@@ -1,6 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 
 const AUTH_NEXT_KEY = "raval:auth-next";
 
@@ -73,7 +72,7 @@ export function friendlyAuthError(error: unknown) {
     return "Please confirm your email address first, then sign in again.";
   }
   if (lower.includes("provider") && lower.includes("google") && (lower.includes("not supported") || lower.includes("missing oauth secret"))) {
-    return "Google sign-in is not enabled correctly in Lovable Cloud yet. Enable Google in Cloud → Users → Auth Providers and save it, then try again.";
+    return "Google sign-in is not enabled correctly. Enable Google in Supabase → Authentication → Sign In / Providers and save it, then try again.";
   }
   if (lower.includes("popup") && lower.includes("blocked")) {
     return "Your browser blocked the Google sign-in window. Allow popups for this app and try again.";
@@ -85,24 +84,25 @@ export function friendlyAuthError(error: unknown) {
 }
 
 export async function signInWithGoogle(nextPath = "/app") {
-  // Google must go through Lovable Cloud's managed OAuth broker. Never call
-  // supabase.auth.signInWithOAuth("google") here: that direct flow needs a
-  // project Google secret and fails with "missing OAuth secret" in Cloud.
-  const result = await lovable.auth.signInWithOAuth("google", {
-    redirect_uri: authCallbackUrl(nextPath),
-    extraParams: { prompt: "select_account" },
+  // Native Supabase Google OAuth. The browser is redirected to Google, then
+  // Supabase returns the user to /auth/callback, which exchanges the PKCE
+  // code for a session (see authCallbackUrl). No Lovable broker involved.
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: authCallbackUrl(nextPath),
+    },
   });
 
-  if (result.error) throw result.error;
-  if (result.redirected) return { redirected: true } as const;
+  if (error) throw error;
 
-  if (result.tokens) {
-    const { error: sessionError } = await supabase.auth.setSession(result.tokens);
-    if (sessionError) throw sessionError;
+  // signInWithOAuth triggers a full-page redirect to Google. Fall back to an
+  // explicit navigation if the URL was returned without redirecting.
+  if (data?.url && typeof window !== "undefined") {
+    window.location.assign(data.url);
   }
 
-  const { data, error: getSessionError } = await supabase.auth.getSession();
-  if (getSessionError) throw getSessionError;
-  if (!data.session) throw new Error("Google sign-in finished without a valid session. Please try again.");
-  return { redirected: false } as const;
+  // The page is leaving for Google; signal the caller not to run the
+  // post-login workspace/navigation flow that applies to inline sessions.
+  return { redirected: true } as const;
 }

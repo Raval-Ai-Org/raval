@@ -8,21 +8,45 @@ import sys
 import glob
 import subprocess
 
-PROJECT_REF = "smdravaoaeqdajmnrlpr"
+PROJECT_REF = "slcmqbbjzyztqyucauol"
 
 print("🔧 Applying Migrations via Supabase CLI")
 print("=" * 60)
 print(f"Project: {PROJECT_REF}")
 print()
 
-# Get all migration files
-migration_files = sorted(glob.glob('supabase/migrations/*.sql'))
+# Final-state migration set for a completely fresh Supabase project.
+# The cron migration 20260709194553 (competitor-watch-scan pg_cron job) is
+# deliberately EXCLUDED: stale Lovable URL + incompatible auth contract, and
+# no production deployment URL exists yet. It will be applied separately
+# after the app is deployed.
+FINAL_STATE_MIGRATIONS = [
+    "20260707193303_93348393-698b-4f35-ae22-644af74d8942.sql",
+    "20260707193445_46dd0707-2e4d-4ee8-b7d1-e2cea84ec364.sql",
+    "20260709194343_9ba1d523-b946-4e78-a69d-e6bdaf5ba26e.sql",
+    "20260709212343_4feb1702-87f2-45f0-9b83-6b92ce93a1e9.sql",
+    "20260709213859_80e26c94-28cf-45c1-9383-304df23d4ba5.sql",
+    "20260710100535_45a3451d-82a0-4499-bc1d-7e2e6260ca0c.sql",
+    "20260712203224_2d6ac297-789e-40b6-9228-e05bdb9dfb39.sql",
+    "20260712220251_2a14b1a0-8e29-4a9a-bad7-e71064c4ce68.sql",
+    "20260718184546_e27386a1-4495-4b68-b399-0a94f1d7702d.sql",
+    "20260718184836_4ff53c1f-ade2-4fe4-88c2-518841d56158.sql",
+    "20260720095116_ad729590-6b24-416b-8a9f-bf7cd05b7214.sql",
+]
+
+migration_files = []
+for name in FINAL_STATE_MIGRATIONS:
+    path = os.path.join('supabase', 'migrations', name)
+    if not os.path.isfile(path):
+        print(f"❌ Expected migration not found: {path}")
+        sys.exit(1)
+    migration_files.append(path)
 
 if not migration_files:
     print("❌ No migration files found")
     sys.exit(1)
 
-print(f"Found {len(migration_files)} migration files")
+print(f"Found {len(migration_files)} migration files (final-state set)")
 print()
 
 successful = 0
@@ -65,7 +89,7 @@ print()
 print("Testing if persona function exists...")
 test_result = subprocess.run(
     ['supabase', 'db', 'query', '--linked', '-c',
-     "SELECT COUNT(*) FROM pg_proc WHERE proname = 'set_persona_once_set'"],
+     "SELECT COUNT(*) FROM pg_proc WHERE proname = 'set_persona_once'"],
     capture_output=True,
     text=True
 )

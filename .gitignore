@@ -35,7 +35,18 @@ playwright-report
 *.sln
 *.sw?
 
+
 # Environment / secrets (keep the example template tracked)
 .env
 .env.*
 !.env.example
+
+# Environment variables
+# Local env files (real credentials). Keep only .env.example tracked.
+.env
+.env.local
+.env.*.local
+.env.production
+!.env.example
+.dev.vars
+
