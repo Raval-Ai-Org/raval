@@ -34,3 +34,8 @@ playwright-report
 *.njsproj
 *.sln
 *.sw?
+
+# Environment / secrets (keep the example template tracked)
+.env
+.env.*
+!.env.example

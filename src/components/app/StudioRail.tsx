@@ -17,6 +17,9 @@ import { GenerationQueueRow } from "@/components/app/GenerationQueueRow";
 import { useStudioSuggestions, type StudioSuggestion, type StudioSuggestionAccent } from "@/hooks/use-studio-suggestions";
 import { GeneratePostImageButton } from "@/components/app/GeneratePostImageButton";
 import { getAnyCachedImage } from "@/lib/post-image";
+import { ConnectionsPanel } from "@/components/app/ConnectionsPanel";
+import { publishContentItems } from "@/lib/sdr.functions";
+import { toast } from "sonner";
 
 
 
@@ -459,6 +462,8 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
 
 
 
+        <ConnectionsPanel />
+
         <ApprovalsSection
           items={approvals}
           jobs={genJobs}
@@ -466,9 +471,25 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
             // Optimistic remove
             setApprovals((prev) => prev.filter((r) => r.id !== id));
             try {
-              const patch: { status: ApprovalStatus; scheduled_at?: string } = { status };
-              if (status === "published") patch.scheduled_at = new Date().toISOString();
-              await runUpdate({ data: { id, patch } });
+              if (status === "published") {
+                // FR-024: approval stays editorial; "publish" then distributes.
+                await runUpdate({ data: { id, patch: { status: "approved" } } });
+                const wsId = typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
+                if (wsId) {
+                  try {
+                    const res = await publishContentItems(wsId, [id], { type: "all" });
+                    const skipped = res.results.filter((r) => r.status === "skipped");
+                    if (skipped.length) {
+                      toast.info("Nothing published", { description: skipped[0].reason ?? "No active target" });
+                    }
+                  } catch (e) {
+                    toast.error("Publish failed", { description: e instanceof Error ? e.message : "Please try again." });
+                  }
+                }
+              } else {
+                const patch: { status: ApprovalStatus } = { status };
+                await runUpdate({ data: { id, patch } });
+              }
               window.dispatchEvent(new CustomEvent("content:changed"));
               window.dispatchEvent(new CustomEvent("approvals:changed"));
             } catch {

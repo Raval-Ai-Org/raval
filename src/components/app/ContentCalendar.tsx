@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { cancelScheduled } from "@/lib/sdr.functions";
 import { authedFetch } from "@/lib/authed-fetch";
 import { streamImage } from "@/lib/streamImage";
 import {
@@ -50,7 +51,7 @@ type EntryType =
   | "newsletter"
   | "video";
 
-type Status = "idea" | "draft" | "approved" | "scheduled" | "published";
+type Status = "idea" | "draft" | "approved" | "scheduled" | "publishing" | "published";
 
 export type CalendarEntry = {
   id: string;
@@ -104,6 +105,7 @@ const STATUS_COLORS: Record<Status, string> = {
   draft: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
   approved: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
   scheduled: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
+  publishing: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
   published: "bg-foreground/10 text-foreground",
 };
 
@@ -770,6 +772,29 @@ function MonthGrid({
                       >
                         {regenning ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
                       </button>
+                      {e.status === "scheduled" && (
+                        <button
+                          type="button"
+                          title="Cancel scheduled post"
+                          aria-label="Cancel scheduled post"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            const wsId = typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
+                            if (!wsId) { toast.error("No workspace selected"); return; }
+                            cancelScheduled(wsId, e.id)
+                              .then(() => {
+                                toast.success("Scheduled post cancelled");
+                                try { window.dispatchEvent(new CustomEvent("content:changed")); } catch {}
+                              })
+                              .catch((err: unknown) =>
+                                toast.error("Couldn't cancel", { description: err instanceof Error ? err.message : "Please try again." }),
+                              );
+                          }}
+                          className="hidden h-3.5 w-3.5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover/chip:grid"
+                        >
+                          <XIcon className="h-2.5 w-2.5" />
+                        </button>
+                      )}
                     </span>
                   );
                 })}
@@ -1070,7 +1095,7 @@ function DayInspector({
 /* Entry editor (sheet-style overlay)                         */
 /* ---------------------------------------------------------- */
 
-const STATUSES: Status[] = ["idea", "draft", "approved", "scheduled", "published"];
+const STATUSES: Status[] = ["idea", "draft", "approved", "scheduled", "publishing", "published"];
 
 function EntryEditor({
   entry, onChange, onDelete, onClose, onRegenerate, regenerating,
