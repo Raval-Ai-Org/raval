@@ -50,6 +50,32 @@ export const SDR_PUBLISH_RESPONSE = {
   ],
 };
 
+/** The webhook-fed delivery mirror for a published item (US4 / FR-010). */
+export const SDR_PUBLICATIONS = [
+  {
+    id: "pub-li",
+    platform: "linkedin",
+    account_id: "li-1",
+    status: "published",
+    platform_post_url: "https://linkedin.com/posts/1",
+    platform_post_id: "post-li",
+    error_category: null,
+    last_error: null,
+    delivered_at: "2026-08-09T10:00:00.000Z",
+  },
+  {
+    id: "pub-tw",
+    platform: "twitter",
+    account_id: "tw-1",
+    status: "failed",
+    platform_post_url: null,
+    platform_post_id: null,
+    error_category: "fatal",
+    last_error: "Duplicate content",
+    delivered_at: null,
+  },
+];
+
 /** Stub the Supabase auth/rest/realtime + server-fn routes so the app shell
  * renders with the fake session (mirrors the integration-spec pattern). */
 export async function mockSupabase(context: BrowserContext) {
@@ -98,6 +124,9 @@ export function mockSdrRoutes(page: Page) {
     }
     if (path === "/api/sdr/disconnect") {
       return route.fulfill({ status: 204 });
+    }
+    if (path === "/api/sdr/publications") {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(SDR_PUBLICATIONS) });
     }
     return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: { code: "NOT_FOUND" } }) });
   });
