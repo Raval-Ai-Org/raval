@@ -930,7 +930,7 @@ export function StudioCanvasModal({
         const skipped = res.results.filter((r) => r.status === "skipped");
         draftIdsRef.current = [];
         toast.success(
-          publishing.length ? `Publishing ${publishing.length} post${publishing.length === 1 ? "" : "s"}…` : "Nothing to publish",
+          publishing.length ? `Post submitted — publishing to ${publishing.length} destination${publishing.length === 1 ? "" : "s"}` : "Nothing to publish",
           {
             description: skipped.length
               ? `${skipped.length} skipped (${skipped[0].reason ?? "no active target"})`

@@ -5,8 +5,9 @@
 // webhook-fed content_publications mirror); the panel re-fetches on
 // content:changed so webhook-driven updates appear without a manual refresh
 // (R2d). Empty state = the item has no SDR delivery rows (not distributed).
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Twitter, Linkedin, Facebook, Instagram, type LucideIcon } from "@/components/ui/gemini-icons";
 import { getPublications, type PublicationRow } from "@/lib/sdr.functions";
 import { cn } from "@/lib/utils";
@@ -63,12 +64,36 @@ export function DeliveryView({
 }: { workspaceId: string; contentItemId: string }) {
   const [rows, setRows] = useState<PublicationRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Track the last seen terminal state per row id so the success/failure toast
+  // fires once per delivery, not on every content:changed re-fetch.
+  const notified = useRef<Record<string, string>>({});
 
   const load = useCallback(async () => {
     try {
       const data = await getPublications(workspaceId, contentItemId);
       setRows(data);
       setError(null);
+      // US4 terminal-state toasts (green tick / red failure) — human-readable,
+      // shown once per delivery transition (FR-010 / SC-002).
+      for (const row of data) {
+        if (row.status !== "published" && row.status !== "failed" && row.status !== "partial_failed") continue;
+        if (notified.current[row.id] === row.status) continue;
+        notified.current[row.id] = row.status;
+        const label = PLATFORM_META[row.platform]?.label ?? row.platform;
+        if (row.status === "published") {
+          toast.success(`Successfully posted to ${label}`, {
+            description: row.platform_post_url ?? undefined,
+          });
+        } else if (row.status === "partial_failed") {
+          toast.warning(`Partly posted to ${label}`, {
+            description: row.last_error ?? "Some destinations didn't go through.",
+          });
+        } else {
+          toast.error(`Failed to post to ${label}`, {
+            description: row.last_error ?? "The destination rejected the post.",
+          });
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load delivery status");
     }

@@ -39,6 +39,15 @@ export const SDR_ACCOUNTS = [
   { account_id: "li-1", workspace_id: WS_ID, platform: "linkedin", platform_username: "Brand LI", status: "active", token_expires_at: null },
 ];
 
+/** The shape the /api/sdr/accounts SERVER route returns to the UI (camelCase,
+ * tokens excluded). The raw SDR rows above are what the SDR returns; the proxy
+ * maps account_id→accountId and platform_username→platformUsername (sdr.handlers
+ * mapAccount). The e2e mock must return THIS mapped shape. */
+export const SDR_CONNECTED_ACCOUNTS = [
+  { accountId: "tw-1", platform: "twitter", platformUsername: "Brand X", status: "active", tokenExpiresAt: null },
+  { accountId: "li-1", platform: "linkedin", platformUsername: "Brand LI", status: "active", tokenExpiresAt: null },
+];
+
 export const SDR_PUBLISH_RESPONSE = {
   job_id: "job-e2e-1",
   workspace_id: WS_ID,
@@ -108,7 +117,7 @@ export function mockSdrRoutes(page: Page) {
     const url = new URL(route.request().url());
     const path = url.pathname;
     if (path === "/api/sdr/accounts") {
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(SDR_ACCOUNTS) });
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(SDR_CONNECTED_ACCOUNTS) });
     }
     if (path === "/api/sdr/oauth/start") {
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ authorizationUrl: "https://mock-oauth/start", stateToken: "st", expiresIn: 600 }) });
@@ -132,10 +141,15 @@ export function mockSdrRoutes(page: Page) {
   });
 }
 
-/** Open the Studio rail by dispatching the app's own toggle:studio event. */
+/** Open the Studio rail by dispatching the app's own toggle:studio event.
+ * Waits for the shell's "Open Studio" button first — that proves the app has
+ * hydrated and the toggle:studio listener is mounted (a blind timeout races
+ * the listener mount and the dispatch is silently lost). */
 export async function openStudio(page: Page) {
   await page.goto("/app");
-  await page.waitForTimeout(1500); // let the shell render + hydrate
+  // Wait for the shell's Studio toggle button — the app is hydrated and the
+  // toggle:studio listener in app.tsx is attached.
+  await expect(page.locator('button[aria-label="Open Studio"]').first()).toBeVisible({ timeout: 15000 });
   await page.evaluate(() => window.dispatchEvent(new CustomEvent("toggle:studio")));
-  await page.waitForTimeout(700); // let the rail animate open
+  await page.waitForTimeout(1000); // let the rail animate open
 }
