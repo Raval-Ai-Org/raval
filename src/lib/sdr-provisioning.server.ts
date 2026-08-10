@@ -82,12 +82,15 @@ export async function ensureWorkspaceSdrProvisioning(
 
   // 2. Mint a per-workspace key via the SDR admin endpoint (global token is
   //    admin-only; tenant traffic uses the minted key — never the global one).
+  //    The SDR contract requires BOTH workspace_id and brand_id (its admin
+  //    schema: `workspace_id` + `brand_id`, each 1–64 chars). RavalAI's model is
+  //    one workspace per client brand, so brand_id maps to the same workspace id.
   const keyRes = await call({
     baseUrl,
     token: adminToken,
     method: "POST",
     path: "/api/v1/admin/api-keys",
-    body: { workspace_id: workspaceId },
+    body: { workspace_id: workspaceId, brand_id: workspaceId },
   });
   if (keyRes.status !== 201 || !keyRes.data?.api_key) {
     throw new Error(`SDR per-workspace key mint failed (status ${keyRes.status})`);

@@ -10,10 +10,36 @@ export type OauthStartResult = { authorizationUrl: string; stateToken: string; e
 export type PublishResult = { results: PublishOutcome[] };
 export type ScheduleResult = { results: ScheduleOutcome[] };
 
+/** Plain-language client messages per SDR error code (see sdr.server.ts
+ * SdrErrorCode). The technical `detail` is kept as a secondary support line so
+ * a user can still report it, but the primary message is human-readable. */
+const SDR_ERROR_MESSAGES: Record<string, string> = {
+  SDR_UNREACHABLE:
+    "The Social Distribution Engine is not responding. Please try again in a moment.",
+  ACCOUNT_EXPIRED:
+    "This social account's authorization has expired. Reconnect it to publish again.",
+  PLATFORM_VALIDATION:
+    "This post doesn't meet the platform's requirements. Check the message and try again.",
+  DUPLICATE: "This post was already submitted — no duplicate will be created.",
+  NOT_FOUND: "The item you're looking for couldn't be found.",
+  UNAUTHORIZED: "You don't have permission to do this.",
+  UNKNOWN: "Something went wrong while publishing. Please try again.",
+};
+
+function describeSdrError(j: { error?: { code?: string; detail?: string } }, status: number): string {
+  const code = j?.error?.code ?? "";
+  const detail = j?.error?.detail ?? "";
+  // Platform validation carries a real reason worth showing verbatim (e.g.
+  // "Instagram requires exactly one media item attached to the post.").
+  if (code === "PLATFORM_VALIDATION" && detail) return detail;
+  const friendly = SDR_ERROR_MESSAGES[code] ?? `Request failed (${status})`;
+  return detail ? `${friendly} (${detail})` : friendly;
+}
+
 async function extractError(res: Response): Promise<string> {
   try {
     const j = await res.json();
-    return j?.error?.detail ?? j?.error?.code ?? `Request failed (${res.status})`;
+    return describeSdrError(j, res.status);
   } catch {
     return `Request failed (${res.status})`;
   }

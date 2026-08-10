@@ -20,6 +20,7 @@ import { genQueue, newJobId } from "@/lib/generation-queue";
 import { PLATFORMS, PLATFORM_ORDER, DEFAULT_PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { publishContentItems, scheduleContentItems } from "@/lib/sdr.functions";
 import { StudioDestinationPicker } from "@/components/app/StudioDestinationPicker";
+import { DeliveryView } from "@/components/app/DeliveryView";
 import type { PublishSelection } from "@/lib/sdr.handlers";
 
 type SocialVariant = { platform: PlatformId; title: string; body: string; hashtags: string[]; chars: number };
@@ -194,6 +195,9 @@ export function StudioCanvasModal({
   const brand = useMemo(() => loadBrandDna(workspaceId), [workspaceId, canvas?.id]);
 
   const isSocial = canvas?.type === "social-post" || canvas?.type === "design-asset";
+  // US4: the persisted content item id to show delivery for (per-platform status
+  // + live links). Only social items that already have a content_item row.
+  const deliveryContentItemId = canvas?.id ?? null;
   const [platforms, setPlatforms] = useState<PlatformId[]>(DEFAULT_PLATFORMS);
   const [variants, setVariants] = useState<SocialVariant[]>([]);
   const [publishSelection, setPublishSelection] = useState<PublishSelection>({ type: "all" });
@@ -926,7 +930,7 @@ export function StudioCanvasModal({
         const skipped = res.results.filter((r) => r.status === "skipped");
         draftIdsRef.current = [];
         toast.success(
-          publishing.length ? `Publishing ${publishing.length} post${publishing.length === 1 ? "" : "s"}…` : "Nothing to publish",
+          publishing.length ? `Post submitted — publishing to ${publishing.length} destination${publishing.length === 1 ? "" : "s"}` : "Nothing to publish",
           {
             description: skipped.length
               ? `${skipped.length} skipped (${skipped[0].reason ?? "no active target"})`
@@ -1274,6 +1278,16 @@ export function StudioCanvasModal({
                     <StudioDestinationPicker workspaceId={workspaceId} value={publishSelection} onChange={setPublishSelection} />
                   </div>
                 )}
+
+                {/* US4 delivery view — per-platform status + live links for an
+                    existing content item. Renders nothing until the item has
+                    content_publications rows (webhook-driven); re-fetches on
+                    content:changed so updates appear without a refresh (R2d). */}
+                {isSocial && workspaceId && deliveryContentItemId ? (
+                  <div className="px-5 pb-3">
+                    <DeliveryView workspaceId={workspaceId} contentItemId={deliveryContentItemId} />
+                  </div>
+                ) : null}
 
                 {/* Footer */}
                 <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
