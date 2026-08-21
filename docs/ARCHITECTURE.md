@@ -90,7 +90,8 @@ Monitoring
                          Validation Engine
                                   │
                                   ▼
-                            Monitoring
+                             Monitoring
+```
 
 ## 3. Frontend
 
@@ -185,6 +186,7 @@ Execute Task
 Store Results
    ↓
 Update Job Status
+```
 
 ## 6. Crawler Layer
 
@@ -331,6 +333,7 @@ Page
 Observation
    ↓
 Finding
+```
 
 ### Data Principle
 
@@ -340,7 +343,7 @@ This allows downstream systems to identify:
 
 Original evidence
 Derived observations
-Findings
+### Findings
 Recommendations
 Validation results
 ### Boundary
@@ -385,7 +388,7 @@ The SEO Engine may analyze:
 
 The SEO Engine consumes evidence from the Website Data Layer.
 
-Potential inputs include:
+### Potential inputs include:
 
 - URLs
 - HTTP status codes
@@ -426,8 +429,9 @@ SEO Finding
 Evidence
       ↓
 Opportunity
+```
 
-Output
+### Output
 
 SEO findings should be available to:
 
@@ -449,13 +453,13 @@ AI provider management
 Fix execution
 Frontend presentation
 Authentication
-Data Principle
+### Data Principle
 
 SEO findings should remain linked to their supporting website evidence.
 
 This allows the system to determine why a particular SEO issue was detected.
 
-Reusability
+### Reusability
 
 SEO findings should be reusable across:
 
@@ -486,7 +490,7 @@ Content gap detection
 Content quality analysis
 Readability-related analysis
 Content recommendations
-Input
+### Input
 
 ### Potential inputs include:
 
@@ -502,7 +506,7 @@ Content Evidence
 
 The engine should produce structured content evidence that can be reused by other intelligence modules.
 
-###Potential content evidence may include:
+### Potential content evidence may include:
 
 Topics
 Covered concepts
@@ -511,13 +515,13 @@ Questions
 Content gaps
 Content quality signals
 Supporting page evidence
-AI Usage
+### AI Usage
 
 The Content Engine may use AI through the centralized AI Gateway when AI-based analysis is required.
 
 The Content Engine should not maintain independent provider credentials or disconnected AI integrations.
 
-###Output
+### Output
 
 Content analysis should produce structured results that can be consumed by:
 
@@ -528,7 +532,7 @@ Fix Engine
 Validation
 Analytics
 
-###Example Flow
+### Example Flow
 Website Content
       ↓
 Content Extraction
@@ -550,7 +554,7 @@ Citation analysis
 Competitor analysis
 Authentication responsibilities
 Fix execution
-Data Principle
+### Data Principle
 
 Content findings should remain connected to the page and evidence from which they were derived.
 
@@ -577,13 +581,13 @@ Recommendations
 Validation
 
 ## 10. Entity Engine
-Responsibility
+### Responsibility
 
 The Entity Engine analyzes entities and their relationships within website and content evidence.
 
 It identifies meaningful entities and creates structured entity intelligence that can be reused by downstream modules.
 
-Potential Responsibilities
+### Potential Responsibilities
 
 The Entity Engine may perform:
 
@@ -597,9 +601,9 @@ Place identification
 Entity consistency analysis
 Knowledge graph-oriented analysis
 Entity evidence collection
-Input
+### Input
 
-Potential inputs include:
+### Potential inputs include:
 
 Website content
 Page metadata
@@ -607,7 +611,7 @@ Structured data
 Existing entity evidence
 Related pages
 External entity signals where available
-Entity Evidence
+### Entity Evidence
 
 Entity results should be stored in structured form.
 
@@ -620,7 +624,7 @@ Source page
 Supporting evidence
 Confidence
 
-Example Flow
+### Example Flow
 Website Evidence
       ↓
 Entity Extraction
@@ -630,7 +634,7 @@ Entity Normalization
 Entity Relationships
       ↓
 Structured Entity Evidence
-Downstream Usage
+### Downstream Usage
 
 Entity intelligence may later support:
 
@@ -640,7 +644,7 @@ Competitor analysis
 Content analysis
 Recommendations
 Unified Intelligence
-Boundary
+### Boundary
 
 The Entity Engine should analyze entity information but should not directly modify customer websites.
 
@@ -651,7 +655,7 @@ Frontend presentation
 Fix execution
 AI provider credentials
 External authentication
-Data Principle
+### Data Principle
 
 Entity information should remain connected to its source evidence.
 
@@ -661,18 +665,18 @@ Source page
 Supporting content
 Structured data
 Related observations
-Reusability
+### Reusability
 
 Entity intelligence should be reusable across multiple intelligence workflows instead of being recreated independently by each module.
 
 ## 11. GEO / AEO / AI Intelligence Layer
-Responsibility
+### Responsibility
 
 This layer evaluates visibility in AI-generated search experiences.
 
 It combines website evidence with AI-generated results to understand how a website, organization, product, or other entity is represented in AI search experiences.
 
-Potential Capabilities
+### Potential Capabilities
 
 The layer may include:
 
@@ -685,7 +689,7 @@ Competitor mention detection
 Entity presence analysis
 Answer-level visibility
 AI visibility scoring
-Input
+### Input
 
 The intelligence layer may consume:
 Website evidence
@@ -696,7 +700,7 @@ AI benchmark results
 Citation data
 Competitor data
 
-Processing Flow
+### Processing Flow
 Website Evidence
       ↓
 SEO / Content / Entity Evidence
@@ -708,7 +712,7 @@ AI Answers
 Mention / Citation / Competitor Detection
       ↓
 AI Visibility Intelligence
-Output
+### Output
 
 The layer should produce structured intelligence that can be used by:
 
@@ -717,7 +721,7 @@ Opportunity Engine
 Analytics
 Recommendations
 Monitoring
-AI Provider Access
+### AI Provider Access
 
 AI provider access should be handled through the centralized AI Gateway.
 
@@ -735,11 +739,11 @@ Frontend presentation
 Direct website modification
 Authentication management
 Provider credential management
-Data Principle
+### Data Principle
 
 AI visibility results should remain connected to the benchmark question, AI run, answer, mentions, citations, competitors, and supporting evidence that produced the result.
 
-Reusability
+### Reusability
 
 AI intelligence should be reusable across:
 
@@ -751,13 +755,13 @@ Monitoring
 Historical analytics
 
 ## 12. AI Benchmark
-Responsibility
+### Responsibility
 
 The AI Benchmark system evaluates predefined questions across supported AI and search experiences.
 
 It provides repeatable measurement of AI visibility.
 
-Benchmark Flow
+### Benchmark Flow
 Question
    ↓
 AI Run
@@ -771,7 +775,7 @@ Citation Detection
 Competitor Detection
    ↓
 Metrics
-Benchmark Data
+### Benchmark Data
 
 A benchmark result should preserve:
 
@@ -786,7 +790,7 @@ Detected citations
 Detected competitors
 Related metrics
 Supporting evidence
-Benchmark Question
+### Benchmark Question
 
 Questions should represent the search or information scenarios that the system wants to evaluate.
 
@@ -810,7 +814,7 @@ Mention changes
 Citation changes
 Competitor changes
 Example Result Relationship
-Benchmark Question
+### Benchmark Question
        ↓
 AI Run
        ↓
@@ -823,7 +827,7 @@ Citations
 Competitors
        ↓
 Visibility Metrics
-Output
+### Output
 
 The AI Benchmark should provide structured results to:
 
@@ -832,7 +836,7 @@ Citation Engine
 Competitor Engine
 Analytics
 Unified Intelligence
-Boundary
+### Boundary
 
 The AI Benchmark should focus on measuring AI/search visibility.
 
@@ -842,7 +846,7 @@ Modify website content
 Execute fixes
 Manage frontend presentation
 Own crawler implementation
-Data Principle
+### Data Principle
 
 Every benchmark result should retain enough context to understand:
 
@@ -857,13 +861,13 @@ Which competitors appeared
 This makes benchmark results reproducible and comparable over time.
 
 ## 13. Citation Engine
-Responsibility
+### Responsibility
 
 The Citation Engine analyzes citations and sources appearing in AI answers.
 
 It identifies where AI answers obtain supporting sources and how frequently relevant websites or competitors are cited.
 
-Potential Responsibilities
+### Potential Responsibilities
 
 The Citation Engine may perform:
 
@@ -875,7 +879,7 @@ Citation frequency analysis
 Citation quality analysis
 Competitor source comparison
 Citation opportunity detection
-Input
+### Input
 
 The Citation Engine may consume:
 
@@ -894,7 +898,7 @@ Benchmark question
 AI run
 Source URL
 Related competitor information where applicable
-Example Flow
+### Example Flow
 AI Answer
    ↓
 Citation Extraction
@@ -918,7 +922,7 @@ Citation position or occurrence
 Source classification
 Related competitor
 Supporting evidence
-Output
+### Output
 
 Citation intelligence may be used by:
 
@@ -928,7 +932,7 @@ Unified Intelligence
 Opportunity Engine
 Analytics
 Monitoring
-Boundary
+### Boundary
 
 The Citation Engine should not generate unrelated website crawl data.
 
@@ -940,7 +944,7 @@ Website crawling
 Website modification
 Frontend presentation
 AI provider authentication
-Data Principle
+### Data Principle
 
 Citation data should preserve its relationship to the original AI answer.
 
@@ -960,13 +964,13 @@ Citation Opportunity
 Citation intelligence may later be used to identify opportunities where competitors are cited but the target website is not.
 
 ## 14. Competitor Engine
-Responsibility
+### Responsibility
 
 The Competitor Engine identifies and compares competing entities and websites.
 
 It uses website, AI, citation, and benchmark evidence to build competitor intelligence.
 
-Potential Responsibilities
+### Potential Responsibilities
 
 The Competitor Engine may perform:
 
@@ -976,9 +980,9 @@ Competitor citation analysis
 Competitor visibility analysis
 Competitor content comparison
 Competitor opportunity analysis
-Input
+### Input
 
-Potential inputs include:
+### Potential inputs include:
 
 AI benchmark results
 AI answers
@@ -999,7 +1003,7 @@ Visibility
 Related benchmark questions
 Related pages
 Comparison signals
-Example Flow
+### Example Flow
 AI / Search Evidence
        ↓
 Competitor Detection
@@ -1019,7 +1023,7 @@ Citations
 Content coverage
 Entity presence
 Related opportunities
-Output
+### Output
 
 Competitor intelligence should be available to:
 
@@ -1029,7 +1033,7 @@ Analytics
 GEO/AEO Intelligence
 Dashboards
 Reports
-Boundary
+### Boundary
 
 Competitor findings should be connected to the same benchmark and evidence model used by the rest of the intelligence system.
 
@@ -1041,13 +1045,13 @@ Website crawling
 AI provider credentials
 Direct website modification
 Frontend presentation
-Data Principle
+### Data Principle
 
 Competitor observations should retain their supporting evidence.
 
 For example:
 
-Benchmark Question
+### Benchmark Question
       ↓
 AI Answer
       ↓
@@ -1055,12 +1059,12 @@ Competitor Mention
       ↓
 Competitor Entity
       ↓
-Competitor Evidence
+### Competitor Evidence
 
 This allows competitor comparisons to remain explainable.
 
 ## 15. Analytics Layer
-Responsibility
+### Responsibility
 
 The Analytics Layer aggregates historical results from the intelligence system.
 
@@ -1111,7 +1115,7 @@ Visibility tracking
 Competitor comparison
 Opportunity prioritization
 Monitoring
-Input
+### Input
 
 Analytics may consume structured results from:
 
@@ -1124,7 +1128,7 @@ Citation Engine
 Competitor Engine
 Opportunity Engine
 Validation Engine
-Output
+### Output
 
 The Analytics Layer may produce:
 
@@ -1133,7 +1137,7 @@ Historical trends
 Comparisons
 Change indicators
 Performance summaries
-Boundary
+### Boundary
 
 Analytics should consume structured results from other modules instead of duplicating their analysis logic.
 
@@ -1145,7 +1149,7 @@ Content analysis
 Entity extraction
 Citation extraction
 Competitor detection
-Data Principle
+### Data Principle
 
 Analytics should preserve historical results rather than overwriting previous states.
 
@@ -1158,7 +1162,7 @@ Current State
 Difference
       ↓
 Trend
-Reusability
+### Reusability
 
 Analytics results should be reusable across:
 
@@ -1176,13 +1180,13 @@ The underlying domain engines remain responsible for generating their own domain
 
 
 ## 16. Unified Intelligence Layer
-Responsibility
+### Responsibility
 
 The unified intelligence layer combines evidence from multiple analysis engines into a consistent intelligence model.
 
 Inputs
 
-Potential inputs include:
+### Potential inputs include:
 
 SEO evidence
 Content evidence
@@ -1196,13 +1200,13 @@ SEO Evidence
       +
 Content Evidence
       +
-Entity Evidence
+### Entity Evidence
       +
 AI Evidence
       +
-Citation Evidence
+### Citation Evidence
       +
-Competitor Evidence
+### Competitor Evidence
       ↓
 Unified Intelligence
 Purpose
@@ -1215,7 +1219,7 @@ Fixes
 Validation
 Analytics
 Monitoring
-Evidence Lineage
+### Evidence Lineage
 
 Unified intelligence should preserve relationships back to the original evidence.
 
@@ -1237,7 +1241,7 @@ This layer should avoid creating duplicate or disconnected intelligence pipeline
 Different engines should contribute evidence to a shared intelligence model rather than creating isolated result systems.
 
 ## 17. Opportunity Engine
-Responsibility
+### Responsibility
 
 The opportunity engine converts evidence and findings into prioritized opportunities.
 
@@ -1265,7 +1269,7 @@ Confidence
 Effort
 Business relevance
 Visibility potential
-Example Flow
+### Example Flow
 Evidence
    ↓
 Finding
@@ -1275,7 +1279,7 @@ Opportunity Detection
 Priority
    ↓
 Recommended Action
-Output
+### Output
 
 Opportunities should be structured so they can be:
 
@@ -1284,12 +1288,12 @@ Included in reports
 Passed to recommendation workflows
 Passed to fix workflows
 Validated later
-Boundary
+### Boundary
 
 The opportunity engine should not directly execute fixes.
 
 ## 18. Fix Engine
-Responsibility
+### Responsibility
 
 The fix engine generates structured recommendations or proposed changes based on validated opportunities.
 
@@ -1320,7 +1324,7 @@ Explicit authorization
 Validation
 Appropriate permissions
 Safety checks
-Example Flow
+### Example Flow
 Opportunity
      ↓
 Recommendation
@@ -1332,7 +1336,7 @@ Authorization
 Implementation
      ↓
 Validation
-Boundary
+### Boundary
 
 The fix engine should remain separate from:
 
@@ -1344,11 +1348,11 @@ AI provider management
 It may consume results from these systems but should not own their responsibilities.
 
 ## 19. Validation Engine
-Responsibility
+### Responsibility
 
 The validation engine determines whether a recommendation or fix produced the expected result.
 
-Validation Flow
+### Validation Flow
 Issue
   ↓
 Recommendation
@@ -1385,12 +1389,12 @@ Actual result
 Evidence
 Status
 Timestamp
-Boundary
+### Boundary
 
 The validation engine should verify changes but should not be responsible for generating the original recommendation.
 
 ## 20. Monitoring
-Responsibility
+### Responsibility
 
 Monitoring tracks both system health and intelligence changes over time.
 
@@ -1426,7 +1430,7 @@ Historical analysis
 Failure investigation
 Trend detection
 Operational visibility
-Example Flow
+### Example Flow
 System / Intelligence Event
         ↓
 Monitoring
@@ -1438,11 +1442,11 @@ Threshold / Change Detection
 Alert
 
 ## 21. Connectors
-Responsibility
+### Responsibility
 
 The connectors module provides controlled integrations with external systems.
 
-Potential Integrations
+### Potential Integrations
 
 Potential integrations include:
 
@@ -1451,7 +1455,7 @@ CMS platforms
 Google Search Console
 Analytics platforms
 Other approved external services
-Connector Responsibilities
+### Connector Responsibilities
 
 Connectors should:
 
@@ -1462,13 +1466,13 @@ Normalize external data
 Handle external API failures
 Respect provider limits
 Record synchronization status
-Security Boundary
+### Security Boundary
 
 Connectors should use secure authentication.
 
 Credentials and tokens should not be exposed to individual intelligence modules.
 
-Integration Flow
+### Integration Flow
 External System
       ↓
 Connector
@@ -1482,15 +1486,15 @@ Normalization
 Raval Intelligence
 
 ## 22. Database
-Technology
+### Technology
 
 PostgreSQL
 
-Responsibility
+### Responsibility
 
 The database stores structured system, website, analysis, intelligence, recommendation, validation, and monitoring data.
 
-Core Logical Entities
+### Core Logical Entities
 
 Potential entities include:
 
@@ -1513,7 +1517,7 @@ Recommendation
 Fix
 Validation Run
 Monitoring Event
-Evidence Lineage
+### Evidence Lineage
 
 Relationships between these entities should preserve evidence lineage.
 
@@ -1538,7 +1542,7 @@ Recommendation
 Fix
    ↓
 Validation
-Data Principle
+### Data Principle
 
 The database should support:
 
@@ -1549,16 +1553,16 @@ Historical records
 Workspace isolation
 Validation history
 Monitoring history
-Boundary
+### Boundary
 
 Application modules should access data through controlled data-access patterns rather than creating uncontrolled direct access from unrelated components.
 
 ## 23. AI Gateway
-Responsibility
+### Responsibility
 
 The AI Gateway provides centralized access to AI providers.
 
-Architecture
+### Architecture
 SEO Engine ──────┐
 Content Engine ──┤
 Entity Engine ───┤
@@ -1571,7 +1575,7 @@ Recommendation ──┘
         ┌─────────┼─────────┐
         ▼         ▼         ▼
     Provider A Provider B Provider C
-Responsibilities
+### Responsibilities
 
 The AI Gateway should handle:
 
@@ -1584,13 +1588,13 @@ Cost tracking
 Structured outputs
 Error handling
 Provider abstraction
-Centralization Principle
+### Centralization Principle
 
 Individual engines should not create disconnected AI provider integrations.
 
 AI access should pass through the centralized gateway where practical.
 
-Benefits
+### Benefits
 
 Centralized AI access allows the system to:
 
@@ -1601,12 +1605,12 @@ Apply limits
 Control costs
 Standardize outputs
 Centralize AI security controls
-Boundary
+### Boundary
 
 The AI Gateway should provide AI access but should not own the business logic of individual engines.
 
 ## 24. Data Flow
-Primary Data Flow
+### Primary Data Flow
 
 The primary end-to-end flow is:
 
@@ -1637,7 +1641,7 @@ The primary end-to-end flow is:
 13. Validation is performed
         ↓
 14. Monitoring tracks changes over time
-Simplified End-to-End Architecture
+### Simplified End-to-End Architecture
 Website
    ↓
 Crawler
@@ -1661,7 +1665,7 @@ Fixes
 Validation
    ↓
 Monitoring
-Data Flow Principle
+### Data Flow Principle
 
 Each stage should consume structured outputs from the previous stage and produce structured data for downstream stages.
 
@@ -1669,7 +1673,7 @@ Each stage should consume structured outputs from the previous stage and produce
 
 Security must be applied at multiple system boundaries.
 
-User → API
+### User → API
 
 Controls include:
 
@@ -1677,7 +1681,7 @@ Authentication
 Authorization
 Workspace isolation
 Rate limits
-API → Workers
+### API → Workers
 
 Controls include:
 
@@ -1685,7 +1689,7 @@ Validated job payloads
 Permission checks
 Quotas
 Job authorization
-Workers → Crawler
+### Workers → Crawler
 
 Controls include:
 
@@ -1694,7 +1698,7 @@ SSRF protection
 Crawl limits
 Resource limits
 Safe request handling
-Services → Database
+### Services → Database
 
 Controls include:
 
@@ -1702,7 +1706,7 @@ Controlled database access
 Tenant isolation
 Appropriate permissions
 Secure credentials
-Services → AI Gateway
+### Services → AI Gateway
 
 Controls include:
 
@@ -1711,7 +1715,7 @@ Rate limits
 Usage controls
 Structured outputs
 Provider isolation
-AI → Tools / Actions
+### AI → Tools / Actions
 
 AI output should be validated before any action is executed.
 
@@ -1724,7 +1728,7 @@ Policy Validation
 Authorization
    ↓
 Tool Execution
-Security Principle
+### Security Principle
 
 Security should be treated as a system-wide responsibility rather than as a single component.
 
@@ -1732,7 +1736,7 @@ Security should be treated as a system-wide responsibility rather than as a sing
 
 The architecture should expect failures.
 
-Potential Failures
+### Potential Failures
 
 Examples include:
 
@@ -1746,7 +1750,7 @@ Database failure
 Connector failure
 Worker failure
 External service failure
-Long-Running Job Handling
+### Long-Running Job Handling
 
 Long-running jobs should support:
 
@@ -1755,7 +1759,7 @@ Failure status
 Error recording
 Observability
 Safe recovery
-Failure Isolation
+### Failure Isolation
 
 A single failed page or AI request should not unnecessarily fail the entire workspace operation.
 
@@ -1765,7 +1769,7 @@ Affected page
 Affected job
 Affected provider request
 Affected connector operation
-Error Information
+### Error Information
 
 Failures should preserve enough information for:
 
@@ -1778,7 +1782,7 @@ Operational investigation
 
 The initial architecture should support future scaling.
 
-Potential Scaling Architecture
+### Potential Scaling Architecture
 Frontend
    ↓
 API Instances
@@ -1794,7 +1798,7 @@ Analysis Workers
 AI Gateway
    ↓
 PostgreSQL
-Scaling Principle
+### Scaling Principle
 
 Individual workloads should be independently scalable where practical.
 
@@ -1804,7 +1808,7 @@ API instances can scale independently
 Crawl workers can scale independently
 Analysis workers can scale independently
 AI workloads can scale independently
-Why This Matters
+### Why This Matters
 
 Crawling, analysis, and AI workloads may have different resource requirements.
 
@@ -1826,25 +1830,25 @@ Observable background jobs
 Safe and validated automation
 Reusable intelligence across dashboards and recommendations
 Avoid unnecessary coupling between modules
-Evidence-First Principle
+### Evidence-First Principle
 
 Recommendations should be traceable to supporting evidence.
 
 The system should be able to identify why a finding, opportunity, or recommendation was generated.
 
-Modular Principle
+### Modular Principle
 
 Each engine should have a clear responsibility and should avoid duplicating another engine's work.
 
-Security Principle
+### Security Principle
 
 External systems, credentials, AI providers, and crawler operations should be protected by explicit security boundaries.
 
-Automation Principle
+### Automation Principle
 
 Automated changes should be validated and authorized before execution.
 
-Reusability Principle
+### Reusability Principle
 
 Evidence and intelligence should be reusable across dashboards, reports, recommendations, validation, and monitoring.
 
@@ -1853,5 +1857,151 @@ Evidence and intelligence should be reusable across dashboards, reports, recomme
 The architecture defines responsibilities and boundaries but does not represent full production implementation.
 
 Technology choices, infrastructure sizing, queue selection, authentication provider, and deployment configuration may be refined after implementation requirements and operational constraints are validated.
+
+
+## Day 2 Core Data Model
+
+The Day 2 foundation introduces the core data model
+used by future crawling, SEO, GEO/AEO, analytics,
+recommendation, connector, and validation modules.
+
+The primary relationship flows are:
+
+Website → Scan → Page Observation → Finding → Recommendation
+
+Website → Question Set → Question → AI Run → AI Result → Citation
+
+The data model preserves historical scan/run records
+and maintains traceability between observations,
+findings, recommendations, AI results, and citations.
+
+The complete entity model is documented in:
+
+- `docs/DATA_MODEL.md`
+- `docs/ERD.png`
+
+
+## Execution Lifecycle
+
+Long-running operations use explicit state transitions.
+
+Website scans and AI benchmark runs follow:
+
+QUEUED → RUNNING → COMPLETED
+                  → FAILED
+                  → CANCELLED
+
+A queued operation may also be cancelled before execution.
+
+Historical executions are preserved as separate records.
+The system does not overwrite previous scan or run results.
+
+
+## Day 2 Backend Implementation
+
+The Day 2 implementation provides the initial working backend foundation for the documented architecture.
+
+### Implemented Components
+
+The current backend includes:
+
+- FastAPI application
+- Database connection and session handling
+- Website model
+- Scan model
+- API request and response schemas
+- Service-layer business logic
+- Scan lifecycle validation
+- Website creation endpoint
+- Scan creation endpoint
+- Scan status update handling
+- Automated backend tests
+
+### Implemented Request Flow
+
+The implemented backend follows this flow:
+
+```text
+Client
+  ↓
+FastAPI API
+  ↓
+Request Schema Validation
+  ↓
+Service Layer
+  ↓
+Business Rule Validation
+  ↓
+Database
+  ↓
+Response Schema
+  ↓
+Client
+
+### Scan Lifecycle
+
+The current scan implementation supports explicit lifecycle states:
+
+QUEUED
+   ↓
+RUNNING
+   ↓
+COMPLETED
+
+Failure and cancellation states are also represented by the architecture:
+
+QUEUED → RUNNING → COMPLETED
+   ↓         ↓
+CANCELLED  FAILED
+
+Invalid state transitions are rejected by the service layer.
+
+### Validation Layers
+
+Validation is intentionally distributed across three boundaries:
+
+Client
+  ↓
+API Validation
+  ↓
+Service Validation
+  ↓
+Database Constraints
+
+API validation is responsible for validating request structure and input types.
+
+Service validation is responsible for enforcing application-level business rules and valid scan state transitions.
+
+Database constraints provide the final persistence-level integrity boundary.
+
+###Testing
+
+The Day 2 backend has automated tests covering the core website and scan flow.
+
+The current test suite verifies:
+
+Website creation
+Scan creation
+Scan lifecycle transitions
+Invalid scan state transitions
+Core API behavior
+
+The backend test suite currently passes successfully:
+5 passed
+
+### Manual API Verification
+
+The implemented API has also been manually verified through FastAPI Swagger UI.
+
+The verification confirms that the core API endpoints respond correctly and that the implemented request/response flow works as expected.
+
+### Current Boundary
+
+The Day 2 backend is a foundation layer.
+
+It does not yet implement the complete crawler, SEO engine, content engine, entity engine, GEO/AEO intelligence, AI benchmarking, citation intelligence, competitor intelligence, opportunity engine, fix engine, or monitoring workflows.
+
+Those components remain part of the broader architecture and future implementation scope.
+
 
 
