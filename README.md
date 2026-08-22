@@ -211,6 +211,24 @@ The example environment configuration is provided in:
 - Automated backend tests
 - Manual API verification through Swagger UI
 
+### Task 3 (Crawler Foundation & Scan Pipeline) — Completed
+
+- Independent Python Crawler package (`crawler/`):
+  - Strict configuration model (`CrawlerConfig`) with safety constraints
+  - FIFO stateful queue (`CrawlQueue`) with deduplication and state tracking
+  - Resilient HTTP fetcher (`PageFetcher`) with timeout, retry backoff, redirect capture, and error isolation
+  - `robots.txt` rule evaluation and sitemap declaration extraction (`RobotsChecker`)
+  - XML sitemap parser supporting URL sets and recursive sitemap indexes (`parse_sitemap_xml`)
+  - HTML link discovery with URL normalization and domain boundary enforcement (`discover_links`)
+  - Concurrency, rate limiting (request delay), and cooperative cancellation controls
+- Backend Integration & Persistence:
+  - `PageResult` database model linked to `Scan` (1-to-many relationship)
+  - `run_scan()` service executing crawl, capturing page evidence, and updating scan lifecycle
+  - `POST /api/v1/scans/{scan_id}/run` to trigger crawl executions
+  - `GET /api/v1/scans/{scan_id}/pages` with scan isolation and evidence serialization
+- Automated Testing Suite:
+  - 131 automated tests passing across crawler units, integration, database persistence, and API routes
+
 ### Backend Verification
 
 The following core flow has been successfully verified:
@@ -220,51 +238,21 @@ Create Website
       ↓
 Create Scan
       ↓
-queued
+Run Scan (Crawler Execution)
       ↓
-running
+Persist Pages & Evidence
       ↓
-completed 
+completed
 ```
 
 ## Future Development
 
-After the Day 1 foundation is completed, implementation can proceed incrementally according to the documented architecture.
+After the Task 3 crawler foundation is completed, implementation can proceed incrementally according to the documented architecture.
 
 Future implementation areas may include:
 
-Backend/API
-Frontend
-Background jobs and workers
-Website crawling
-Website data processing
-SEO analysis
-Content analysis
-Entity analysis
-GEO/AEO/AI analysis
-AI benchmarking
-Citation intelligence
-Competitor intelligence
-Analytics
-Unified intelligence
-Opportunity detection
-Recommendation generation
-Fix generation
-Validation
-Connectors
-Monitoring
-Testing
-
-These are future implementation areas and are not part of the current Day 2 core foundation.
-
-
-### Day 2 Boundary
-
-The current implementation proves the core application foundation and execution lifecycle.
-
-The following remain future implementation areas:
-
-- Full website crawler
+- Headless browser rendering (e.g. Playwright / Crawlee for dynamic JS rendering)
+- Deep structured page extraction (schema.org, metadata, headings, OpenGraph)
 - Technical SEO engine
 - Content intelligence engine
 - Entity intelligence
@@ -272,19 +260,16 @@ The following remain future implementation areas:
 - AI visibility benchmarking
 - Citation intelligence
 - Competitor intelligence
-- Analytics connectors
+- Search Console & Analytics connectors
 - Opportunity engine
 - Automated fix engine
 - Continuous monitoring
 
+### Current Boundary
 
-## Current Architecture Status
+The current implementation provides a robust Python crawler engine integrated with the FastAPI backend and SQLite/PostgreSQL persistence layer.
 
-The project contains the documented Day 1 architecture together with the implemented Day 2 backend foundation.
-
-The current backend includes the initial API, database, data models, schemas, service-layer validation, scan lifecycle handling, and automated tests.
-
-The broader intelligence modules remain future implementation areas.
+Headless browser rendering (Playwright), structured extraction engines, and downstream AI/SEO intelligence modules remain part of future milestones.
 
 ## Repository
 

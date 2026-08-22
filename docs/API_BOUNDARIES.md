@@ -78,115 +78,66 @@ The initial service boundaries are:
 - AI results remain traceable to their question and run.
 - API versioning begins at v1.
 
-## 11. Day 2 Implemented API
+## 11. Implemented API & Execution Flow
 
-The Day 2 backend implements the initial Website and Scan API flow.
+The backend implements the core Website, Scan, and Crawled Page API flow.
 
 ### Implemented Endpoints
 
-The current backend provides the core endpoints required for the initial execution flow.
+The current backend provides the core endpoints required for website management, scan execution, and page evidence inspection:
 
 #### Website
+- `POST /api/v1/websites` — Creates a website record.
 
-```text
-POST /api/v1/websites
+#### Scan Lifecycle
+- `POST /api/v1/websites/{website_id}/scans` — Creates a new scan associated with a website (initial state: `queued`).
+- `GET /api/v1/scans/{scan_id}` — Returns scan details, counts (`pages_crawled`, `pages_failed`, `pages_skipped`), and lifecycle state.
+- `POST /api/v1/scans/{scan_id}/run` — Executes the website crawler for the scan, persists page-level evidence, and completes the scan.
 
-Creates a website record.
-
-#### Scan
-POST /api/v1/websites/{website_id}/scans
-
-Creates a scan associated with a website.
-
-#### Scan Status
-GET /api/v1/scans/{scan_id}
-
-Returns the current scan information and lifecycle status.
-
-#### Scan State Update
-
-The backend supports controlled scan state transitions through the service layer.
+#### Crawled Pages Evidence
+- `GET /api/v1/scans/{scan_id}/pages` — Returns all crawled page records belonging to the scan with strict scan isolation (URL, final URL, HTTP status code, content type, depth, parent URL, errors, timestamp).
 
 ### Request Flow
 
 The implemented API follows:
 
+```text
 Client
    ↓
 FastAPI Router
    ↓
-Request Schema
+Request Schema Validation
    ↓
-Service Layer
+Service Layer (Crawler Execution / Business Logic)
    ↓
-Database
+Database (Websites, Scans, PageResults)
    ↓
 Response Schema
    ↓
 Client
+```
 
 ### Service Boundary
 
-The API layer is responsible for HTTP concerns and request/response validation.
+The API layer is responsible for HTTP concerns, parameter parsing, and schema validation.
 
-The service layer owns application-level business rules.
+The service layer owns business logic, scan state transitions, and crawler invocation.
 
-The database layer is responsible for persistence and database-level integrity.
+The database layer is responsible for persistence and referential integrity (foreign keys linking `PageResult` to `Scan`, and `Scan` to `Website`).
 
-This separation prevents API routes from containing all application logic.
+### Testing
 
-### Validation Boundary
+The implemented API, crawler engine, and service flows are thoroughly verified by automated tests:
 
-The implemented API uses three validation layers:
-
-API Validation
-      ↓
-Service Validation
-      ↓
-Database Constraints
-
-API validation validates request structure and data types.
-
-Service validation enforces business rules and valid scan lifecycle transitions.
-
-Database constraints provide persistence-level integrity.
-
-### Scan Lifecycle
-
-The implemented scan flow supports:
-
-QUEUED
-   ↓
-RUNNING
-   ↓
-COMPLETED
-
-Failure and cancellation states are also supported by the documented lifecycle model.
-
-Invalid scan transitions are rejected by the service layer.
-
-###Testing
-
-The implemented API and service flow are covered by automated backend tests.
-
-Current verification result:
-
-5 passed
-
-The core tests cover website creation, scan creation, lifecycle transitions, invalid transitions, and core API behavior.
+- **131 tests passing** across unit tests, service tests, database persistence tests, and API integration tests.
 
 ### Implementation Boundary
 
-The current API is a core foundation.
+The current API covers the website creation, scan execution, crawler pipeline, and page evidence persistence.
 
 The following API areas remain future implementation work:
-
-Page observations
-Findings
-Recommendations
-AI runs
-AI results
-Citations
-Competitors
-Connectors
-Monitoring
+- Structured page observations & entity extraction
+- SEO & content findings
+- Automated recommendations
+- AI visibility benchmark runs & citations
+- External connectors & monitoring

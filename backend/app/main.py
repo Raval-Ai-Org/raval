@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from .database import Base, engine, get_db
 from .models import Scan
 from .schemas import (
+    PageResultResponse,
     ScanResponse,
     ScanStatusUpdate,
     WebsiteCreate,
@@ -12,6 +13,8 @@ from .schemas import (
 from .services import (
     create_scan,
     create_website,
+    get_scan_pages,
+    run_scan,
     update_scan_status,
 )
 
@@ -92,6 +95,27 @@ def get_scan(
     return scan
 
 
+@app.get(
+    "/api/v1/scans/{scan_id}/pages",
+    response_model=list[PageResultResponse],
+)
+def get_scan_pages_endpoint(
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_scan_pages(
+            db,
+            scan_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+
+
 @app.patch(
     "/api/v1/scans/{scan_id}/status",
     response_model=ScanResponse,
@@ -126,3 +150,41 @@ def update_scan_status_endpoint(
             status_code=409,
             detail=str(exc),
         )
+@app.post(
+    "/api/v1/scans/{scan_id}/run",
+    response_model=ScanResponse,
+)
+def run_scan_endpoint(
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    scan = db.get(
+        Scan,
+        scan_id,
+    )
+
+    if scan is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Scan not found",
+        )
+
+    try:
+        run_scan(
+            db,
+            scan,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        )
+
+    return scan

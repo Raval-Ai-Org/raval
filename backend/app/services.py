@@ -1,8 +1,12 @@
 from datetime import datetime
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
-from .models import Scan, Website
+from crawler.config import CrawlerConfig
+from crawler.crawler import Crawler
+
+from .models import PageResult, Scan, Website
 
 
 ALLOWED_STATES = {
@@ -119,3 +123,112 @@ def update_scan_status(
     db.refresh(scan)
 
     return scan
+
+
+def run_scan(
+    db: Session,
+    scan: Scan,
+) -> object:
+    website = db.get(
+        Website,
+        scan.website_id,
+    )
+
+    if website is None:
+        raise ValueError(
+            "Website not found"
+        )
+
+    update_scan_status(
+        db,
+        scan,
+        "running",
+    )
+
+    try:
+        hostname = urlparse(
+            website.url
+        ).hostname
+
+        allowed_domains = []
+
+        if hostname:
+            allowed_domains.append(
+                hostname
+            )
+
+        config = CrawlerConfig(
+            max_pages=50,
+            max_depth=3,
+            allowed_domains=allowed_domains,
+            respect_robots_txt=True,
+        )
+
+        crawler = Crawler(config)
+
+        result = crawler.crawl(
+            website.url
+        )
+
+        scan.pages_crawled = result.pages_crawled
+        scan.pages_failed = result.pages_failed
+        scan.pages_skipped = result.pages_skipped
+
+        pages = getattr(result, "pages", [])
+        if isinstance(pages, (list, tuple)):
+            for page in pages:
+                page_result = PageResult(
+                    scan_id=scan.id,
+                    url=page.url,
+                    final_url=getattr(page, "final_url", None),
+                    status_code=page.status_code,
+                    content_type=page.content_type,
+                    content=getattr(page, "content", None),
+                    depth=page.depth,
+                    parent_url=getattr(page, "parent_url", None),
+                    error=page.error,
+                )
+                db.add(page_result)
+
+        db.commit()
+        db.refresh(scan)
+
+        update_scan_status(
+            db,
+            scan,
+            "completed",
+        )
+
+        return result
+
+    except Exception as exc:
+        update_scan_status(
+            db,
+            scan,
+            "failed",
+            str(exc),
+        )
+
+        raise
+
+
+def get_scan_pages(
+    db: Session,
+    scan_id: int,
+) -> list[PageResult]:
+    scan = db.get(
+        Scan,
+        scan_id,
+    )
+
+    if scan is None:
+        raise ValueError(
+            "Scan not found"
+        )
+
+    return (
+        db.query(PageResult)
+        .filter(PageResult.scan_id == scan_id)
+        .order_by(PageResult.id)
+        .all()
+    )

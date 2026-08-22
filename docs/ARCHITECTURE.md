@@ -1897,111 +1897,77 @@ Historical executions are preserved as separate records.
 The system does not overwrite previous scan or run results.
 
 
-## Day 2 Backend Implementation
+## 30. Implemented Foundation & Crawler Pipeline (Task 2 & 3)
 
-The Day 2 implementation provides the initial working backend foundation for the documented architecture.
+The project includes the working backend foundation and an independent, fully tested Python crawler integrated into the scan lifecycle.
 
 ### Implemented Components
 
-The current backend includes:
+#### 1. Core Backend (FastAPI + SQLAlchemy)
+- FastAPI application with CORS and routing
+- Database layer with SQLite/PostgreSQL connection pooling and session lifecycle
+- `Website`, `Scan`, and `PageResult` models
+- Pydantic validation schemas (`WebsiteCreate`, `WebsiteResponse`, `ScanCreate`, `ScanResponse`, `PageResultResponse`)
+- Service-layer business logic with strict lifecycle state transitions (`queued` → `running` → `completed` / `failed` / `cancelled`)
+- Endpoints for website creation, scan management, scan execution, and page results query
 
-- FastAPI application
-- Database connection and session handling
-- Website model
-- Scan model
-- API request and response schemas
-- Service-layer business logic
-- Scan lifecycle validation
-- Website creation endpoint
-- Scan creation endpoint
-- Scan status update handling
-- Automated backend tests
+#### 2. Python Crawler Package (`crawler/`)
+- **`CrawlerConfig`**: Immutable configuration enforcing safety constraints (`max_pages`, `max_depth`, `timeout_seconds`, `retry_count`, `request_delay_seconds`, `max_concurrency`, `allowed_domains`, `respect_robots_txt`).
+- **`CrawlQueue`**: FIFO queue with state tracking (`DISCOVERED`, `QUEUED`, `CRAWLING`, `COMPLETED`, `FAILED`, `SKIPPED`) and URL deduplication.
+- **`PageFetcher`**: Resilient HTTP client using `requests` with configurable timeouts, retries, User-Agent header, redirect final URL tracking, and graceful handling of 4xx/5xx responses, timeouts, DNS/connection failures, and SSL errors.
+- **`RobotsChecker`**: Origin-cached `robots.txt` parser enforcing User-Agent permissions and extracting declared sitemap URLs.
+- **`parse_sitemap_xml`**: XML parser for sitemaps supporting `<urlset>` and recursive `<sitemapindex>` containers.
+- **`discover_links`**: HTML link parser with URL normalization, fragment deduplication, and internal/allowed domain filtering.
+- **`Crawler`**: Central crawl engine orchestrating start URL validation, robots.txt checking, sitemap ingestion, link crawling, safety limits, request throttling, and cooperative cancellation.
 
-### Implemented Request Flow
-
-The implemented backend follows this flow:
+### Implemented Scan Execution Flow
 
 ```text
 Client
   ↓
-FastAPI API
+POST /api/v1/scans/{scan_id}/run
   ↓
-Request Schema Validation
+FastAPI Router
   ↓
-Service Layer
+Service Layer (run_scan)
+  ↓ [Set status: running]
+Crawler Engine (Crawler.crawl)
+  ├── 1. Check robots.txt (RobotsChecker)
+  ├── 2. Discover & queue sitemap URLs (CrawlQueue)
+  ├── 3. Fetch start URL & queued pages (PageFetcher)
+  ├── 4. Discover internal links from HTML (discover_links)
+  └── 5. Enforce max_pages / max_depth / domain boundaries
   ↓
-Business Rule Validation
+Persist Page Results (PageResult records linked to Scan)
   ↓
-Database
-  ↓
-Response Schema
-  ↓
-Client
+Update Scan Totals (pages_crawled, pages_failed, pages_skipped)
+  ↓ [Set status: completed]
+Response to Client (CrawlResult Summary)
+```
 
-### Scan Lifecycle
+### Scan Evidence Retrieval
 
-The current scan implementation supports explicit lifecycle states:
+Persisted page crawl results are accessible via:
+```text
+GET /api/v1/scans/{scan_id}/pages
+```
+This returns all `PageResult` records for the scan, including URL, final URL, status code, content type, crawl depth, parent URL, errors, and crawl timestamp with strict scan isolation.
 
-QUEUED
-   ↓
-RUNNING
-   ↓
-COMPLETED
+### Automated Testing
 
-Failure and cancellation states are also represented by the architecture:
+The complete test suite contains **131 passing automated tests**:
+- Core flow and lifecycle transition tests
+- Crawler config, queue, fetcher, models, and discovery unit tests
+- Crawler error resilience tests (HTTP 4xx/5xx, timeouts, connection/DNS errors, SSL errors, malformed HTML, non-HTML content)
+- Sitemap XML parsing and crawler-sitemap integration tests
+- Database persistence, scan run, and page retrieval API tests
 
-QUEUED → RUNNING → COMPLETED
-   ↓         ↓
-CANCELLED  FAILED
+### Architectural Milestone & Future Boundaries
 
-Invalid state transitions are rejected by the service layer.
+The current milestone provides a resilient Python-based HTTP crawler and scan persistence pipeline.
 
-### Validation Layers
-
-Validation is intentionally distributed across three boundaries:
-
-Client
-  ↓
-API Validation
-  ↓
-Service Validation
-  ↓
-Database Constraints
-
-API validation is responsible for validating request structure and input types.
-
-Service validation is responsible for enforcing application-level business rules and valid scan state transitions.
-
-Database constraints provide the final persistence-level integrity boundary.
-
-###Testing
-
-The Day 2 backend has automated tests covering the core website and scan flow.
-
-The current test suite verifies:
-
-Website creation
-Scan creation
-Scan lifecycle transitions
-Invalid scan state transitions
-Core API behavior
-
-The backend test suite currently passes successfully:
-5 passed
-
-### Manual API Verification
-
-The implemented API has also been manually verified through FastAPI Swagger UI.
-
-The verification confirms that the core API endpoints respond correctly and that the implemented request/response flow works as expected.
-
-### Current Boundary
-
-The Day 2 backend is a foundation layer.
-
-It does not yet implement the complete crawler, SEO engine, content engine, entity engine, GEO/AEO intelligence, AI benchmarking, citation intelligence, competitor intelligence, opportunity engine, fix engine, or monitoring workflows.
-
-Those components remain part of the broader architecture and future implementation scope.
-
-
-
+The following areas are future implementation milestones as defined in the target architecture:
+- **Headless Browser Rendering**: Playwright / Crawlee for dynamic single-page applications requiring JavaScript rendering.
+- **Structured Page Extraction**: Deep extraction of OpenGraph, Schema.org microdata/JSON-LD, headings, image alt texts, and canonical links.
+- **Intelligence Engines**: Technical SEO engine, Content engine, Entity engine, GEO/AEO intelligence, and AI visibility benchmarking.
+- **Action Engines**: Recommendation engine, automated fix generation, and continuous monitoring.
