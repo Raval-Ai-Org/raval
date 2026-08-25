@@ -4,7 +4,7 @@
 // SDR routes are mocked (sdr-common.ts returns SDR_PUBLICATIONS for any item),
 // so the spec runs WITHOUT a live SDR. Executed under the T078 harness.
 import { test, expect } from "@playwright/test";
-import { loginAsTestUser, mockSdrRoutes, mockSupabase, openStudio } from "./sdr-common";
+import { loginAsTestUser, mockSdrRoutes, mockSupabase, openCanvas, openStudio } from "./sdr-common";
 
 test.describe("Studio delivery view (US4)", () => {
   test.beforeEach(async ({ page, context }) => {
@@ -18,11 +18,7 @@ test.describe("Studio delivery view (US4)", () => {
 
     // Open a social content item in view mode — the canvas modal mounts the
     // DeliveryView for any social item with a persisted content-item id.
-    await page.evaluate(() => {
-      window.dispatchEvent(
-        new CustomEvent("open:canvas", { detail: { type: "social-post", id: "item-e2e", mode: "view" } }),
-      );
-    });
+    await openCanvas(page, { type: "social-post", id: "item-e2e", mode: "view" });
     await page.waitForTimeout(700); // let the canvas modal mount
 
     // Delivery panel header.
