@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
+function browserLaunchOptions(envName: string) {
+  const executablePath = process.env[envName];
+  return executablePath ? { executablePath } : {};
+}
+
 /**
  * Cross-engine visual/regression config + integration tests.
  * Assumes the dev server is already running on http://localhost:8080.
@@ -29,10 +34,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
-        launchOptions: {
-          executablePath:
-            process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "/chromium-1194/chrome-linux/chrome",
-        },
+        launchOptions: browserLaunchOptions("PLAYWRIGHT_CHROMIUM_EXECUTABLE"),
       },
     },
     {
@@ -41,10 +43,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Firefox"],
         viewport: { width: 1440, height: 900 },
-        launchOptions: {
-          executablePath:
-            process.env.PLAYWRIGHT_FIREFOX_EXECUTABLE || "/firefox-1495/firefox/firefox",
-        },
+        launchOptions: browserLaunchOptions("PLAYWRIGHT_FIREFOX_EXECUTABLE"),
       },
     },
     {
@@ -53,10 +52,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Safari"],
         viewport: { width: 1440, height: 900 },
-        launchOptions: {
-          executablePath:
-            process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE || "/webkit-2215/pw_run.sh",
-        },
+        launchOptions: browserLaunchOptions("PLAYWRIGHT_WEBKIT_EXECUTABLE"),
       },
     },
     {
@@ -65,11 +61,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
-        launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
-          ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
-          : process.env.CI
-            ? {}
-            : { executablePath: "/chromium-1194/chrome-linux/chrome" },
+        launchOptions: browserLaunchOptions("PLAYWRIGHT_CHROMIUM_EXECUTABLE"),
       },
     },
     // Cross-browser deep-link coverage. These projects re-run the deep-link
@@ -82,10 +74,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
-        launchOptions: {
-          executablePath:
-            process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "/chromium-1194/chrome-linux/chrome",
-        },
+        launchOptions: browserLaunchOptions("PLAYWRIGHT_CHROMIUM_EXECUTABLE"),
       },
     },
     {
@@ -94,10 +83,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Firefox"],
         viewport: { width: 1440, height: 900 },
-        launchOptions: {
-          executablePath:
-            process.env.PLAYWRIGHT_FIREFOX_EXECUTABLE || "/firefox-1495/firefox/firefox",
-        },
+        launchOptions: browserLaunchOptions("PLAYWRIGHT_FIREFOX_EXECUTABLE"),
       },
     },
     {
@@ -106,13 +92,8 @@ export default defineConfig({
       use: {
         ...devices["Desktop Safari"],
         viewport: { width: 1440, height: 900 },
-        launchOptions: {
-          executablePath:
-            process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE || "/webkit-2215/pw_run.sh",
-        },
+        launchOptions: browserLaunchOptions("PLAYWRIGHT_WEBKIT_EXECUTABLE"),
       },
     },
-
   ],
 });
-

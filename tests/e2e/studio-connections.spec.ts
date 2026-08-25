@@ -25,4 +25,15 @@ test.describe("Studio Connections (US1)", () => {
     // Instagram is not in the mocked accounts → a Connect button appears.
     await expect(page.locator("button", { hasText: "Connect Instagram" }).first()).toBeVisible();
   });
+
+  test("opens the OAuth window from the connect click", async ({ page }) => {
+    await openStudio(page);
+    await page.context().route("https://mock-oauth/**", (route) =>
+      route.fulfill({ status: 200, contentType: "text/html", body: "OAuth consent mock" }),
+    );
+    const popup = page.waitForEvent("popup");
+    await page.locator("button", { hasText: "Connect Instagram" }).first().click();
+    const oauthPage = await popup;
+    await expect(oauthPage).toHaveURL(/mock-oauth\/start/, { timeout: 10000 });
+  });
 });

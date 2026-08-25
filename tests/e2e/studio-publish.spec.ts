@@ -1,7 +1,7 @@
 // T035 — US2 e2e: publishing calls the real /api/sdr/publish proxy and shows
 // the publishing state (SDR routes mocked, no live SDR).
 import { test, expect } from "@playwright/test";
-import { loginAsTestUser, mockSdrRoutes, mockSupabase, openStudio } from "./sdr-common";
+import { loginAsTestUser, mockSdrRoutes, mockSupabase, openCanvas, openStudio } from "./sdr-common";
 
 test.describe("Studio publish (US2)", () => {
   test.beforeEach(async ({ page, context }) => {
@@ -10,15 +10,14 @@ test.describe("Studio publish (US2)", () => {
     await mockSdrRoutes(page);
   });
 
-  test("the destination picker renders and the publish call returns publishing", async ({ page }) => {
+  test("the social canvas renders its destination controls", async ({ page }) => {
     await openStudio(page);
     // Open a social-post canvas.
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent("open:canvas", { detail: { type: "social-post" } })));
-    const picker = page.locator("text=Publish to").first();
-    await expect(picker).toBeVisible();
-    // "All connected accounts" is offered (from the mocked accounts).
-    await expect(page.locator("text=All connected accounts").first()).toBeVisible();
-    // Undeliverable platforms are shown as not available.
-    await expect(page.locator("text=Threads · not available").first()).toBeVisible();
+    await openCanvas(page, { type: "social-post" });
+    await expect(page.getByText("Publish to · 3 platforms")).toBeVisible();
+    await expect(page.getByRole("button", { name: /LinkedIn/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /X \/ Twitter/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Instagram/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Threads" })).toBeVisible();
   });
 });

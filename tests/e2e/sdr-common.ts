@@ -147,9 +147,20 @@ export function mockSdrRoutes(page: Page) {
  * the listener mount and the dispatch is silently lost). */
 export async function openStudio(page: Page) {
   await page.goto("/app");
-  // Wait for the shell's Studio toggle button — the app is hydrated and the
-  // toggle:studio listener in app.tsx is attached.
-  await expect(page.locator('button[aria-label="Open Studio"]').first()).toBeVisible({ timeout: 15000 });
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent("toggle:studio")));
-  await page.waitForTimeout(1000); // let the rail animate open
+  const studioButton = page.getByRole("button", { name: /(?:Open )?Studio/ }).first();
+  await expect(studioButton).toBeVisible({ timeout: 30000 });
+  await studioButton.click();
+  await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible({ timeout: 15000 });
+}
+
+export async function openCanvas(page: Page, detail: { type: string; id?: string; mode?: string }) {
+  await page.evaluate((canvasDetail) => {
+    window.dispatchEvent(new CustomEvent("open:canvas", { detail: canvasDetail }));
+  }, detail);
+  await expect.poll(() => new URL(page.url()).searchParams.get("canvas"), { timeout: 5000 }).toBe(detail.type);
+  if (detail.mode === "view") {
+    await expect(page.getByText("Delivery").first()).toBeVisible({ timeout: 15000 });
+  } else {
+    await expect(page.getByText("Publish to").first()).toBeVisible({ timeout: 15000 });
+  }
 }

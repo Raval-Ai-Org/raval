@@ -61,12 +61,21 @@ export function ConnectionsPanel() {
 
   const connect = async (platform: string) => {
     if (!workspaceId) return;
+    const oauthWindow = window.open("about:blank", "_blank", "width=600,height=700");
+    if (!oauthWindow) {
+      setError(
+        "Your browser blocked the social account window. Allow popups for this app and try again.",
+      );
+      return;
+    }
     setBusy(platform);
     setError(null);
     try {
       const { authorizationUrl } = await oauthStart(workspaceId, platform);
-      window.open(authorizationUrl, "_blank", "noopener,noreferrer,width=600,height=700");
+      oauthWindow.location.href = authorizationUrl;
+      oauthWindow.focus();
     } catch (e) {
+      oauthWindow.close();
       setError(e instanceof Error ? e.message : "Failed to start connect");
     } finally {
       setBusy(null);
@@ -93,7 +102,9 @@ export function ConnectionsPanel() {
   return (
     <div className="space-y-2 px-2 py-1">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Connections</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Connections
+        </h3>
         <button
           onClick={() => void refresh()}
           className="text-[11px] text-muted-foreground hover:text-foreground"
@@ -116,7 +127,10 @@ export function ConnectionsPanel() {
         const Icon = spec?.icon;
         const isActive = a.status === "active";
         return (
-          <div key={a.accountId} className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/50 px-2 py-1.5">
+          <div
+            key={a.accountId}
+            className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/50 px-2 py-1.5"
+          >
             {Icon && <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: spec?.tint }} />}
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium">{a.platformUsername || a.platform}</p>
