@@ -33,6 +33,7 @@ export function StudioDestinationPicker({
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [pendingPlatform, setPendingPlatform] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
@@ -70,9 +71,15 @@ export function StudioDestinationPicker({
     }
   };
 
+  const requestConnect = (platform: string) => {
+    setError(null);
+    setPendingPlatform(platform);
+  };
+
   const connectedPlatforms = new Set(
     accounts.filter((a) => a.status !== "disconnected").map((a) => a.platform),
   );
+  const pendingLabel = CONNECTABLE.find((p) => p.id === pendingPlatform)?.label ?? pendingPlatform;
 
   return (
     <div className="space-y-2 rounded-xl border border-border/60 bg-card/50 p-2.5">
@@ -90,6 +97,46 @@ export function StudioDestinationPicker({
       </div>
 
       {error && <p className="text-[11px] text-destructive">{error}</p>}
+
+      {pendingPlatform && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="destination-connect-title"
+            className="w-full max-w-sm rounded-xl border border-border bg-background p-5 shadow-2xl"
+          >
+            <h4 id="destination-connect-title" className="text-sm font-semibold text-foreground">
+              Connect {pendingLabel}
+            </h4>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              RavalAI wants permission to access your {pendingLabel} account so it can post and
+              schedule content on your behalf.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setPendingPlatform(null)}
+                className="rounded-md border border-border/60 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const platform = pendingPlatform;
+                  setPendingPlatform(null);
+                  void connect(platform);
+                }}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Continue to {pendingLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {accounts.filter((a) => a.status === "active").length === 0 ? (
         <p className="text-[11px] text-muted-foreground">Connect a brand account to publish.</p>
@@ -125,7 +172,7 @@ export function StudioDestinationPicker({
                     <button
                       onClick={(e) => {
                         e.preventDefault();
-                        void connect(p.id);
+                        requestConnect(p.id);
                       }}
                       disabled={connecting === p.id}
                       className="ml-auto rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"

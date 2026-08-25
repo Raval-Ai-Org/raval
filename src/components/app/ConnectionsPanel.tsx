@@ -25,6 +25,7 @@ export function ConnectionsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pendingPlatform, setPendingPlatform] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const id = currentWorkspaceId();
@@ -82,6 +83,11 @@ export function ConnectionsPanel() {
     }
   };
 
+  const requestConnect = (platform: string) => {
+    setError(null);
+    setPendingPlatform(platform);
+  };
+
   const disconnect = async (accountId: string) => {
     if (!workspaceId) return;
     setBusy(accountId);
@@ -98,6 +104,7 @@ export function ConnectionsPanel() {
 
   const visible = accounts.filter((a) => a.status !== "disconnected");
   const connectedPlatforms = new Set(visible.map((a) => a.platform));
+  const pendingLabel = PLATFORMS.find((p) => p.id === pendingPlatform)?.label ?? pendingPlatform;
 
   return (
     <div className="space-y-2 px-2 py-1">
@@ -114,13 +121,75 @@ export function ConnectionsPanel() {
         </button>
       </div>
 
-      {error && <p className="text-[11px] text-destructive">{error}</p>}
+      {error && (
+        <div className="space-y-1.5 rounded-md border border-destructive/25 bg-destructive/5 p-2">
+          <p className="text-[11px] font-medium text-destructive">
+            We couldn't load your connected accounts.
+          </p>
+          <p className="text-[10px] leading-relaxed text-muted-foreground">{error}</p>
+          <button
+            onClick={() => void refresh()}
+            className="text-[10px] font-medium text-foreground underline underline-offset-2 hover:text-primary"
+          >
+            Try again
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-xs text-muted-foreground">Loading…</p>
-      ) : !loading && visible.length === 0 ? (
+      ) : !loading && !error && visible.length === 0 ? (
         <p className="text-xs text-muted-foreground">No brand accounts connected yet.</p>
       ) : null}
+
+      {!loading && (
+        <div className="rounded-md border border-border/60 bg-card/50 p-2">
+          <p className="text-[11px] font-medium text-foreground">Connect a social account</p>
+          <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
+            Authorize RavalAI to post and schedule on your behalf.
+          </p>
+        </div>
+      )}
+
+      {pendingPlatform && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="social-connect-title"
+            className="w-full max-w-sm rounded-xl border border-border bg-background p-5 shadow-2xl"
+          >
+            <h4 id="social-connect-title" className="text-sm font-semibold text-foreground">
+              Connect {pendingLabel}
+            </h4>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              RavalAI wants permission to access your {pendingLabel} account so it can post and
+              schedule content on your behalf.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setPendingPlatform(null)}
+                className="rounded-md border border-border/60 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const platform = pendingPlatform;
+                  setPendingPlatform(null);
+                  void connect(platform);
+                }}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Continue to {pendingLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {visible.map((a) => {
         const spec = PLATFORMS.find((p) => p.id === a.platform);
@@ -154,7 +223,7 @@ export function ConnectionsPanel() {
               </button>
             ) : (
               <button
-                onClick={() => void connect(a.platform)}
+                onClick={() => requestConnect(a.platform)}
                 disabled={busy === a.platform}
                 className="shrink-0 text-[10px] text-foreground hover:text-primary disabled:opacity-50"
               >
@@ -169,7 +238,7 @@ export function ConnectionsPanel() {
         {PLATFORMS.filter((p) => !connectedPlatforms.has(p.id)).map((p) => (
           <button
             key={p.id}
-            onClick={() => void connect(p.id)}
+            onClick={() => requestConnect(p.id)}
             disabled={busy === p.id}
             className="rounded-md border border-border/60 px-2 py-1 text-[11px] text-muted-foreground hover:border-border hover:text-foreground disabled:opacity-50"
           >
