@@ -580,3 +580,65 @@ def test_api_with_page_extractor_pipeline():
     finally:
         db.close()
 
+
+def test_api_page_extraction_and_indexability_new_gap_fields():
+    db = SessionLocal()
+    try:
+        website, scan = _create_test_website_and_scan(db, "Gap Fields API Test", "https://gap-api-test.com")
+        html_content = """<html>
+        <head><title>Gap API Verification</title></head>
+        <body>
+            <main>
+                <h1>Primary Article</h1>
+                <p>First paragraph with significant length.</p>
+                <p>Second paragraph with actionable intelligence.</p>
+            </main>
+        </body>
+        </html>"""
+
+        page = PageResult(
+            scan_id=scan.id,
+            url="https://gap-api-test.com/article",
+            status_code=200,
+            content_type="text/html",
+            content=html_content,
+            depth=1,
+            robots_txt_allowed=True,
+        )
+        db.add(page)
+        db.commit()
+        db.refresh(page)
+
+        # Trigger extraction
+        from app.page_extractor import extract_page
+        extract_page(db, page)
+
+        # 1. Test /api/v1/pages/{page_id}/extraction
+        ext_resp = client.get(f"/api/v1/pages/{page.id}/extraction")
+        assert ext_resp.status_code == 200
+        ext_data = ext_resp.json()
+        assert ext_data["content_size_bytes"] == len(html_content.encode("utf-8"))
+        assert ext_data["content_size_bytes"] > 0
+        assert ext_data["paragraph_count"] == 2
+        assert "Primary Article" in ext_data["main_content_candidate"]
+        assert ext_data["main_content_confidence"] == 1.0
+
+        # 2. Test /api/v1/pages/{page_id}/indexability
+        idx_resp = client.get(f"/api/v1/pages/{page.id}/indexability")
+        assert idx_resp.status_code == 200
+        idx_data = idx_resp.json()
+        assert idx_data["robots_txt_allowed"] is True
+        assert idx_data["http_status"] == 200
+
+        # 3. Test /api/v1/pages/{page_id}/intelligence
+        intel_resp = client.get(f"/api/v1/pages/{page.id}/intelligence")
+        assert intel_resp.status_code == 200
+        intel_data = intel_resp.json()
+        assert intel_data["extraction"]["content_size_bytes"] == len(html_content.encode("utf-8"))
+        assert intel_data["extraction"]["paragraph_count"] == 2
+        assert intel_data["extraction"]["main_content_confidence"] == 1.0
+        assert intel_data["indexability_evidence"]["robots_txt_allowed"] is True
+    finally:
+        db.close()
+
+

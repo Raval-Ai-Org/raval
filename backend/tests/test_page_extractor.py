@@ -1208,7 +1208,7 @@ def test_extract_page_full_pipeline_persistence_all_domains():
         assert ext.indexability_evidence is not None
         idx_ev = ext.indexability_evidence
         assert idx_ev.http_status == 200
-        assert idx_ev.robots_txt_allowed is None
+        assert idx_ev.robots_txt_allowed is True
         assert idx_ev.page_noindex is False
         assert idx_ev.page_nofollow is False
         assert idx_ev.canonical_url == "https://master-test.com/analytics"
@@ -1455,3 +1455,292 @@ def test_controlled_real_site_verification():
     assert "Cloud Computing Services" in res.clean_text
     assert "Build, modernize, and scale" in res.clean_text
     assert res.word_count > 10
+
+
+# ==============================================================================
+# GAP 1 — Response / Content Size (content_size_bytes) Tests
+# ==============================================================================
+
+def test_content_size_bytes_normal_html():
+    html_doc = "<html><head><title>Size Test</title></head><body><p>Hello world</p></body></html>"
+    res = extract_html(html_doc, "text/html", "https://example.com")
+    assert res.content_size_bytes == len(html_doc.encode("utf-8"))
+    assert res.content_size_bytes > 0
+
+
+def test_content_size_bytes_unicode_multibyte():
+    # Multi-byte UTF-8 characters: emojis and non-ASCII chars
+    html_doc = "<html><body><h1>Python 🐍 🚀</h1><p>Prógramação com acentuação: São Paulo, München, 東京都</p></body></html>"
+    res = extract_html(html_doc, "text/html", "https://example.com")
+    utf8_bytes = len(html_doc.encode("utf-8"))
+    char_count = len(html_doc)
+    assert res.content_size_bytes == utf8_bytes
+    assert res.content_size_bytes > char_count  # Byte length must exceed character length for multibyte UTF-8
+
+
+def test_content_size_bytes_empty_and_none():
+    res_none = extract_html(None, "text/html", "https://example.com")
+    assert res_none.content_size_bytes == 0
+
+    res_empty = extract_html("", "text/html", "https://example.com")
+    assert res_empty.content_size_bytes == 0
+
+    res_whitespace = extract_html("    \n\t   ", "text/html", "https://example.com")
+    assert res_whitespace.content_size_bytes == len("    \n\t   ".encode("utf-8"))
+
+
+def test_content_size_bytes_persistence():
+    db = SessionLocal()
+    try:
+        scan = Scan(website_id=1, status="completed", pages_crawled=1, pages_failed=0, pages_skipped=0)
+        db.add(scan)
+        db.commit()
+        db.refresh(scan)
+
+        html_content = "<html><head><title>Byte Test</title></head><body><p>1234567890</p></body></html>"
+        page_result = PageResult(
+            scan_id=scan.id,
+            url="https://example.com/byte-test",
+            status_code=200,
+            content_type="text/html",
+            content=html_content,
+        )
+        db.add(page_result)
+        db.commit()
+        db.refresh(page_result)
+
+        ext = extract_page(db, page_result)
+        assert ext.content_size_bytes == len(html_content.encode("utf-8"))
+        assert ext.content_size_bytes == 80
+    finally:
+        db.close()
+
+
+# ==============================================================================
+# GAP 2 — Main-Content Candidate / Confidence & Paragraph Count Tests
+# ==============================================================================
+
+def test_main_content_candidate_main_tag():
+    html_doc = """<html>
+    <body>
+        <header><nav><a href="/">Home</a></nav></header>
+        <main>
+            <h1>Main Title</h1>
+            <p>This is the core primary content of the article.</p>
+        </main>
+        <footer><p>Copyright 2026</p></footer>
+    </body>
+    </html>"""
+    res = extract_html(html_doc, "text/html", "https://example.com")
+    assert res.main_content_candidate == "Main Title This is the core primary content of the article."
+    assert res.main_content_confidence == 1.0
+
+
+def test_main_content_candidate_article_tag():
+    html_doc = """<html>
+    <body>
+        <header><nav><a href="/">Nav</a></nav></header>
+        <article>
+            <h2>Breaking News</h2>
+            <p>AI models achieve new autonomous benchmarks.</p>
+        </article>
+        <aside><p>Sidebar promo</p></aside>
+    </body>
+    </html>"""
+    res = extract_html(html_doc, "text/html", "https://example.com")
+    assert res.main_content_candidate == "Breaking News AI models achieve new autonomous benchmarks."
+    assert res.main_content_confidence == 0.9
+
+
+def test_main_content_candidate_role_main():
+    html_doc = """<html>
+    <body>
+        <header>Header Bar</header>
+        <div role="main" class="app-container">
+            <h1>Application Dashboard</h1>
+            <p>Live operational metrics.</p>
+        </div>
+        <footer>Footer Bar</footer>
+    </body>
+    </html>"""
+    res = extract_html(html_doc, "text/html", "https://example.com")
+    assert res.main_content_candidate == "Application Dashboard Live operational metrics."
+    assert res.main_content_confidence == 0.85
+
+
+def test_main_content_candidate_fallback():
+    html_doc = """<html>
+    <body>
+        <div class="generic-layout">
+            <h1>Fallback Header</h1>
+            <p>General body text without semantic container tags.</p>
+        </div>
+    </body>
+    </html>"""
+    res = extract_html(html_doc, "text/html", "https://example.com")
+    assert res.main_content_candidate == "Fallback Header General body text without semantic container tags."
+    assert res.main_content_confidence == 0.5
+
+
+def test_paragraph_count_and_empty_paragraphs():
+    html_doc = """<html>
+    <body>
+        <p>Paragraph 1</p>
+        <p></p>
+        <p>   </p>
+        <p>Paragraph 2</p>
+        <p>Paragraph 3 with <b>inline</b> formatting</p>
+    </body>
+    </html>"""
+    res = extract_html(html_doc, "text/html", "https://example.com")
+    assert res.paragraph_count == 3
+
+
+def test_paragraph_count_excludes_script_style_non_visible():
+    html_doc = """<html>
+    <body>
+        <p>Visible Paragraph</p>
+        <script><p>Ignored script text</p></script>
+        <style><p>Ignored style text</p></style>
+        <noscript><p>Ignored noscript text</p></noscript>
+    </body>
+    </html>"""
+    res = extract_html(html_doc, "text/html", "https://example.com")
+    assert res.paragraph_count == 1
+
+
+def test_clean_content_new_fields_persistence():
+    db = SessionLocal()
+    try:
+        scan = Scan(website_id=1, status="completed", pages_crawled=1, pages_failed=0, pages_skipped=0)
+        db.add(scan)
+        db.commit()
+        db.refresh(scan)
+
+        html_content = """<html>
+        <body>
+            <main>
+                <h1>Autonomous System</h1>
+                <p>Paragraph one inside main.</p>
+                <p>Paragraph two inside main.</p>
+            </main>
+        </body>
+        </html>"""
+        page_result = PageResult(
+            scan_id=scan.id,
+            url="https://example.com/main-test",
+            status_code=200,
+            content_type="text/html",
+            content=html_content,
+        )
+        db.add(page_result)
+        db.commit()
+        db.refresh(page_result)
+
+        ext = extract_page(db, page_result)
+        assert ext.paragraph_count == 2
+        assert ext.main_content_candidate == "Autonomous System Paragraph one inside main. Paragraph two inside main."
+        assert ext.main_content_confidence == 1.0
+    finally:
+        db.close()
+
+
+# ==============================================================================
+# GAP 3 — Per-Page Robots.txt Evidence Propagation Tests
+# ==============================================================================
+
+def test_robots_txt_allowed_propagated_true():
+    db = SessionLocal()
+    try:
+        scan = Scan(website_id=1, status="completed", pages_crawled=1, pages_failed=0, pages_skipped=0)
+        db.add(scan)
+        db.commit()
+        db.refresh(scan)
+
+        page_result = PageResult(
+            scan_id=scan.id,
+            url="https://example.com/allowed-page",
+            status_code=200,
+            content_type="text/html",
+            content="<html><head><title>Allowed Page</title></head><body><p>Content</p></body></html>",
+            robots_txt_allowed=True,
+        )
+        db.add(page_result)
+        db.commit()
+        db.refresh(page_result)
+
+        ext = extract_page(db, page_result)
+        assert ext.indexability_evidence is not None
+        assert ext.indexability_evidence.robots_txt_allowed is True
+        assert ext.indexability_evidence.evidence_summary["robots_txt_allowed"] is True
+    finally:
+        db.close()
+
+
+def test_robots_txt_allowed_propagated_false():
+    db = SessionLocal()
+    try:
+        scan = Scan(website_id=1, status="completed", pages_crawled=1, pages_failed=0, pages_skipped=0)
+        db.add(scan)
+        db.commit()
+        db.refresh(scan)
+
+        page_result = PageResult(
+            scan_id=scan.id,
+            url="https://example.com/disallowed-page",
+            status_code=403,
+            content_type="text/html",
+            content="<html><head><title>Blocked</title></head><body><p>Access Denied</p></body></html>",
+            robots_txt_allowed=False,
+        )
+        db.add(page_result)
+        db.commit()
+        db.refresh(page_result)
+
+        ext = extract_page(db, page_result)
+        assert ext.indexability_evidence is not None
+        assert ext.indexability_evidence.robots_txt_allowed is False
+        assert ext.indexability_evidence.evidence_summary["robots_txt_allowed"] is False
+    finally:
+        db.close()
+
+
+def test_robots_txt_allowed_distinction_from_page_noindex():
+    db = SessionLocal()
+    try:
+        scan = Scan(website_id=1, status="completed", pages_crawled=1, pages_failed=0, pages_skipped=0)
+        db.add(scan)
+        db.commit()
+        db.refresh(scan)
+
+        # robots.txt allowed the crawl, but page HTML meta tag specifies noindex
+        html_doc = """<html>
+        <head>
+            <title>Noindex Page</title>
+            <meta name="robots" content="noindex, follow">
+        </head>
+        <body>
+            <p>Crawled successfully per robots.txt, but page meta directives say noindex.</p>
+        </body>
+        </html>"""
+
+        page_result = PageResult(
+            scan_id=scan.id,
+            url="https://example.com/noindex-page",
+            status_code=200,
+            content_type="text/html",
+            content=html_doc,
+            robots_txt_allowed=True,
+        )
+        db.add(page_result)
+        db.commit()
+        db.refresh(page_result)
+
+        ext = extract_page(db, page_result)
+        assert ext.indexability_evidence is not None
+        assert ext.indexability_evidence.robots_txt_allowed is True
+        assert ext.indexability_evidence.page_noindex is True
+        assert ext.indexability_evidence.page_nofollow is False
+    finally:
+        db.close()
+

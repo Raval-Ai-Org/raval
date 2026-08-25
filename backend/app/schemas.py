@@ -52,6 +52,7 @@ class PageResultResponse(BaseModel):
     depth: int = 0
     parent_url: str | None = None
     error: str | None = None
+    robots_txt_allowed: bool | None = None
     created_at: datetime
 
 
@@ -62,8 +63,12 @@ class PageExtractionResponse(BaseModel):
     page_result_id: int
     scan_id: int
     html_available: bool
+    content_size_bytes: int = 0
     clean_text_available: bool
     word_count: int
+    paragraph_count: int = 0
+    main_content_candidate: str | None = None
+    main_content_confidence: float | None = None
     detected_language: str | None = None
     extraction_status: str
     extraction_error: str | None = None

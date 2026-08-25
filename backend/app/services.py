@@ -198,6 +198,7 @@ def run_scan(
                     depth=page.depth,
                     parent_url=getattr(page, "parent_url", None),
                     error=page.error,
+                    robots_txt_allowed=getattr(page, "robots_txt_allowed", True),
                 )
                 db.add(page_result)
 

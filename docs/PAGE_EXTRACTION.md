@@ -82,7 +82,7 @@ Every extracted record maintains full two-way traceability:
 
 | Entity / Model | Database Table | Relationship to `PageExtraction` | Key Evidence Fields |
 |---|---|---|---|
-| **PageExtraction** | `page_extractions` | Parent Model (1:1 with `PageResult`) | `html_available`, `clean_text_available`, `word_count`, `title_*`, `h1_count`, `canonical_*`, `image_count`, `images_without_alt`, `extraction_status` |
+| **PageExtraction** | `page_extractions` | Parent Model (1:1 with `PageResult`) | `html_available`, `content_size_bytes`, `clean_text_available`, `word_count`, `paragraph_count`, `main_content_candidate`, `main_content_confidence`, `title_*`, `h1_count`, `canonical_*`, `image_count`, `images_without_alt`, `extraction_status` |
 | **PageMetaDescription** | `page_meta_descriptions` | 1 : N (One-to-Many) | `position`, `text`, `length`, `word_count`, `empty`, `duplicate_within_page`, `duplicate_in_scan`, `too_short`, `too_long` |
 | **PageHeading** | `page_headings` | 1 : N (One-to-Many) | `level` (1–6), `text`, `position`, `empty` |
 | **PageCanonical** | `page_canonicals` | 1 : N (One-to-Many) | `position`, `url`, `empty`, `valid`, `self_reference`, `cross_page` |
@@ -113,6 +113,7 @@ Every extracted record maintains full two-way traceability:
 ## 9. Basic Page Information
 
 - `html_available`: True if document contains parsable HTML content.
+- `content_size_bytes`: Raw UTF-8 encoded byte length of the content payload received by the extractor (`0` if content is `None`).
 - `clean_text_available`: True if visible clean text exists after removing non-content elements.
 - `word_count`: Total word count computed from visible text tokens.
 - `detected_language`: Primary language tag derived from the HTML document.
@@ -234,6 +235,13 @@ Every extracted record maintains full two-way traceability:
 
 - Removes non-visible elements (`<script>`, `<style>`, `<noscript>`, `<svg>`, `<canvas>`, `<template>`, `<head>`).
 - Normalizes whitespace into `clean_text` and calculates `word_count`.
+- `paragraph_count`: Counts meaningful, non-empty `<p>` elements contributing textual body content (excluding paragraphs inside non-visible regions).
+- `main_content_candidate` & `main_content_confidence`: Extracts primary body content using a conservative structural hierarchy:
+  1. `<main>` element text (`confidence = 1.0`)
+  2. `<article>` element text (`confidence = 0.9`)
+  3. `role="main"` container text (`confidence = 0.85`)
+  4. Fallback clean body visible text (`confidence = 0.5`)
+  *(Note: Confidence strictly expresses extraction heuristic certainty, NOT a content quality or SEO score).*
 
 ---
 
@@ -241,11 +249,11 @@ Every extracted record maintains full two-way traceability:
 
 Aggregates technical signals into `PageIndexabilityEvidence`:
 - `http_status`: From `PageResult.status_code`.
-- `robots_txt_allowed`: Nullable (`None` until crawler exposes per-page robots authorization).
-- `page_noindex` / `page_nofollow`: From extracted robots directives.
+- `robots_txt_allowed`: Boolean authorization result propagated from crawler robots.txt check (`True` for allowed/fetched pages, `False` for blocked items).
+- `page_noindex` / `page_nofollow`: From extracted HTML `<meta name="robots">` directives. *(Note: robots.txt crawler authorization and page-level HTML meta directives remain distinct, isolated signals).*
 - `canonical_url`: Normalized URL of first valid canonical tag.
 - `redirected`: True if `PageResult.final_url` differs from `PageResult.url`.
-- `evidence_summary`: Complete JSON payload of raw contributing signals.
+- `evidence_summary`: Complete JSON payload of raw contributing signals including `robots_txt_allowed`.
 
 ---
 
@@ -256,13 +264,13 @@ All API endpoints are read-only and return validated Pydantic models:
 | HTTP Method | Route Path | Purpose / Response Model | 404 Error Detail |
 |---|---|---|---|
 | `GET` | `/api/v1/pages/{page_id}/intelligence` | Full page intelligence overview (`PageIntelligenceResponse`) | `"Page not found"` |
-| `GET` | `/api/v1/pages/{page_id}/extraction` | Core extraction summary (`PageExtractionResponse`) | `"Page not found"` / `"Page extraction not found"` |
+| `GET` | `/api/v1/pages/{page_id}/extraction` | Core extraction summary (`PageExtractionResponse`) including `content_size_bytes`, `paragraph_count`, `main_content_candidate`, `main_content_confidence` | `"Page not found"` / `"Page extraction not found"` |
 | `GET` | `/api/v1/pages/{page_id}/metadata` | Meta tags, canonicals, robots, social (`PageMetadataResponse`) | `"Page not found"` / `"Page extraction not found"` |
 | `GET` | `/api/v1/pages/{page_id}/headings` | Ordered H1–H6 headings (`list[PageHeadingResponse]`) | `"Page not found"` / `"Page extraction not found"` |
 | `GET` | `/api/v1/pages/{page_id}/structured-data` | JSON-LD blocks (`list[PageStructuredDataResponse]`) | `"Page not found"` / `"Page extraction not found"` |
 | `GET` | `/api/v1/pages/{page_id}/links` | Internal & external links (`list[PageLinkResponse]`) | `"Page not found"` / `"Page extraction not found"` |
 | `GET` | `/api/v1/pages/{page_id}/images` | Image assets and alt text (`list[PageImageResponse]`) | `"Page not found"` / `"Page extraction not found"` |
-| `GET` | `/api/v1/pages/{page_id}/indexability` | Technical indexability evidence (`PageIndexabilityEvidenceResponse`) | `"Page not found"` / `"Page extraction not found"` |
+| `GET` | `/api/v1/pages/{page_id}/indexability` | Technical indexability evidence (`PageIndexabilityEvidenceResponse`) including `robots_txt_allowed` | `"Page not found"` / `"Page extraction not found"` |
 | `GET` | `/api/v1/scans/{scan_id}/page-intelligence` | All pages intelligence in a scan (`list[PageIntelligenceResponse]`) | `"Scan not found"` |
 
 ---
@@ -294,12 +302,12 @@ All API endpoints are read-only and return validated Pydantic models:
 
 ## 30. Automated Testing Strategy & Coverage
 
-The automated test suite verifies all extraction domains with **104 passing tests**:
+The automated test suite verifies all extraction domains with **115 passing tests**:
 
 - `backend/tests/test_core_flow.py` (5 tests): Website & scan lifecycles.
-- `backend/tests/test_page_extraction_api.py` (6 tests): API endpoint routing, 404 handling, and end-to-end extraction pipeline verification.
-- `backend/tests/test_page_extractor.py` (69 tests): Exhaustive unit fixtures across Titles (1–8), Meta Descriptions (9–16), Headings (17–21), Canonicals (22–27), Robots (28–34), Open Graph (35–38), Twitter (39–42), JSON-LD (43–50), Microdata (51–53), Breadcrumbs (57–59), Images (61–63), Links (71), Language/Hreflang (81–82), Clean Content (89–90), Persistence/Idempotency, and Error Isolation.
-- `backend/tests/test_real_site_verification.py` (1 test): Deterministic real-site verification with network fallback.
+- `backend/tests/test_page_extraction_api.py` (7 tests): API endpoint routing, 404 handling, end-to-end extraction pipeline verification, and new gap field API verification.
+- `backend/tests/test_page_extractor.py` (79 tests): Exhaustive unit fixtures across Titles (1–8), Meta Descriptions (9–16), Headings (17–21), Canonicals (22–27), Robots (28–34), Open Graph (35–38), Twitter (39–42), JSON-LD (43–50), Microdata (51–53), Breadcrumbs (57–59), Images (61–63), Links (71), Language/Hreflang (81–82), Clean Content (89–90), Persistence/Idempotency, Error Isolation, `content_size_bytes` (Gap 1), `paragraph_count` & `main_content_candidate` (Gap 2), and `robots_txt_allowed` propagation (Gap 3).
+- `backend/tests/test_real_site_verification.py` (1 test): Deterministic real-site verification with network fallback and clean content size/paragraph assertions.
 - `backend/tests/test_scan_run.py` (10 tests): Crawler & scan execution.
 - `backend/tests/test_sitemap.py` (13 tests): Sitemap parsing & discovery.
 
@@ -328,7 +336,7 @@ The Page Extraction engine was verified against a live production web page ([htt
 | **Hreflang** | None declared | `0` records | **MATCH** (Legitimate Absence) |
 | **Images** | 1 active `<img>` tag (`python-logo.png`) | `image_count: 1`, `images_without_alt: 0` | **MATCH** |
 | **Links** | 215 active `<a>` tags (excluding commented-out HTML) | 215 links extracted (136 internal, 79 external) | **MATCH** |
-| **Clean Text** | Visible paragraph content | `clean_text_available: True`, `word_count: 1,111` | **MATCH** |
+| **Clean Text & Size** | Visible content (`content_size_bytes: 52462`, `paragraph_count > 0`) | `clean_text_available: True`, `word_count: 1,111`, `main_content_confidence: 0.5` | **MATCH** |
 
 **Final Verification Result**: **100% PASS**
 
@@ -336,10 +344,8 @@ The Page Extraction engine was verified against a live production web page ([htt
 
 ## 32. Current Limitations
 
-- **No Network I/O**: Extractor does not verify live HTTP status of images, external links, or canonical URLs.
-- **Robots.txt Signal**: `robots_txt_allowed` remains `None` on `page_indexability_evidence` because the Task 3 crawler does not store per-page robots authorization flags on `PageResult`.
+- **No Network I/O during Extraction**: Extractor does not verify live HTTP status of images, external links, or canonical URLs.
 - **Language Detection**: Derived solely from `<html>` tag attributes; does not run statistical NLP text-based language identification.
-- **Boilerplate Filtering**: Strips structural non-content tags (`<script>`, `<style>`, `<nav>`, `<header>`, `<footer>`), but does not perform ML-based article body segmentation.
 - **Schema.org Validation**: Extracts types, names, and JSON structures without performing full schema validation against Schema.org vocabulary definitions.
 
 ---

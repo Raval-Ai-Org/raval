@@ -140,3 +140,8 @@ def test_real_site_verification_live_or_fallback():
 
         assert ext.clean_text_available is True
         assert "Python is a programming language" in ext.clean_text
+        assert ext.content_size_bytes == len(OFFLINE_PYTHON_ORG_HTML.encode("utf-8"))
+        assert ext.paragraph_count == 3
+        assert ext.main_content_candidate is not None
+        assert ext.main_content_confidence == 0.5
+

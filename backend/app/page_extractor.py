@@ -156,9 +156,13 @@ class HreflangItem:
 @dataclass
 class ExtractionResult:
     html_available: bool = False
+    content_size_bytes: int = 0
     clean_text_available: bool = False
     clean_text: str = ""
     word_count: int = 0
+    paragraph_count: int = 0
+    main_content_candidate: str | None = None
+    main_content_confidence: float | None = None
     html_lang: str | None = None
     detected_language: str | None = None
     extraction_status: str = "success"
@@ -253,6 +257,17 @@ class PageHTMLParser(HTMLParser):
         self.raw_hreflang: list[tuple[str, str | None]] = []
         self.visible_text_fragments: list[str] = []
 
+        self.paragraphs: list[str] = []
+        self._in_p: bool = False
+        self._current_p_parts: list[str] = []
+
+        self.main_tag_fragments: list[str] = []
+        self._in_main_tag_depth: int = 0
+        self.article_tag_fragments: list[str] = []
+        self._in_article_tag_depth: int = 0
+        self.role_main_fragments: list[str] = []
+        self._role_main_stack: list[str] = []
+
         self._in_head = False
         self._ignore_depth = 0
         self._in_title = False
@@ -298,6 +313,31 @@ class PageHTMLParser(HTMLParser):
         if tag_lower == "body" or (self._in_head and tag_lower in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "section", "article", "header", "footer", "main", "nav", "aside"}):
             self._in_head = False
             self._ignore_depth = 0
+
+        # Paragraph start tracking
+        if tag_lower == "p" and self._ignore_depth == 0 and not self._in_head and not self._in_json_ld:
+            if self._in_p:
+                p_text = re.sub(r"\s+", " ", "".join(self._current_p_parts)).strip()
+                if p_text:
+                    self.paragraphs.append(p_text)
+            self._in_p = True
+            self._current_p_parts = []
+
+        # Auto-close paragraph on block elements
+        if self._in_p and tag_lower not in {"p", "b", "strong", "i", "em", "a", "span", "code", "small", "sub", "sup", "mark", "u", "s", "del", "ins", "time", "abbr", "q", "cite", "img", "br", "wbr"}:
+            p_text = re.sub(r"\s+", " ", "".join(self._current_p_parts)).strip()
+            if p_text:
+                self.paragraphs.append(p_text)
+            self._in_p = False
+            self._current_p_parts = []
+
+        # Main-content container tracking
+        if tag_lower == "main":
+            self._in_main_tag_depth += 1
+        if tag_lower == "article":
+            self._in_article_tag_depth += 1
+        if attr_dict.get("role", "").strip().lower() == "main":
+            self._role_main_stack.append(tag_lower)
 
         # Auto-close title if any other tag starts without closing title
         if self._in_title and tag_lower != "title":
@@ -506,6 +546,22 @@ class PageHTMLParser(HTMLParser):
                 self._in_breadcrumb_nav = False
                 self._breadcrumb_depth = 0
 
+        # Paragraph end tracking
+        if tag_lower == "p" and self._in_p:
+            p_text = re.sub(r"\s+", " ", "".join(self._current_p_parts)).strip()
+            if p_text:
+                self.paragraphs.append(p_text)
+            self._in_p = False
+            self._current_p_parts = []
+
+        # Main-content container end tracking
+        if tag_lower == "main" and self._in_main_tag_depth > 0:
+            self._in_main_tag_depth -= 1
+        if tag_lower == "article" and self._in_article_tag_depth > 0:
+            self._in_article_tag_depth -= 1
+        if self._role_main_stack and self._role_main_stack[-1] == tag_lower:
+            self._role_main_stack.pop()
+
         if tag_lower in self.NON_VISIBLE_TAGS:
             if self._ignore_depth > 0:
                 self._ignore_depth -= 1
@@ -528,9 +584,24 @@ class PageHTMLParser(HTMLParser):
 
         if self._ignore_depth == 0 and not self._in_head and not self._in_json_ld:
             self.visible_text_fragments.append(data)
+            if self._in_p:
+                self._current_p_parts.append(data)
+            if self._in_main_tag_depth > 0:
+                self.main_tag_fragments.append(data)
+            if self._in_article_tag_depth > 0:
+                self.article_tag_fragments.append(data)
+            if len(self._role_main_stack) > 0:
+                self.role_main_fragments.append(data)
 
     def close(self) -> None:
         super().close()
+        if self._in_p and self._current_p_parts:
+            p_text = re.sub(r"\s+", " ", "".join(self._current_p_parts)).strip()
+            if p_text:
+                self.paragraphs.append(p_text)
+            self._in_p = False
+            self._current_p_parts = []
+
         if self._in_title and self._current_title_parts:
             title_text = "".join(self._current_title_parts)
             self.titles.append(title_text)
@@ -770,8 +841,12 @@ def extract_html(
     if html_content is None or not html_content.strip():
         return ExtractionResult(
             html_available=False,
+            content_size_bytes=len(html_content.encode("utf-8")) if (html_content and isinstance(html_content, str)) else 0,
             clean_text_available=False,
             word_count=0,
+            paragraph_count=0,
+            main_content_candidate=None,
+            main_content_confidence=None,
             detected_language=None,
             html_lang=None,
             extraction_status="success",
@@ -799,8 +874,12 @@ def extract_html(
         ):
             return ExtractionResult(
                 html_available=False,
+                content_size_bytes=len(html_content.encode("utf-8")) if (html_content and isinstance(html_content, str)) else 0,
                 clean_text_available=False,
                 word_count=0,
+                paragraph_count=0,
+                main_content_candidate=None,
+                main_content_confidence=None,
                 detected_language=None,
                 html_lang=None,
                 extraction_status="skipped_non_html",
@@ -816,8 +895,12 @@ def extract_html(
     except Exception as exc:
         return ExtractionResult(
             html_available=True,
+            content_size_bytes=len(html_content.encode("utf-8")) if (html_content and isinstance(html_content, str)) else 0,
             clean_text_available=False,
             word_count=0,
+            paragraph_count=0,
+            main_content_candidate=None,
+            main_content_confidence=None,
             detected_language=None,
             html_lang=None,
             extraction_status="error",
@@ -829,6 +912,7 @@ def extract_html(
 
     result = ExtractionResult()
     result.html_available = True
+    result.content_size_bytes = len(html_content.encode("utf-8")) if (html_content and isinstance(html_content, str)) else 0
     result.html_lang = parser.html_lang
     result.detected_language = parser.html_lang
 
@@ -839,6 +923,32 @@ def extract_html(
     words = [w for w in clean_text.split(" ") if w]
     result.word_count = len(words)
     result.clean_text_available = result.word_count > 0
+    result.paragraph_count = len(parser.paragraphs)
+
+    # Main-content candidate selection hierarchy:
+    # 1. <main> element (confidence = 1.0)
+    # 2. <article> element (confidence = 0.9)
+    # 3. role="main" element (confidence = 0.85)
+    # 4. Fallback clean visible body text (confidence = 0.5)
+    main_text = re.sub(r"\s+", " ", "".join(parser.main_tag_fragments)).strip()
+    article_text = re.sub(r"\s+", " ", "".join(parser.article_tag_fragments)).strip()
+    role_main_text = re.sub(r"\s+", " ", "".join(parser.role_main_fragments)).strip()
+
+    if main_text:
+        result.main_content_candidate = main_text
+        result.main_content_confidence = 1.0
+    elif article_text:
+        result.main_content_candidate = article_text
+        result.main_content_confidence = 0.9
+    elif role_main_text:
+        result.main_content_candidate = role_main_text
+        result.main_content_confidence = 0.85
+    elif clean_text:
+        result.main_content_candidate = clean_text
+        result.main_content_confidence = 0.5
+    else:
+        result.main_content_candidate = None
+        result.main_content_confidence = None
 
     # 1. Title Extraction
     result.title_count = len(parser.titles)
@@ -1314,8 +1424,12 @@ def extract_page(
 
     # Populate scalar PageExtraction fields
     extraction.html_available = extracted_data.html_available
+    extraction.content_size_bytes = extracted_data.content_size_bytes
     extraction.clean_text_available = extracted_data.clean_text_available
     extraction.word_count = extracted_data.word_count
+    extraction.paragraph_count = extracted_data.paragraph_count
+    extraction.main_content_candidate = extracted_data.main_content_candidate
+    extraction.main_content_confidence = extracted_data.main_content_confidence
     extraction.detected_language = extracted_data.detected_language
     extraction.extraction_status = extracted_data.extraction_status
     extraction.extraction_error = extracted_data.extraction_error
@@ -1575,8 +1689,11 @@ def extract_page(
         if norm_final and norm_orig and norm_final != norm_orig:
             redirected = True
 
+    robots_txt_allowed = page_result.robots_txt_allowed if page_result.robots_txt_allowed is not None else True
+
     evidence_summary = {
-        "status_code": page_result.status_code,
+        "http_status": page_result.status_code,
+        "robots_txt_allowed": robots_txt_allowed,
         "has_content": bool(page_result.content and page_result.content.strip()),
         "content_type": page_result.content_type,
         "redirected": redirected,
@@ -1595,7 +1712,7 @@ def extract_page(
         PageIndexabilityEvidence(
             page_extraction_id=extraction.id,
             http_status=page_result.status_code,
-            robots_txt_allowed=None,  # Not exposed per-page by Task 3 crawler PageResult
+            robots_txt_allowed=robots_txt_allowed,
             page_noindex=page_noindex,
             page_nofollow=page_nofollow,
             canonical_url=canonical_url,

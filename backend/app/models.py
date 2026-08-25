@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -174,6 +174,11 @@ class PageResult(Base):
         nullable=True,
     )
 
+    robots_txt_allowed: Mapped[bool | None] = mapped_column(
+        nullable=True,
+        default=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
@@ -217,6 +222,12 @@ class PageExtraction(Base):
         default=False,
     )
 
+    content_size_bytes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
     clean_text_available: Mapped[bool] = mapped_column(
         nullable=False,
         default=False,
@@ -226,6 +237,22 @@ class PageExtraction(Base):
         Integer,
         nullable=False,
         default=0,
+    )
+
+    paragraph_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    main_content_candidate: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    main_content_confidence: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
     )
 
     detected_language: Mapped[str | None] = mapped_column(

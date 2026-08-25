@@ -262,20 +262,31 @@ def run_verification(target_url: str = "https://www.python.org/") -> dict:
     report_lines.append(f"  Result:           {'MATCH' if links_match else 'MISMATCH'}")
     report_lines.append("")
 
-    # 12. Clean Content Verification
+    # 12. Clean Content & Size Verification
     clean_text_valid = ext.clean_text_available and ext.word_count > 50 and "Python" in ext.clean_text
-    all_passed = all_passed and clean_text_valid
+    size_valid = ext.content_size_bytes == len(html.encode("utf-8")) and ext.content_size_bytes > 0
+    candidate_valid = ext.main_content_candidate is not None and ext.main_content_confidence is not None
+    paragraphs_valid = ext.paragraph_count > 0
+
+    clean_content_all_valid = clean_text_valid and size_valid and candidate_valid and paragraphs_valid
+    all_passed = all_passed and clean_content_all_valid
     results["clean_content"] = {
         "clean_text_available": ext.clean_text_available,
         "word_count": ext.word_count,
+        "content_size_bytes": ext.content_size_bytes,
+        "paragraph_count": ext.paragraph_count,
+        "main_content_confidence": ext.main_content_confidence,
         "sample": ext.clean_text[:120],
-        "match": clean_text_valid,
+        "match": clean_content_all_valid,
     }
-    report_lines.append("Clean Content:")
+    report_lines.append("Clean Content & Page Size:")
+    report_lines.append(f"  Content size (bytes): {ext.content_size_bytes}")
     report_lines.append(f"  Clean text available: {ext.clean_text_available}")
     report_lines.append(f"  Word count:           {ext.word_count}")
+    report_lines.append(f"  Paragraph count:      {ext.paragraph_count}")
+    report_lines.append(f"  Main candidate conf:  {ext.main_content_confidence}")
     report_lines.append(f"  Sample:               {ext.clean_text[:80]}...")
-    report_lines.append(f"  Result:               {'MATCH' if clean_text_valid else 'MISMATCH'}")
+    report_lines.append(f"  Result:               {'MATCH' if clean_content_all_valid else 'MISMATCH'}")
     report_lines.append("")
 
     # Final Result

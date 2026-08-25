@@ -193,6 +193,7 @@ class Crawler:
                         content=response.content,
                         error=response.error,
                         final_url=getattr(response, "final_url", None),
+                        robots_txt_allowed=True,
                     )
                 )
 
@@ -214,6 +215,7 @@ class Crawler:
                     content_type=response.content_type,
                     content=response.content,
                     final_url=getattr(response, "final_url", None),
+                    robots_txt_allowed=True,
                 )
             )
 
