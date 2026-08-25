@@ -6,7 +6,18 @@ from sqlalchemy.orm import Session
 from crawler.config import CrawlerConfig
 from crawler.crawler import Crawler
 
-from .models import PageResult, Scan, Website
+from .models import (
+    PageExtraction,
+    PageHeading,
+    PageImage,
+    PageIndexabilityEvidence,
+    PageLink,
+    PageResult,
+    PageStructuredData,
+    Scan,
+    Website,
+)
+from .page_extractor import extract_page, extract_scan_pages
 
 
 ALLOWED_STATES = {
@@ -193,6 +204,14 @@ def run_scan(
         db.commit()
         db.refresh(scan)
 
+        # Trigger Task 4 page extraction pipeline for crawled pages
+        try:
+            from .page_extractor import extract_scan_pages
+            extract_scan_pages(db, scan.id)
+        except Exception:
+            # Error isolation: ensure extraction issue does not fail a successful crawl
+            pass
+
         update_scan_status(
             db,
             scan,
@@ -232,3 +251,244 @@ def get_scan_pages(
         .order_by(PageResult.id)
         .all()
     )
+
+
+def get_page_result(
+    db: Session,
+    page_result_id: int,
+) -> PageResult:
+    page_result = db.get(
+        PageResult,
+        page_result_id,
+    )
+
+    if page_result is None:
+        raise ValueError(
+            "Page not found"
+        )
+
+    return page_result
+
+
+def get_page_extraction(
+    db: Session,
+    page_result_id: int,
+) -> PageExtraction | None:
+    page_result = get_page_result(
+        db,
+        page_result_id,
+    )
+
+    return page_result.extraction
+
+
+def get_page_intelligence(
+    db: Session,
+    page_result_id: int,
+) -> dict:
+    page_result = get_page_result(
+        db,
+        page_result_id,
+    )
+    extraction = page_result.extraction
+
+    return {
+        "page_result_id": page_result.id,
+        "scan_id": page_result.scan_id,
+        "url": page_result.url,
+        "final_url": page_result.final_url,
+        "status_code": page_result.status_code,
+        "content_type": page_result.content_type,
+        "created_at": page_result.created_at,
+        "extraction": extraction,
+        "meta_descriptions": extraction.meta_descriptions if extraction else [],
+        "headings": extraction.headings if extraction else [],
+        "canonicals": extraction.canonicals if extraction else [],
+        "robots": extraction.robots if extraction else None,
+        "social_metadata": extraction.social_metadata if extraction else [],
+        "structured_data": extraction.structured_data if extraction else [],
+        "microdata": extraction.microdata if extraction else [],
+        "breadcrumbs": extraction.breadcrumbs if extraction else [],
+        "images": extraction.images if extraction else [],
+        "links": extraction.links if extraction else [],
+        "language": extraction.language if extraction else None,
+        "hreflang": extraction.hreflang if extraction else [],
+        "indexability_evidence": extraction.indexability_evidence if extraction else None,
+    }
+
+
+def get_page_metadata(
+    db: Session,
+    page_result_id: int,
+) -> dict:
+    page_result = get_page_result(
+        db,
+        page_result_id,
+    )
+    extraction = page_result.extraction
+
+    if extraction is None:
+        raise ValueError(
+            "Page extraction not found"
+        )
+
+    return {
+        "page_result_id": page_result.id,
+        "page_extraction_id": extraction.id,
+        "detected_language": extraction.detected_language,
+        "title_present": extraction.title_present,
+        "title_text": extraction.title_text,
+        "title_length": extraction.title_length,
+        "title_word_count": extraction.title_word_count,
+        "title_empty": extraction.title_empty,
+        "title_duplicate": extraction.title_duplicate,
+        "title_too_short": extraction.title_too_short,
+        "title_too_long": extraction.title_too_long,
+        "meta_descriptions": extraction.meta_descriptions,
+        "social_metadata": extraction.social_metadata,
+        "language": extraction.language,
+        "hreflang": extraction.hreflang,
+        "canonicals": extraction.canonicals,
+        "robots": extraction.robots,
+    }
+
+
+def get_page_headings(
+    db: Session,
+    page_result_id: int,
+) -> list[PageHeading]:
+    page_result = get_page_result(
+        db,
+        page_result_id,
+    )
+    extraction = page_result.extraction
+
+    if extraction is None:
+        raise ValueError(
+            "Page extraction not found"
+        )
+
+    return extraction.headings
+
+
+def get_page_structured_data(
+    db: Session,
+    page_result_id: int,
+) -> list[PageStructuredData]:
+    page_result = get_page_result(
+        db,
+        page_result_id,
+    )
+    extraction = page_result.extraction
+
+    if extraction is None:
+        raise ValueError(
+            "Page extraction not found"
+        )
+
+    return extraction.structured_data
+
+
+def get_page_links(
+    db: Session,
+    page_result_id: int,
+) -> list[PageLink]:
+    page_result = get_page_result(
+        db,
+        page_result_id,
+    )
+    extraction = page_result.extraction
+
+    if extraction is None:
+        raise ValueError(
+            "Page extraction not found"
+        )
+
+    return extraction.links
+
+
+def get_page_images(
+    db: Session,
+    page_result_id: int,
+) -> list[PageImage]:
+    page_result = get_page_result(
+        db,
+        page_result_id,
+    )
+    extraction = page_result.extraction
+
+    if extraction is None:
+        raise ValueError(
+            "Page extraction not found"
+        )
+
+    return extraction.images
+
+
+def get_page_indexability(
+    db: Session,
+    page_result_id: int,
+) -> PageIndexabilityEvidence | None:
+    page_result = get_page_result(
+        db,
+        page_result_id,
+    )
+    extraction = page_result.extraction
+
+    if extraction is None:
+        raise ValueError(
+            "Page extraction not found"
+        )
+
+    return extraction.indexability_evidence
+
+
+def get_scan_page_intelligence(
+    db: Session,
+    scan_id: int,
+) -> list[dict]:
+    scan = db.get(
+        Scan,
+        scan_id,
+    )
+
+    if scan is None:
+        raise ValueError(
+            "Scan not found"
+        )
+
+    pages = (
+        db.query(PageResult)
+        .filter(PageResult.scan_id == scan_id)
+        .order_by(PageResult.id)
+        .all()
+    )
+
+    results = []
+    for page in pages:
+        extraction = page.extraction
+        results.append({
+            "page_result_id": page.id,
+            "scan_id": page.scan_id,
+            "url": page.url,
+            "final_url": page.final_url,
+            "status_code": page.status_code,
+            "content_type": page.content_type,
+            "created_at": page.created_at,
+            "extraction": extraction,
+            "meta_descriptions": extraction.meta_descriptions if extraction else [],
+            "headings": extraction.headings if extraction else [],
+            "canonicals": extraction.canonicals if extraction else [],
+            "robots": extraction.robots if extraction else None,
+            "social_metadata": extraction.social_metadata if extraction else [],
+            "structured_data": extraction.structured_data if extraction else [],
+            "microdata": extraction.microdata if extraction else [],
+            "breadcrumbs": extraction.breadcrumbs if extraction else [],
+            "images": extraction.images if extraction else [],
+            "links": extraction.links if extraction else [],
+            "language": extraction.language if extraction else None,
+            "hreflang": extraction.hreflang if extraction else [],
+            "indexability_evidence": extraction.indexability_evidence if extraction else None,
+        })
+
+    return results

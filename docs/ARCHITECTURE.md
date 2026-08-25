@@ -13,7 +13,11 @@ Website
     ↓
 Crawler
     ↓
-Website Data
+Website Data (PageResult Evidence Layer)
+    ↓
+PageExtraction (Structured Extraction Layer)
+    ↓
+Structured Page Intelligence
     ↓
 SEO / Content / Entity Analysis
     ↓
@@ -30,6 +34,19 @@ Fix Engine
 Validation
     ↓
 Monitoring
+
+### Page Intelligence Extraction Pipeline
+
+```text
+PageResult (Raw Crawl Evidence)
+    ↓
+PageExtraction (Structured Extraction Layer)
+    ↓
+Structured Page Intelligence (Headings, Metadata, JSON-LD, Microdata, Links, Images, Indexability)
+    ↓
+Backend API (/api/v1/pages/* & /api/v1/scans/{scan_id}/page-intelligence)
+```
+
 
 
 ## 2. High-Level System Flow

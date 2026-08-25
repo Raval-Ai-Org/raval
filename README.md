@@ -247,29 +247,26 @@ completed
 
 ## Future Development
 
-After the Task 3 crawler foundation is completed, implementation can proceed incrementally according to the documented architecture.
+After the Task 4 Page Extraction Engine is completed, implementation can proceed incrementally according to the documented architecture.
 
 Future implementation areas may include:
 
-- Headless browser rendering (e.g. Playwright / Crawlee for dynamic JS rendering)
-- Deep structured page extraction (schema.org, metadata, headings, OpenGraph)
-- Technical SEO engine
-- Content intelligence engine
-- Entity intelligence
-- GEO/AEO intelligence
-- AI visibility benchmarking
-- Citation intelligence
+- Headless browser rendering (e.g. Playwright for complex client-side dynamic rendering)
+- Technical SEO scoring engine
+- Content intelligence & quality scoring
+- Entity intelligence & knowledge graph mapping
+- GEO/AEO visibility scoring
+- AI visibility benchmarking & citations
 - Competitor intelligence
 - Search Console & Analytics connectors
-- Opportunity engine
-- Automated fix engine
+- Opportunity & automated fix engine
 - Continuous monitoring
 
 ### Current Boundary
 
-The current implementation provides a robust Python crawler engine integrated with the FastAPI backend and SQLite/PostgreSQL persistence layer.
+The current implementation provides a complete crawler engine integrated with FastAPI, SQLite/PostgreSQL persistence, and a comprehensive 13-domain structured Page Extraction Engine capturing titles, meta descriptions, headings, canonicals, robots directives, social metadata (OG/Twitter), JSON-LD, microdata, breadcrumbs, images, links, language/hreflang, clean content, and indexability evidence.
 
-Headless browser rendering (Playwright), structured extraction engines, and downstream AI/SEO intelligence modules remain part of future milestones.
+Downstream scoring engines (SEO/GEO/AEO composite scores) and automated recommendations remain part of future milestones.
 
 ## Repository
 
@@ -293,6 +290,7 @@ Make important logic testable
 Core project documentation:
 
 - `docs/ARCHITECTURE.md` — system architecture
+- `docs/PAGE_EXTRACTION.md` — page extraction engine specification
 - `docs/DATA_MODEL.md` — core database/data model
 - `docs/ERD.png` — entity relationship diagram
 - `docs/TECHNOLOGY_STACK.md` — technology decisions
