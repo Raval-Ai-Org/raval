@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, HttpUrl
+from pydantic import BaseModel, ConfigDict, HttpUrl, computed_field
 
 
 class WebsiteCreate(BaseModel):
@@ -319,3 +319,76 @@ class PageIntelligenceResponse(BaseModel):
     language: PageLanguageResponse | None = None
     hreflang: list[PageHreflangResponse] = []
     indexability_evidence: PageIndexabilityEvidenceResponse | None = None
+
+
+class TechnicalSeoFindingResponse(BaseModel):
+    """A single technical-SEO finding with its full evidence payload.
+
+    ``page_id`` and ``type`` are exposed as aliases of the persisted
+    ``page_result_id`` and ``rule_id`` columns so the API satisfies the
+    Finding contract in VALIDATION_RULES.md (§9) without a redundant column.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    website_id: int
+    scan_id: int
+    page_result_id: int
+    rule_id: str
+    category: str
+    severity: str
+    status: str
+    message: str | None = None
+    observed_value: str | None = None
+    expected_state: str | None = None
+    reason: str | None = None
+    recommendation: str | None = None
+    evidence: dict[str, Any] | None = None
+    created_at: datetime
+
+    @computed_field
+    @property
+    def page_id(self) -> int:
+        return self.page_result_id
+
+    @computed_field
+    @property
+    def type(self) -> str:
+        return self.rule_id
+
+
+class CategoryHealthResponse(BaseModel):
+    """Per-category aggregation used by the provisional scoring foundation."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    category: str
+    total: int
+    counts_by_severity: dict[str, int]
+    health: int
+
+
+class ScoringMetaResponse(BaseModel):
+    """Metadata that marks scores as provisional and future-replaceable."""
+
+    provisional: bool
+    version: str
+    weights: dict[str, int]
+    note: str
+
+
+class FindingsSummaryResponse(BaseModel):
+    """Summary counts + technical category health for a single scan."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    scan_id: int
+    website_id: int | None = None
+    pages_analyzed: int
+    total_findings: int
+    counts_by_severity: dict[str, int]
+    categories: list[CategoryHealthResponse] = []
+    provisional_overall_health: int
+    worst_category: str | None = None
+    scoring: ScoringMetaResponse

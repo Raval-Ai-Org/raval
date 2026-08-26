@@ -119,6 +119,12 @@ class Scan(Base):
         cascade="all, delete-orphan",
     )
 
+    findings = relationship(
+        "TechnicalSeoFinding",
+        back_populates="scan",
+        cascade="all, delete-orphan",
+    )
+
 
 class PageResult(Base):
     __tablename__ = "page_results"
@@ -194,6 +200,12 @@ class PageResult(Base):
         "PageExtraction",
         back_populates="page_result",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    findings = relationship(
+        "TechnicalSeoFinding",
+        back_populates="page_result",
         cascade="all, delete-orphan",
     )
 
@@ -1174,4 +1186,114 @@ class PageIndexabilityEvidence(Base):
     page_extraction = relationship(
         "PageExtraction",
         back_populates="indexability_evidence",
+    )
+
+
+class TechnicalSeoFinding(Base):
+    """A single technical-SEO / indexability finding produced by the rule engine.
+
+    Task 5 layer. Each row is one rule firing on one page, backed by the
+    Task 4 extraction evidence. Findings are page-anchored (``page_result_id``
+    is required) and carry the full explainability payload:
+    what is wrong (``message``/``observed_value``), where (page relations),
+    why it matters (``reason``), the expected state, a recommendation, and the
+    raw evidence dict behind the decision. Idempotency is achieved by
+    purge-and-reinsert per scan/page, so there is intentionally no unique
+    constraint (one rule may legitimately emit several rows on one page, e.g.
+    multiple broken links).
+    """
+
+    __tablename__ = "technical_seo_findings"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    scan_id: Mapped[int] = mapped_column(
+        ForeignKey("scans.id"),
+        nullable=False,
+        index=True,
+    )
+
+    page_result_id: Mapped[int] = mapped_column(
+        ForeignKey("page_results.id"),
+        nullable=False,
+        index=True,
+    )
+
+    rule_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        index=True,
+    )
+
+    category: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        index=True,
+    )
+
+    severity: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="open",
+    )
+
+    message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    observed_value: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    expected_state: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    reason: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    recommendation: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    evidence: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    scan = relationship(
+        "Scan",
+        back_populates="findings",
+    )
+
+    page_result = relationship(
+        "PageResult",
+        back_populates="findings",
     )
