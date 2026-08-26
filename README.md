@@ -229,6 +229,23 @@ The example environment configuration is provided in:
 - Automated Testing Suite:
   - 131 automated tests passing across crawler units, integration, database persistence, and API routes
 
+### Task 4 (Page Extraction Engine) — Completed
+
+- Deterministic, zero-network HTML extraction (`page_extractor.extract_html` pure; `extract_scan_pages` stateful) persisting `PageExtraction` + 13 child evidence tables per crawled page
+- 13 extraction domains: titles, meta descriptions, headings, canonicals, robots directives, social metadata (Open Graph / Twitter), JSON-LD, microdata, breadcrumbs, images, links, language/hreflang, and indexability evidence
+- Read-only page-intelligence and per-domain extraction API endpoints
+- Extraction runs automatically at the end of `run_scan`, error-isolated
+
+### Task 5 (Technical SEO & Indexability Intelligence Engine) — Completed
+
+- Modular, pure-logic rule engine (`backend/app/technical_seo/`) analyzing the Task 4 evidence into page-anchored, evidence-backed, severity-classified findings — 58 rules across 13 categories, each registered via an `@register` decorator with per-rule fault isolation
+- `RuleContext`/`ScanContext` duck-typed to accept both the ORM evidence (production) and the extraction dataclasses (no-DB verification); strict per-scan isolation for cross-page rules
+- Ownership matrix (one owner per signal, no double-emission) and conservative false-positive controls (broken links only with crawl evidence, external links never flagged, multiple-H1 and cross-page canonical are informational, structural-only structured-data checks)
+- Persistence + orchestration in `backend/app/findings_service.py` (idempotent purge-and-reinsert, single commit); analysis runs automatically after extraction in `run_scan`, error-isolated
+- Six findings API endpoints (`analyze`, scan/page/website findings with filters, finding-by-id, summary) with a `400`/`404` contract; a **provisional** technical-health score explicitly separated from the future final GEO/AEO score
+- Full specification in `docs/TECHNICAL_SEO_RULES.md`; real-site verification script (`backend/scripts/verify_technical_seo.py`) plus rule/scoring/API/real-site test suites
+
+
 ### Backend Verification
 
 The following core flow has been successfully verified:
@@ -247,15 +264,15 @@ completed
 
 ## Future Development
 
-After the Task 4 Page Extraction Engine is completed, implementation can proceed incrementally according to the documented architecture.
+With the Crawler (Task 3), Page Extraction Engine (Task 4), and Technical SEO & Indexability Intelligence Engine (Task 5) completed, implementation can proceed incrementally according to the documented architecture.
 
 Future implementation areas may include:
 
 - Headless browser rendering (e.g. Playwright for complex client-side dynamic rendering)
-- Technical SEO scoring engine
 - Content intelligence & quality scoring
 - Entity intelligence & knowledge graph mapping
 - GEO/AEO visibility scoring
+- Final SEO/GEO/AEO composite scoring (replacing the current provisional findings score)
 - AI visibility benchmarking & citations
 - Competitor intelligence
 - Search Console & Analytics connectors
@@ -264,9 +281,9 @@ Future implementation areas may include:
 
 ### Current Boundary
 
-The current implementation provides a complete crawler engine integrated with FastAPI, SQLite/PostgreSQL persistence, and a comprehensive 13-domain structured Page Extraction Engine capturing titles, meta descriptions, headings, canonicals, robots directives, social metadata (OG/Twitter), JSON-LD, microdata, breadcrumbs, images, links, language/hreflang, clean content, and indexability evidence.
+The current implementation provides a complete crawler engine integrated with FastAPI, SQLite/PostgreSQL persistence, a comprehensive 13-domain structured Page Extraction Engine, and a Technical SEO & Indexability Intelligence Engine that turns the extraction evidence into page-anchored, evidence-backed, severity-classified findings (58 rules across 13 categories) exposed through dedicated findings endpoints.
 
-Downstream scoring engines (SEO/GEO/AEO composite scores) and automated recommendations remain part of future milestones.
+Final composite scoring (SEO/GEO/AEO) and automated recommendations remain part of future milestones; the findings summary currently exposes only a clearly-marked provisional technical-health heuristic.
 
 ## Repository
 
@@ -291,6 +308,7 @@ Core project documentation:
 
 - `docs/ARCHITECTURE.md` — system architecture
 - `docs/PAGE_EXTRACTION.md` — page extraction engine specification
+- `docs/TECHNICAL_SEO_RULES.md` — technical SEO & indexability rule engine (rule catalog, ownership matrix, false-positive controls, provisional scoring)
 - `docs/DATA_MODEL.md` — core database/data model
 - `docs/ERD.png` — entity relationship diagram
 - `docs/TECHNOLOGY_STACK.md` — technology decisions

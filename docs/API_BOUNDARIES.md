@@ -108,18 +108,35 @@ The current backend provides the core endpoints required for website management,
 - `GET /api/v1/pages/{page_id}/images` — Returns extracted image records (URL, alt text, missing/empty flags, dimensions, lazy loading).
 - `GET /api/v1/pages/{page_id}/indexability` — Returns extracted indexability evidence (`PageIndexabilityEvidence` record).
 
+#### Technical SEO Findings (Task 5)
+The Technical SEO & Indexability Intelligence Engine analyzes the persisted Task 4 extraction evidence and produces page-anchored, evidence-backed, severity-classified findings. Analysis runs automatically at the end of `POST /scans/{scan_id}/run` (error-isolated) and can be re-run on demand. Full rule catalog, ownership matrix, false-positive controls, and the provisional scoring model are documented in `docs/TECHNICAL_SEO_RULES.md`.
+
+- `POST /api/v1/scans/{scan_id}/analyze` — Runs (or re-runs, idempotently) the rule engine over the scan's extracted pages and returns the provisional findings summary.
+- `GET /api/v1/scans/{scan_id}/findings` — Returns the scan's findings. Optional filters: `severity`, `category`, `rule_id`, `status`.
+- `GET /api/v1/scans/{scan_id}/findings/summary` — Returns the aggregated summary (per-category counts and health, provisional overall health, worst category) computed from the persisted findings.
+- `GET /api/v1/pages/{page_id}/findings` — Returns a single page's findings (same optional filters). A clean page returns `[]`.
+- `GET /api/v1/findings/{finding_id}` — Returns a single finding with its full explainability payload (what/where/why/what-next + evidence).
+- `GET /api/v1/websites/{website_id}/findings` — Returns all findings for a website across its scans (same optional filters).
+
+Each finding response carries `rule_id`/`category`/`severity`/`status`, the explainability fields (`message`, `observed_value`, `expected_state`, `reason`, `recommendation`), the raw `evidence` object, and — per VALIDATION_RULES.md §9 — `page_id` (alias of `page_result_id`) and `type` (alias of `rule_id`). Scoring is explicitly marked `provisional` and is **not** the final GEO/AEO score.
+
 ### Error Handling & 404 Behavior Contract
 - **Unknown Page ID (`page_id`)**: Returns HTTP 404 with `{"detail": "Page not found"}`.
 - **Unknown Scan ID (`scan_id`)**: Returns HTTP 404 with `{"detail": "Scan not found"}`.
 - **Existing Page without Extraction**:
   - `GET /api/v1/pages/{page_id}/intelligence` returns HTTP 200 with `extraction: null` and empty collections (`[]`) for child models.
   - Dedicated extraction endpoints (`/extraction`, `/metadata`, `/headings`, `/structured-data`, `/links`, `/images`, `/indexability`) return HTTP 404 with `{"detail": "Page extraction not found"}`.
+- **Findings (Task 5)**:
+  - Unknown `finding_id` returns HTTP 404 with `{"detail": "Finding not found"}`; unknown `website_id` returns `{"detail": "Website not found"}`.
+  - An invalid `severity` or `category` filter value returns HTTP 400 (valid values are derived from the live rule registry).
+  - A page or scan with no findings returns HTTP 200 with `[]`.
 - **Exceptions**: Database errors and stack traces are suppressed; clear HTTP client error responses are returned.
 
-### Architectural Separation: Evidence vs Scoring
+### Architectural Separation: Evidence vs Analysis vs Scoring
 - `PageResult` is the raw crawl evidence layer.
-- `PageExtraction` is the structured page extraction evidence layer.
-- Extraction APIs are strictly read-only access endpoints and do NOT compute SEO, GEO, AEO, or indexability scores.
+- `PageExtraction` is the structured page extraction evidence layer (Task 4).
+- `TechnicalSeoFinding` is the analysis layer (Task 5): each finding is derived from, and traceable to, the extraction evidence for a specific page.
+- Extraction APIs are strictly read-only and do NOT compute scores. The findings summary carries only a **provisional** technical-health heuristic, explicitly not the final SEO/GEO/AEO score.
 
 ### Request Flow
 
@@ -157,10 +174,12 @@ The implemented API, crawler engine, service flows, and page extraction intellig
 
 ### Implementation Boundary
 
-The current API covers website creation, scan execution, the crawler pipeline, page evidence persistence, automated HTML extraction execution, structured page extraction evidence retrieval, and indexability signal persistence across all 13 extraction domains.
+The current API covers website creation, scan execution, the crawler pipeline, page evidence persistence, automated HTML extraction execution, structured page extraction evidence retrieval, indexability signal persistence across all 13 extraction domains, and the Task 5 Technical SEO & Indexability Intelligence Engine (modular rule engine producing page-anchored, evidence-backed, severity-classified findings + a provisional technical-health summary).
+
+The `FindingService` boundary reserved in §9 is now implemented as `backend/app/findings_service.py` (the single point where the pure rule engine in `app.technical_seo` is persisted to `TechnicalSeoFinding` rows).
 
 The following API areas remain future implementation work:
-- SEO, GEO, and AEO scoring algorithms
+- Final SEO, GEO, and AEO composite scoring algorithms (the current findings score is provisional)
 - Automated recommendations and fixes
 - AI visibility benchmark runs & citations
 - External connectors & monitoring

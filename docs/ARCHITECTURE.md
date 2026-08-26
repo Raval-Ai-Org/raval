@@ -487,6 +487,31 @@ Recommendations
 Validation
 Monitoring
 
+### Implementation (Task 5 — Technical SEO & Indexability Intelligence Engine)
+
+The technical-SEO portion of the SEO Engine is implemented as a modular rule engine that consumes the Task 4 page-extraction evidence and produces structured, page-anchored findings. It does not re-crawl or re-parse:
+
+```text
+Website → Crawler → Page Extraction → [ Technical SEO Analysis → Findings/Evidence ] → API
+```
+
+**Pure logic vs persistence boundary.** `backend/app/technical_seo/` is pure analysis logic — no database session, no FastAPI, no model writes — mirroring how `page_extractor.extract_html` is pure while `services.run_scan` is stateful. It reads a `RuleContext` (per page) and a `ScanContext` (per scan) and returns in-memory `RuleFinding` DTOs. `backend/app/findings_service.py` is the single place that persists those DTOs to `TechnicalSeoFinding` rows.
+
+**Modular rules & registry.** Each rule is a small function decorated with `@register(rule_id, category, severity, name, purpose)` and grouped by category under `technical_seo/rules/` (http, indexability, canonical, robots, title, meta, headings, duplicates, links, images, structured_data, social, language). The engine (`run_page_rules`) runs every registered rule with per-rule fault isolation — a rule that raises is logged and skipped, never silently dropped, so one buggy rule cannot suppress the rest.
+
+**Evidence-backed & explainable.** Every finding records what is wrong (`message`/`observed_value`), where (`page_result_id`, `scan_id`, `website_id`), why (`reason`, `expected_state`, `evidence`), what to do (`recommendation`), and how it is tracked (`rule_id`, `category`, `severity`, `status`). Findings remain traceable to the exact extraction evidence that produced them.
+
+**Ownership matrix.** Exactly one category owns each signal (HTTP owns status codes, indexability owns noindex/robots.txt block, canonical owns canonical issues, duplicates owns cross-page duplicates, title/meta own within-page issues, etc.) so a single cause never produces duplicate findings across categories.
+
+**False-positive controls.** The engine reports only what the evidence proves — e.g. a broken internal link is emitted only when the destination was actually crawled in-scan and returned 4xx/5xx; external links are never flagged; multiple H1 and cross-page canonicals are informational, not errors; structured-data checks are structural only (not a Schema.org validator).
+
+**Provisional scoring.** The summary derives a per-category and overall technical-health heuristic from real findings, marked `provisional` in the payload. This is explicitly **not** the final GEO/AEO score; the future `Score → Category → Rule → Evidence → Page` chain can replace the numbers without changing the finding evidence.
+
+**Automatic execution.** `services.run_scan` triggers `analyze_scan_findings` after the extraction hook, error-isolated, so analysis failure can never fail an otherwise-successful crawl.
+
+The full rule catalog (all 58 rules across 13 categories), ownership matrix, false-positive controls, severity model, provisional scoring, API surface, and a documented known evidence limitation (the crawler currently hardcodes `robots_txt_allowed = True`, so the robots.txt-block rule is fixture-only today) are specified in `docs/TECHNICAL_SEO_RULES.md`.
+
+
 ## 9. Content Engine
 ### Responsibility
 
