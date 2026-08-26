@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from .database import Base, engine, get_db
 from .models import Scan
 from .schemas import (
+    FindingsSummaryResponse,
     PageBreadcrumbResponse,
     PageCanonicalResponse,
     PageExtractionResponse,
@@ -23,6 +24,7 @@ from .schemas import (
     PageStructuredDataResponse,
     ScanResponse,
     ScanStatusUpdate,
+    TechnicalSeoFindingResponse,
     WebsiteCreate,
     WebsiteResponse,
 )
@@ -42,6 +44,37 @@ from .services import (
     run_scan,
     update_scan_status,
 )
+from .findings_service import (
+    analyze_scan_findings,
+    get_finding,
+    get_page_findings,
+    get_scan_findings,
+    get_scan_findings_summary,
+    get_website_findings,
+)
+from .technical_seo import RULE_REGISTRY
+from .technical_seo.config import SEVERITY_ORDER
+
+
+# Valid filter values for the findings endpoints (400 on anything else).
+VALID_SEVERITIES = set(SEVERITY_ORDER)
+VALID_CATEGORIES = {rule.category for rule in RULE_REGISTRY}
+
+
+def _validate_finding_filters(
+    severity: str | None,
+    category: str | None,
+) -> None:
+    if severity is not None and severity not in VALID_SEVERITIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid severity: {severity}",
+        )
+    if category is not None and category not in VALID_CATEGORIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid category: {category}",
+        )
 
 
 Base.metadata.create_all(
@@ -394,6 +427,156 @@ def get_page_indexability_endpoint(
         return get_page_indexability(
             db,
             page_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — technical-SEO findings
+# ---------------------------------------------------------------------------
+@app.post(
+    "/api/v1/scans/{scan_id}/analyze",
+    response_model=FindingsSummaryResponse,
+)
+def analyze_scan_endpoint(
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return analyze_scan_findings(
+            db,
+            scan_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/scans/{scan_id}/findings",
+    response_model=list[TechnicalSeoFindingResponse],
+)
+def get_scan_findings_endpoint(
+    scan_id: int,
+    severity: str | None = None,
+    category: str | None = None,
+    rule_id: str | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+):
+    _validate_finding_filters(severity, category)
+    try:
+        return get_scan_findings(
+            db,
+            scan_id,
+            severity=severity,
+            category=category,
+            rule_id=rule_id,
+            status=status,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/scans/{scan_id}/findings/summary",
+    response_model=FindingsSummaryResponse,
+)
+def get_scan_findings_summary_endpoint(
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_scan_findings_summary(
+            db,
+            scan_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/pages/{page_id}/findings",
+    response_model=list[TechnicalSeoFindingResponse],
+)
+def get_page_findings_endpoint(
+    page_id: int,
+    severity: str | None = None,
+    category: str | None = None,
+    rule_id: str | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+):
+    _validate_finding_filters(severity, category)
+    try:
+        return get_page_findings(
+            db,
+            page_id,
+            severity=severity,
+            category=category,
+            rule_id=rule_id,
+            status=status,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/findings/{finding_id}",
+    response_model=TechnicalSeoFindingResponse,
+)
+def get_finding_endpoint(
+    finding_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_finding(
+            db,
+            finding_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/findings",
+    response_model=list[TechnicalSeoFindingResponse],
+)
+def get_website_findings_endpoint(
+    website_id: int,
+    severity: str | None = None,
+    category: str | None = None,
+    rule_id: str | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+):
+    _validate_finding_filters(severity, category)
+    try:
+        return get_website_findings(
+            db,
+            website_id,
+            severity=severity,
+            category=category,
+            rule_id=rule_id,
+            status=status,
         )
     except ValueError as exc:
         raise HTTPException(
