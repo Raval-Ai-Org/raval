@@ -1,55 +1,67 @@
-from .answer_analyzer import (
+import os
+import sys
+
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(_current_dir)
+_backend_dir = os.path.join(_project_root, "backend")
+
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
+from backend.app.answer_analyzer import (
     AnswerAnalysisEvidence,
     AnswerAnalyzer,
     analyze_answers,
 )
-from .content_gap_analyzer import (
+from backend.app.content_gap_analyzer import (
     ContentGapEvidence,
     ContentGapAnalyzer,
     analyze_content_gaps,
 )
-from .content_intelligence import (
+from backend.app.content_intelligence_analyzer import (
     ContentIntelligenceAnalyzer,
     ContentIntelligenceSummary,
     analyze_content_intelligence,
 )
-from .content_quality_checks import (
+from backend.app.content_quality_checks import (
     ContentQualityChecker,
     ContentQualityChecksResult,
     run_content_quality_checks,
 )
-from .intent_analyzer import (
+from backend.app.intent_analyzer import (
     IntentAnalysisEvidence,
     IntentAnalyzer,
     analyze_intent,
 )
-from .quality_analyzer import (
+from backend.app.quality_analyzer import (
     QualityAnalysisEvidence,
     QualityAnalyzer,
     analyze_quality,
 )
-from .question_analyzer import (
+from backend.app.question_analyzer import (
     QuestionAnalysisEvidence,
     QuestionAnalyzer,
     analyze_questions,
 )
-from .readiness_analyzer import (
+from backend.app.readiness_analyzer import (
     AnswerReadinessEvidence,
     ReadinessAnalyzer,
     analyze_readiness,
 )
-from .semantic_coverage_analyzer import (
+from backend.app.semantic_coverage_analyzer import (
     SemanticCoverageEvidence,
     SemanticCoverageAnalyzer,
     analyze_semantic_coverage,
 )
-from .structure_analyzer import (
+from backend.app.content_structure_analyzer import (
     ContentStructureAnalyzer,
     ContentStructureEvidence,
     analyze_content_structure,
     evaluate_title_h1_alignment,
 )
-from .topic_analyzer import (
+from backend.app.topic_analyzer import (
     TopicAnalysisEvidence,
     TopicSemanticAnalyzer,
     analyze_topic_semantics,

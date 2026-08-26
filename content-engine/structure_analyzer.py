@@ -1,17 +1,20 @@
 """
-Content Engine (Raval AI GEO / AEO / SEO Intelligence)
+Content Structure Analyzer Engine (Content Engine)
 """
 
 import os
 import sys
 
-# Ensure backend directory is discoverable
 current_dir = os.path.dirname(os.path.abspath(__file__))
-backend_dir = os.path.join(os.path.dirname(current_dir), "backend")
+project_root = os.path.dirname(current_dir)
+backend_dir = os.path.join(project_root, "backend")
+
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-from app.content_structure_analyzer import (
+from backend.app.content_structure_analyzer import (
     ContentStructureAnalyzer,
     ContentStructureEvidence,
     analyze_content_structure,
