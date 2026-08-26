@@ -213,6 +213,14 @@ def run_scan(
             # Error isolation: ensure extraction issue does not fail a successful crawl
             pass
 
+        # Trigger Task 5 technical-SEO analysis over the extracted evidence
+        try:
+            from .findings_service import analyze_scan_findings
+            analyze_scan_findings(db, scan.id)
+        except Exception:
+            # Error isolation: analysis failure must never fail a successful crawl
+            pass
+
         update_scan_status(
             db,
             scan,
