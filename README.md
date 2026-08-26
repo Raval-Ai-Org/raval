@@ -264,9 +264,12 @@ Future implementation areas may include:
 
 ### Current Boundary
 
-The current implementation provides a complete crawler engine integrated with FastAPI, SQLite/PostgreSQL persistence, and a comprehensive 13-domain structured Page Extraction Engine capturing titles, meta descriptions, headings, canonicals, robots directives, social metadata (OG/Twitter), JSON-LD, microdata, breadcrumbs, images, links, language/hreflang, clean content, and indexability evidence.
-
-Downstream scoring engines (SEO/GEO/AEO composite scores) and automated recommendations remain part of future milestones.
+The current implementation provides:
+- A high-performance website crawler engine with polite rate-limiting, robots.txt, sitemap parsing, and scan lifecycle management.
+- A comprehensive 13-domain structured Page Extraction Engine capturing titles, meta descriptions, headings, canonicals, robots directives, social metadata (OG/Twitter), JSON-LD, microdata, breadcrumbs, images, links, language/hreflang, clean content, and indexability evidence.
+- A complete, deterministic Content Intelligence & AEO/GEO Engine featuring 11 specialized sub-analyzers: Content Structure, Topic & Semantics, Entity Extraction, Question Detection, Answer Detection, Answer-Readiness Scoring, Content Gap Analysis, Evidence Quality & Superlative Detection, Search Intent Inference, Semantic Coverage, Master Content Intelligence Synthesis, and Defensive Content Quality Checks.
+- Finding and Recommendation foundations with multi-tenant and historical scan isolation.
+- 350+ automated unit, integration, and real-site tests verifying the full pipeline.
 
 ## Repository
 
@@ -290,6 +293,7 @@ Make important logic testable
 Core project documentation:
 
 - `docs/ARCHITECTURE.md` — system architecture
+- `docs/CONTENT_AEO_RULES.md` — Content AEO, GEO & SEO intelligence rules specification
 - `docs/PAGE_EXTRACTION.md` — page extraction engine specification
 - `docs/DATA_MODEL.md` — core database/data model
 - `docs/ERD.png` — entity relationship diagram

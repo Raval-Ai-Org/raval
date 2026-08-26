@@ -149,18 +149,32 @@ The service layer owns business logic, scan state transitions, crawler invocatio
 
 The database layer is responsible for persistence and referential integrity (foreign keys linking `PageResult` to `Scan`, `PageExtraction` to `PageResult`, and child extraction tables to `PageExtraction`).
 
+#### Content Intelligence & AEO Analysis Endpoints (Task 5)
+- `GET /api/v1/pages/{page_id}/content-structure` — Detailed outline, heading hierarchy, paragraph metrics, and Title/H1 alignment.
+- `GET /api/v1/pages/{page_id}/topic-analysis` — Primary and supporting topic clusters, keyword density, and lexical diversity.
+- `GET /api/v1/pages/{page_id}/entity-analysis` — Named entities extracted from text and schema, entity classifications, and confidence.
+- `GET /api/v1/pages/{page_id}/question-analysis` — Explicit questions detected in headings, body, and schema, along with answer detection flags.
+- `GET /api/v1/pages/{page_id}/answer-analysis` — Answer directness evaluation, definition snippet detection, and answer length classification.
+- `GET /api/v1/pages/{page_id}/answer-readiness` — Comprehensive answer-readiness evaluation, readiness score (0.0 to 1.0), and grade.
+- `GET /api/v1/pages/{page_id}/content-gaps` — Unanswered question headings, thin sections, and missing topical dimensions.
+- `GET /api/v1/pages/{page_id}/quality-analysis` — Quantitative data points, citations, attributions, and unsupported superlative claims.
+- `GET /api/v1/pages/{page_id}/intent-analysis` — Primary search intent classification, confidence, secondary intents, and CTA signals.
+- `GET /api/v1/pages/{page_id}/semantic-coverage` — Domain breadth, covered/weak/missing concepts, and semantic coverage score.
+- `GET /api/v1/pages/{page_id}/content-intelligence` — Master synthesis containing overall score, status, strengths, critical issues, and findings.
+- `GET /api/v1/pages/{page_id}/content-quality-checks` — Defensive content integrity and resilience checks (empty, thin, malformed HTML, encoding).
+- `GET /api/v1/scans/{scan_id}/content-intelligence` — Scan-level content intelligence summary aggregating scores across all pages.
+- `POST /api/v1/pages/{page_id}/run-content-pipeline` — Executes the complete content intelligence pipeline for a page with optional finding persistence.
+- `GET /api/v1/content-intelligence/rules` — Catalog of explainable AEO/GEO/SEO content intelligence rules, thresholds, and remediations.
+
+#### Findings, Recommendations, Entities & AI Runs (Task 5 Foundation)
+- `GET /api/v1/websites/{website_id}/findings` / `GET /api/v1/scans/{scan_id}/findings` / `GET /api/v1/findings/{id}`
+- `GET /api/v1/websites/{website_id}/recommendations` / `GET /api/v1/findings/{id}/recommendations` / `GET /api/v1/recommendations/{id}`
+- `POST /api/v1/websites/{website_id}/entities` / `GET /api/v1/websites/{website_id}/entities` / `GET /api/v1/entities/{id}`
+- `POST /api/v1/websites/{website_id}/ai-runs` / `GET /api/v1/ai-runs/{id}` / `GET /api/v1/ai-runs/{id}/result` / `GET /api/v1/ai-results/{id}/citations`
+- `POST /api/v1/websites/{website_id}/question-sets` / `GET /api/v1/question-sets/{id}` / `POST /api/v1/question-sets/{id}/questions`
+
 ### Testing
 
-The implemented API, crawler engine, service flows, and page extraction intelligence are thoroughly verified by automated tests:
+The implemented API, crawler engine, service flows, page extraction intelligence, and analytical content intelligence engines are thoroughly verified by automated tests:
 
-- Automated test suites verify unit logic, crawler integration, database persistence, scan isolation, extraction sub-endpoints, and full nested page intelligence.
-
-### Implementation Boundary
-
-The current API covers website creation, scan execution, the crawler pipeline, page evidence persistence, automated HTML extraction execution, structured page extraction evidence retrieval, and indexability signal persistence across all 13 extraction domains.
-
-The following API areas remain future implementation work:
-- SEO, GEO, and AEO scoring algorithms
-- Automated recommendations and fixes
-- AI visibility benchmark runs & citations
-- External connectors & monitoring
+- 350+ automated test suites verify unit logic, crawler integration, database persistence, scan isolation, extraction sub-endpoints, and full nested page intelligence.

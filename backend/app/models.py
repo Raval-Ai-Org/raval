@@ -36,6 +36,32 @@ class Website(Base):
         cascade="all, delete-orphan",
     )
 
+    findings = relationship(
+        "Finding",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    question_sets = relationship(
+        "QuestionSet",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    ai_runs = relationship(
+        "AIRun",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    entities = relationship(
+        "Entity",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+
+
 
 class Scan(Base):
     __tablename__ = "scans"
@@ -119,6 +145,19 @@ class Scan(Base):
         cascade="all, delete-orphan",
     )
 
+    findings = relationship(
+        "Finding",
+        back_populates="scan",
+        cascade="all, delete-orphan",
+    )
+
+    entities = relationship(
+        "Entity",
+        back_populates="scan",
+        cascade="all, delete-orphan",
+    )
+
+
 
 class PageResult(Base):
     __tablename__ = "page_results"
@@ -196,6 +235,18 @@ class PageResult(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+
+    findings = relationship(
+        "Finding",
+        back_populates="page_result",
+    )
+
+    entities = relationship(
+        "Entity",
+        back_populates="page_result",
+        cascade="all, delete-orphan",
+    )
+
 
 
 class PageExtraction(Base):
@@ -1174,4 +1225,528 @@ class PageIndexabilityEvidence(Base):
     page_extraction = relationship(
         "PageExtraction",
         back_populates="indexability_evidence",
+    )
+
+
+class Finding(Base):
+    __tablename__ = "findings"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+    )
+
+    scan_id: Mapped[int] = mapped_column(
+        ForeignKey("scans.id"),
+        nullable=False,
+    )
+
+    page_id: Mapped[int | None] = mapped_column(
+        ForeignKey("page_results.id"),
+        nullable=True,
+    )
+
+    finding_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    category: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="seo",
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    description: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    severity: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="medium",
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="open",
+    )
+
+    evidence: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="findings",
+    )
+
+    scan = relationship(
+        "Scan",
+        back_populates="findings",
+    )
+
+    page_result = relationship(
+        "PageResult",
+        back_populates="findings",
+    )
+
+    recommendations = relationship(
+        "Recommendation",
+        back_populates="finding",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def type(self) -> str:
+        return self.finding_type
+
+
+class Recommendation(Base):
+    __tablename__ = "recommendations"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    finding_id: Mapped[int] = mapped_column(
+        ForeignKey("findings.id"),
+        nullable=False,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    description: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    priority: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="medium",
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="open",
+    )
+
+    impact: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    action_type: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    payload: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    finding = relationship(
+        "Finding",
+        back_populates="recommendations",
+    )
+
+
+class QuestionSet(Base):
+    __tablename__ = "question_sets"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    version: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="1.0",
+    )
+
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="question_sets",
+    )
+
+    questions = relationship(
+        "Question",
+        back_populates="question_set",
+        cascade="all, delete-orphan",
+    )
+
+
+class Question(Base):
+    __tablename__ = "questions"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    question_set_id: Mapped[int] = mapped_column(
+        ForeignKey("question_sets.id"),
+        nullable=False,
+    )
+
+    text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    intent: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    topic: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    question_set = relationship(
+        "QuestionSet",
+        back_populates="questions",
+    )
+
+    ai_runs = relationship(
+        "AIRun",
+        back_populates="question",
+        cascade="all, delete-orphan",
+    )
+
+
+class AIRun(Base):
+    __tablename__ = "ai_runs"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+    )
+
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("questions.id"),
+        nullable=False,
+    )
+
+    provider: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    model: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    environment: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="production",
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="queued",
+    )
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="ai_runs",
+    )
+
+    question = relationship(
+        "Question",
+        back_populates="ai_runs",
+    )
+
+    result = relationship(
+        "AIResult",
+        back_populates="ai_run",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class AIResult(Base):
+    __tablename__ = "ai_results"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    ai_run_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_runs.id"),
+        nullable=False,
+        unique=True,
+    )
+
+    answer: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    mentions_brand: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=False,
+    )
+
+    mentions_competitors: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    metrics: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    ai_run = relationship(
+        "AIRun",
+        back_populates="result",
+    )
+
+
+    citations = relationship(
+        "Citation",
+        back_populates="ai_result",
+        cascade="all, delete-orphan",
+    )
+
+
+class Citation(Base):
+    __tablename__ = "citations"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    ai_result_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_results.id"),
+        nullable=False,
+    )
+
+    url: Mapped[str] = mapped_column(
+        String(2048),
+        nullable=False,
+    )
+
+    domain: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    title: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    snippet: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    position: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    ai_result = relationship(
+        "AIResult",
+        back_populates="citations",
+    )
+
+
+class Entity(Base):
+    __tablename__ = "entities"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+    )
+
+    page_id: Mapped[int | None] = mapped_column(
+        ForeignKey("page_results.id"),
+        nullable=True,
+    )
+
+    scan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scans.id"),
+        nullable=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    entity_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    confidence: Mapped[float] = mapped_column(
+        Float,
+        default=1.0,
+        nullable=False,
+    )
+
+    same_as: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    properties: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    relationships: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    evidence: Mapped[dict | list | str | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="entities",
+    )
+
+    page_result = relationship(
+        "PageResult",
+        back_populates="entities",
+    )
+
+    scan = relationship(
+        "Scan",
+        back_populates="entities",
     )

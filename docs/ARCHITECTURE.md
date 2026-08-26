@@ -1981,10 +1981,37 @@ The complete test suite contains **131 passing automated tests**:
 
 ### Architectural Milestone & Future Boundaries
 
-The current milestone provides a resilient Python-based HTTP crawler and scan persistence pipeline.
+The current milestone provides:
+- A resilient Python-based HTTP crawler and scan persistence pipeline.
+- Deep structured page extraction across 13 DOM domains (Task 4).
+- The complete, deterministic Content Intelligence Engine (Task 5) featuring 11 analytical engines, explainable scoring, resilience checks, and AEO rules.
 
-The following areas are future implementation milestones as defined in the target architecture:
-- **Headless Browser Rendering**: Playwright / Crawlee for dynamic single-page applications requiring JavaScript rendering.
-- **Structured Page Extraction**: Deep extraction of OpenGraph, Schema.org microdata/JSON-LD, headings, image alt texts, and canonical links.
-- **Intelligence Engines**: Technical SEO engine, Content engine, Entity engine, GEO/AEO intelligence, and AI visibility benchmarking.
-- **Action Engines**: Recommendation engine, automated fix generation, and continuous monitoring.
+### Content Intelligence Engine Architecture (Task 5)
+
+The Content Intelligence Engine operates on extracted page evidence, evaluating content structure, semantics, entities, answer engine readiness, and empirical quality without external LLM dependencies:
+
+```text
+PageExtraction Evidence
+         │
+         ├── ContentQualityChecks (Defensive syntax, thinness, encoding)
+         ├── ContentStructureAnalyzer (H1s, hierarchy, sections, alignment)
+         ├── TopicSemanticAnalyzer (Primary topic, clusters, diversity, stuffing)
+         ├── EntityAnalyzer (Named entities, classifications, schema parity)
+         ├── QuestionAnalyzer (Explicit heading & body questions)
+         ├── AnswerAnalyzer (Directness, definition snippets, word counts)
+         ├── ReadinessAnalyzer (Composite answer-readiness scoring)
+         ├── ContentGapAnalyzer (Unanswered questions, missing facets)
+         ├── QualityAnalyzer (Quantitative metrics, citations, unsupported claims)
+         ├── IntentAnalyzer (Primary search intent, CTA balance)
+         ├── SemanticCoverageAnalyzer (Domain breadth, concept coverage)
+         │
+         ▼
+ContentIntelligenceAnalyzer (Master Synthesis & Composite Scoring)
+         │
+         ▼
+Persist Findings (Strict scan_id & website_id isolation)
+```
+
+The downstream action layers remain future milestones:
+- **Automated Fix Generation**: Direct pull request/code generation for detected content issues.
+- **Continuous Monitoring**: Scheduled drift detection and historical visibility tracking.

@@ -247,8 +247,13 @@ Database Constraints
 
 This separation keeps request validation, business rules, and persistence integrity distinct.
 
-### Current Implementation Boundary
+### Implemented Task 5 Intelligence Models
 
-The current Day 2 implementation does not yet persist the complete intelligence model described in the broader architecture.
-
-Entities such as PageObservation, Finding, Recommendation, AIResult, Citation, Competitor, Connector, and AuditLog remain part of the documented extensible data model and future implementation scope.
+The following intelligence and content analysis entities are fully implemented and verified in `backend/app/models.py`:
+- `Finding`: Issue or condition derived from extraction/analysis observations, linked to `scan_id`, `website_id`, and optional `page_id`.
+- `Recommendation`: Actionable remediation advice derived from a finding, linked to `finding_id`.
+- `Entity`: Persistent brand, product, organization, or persona linked to `website_id`.
+- `QuestionSet` & `Question`: Versioned benchmark questions and suites linked to `website_id`.
+- `AIRun`, `AIResult`, `Citation`: AI visibility benchmark measurement executions, engine responses, and cited domain sources.
+- `PageExtraction` & 13 Child Evidence Tables: Granular observable DOM signals.
+- Content Intelligence Response Schemas: Structured Pydantic contracts across structure, topics, entities, Q&A, answers, readiness, gaps, quality, intent, semantic coverage, master intelligence summaries, and content quality checks.

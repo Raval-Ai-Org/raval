@@ -161,3 +161,9 @@ unavailable or null rather than invented.
 - API and service responsibilities remain separated.
 - Complexity is introduced only when required by the product.
 
+## 15. Content Intelligence & AEO Validation Rules
+
+- **Score Bounds**: All calculated scores (`overall_content_score`, `answer_readiness_score`, `evidence_quality_score`, `semantic_coverage_score`, `intent_confidence`) are deterministic floating point values strictly clamped to `[0.0, 1.0]`.
+- **Status Enumerations**: `content_status` must strictly be one of `optimal` (>= 0.75), `needs_improvement` (0.45 - 0.74), or `deficient` (< 0.45).
+- **Graceful Fault Tolerance**: Under no circumstances should an empty string, `None`, unclosed HTML tags, non-HTML responses, or corrupted binary characters raise an unhandled exception or crash an active crawl/scan.
+- **Finding Payload Integrity**: Every persisted finding payload must be a JSON-serializable dictionary capturing verifiable, reproduceable evidence.

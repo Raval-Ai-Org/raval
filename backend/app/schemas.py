@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 
 class WebsiteCreate(BaseModel):
@@ -319,3 +319,419 @@ class PageIntelligenceResponse(BaseModel):
     language: PageLanguageResponse | None = None
     hreflang: list[PageHreflangResponse] = []
     indexability_evidence: PageIndexabilityEvidenceResponse | None = None
+
+
+class FindingCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    page_id: int | None = None
+    finding_type: str = Field(..., alias="type")
+    category: str = "seo"
+    title: str
+    description: str
+    severity: str = "medium"
+    status: str = "open"
+    evidence: dict[str, Any] | list[Any] | None = None
+
+
+class FindingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: int
+    website_id: int
+    scan_id: int
+    page_id: int | None = None
+    finding_type: str
+    type: str | None = None
+    category: str
+    title: str
+    description: str
+    severity: str
+    status: str
+    evidence: dict[str, Any] | list[Any] | None = None
+    created_at: datetime
+
+    @model_validator(mode="after")
+    def populate_type(self):
+        if self.type is None:
+            self.type = self.finding_type
+        return self
+
+
+class RecommendationCreate(BaseModel):
+    title: str
+    description: str
+    priority: str = "medium"
+    status: str = "open"
+    impact: str | None = None
+    action_type: str | None = None
+    payload: dict[str, Any] | list[Any] | None = None
+
+
+class RecommendationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    finding_id: int
+    title: str
+    description: str
+    priority: str
+    status: str
+    impact: str | None = None
+    action_type: str | None = None
+    payload: dict[str, Any] | list[Any] | None = None
+    created_at: datetime
+
+
+class QuestionSetCreate(BaseModel):
+    name: str
+    version: str = "1.0"
+    description: str | None = None
+
+
+class QuestionSetResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    website_id: int
+    name: str
+    version: str
+    description: str | None = None
+    created_at: datetime
+
+
+class QuestionCreate(BaseModel):
+    text: str
+    intent: str | None = None
+    topic: str | None = None
+
+
+class QuestionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    question_set_id: int
+    text: str
+    intent: str | None = None
+    topic: str | None = None
+    created_at: datetime
+
+
+class AIRunCreate(BaseModel):
+    question_id: int
+    provider: str
+    model: str
+    environment: str = "production"
+
+
+class AIRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    website_id: int
+    question_id: int
+    provider: str
+    model: str
+    environment: str
+    status: str
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    created_at: datetime
+
+
+class AIRunStatusUpdate(BaseModel):
+    status: str
+    error_message: str | None = None
+
+
+class CitationCreate(BaseModel):
+    url: str
+    domain: str | None = None
+    title: str | None = None
+    snippet: str | None = None
+    position: int = 1
+
+
+class CitationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ai_result_id: int
+    url: str
+    domain: str | None = None
+    title: str | None = None
+    snippet: str | None = None
+    position: int
+    created_at: datetime
+
+
+class AIResultCreate(BaseModel):
+    answer: str
+    mentions_brand: bool = False
+    mentions_competitors: list[str] | dict[str, Any] | None = None
+    metrics: dict[str, Any] | None = None
+    citations: list[CitationCreate] = []
+
+
+class AIResultResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ai_run_id: int
+    answer: str
+    mentions_brand: bool
+    mentions_competitors: list[str] | dict[str, Any] | None = None
+    metrics: dict[str, Any] | None = None
+    citations: list[CitationResponse] = []
+    created_at: datetime
+
+
+class EntityCreate(BaseModel):
+    name: str
+    entity_type: str
+    page_id: int | None = None
+    scan_id: int | None = None
+    description: str | None = None
+    confidence: float = 1.0
+    same_as: list[str] | dict[str, Any] | None = None
+    properties: dict[str, Any] | None = None
+    relationships: dict[str, Any] | list[Any] | None = None
+    evidence: dict[str, Any] | list[Any] | str | None = None
+
+
+class EntityUpdate(BaseModel):
+    name: str | None = None
+    entity_type: str | None = None
+    page_id: int | None = None
+    scan_id: int | None = None
+    description: str | None = None
+    confidence: float | None = None
+    same_as: list[str] | dict[str, Any] | None = None
+    properties: dict[str, Any] | None = None
+    relationships: dict[str, Any] | list[Any] | None = None
+    evidence: dict[str, Any] | list[Any] | str | None = None
+
+
+class EntityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    website_id: int
+    page_id: int | None = None
+    scan_id: int | None = None
+    name: str
+    entity_type: str
+    description: str | None = None
+    confidence: float
+    same_as: list[str] | dict[str, Any] | None = None
+    properties: dict[str, Any] | None = None
+    relationships: dict[str, Any] | list[Any] | None = None
+    evidence: dict[str, Any] | list[Any] | str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ContentStructureResponse(BaseModel):
+    h1_count: int
+    has_h1: bool
+    multiple_h1: bool
+    missing_h1: bool
+    heading_levels: dict[str, int]
+    total_headings: int
+    heading_hierarchy_valid: bool
+    heading_level_skips: list[dict[str, Any]]
+    repeated_headings: list[dict[str, Any]]
+    list_present: bool
+    unordered_list_present: bool
+    ordered_list_present: bool
+    unordered_list_count: int
+    ordered_list_count: int
+    total_list_item_count: int
+    paragraph_count: int
+    average_paragraph_words: float
+    long_text_blocks: list[dict[str, Any]]
+    section_count: int
+    sections: list[dict[str, Any]]
+    empty_sections: list[dict[str, Any]]
+    thin_sections: list[dict[str, Any]]
+    title_h1_alignment: dict[str, Any] | None = None
+
+
+class TopicAnalysisResponse(BaseModel):
+    primary_topic: str | None = None
+    primary_topic_confidence: float
+    supporting_topics: list[str]
+    topic_keywords: list[dict[str, Any]]
+    total_words: int
+    unique_meaningful_words: int
+    lexical_diversity: float
+    semantic_depth: str
+    primary_topic_in_title: bool
+    primary_topic_in_h1: bool
+    findings: list[dict[str, Any]]
+
+
+class EntityAnalysisResponse(BaseModel):
+    entity_count: int
+    entities: list[dict[str, Any]]
+    structured_data_entity_count: int
+    content_entity_count: int
+    has_organization_entity: bool
+    has_product_entity: bool
+    entity_consistency_valid: bool
+    consistency_issues: list[dict[str, Any]]
+    findings: list[dict[str, Any]]
+
+
+class QuestionAnalysisResponse(BaseModel):
+    question_count: int
+    answered_question_count: int
+    unanswered_question_count: int
+    faq_schema_present: bool
+    answer_readiness_score: float
+    questions: list[dict[str, Any]]
+    findings: list[dict[str, Any]]
+
+
+class AnswerAnalysisResponse(BaseModel):
+    total_questions: int
+    answered_questions: int
+    unanswered_questions: int
+    direct_answers_count: int
+    optimal_length_answers_count: int
+    overall_answer_rate: float
+    answers: list[dict[str, Any]]
+    findings: list[dict[str, Any]]
+
+
+class AnswerReadinessResponse(BaseModel):
+    readiness_score: float
+    readiness_level: str
+    component_scores: dict[str, float]
+    positive_signals: list[str]
+    negative_signals: list[str]
+    total_questions: int
+    answered_questions: int
+    direct_answers_count: int
+    has_structured_data_qa: bool
+    findings: list[dict[str, Any]]
+
+
+class ContentGapResponse(BaseModel):
+    total_gaps: int
+    unanswered_question_gaps_count: int
+    structural_gaps_count: int
+    topical_gaps_count: int
+    entity_gaps_count: int
+    schema_gaps_count: int
+    gaps: list[dict[str, Any]]
+    findings: list[dict[str, Any]]
+
+
+class QualityAnalysisResponse(BaseModel):
+    has_quantitative_evidence: bool
+    data_points_count: int
+    citations_count: int
+    attributions_count: int
+    unsupported_claims_count: int
+    thin_sections_count: int
+    evidence_strength: str
+    quality_score: float
+    data_points: list[str]
+    attributions: list[str]
+    unsupported_claims: list[dict[str, Any]]
+    findings: list[dict[str, Any]]
+
+
+class IntentAnalysisResponse(BaseModel):
+    primary_intent: str
+    confidence: float
+    secondary_intents: list[dict[str, Any]]
+    supporting_evidence: list[str]
+    conflicting_signals: list[str]
+    has_commercial_call_to_action: bool
+    findings: list[dict[str, Any]]
+
+
+class SemanticCoverageResponse(BaseModel):
+    semantic_coverage_score: float
+    breadth_level: str
+    covered_concepts: list[str]
+    weakly_covered_concepts: list[str]
+    missing_concepts: list[str]
+    component_scores: dict[str, float]
+    findings: list[dict[str, Any]]
+
+
+class ContentIntelligenceResponse(BaseModel):
+    page_id: int | None
+    url: str | None
+    title: str | None
+    overall_content_score: float
+    content_status: str
+    word_count: int
+    reading_time_minutes: float
+    primary_topic: str | None
+    primary_intent: str
+    intent_confidence: float
+    answer_readiness_score: float
+    answer_readiness_level: str
+    semantic_coverage_score: float
+    semantic_breadth_level: str
+    evidence_quality_score: float
+    evidence_strength: str
+    total_questions: int
+    answered_questions: int
+    unanswered_questions: int
+    total_gaps: int
+    entity_count: int
+    key_strengths: list[str]
+    critical_issues: list[str]
+    component_summaries: dict[str, Any]
+    findings: list[dict[str, Any]]
+
+
+class ContentQualityChecksResponse(BaseModel):
+    is_valid_content: bool
+    total_checks: int
+    passed_checks: int
+    failed_checks: int
+    warning_checks: int
+    checks: list[dict[str, Any]]
+    findings: list[dict[str, Any]]
+
+
+class ScanContentIntelligenceSummaryResponse(BaseModel):
+    scan_id: int
+    total_pages_analyzed: int
+    average_content_score: float
+    optimal_pages_count: int
+    needs_improvement_pages_count: int
+    deficient_pages_count: int
+    pages: list[ContentIntelligenceResponse]
+
+
+class ContentPipelineResultResponse(BaseModel):
+    page_id: int
+    url: str
+    content_intelligence: ContentIntelligenceResponse
+    quality_checks: ContentQualityChecksResponse
+    findings_persisted_count: int
+
+
+class ContentAEORuleItem(BaseModel):
+    rule_id: str
+    category: str
+    severity: str
+    weight: float
+    title: str
+    description: str
+    recommendation: str
+    trigger_condition: str
+
+
+class ContentAEORulesResponse(BaseModel):
+    total_rules: int
+    categories: list[str]
+    rules: list[ContentAEORuleItem]
