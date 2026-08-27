@@ -61,11 +61,22 @@ in server modules only):
 
 ## Quick start (for new team members)
 
-**TL;DR:** clone, run `npm run setup`, fill in `.env`, run `npm run dev`. The dev server is on `http://localhost:8080`.
+**TL;DR:** clone, run `npm run setup`, fill in `.env` (from 1Password — see below), run `npm run dev`. The dev server is on `http://localhost:8080`.
 
 ### Why a setup script?
 
 The repo's `.env` file is **gitignored** (it holds secrets like the Supabase service-role key and SDR admin token). The first time you clone, you need to create `.env` from `.env.example` **and** replace the placeholder values with real ones — otherwise `npm run dev` will start, the homepage and `/login` will load, but authentication will silently fail. The page won't return a 404 in the HTTP sense, but from your perspective it will look broken (form submits and nothing happens, or you get redirected in a loop). The setup script catches this for you.
+
+### How to get the real `.env` values
+
+**Never commit `.env` to the repo, even if it's private.** Git history is forever, and the Supabase service-role key + SDR encryption key would be exposed to anyone with future read access.
+
+**Safe procedure:**
+1. Ask Junaid to share the "RavalAI local dev .env" item in 1Password
+2. Copy each line from 1Password into your local `.env`
+3. Run `npm run setup` to verify
+
+Full details on what's in the file, what each value does, and what to do if a secret is leaked: [`docs/TEAM-CREDENTIALS.md`](docs/TEAM-CREDENTIALS.md).
 
 ### One-time setup
 
