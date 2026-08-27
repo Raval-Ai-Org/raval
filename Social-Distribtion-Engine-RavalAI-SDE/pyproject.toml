@@ -1,0 +1,230 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "raval-sde"
+version = "0.1.0"
+description = "RavalAI Social Distribution Engine - publish and schedule posts to multiple social platforms"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "RavalAI Engineering", email = "engineering@raval.it.com" }]
+license = { text = "MIT" }
+keywords = ["social-media", "publishing", "scheduling", "queue", "celery"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Web Environment",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Communications",
+]
+
+dependencies = [
+  # Web Framework
+  "fastapi>=0.104.0",
+  "uvicorn[standard]>=0.24.0",
+  "pydantic>=2.5.0",
+  "pydantic-settings>=2.1.0",
+
+  # Database
+  "sqlalchemy>=2.0.20",
+  "alembic>=1.13.0",
+  "psycopg[binary]>=3.3.0",
+  "asyncpg>=0.29.0",
+
+  # Queue & Tasks
+  "celery>=5.3.0",
+  "redis>=5.0.0",
+
+  # HTTP Client
+  "httpx>=0.25.0",
+
+  # Security & Encryption
+  "cryptography>=41.0.0",
+  "python-multipart>=0.0.6",
+  "PyJWT>=2.8.0",
+
+  # Logging & Observability
+  "structlog>=24.0.0",
+  "python-json-logger>=2.0.7",
+
+  # Utilities
+  "python-dateutil>=2.8.0",
+  "pytz>=2024.1",
+]
+
+[project.optional-dependencies]
+# Development
+dev = [
+  "pytest>=7.4.4",
+  "pytest-asyncio>=0.23.3",
+  "pytest-cov>=4.1.0",
+  "pytest-timeout>=2.2.0",
+  "respx>=0.21.1",
+  "schemathesis>=3.29.1",
+  "ruff>=0.3.5",
+  "mypy>=1.8.0",
+  "aiosqlite>=0.19.0",
+  "httpx>=0.25.0",
+]
+# Documentation
+docs = [
+  "mkdocs==1.5.3",
+  "mkdocs-material==9.5.3",
+]
+
+[project.urls]
+Repository = "https://github.com/raval-ai/raval-sde"
+Documentation = "https://docs.raval.it.com/sde"
+Issues = "https://github.com/raval-ai/raval-sde/issues"
+
+[tool.hatch.version]
+path = "app/__init__.py"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = [
+  "--strict-markers",
+  "--tb=short",
+  "--cov=app",
+  "--cov-report=term-missing",
+  "--cov-report=html",
+]
+markers = [
+  "unit: mark test as a unit test",
+  "integration: mark test as an integration test",
+  "contract: mark test as a contract/API test",
+]
+
+[tool.coverage.run]
+branch = true
+omit = [
+  "*/__init__.py",
+  "*/__main__.py",
+  "*/tests/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  "class .*\\bProtocol\\):",
+  "@(abc\\.)?abstractmethod",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+disallow_any_unimported = true
+disallow_any_expr = false
+disallow_any_decorated = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_return_any = true
+warn_unreachable = true
+check_untyped_defs = true
+
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+  "tests.*",
+  "alembic.*",
+]
+ignore_errors = true
+
+# Celery ships without type stubs; treat it as untyped rather than an error.
+[[tool.mypy.overrides]]
+module = [
+  "celery",
+  "celery.*",
+]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+  ".git",
+  "__pycache__",
+  ".venv",
+  "venv",
+  ".env*",
+  ".pytest_cache",
+  ".mypy_cache",
+  "dist",
+  "build",
+  "alembic",
+]
+
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "F",    # Pyflakes
+  "I",    # isort
+  "C",    # flake8-comprehensions
+  "B",    # flake8-bugbear
+  "U",    # pyupgrade
+  "A",    # flake8-builtins
+  "C4",   # flake8-comprehensions
+  "PT",   # flake8-pytest-style
+  "RET",  # flake8-return
+  "SIM",  # flake8-simplify
+  "ARG",  # flake8-unused-arguments
+  "D",    # pydocstyle
+]
+ignore = [
+  "E501",   # line too long (handled by formatter)
+  "D100",   # Missing docstring in public module
+  "D101",   # Missing docstring in public class
+  "D102",   # Missing docstring in public method
+  "D103",   # Missing docstring in public function
+  "D105",   # Missing docstring in magic method
+  # Docstring whitespace conventions — D203/D211 and D212/D213 are mutually
+  # exclusive pairs; both sides are ignored to avoid churning legacy modules.
+  # D413 conflicts with the formatter: for docstrings ending in a fenced code
+  # block, ruff format strips the trailing blank line D413 demands.
+  "D203",
+  "D211",
+  "D212",
+  "D213",
+  "D413",
+]
+[tool.ruff.lint.flake8-bugbear]
+# B008: FastAPI requires `Depends()` in argument defaults — the documented
+# fix is to register it as an immutable call, not to rewrite every endpoint.
+extend-immutable-calls = ["fastapi.Depends"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "F403"]
+"tests/**" = ["D", "E402", "PT011"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.setuptools]
+packages = ["app"]
+

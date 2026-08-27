@@ -1,0 +1,44 @@
+# ─── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ─── Test / coverage artifacts ─────────────────────────────────────────────
+.coverage
+.coverage.*
+htmlcov/
+
+# ─── Celery / queue ────────────────────────────────────────────────────────
+celerybeat-schedule
+celerybeat.pid
+
+# ─── Logs ──────────────────────────────────────────────────────────────────
+*.log
+
+# ─── Tool caches ───────────────────────────────────────────────────────────
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+
+# ─── Build / packaging ─────────────────────────────────────────────────────
+*.egg-info/
+dist/
+build/
+
+# ─── Environment / secrets (keep the example templates tracked) ────────────
+.env
+.env.*
+!.env.example
+!.env.example.twitter-or-X
+
+# ─── OS / editor ───────────────────────────────────────────────────────────
+.DS_Store
+
+# ─── Virtual environments ──────────────────────────────────────────────────
+venv/
+.venv/
+
+# ─── Editor / agent runtime junk (never commit) ──────────────────────────
+.claude/*.tmp*
+.claude/settings.local.json.tmp*

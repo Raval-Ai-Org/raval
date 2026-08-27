@@ -1,0 +1,819 @@
+openapi: 3.1.0
+info:
+  title: RavalAI Social Distribution Engine (SDE)
+  description: |
+    Backend service for publishing and scheduling social media posts.
+
+    ## Authentication
+    All endpoints except `/healthz` require:
+    - `Authorization: Bearer <SDE_API_TOKEN>`
+    - `X-Signature: hex(hmac_sha256(SDE_SIGNING_SECRET, raw_body))`
+    - `X-Timestamp`: Unix timestamp, reject if |now - ts| > 300s
+
+    ## Error Response Format
+    All errors follow this structure:
+    ```json
+    {
+      "error_code": "ERROR_CODE",
+      "detail": "Human-readable explanation",
+      "how_to_fix": "Actionable next step",
+      "field": "optional field name",
+      "platform": "optional platform"
+    }
+    ```
+
+    ## Key Concepts
+    - **Post**: Logical publish request
+    - **Target**: Individual platform publish attempt
+    - **Idempotency**: Same idempotency_key returns existing post
+  version: 1.0.0
+  contact:
+    name: RavalAI Engineering
+    url: https://raval.it.com
+servers:
+  - url: https://sde.raval.it.com/api/v1
+    description: Production server
+  - url: http://localhost:8000/api/v1
+    description: Local development
+
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      description: Returns health status of all components. Does not require authentication.
+      operationId: getHealth
+      tags:
+        - Operations
+      responses:
+        '200':
+          description: All components healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  api:
+                    type: string
+                    example: ok
+                  db:
+                    type: string
+                    example: ok
+                  redis:
+                    type: string
+                    example: ok
+                  beat_last_tick:
+                    type: string
+                    format: date-time
+        '503':
+          description: One or more components unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /publish:
+    post:
+      summary: Publish immediately
+      description: |
+        Submit a post for immediate publishing. Sets scheduled_at to now().
+        Returns 201 if new, 200 if idempotency key already exists.
+      operationId: publishNow
+      tags:
+        - Publishing
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+        - TimestampAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishRequest'
+      responses:
+        '200':
+          description: Idempotent duplicate - existing post returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishResponse'
+        '201':
+          description: Post created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Platform-specific validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+  /schedule:
+    post:
+      summary: Schedule for later
+      description: |
+        Submit a post for scheduled publishing. scheduled_at must be in the future.
+        Returns 201 if new, 200 if idempotency key already exists.
+      operationId: schedulePost
+      tags:
+        - Publishing
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+        - TimestampAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishRequest'
+      responses:
+        '200':
+          description: Idempotent duplicate - existing post returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishResponse'
+        '201':
+          description: Post scheduled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishResponse'
+        '400':
+          description: Validation error (scheduled_at in past)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Platform-specific validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+  /jobs/{post_id}:
+    get:
+      summary: Get job status
+      description: Returns full job details including all targets and event timeline
+      operationId: getJob
+      tags:
+        - Jobs
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+        - TimestampAuth: []
+      parameters:
+        - name: post_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Post UUID
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobDetailResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Cancel job
+      description: |
+        Cancel a pending job. Only allowed if no target is PUBLISHING or PUBLISHED.
+        Returns 409 if job cannot be cancelled.
+      operationId: cancelJob
+      tags:
+        - Jobs
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+        - TimestampAuth: []
+      parameters:
+        - name: post_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Post UUID
+      responses:
+        '200':
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobDetailResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Job cannot be cancelled (already publishing or published)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs:
+    get:
+      summary: List jobs
+      description: Paginated list of jobs with optional filters
+      operationId: listJobs
+      tags:
+        - Jobs
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+        - TimestampAuth: []
+      parameters:
+        - name: workspace_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Workspace identifier
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PARTIAL, COMPLETED, FAILED, CANCELLED]
+          description: Filter by status
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter by created_at >= from
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter by created_at <= to
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 100
+          description: Max results per page
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Pagination cursor
+      responses:
+        '200':
+          description: Job list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /accounts:
+    get:
+      summary: List accounts
+      description: Returns connected social accounts for a workspace
+      operationId: listAccounts
+      tags:
+        - Accounts
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+        - TimestampAuth: []
+      parameters:
+        - name: workspace_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth/{platform}/start:
+    get:
+      summary: Start OAuth flow
+      description: Initiates OAuth connection for a platform
+      operationId: oauthStart
+      tags:
+        - Accounts
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [x, linkedin, facebook, dryrun]
+          description: Platform identifier
+        - name: workspace_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: brand_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_after
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect to platform OAuth consent
+        '400':
+          description: Invalid platform
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth/{platform}/callback:
+    get:
+      summary: OAuth callback
+      description: Handles OAuth callback from platform
+      operationId: oauthCallback
+      tags:
+        - Accounts
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [x, linkedin, facebook, dryrun]
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to redirect_after URL
+        '400':
+          description: Invalid code or state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /accounts/{account_id}:
+    delete:
+      summary: Disconnect account
+      description: Revokes OAuth tokens and marks account as disconnected
+      operationId: disconnectAccount
+      tags:
+        - Accounts
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+        - TimestampAuth: []
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Account disconnected
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /webhooks/config:
+    post:
+      summary: Configure webhook
+      description: Register or update webhook endpoint for workspace
+      operationId: configureWebhook
+      tags:
+        - Webhooks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+        - TimestampAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - workspace_id
+                - url
+                - secret
+              properties:
+                workspace_id:
+                  type: string
+                url:
+                  type: string
+                  format: uri
+                secret:
+                  type: string
+                  description: Secret for HMAC signing
+      responses:
+        '200':
+          description: Webhook configured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id:
+                    type: string
+                  url:
+                    type: string
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: Returns Prometheus-format metrics for monitoring
+      operationId: getMetrics
+      tags:
+        - Operations
+      responses:
+        '200':
+          description: Metrics in Prometheus text format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    SignatureAuth:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: HMAC-SHA256 signature of request body
+    TimestampAuth:
+      type: apiKey
+      in: header
+      name: X-Timestamp
+      description: Unix timestamp (reject if > 5 min old)
+
+  schemas:
+    # Request Schemas
+    PublishRequest:
+      type: object
+      required:
+        - workspace_id
+        - brand_id
+        - idempotency_key
+        - scheduled_at
+        - targets
+      properties:
+        workspace_id:
+          type: string
+          description: Workspace identifier
+        brand_id:
+          type: string
+          description: Brand/tenant identifier
+        idempotency_key:
+          type: string
+          description: Unique key for idempotency (generated by RavalAI)
+        scheduled_at:
+          type: string
+          format: date-time
+          description: Publish time (now() for immediate, future for scheduled)
+        timezone:
+          type: string
+          description: Timezone for scheduled_at interpretation
+        targets:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PublishTarget'
+
+    PublishTarget:
+      type: object
+      required:
+        - account_id
+        - platform
+        - content
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          description: Connected account UUID
+        platform:
+          type: string
+          enum: [x, linkedin, facebook, dryrun]
+        content:
+          $ref: '#/components/schemas/TargetContent'
+
+    TargetContent:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+        media:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [image, video]
+              url:
+                type: string
+                format: uri
+              alt:
+                type: string
+        link:
+          type: string
+          format: uri
+        first_comment:
+          type: string
+          nullable: true
+
+    # Response Schemas
+    PublishResponse:
+      type: object
+      properties:
+        post_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, PARTIAL, COMPLETED, FAILED, CANCELLED]
+        idempotency_duplicate:
+          type: boolean
+          description: True if this was an idempotent duplicate
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/TargetStatus'
+
+    TargetStatus:
+      type: object
+      properties:
+        target_id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, QUEUED, PUBLISHING, PUBLISHED, RETRYING, FAILED, CANCELLED]
+
+    JobDetailResponse:
+      type: object
+      properties:
+        post_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+        brand_id:
+          type: string
+        idempotency_key:
+          type: string
+        status:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobTargetDetail'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobEvent'
+
+    JobTargetDetail:
+      type: object
+      properties:
+        target_id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+        status:
+          type: string
+        attempt_count:
+          type: integer
+        last_error_code:
+          type: string
+          nullable: true
+        last_error_detail:
+          type: string
+          nullable: true
+        platform_post_id:
+          type: string
+          nullable: true
+        platform_post_url:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    JobEvent:
+      type: object
+      properties:
+        event:
+          type: string
+          enum: [post.queued, post.publishing, post.published, post.retrying, post.failed, post.partial]
+        timestamp:
+          type: string
+          format: date-time
+        target_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    JobListResponse:
+      type: object
+      properties:
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobSummary'
+        next_cursor:
+          type: string
+          nullable: true
+
+    JobSummary:
+      type: object
+      properties:
+        post_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        target_count:
+          type: integer
+        published_count:
+          type: integer
+
+    AccountResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+        display_name:
+          type: string
+        status:
+          type: string
+          enum: [active, needs_reauth, disconnected]
+        token_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # Error Schemas
+    ErrorResponse:
+      type: object
+      properties:
+        error_code:
+          type: string
+        detail:
+          type: string
+        how_to_fix:
+          type: string
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        error_code:
+          type: string
+          const: VALIDATION_ERROR
+        detail:
+          type: string
+        how_to_fix:
+          type: string
+        field_errors:
+          type: array
+          items:
+            type: object
+            properties:
+              platform:
+                type: string
+              field:
+                type: string
+              error:
+                type: string
+
+tags:
+  - name: Publishing
+    description: Post publishing and scheduling endpoints
+  - name: Jobs
+    description: Job status and management
+  - name: Accounts
+    description: Connected account management
+  - name: Webhooks
+    description: Webhook configuration
+  - name: Operations
+    description: Health, metrics, and operational endpoints
