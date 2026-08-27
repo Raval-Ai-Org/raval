@@ -18,6 +18,7 @@ import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as StudioRouteImport } from './routes/studio'
 import { Route as ApiAgentTasksRouteImport } from './routes/api.agent-tasks'
 import { Route as ApiAiGenerateRouteImport } from './routes/api.ai-generate'
 import { Route as ApiBrandExtractRouteImport } from './routes/api.brand-extract'
@@ -92,6 +93,11 @@ const SignupRoute = SignupRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudioRoute = StudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAgentTasksRoute = ApiAgentTasksRouteImport.update({
@@ -258,6 +264,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/api/agent-tasks': typeof ApiAgentTasksRoute
   '/api/ai-generate': typeof ApiAiGenerateRoute
   '/api/brand-extract': typeof ApiBrandExtractRoute
@@ -298,6 +305,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/api/agent-tasks': typeof ApiAgentTasksRoute
   '/api/ai-generate': typeof ApiAiGenerateRoute
   '/api/brand-extract': typeof ApiBrandExtractRoute
@@ -340,6 +348,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/api/agent-tasks': typeof ApiAgentTasksRoute
   '/api/ai-generate': typeof ApiAiGenerateRoute
   '/api/brand-extract': typeof ApiBrandExtractRoute
@@ -383,6 +392,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/sitemap.xml'
+    | '/studio'
     | '/api/agent-tasks'
     | '/api/ai-generate'
     | '/api/brand-extract'
@@ -423,6 +433,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/sitemap.xml'
+    | '/studio'
     | '/api/agent-tasks'
     | '/api/ai-generate'
     | '/api/brand-extract'
@@ -464,6 +475,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/sitemap.xml'
+    | '/studio'
     | '/api/agent-tasks'
     | '/api/ai-generate'
     | '/api/brand-extract'
@@ -506,6 +518,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  StudioRoute: typeof StudioRoute
   ApiAgentTasksRoute: typeof ApiAgentTasksRoute
   ApiAiGenerateRoute: typeof ApiAiGenerateRoute
   ApiBrandExtractRoute: typeof ApiBrandExtractRoute
@@ -596,6 +609,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/studio': {
+      id: '/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof StudioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/agent-tasks': {
@@ -839,6 +859,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  StudioRoute: StudioRoute,
   ApiAgentTasksRoute: ApiAgentTasksRoute,
   ApiAiGenerateRoute: ApiAiGenerateRoute,
   ApiBrandExtractRoute: ApiBrandExtractRoute,

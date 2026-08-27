@@ -194,6 +194,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* PRE_HYDRATE script: rendered identically on server and client to
+            avoid hydration mismatches. It must run BEFORE React hydrates so
+            the dark class + chat density are set before paint. The script
+            body is a no-op on the server (window is undefined) thanks to
+            the try/catch wrapper. */}
         <script dangerouslySetInnerHTML={{ __html: PRE_HYDRATE }} />
       </head>
       <body suppressHydrationWarning>

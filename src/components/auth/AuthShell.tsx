@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from "framer-motion";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
 
 /**
@@ -16,7 +16,14 @@ export function AuthShell({
   children: ReactNode;
   footer: ReactNode;
 }) {
-  const reduce = useReducedMotion();
+  // useReducedMotion returns null on the server and a boolean on the client.
+  // To avoid SSR/CSR hydration mismatches, we start as false (matching the
+  // server render) and update after mount.
+  const reduceMotionRaw = useReducedMotion();
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    setReduce(!!reduceMotionRaw);
+  }, [reduceMotionRaw]);
   const ease = [0.22, 1, 0.36, 1] as const;
 
   return (
