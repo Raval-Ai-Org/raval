@@ -80,6 +80,8 @@ Full details on what's in the file, what each value does, and what to do if a se
 
 ### One-time setup
 
+Cross-platform — same commands on Linux, macOS, and Windows PowerShell.
+
 ```bash
 git clone https://github.com/Raval-Ai-Org/raval.git
 cd raval
@@ -92,6 +94,20 @@ npm run setup                    # creates .env from .env.example if missing
 npm install                       # if node_modules wasn't installed by setup
 npm run dev                       # http://localhost:8080
 ```
+
+**Windows PowerShell notes:**
+- `npm run setup` auto-detects Windows and runs `scripts/setup.ps1` under the hood (no need to manually invoke PowerShell)
+- If you see a script execution policy error when running `setup.ps1` directly, run `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` once
+- The Node.js-based wrappers (`scripts/setup.cjs`, `scripts/predev-check.cjs`) work on every platform and don't need PowerShell at all
+- Git for Windows is **not** required — `npm run dev` works with the PowerShell that ships with Windows 10/11
+
+**Per-platform commands** (if you want to run the underlying script directly):
+
+| Platform | Setup | Predev check |
+|---|---|---|
+| Linux / macOS | `bash scripts/setup.sh` | `bash scripts/predev-check.sh` |
+| Windows PowerShell | `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1` | `powershell -ExecutionPolicy Bypass -File scripts\predev-check.ps1` |
+| Any (Node.js) | `node scripts/setup.cjs` | `node scripts/predev-check.cjs` |
 
 ### What `npm run setup` does
 
