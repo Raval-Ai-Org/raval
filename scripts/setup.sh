@@ -68,8 +68,10 @@ fi
 # ─── 2. Check .env has real values, not placeholders ─────────────────────────
 step "Step 2/4: Verifying .env has real values"
 if [ -f .env ]; then
-  PLACEHOLDER_COUNT=$(grep -cE "YOUR_PROJECT_REF|YOUR_PUBLISHABLE|YOUR_SERVICE_ROLE|your-openrouter|placeholder" .env || true)
-  if [ "$PLACEHOLDER_COUNT" -gt 0 ]; then
+  # grep -c returns a number followed by a newline. Strip the newline so the
+  # integer comparison below works on all shells.
+  PLACEHOLDER_COUNT=$(grep -cE "YOUR_PROJECT_REF|YOUR_PUBLISHABLE|YOUR_SERVICE_ROLE|your-openrouter|placeholder" .env 2>/dev/null | tr -d '[:space:]' || echo "0")
+  if [ -n "$PLACEHOLDER_COUNT" ] && [ "$PLACEHOLDER_COUNT" -gt 0 ] 2>/dev/null; then
     fail ".env contains $PLACEHOLDER_COUNT placeholder value(s)"
     warn "Open .env in your editor and replace the placeholders with real credentials."
     warn "Lines containing placeholders:"
@@ -104,7 +106,7 @@ echo ""
 
 if [ -f .env ]; then
   echo -e "  .env file:          ${GREEN}present${RESET}"
-  if [ "$PLACEHOLDER_COUNT" -gt 0 ] 2>/dev/null; then
+  if [ -n "$PLACEHOLDER_COUNT" ] && [ "$PLACEHOLDER_COUNT" -gt 0 ] 2>/dev/null; then
     echo -e "  .env values:        ${RED}placeholders detected${RESET}"
   else
     echo -e "  .env values:        ${GREEN}looks real${RESET}"

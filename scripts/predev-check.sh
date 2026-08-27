@@ -50,8 +50,8 @@ if [ ! -f .env ]; then
 else
   ok ".env exists"
   # Check for placeholders
-  PLACEHOLDER_COUNT=$(grep -cE "YOUR_PROJECT_REF|YOUR_PUBLISHABLE|YOUR_SERVICE_ROLE|your-openrouter" .env 2>/dev/null || echo 0)
-  if [ "$PLACEHOLDER_COUNT" -gt 0 ]; then
+  PLACEHOLDER_COUNT=$(grep -cE "YOUR_PROJECT_REF|YOUR_PUBLISHABLE|YOUR_SERVICE_ROLE|your-openrouter" .env 2>/dev/null | tr -d '[:space:]' || echo 0)
+  if [ -n "$PLACEHOLDER_COUNT" ] && [ "$PLACEHOLDER_COUNT" -gt 0 ] 2>/dev/null; then
     fail ".env contains $PLACEHOLDER_COUNT placeholder value(s) — auth will fail"
     echo -e "    ${BOLD}Fix:${RESET}  Edit .env and replace YOUR_* with real credentials"
     echo -e "    Get real values from a teammate or 1Password"
@@ -71,7 +71,7 @@ if [ -f .env ]; then
   SDR_URL=$(grep -E "^SDR_BASE_URL=" .env | cut -d'=' -f2- | tr -d '"' | tr -d "'" || echo "")
   if [ -n "$SDR_URL" ] && [ "$SDR_URL" != "https://YOUR_PROJECT_REF.supabase.co" ]; then
     # Quick HEAD check with short timeout
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$SDR_URL/health" 2>/dev/null || echo "000")
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$SDR_URL/health" 2>/dev/null | tr -d '[:space:]' || echo "000")
     if [ "$HTTP_CODE" = "200" ]; then
       ok "SDR reachable at $SDR_URL"
     elif [ "$HTTP_CODE" = "000" ]; then
