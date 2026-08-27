@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -56,6 +56,30 @@ class Website(Base):
 
     entities = relationship(
         "Entity",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    opportunities = relationship(
+        "Opportunity",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    fix_plans = relationship(
+        "FixPlan",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    validations = relationship(
+        "ValidationResult",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    monitoring_records = relationship(
+        "MonitoringRecord",
         back_populates="website",
         cascade="all, delete-orphan",
     )
@@ -157,6 +181,30 @@ class Scan(Base):
         cascade="all, delete-orphan",
     )
 
+    opportunities = relationship(
+        "Opportunity",
+        back_populates="scan",
+        cascade="all, delete-orphan",
+    )
+
+    fix_plans = relationship(
+        "FixPlan",
+        back_populates="scan",
+        cascade="all, delete-orphan",
+    )
+
+    validations = relationship(
+        "ValidationResult",
+        back_populates="scan",
+        cascade="all, delete-orphan",
+    )
+
+    monitoring_records = relationship(
+        "MonitoringRecord",
+        back_populates="scan",
+        cascade="all, delete-orphan",
+    )
+
 
 
 class PageResult(Base):
@@ -243,6 +291,24 @@ class PageResult(Base):
 
     entities = relationship(
         "Entity",
+        back_populates="page_result",
+        cascade="all, delete-orphan",
+    )
+
+    opportunities = relationship(
+        "Opportunity",
+        back_populates="page_result",
+        cascade="all, delete-orphan",
+    )
+
+    fix_plans = relationship(
+        "FixPlan",
+        back_populates="page_result",
+        cascade="all, delete-orphan",
+    )
+
+    validations = relationship(
+        "ValidationResult",
         back_populates="page_result",
         cascade="all, delete-orphan",
     )
@@ -1316,6 +1382,24 @@ class Finding(Base):
         cascade="all, delete-orphan",
     )
 
+    opportunities = relationship(
+        "Opportunity",
+        back_populates="finding",
+        cascade="all, delete-orphan",
+    )
+
+    fix_plans = relationship(
+        "FixPlan",
+        back_populates="finding",
+        cascade="all, delete-orphan",
+    )
+
+    validations = relationship(
+        "ValidationResult",
+        back_populates="finding",
+        cascade="all, delete-orphan",
+    )
+
     @property
     def type(self) -> str:
         return self.finding_type
@@ -1381,6 +1465,52 @@ class Recommendation(Base):
         "Finding",
         back_populates="recommendations",
     )
+
+    opportunities = relationship(
+        "Opportunity",
+        back_populates="recommendation",
+        cascade="all, delete-orphan",
+    )
+
+    fix_plans = relationship(
+        "FixPlan",
+        back_populates="recommendation",
+        cascade="all, delete-orphan",
+    )
+
+    validations = relationship(
+        "ValidationResult",
+        back_populates="recommendation",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def category(self) -> str:
+        if isinstance(self.payload, dict) and "category" in self.payload:
+            return self.payload["category"]
+        if self.finding:
+            return self.finding.category
+        return "seo"
+
+    @property
+    def effort(self) -> str:
+        if isinstance(self.payload, dict) and "effort" in self.payload:
+            return self.payload["effort"]
+        return "medium"
+
+    @property
+    def rationale(self) -> str | None:
+        if isinstance(self.payload, dict) and "rationale" in self.payload:
+            return self.payload["rationale"]
+        return None
+
+    @property
+    def opportunity_id(self) -> int | None:
+        if isinstance(self.payload, dict) and "opportunity_id" in self.payload:
+            return self.payload["opportunity_id"]
+        if self.opportunities:
+            return self.opportunities[0].id
+        return None
 
 
 class QuestionSet(Base):
@@ -1551,6 +1681,12 @@ class AIRun(Base):
         "AIResult",
         back_populates="ai_run",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    monitoring_records = relationship(
+        "MonitoringRecord",
+        back_populates="ai_run",
         cascade="all, delete-orphan",
     )
 
@@ -1749,4 +1885,592 @@ class Entity(Base):
     scan = relationship(
         "Scan",
         back_populates="entities",
+    )
+
+
+class Opportunity(Base):
+    __tablename__ = "opportunities"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    scan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scans.id"),
+        nullable=True,
+        index=True,
+    )
+
+    page_id: Mapped[int | None] = mapped_column(
+        ForeignKey("page_results.id"),
+        nullable=True,
+        index=True,
+    )
+
+    finding_id: Mapped[int | None] = mapped_column(
+        ForeignKey("findings.id"),
+        nullable=True,
+        index=True,
+    )
+
+    recommendation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("recommendations.id"),
+        nullable=True,
+        index=True,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    description: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    opportunity_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    category: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="seo",
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="identified",
+        index=True,
+    )
+
+    impact: Mapped[float] = mapped_column(
+        Float,
+        default=0.5,
+        nullable=False,
+    )
+
+    effort: Mapped[float] = mapped_column(
+        Float,
+        default=0.5,
+        nullable=False,
+    )
+
+    confidence: Mapped[float] = mapped_column(
+        Float,
+        default=0.8,
+        nullable=False,
+    )
+
+    priority_score: Mapped[float] = mapped_column(
+        Float,
+        default=0.5,
+        nullable=False,
+        index=True,
+    )
+
+    priority: Mapped[str] = mapped_column(
+        String(20),
+        default="MEDIUM",
+        nullable=False,
+        index=True,
+    )
+
+    rationale: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    evidence: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="opportunities",
+    )
+
+    scan = relationship(
+        "Scan",
+        back_populates="opportunities",
+    )
+
+    page_result = relationship(
+        "PageResult",
+        back_populates="opportunities",
+    )
+
+    finding = relationship(
+        "Finding",
+        back_populates="opportunities",
+    )
+
+    recommendation = relationship(
+        "Recommendation",
+        back_populates="opportunities",
+    )
+
+    fix_plans = relationship(
+        "FixPlan",
+        back_populates="opportunity",
+        cascade="all, delete-orphan",
+    )
+
+    validations = relationship(
+        "ValidationResult",
+        back_populates="opportunity",
+        cascade="all, delete-orphan",
+    )
+
+
+class FixPlan(Base):
+    __tablename__ = "fix_plans"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    recommendation_id: Mapped[int] = mapped_column(
+        ForeignKey("recommendations.id"),
+        nullable=False,
+        index=True,
+    )
+
+    finding_id: Mapped[int | None] = mapped_column(
+        ForeignKey("findings.id"),
+        nullable=True,
+        index=True,
+    )
+
+    opportunity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("opportunities.id"),
+        nullable=True,
+        index=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    scan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scans.id"),
+        nullable=True,
+        index=True,
+    )
+
+    page_id: Mapped[int | None] = mapped_column(
+        ForeignKey("page_results.id"),
+        nullable=True,
+        index=True,
+    )
+
+    fix_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    description: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    problem_statement: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    proposed_action: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    expected_outcome: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    estimated_effort: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="medium",
+    )
+
+    risk_level: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="low",
+    )
+
+    priority: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="medium",
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="draft",
+        index=True,
+    )
+
+    diff_payload: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    safety_checks: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    recommendation = relationship(
+        "Recommendation",
+        back_populates="fix_plans",
+    )
+
+    finding = relationship(
+        "Finding",
+        back_populates="fix_plans",
+    )
+
+    opportunity = relationship(
+        "Opportunity",
+        back_populates="fix_plans",
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="fix_plans",
+    )
+
+    scan = relationship(
+        "Scan",
+        back_populates="fix_plans",
+    )
+
+    page_result = relationship(
+        "PageResult",
+        back_populates="fix_plans",
+    )
+
+    validations = relationship(
+        "ValidationResult",
+        back_populates="fix_plan",
+        cascade="all, delete-orphan",
+    )
+
+
+class ValidationResult(Base):
+    __tablename__ = "validation_results"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    fix_plan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("fix_plans.id"),
+        nullable=True,
+        index=True,
+    )
+
+    recommendation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("recommendations.id"),
+        nullable=True,
+        index=True,
+    )
+
+    finding_id: Mapped[int | None] = mapped_column(
+        ForeignKey("findings.id"),
+        nullable=True,
+        index=True,
+    )
+
+    opportunity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("opportunities.id"),
+        nullable=True,
+        index=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    scan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scans.id"),
+        nullable=True,
+        index=True,
+    )
+
+    page_id: Mapped[int | None] = mapped_column(
+        ForeignKey("page_results.id"),
+        nullable=True,
+        index=True,
+    )
+
+    validation_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="completed",
+        index=True,
+    )
+
+    result: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        index=True,
+    )
+
+    validation_score: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=1.0,
+    )
+
+    before_state: Mapped[dict | list | str | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    after_state: Mapped[dict | list | str | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    expected_result: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    actual_result: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    explanation: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    feedback: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    fix_plan = relationship(
+        "FixPlan",
+        back_populates="validations",
+    )
+
+    recommendation = relationship(
+        "Recommendation",
+        back_populates="validations",
+    )
+
+    finding = relationship(
+        "Finding",
+        back_populates="validations",
+    )
+
+    opportunity = relationship(
+        "Opportunity",
+        back_populates="validations",
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="validations",
+    )
+
+    scan = relationship(
+        "Scan",
+        back_populates="validations",
+    )
+
+    page_result = relationship(
+        "PageResult",
+        back_populates="validations",
+    )
+
+
+class MonitoringRecord(Base):
+    __tablename__ = "monitoring_records"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    scan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scans.id"),
+        nullable=True,
+        index=True,
+    )
+
+    ai_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ai_runs.id"),
+        nullable=True,
+        index=True,
+    )
+
+    target_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    target_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    metric_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    metric_category: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="intelligence",
+    )
+
+    previous_value: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    current_value: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    delta: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    change_detected: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="active",
+    )
+
+    event_type: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    summary: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    details: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="monitoring_records",
+    )
+
+    scan = relationship(
+        "Scan",
+        back_populates="monitoring_records",
+    )
+
+    ai_run = relationship(
+        "AIRun",
+        back_populates="monitoring_records",
     )

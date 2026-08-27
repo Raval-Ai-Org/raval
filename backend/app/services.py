@@ -2122,3 +2122,87 @@ def run_full_page_content_pipeline(
         "quality_checks": quality_checks,
         "findings_persisted_count": persisted_count,
     }
+
+
+# Task 6 Opportunity Engine & Prioritization Exports
+from .opportunity_prioritization import (
+    ALLOWED_OPPORTUNITY_CATEGORIES,
+    ALLOWED_OPPORTUNITY_PRIORITIES,
+    ALLOWED_OPPORTUNITY_STATUSES,
+    calculate_opportunity_priority,
+)
+from .opportunity_service import (
+    create_opportunity,
+    delete_opportunity,
+    generate_opportunities_for_scan,
+    generate_opportunities_for_website,
+    generate_opportunity_from_ai_run,
+    generate_opportunity_from_finding,
+    generate_opportunity_from_page_intelligence,
+    generate_opportunity_from_recommendation,
+    get_finding_opportunities,
+    get_opportunity,
+    get_scan_opportunities,
+    get_website_opportunities,
+    list_opportunities,
+    update_opportunity,
+)
+
+# Task 6.3 Recommendation Engine Exports
+from .recommendation_service import (
+    ALLOWED_RECOMMENDATION_CATEGORIES,
+    generate_recommendation_from_finding,
+    generate_recommendation_from_opportunity,
+    generate_recommendations_for_scan,
+    generate_recommendations_for_website,
+    update_recommendation,
+    delete_recommendation,
+    list_recommendations,
+)
+
+# Task 6.4 Fix / Action Planning Foundation Exports
+from .fix_service import (
+    ALLOWED_FIX_STATUSES,
+    ALLOWED_FIX_TYPES,
+    ALLOWED_RISK_LEVELS,
+    ALLOWED_STATUS_TRANSITIONS,
+    create_fix_plan,
+    delete_fix_plan,
+    generate_fix_plan_from_recommendation,
+    generate_fix_plans_for_scan,
+    generate_fix_plans_for_website,
+    get_fix_plan,
+    list_fix_plans,
+    transition_fix_plan_status,
+    update_fix_plan,
+)
+
+# Task 6.5 & 6.6 Validation Engine & Feedback Exports
+from .validation_service import (
+    SUPPORTED_VALIDATION_TYPES,
+    VALIDATION_RESULTS,
+    VALIDATION_STATUSES,
+    apply_validation_feedback,
+    batch_validate_scan,
+    batch_validate_website,
+    create_validation,
+    get_validation,
+    list_validations,
+    validate_fix_plan,
+    validate_recommendation,
+)
+
+# Task 6.7 End-to-End Pipeline Exports
+from .pipeline_service import (
+    get_pipeline_summary,
+    run_end_to_end_intelligence_pipeline,
+)
+
+# Task 6.10 Monitoring Engine Exports
+from .monitoring_service import (
+    evaluate_scan_monitoring,
+    evaluate_website_monitoring,
+    get_monitoring_timeline,
+    get_website_health_status,
+    record_metric,
+)

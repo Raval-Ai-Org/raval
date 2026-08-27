@@ -3,7 +3,19 @@ from sqlalchemy.orm import Session
 
 from .content_intelligence_rules import get_content_aeo_rules
 from .database import Base, engine, get_db
-from .models import AIRun, Entity, Scan
+from .models import (
+    AIRun,
+    Entity,
+    Finding,
+    FixPlan,
+    Opportunity,
+    PageResult,
+    Recommendation,
+    Scan,
+    ValidationResult,
+    MonitoringRecord,
+    Website,
+)
 from .schemas import (
     AIRunCreate,
     AIRunResponse,
@@ -25,7 +37,24 @@ from .schemas import (
     EntityUpdate,
     FindingCreate,
     FindingResponse,
+    FixPlanBatchGenerateResponse,
+    FixPlanCreate,
+    FixPlanResponse,
+    FixPlanStatusTransition,
+    FixPlanUpdate,
     IntentAnalysisResponse,
+    OpportunityBatchGenerateResponse,
+    OpportunityCreate,
+    OpportunityResponse,
+    OpportunityUpdate,
+    MonitoringRecordCreate,
+    MonitoringRecordResponse,
+    MonitoringTimelineResponse,
+    WebsiteHealthSummaryResponse,
+    PipelineRunRequest,
+    PipelineRunResponse,
+    PipelineStageCounts,
+    PipelineSummaryResponse,
     PageBreadcrumbResponse,
     PageCanonicalResponse,
     PageExtractionResponse,
@@ -49,13 +78,19 @@ from .schemas import (
     QuestionResponse,
     QuestionSetCreate,
     QuestionSetResponse,
+    RecommendationBatchGenerateResponse,
     RecommendationCreate,
     RecommendationResponse,
+    RecommendationUpdate,
     ScanContentIntelligenceSummaryResponse,
     ScanResponse,
     ScanStatusUpdate,
     SemanticCoverageResponse,
     TopicAnalysisResponse,
+    ValidationBatchResponse,
+    ValidationCreate,
+    ValidationResponse,
+    ValidationRunRequest,
     WebsiteCreate,
     WebsiteResponse,
 )
@@ -118,6 +153,50 @@ from .services import (
     update_ai_run_status,
     update_entity,
     update_scan_status,
+    create_opportunity,
+    delete_opportunity,
+    generate_opportunities_for_scan,
+    generate_opportunities_for_website,
+    generate_opportunity_from_finding,
+    generate_opportunity_from_recommendation,
+    get_finding_opportunities,
+    get_opportunity,
+    get_scan_opportunities,
+    get_website_opportunities,
+    update_opportunity,
+    create_fix_plan,
+    delete_fix_plan,
+    delete_recommendation,
+    generate_fix_plan_from_recommendation,
+    generate_fix_plans_for_scan,
+    generate_fix_plans_for_website,
+    generate_recommendation_from_finding,
+    generate_recommendation_from_opportunity,
+    generate_recommendations_for_scan,
+    generate_recommendations_for_website,
+    get_fix_plan,
+    list_fix_plans,
+    list_recommendations,
+    transition_fix_plan_status,
+    update_fix_plan,
+    update_recommendation,
+    validate_fix_plan,
+    validate_recommendation,
+    create_validation,
+    get_validation,
+    list_validations,
+    batch_validate_scan,
+    batch_validate_website,
+    run_end_to_end_intelligence_pipeline,
+    get_pipeline_summary,
+    generate_opportunity_from_page_intelligence,
+    generate_opportunity_from_ai_run,
+    list_opportunities,
+    record_metric,
+    evaluate_scan_monitoring,
+    evaluate_website_monitoring,
+    get_monitoring_timeline,
+    get_website_health_status,
 )
 
 
@@ -1331,3 +1410,992 @@ def get_content_aeo_rules_endpoint(
         "categories": categories,
         "rules": rules,
     }
+
+
+# ==========================================
+# Task 6 Opportunity Engine & Prioritization Endpoints
+# ==========================================
+
+@app.post(
+    "/api/v1/opportunities",
+    response_model=OpportunityResponse,
+)
+def create_opportunity_endpoint(
+    payload: OpportunityCreate,
+    db: Session = Depends(get_db),
+):
+    try:
+        return create_opportunity(db, payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/opportunities/{opportunity_id}",
+    response_model=OpportunityResponse,
+)
+def get_opportunity_endpoint(
+    opportunity_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_opportunity(db, opportunity_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.patch(
+    "/api/v1/opportunities/{opportunity_id}",
+    response_model=OpportunityResponse,
+)
+def update_opportunity_endpoint(
+    opportunity_id: int,
+    payload: OpportunityUpdate,
+    db: Session = Depends(get_db),
+):
+    try:
+        return update_opportunity(db, opportunity_id, payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.delete(
+    "/api/v1/opportunities/{opportunity_id}",
+)
+def delete_opportunity_endpoint(
+    opportunity_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        delete_opportunity(db, opportunity_id)
+        return {"status": "success", "deleted_id": opportunity_id}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/opportunities",
+    response_model=list[OpportunityResponse],
+)
+def list_opportunities_endpoint(
+    website_id: int | None = None,
+    scan_id: int | None = None,
+    category: str | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    opportunity_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    if website_id is not None:
+        try:
+            return get_website_opportunities(
+                db,
+                website_id,
+                scan_id=scan_id,
+                category=category,
+                status=status,
+                priority=priority,
+                opportunity_type=opportunity_type,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+    from .models import Opportunity
+    query = db.query(Opportunity)
+    if scan_id is not None:
+        query = query.filter(Opportunity.scan_id == scan_id)
+    if category:
+        query = query.filter(Opportunity.category == category.lower())
+    if status:
+        query = query.filter(Opportunity.status == status.lower())
+    if priority:
+        query = query.filter(Opportunity.priority == priority.upper())
+    if opportunity_type:
+        query = query.filter(Opportunity.opportunity_type == opportunity_type)
+
+    return query.order_by(Opportunity.priority_score.desc(), Opportunity.id.asc()).all()
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/opportunities",
+    response_model=list[OpportunityResponse],
+)
+def get_website_opportunities_endpoint(
+    website_id: int,
+    scan_id: int | None = None,
+    category: str | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    opportunity_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_website_opportunities(
+            db,
+            website_id,
+            scan_id=scan_id,
+            category=category,
+            status=status,
+            priority=priority,
+            opportunity_type=opportunity_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/scans/{scan_id}/opportunities",
+    response_model=list[OpportunityResponse],
+)
+def get_scan_opportunities_endpoint(
+    scan_id: int,
+    category: str | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_scan_opportunities(
+            db,
+            scan_id,
+            category=category,
+            status=status,
+            priority=priority,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/findings/{finding_id}/opportunities",
+    response_model=list[OpportunityResponse],
+)
+def get_finding_opportunities_endpoint(
+    finding_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_finding_opportunities(db, finding_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/findings/{finding_id}/generate-opportunities",
+    response_model=OpportunityResponse,
+)
+def generate_opportunity_for_finding_endpoint(
+    finding_id: int,
+    recommendation_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        return generate_opportunity_from_finding(
+            db,
+            finding_id,
+            recommendation_id=recommendation_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.post(
+    "/api/v1/recommendations/{recommendation_id}/generate-opportunities",
+    response_model=OpportunityResponse,
+)
+def generate_opportunity_for_recommendation_endpoint(
+    recommendation_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return generate_opportunity_from_recommendation(
+            db,
+            recommendation_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/scans/{scan_id}/generate-opportunities",
+    response_model=OpportunityBatchGenerateResponse,
+)
+def generate_opportunities_for_scan_endpoint(
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        scan = db.get(Scan, scan_id)
+        if scan is None:
+            raise HTTPException(status_code=404, detail="Scan not found")
+        ops = generate_opportunities_for_scan(db, scan_id)
+        return {
+            "website_id": scan.website_id,
+            "scan_id": scan_id,
+            "generated_count": len(ops),
+            "opportunities": ops,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/websites/{website_id}/generate-opportunities",
+    response_model=OpportunityBatchGenerateResponse,
+)
+def generate_opportunities_for_website_endpoint(
+    website_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        website = db.get(Website, website_id)
+        if website is None:
+            raise HTTPException(status_code=404, detail="Website not found")
+        ops = generate_opportunities_for_website(db, website_id)
+        return {
+            "website_id": website_id,
+            "scan_id": None,
+            "generated_count": len(ops),
+            "opportunities": ops,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ==========================================
+# Task 6.3 Recommendation Engine Endpoints
+# ==========================================
+
+@app.get(
+    "/api/v1/recommendations",
+    response_model=list[RecommendationResponse],
+)
+def list_recommendations_endpoint(
+    website_id: int | None = None,
+    scan_id: int | None = None,
+    finding_id: int | None = None,
+    opportunity_id: int | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    action_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        return list_recommendations(
+            db,
+            website_id=website_id,
+            scan_id=scan_id,
+            finding_id=finding_id,
+            opportunity_id=opportunity_id,
+            status=status,
+            priority=priority,
+            action_type=action_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.patch(
+    "/api/v1/recommendations/{recommendation_id}",
+    response_model=RecommendationResponse,
+)
+def update_recommendation_endpoint(
+    recommendation_id: int,
+    payload: RecommendationUpdate,
+    db: Session = Depends(get_db),
+):
+    try:
+        return update_recommendation(db, recommendation_id, payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.delete(
+    "/api/v1/recommendations/{recommendation_id}",
+)
+def delete_recommendation_endpoint(
+    recommendation_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        delete_recommendation(db, recommendation_id)
+        return {"status": "success", "deleted_id": recommendation_id}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/findings/{finding_id}/generate-recommendations",
+    response_model=RecommendationResponse,
+)
+def generate_recommendation_for_finding_endpoint(
+    finding_id: int,
+    opportunity_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        return generate_recommendation_from_finding(
+            db,
+            finding_id,
+            opportunity_id=opportunity_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.post(
+    "/api/v1/opportunities/{opportunity_id}/generate-recommendations",
+    response_model=RecommendationResponse,
+)
+def generate_recommendation_for_opportunity_endpoint(
+    opportunity_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return generate_recommendation_from_opportunity(
+            db,
+            opportunity_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/scans/{scan_id}/generate-recommendations",
+    response_model=RecommendationBatchGenerateResponse,
+)
+def generate_recommendations_for_scan_endpoint(
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        scan = db.get(Scan, scan_id)
+        if scan is None:
+            raise HTTPException(status_code=404, detail="Scan not found")
+        recs = generate_recommendations_for_scan(db, scan_id)
+        return {
+            "website_id": scan.website_id,
+            "scan_id": scan_id,
+            "generated_count": len(recs),
+            "recommendations": recs,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/websites/{website_id}/generate-recommendations",
+    response_model=RecommendationBatchGenerateResponse,
+)
+def generate_recommendations_for_website_endpoint(
+    website_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        website = db.get(Website, website_id)
+        if website is None:
+            raise HTTPException(status_code=404, detail="Website not found")
+        recs = generate_recommendations_for_website(db, website_id)
+        return {
+            "website_id": website_id,
+            "scan_id": None,
+            "generated_count": len(recs),
+            "recommendations": recs,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/opportunities/{opportunity_id}/recommendations",
+    response_model=list[RecommendationResponse],
+)
+def get_opportunity_recommendations_endpoint(
+    opportunity_id: int,
+    db: Session = Depends(get_db),
+):
+    op = db.get(Opportunity, opportunity_id)
+    if op is None:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if op.recommendation:
+        return [op.recommendation]
+    # Check by finding_id
+    if op.finding_id:
+        return db.query(Recommendation).filter(Recommendation.finding_id == op.finding_id).all()
+    return []
+
+
+# ==========================================
+# Task 6.4 Fix / Action Planning Endpoints
+# ==========================================
+
+@app.post(
+    "/api/v1/fix-plans",
+    response_model=FixPlanResponse,
+    status_code=201,
+)
+def create_fix_plan_endpoint(
+    payload: FixPlanCreate,
+    db: Session = Depends(get_db),
+):
+    try:
+        return create_fix_plan(db, payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/fix-plans/{fix_plan_id}",
+    response_model=FixPlanResponse,
+)
+def get_fix_plan_endpoint(
+    fix_plan_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_fix_plan(db, fix_plan_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.patch(
+    "/api/v1/fix-plans/{fix_plan_id}",
+    response_model=FixPlanResponse,
+)
+def update_fix_plan_endpoint(
+    fix_plan_id: int,
+    payload: FixPlanUpdate,
+    db: Session = Depends(get_db),
+):
+    try:
+        return update_fix_plan(db, fix_plan_id, payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.post(
+    "/api/v1/fix-plans/{fix_plan_id}/status",
+    response_model=FixPlanResponse,
+)
+def transition_fix_plan_status_endpoint(
+    fix_plan_id: int,
+    payload: FixPlanStatusTransition,
+    db: Session = Depends(get_db),
+):
+    try:
+        return transition_fix_plan_status(
+            db,
+            fix_plan_id,
+            payload.status,
+            comment=payload.comment,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.delete(
+    "/api/v1/fix-plans/{fix_plan_id}",
+)
+def delete_fix_plan_endpoint(
+    fix_plan_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        delete_fix_plan(db, fix_plan_id)
+        return {"status": "success", "deleted_id": fix_plan_id}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/fix-plans",
+    response_model=list[FixPlanResponse],
+)
+def list_fix_plans_endpoint(
+    website_id: int | None = None,
+    scan_id: int | None = None,
+    recommendation_id: int | None = None,
+    opportunity_id: int | None = None,
+    status: str | None = None,
+    fix_type: str | None = None,
+    priority: str | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        return list_fix_plans(
+            db,
+            website_id=website_id,
+            scan_id=scan_id,
+            recommendation_id=recommendation_id,
+            opportunity_id=opportunity_id,
+            status=status,
+            fix_type=fix_type,
+            priority=priority,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/recommendations/{recommendation_id}/generate-fix-plan",
+    response_model=FixPlanResponse,
+)
+def generate_fix_plan_for_recommendation_endpoint(
+    recommendation_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return generate_fix_plan_from_recommendation(
+            db,
+            recommendation_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/recommendations/{recommendation_id}/fix-plans",
+    response_model=list[FixPlanResponse],
+)
+def get_recommendation_fix_plans_endpoint(
+    recommendation_id: int,
+    db: Session = Depends(get_db),
+):
+    rec = db.get(Recommendation, recommendation_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="Recommendation not found")
+    return db.query(FixPlan).filter(FixPlan.recommendation_id == recommendation_id).all()
+
+
+@app.post(
+    "/api/v1/scans/{scan_id}/generate-fix-plans",
+    response_model=FixPlanBatchGenerateResponse,
+)
+def generate_fix_plans_for_scan_endpoint(
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        scan = db.get(Scan, scan_id)
+        if scan is None:
+            raise HTTPException(status_code=404, detail="Scan not found")
+        plans = generate_fix_plans_for_scan(db, scan_id)
+        return {
+            "website_id": scan.website_id,
+            "scan_id": scan_id,
+            "generated_count": len(plans),
+            "fix_plans": plans,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/websites/{website_id}/generate-fix-plans",
+    response_model=FixPlanBatchGenerateResponse,
+)
+def generate_fix_plans_for_website_endpoint(
+    website_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        website = db.get(Website, website_id)
+        if website is None:
+            raise HTTPException(status_code=404, detail="Website not found")
+        plans = generate_fix_plans_for_website(db, website_id)
+        return {
+            "website_id": website_id,
+            "scan_id": None,
+            "generated_count": len(plans),
+            "fix_plans": plans,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ==========================================
+# Task 6.5 & 6.6 — Validation API Endpoints
+# ==========================================
+
+@app.post(
+    "/api/v1/fix-plans/{fix_plan_id}/validate",
+    response_model=ValidationResponse,
+)
+def validate_fix_plan_endpoint(
+    fix_plan_id: int,
+    request: ValidationRunRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        simulated = request.simulated_after_state if request else None
+        return validate_fix_plan(db, fix_plan_id, simulated_after_state=simulated)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/recommendations/{recommendation_id}/validate",
+    response_model=ValidationResponse,
+)
+def validate_recommendation_endpoint(
+    recommendation_id: int,
+    request: ValidationRunRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        simulated = request.simulated_after_state if request else None
+        return validate_recommendation(db, recommendation_id, simulated_after_state=simulated)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/validations",
+    response_model=ValidationResponse,
+    status_code=201,
+)
+def create_validation_endpoint(
+    payload: ValidationCreate,
+    db: Session = Depends(get_db),
+):
+    try:
+        return create_validation(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/validations/{validation_id}",
+    response_model=ValidationResponse,
+)
+def get_validation_endpoint(
+    validation_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_validation(db, validation_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/validations",
+    response_model=list[ValidationResponse],
+)
+def list_validations_endpoint(
+    website_id: int | None = None,
+    scan_id: int | None = None,
+    fix_plan_id: int | None = None,
+    recommendation_id: int | None = None,
+    finding_id: int | None = None,
+    opportunity_id: int | None = None,
+    status: str | None = None,
+    result: str | None = None,
+    validation_type: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    return list_validations(
+        db,
+        website_id=website_id,
+        scan_id=scan_id,
+        fix_plan_id=fix_plan_id,
+        recommendation_id=recommendation_id,
+        finding_id=finding_id,
+        opportunity_id=opportunity_id,
+        status=status,
+        result=result,
+        validation_type=validation_type,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get(
+    "/api/v1/fix-plans/{fix_plan_id}/validations",
+    response_model=list[ValidationResponse],
+)
+def get_fix_plan_validations_endpoint(
+    fix_plan_id: int,
+    db: Session = Depends(get_db),
+):
+    plan = db.get(FixPlan, fix_plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="FixPlan not found")
+    return db.query(ValidationResult).filter(ValidationResult.fix_plan_id == fix_plan_id).all()
+
+
+@app.get(
+    "/api/v1/recommendations/{recommendation_id}/validations",
+    response_model=list[ValidationResponse],
+)
+def get_recommendation_validations_endpoint(
+    recommendation_id: int,
+    db: Session = Depends(get_db),
+):
+    rec = db.get(Recommendation, recommendation_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Recommendation not found")
+    return db.query(ValidationResult).filter(ValidationResult.recommendation_id == recommendation_id).all()
+
+
+@app.post(
+    "/api/v1/scans/{scan_id}/validate",
+    response_model=ValidationBatchResponse,
+)
+def batch_validate_scan_endpoint(
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        validations = batch_validate_scan(db, scan_id)
+        pass_count = sum(1 for v in validations if v.result == "PASS")
+        fail_count = sum(1 for v in validations if v.result == "FAIL")
+        partial_count = sum(1 for v in validations if v.result == "PARTIAL")
+        return {
+            "website_id": None,
+            "scan_id": scan_id,
+            "total_validated": len(validations),
+            "pass_count": pass_count,
+            "fail_count": fail_count,
+            "partial_count": partial_count,
+            "validations": validations,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/websites/{website_id}/validate",
+    response_model=ValidationBatchResponse,
+)
+def batch_validate_website_endpoint(
+    website_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        validations = batch_validate_website(db, website_id)
+        pass_count = sum(1 for v in validations if v.result == "PASS")
+        fail_count = sum(1 for v in validations if v.result == "FAIL")
+        partial_count = sum(1 for v in validations if v.result == "PARTIAL")
+        return {
+            "website_id": website_id,
+            "scan_id": None,
+            "total_validated": len(validations),
+            "pass_count": pass_count,
+            "fail_count": fail_count,
+            "partial_count": partial_count,
+            "validations": validations,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ====================================================
+# Task 6.7 — End-to-End Intelligence Pipeline Endpoints
+# ====================================================
+
+@app.post(
+    "/api/v1/scans/{scan_id}/run-pipeline",
+    response_model=PipelineRunResponse,
+)
+def run_scan_pipeline_endpoint(
+    scan_id: int,
+    request: PipelineRunRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    scan = db.get(Scan, scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail=f"Scan with id {scan_id} not found")
+    run_vals = request.run_validations if request else True
+    try:
+        return run_end_to_end_intelligence_pipeline(
+            db,
+            website_id=scan.website_id,
+            scan_id=scan_id,
+            run_validations=run_vals,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/websites/{website_id}/run-pipeline",
+    response_model=PipelineRunResponse,
+)
+def run_website_pipeline_endpoint(
+    website_id: int,
+    request: PipelineRunRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail=f"Website with id {website_id} not found")
+    run_vals = request.run_validations if request else True
+    try:
+        return run_end_to_end_intelligence_pipeline(
+            db,
+            website_id=website_id,
+            scan_id=None,
+            run_validations=run_vals,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/scans/{scan_id}/pipeline-summary",
+    response_model=PipelineSummaryResponse,
+)
+def get_scan_pipeline_summary_endpoint(
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    scan = db.get(Scan, scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail=f"Scan with id {scan_id} not found")
+    try:
+        return get_pipeline_summary(db, website_id=scan.website_id, scan_id=scan_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/pipeline-summary",
+    response_model=PipelineSummaryResponse,
+)
+def get_website_pipeline_summary_endpoint(
+    website_id: int,
+    db: Session = Depends(get_db),
+):
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail=f"Website with id {website_id} not found")
+    try:
+        return get_pipeline_summary(db, website_id=website_id, scan_id=None)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ==========================================
+# Task 6.8 Page & AI Run Opportunity Endpoints
+# ==========================================
+
+@app.post(
+    "/api/v1/pages/{page_id}/generate-opportunities",
+    response_model=list[OpportunityResponse],
+)
+def generate_page_opportunities_endpoint(
+    page_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return generate_opportunity_from_page_intelligence(db, page_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 400, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/ai-runs/{ai_run_id}/generate-opportunities",
+    response_model=OpportunityResponse,
+)
+def generate_ai_run_opportunities_endpoint(
+    ai_run_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return generate_opportunity_from_ai_run(db, ai_run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 400, detail=str(exc))
+
+
+# ==========================================
+# Task 6.10 Monitoring Engine Endpoints
+# ==========================================
+
+@app.post(
+    "/api/v1/scans/{scan_id}/monitoring",
+    response_model=list[MonitoringRecordResponse],
+)
+def evaluate_scan_monitoring_endpoint(
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return evaluate_scan_monitoring(db, scan_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 400, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/websites/{website_id}/monitoring",
+    response_model=list[MonitoringRecordResponse],
+)
+def evaluate_website_monitoring_endpoint(
+    website_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return evaluate_website_monitoring(db, website_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 400, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/monitoring-timeline",
+    response_model=MonitoringTimelineResponse,
+)
+def get_monitoring_timeline_endpoint(
+    website_id: int,
+    metric_name: str | None = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    try:
+        records = get_monitoring_timeline(db, website_id, metric_name=metric_name, limit=limit)
+        return {
+            "website_id": website_id,
+            "total_records": len(records),
+            "records": records,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 400, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/health-summary",
+    response_model=WebsiteHealthSummaryResponse,
+)
+def get_website_health_summary_endpoint(
+    website_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_website_health_status(db, website_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 400, detail=str(exc))

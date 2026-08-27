@@ -1,0 +1,12 @@
+{
+  "python.analysis.extraPaths": [
+    "./backend",
+    "./content-engine",
+    "./entity-engine"
+  ],
+  "python.autoComplete.extraPaths": [
+    "./backend",
+    "./content-engine",
+    "./entity-engine"
+  ]
+}

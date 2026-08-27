@@ -1262,6 +1262,11 @@ Different engines should contribute evidence to a shared intelligence model rath
 
 The opportunity engine converts evidence and findings into prioritized opportunities.
 
+> **Implementation Status (Task 6 Batch 1)**:
+> - **Task 6.1 (Opportunity Engine)**: Implemented (`backend/app/models.py:Opportunity`, `backend/app/opportunity_service.py`).
+> - **Task 6.2 (Opportunity Prioritization)**: Implemented (`backend/app/opportunity_prioritization.py`).
+> - Detailed specification available at [docs/OPPORTUNITY_ENGINE.md](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/OPPORTUNITY_ENGINE.md).
+
 Opportunity Structure
 
 An opportunity may contain:
@@ -1286,6 +1291,15 @@ Confidence
 Effort
 Business relevance
 Visibility potential
+
+Prioritization Formula:
+`Score = 0.50 * Impact + 0.25 * Confidence + 0.25 * (1.0 - Effort)`
+Bounded to `[0.0, 1.0]` with levels:
+- `CRITICAL`: >= 0.80
+- `HIGH`: 0.60 - 0.79
+- `MEDIUM`: 0.40 - 0.59
+- `LOW`: < 0.40
+
 ### Example Flow
 Evidence
    ↓
@@ -1313,6 +1327,11 @@ The opportunity engine should not directly execute fixes.
 ### Responsibility
 
 The fix engine generates structured recommendations or proposed changes based on validated opportunities.
+
+> **Implementation Status (Task 6 Batch 2)**:
+> - **Task 6.3 (Recommendation Engine)**: Implemented (`backend/app/models.py:Recommendation`, `backend/app/recommendation_service.py`). See [docs/RECOMMENDATION_ENGINE.md](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/RECOMMENDATION_ENGINE.md).
+> - **Task 6.4 (Fix / Action Planning Foundation)**: Implemented (`backend/app/models.py:FixPlan`, `backend/app/fix_service.py`). See [docs/FIX_ENGINE.md](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/FIX_ENGINE.md).
+> - **Safety Boundary**: The planning foundation generates inspectable, reviewable diff proposals with an auditable review lifecycle (`draft` → `ready_for_review` → `approved` → `completed`). It does not perform automated website mutations, CMS calls, or code deployment.
 
 Potential Outputs
 
@@ -1369,6 +1388,13 @@ It may consume results from these systems but should not own their responsibilit
 
 The validation engine determines whether a recommendation or fix produced the expected result.
 
+> **Implementation Status (Task 6 Batch 3)**:
+> - **Task 6.5 (Validation Engine Foundation)**: Implemented (`backend/app/models.py:ValidationResult`, `backend/app/validation_service.py`).
+> - **Task 6.6 (Validation Feedback Loop)**: Implemented (`apply_validation_feedback` updating FixPlan and Recommendation lifecycle statuses).
+> - **Task 6.7 (End-to-End Pipeline Orchestration)**: Implemented (`backend/app/pipeline_service.py:run_end_to_end_intelligence_pipeline`).
+> - See [docs/VALIDATION_ENGINE.md](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/VALIDATION_ENGINE.md) for full architecture and API documentation.
+> - **Safety Boundary**: The engine performs internal deterministic evidence comparisons. It does not perform live website mutations or external calls.
+
 ### Validation Flow
 Issue
   ↓
@@ -1415,48 +1441,35 @@ The validation engine should verify changes but should not be responsible for ge
 
 Monitoring tracks both system health and intelligence changes over time.
 
-System Monitoring
+### Implementation Status (Task 6.10)
+- **Status**: IMPLEMENTED
+- **Documentation**: [docs/MONITORING.md](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/MONITORING.md)
+- **Model**: `MonitoringRecord` in `backend/app/models.py` (table `monitoring_records`)
+- **Service**: `backend/app/monitoring_service.py`
+- **Façade**: `analytics/__init__.py`
+- **End-to-End Pipeline Integration**: Connected directly into `run_end_to_end_intelligence_pipeline` as Stage 7.
 
-Potential monitoring areas include:
+System Monitoring & Intelligence Monitoring
 
-API health
-Job failures
-Worker health
-Crawl health
-AI provider errors
-Database errors
-Connector failures
-Usage
-Quotas
-Intelligence Monitoring
+Tracked areas include:
+- `health_score`: Composite $[0.0, 1.0]$ bounded health index based on validation pass rates, finding density, and opportunity severity.
+- `validation_pass_rate`: Ratio of validated fixes passing evidence criteria.
+- `open_findings_count`: Active finding density.
+- `critical_opportunities_count`: Strategic high-impact opportunities awaiting action.
+- `resolved_recommendations_count`: Completed and verified remediations.
 
-Potential monitoring areas include:
-
-SEO changes
-AI visibility changes
-Citation changes
-Competitor changes
-Opportunity changes
-Validation results
-Purpose
-
-Monitoring should support:
-
-Alerts
-Historical analysis
-Failure investigation
-Trend detection
-Operational visibility
-### Example Flow
-System / Intelligence Event
-        ↓
-Monitoring
-        ↓
-Metric
-        ↓
-Threshold / Change Detection
-        ↓
-Alert
+### Monitoring Flow
+```text
+Scan / Run
+    ↓
+Metric Snapshot
+    ↓
+Delta Calculation (vs Previous Scan)
+    ↓
+Status & Event Classification (healthy / warning / critical)
+    ↓
+Database Persistence (idempotent per scan & metric)
+```
 
 ## 21. Connectors
 ### Responsibility

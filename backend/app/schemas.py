@@ -380,7 +380,28 @@ class RecommendationResponse(BaseModel):
     impact: str | None = None
     action_type: str | None = None
     payload: dict[str, Any] | list[Any] | None = None
+    category: str | None = None
+    effort: str | None = None
+    rationale: str | None = None
+    opportunity_id: int | None = None
     created_at: datetime
+
+
+class RecommendationUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    priority: str | None = None
+    status: str | None = None
+    impact: str | None = None
+    action_type: str | None = None
+    payload: dict[str, Any] | list[Any] | None = None
+
+
+class RecommendationBatchGenerateResponse(BaseModel):
+    website_id: int | None = None
+    scan_id: int | None = None
+    generated_count: int
+    recommendations: list[RecommendationResponse] = []
 
 
 class QuestionSetCreate(BaseModel):
@@ -735,3 +756,304 @@ class ContentAEORulesResponse(BaseModel):
     total_rules: int
     categories: list[str]
     rules: list[ContentAEORuleItem]
+
+
+class OpportunityCreate(BaseModel):
+    website_id: int
+    scan_id: int | None = None
+    page_id: int | None = None
+    finding_id: int | None = None
+    recommendation_id: int | None = None
+    title: str
+    description: str
+    opportunity_type: str
+    category: str = "seo"
+    status: str = "identified"
+    impact: float = 0.5
+    effort: float = 0.5
+    confidence: float = 0.8
+    priority_score: float | None = None
+    priority: str | None = None
+    rationale: str | None = None
+    evidence: dict[str, Any] | list[Any] | None = None
+
+
+class OpportunityUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    category: str | None = None
+    status: str | None = None
+    impact: float | None = None
+    effort: float | None = None
+    confidence: float | None = None
+    priority_score: float | None = None
+    priority: str | None = None
+    rationale: str | None = None
+    evidence: dict[str, Any] | list[Any] | None = None
+
+
+class OpportunityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    website_id: int
+    scan_id: int | None = None
+    page_id: int | None = None
+    finding_id: int | None = None
+    recommendation_id: int | None = None
+    title: str
+    description: str
+    opportunity_type: str
+    category: str
+    status: str
+    impact: float
+    effort: float
+    confidence: float
+    priority_score: float
+    priority: str
+    rationale: str
+    evidence: dict[str, Any] | list[Any] | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class OpportunityBatchGenerateResponse(BaseModel):
+    website_id: int
+    scan_id: int | None = None
+    generated_count: int
+    opportunities: list[OpportunityResponse] = []
+
+
+# ==========================================
+# Task 6.4 Fix / Action Planning Schemas
+# ==========================================
+
+class FixPlanCreate(BaseModel):
+    recommendation_id: int
+    finding_id: int | None = None
+    opportunity_id: int | None = None
+    website_id: int
+    scan_id: int | None = None
+    page_id: int | None = None
+    fix_type: str
+    title: str
+    description: str
+    problem_statement: str
+    proposed_action: str
+    expected_outcome: str
+    estimated_effort: str = "medium"
+    risk_level: str = "low"
+    priority: str = "medium"
+    status: str = "draft"
+    diff_payload: dict[str, Any] | list[Any] | None = None
+    safety_checks: dict[str, Any] | None = None
+
+
+class FixPlanUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    problem_statement: str | None = None
+    proposed_action: str | None = None
+    expected_outcome: str | None = None
+    estimated_effort: str | None = None
+    risk_level: str | None = None
+    priority: str | None = None
+    status: str | None = None
+    diff_payload: dict[str, Any] | list[Any] | None = None
+    safety_checks: dict[str, Any] | None = None
+
+
+class FixPlanStatusTransition(BaseModel):
+    status: str
+    comment: str | None = None
+
+
+class FixPlanResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    recommendation_id: int
+    finding_id: int | None = None
+    opportunity_id: int | None = None
+    website_id: int
+    scan_id: int | None = None
+    page_id: int | None = None
+    fix_type: str
+    title: str
+    description: str
+    problem_statement: str
+    proposed_action: str
+    expected_outcome: str
+    estimated_effort: str
+    risk_level: str
+    priority: str
+    status: str
+    diff_payload: dict[str, Any] | list[Any] | None = None
+    safety_checks: dict[str, Any] | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class FixPlanBatchGenerateResponse(BaseModel):
+    website_id: int | None = None
+    scan_id: int | None = None
+    generated_count: int
+    fix_plans: list[FixPlanResponse] = []
+
+
+# ==========================================
+# Task 6.5 & 6.6 — Validation Engine Schemas
+# ==========================================
+
+class ValidationCreate(BaseModel):
+    website_id: int
+    fix_plan_id: int | None = None
+    recommendation_id: int | None = None
+    finding_id: int | None = None
+    opportunity_id: int | None = None
+    scan_id: int | None = None
+    page_id: int | None = None
+    validation_type: str
+    expected_result: str
+    before_state: dict[str, Any] | list[Any] | str | None = None
+    after_state: dict[str, Any] | list[Any] | str | None = None
+
+
+class ValidationRunRequest(BaseModel):
+    simulated_after_state: dict[str, Any] | list[Any] | str | None = None
+
+
+class ValidationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    fix_plan_id: int | None = None
+    recommendation_id: int | None = None
+    finding_id: int | None = None
+    opportunity_id: int | None = None
+    website_id: int
+    scan_id: int | None = None
+    page_id: int | None = None
+    validation_type: str
+    status: str
+    result: str
+    validation_score: float
+    before_state: dict[str, Any] | list[Any] | str | None = None
+    after_state: dict[str, Any] | list[Any] | str | None = None
+    expected_result: str
+    actual_result: str
+    explanation: str
+    feedback: dict[str, Any] | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ValidationBatchResponse(BaseModel):
+    website_id: int | None = None
+    scan_id: int | None = None
+    total_validated: int
+    pass_count: int
+    fail_count: int
+    partial_count: int
+    validations: list[ValidationResponse] = []
+
+
+# ====================================================
+# Task 6.7 — End-to-End Intelligence Pipeline Schemas
+# ====================================================
+
+class PipelineRunRequest(BaseModel):
+    run_validations: bool = True
+
+
+class PipelineStageCounts(BaseModel):
+    findings: int = 0
+    opportunities: int = 0
+    recommendations: int = 0
+    fix_plans: int = 0
+    validations: int = 0
+    monitoring: int = 0
+
+
+# ==========================================
+# Task 6.10 — Monitoring Schemas
+# ==========================================
+
+class MonitoringRecordCreate(BaseModel):
+    website_id: int
+    scan_id: int | None = None
+    ai_run_id: int | None = None
+    target_type: str = "website"
+    target_id: int | None = None
+    metric_name: str
+    metric_category: str = "intelligence"
+    current_value: float
+    previous_value: float | None = None
+    delta: float | None = None
+    change_detected: bool = False
+    status: str = "active"
+    event_type: str | None = None
+    summary: str
+    details: dict[str, Any] | list[Any] | None = None
+
+
+class MonitoringRecordResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    website_id: int
+    scan_id: int | None = None
+    ai_run_id: int | None = None
+    target_type: str
+    target_id: int | None = None
+    metric_name: str
+    metric_category: str
+    previous_value: float | None = None
+    current_value: float
+    delta: float | None = None
+    change_detected: bool
+    status: str
+    event_type: str | None = None
+    summary: str
+    details: dict[str, Any] | list[Any] | None = None
+    recorded_at: datetime
+
+
+class MonitoringTimelineResponse(BaseModel):
+    website_id: int
+    total_records: int
+    records: list[MonitoringRecordResponse] = []
+
+
+class WebsiteHealthSummaryResponse(BaseModel):
+    website_id: int
+    health_status: str  # healthy, warning, critical
+    health_score: float
+    validation_pass_rate: float
+    open_findings_count: int
+    critical_opportunities_count: int
+    recent_events: list[str] = []
+    evaluated_at: datetime
+
+
+class PipelineRunResponse(BaseModel):
+    website_id: int
+    scan_id: int | None = None
+    status: str = "completed"
+    stage_counts: PipelineStageCounts
+    validation_summary: dict[str, int] = {"PASS": 0, "FAIL": 0, "PARTIAL": 0}
+    opportunities: list[OpportunityResponse] = []
+    recommendations: list[RecommendationResponse] = []
+    fix_plans: list[FixPlanResponse] = []
+    validations: list[ValidationResponse] = []
+    monitoring_records: list[MonitoringRecordResponse] = []
+    completed_at: datetime
+
+
+class PipelineSummaryResponse(BaseModel):
+    website_id: int
+    scan_id: int | None = None
+    stage_counts: PipelineStageCounts
+    validation_summary: dict[str, int] = {"PASS": 0, "FAIL": 0, "PARTIAL": 0}
+    health_score: float = 1.0
+    health_status: str = "healthy"
