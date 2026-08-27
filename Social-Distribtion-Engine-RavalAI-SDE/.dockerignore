@@ -1,0 +1,27 @@
+# ─── VCS / IDE ─────────────────────────────────────────────────────────────
+.git
+.gitignore
+.vscode/
+.idea/
+
+# ─── Python ────────────────────────────────────────────────────────────────
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+htmlcov/
+.coverage*
+
+# ─── Secrets (never bake into an image) ────────────────────────────────────
+.env
+.env.*
+
+# ─── Test / docs ───────────────────────────────────────────────────────────
+tests/
+specs/
+history/
+htmlcov/

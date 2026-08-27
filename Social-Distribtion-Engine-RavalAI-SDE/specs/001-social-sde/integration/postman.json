@@ -1,0 +1,105 @@
+{
+  "info": {
+    "name": "RavalAI Social Distribution Engine",
+    "description": "Complete API collection for the SDE platform. Includes all endpoints with examples.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{SDE_API_TOKEN}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000" },
+    { "key": "SDE_API_TOKEN", "value": "your-token-here" }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/healthz"
+      }
+    },
+    {
+      "name": "Publish",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/publish",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idempotency_key\": \"test-post-1\",\n  \"targets\": [\n    {\n      \"account_id\": \"acc_123\",\n      \"content\": {\n        \"text\": \"Hello from RavalAI!\",\n        \"media_urls\": [],\n        \"metadata\": {}\n      }\n    }\n  ]\n}"
+        }
+      }
+    },
+    {
+      "name": "Schedule",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/schedule",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idempotency_key\": \"test-schedule-1\",\n  \"scheduled_at\": \"2026-07-28T10:00:00Z\",\n  \"targets\": [\n    {\n      \"account_id\": \"acc_123\",\n      \"content\": {\n        \"text\": \"Scheduled post from RavalAI!\"\n      }\n    }\n  ]\n}"
+        }
+      }
+    },
+    {
+      "name": "Get Job",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/jobs/{{job_id}}"
+      }
+    },
+    {
+      "name": "List Jobs",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs?limit=10&offset=0",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "jobs"],
+          "query": [
+            { "key": "limit", "value": "10" },
+            { "key": "offset", "value": "0" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Cancel Job",
+      "request": {
+        "method": "DELETE",
+        "url": "{{base_url}}/api/v1/jobs/{{job_id}}"
+      }
+    },
+    {
+      "name": "List Accounts",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/accounts"
+      }
+    },
+    {
+      "name": "Register Webhook",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/webhooks/config",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://your-server.com/webhooks/sde\",\n  \"secret\": \"your-webhook-secret\"\n}"
+        }
+      }
+    },
+    {
+      "name": "List Webhooks",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/webhooks/config"
+      }
+    }
+  ]
+}
