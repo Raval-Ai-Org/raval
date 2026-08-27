@@ -4,6 +4,8 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
+    "setup": "bash scripts/setup.sh",
+    "predev": "bash scripts/predev-check.sh",
     "dev": "vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",

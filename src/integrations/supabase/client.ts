@@ -43,6 +43,30 @@ function createSupabaseClient() {
     throw new Error(message);
   }
 
+  // Detect placeholder values from .env.example. These pass the truthiness
+  // check above but point at a non-existent project, which causes silent
+  // auth failures (the form "loads" but submission fails — appears as 404
+  // to the user). Fail loud and early instead.
+  const PLACEHOLDER_PATTERNS = [
+    'YOUR_PROJECT_REF',
+    'YOUR_PUBLISHABLE',
+    'YOUR_SERVICE_ROLE',
+    'placeholder',
+  ];
+  const isPlaceholder = (value: string) =>
+    PLACEHOLDER_PATTERNS.some((p) => value.includes(p));
+
+  if (isPlaceholder(SUPABASE_URL) || isPlaceholder(SUPABASE_PUBLISHABLE_KEY)) {
+    const message =
+      '[Supabase] .env contains placeholder values (YOUR_PROJECT_REF etc.). ' +
+      'The dev server will start and /login will load, but authentication will ' +
+      'silently fail because the Supabase client is pointed at a non-existent ' +
+      'project. Fix: edit raval/.env and replace the placeholders with real ' +
+      'credentials from 1Password or a teammate. Then restart `npm run dev`.';
+    console.error(message);
+    throw new Error(message);
+  }
+
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: {
       fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),

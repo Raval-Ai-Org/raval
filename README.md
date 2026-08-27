@@ -59,13 +59,75 @@ in server modules only):
   uniqueness constraint) and terminal-wins: a stale `retrying` never downgrades
   a `published`/`failed` row.
 
+## Quick start (for new team members)
+
+**TL;DR:** clone, run `npm run setup`, fill in `.env`, run `npm run dev`. The dev server is on `http://localhost:8080`.
+
+### Why a setup script?
+
+The repo's `.env` file is **gitignored** (it holds secrets like the Supabase service-role key and SDR admin token). The first time you clone, you need to create `.env` from `.env.example` **and** replace the placeholder values with real ones — otherwise `npm run dev` will start, the homepage and `/login` will load, but authentication will silently fail. The page won't return a 404 in the HTTP sense, but from your perspective it will look broken (form submits and nothing happens, or you get redirected in a loop). The setup script catches this for you.
+
+### One-time setup
+
+```bash
+git clone https://github.com/Raval-Ai-Org/raval.git
+cd raval
+npm run setup                    # creates .env from .env.example if missing
+# Edit .env — replace the YOUR_* placeholders with real credentials.
+# Get the values from a teammate (Junaid) or from 1Password.
+# Required keys: VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY,
+# SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SERVICE_ROLE_KEY,
+# SDR_BASE_URL, SDR_ADMIN_TOKEN, SDR_SECRET_ENCRYPTION_KEY, CRON_SECRET
+npm install                       # if node_modules wasn't installed by setup
+npm run dev                       # http://localhost:8080
+```
+
+### What `npm run setup` does
+
+1. Creates `.env` from `.env.example` if it's missing
+2. Scans `.env` for placeholder values (`YOUR_PROJECT_REF`, etc.) and warns if found
+3. Runs `npm install` if `node_modules` is missing
+4. Prints a one-screen status report
+
+It's idempotent — safe to run multiple times.
+
+### What `npm run dev` does before starting Vite
+
+A `predev` hook automatically runs `scripts/predev-check.sh`, which:
+- Verifies `.env` exists and has real (non-placeholder) values
+- Verifies `node_modules` is installed
+- Pings the SDR tunnel to confirm reachability
+
+If anything is wrong, it prints a loud warning. The dev server still starts (so you can debug), but the warning tells you exactly what to fix.
+
+### Test login (works once `.env` has real values)
+
+| Field | Value |
+|---|---|
+| Email | `junaidsajjad2298@gmail.com` |
+| Password | `Junaid@1234` |
+| URL | `http://localhost:8080/login` |
+
+If login doesn't work after entering these credentials, the issue is almost always in `.env` — open your browser's DevTools (F12), check the Console for `[Supabase] .env contains placeholder values` and fix accordingly.
+
+### Common "404 on /login" causes (and fixes)
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Page loads, form submits, nothing happens | `.env` has placeholder values | Replace `YOUR_*` with real values in `.env`, restart `npm run dev` |
+| Hard-refresh (Ctrl+Shift+R) fixes it | Browser cached the old page | Always do a hard refresh after pulling new code |
+| Page loads but text is unstyled | Vite build cache stale | `rm -rf node_modules/.vite && npm run dev` |
+| `Cannot find module '@/...'` | TS path aliases not resolving | `rm -rf node_modules && npm install && npm run dev` |
+| Port 8080 already in use | Another service on 8080 | `lsof -i :8080` to find the process, or change the port in `vite.config.ts` |
+
 ### Development
 
 ```bash
-npm install
-npm run dev        # local dev server; point SDR_BASE_URL at your local SDR
-npx vitest run     # unit/contract/integration tests
-npm run build
+npm run setup                     # one-time, after clone
+npm run dev                       # local dev server; http://localhost:8080
+npx vitest run                    # unit/contract/integration tests
+npx playwright test tests/e2e/live-platform-e2e.spec.ts   # live e2e suite
+npm run build                     # production build
 ```
 
 See [`specs/001-sdr-integration/quickstart.md`](../specs/001-sdr-integration/quickstart.md)
