@@ -1057,3 +1057,15 @@ class PipelineSummaryResponse(BaseModel):
     validation_summary: dict[str, int] = {"PASS": 0, "FAIL": 0, "PARTIAL": 0}
     health_score: float = 1.0
     health_status: str = "healthy"
+
+
+class DirectAuthorityCitationAnalysisRequest(BaseModel):
+    url: str | None = None
+    html: str | None = None
+    text_content: str | None = None
+    title: str | None = None
+    meta_description: str | None = None
+    headings: list[dict[str, Any]] | None = None
+    links: list[dict[str, Any]] | None = None
+    structured_data: list[dict[str, Any]] | None = None
+    page_id: int | None = None

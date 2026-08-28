@@ -55,6 +55,7 @@ from .schemas import (
     PipelineRunResponse,
     PipelineStageCounts,
     PipelineSummaryResponse,
+    DirectAuthorityCitationAnalysisRequest,
     PageBreadcrumbResponse,
     PageCanonicalResponse,
     PageExtractionResponse,
@@ -197,7 +198,12 @@ from .services import (
     evaluate_website_monitoring,
     get_monitoring_timeline,
     get_website_health_status,
+    analyze_page_authority_citation_trust,
+    analyze_scan_authority_citation_trust,
+    analyze_website_authority_citation_trust,
+    analyze_direct_authority_citation_trust,
 )
+from .authority_citation_schemas import AuthorityCitationTrustResult
 
 
 Base.metadata.create_all(
@@ -2399,3 +2405,176 @@ def get_website_health_summary_endpoint(
         return get_website_health_status(db, website_id)
     except ValueError as exc:
         raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 400, detail=str(exc))
+
+
+# =============================================================================
+# Day 8 - Phase B - Step 11: Authority, Citation & Trust Intelligence Endpoints
+# =============================================================================
+
+@app.get(
+    "/api/v1/pages/{page_id}/authority-citation-trust",
+    response_model=AuthorityCitationTrustResult,
+)
+def get_page_authority_citation_trust_endpoint(
+    page_id: int,
+    persist: bool = False,
+    db: Session = Depends(get_db),
+):
+    """
+    Evaluates trust, authority, source quality, claim support, transparency,
+    and structural citation readiness for a specific page.
+    """
+    try:
+        return analyze_page_authority_citation_trust(
+            db=db,
+            page_id=page_id,
+            persist_findings=persist,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.post(
+    "/api/v1/pages/{page_id}/authority-citation-trust",
+    response_model=AuthorityCitationTrustResult,
+)
+def post_page_authority_citation_trust_endpoint(
+    page_id: int,
+    persist: bool = True,
+    db: Session = Depends(get_db),
+):
+    """
+    Evaluates and persists findings and actionable recommendations for a specific page.
+    """
+    try:
+        return analyze_page_authority_citation_trust(
+            db=db,
+            page_id=page_id,
+            persist_findings=persist,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/scans/{scan_id}/authority-citation-trust",
+    response_model=list[AuthorityCitationTrustResult],
+)
+def get_scan_authority_citation_trust_endpoint(
+    scan_id: int,
+    persist: bool = False,
+    db: Session = Depends(get_db),
+):
+    """
+    Evaluates trust, authority, source quality, claim support, transparency,
+    and structural citation readiness across all pages in a scan.
+    """
+    try:
+        return analyze_scan_authority_citation_trust(
+            db=db,
+            scan_id=scan_id,
+            persist_findings=persist,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.post(
+    "/api/v1/scans/{scan_id}/authority-citation-trust",
+    response_model=list[AuthorityCitationTrustResult],
+)
+def post_scan_authority_citation_trust_endpoint(
+    scan_id: int,
+    persist: bool = True,
+    db: Session = Depends(get_db),
+):
+    """
+    Evaluates and persists findings and actionable recommendations across all pages in a scan.
+    """
+    try:
+        return analyze_scan_authority_citation_trust(
+            db=db,
+            scan_id=scan_id,
+            persist_findings=persist,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/authority-citation-trust",
+    response_model=list[AuthorityCitationTrustResult],
+)
+def get_website_authority_citation_trust_endpoint(
+    website_id: int,
+    persist: bool = False,
+    db: Session = Depends(get_db),
+):
+    """
+    Evaluates trust, authority, source quality, claim support, transparency,
+    and structural citation readiness across the latest scan of a website.
+    """
+    try:
+        return analyze_website_authority_citation_trust(
+            db=db,
+            website_id=website_id,
+            persist_findings=persist,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.post(
+    "/api/v1/websites/{website_id}/authority-citation-trust",
+    response_model=list[AuthorityCitationTrustResult],
+)
+def post_website_authority_citation_trust_endpoint(
+    website_id: int,
+    persist: bool = True,
+    db: Session = Depends(get_db),
+):
+    """
+    Evaluates and persists findings and actionable recommendations across the latest scan of a website.
+    """
+    try:
+        return analyze_website_authority_citation_trust(
+            db=db,
+            website_id=website_id,
+            persist_findings=persist,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.post(
+    "/api/v1/authority-citation-trust/analyze",
+    response_model=AuthorityCitationTrustResult,
+)
+def analyze_direct_authority_citation_trust_endpoint(
+    payload: DirectAuthorityCitationAnalysisRequest,
+):
+    """
+    Direct ad-hoc evaluation of Authority, Citation & Trust signals for raw HTML or page properties.
+    """
+    try:
+        return analyze_direct_authority_citation_trust(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

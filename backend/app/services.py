@@ -2206,3 +2206,14 @@ from .monitoring_service import (
     get_website_health_status,
     record_metric,
 )
+
+# Day 8 Phase B Authority, Citation & Trust Intelligence Exports
+from .authority_citation_recommendations import (
+    analyze_direct_authority_citation_trust,
+    analyze_page_authority_citation_trust,
+    analyze_scan_authority_citation_trust,
+    analyze_website_authority_citation_trust,
+    map_finding_to_recommendation,
+    map_result_to_findings_and_recommendations,
+    persist_authority_citation_findings_and_recommendations,
+)
