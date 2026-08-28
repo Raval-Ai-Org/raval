@@ -11,6 +11,7 @@ through external planning tools.
 docs/
 ├── README.md                            (this file)
 ├── TEAM-CREDENTIALS.md                  How to share .env safely between team members
+├── PLATFORM-CREDENTIALS-STATUS.md      Which dev apps are wired (LinkedIn/Meta/X) and their review status
 ├── adr/                                 Architecture Decision Records
 │   ├── 0001-proxy-through-server-for-sdr-access.md
 │   ├── 0002-split-scheduling-generation-vs-distribution.md
