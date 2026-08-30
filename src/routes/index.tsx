@@ -1,7 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 
-const BASE_URL = "https://raval6.lovable.app";
+const BASE_URL = (typeof import.meta.env.VITE_APP_URL === 'string' && import.meta.env.VITE_APP_URL)
+  ? import.meta.env.VITE_APP_URL.replace(/\/$/, '')  // Remove trailing slash
+  : (typeof window !== 'undefined' ? window.location.origin : "https://raval.ai");
 
 export const Route = createFileRoute("/")({
   ssr: false,

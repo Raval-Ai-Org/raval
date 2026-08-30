@@ -12,6 +12,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
+import { BASE_URL } from "@/lib/seo";
 
 import appCss from "../styles.css?url";
 
@@ -144,12 +145,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "@graph": [
             {
               "@type": "Organization",
-              "@id": "https://raval6.lovable.app/#organization",
+              "@id": `${BASE_URL}/#organization`,
               name: "Raval AI",
-              url: "https://raval6.lovable.app",
+              url: BASE_URL,
               logo: {
                 "@type": "ImageObject",
-                url: "https://raval6.lovable.app/favicon.svg",
+                url: `${BASE_URL}/favicon.svg`,
               },
               description:
                 "Raval AI is the Marketing Intelligence Layer — an AI-native platform that helps brands and agencies get visible inside LLMs.",
@@ -157,12 +158,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
             },
             {
               "@type": "WebSite",
-              "@id": "https://raval6.lovable.app/#website",
-              url: "https://raval6.lovable.app",
+              "@id": `${BASE_URL}/#website`,
+              url: BASE_URL,
               name: "Raval AI",
               description:
                 "Get visible inside LLMs. The AI-native marketing platform for brands and agencies.",
-              publisher: { "@id": "https://raval6.lovable.app/#organization" },
+              publisher: { "@id": `${BASE_URL}/#organization` },
               inLanguage: "en",
             },
           ],

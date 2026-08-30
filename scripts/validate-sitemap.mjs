@@ -23,7 +23,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const CANONICAL_HOST = "https://raval6.lovable.app";
+const CANONICAL_HOST = process.env.APP_URL || "https://raval.ai";
 const SERVER = process.env.SITEMAP_BASE_URL ?? "http://localhost:8080";
 const BASELINE_PATH = resolve(process.cwd(), "scripts/sitemap-lastmod.baseline.json");
 const UPDATE_BASELINE = process.env.UPDATE_SITEMAP_LASTMOD_BASELINE === "1";

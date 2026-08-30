@@ -11,4 +11,4 @@ Disallow: /auth/
 Disallow: /reset-password
 Disallow: /api/
 
-Sitemap: https://raval6.lovable.app/sitemap.xml
+Sitemap: https://raval.ai/sitemap.xml

@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { TABS, type AnalyticsTab } from "@/components/app/AnalyticsTabs";
+import { BASE_URL } from "@/lib/seo";
 
 const VALID = new Set(TABS.map((t) => t.id));
 
@@ -9,7 +10,7 @@ export const Route = createFileRoute("/app/analytics")({
   // or the redirect chain reads this route's shell directly.
   head: () => ({
     meta: [{ name: "robots", content: "noindex,nofollow" }],
-    links: [{ rel: "canonical", href: "https://raval6.lovable.app/app" }],
+    links: [{ rel: "canonical", href: `${BASE_URL}/app` }],
   }),
   validateSearch: (s: Record<string, unknown>): { tab: AnalyticsTab } => {
     const t = typeof s.tab === "string" && VALID.has(s.tab as AnalyticsTab) ? (s.tab as AnalyticsTab) : "overview";

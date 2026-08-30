@@ -6,6 +6,7 @@ import { Eye, EyeOff, ArrowRight } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { signInWithGoogle, friendlyAuthError, safeNextPath, authCallbackUrl } from "@/lib/auth";
 import { ensureAuthWorkspace } from "@/lib/workspaces.functions";
+import { BASE_URL } from "@/lib/seo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthShell, authRow } from "@/components/auth/AuthShell";
@@ -18,14 +19,14 @@ export const Route = createFileRoute("/signup")({
       { name: "description", content: "Create your Raval AI workspace — the Marketing Intelligence Layer for brands and agencies." },
       { property: "og:title", content: "Create account · Raval AI" },
       { property: "og:description", content: "Start your Raval AI workspace and get visible inside LLMs with AEO/GEO, Brand DNA and multi-client operations." },
-      { property: "og:url", content: "https://raval6.lovable.app/signup" },
+      { property: "og:url", content: `${BASE_URL}/signup` },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Create account · Raval AI" },
       { name: "twitter:description", content: "Start your Raval AI workspace and get visible inside LLMs with AEO/GEO, Brand DNA and multi-client operations." },
       { name: "robots", content: "noindex,nofollow" },
     ],
-    links: [{ rel: "canonical", href: "https://raval6.lovable.app/signup" }],
+    links: [{ rel: "canonical", href: `${BASE_URL}/signup` }],
   }),
   component: SignupPage,
 });

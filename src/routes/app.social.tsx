@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { BASE_URL } from "@/lib/seo";
 
 export const Route = createFileRoute("/app/social")({
   // Private studio deep-link — must never be indexable. The redirect lands on
@@ -6,7 +7,7 @@ export const Route = createFileRoute("/app/social")({
   // or the redirect chain reads this route's shell directly.
   head: () => ({
     meta: [{ name: "robots", content: "noindex,nofollow" }],
-    links: [{ rel: "canonical", href: "https://raval6.lovable.app/app" }],
+    links: [{ rel: "canonical", href: `${BASE_URL}/app` }],
   }),
   beforeLoad: () => { throw redirect({ to: "/app/analytics", search: { tab: "social" } }); },
 });

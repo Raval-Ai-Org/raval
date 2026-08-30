@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
+import { BASE_URL } from "@/lib/seo";
 import { toast } from "sonner";
 import { Logo } from "@/components/brand/Logo";
 import { StarAgent, type StarMood } from "@/components/StarAgent";
@@ -31,13 +32,13 @@ export const Route = createFileRoute("/onboarding")({
       { name: "robots", content: "noindex,nofollow" },
       { property: "og:title", content: "Onboard a client · Raval AI" },
       { property: "og:description", content: "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content." },
-      { property: "og:url", content: "https://raval6.lovable.app/onboarding" },
+      { property: "og:url", content: `${BASE_URL}/onboarding` },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Onboard a client · Raval AI" },
       { name: "twitter:description", content: "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content." },
     ],
-    links: [{ rel: "canonical", href: "https://raval6.lovable.app/onboarding" }],
+    links: [{ rel: "canonical", href: `${BASE_URL}/onboarding` }],
   }),
 });
 

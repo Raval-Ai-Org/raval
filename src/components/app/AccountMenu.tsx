@@ -13,6 +13,7 @@ import { LogOut, HelpCircle, Sparkles } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/hooks/use-theme";
 import { signOutAndRedirect } from "@/lib/auth";
+import { BASE_URL } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
 type UserInfo = { email: string; name: string; avatar: string | null };
@@ -117,7 +118,7 @@ export function AccountMenu({ onOpenSettings, onClose }: { onOpenSettings?: () =
           Upgrade plan
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => { window.open("https://raval6.lovable.app/#help", "_blank", "noopener,noreferrer"); }}
+          onSelect={() => { window.open(`${BASE_URL}/#help`, "_blank", "noopener,noreferrer"); }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <HelpCircle className="h-4 w-4 text-muted-foreground" />
@@ -180,7 +181,7 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
         <DropdownMenuItem onSelect={() => window.dispatchEvent(new CustomEvent("open:upgrade"))} className="gap-2 rounded-lg px-2 py-1.5 text-[13px]">
           <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" /> Upgrade plan
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => window.open("https://raval6.lovable.app/#help", "_blank", "noopener,noreferrer")} className="gap-2 rounded-lg px-2 py-1.5 text-[13px]">
+        <DropdownMenuItem onSelect={() => window.open(`${BASE_URL}/#help`, "_blank", "noopener,noreferrer")} className="gap-2 rounded-lg px-2 py-1.5 text-[13px]">
           <HelpCircle className="h-4 w-4 text-muted-foreground" /> Help & FAQ
         </DropdownMenuItem>
         <DropdownMenuSeparator />

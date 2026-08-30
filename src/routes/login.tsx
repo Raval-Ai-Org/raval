@@ -6,6 +6,7 @@ import { Eye, EyeOff, ArrowRight } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { signInWithGoogle, friendlyAuthError, safeNextPath, passwordResetUrl } from "@/lib/auth";
 import { ensureAuthWorkspace } from "@/lib/workspaces.functions";
+import { BASE_URL } from "@/lib/seo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthShell, authRow } from "@/components/auth/AuthShell";
@@ -18,14 +19,14 @@ export const Route = createFileRoute("/login")({
       { name: "description", content: "Sign in to Raval AI — the Marketing Intelligence Layer for brands and agencies." },
       { property: "og:title", content: "Sign in · Raval AI" },
       { property: "og:description", content: "Access your Raval AI workspace to plan, create and optimize marketing that gets you visible inside LLMs." },
-      { property: "og:url", content: "https://raval6.lovable.app/login" },
+      { property: "og:url", content: `${BASE_URL}/login` },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Sign in · Raval AI" },
       { name: "twitter:description", content: "Access your Raval AI workspace to plan, create and optimize marketing that gets you visible inside LLMs." },
       { name: "robots", content: "noindex,nofollow" },
     ],
-    links: [{ rel: "canonical", href: "https://raval6.lovable.app/login" }],
+    links: [{ rel: "canonical", href: `${BASE_URL}/login` }],
   }),
   component: LoginPage,
 });

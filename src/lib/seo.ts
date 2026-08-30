@@ -1,8 +1,14 @@
 // Per-route SEO helper — keeps titles/descriptions unique per page.
-// Match this to the live published domain so canonical/og:url stay accurate.
-export const BASE_URL = "https://raval6.lovable.app";
+// The application domain is now configurable via APP_URL environment variable
+// to support both local development and production deployments.
+
+export const BASE_URL = (typeof import.meta.env.VITE_APP_URL === 'string' && import.meta.env.VITE_APP_URL)
+  ? import.meta.env.VITE_APP_URL
+  : (typeof window !== 'undefined' ? window.location.origin : 'https://raval.ai');
+
 export const BRAND_NAME = "Raval AI";
-export const BRAND_LOGO = "https://raval6.lovable.app/favicon.svg";
+// Logo is served from the same domain as the application
+export const BRAND_LOGO = `${BASE_URL}/favicon.svg`;
 export const BRAND_SOCIAL_IMAGE =
   "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp";
 

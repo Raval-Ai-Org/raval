@@ -19,7 +19,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const CANONICAL_HOST = "https://raval6.lovable.app";
+const CANONICAL_HOST = process.env.APP_URL || "https://raval.ai";
 const EXPECTED_SITEMAP = `${CANONICAL_HOST}/sitemap.xml`;
 const SERVER = process.env.SITEMAP_BASE_URL ?? "http://localhost:8080";
 const ROBOTS_PATH = resolve(process.cwd(), "public/robots.txt");

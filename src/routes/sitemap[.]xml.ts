@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
 
-const BASE_URL = "https://raval6.lovable.app";
+// Generate XML sitemap dynamically using BASE_URL from environment
+// This ensures the sitemap always references the correct domain
+import { BASE_URL } from "@/lib/seo";
 
 interface SitemapEntry {
   path: string;
