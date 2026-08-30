@@ -73,8 +73,17 @@ function AuthCallbackPage() {
           setState({ status: "error", message: friendlyAuthError(sessionError) });
           return;
         }
-      } else if (queryParams.get("code")) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(window.location.href);
+      } else {
+        const authCode = queryParams.get("code");
+        if (!authCode) {
+          setState({ status: "error", message: "Sign-in did not return an authorization code. Please try again." });
+          return;
+        }
+
+        // exchangeCodeForSession expects the raw one-time authorization code,
+        // not the callback URL. Supabase uses the PKCE verifier it stored when
+        // signInWithOAuth started the flow to exchange this code for a session.
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(authCode);
         if (exchangeError) {
           setState({ status: "error", message: friendlyAuthError(exchangeError) });
           return;
