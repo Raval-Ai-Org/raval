@@ -69,10 +69,12 @@ export const listApprovals = createServerFn({ method: "GET" })
 export const decideApproval = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) =>
-    z.object({
-      approvalId: uuidSchema,
-      decision: z.enum(["approved", "rejected"]),
-    }).parse(data),
+    z
+      .object({
+        approvalId: uuidSchema,
+        decision: z.enum(["approved", "rejected"]),
+      })
+      .parse(data),
   )
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
@@ -103,13 +105,11 @@ export const createWorkspace = createServerFn({ method: "POST" })
       throw new Error("Could not create project");
     }
 
-    const { error: memberError } = await supabaseAdmin
-      .from("workspace_members")
-      .insert({
-        workspace_id: workspace.id,
-        user_id: context.userId,
-        role: "owner",
-      });
+    const { error: memberError } = await supabaseAdmin.from("workspace_members").insert({
+      workspace_id: workspace.id,
+      user_id: context.userId,
+      role: "owner",
+    });
 
     if (memberError) {
       await supabaseAdmin.from("workspaces").delete().eq("id", workspace.id);
@@ -136,7 +136,10 @@ export const ensureAuthWorkspace = createServerFn({ method: "POST" })
 
     await supabaseAdmin
       .from("profiles")
-      .upsert({ id: context.userId, name: nameFromMeta, avatar_url: avatarFromMeta }, { onConflict: "id" });
+      .upsert(
+        { id: context.userId, name: nameFromMeta, avatar_url: avatarFromMeta },
+        { onConflict: "id" },
+      );
 
     // Do NOT auto-create a workspace. New users must create their first client
     // explicitly on /projects so we never show empty placeholder workspaces.
@@ -156,7 +159,9 @@ export const acceptWorkspaceInvite = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ token: uuidSchema }).parse(data))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const email = String(context.claims.email ?? "").trim().toLowerCase();
+    const email = String(context.claims.email ?? "")
+      .trim()
+      .toLowerCase();
     if (!email) throw new Error("Could not verify invite email");
 
     const { data: invite, error: inviteError } = await supabaseAdmin
@@ -171,16 +176,14 @@ export const acceptWorkspaceInvite = createServerFn({ method: "POST" })
     }
 
     if (!invite.accepted_at) {
-      const { error: memberError } = await supabaseAdmin
-        .from("workspace_members")
-        .upsert(
-          {
-            workspace_id: invite.workspace_id,
-            user_id: context.userId,
-            role: invite.role as "admin" | "editor" | "viewer",
-          },
-          { onConflict: "workspace_id,user_id" },
-        );
+      const { error: memberError } = await supabaseAdmin.from("workspace_members").upsert(
+        {
+          workspace_id: invite.workspace_id,
+          user_id: context.userId,
+          role: invite.role as "admin" | "editor" | "viewer",
+        },
+        { onConflict: "workspace_id,user_id" },
+      );
       if (memberError) throw new Error("Could not join workspace");
 
       await supabaseAdmin

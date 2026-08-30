@@ -114,14 +114,14 @@ function normalize(input: string | null | undefined): string | null {
     CANONICAL_HOST,
   );
   // ISO 8601 timestamps (with or without fractional seconds / TZ).
-  out = out.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g, "<TIMESTAMP>");
+  out = out.replace(
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g,
+    "<TIMESTAMP>",
+  );
   // Plain dates.
   out = out.replace(/\b\d{4}-\d{2}-\d{2}\b/g, "<DATE>");
   // UUIDs.
-  out = out.replace(
-    /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
-    "<UUID>",
-  );
+  out = out.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<UUID>");
   // Long hex/base64 IDs (build hashes, cache keys, tokens) — 24+ chars.
   out = out.replace(/\b[0-9a-f]{24,}\b/gi, "<HASH>");
   out = out.replace(/\b[A-Za-z0-9_-]{32,}\b/g, (m) =>
@@ -144,12 +144,12 @@ async function collectSnapshot(page: Page, path: string): Promise<RouteSnapshot>
   const raw = await page.evaluate(() => {
     const pick = (sel: string, attr = "content") =>
       document.querySelector(sel)?.getAttribute(attr) ?? null;
-    const hreflang = Array.from(
-      document.querySelectorAll('link[rel="alternate"][hreflang]'),
-    ).map((el) => ({
-      hreflang: el.getAttribute("hreflang") ?? "",
-      href: el.getAttribute("href") ?? "",
-    }));
+    const hreflang = Array.from(document.querySelectorAll('link[rel="alternate"][hreflang]')).map(
+      (el) => ({
+        hreflang: el.getAttribute("hreflang") ?? "",
+        href: el.getAttribute("href") ?? "",
+      }),
+    );
     const jsonLdTypes: string[] = [];
     const jsonLdNodes: Array<Record<string, unknown>> = [];
     for (const node of Array.from(
@@ -157,8 +157,7 @@ async function collectSnapshot(page: Page, path: string): Promise<RouteSnapshot>
     )) {
       try {
         const parsed = JSON.parse(node.textContent ?? "null");
-        const asStr = (v: unknown): string | null =>
-          typeof v === "string" ? v : null;
+        const asStr = (v: unknown): string | null => (typeof v === "string" ? v : null);
         const summarize = (obj: Record<string, unknown>, typeName: string) => {
           const offers = obj.offers as unknown;
           const offerList = Array.isArray(offers) ? offers : offers ? [offers] : [];
@@ -190,8 +189,8 @@ async function collectSnapshot(page: Page, path: string): Promise<RouteSnapshot>
           const publisher = obj.publisher as unknown;
           const publisherRef =
             publisher && typeof publisher === "object"
-              ? asStr((publisher as Record<string, unknown>)["@id"]) ??
-                asStr((publisher as Record<string, unknown>).name)
+              ? (asStr((publisher as Record<string, unknown>)["@id"]) ??
+                asStr((publisher as Record<string, unknown>).name))
               : null;
           jsonLdNodes.push({
             type: typeName,
@@ -210,7 +209,10 @@ async function collectSnapshot(page: Page, path: string): Promise<RouteSnapshot>
         };
         const walk = (v: unknown) => {
           if (!v) return;
-          if (Array.isArray(v)) { v.forEach(walk); return; }
+          if (Array.isArray(v)) {
+            v.forEach(walk);
+            return;
+          }
           if (typeof v === "object") {
             const obj = v as Record<string, unknown>;
             const t = obj["@type"];
@@ -226,7 +228,9 @@ async function collectSnapshot(page: Page, path: string): Promise<RouteSnapshot>
           }
         };
         walk(parsed);
-      } catch { /* ignore malformed JSON-LD */ }
+      } catch {
+        /* ignore malformed JSON-LD */
+      }
     }
     return {
       title: document.title,
@@ -248,7 +252,6 @@ async function collectSnapshot(page: Page, path: string): Promise<RouteSnapshot>
       jsonLdNodes,
     };
   });
-
 
   const searchBlob = [
     raw.title,
@@ -344,17 +347,13 @@ function assertJsonLdStructure(snap: RouteSnapshot, label: string) {
     // breadcrumbDepth instead.
     if (!["FAQPage", "BreadcrumbList"].includes(node.type)) {
       const identifier = node.id ?? node.url;
-      expect(
-        identifier,
-        `${label}: JSON-LD ${node.type} node must expose @id or url`,
-      ).toBeTruthy();
+      expect(identifier, `${label}: JSON-LD ${node.type} node must expose @id or url`).toBeTruthy();
     }
     for (const abs of [node.id, node.url, node.logoUrl, node.publisherRef]) {
       if (abs && /^https?:\/\//i.test(abs)) {
-        expect(
-          abs,
-          `${label}: JSON-LD absolute URL must stay on canonical host`,
-        ).toContain(CANONICAL_HOST);
+        expect(abs, `${label}: JSON-LD absolute URL must stay on canonical host`).toContain(
+          CANONICAL_HOST,
+        );
       }
     }
     const required = JSONLD_REQUIRED_FIELDS[node.type];
@@ -369,8 +368,6 @@ function assertJsonLdStructure(snap: RouteSnapshot, label: string) {
   }
 }
 
-
-
 // Routes covered by the snapshot contract. Public routes must expose at
 // least one approved pitch-deck phrase; private shells only need the
 // noindex + canonical guarantees.
@@ -380,22 +377,12 @@ const PUBLIC_ROUTES = ["/", "/login", "/signup", "/reset-password"];
 // shell and agency/projects hubs. They must all stay noindex +
 // self-canonical so future refactors can't leak private tooling into
 // search.
-const PRIVATE_ROUTES = [
-  "/onboarding",
-  "/app",
-  "/agency",
-  "/projects",
-];
+const PRIVATE_ROUTES = ["/onboarding", "/app", "/agency", "/projects"];
 // Studio-adjacent routes that redirect into /app. We don't snapshot their
 // resolved head (that's covered by /app), but we DO assert the redirect
 // still lands on a noindex private shell so a broken redirect can't leak
 // a public studio surface into search.
-const STUDIO_REDIRECT_ROUTES = [
-  "/app/content",
-  "/app/social",
-  "/app/seo",
-  "/app/analytics",
-];
+const STUDIO_REDIRECT_ROUTES = ["/app/content", "/app/social", "/app/seo", "/app/analytics"];
 // Unmatched paths — pins the root NotFoundComponent's SEO surface so a
 // missing/renamed route can never silently ship an indexable 404.
 const NOT_FOUND_ROUTES = ["/this-route-should-never-exist-404"];
@@ -440,7 +427,6 @@ test.describe("SEO route snapshots — approved pitch-deck text", () => {
       assertNoForbidden(snap, `private ${path}`);
       assertJsonLdStructure(snap, `private ${path}`);
 
-
       expect(JSON.stringify(snap, null, 2)).toMatchSnapshot(
         `private${path.replace(/\//g, "-")}.json`,
       );
@@ -469,13 +455,17 @@ test.describe("SEO route snapshots — approved pitch-deck text", () => {
       // the runtime noindex meta, strip stale canonicals, and set the 404
       // title — wait for the full deterministic end state so the snapshot
       // never races the hydration effect.
-      await page.waitForFunction(
-        () =>
-          !!document.querySelector('meta[name="robots"]') &&
-          document.title.includes("Page not found"),
-        null,
-        { timeout: 15000 },
-      ).catch(() => { /* fall through to assertion for a clearer failure */ });
+      await page
+        .waitForFunction(
+          () =>
+            !!document.querySelector('meta[name="robots"]') &&
+            document.title.includes("Page not found"),
+          null,
+          { timeout: 15000 },
+        )
+        .catch(() => {
+          /* fall through to assertion for a clearer failure */
+        });
       const snap = await collectSnapshot(page, "/__not_found__");
 
       // A 404 must never be indexable and must not claim to be another URL.
@@ -491,9 +481,7 @@ test.describe("SEO route snapshots — approved pitch-deck text", () => {
     });
   }
 
-
   test("snapshot: robots.txt", async ({ request }) => {
-
     const res = await request.get("/robots.txt");
     expect(res.status()).toBe(200);
     const raw = (await res.text()).trim();

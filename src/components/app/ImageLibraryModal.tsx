@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search as SearchIcon, X as XIcon, Download, Trash2, Copy, Image as ImageIcon, Layers } from "@/components/ui/gemini-icons";
+import {
+  Search as SearchIcon,
+  X as XIcon,
+  Download,
+  Trash2,
+  Copy,
+  Image as ImageIcon,
+  Layers,
+} from "@/components/ui/gemini-icons";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -85,7 +93,9 @@ export function ImageLibraryModal({
       const a = document.createElement("a");
       a.href = e.dataUrl;
       const meta = metaByPostId[e.postId];
-      const safe = (meta?.title || meta?.clientName || e.postId).replace(/[^a-z0-9-_]+/gi, "-").slice(0, 60);
+      const safe = (meta?.title || meta?.clientName || e.postId)
+        .replace(/[^a-z0-9-_]+/gi, "-")
+        .slice(0, 60);
       a.download = `${safe}-${e.size}.png`;
       document.body.appendChild(a);
       a.click();
@@ -138,7 +148,8 @@ export function ImageLibraryModal({
                 Image library
               </h2>
               <p className="text-[11.5px] text-muted-foreground">
-                {entries.length} generated {entries.length === 1 ? "image" : "images"} across every client
+                {entries.length} generated {entries.length === 1 ? "image" : "images"} across every
+                client
               </p>
             </div>
           </div>
@@ -163,7 +174,12 @@ export function ImageLibraryModal({
             />
           </div>
           <div className="flex items-center gap-1.5">
-            <SizeChip label="All" count={sizeCounts.all ?? 0} active={sizeFilter === "all"} onClick={() => setSizeFilter("all")} />
+            <SizeChip
+              label="All"
+              count={sizeCounts.all ?? 0}
+              active={sizeFilter === "all"}
+              onClick={() => setSizeFilter("all")}
+            />
             {(["1024x1024", "1792x1024", "1024x1792"] as ImgSize[]).map((s) =>
               (sizeCounts[s] ?? 0) > 0 ? (
                 <SizeChip
@@ -173,7 +189,7 @@ export function ImageLibraryModal({
                   active={sizeFilter === s}
                   onClick={() => setSizeFilter(s)}
                 />
-              ) : null
+              ) : null,
             )}
           </div>
         </div>
@@ -181,7 +197,13 @@ export function ImageLibraryModal({
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {filtered.length === 0 ? (
-            <EmptyState hasAny={entries.length > 0} onClear={() => { setQ(""); setSizeFilter("all"); }} />
+            <EmptyState
+              hasAny={entries.length > 0}
+              onClear={() => {
+                setQ("");
+                setSizeFilter("all");
+              }}
+            />
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               <AnimatePresence mode="popLayout">
@@ -214,7 +236,11 @@ export function ImageLibraryModal({
                           {meta?.title || "Untitled post"}
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5 truncate text-[10.5px] text-muted-foreground">
-                          {meta?.clientName ? <span className="truncate">{meta.clientName}</span> : <span>Unlinked</span>}
+                          {meta?.clientName ? (
+                            <span className="truncate">{meta.clientName}</span>
+                          ) : (
+                            <span>Unlinked</span>
+                          )}
                           {meta?.channel && <span className="opacity-60">· {meta.channel}</span>}
                         </div>
                       </div>
@@ -253,7 +279,11 @@ export function ImageLibraryModal({
                 className="grid w-full max-w-4xl grid-cols-1 gap-5 overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d0d] p-5 md:grid-cols-[1.4fr_1fr]"
               >
                 <div className="overflow-hidden rounded-xl bg-black/50">
-                  <img src={selected.dataUrl} alt="" className="h-full max-h-[70vh] w-full object-contain" />
+                  <img
+                    src={selected.dataUrl}
+                    alt=""
+                    className="h-full max-h-[70vh] w-full object-contain"
+                  />
                 </div>
                 <div className="flex min-w-0 flex-col">
                   <div className="mb-3 flex items-start justify-between gap-3">
@@ -283,8 +313,16 @@ export function ImageLibraryModal({
                     <MetaCell label="Source" value="AI generated" />
                   </dl>
                   <div className="mt-auto grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <ActionButton icon={<Download className="h-3.5 w-3.5" />} label="Download" onClick={() => downloadOne(selected)} />
-                    <ActionButton icon={<Copy className="h-3.5 w-3.5" />} label="Copy" onClick={() => copyOne(selected)} />
+                    <ActionButton
+                      icon={<Download className="h-3.5 w-3.5" />}
+                      label="Download"
+                      onClick={() => downloadOne(selected)}
+                    />
+                    <ActionButton
+                      icon={<Copy className="h-3.5 w-3.5" />}
+                      label="Copy"
+                      onClick={() => copyOne(selected)}
+                    />
                     <ActionButton
                       icon={<Trash2 className="h-3.5 w-3.5" />}
                       label="Remove"
@@ -302,7 +340,17 @@ export function ImageLibraryModal({
   );
 }
 
-function SizeChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+function SizeChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
@@ -314,7 +362,14 @@ function SizeChip({ label, count, active, onClick }: { label: string; count: num
       )}
     >
       {label}
-      <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] tabular-nums", active ? "bg-black/10" : "bg-white/5")}>{count}</span>
+      <span
+        className={cn(
+          "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
+          active ? "bg-black/10" : "bg-white/5",
+        )}
+      >
+        {count}
+      </span>
     </button>
   );
 }
@@ -322,15 +377,25 @@ function SizeChip({ label, count, active, onClick }: { label: string; count: num
 function MetaCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-2">
-      <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
       <div className="mt-0.5 truncate text-[12px] text-foreground">{value}</div>
     </div>
   );
 }
 
 function ActionButton({
-  icon, label, onClick, tone,
-}: { icon: React.ReactNode; label: string; onClick: () => void; tone?: "danger" }) {
+  icon,
+  label,
+  onClick,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  tone?: "danger";
+}) {
   return (
     <button
       onClick={onClick}

@@ -16,27 +16,27 @@ links:
   adr: history/adr/0001-multi-tenant-auth-model-per-workspace-api-keys.md
   pr: null
 files:
- - .env (restored to full key set; strong secrets generated; LINKEDIN_* preserved)
- - scripts/_env_utils.py (new — non-destructive .env updates)
- - scripts/linkedin_oauth_and_post.py, scripts/twitter_oauth_and_post.py (no longer clobber .env)
- - scripts/seed_linkedin_account.py (new — refresh + userinfo + account upsert)
- - specs/001-social-sde/MULTI_TENANCY.md (new spec amendment)
- - history/adr/0001..0003-*.md (auth model, LinkedIn persona, token refresh)
- - specs/001-social-sde/tasks.md (Phase 9 added; T055-T067 marked done)
- - app/celery_app.py (beat task names fixed; include=scheduler_tasks; adapters registered for workers)
- - app/services/scheduler_tasks.py (await publish, decrypt token + author_urn, webhooks, _sync_post_status, real token refresh, workspace-scoped lookup)
- - app/services/publisher.py (decrypt token + author_urn, webhooks, real platform in responses, DuplicatePostError→409, workspace-scoped lookup)
- - app/adapters/base.py, linkedin.py, twitter.py, meta.py, dryrun.py (author_urn param; LinkedIn requires it)
- - app/api/accounts.py (LinkedIn openid scopes + userinfo + author_urn metadata; real Twitter PKCE; Redis-backed OAuth state)
- - app/api/deps.py (per-workspace API-key resolver; global token = ops/dev fallback)
- - app/api/jobs.py (real platform in responses)
- - app/api/publish.py (409 on duplicate)
- - app/api/admin.py (new — mint per-workspace API keys)
- - app/models.py (ApiKey model), alembic/versions/002_add_api_keys.py (new migration)
- - tests/conftest.py (db fixture alias, seed_test_accounts), tests/unit/test_multi_tenant.py (new), tests/unit/test_worker_dogfood.py (new), tests/unit/test_scheduler.py, tests/unit/test_adapters.py
+  - .env (restored to full key set; strong secrets generated; LINKEDIN_* preserved)
+  - scripts/_env_utils.py (new — non-destructive .env updates)
+  - scripts/linkedin_oauth_and_post.py, scripts/twitter_oauth_and_post.py (no longer clobber .env)
+  - scripts/seed_linkedin_account.py (new — refresh + userinfo + account upsert)
+  - specs/001-social-sde/MULTI_TENANCY.md (new spec amendment)
+  - history/adr/0001..0003-*.md (auth model, LinkedIn persona, token refresh)
+  - specs/001-social-sde/tasks.md (Phase 9 added; T055-T067 marked done)
+  - app/celery_app.py (beat task names fixed; include=scheduler_tasks; adapters registered for workers)
+  - app/services/scheduler_tasks.py (await publish, decrypt token + author_urn, webhooks, _sync_post_status, real token refresh, workspace-scoped lookup)
+  - app/services/publisher.py (decrypt token + author_urn, webhooks, real platform in responses, DuplicatePostError→409, workspace-scoped lookup)
+  - app/adapters/base.py, linkedin.py, twitter.py, meta.py, dryrun.py (author_urn param; LinkedIn requires it)
+  - app/api/accounts.py (LinkedIn openid scopes + userinfo + author_urn metadata; real Twitter PKCE; Redis-backed OAuth state)
+  - app/api/deps.py (per-workspace API-key resolver; global token = ops/dev fallback)
+  - app/api/jobs.py (real platform in responses)
+  - app/api/publish.py (409 on duplicate)
+  - app/api/admin.py (new — mint per-workspace API keys)
+  - app/models.py (ApiKey model), alembic/versions/002_add_api_keys.py (new migration)
+  - tests/conftest.py (db fixture alias, seed_test_accounts), tests/unit/test_multi_tenant.py (new), tests/unit/test_worker_dogfood.py (new), tests/unit/test_scheduler.py, tests/unit/test_adapters.py
 tests:
- - Full suite 182 passed (was 167 baseline; +15 new/updated)
- - Live: /healthz healthy (db+redis+workers); LinkedIn post #1 via /publish (urn:li:share:7489056989533253633); LinkedIn post #2 via /schedule+beat+worker (urn:li:share:7489060292774211584)
+  - Full suite 182 passed (was 167 baseline; +15 new/updated)
+  - Live: /healthz healthy (db+redis+workers); LinkedIn post #1 via /publish (urn:li:share:7489056989533253633); LinkedIn post #2 via /schedule+beat+worker (urn:li:share:7489060292774211584)
 ---
 
 ## Prompt

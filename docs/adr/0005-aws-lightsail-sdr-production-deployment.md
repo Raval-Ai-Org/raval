@@ -12,6 +12,7 @@
 The Social Distribution Engine (SDR) backend service needs to be deployed to production cloud infrastructure to enable the RavalAI platform (deployed on Vercel at `https://raval.it.com`) to publish social media posts on behalf of clients. The SDR consists of 5 Docker containers (FastAPI API, Celery worker, Celery beat, PostgreSQL, Redis) requiring minimum 2 GB RAM and 24/7 uptime with public HTTPS access.
 
 **Key Requirements:**
+
 - Public internet access with HTTPS for API calls from Vercel
 - Webhook reception from social platforms (LinkedIn, X, Facebook, Instagram)
 - Minimum 2 GB RAM (measured: 1.5 GB idle, 2 GB under load)
@@ -33,26 +34,31 @@ The Social Distribution Engine (SDR) backend service needs to be deployed to pro
 ## Considered Options
 
 ### Option 1: Oracle Cloud Always Free ❌ REJECTED
+
 - **Specs**: 4 OCPUs + 24 GB RAM (Ampere A1)
 - **Cost**: $0 forever
 - **Verdict**: Billing verification failed twice, unreliable activation, lost money
 
 ### Option 2: AWS EC2 Free Tier (t2.micro/t3.micro) ❌ REJECTED
+
 - **Specs**: 1 vCPU + 1 GB RAM
 - **Cost**: $0 for 12 months
 - **Verdict**: Insufficient RAM (containers will crash)
 
 ### Option 3: Hetzner Cloud CPX21 ⚠️ CONSIDERED
+
 - **Specs**: 3 vCPU + 4 GB RAM + 80 GB SSD
 - **Cost**: €4.15/month (~$4.50 USD)
 - **Verdict**: Cheapest viable option, but new platform (unfamiliar)
 
 ### Option 4: DigitalOcean Basic Droplet ⚠️ CONSIDERED
+
 - **Specs**: 2 vCPU + 4 GB RAM + 80 GB SSD
 - **Cost**: $0 for 60 days ($200 credit), then $24/month
 - **Verdict**: Free trial attractive, but expensive after trial
 
 ### Option 5: AWS Lightsail $12/month Dual-stack ✅ SELECTED
+
 - **Specs**: 2 vCPU + 2 GB RAM + 60 GB SSD + 3 TB transfer
 - **Cost**: $12/month (Dual-stack networking)
 - **Verdict**: Balance of familiarity, functionality, and acceptable cost
@@ -64,6 +70,7 @@ The Social Distribution Engine (SDR) backend service needs to be deployed to pro
 **Chosen option**: AWS Lightsail $12/month Dual-stack plan
 
 **Rationale:**
+
 - **Minimum viable RAM**: 2 GB meets requirement (measured 1.5 GB idle, 2 GB under load)
 - **IPv4 + IPv6 dual-stack**: Ensures social platform webhooks (likely IPv4) can reach server
 - **AWS familiarity**: User already knows AWS interface, reduces operational risk
@@ -78,6 +85,7 @@ The Social Distribution Engine (SDR) backend service needs to be deployed to pro
 ## Deployment Details
 
 ### **Server Specifications**
+
 - **Provider**: AWS Lightsail
 - **Region**: Singapore (ap-southeast-1a)
 - **Plan**: $12/month Dual-stack
@@ -86,6 +94,7 @@ The Social Distribution Engine (SDR) backend service needs to be deployed to pro
 - **Networking**: Dual-stack (IPv4 + IPv6)
 
 ### **Network Configuration**
+
 - **Public IPv4**: `47.129.3.69`
 - **Private IPv4**: `172.26.11.222`
 - **Public IPv6**: `2406:da18:1c72:9200:295c:4b4d:c5ad:558b`
@@ -93,6 +102,7 @@ The Social Distribution Engine (SDR) backend service needs to be deployed to pro
 - **Firewall**: SSH (22), HTTP (80), HTTPS (443)
 
 ### **Installation Completed**
+
 ```bash
 # System
 Ubuntu 24.04 LTS (updated 2026-08-13)
@@ -112,6 +122,7 @@ Location: /home/ubuntu/sdr/
 **⚠️ THESE SECRETS ARE PRODUCTION CREDENTIALS - DO NOT COMMIT TO GIT**
 
 ### **Database Credentials**
+
 ```bash
 POSTGRES_HOST=postgres
 POSTGRES_DB=raval_sde
@@ -120,6 +131,7 @@ POSTGRES_PASSWORD=87589f0a1984551c93455d448091586642f4b069ac7b3d2a51f62fb858c59a
 ```
 
 ### **SDR API Security**
+
 ```bash
 # MUST match Vercel's SDR_ADMIN_TOKEN exactly
 SDE_API_TOKEN=2d6f0f80867966cf0133407a2b2145501f934758a7eeb4e8
@@ -132,18 +144,21 @@ FERNET_KEY=0yIvrQov4QCE9bAErwq8LhF4rjA6TRtJ8XjSR5_ydD8=
 ```
 
 ### **Database Connection Strings**
+
 ```bash
 DATABASE_URL=postgresql://sde:87589f0a1984551c93455d448091586642f4b069ac7b3d2a51f62fb858c59a3e@postgres:5432/raval_sde
 DATABASE_URL_SYNC=postgresql+psycopg://sde:87589f0a1984551c93455d448091586642f4b069ac7b3d2a51f62fb858c59a3e@postgres:5432/raval_sde
 ```
 
 ### **GitHub Access**
+
 ```bash
 # Personal Access Token (for private repo access)
 PAT=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
 ```
 
 ### **Full Production .env**
+
 Location: `/home/ubuntu/sdr/.env`
 
 ```env
@@ -182,6 +197,7 @@ FERNET_KEY=0yIvrQov4QCE9bAErwq8LhF4rjA6TRtJ8XjSR5_ydD8=
 ## Deployment Status (as of 2026-08-13 13:34 UTC)
 
 ### **✅ Completed**
+
 1. AWS Lightsail instance provisioned (47.129.3.69)
 2. Ubuntu 24.04 LTS installed and updated
 3. Docker Engine 29.7.2 + Docker Compose v5.4.0 installed
@@ -193,6 +209,7 @@ FERNET_KEY=0yIvrQov4QCE9bAErwq8LhF4rjA6TRtJ8XjSR5_ydD8=
 9. Health check passing: `http://localhost:8000/healthz` returns healthy
 
 ### **Container Status**
+
 ```bash
 NAME                 STATUS                  PORTS
 raval-sde-api        Up 8 minutes (healthy)  0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
@@ -203,10 +220,12 @@ raval-sde-worker     Up 8 minutes (unhealthy) - but functioning (processing task
 ```
 
 **Note**: Beat and Worker show "unhealthy" status but logs confirm they ARE working:
+
 - Beat: Sending scheduled tasks every 30 seconds (`tick-due-jobs`)
 - Worker: Processing tasks successfully (`Task scheduler.tick_due_jobs[...] succeeded`)
 
 ### **Health Check Response**
+
 ```json
 {
   "status": "healthy",
@@ -225,6 +244,7 @@ raval-sde-worker     Up 8 minutes (unhealthy) - but functioning (processing task
 ## ⏸️ Pending Tasks (Paused for Documentation)
 
 ### **Immediate Next Steps (T080 continuation)**
+
 1. **Install Cloudflared** ✅ (completed: version 2026.8.0 installed)
 2. **Authenticate with Cloudflare** (pending: `cloudflared tunnel login`)
 3. **Create Cloudflare Tunnel** (pending: `cloudflared tunnel create raval-sdr-test`)
@@ -234,6 +254,7 @@ raval-sde-worker     Up 8 minutes (unhealthy) - but functioning (processing task
 7. **Verify HTTPS access** (pending: test `https://sdr-test.raval.it.com/healthz`)
 
 ### **Subdomain Decision (CRITICAL)**
+
 **⚠️ IMPORTANT SAFETY CONSIDERATION:**
 
 User raised critical concern: The real production site (`raval.it.com`) is **ALREADY LIVE with REAL CLIENTS**. This deployment is a **COPY/TEST environment**.
@@ -241,12 +262,14 @@ User raised critical concern: The real production site (`raval.it.com`) is **ALR
 **Two options identified:**
 
 **Option A: Use test subdomain** (RECOMMENDED for safety)
+
 - `sdr-test.raval.it.com` or `sdr-staging.raval.it.com`
 - Zero risk to real production
 - Clear separation (test vs production)
 - Can test safely without affecting real clients
 
 **Option B: Use production subdomain**
+
 - `sdr.raval.it.com`
 - Only if real production is NOT using SDR yet
 - Requires confirmation that Supabase databases are separate
@@ -254,12 +277,14 @@ User raised critical concern: The real production site (`raval.it.com`) is **ALR
 **Decision**: User paused to document before making final subdomain choice.
 
 ### **After Tunnel Setup**
+
 1. Update Vercel environment variable: `SDR_BASE_URL` from `http://localhost:8000` to `https://sdr-test.raval.it.com` (or chosen subdomain)
 2. Redeploy Vercel to pick up new SDR_BASE_URL
 3. Test integration: RavalAI production → deployed SDR
 4. Verify webhooks: LinkedIn/X/Facebook/Instagram → SDR delivery callbacks
 
 ### **Subsequent Tasks (T081-T083)**
+
 - **T081**: Update OAuth redirect URIs on all platforms to production SDR URL
 - **T081**: Initiate Meta App Review for Facebook/Instagram publish permissions
 - **T082**: Implement workspace SDR key rotation feature
@@ -271,6 +296,7 @@ User raised critical concern: The real production site (`raval.it.com`) is **ALR
 ## Architectural Decisions
 
 ### **1. Dual-stack vs IPv6-only Networking**
+
 **Decision**: Dual-stack (+$2/month premium)
 
 **Rationale**: Social media platform webhooks (LinkedIn, X, Facebook, Instagram) likely require IPv4 for delivery status callbacks. This is critical for US4 user story (users see delivery status). The $2/month premium is production reliability insurance - webhook delivery failures would be catastrophic for user experience.
@@ -278,9 +304,11 @@ User raised critical concern: The real production site (`raval.it.com`) is **ALR
 **Trade-off**: $12/month vs $10/month - chose reliability over cost savings.
 
 ### **2. AWS Lightsail vs Hetzner Cloud**
+
 **Decision**: AWS Lightsail ($12/month)
 
-**Rationale**: 
+**Rationale**:
+
 - User familiarity with AWS reduces operational risk
 - Instant activation (no learning curve)
 - Production workload prioritizes reliability over cost
@@ -289,15 +317,18 @@ User raised critical concern: The real production site (`raval.it.com`) is **ALR
 **Trade-off**: 2 GB RAM vs 4 GB RAM (Hetzner) - accepted tighter margins for familiarity.
 
 ### **3. Production Deployment Philosophy**
+
 **Decision**: Production reliability over cost savings
 
-**Rationale**: 
+**Rationale**:
+
 - Launch is end of next month (September 2026)
 - Quality bar = production perfection
 - Correctness, security, completeness beat velocity
 - $12/month is acceptable for business-critical service
 
 ### **4. Subdomain Safety Strategy**
+
 **Decision**: Paused for user confirmation (test vs production subdomain)
 
 **Rationale**: User raised critical concern about real production site already running with real clients. Must ensure test deployment does not interfere with live business operations. Recommending `sdr-test.raval.it.com` for isolation unless confirmed that production is not using SDR yet.
@@ -307,6 +338,7 @@ User raised critical concern: The real production site (`raval.it.com`) is **ALR
 ## Consequences
 
 ### **Positive**
+
 - ✅ SDR service successfully deployed to production infrastructure
 - ✅ All 5 containers operational (API, worker, beat, PostgreSQL, Redis)
 - ✅ Health checks passing, tasks processing correctly
@@ -317,12 +349,14 @@ User raised critical concern: The real production site (`raval.it.com`) is **ALR
 - ✅ Cloudflared installed, ready for HTTPS tunnel setup
 
 ### **Negative**
+
 - ⚠️ $12/month recurring cost (vs $0 Oracle or $4.50 Hetzner)
 - ⚠️ Only 2 GB RAM (minimal headroom, no buffer for traffic spikes)
 - ⚠️ Subdomain decision pending (test vs production isolation concern)
 - ⚠️ Beat/Worker containers show "unhealthy" status (cosmetic issue, functioning correctly)
 
 ### **Neutral**
+
 - Cloudflare Tunnel setup still required (blocked on subdomain decision)
 - Vercel configuration update pending (depends on final SDR URL)
 - T081-T083 tasks deferred until tunnel operational
@@ -332,6 +366,7 @@ User raised critical concern: The real production site (`raval.it.com`) is **ALR
 ## Monitoring and Maintenance
 
 ### **Health Checks**
+
 ```bash
 # API health
 curl http://localhost:8000/healthz
@@ -346,6 +381,7 @@ docker compose logs beat --tail=50
 ```
 
 ### **Database Access**
+
 ```bash
 # Connect to PostgreSQL
 docker compose exec postgres psql -U sde -d raval_sde
@@ -355,6 +391,7 @@ docker compose exec postgres psql -U sde -d raval_sde -c "\dt"
 ```
 
 ### **System Resources**
+
 ```bash
 # Memory usage
 free -h
@@ -367,6 +404,7 @@ docker stats
 ```
 
 ### **Service Management**
+
 ```bash
 # Restart all containers
 docker compose restart
@@ -417,6 +455,7 @@ docker compose up -d
 **Status**: SDR fully operational on AWS Lightsail at `http://localhost:8000`, Cloudflared installed, ready for tunnel authentication.
 
 **To resume**:
+
 1. Confirm subdomain choice: `sdr-test.raval.it.com` (safe) or `sdr.raval.it.com` (production)
 2. Run: `cloudflared tunnel login` (authenticate via browser)
 3. Continue with Cloudflare Tunnel setup (ADR AWS-LIGHTSAIL-DEPLOYMENT-STEPS.md Step 8.2+)

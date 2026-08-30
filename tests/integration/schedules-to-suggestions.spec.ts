@@ -17,7 +17,8 @@ import { test, expect } from "@playwright/test";
 const BASE = "http://localhost:8080";
 const SUPA_URL = process.env.SUPABASE_URL!;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const PUBLISHABLE = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
+const PUBLISHABLE =
+  process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
 const USER_TOKEN = process.env.LOVABLE_BROWSER_SUPABASE_ACCESS_TOKEN!;
 const SESSION_JSON = process.env.LOVABLE_BROWSER_SUPABASE_SESSION_JSON!;
 const STORAGE_KEY = process.env.LOVABLE_BROWSER_SUPABASE_STORAGE_KEY!;
@@ -97,13 +98,25 @@ test.describe("Schedules → content_items → Studio suggestions", () => {
 
   test.afterAll(async () => {
     for (const wsId of createdWorkspaceIds) {
-      await fetch(`${SUPA_URL}/rest/v1/content_items?workspace_id=eq.${wsId}`, { method: "DELETE", headers: ADMIN_HEADERS });
-      await fetch(`${SUPA_URL}/rest/v1/scheduled_jobs?workspace_id=eq.${wsId}`, { method: "DELETE", headers: ADMIN_HEADERS });
-      await fetch(`${SUPA_URL}/rest/v1/workspaces?id=eq.${wsId}`, { method: "DELETE", headers: ADMIN_HEADERS });
+      await fetch(`${SUPA_URL}/rest/v1/content_items?workspace_id=eq.${wsId}`, {
+        method: "DELETE",
+        headers: ADMIN_HEADERS,
+      });
+      await fetch(`${SUPA_URL}/rest/v1/scheduled_jobs?workspace_id=eq.${wsId}`, {
+        method: "DELETE",
+        headers: ADMIN_HEADERS,
+      });
+      await fetch(`${SUPA_URL}/rest/v1/workspaces?id=eq.${wsId}`, {
+        method: "DELETE",
+        headers: ADMIN_HEADERS,
+      });
     }
   });
 
-  test("runDueScheduledJobs writes content_items and clears the SEO-brief suggestion", async ({ page, request }) => {
+  test("runDueScheduledJobs writes content_items and clears the SEO-brief suggestion", async ({
+    page,
+    request,
+  }) => {
     const userId = getUserId();
     const wsId = await seedWorkspace(userId);
 
@@ -114,7 +127,9 @@ test.describe("Schedules → content_items → Studio suggestions", () => {
           window.localStorage.setItem(storageKey, sess);
           window.localStorage.setItem("workspace:selected", wsId);
           window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
-        } catch { /* noop */ }
+        } catch {
+          /* noop */
+        }
       },
       { storageKey: STORAGE_KEY, sess: SESSION_JSON, wsId },
     );
@@ -145,11 +160,18 @@ test.describe("Schedules → content_items → Studio suggestions", () => {
     );
     expect(itemsRes.ok).toBeTruthy();
     const items = (await itemsRes.json()) as {
-      id: string; kind: string; status: string; meta: Record<string, unknown> | null; title: string;
+      id: string;
+      kind: string;
+      status: string;
+      meta: Record<string, unknown> | null;
+      title: string;
     }[];
     expect(items.length).toBeGreaterThanOrEqual(1);
-    const linked = items.find((i) =>
-      i.meta && typeof i.meta === "object" && (i.meta as { scheduled_job_id?: string }).scheduled_job_id === jobId,
+    const linked = items.find(
+      (i) =>
+        i.meta &&
+        typeof i.meta === "object" &&
+        (i.meta as { scheduled_job_id?: string }).scheduled_job_id === jobId,
     );
     expect(linked, "expected content_item linked to the scheduled job").toBeTruthy();
     expect(linked!.kind).toBe("blog");
@@ -160,7 +182,9 @@ test.describe("Schedules → content_items → Studio suggestions", () => {
       { headers: ADMIN_HEADERS },
     );
     const [jobRow] = (await jobRes.json()) as {
-      last_run_status: string | null; active: boolean; last_content_item_id: string | null;
+      last_run_status: string | null;
+      active: boolean;
+      last_content_item_id: string | null;
     }[];
     expect(jobRow.last_run_status).toBe("ok");
     expect(jobRow.active).toBe(false);
@@ -175,8 +199,6 @@ test.describe("Schedules → content_items → Studio suggestions", () => {
 
     // Sanity: the suggestion rail is still rendering other cards, i.e. it did
     // not silently unmount.
-    await expect(
-      page.getByRole("button", { name: /^Run suggestion:/i }).first(),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Run suggestion:/i }).first()).toBeVisible();
   });
 });

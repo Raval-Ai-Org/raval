@@ -176,10 +176,7 @@ async function hoverElement(page: Page, locator: Locator): Promise<boolean> {
 /** Assert that a hover was actually observed by the engine; if not, mark the
  *  test as skipped for this engine so we don't blame a real regression on a
  *  Playwright/browser hover-simulation quirk. */
-function requireHover(
-  hovered: boolean,
-  testInfo: import("@playwright/test").TestInfo,
-) {
+function requireHover(hovered: boolean, testInfo: import("@playwright/test").TestInfo) {
   if (!hovered) {
     testInfo.skip(
       true,
@@ -294,8 +291,6 @@ test.describe("Interactive states — primary button", () => {
     await page.evaluate(() => (document as any).fonts?.ready);
     await page.waitForTimeout(900);
   });
-
-
 
   test("submit button: hover darkens the background", async ({ page }, testInfo) => {
     const button = page.getByRole("button", { name: /^sign in$/i }).first();

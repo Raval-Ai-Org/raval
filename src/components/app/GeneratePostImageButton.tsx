@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Image as ImageIcon, Sparkles, X, AlertTriangle, Repeat as RefreshCw, Check } from "@/components/brand/icons";
+import {
+  Image as ImageIcon,
+  Sparkles,
+  X,
+  AlertTriangle,
+  Repeat as RefreshCw,
+  Check,
+} from "@/components/brand/icons";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { usePostImage } from "@/hooks/use-post-image";
 import { loadBrandDna, hasAnyCachedImage, DEFAULT_IMG_SIZE, type ImgSize } from "@/lib/post-image";
 import type { PlatformId } from "@/lib/social-platforms";
 import { PromptInspector } from "@/components/app/PromptInspector";
-
-
 
 // Module-level dedupe so multiple cards for the same post only hit the DB once,
 // even when several rails mount them simultaneously.
@@ -72,15 +77,17 @@ export function GeneratePostImageButton({
     if (typeof window === "undefined") return DEFAULT_IMG_SIZE;
     try {
       const saved = window.sessionStorage.getItem("post-image:size") as ImgSize | null;
-      return saved === "1024x1024" || saved === "1792x1024" || saved === "1024x1792" ? saved : DEFAULT_IMG_SIZE;
-    } catch { return DEFAULT_IMG_SIZE; }
+      return saved === "1024x1024" || saved === "1792x1024" || saved === "1024x1792"
+        ? saved
+        : DEFAULT_IMG_SIZE;
+    } catch {
+      return DEFAULT_IMG_SIZE;
+    }
   });
   const brand = loadBrandDna(workspaceId ?? null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  const {
-    image, status, error, progress, generate, cancel,
-  } = usePostImage({
+  const { image, status, error, progress, generate, cancel } = usePostImage({
     postId,
     postBody: body,
     postTitle,
@@ -93,9 +100,10 @@ export function GeneratePostImageButton({
 
   const chooseSize = useCallback((s: ImgSize) => {
     setSize(s);
-    try { window.sessionStorage.setItem("post-image:size", s); } catch {}
+    try {
+      window.sessionStorage.setItem("post-image:size", s);
+    } catch {}
   }, []);
-
 
   // Show a subtle "has image" indicator when a cached image exists (any size)
   // for this post — cheap check, no fetch. Uses hasAnyCachedImage so the
@@ -117,39 +125,46 @@ export function GeneratePostImageButton({
     const el = rootRef.current;
     if (!el || bodyLoaded || !postId) return;
     if (typeof IntersectionObserver === "undefined") return;
-    const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    const conn = (
+      navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }
+    ).connection;
     if (conn?.saveData || conn?.effectiveType === "slow-2g" || conn?.effectiveType === "2g") return;
 
-    const io = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        io.disconnect();
-        void (async () => {
-          const rec = await fetchPostBody(postId);
-          if (rec?.body) setBody(rec.body);
-          else setBody(postTitle || "");
-          if (rec?.channel && !platformState) setPlatformState(String(rec.channel) as PlatformId);
-          setBodyLoaded(true);
-        })();
-      }
-    }, { rootMargin: "300px" });
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          io.disconnect();
+          void (async () => {
+            const rec = await fetchPostBody(postId);
+            if (rec?.body) setBody(rec.body);
+            else setBody(postTitle || "");
+            if (rec?.channel && !platformState) setPlatformState(String(rec.channel) as PlatformId);
+            setBodyLoaded(true);
+          })();
+        }
+      },
+      { rootMargin: "300px" },
+    );
     io.observe(el);
     return () => io.disconnect();
   }, [postId, bodyLoaded, postTitle, platformState]);
 
-  const openPopover = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setOpen((o) => !o);
-    if (bodyLoaded || !postId) return;
-    // Fallback for cards that never entered the observer (e.g. rendered
-    // above the fold before mount) — still zero generation, just body prefetch.
-    const rec = await fetchPostBody(postId);
-    if (rec?.body) setBody(rec.body);
-    else setBody(postTitle || "");
-    if (rec?.channel && !platformState) setPlatformState(String(rec.channel) as PlatformId);
-    setBodyLoaded(true);
-  }, [bodyLoaded, postId, postTitle, platformState]);
-
+  const openPopover = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setOpen((o) => !o);
+      if (bodyLoaded || !postId) return;
+      // Fallback for cards that never entered the observer (e.g. rendered
+      // above the fold before mount) — still zero generation, just body prefetch.
+      const rec = await fetchPostBody(postId);
+      if (rec?.body) setBody(rec.body);
+      else setBody(postTitle || "");
+      if (rec?.channel && !platformState) setPlatformState(String(rec.channel) as PlatformId);
+      setBodyLoaded(true);
+    },
+    [bodyLoaded, postId, postTitle, platformState],
+  );
 
   const label = compact ? "Image" : "Generate image";
 
@@ -174,7 +189,13 @@ export function GeneratePostImageButton({
       <AnimatePresence>
         {open && (
           <>
-            <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
+            <div
+              className="fixed inset-0 z-40"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+              }}
+            />
             <motion.div
               initial={{ opacity: 0, y: -6, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -201,16 +222,25 @@ export function GeneratePostImageButton({
                       compact
                     />
                   )}
-                  <button onClick={() => setOpen(false)} className="rounded-md p-0.5 text-muted-foreground hover:bg-muted">
+                  <button
+                    onClick={() => setOpen(false)}
+                    className="rounded-md p-0.5 text-muted-foreground hover:bg-muted"
+                  >
                     <X className="h-3 w-3" />
                   </button>
                 </div>
               </div>
 
-
-              <div className="relative overflow-hidden rounded-xl bg-muted/50" style={{ aspectRatio: aspectFor(size) }}>
+              <div
+                className="relative overflow-hidden rounded-xl bg-muted/50"
+                style={{ aspectRatio: aspectFor(size) }}
+              >
                 {image ? (
-                  <img src={image} alt="Post" className={cn("h-full w-full object-cover", status === "loading" && "blur-sm")} />
+                  <img
+                    src={image}
+                    alt="Post"
+                    className={cn("h-full w-full object-cover", status === "loading" && "blur-sm")}
+                  />
                 ) : status === "loading" ? (
                   <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center">
                     <Sparkles className="h-4 w-4 animate-pulse text-brand-green" />
@@ -228,18 +258,21 @@ export function GeneratePostImageButton({
                 )}
                 {status === "loading" && (
                   <div className="absolute inset-x-0 bottom-0 h-1 bg-black/10">
-                    <div className="h-full bg-brand-green transition-all" style={{ width: `${progress}%` }} />
+                    <div
+                      className="h-full bg-brand-green transition-all"
+                      style={{ width: `${progress}%` }}
+                    />
                   </div>
                 )}
               </div>
 
               {/* Size chips — Instagram default, user-changeable. */}
               <div className="mt-2 flex items-center gap-1">
-                {([
+                {[
                   { s: "1024x1024" as ImgSize, label: "Instagram", sub: "1:1" },
                   { s: "1792x1024" as ImgSize, label: "Landscape", sub: "16:9" },
                   { s: "1024x1792" as ImgSize, label: "Story", sub: "9:16" },
-                ]).map((opt) => (
+                ].map((opt) => (
                   <button
                     key={opt.s}
                     onClick={() => chooseSize(opt.s)}
@@ -258,7 +291,6 @@ export function GeneratePostImageButton({
                 ))}
               </div>
 
-
               <div className="mt-2 flex items-center gap-1.5">
                 {status === "loading" ? (
                   <button
@@ -274,9 +306,13 @@ export function GeneratePostImageButton({
                     className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-foreground px-2 py-1.5 text-[11.5px] font-medium text-background transition hover:bg-foreground/90 disabled:opacity-40"
                   >
                     {image ? (
-                      <><RefreshCw className="h-3 w-3" strokeWidth={2.5} /> Regenerate</>
+                      <>
+                        <RefreshCw className="h-3 w-3" strokeWidth={2.5} /> Regenerate
+                      </>
                     ) : (
-                      <><Sparkles className="h-3 w-3" strokeWidth={2.5} /> Generate</>
+                      <>
+                        <Sparkles className="h-3 w-3" strokeWidth={2.5} /> Generate
+                      </>
                     )}
                   </button>
                 )}

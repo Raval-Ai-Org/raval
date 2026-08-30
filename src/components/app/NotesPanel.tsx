@@ -20,12 +20,32 @@ const notesKey = (wsId: string) => `${NOTES_PREFIX}${wsId}`;
 const openKey = (wsId: string) => `${OPEN_PREFIX}${wsId}`;
 
 const PALETTE = [
-  { name: "sand", bg: "bg-amber-50 dark:bg-amber-500/10", ring: "ring-amber-200/60 dark:ring-amber-500/20" },
-  { name: "mint", bg: "bg-emerald-50 dark:bg-emerald-500/10", ring: "ring-emerald-200/60 dark:ring-emerald-500/20" },
+  {
+    name: "sand",
+    bg: "bg-amber-50 dark:bg-amber-500/10",
+    ring: "ring-amber-200/60 dark:ring-amber-500/20",
+  },
+  {
+    name: "mint",
+    bg: "bg-emerald-50 dark:bg-emerald-500/10",
+    ring: "ring-emerald-200/60 dark:ring-emerald-500/20",
+  },
   { name: "sky", bg: "bg-sky-50 dark:bg-sky-500/10", ring: "ring-sky-200/60 dark:ring-sky-500/20" },
-  { name: "lilac", bg: "bg-violet-50 dark:bg-violet-500/10", ring: "ring-violet-200/60 dark:ring-violet-500/20" },
-  { name: "rose", bg: "bg-rose-50 dark:bg-rose-500/10", ring: "ring-rose-200/60 dark:ring-rose-500/20" },
-  { name: "slate", bg: "bg-slate-50 dark:bg-slate-500/10", ring: "ring-slate-200/60 dark:ring-slate-500/20" },
+  {
+    name: "lilac",
+    bg: "bg-violet-50 dark:bg-violet-500/10",
+    ring: "ring-violet-200/60 dark:ring-violet-500/20",
+  },
+  {
+    name: "rose",
+    bg: "bg-rose-50 dark:bg-rose-500/10",
+    ring: "ring-rose-200/60 dark:ring-rose-500/20",
+  },
+  {
+    name: "slate",
+    bg: "bg-slate-50 dark:bg-slate-500/10",
+    ring: "ring-slate-200/60 dark:ring-slate-500/20",
+  },
 ] as const;
 type PaletteName = (typeof PALETTE)[number]["name"];
 
@@ -65,8 +85,7 @@ function writeOpen(wsId: string, v: boolean) {
   } catch {}
 }
 
-const rid = () =>
-  `n_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+const rid = () => `n_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
 /* -------------------- Panel -------------------- */
 
@@ -115,9 +134,7 @@ export function NotesPanel({ workspaceId }: { workspaceId: string }) {
 
   const updateNote = useCallback((id: string, patch: Partial<Note>) => {
     setNotes((prev) =>
-      prev.map((n) =>
-        n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n,
-      ),
+      prev.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n)),
     );
   }, []);
 
@@ -164,7 +181,9 @@ export function NotesPanel({ workspaceId }: { workspaceId: string }) {
                       composerRef.current?.blur();
                     }
                   }}
-                  placeholder={composerActive ? "Jot a thought… (⌘/Ctrl+Enter to save)" : "Take a note…"}
+                  placeholder={
+                    composerActive ? "Jot a thought… (⌘/Ctrl+Enter to save)" : "Take a note…"
+                  }
                   rows={composerActive ? 3 : 1}
                   className="block w-full resize-none rounded-xl bg-transparent px-3 py-2 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
                 />
@@ -399,9 +418,7 @@ export function NotesTabBody({ workspaceId }: { workspaceId: string }) {
 
   const updateNote = useCallback((id: string, patch: Partial<Note>) => {
     setNotes((prev) =>
-      prev.map((n) =>
-        n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n,
-      ),
+      prev.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n)),
     );
   }, []);
 
@@ -585,7 +602,6 @@ export function NotesTabBody({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-
 function NotesSection({
   label,
   items,
@@ -608,7 +624,6 @@ function NotesSection({
         </div>
       )}
       <ul className="grid grid-cols-1 gap-1.5">
-
         <AnimatePresence initial={false}>
           {items.map((n) => {
             const p = PALETTE.find((x) => x.name === n.color) ?? PALETTE[0];
@@ -694,5 +709,3 @@ function NotesSection({
     </div>
   );
 }
-
-

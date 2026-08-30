@@ -45,7 +45,12 @@ function parseRobots(text) {
 
 function isDisallowed(pathname, { disallow, allow }) {
   const matches = (rules) =>
-    rules.filter((r) => pathname === r || pathname.startsWith(r.endsWith("/") ? r : r + "/") || pathname === r.replace(/\/$/, ""));
+    rules.filter(
+      (r) =>
+        pathname === r ||
+        pathname.startsWith(r.endsWith("/") ? r : r + "/") ||
+        pathname === r.replace(/\/$/, ""),
+    );
   const d = matches(disallow);
   const a = matches(allow);
   if (d.length === 0) return false;

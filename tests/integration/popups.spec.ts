@@ -43,9 +43,9 @@ function fakeSession() {
 }
 
 async function stubBackend(page: Page) {
-  await page.context().route(
-    new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`),
-    async (route: Route) => {
+  await page
+    .context()
+    .route(new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`), async (route: Route) => {
       const req = route.request();
       const url = req.url();
       const method = req.method();
@@ -95,7 +95,8 @@ async function stubBackend(page: Page) {
       }
 
       if (url.includes("/rest/v1/chat_messages")) {
-        if (method === "GET") return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
+        if (method === "GET")
+          return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
         return route.fulfill({ status: 201, headers: JSON_HEADERS, body: "[]" });
       }
       if (url.includes("/rest/v1/content_items")) {
@@ -107,13 +108,13 @@ async function stubBackend(page: Page) {
         headers: JSON_HEADERS,
         body: wantsSingle ? "null" : "[]",
       });
+    });
 
-    },
-  );
-
-  await page.context().route("**/_serverFn/**", (route) =>
-    route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
-  );
+  await page
+    .context()
+    .route("**/_serverFn/**", (route) =>
+      route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
+    );
 
   // Catch-all for any project /api/* endpoint so no unhandled fetch throws.
   await page.context().route("**/api/**", (route) => {
@@ -134,8 +135,6 @@ async function stubBackend(page: Page) {
     }
     return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "{}" });
   });
-
-
 }
 
 async function seedSession(page: Page) {
@@ -194,24 +193,22 @@ const DIALOG_POPUPS: {
 
 async function waitForAppReady(page: Page) {
   await page.goto("/app", { waitUntil: "domcontentloaded" });
-  await expect(page.locator('h1', { hasText: /Raval AI Workspace/i }).first())
-    .toBeAttached({ timeout: 20_000 });
+  await expect(page.locator("h1", { hasText: /Raval AI Workspace/i }).first()).toBeAttached({
+    timeout: 20_000,
+  });
   // Wait for workspaceId to hydrate from localStorage and the lazily-mounted
   // dialog shells (Publish/Share/etc) to attach their `open:*` listeners.
-  await expect(page.locator("[data-publish-trigger]").first())
-    .toBeAttached({ timeout: 15_000 });
+  await expect(page.locator("[data-publish-trigger]").first()).toBeAttached({ timeout: 15_000 });
   await page.waitForTimeout(3000);
-
 }
-
-
 
 async function assertNoLeaks(page: Page) {
   // No lingering visible dialogs.
   await expect(page.locator('[role="dialog"]:visible')).toHaveCount(0, { timeout: 5_000 });
   // No stuck Radix scroll-lock (would freeze the page for the user).
-  const locked = await page.evaluate(() =>
-    document.body.hasAttribute("data-scroll-locked") || document.body.style.overflow === "hidden",
+  const locked = await page.evaluate(
+    () =>
+      document.body.hasAttribute("data-scroll-locked") || document.body.style.overflow === "hidden",
   );
   expect(locked).toBe(false);
 }
@@ -225,11 +222,15 @@ test.describe("Popup smoke — every global open:* event mounts, renders and cle
   for (const popup of DIALOG_POPUPS) {
     test(`${popup.name} — opens on ${popup.event}, escape closes cleanly`, async ({ page }) => {
       const pageErrors: string[] = [];
-      page.on("pageerror", (e) => { pageErrors.push(e.message); console.log("PAGEERROR:", e.message); });
-      page.on("console", (m) => { if (m.type()==="error") console.log("CONSOLE:", m.text().slice(0,300)); });
+      page.on("pageerror", (e) => {
+        pageErrors.push(e.message);
+        console.log("PAGEERROR:", e.message);
+      });
+      page.on("console", (m) => {
+        if (m.type() === "error") console.log("CONSOLE:", m.text().slice(0, 300));
+      });
 
       await waitForAppReady(page);
-
 
       const dispatchAndAssertOpen = async () => {
         await page.evaluate((evt) => {
@@ -249,8 +250,9 @@ test.describe("Popup smoke — every global open:* event mounts, renders and cle
       if (popup.expect) {
         // Best-effort text match — dialog title should be present in DOM
         // whether or not the visible portal has stabilized.
-        await expect(page.locator('[role="dialog"]').filter({ hasText: popup.expect }).first())
-          .toBeAttached({ timeout: 5_000 });
+        await expect(
+          page.locator('[role="dialog"]').filter({ hasText: popup.expect }).first(),
+        ).toBeAttached({ timeout: 5_000 });
       }
 
       await page.keyboard.press("Escape");
@@ -264,51 +266,50 @@ test.describe("Popup smoke — every global open:* event mounts, renders and cle
 
       expect(pageErrors, `Uncaught page errors while cycling ${popup.name}`).toEqual([]);
     });
-
   }
 
   test("orphan events — no popup dispatches a CustomEvent without a listener", async ({ page }) => {
     // Statically curated allowlist of events that intentionally have no
     // in-app listener (they trigger navigations or external side effects).
-    const ALLOWED_ORPHANS = new Set<string>([
-      "content:changed",
-      "credits:changed",
-    ]);
+    const ALLOWED_ORPHANS = new Set<string>(["content:changed", "credits:changed"]);
 
     await waitForAppReady(page);
 
     // Instrument dispatchEvent so we see every CustomEvent fired during a
     // brief interaction window. Then dispatch each popup event and record
     // whether it produced a visible dialog OR triggered a further event.
-    const missing = await page.evaluate(async (events) => {
-      const seen: Record<string, boolean> = {};
+    const missing = await page.evaluate(
+      async (events) => {
+        const seen: Record<string, boolean> = {};
 
-      for (const evt of events) {
-        seen[evt] = false;
-        // Attach a probe listener just before dispatch to detect whether
-        // the app already has one registered.
-        let hadPrior = false;
-        const probe = () => {
-          hadPrior = true;
-        };
-        window.addEventListener(evt, probe, { capture: true });
-        window.dispatchEvent(new CustomEvent(evt));
-        window.removeEventListener(evt, probe, { capture: true });
+        for (const evt of events) {
+          seen[evt] = false;
+          // Attach a probe listener just before dispatch to detect whether
+          // the app already has one registered.
+          let hadPrior = false;
+          const probe = () => {
+            hadPrior = true;
+          };
+          window.addEventListener(evt, probe, { capture: true });
+          window.dispatchEvent(new CustomEvent(evt));
+          window.removeEventListener(evt, probe, { capture: true });
 
-        // Wait a frame for React to open the dialog.
-        await new Promise((r) => setTimeout(r, 120));
-        const dialogOpen = document.querySelectorAll('[role="dialog"]').length > 0;
-        seen[evt] = hadPrior && dialogOpen;
+          // Wait a frame for React to open the dialog.
+          await new Promise((r) => setTimeout(r, 120));
+          const dialogOpen = document.querySelectorAll('[role="dialog"]').length > 0;
+          seen[evt] = hadPrior && dialogOpen;
 
-        // Cleanup — press Escape to close any opened dialog.
-        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-        await new Promise((r) => setTimeout(r, 120));
-      }
+          // Cleanup — press Escape to close any opened dialog.
+          window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+          await new Promise((r) => setTimeout(r, 120));
+        }
 
-      return Object.entries(seen)
-        .filter(([, ok]) => !ok)
-        .map(([k]) => k);
-    }, DIALOG_POPUPS.map((p) => p.event).filter((e) => !ALLOWED_ORPHANS.has(e)));
+        return Object.entries(seen)
+          .filter(([, ok]) => !ok)
+          .map(([k]) => k);
+      },
+      DIALOG_POPUPS.map((p) => p.event).filter((e) => !ALLOWED_ORPHANS.has(e)),
+    );
 
     expect(
       missing,

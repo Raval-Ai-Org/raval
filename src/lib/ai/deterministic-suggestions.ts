@@ -4,8 +4,17 @@
 // being added; the model was just picking from a rubric we can encode.
 
 export type Intent =
-  | "geo-audit" | "brand-dna" | "plan-week" | "schedule" | "review-drafts"
-  | "seo-brief" | "share" | "ideate" | "social" | "email" | "blog";
+  | "geo-audit"
+  | "brand-dna"
+  | "plan-week"
+  | "schedule"
+  | "review-drafts"
+  | "seo-brief"
+  | "share"
+  | "ideate"
+  | "social"
+  | "email"
+  | "blog";
 
 export type SmartSuggestion = {
   label: string;
@@ -79,7 +88,7 @@ const ALL_SUGGESTIONS: Array<
   },
   {
     label: "Review pending drafts",
-    hint: (0 as unknown as string) as string, // placeholder, filled in build()
+    hint: 0 as unknown as string as string, // placeholder, filled in build()
     prompt: "Show me pending drafts to approve",
     intent: "review-drafts",
     when: (s) => (s.pendingDrafts > 0 ? 85 : 0),
@@ -141,8 +150,7 @@ export function buildSmartSuggestions(
   max = 5,
 ): SmartSuggestion[] {
   const hasBrand = Boolean(brandContext && brandContext.trim().length > 20);
-  const scored = ALL_SUGGESTIONS
-    .map((s) => ({ s, score: s.when(signals, hasBrand) }))
+  const scored = ALL_SUGGESTIONS.map((s) => ({ s, score: s.when(signals, hasBrand) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score);
 
@@ -153,8 +161,10 @@ export function buildSmartSuggestions(
     seenIntents.add(s.intent);
     let hint = s.hint;
     // Special-case dynamic hints.
-    if (s.intent === "review-drafts") hint = `${signals.pendingDrafts} draft${signals.pendingDrafts === 1 ? "" : "s"} pending`;
-    if (s.intent === "geo-audit" && signals.latestGeoScore != null) hint = `Current GEO score ${signals.latestGeoScore}/100`;
+    if (s.intent === "review-drafts")
+      hint = `${signals.pendingDrafts} draft${signals.pendingDrafts === 1 ? "" : "s"} pending`;
+    if (s.intent === "geo-audit" && signals.latestGeoScore != null)
+      hint = `Current GEO score ${signals.latestGeoScore}/100`;
     picked.push({ label: s.label, hint: String(hint), prompt: s.prompt, intent: s.intent });
     if (picked.length >= max) break;
   }
@@ -175,15 +185,27 @@ const NEXT_STEP_RULES: Array<{
 }> = [
   {
     when: (_st, _lm, hasBrand) => (hasBrand ? 0 : 100),
-    build: () => ({ label: "Set up Brand DNA", prompt: "Help me set up my Brand DNA end-to-end", agent: "scout" }),
+    build: () => ({
+      label: "Set up Brand DNA",
+      prompt: "Help me set up my Brand DNA end-to-end",
+      agent: "scout",
+    }),
   },
   {
     when: (st) => (st.pending > 0 ? 90 : 0),
-    build: () => ({ label: "Approve pending drafts", prompt: "Show pending drafts I need to approve", agent: "spark" }),
+    build: () => ({
+      label: "Approve pending drafts",
+      prompt: "Show pending drafts I need to approve",
+      agent: "spark",
+    }),
   },
   {
     when: (st) => (st.scheduled === 0 ? 70 : 15),
-    build: () => ({ label: "Schedule this week", prompt: "Schedule content across LinkedIn, Instagram, and X for the next 7 days", agent: "echo" }),
+    build: () => ({
+      label: "Schedule this week",
+      prompt: "Schedule content across LinkedIn, Instagram, and X for the next 7 days",
+      agent: "echo",
+    }),
   },
   {
     when: (st) => (st.published < 3 ? 60 : 25),
@@ -227,8 +249,7 @@ export function buildNextSteps(
   const bits = extractBrandBits(brandContext);
   const hasBrand = Boolean(brandContext && brandContext.trim().length > 20);
   const lm = lastUserMessage ?? "";
-  const scored = NEXT_STEP_RULES
-    .map((r) => ({ r, score: r.when(stats, lm, hasBrand) }))
+  const scored = NEXT_STEP_RULES.map((r) => ({ r, score: r.when(stats, lm, hasBrand) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score);
   const picked: NextStepSuggestion[] = [];

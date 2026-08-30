@@ -24,18 +24,32 @@ interface Props {
  * Suggestions are derived from the user's most recent prompt so they feel
  * contextual rather than canned.
  */
-export function NextStepSuggestions({ lastUserMessage = "", onPick, workspaceId, brandContext }: Props) {
+export function NextStepSuggestions({
+  lastUserMessage = "",
+  onPick,
+  workspaceId,
+  brandContext,
+}: Props) {
   const suggest = useServerFn(suggestNextSteps);
   const [live, setLive] = useState<NextStep[] | null>(null);
 
   useEffect(() => {
-    if (!workspaceId) { setLive(null); return; }
+    if (!workspaceId) {
+      setLive(null);
+      return;
+    }
     let cancelled = false;
     setLive(null);
     suggest({ data: { workspaceId, context: brandContext, lastUserMessage } })
-      .then((res) => { if (!cancelled && res?.steps?.length) setLive(res.steps); })
-      .catch(() => { if (!cancelled) setLive(null); });
-    return () => { cancelled = true; };
+      .then((res) => {
+        if (!cancelled && res?.steps?.length) setLive(res.steps);
+      })
+      .catch(() => {
+        if (!cancelled) setLive(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [workspaceId, brandContext, lastUserMessage, suggest]);
 
   const text = lastUserMessage.toLowerCase();
@@ -84,36 +98,66 @@ function pickSteps(t: string): NextStep[] {
   // Intent-aware fallbacks. Order matters: most specific first.
   if (/(seo|aeo|geo|rank|keyword|serp|audit|visibility)/.test(t)) {
     return [
-      { label: "Audit my homepage",       prompt: "Run a full SEO + AEO audit of my homepage" },
-      { label: "Find ranking opportunities", prompt: "Find top 10 keyword opportunities I'm almost ranking for" },
-      { label: "Fix on-page issues",      prompt: "List the on-page SEO issues I should fix this week" },
+      { label: "Audit my homepage", prompt: "Run a full SEO + AEO audit of my homepage" },
+      {
+        label: "Find ranking opportunities",
+        prompt: "Find top 10 keyword opportunities I'm almost ranking for",
+      },
+      { label: "Fix on-page issues", prompt: "List the on-page SEO issues I should fix this week" },
     ];
   }
   if (/(reddit|quora|community|thread|comment)/.test(t)) {
     return [
-      { label: "Find hot Reddit threads", prompt: "Find 5 hot Reddit threads in my niche to reply to", brand: "reddit" },
-      { label: "Draft Quora answers",      prompt: "Draft 3 Quora answers linking to my site", brand: "quora" },
-      { label: "Schedule replies",         prompt: "Schedule these replies across this week" },
+      {
+        label: "Find hot Reddit threads",
+        prompt: "Find 5 hot Reddit threads in my niche to reply to",
+        brand: "reddit",
+      },
+      {
+        label: "Draft Quora answers",
+        prompt: "Draft 3 Quora answers linking to my site",
+        brand: "quora",
+      },
+      { label: "Schedule replies", prompt: "Schedule these replies across this week" },
     ];
   }
   if (/(post|social|linkedin|instagram|twitter|x\b)/.test(t)) {
     return [
-      { label: "Plan this week's posts",  prompt: "Plan 5 LinkedIn posts for this week", brand: "linkedin" },
-      { label: "Repurpose for Instagram", prompt: "Repurpose my top post for Instagram carousel", brand: "instagram" },
+      {
+        label: "Plan this week's posts",
+        prompt: "Plan 5 LinkedIn posts for this week",
+        brand: "linkedin",
+      },
+      {
+        label: "Repurpose for Instagram",
+        prompt: "Repurpose my top post for Instagram carousel",
+        brand: "instagram",
+      },
       { label: "Schedule across channels", prompt: "Schedule these posts across all my channels" },
     ];
   }
   if (/(content|blog|article|write)/.test(t)) {
     return [
-      { label: "Outline a blog post",      prompt: "Outline a blog post on this topic targeting our ICP" },
-      { label: "Generate FAQ for AEO",     prompt: "Generate an FAQ section optimized for answer engines" },
-      { label: "Refresh an old article",   prompt: "Refresh my lowest-performing article" },
+      {
+        label: "Outline a blog post",
+        prompt: "Outline a blog post on this topic targeting our ICP",
+      },
+      {
+        label: "Generate FAQ for AEO",
+        prompt: "Generate an FAQ section optimized for answer engines",
+      },
+      { label: "Refresh an old article", prompt: "Refresh my lowest-performing article" },
     ];
   }
   // Default broad suggestions
   return [
-    { label: "Audit my site",            prompt: "Run a full visibility audit of my site (SEO + AEO + GEO)" },
-    { label: "Draft this week's posts",  prompt: "Plan and draft this week's LinkedIn and Instagram posts", brand: "linkedin", agent: "social" },
+    { label: "Audit my site", prompt: "Run a full visibility audit of my site (SEO + AEO + GEO)" },
+    {
+      label: "Draft this week's posts",
+      prompt: "Plan and draft this week's LinkedIn and Instagram posts",
+      brand: "linkedin",
+      agent: "social",
+    },
     { label: "Plan this week's content", prompt: "Plan this week's content and social posts" },
   ];
 }

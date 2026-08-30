@@ -19,20 +19,30 @@ export function useVisibleInterval(cb: () => void, delayMs: number, deps: unknow
       timer = window.setInterval(() => cbRef.current(), delayMs);
     };
     const stop = () => {
-      if (timer !== undefined) { window.clearInterval(timer); timer = undefined; }
+      if (timer !== undefined) {
+        window.clearInterval(timer);
+        timer = undefined;
+      }
     };
     const onVis = () => {
       if (document.hidden) {
         stop();
       } else {
         // refresh immediately on re-focus, then resume ticking
-        try { cbRef.current(); } catch { /* ignore */ }
+        try {
+          cbRef.current();
+        } catch {
+          /* ignore */
+        }
         start();
       }
     };
     if (!document.hidden) start();
     document.addEventListener("visibilitychange", onVis);
-    return () => { stop(); document.removeEventListener("visibilitychange", onVis); };
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVis);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [delayMs, ...deps]);
 }

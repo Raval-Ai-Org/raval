@@ -14,7 +14,10 @@ export const Route = createFileRoute("/api/public/hooks/sdr")({
         const rawBody = await request.text();
         const signature = request.headers.get("x-signature-256");
         const eventType = request.headers.get("x-event-type");
-        const out = await handleSdrWebhook({ rawBody, signature, eventType, maxBodyBytes: MAX_BODY_BYTES }, { db: supabaseAdmin });
+        const out = await handleSdrWebhook(
+          { rawBody, signature, eventType, maxBodyBytes: MAX_BODY_BYTES },
+          { db: supabaseAdmin },
+        );
         return Response.json(out.body, { status: out.status });
       },
     },

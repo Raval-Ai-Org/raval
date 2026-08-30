@@ -10,20 +10,50 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
-  Plus, Globe, ArrowRight, Sparkles, Loader2, LogOut, Search,
-  MoreHorizontal, Pencil, Trash2, ExternalLink, Clock, LayoutDashboard,
-  UserCircle2, Settings, HelpCircle, UserPlus,
+  Plus,
+  Globe,
+  ArrowRight,
+  Sparkles,
+  Loader2,
+  LogOut,
+  Search,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  ExternalLink,
+  Clock,
+  LayoutDashboard,
+  UserCircle2,
+  Settings,
+  HelpCircle,
+  UserPlus,
 } from "@/components/ui/gemini-icons";
 import { toast } from "sonner";
 import { pageHead, webPageLd } from "@/lib/seo";
@@ -42,17 +72,19 @@ export const Route = createFileRoute("/projects")({
       throw redirect({ to: "/login", search: { next: location.href } as any });
     }
   },
-  head: () => pageHead({
-    title: "Clients · Raval AI",
-    description: "Every client brand in one Marketing Intelligence Layer — onboard, orchestrate and grow with Brand DNA, AEO/GEO and shared operations.",
-    path: "/projects",
-    noindex: true,
-    jsonLd: webPageLd({
+  head: () =>
+    pageHead({
       title: "Clients · Raval AI",
-      description: "Every client brand in one Marketing Intelligence Layer.",
+      description:
+        "Every client brand in one Marketing Intelligence Layer — onboard, orchestrate and grow with Brand DNA, AEO/GEO and shared operations.",
       path: "/projects",
+      noindex: true,
+      jsonLd: webPageLd({
+        title: "Clients · Raval AI",
+        description: "Every client brand in one Marketing Intelligence Layer.",
+        path: "/projects",
+      }),
     }),
-  }),
 });
 
 type Workspace = {
@@ -68,9 +100,17 @@ type Workspace = {
 export type ClientStatus = Workspace["client_status"];
 
 const STATUS_META: Record<ClientStatus, { label: string; dot: string; chipText: string }> = {
-  active:     { label: "Active",     dot: "bg-emerald-500", chipText: "text-emerald-600 dark:text-emerald-400" },
-  onboarding: { label: "Onboarding", dot: "bg-amber-500",   chipText: "text-amber-600 dark:text-amber-400" },
-  paused:     { label: "Paused",     dot: "bg-zinc-400",    chipText: "text-muted-foreground" },
+  active: {
+    label: "Active",
+    dot: "bg-emerald-500",
+    chipText: "text-emerald-600 dark:text-emerald-400",
+  },
+  onboarding: {
+    label: "Onboarding",
+    dot: "bg-amber-500",
+    chipText: "text-amber-600 dark:text-amber-400",
+  },
+  paused: { label: "Paused", dot: "bg-zinc-400", chipText: "text-muted-foreground" },
 };
 
 const SELECTED_KEY = "workspace:selected";
@@ -94,7 +134,10 @@ function ProjectsPage() {
       .from("workspaces")
       .select("id, name, website_url, industry, onboarded_at, created_at, client_status")
       .order("created_at", { ascending: false });
-    if (error) { toast.error("Couldn't load clients"); return; }
+    if (error) {
+      toast.error("Couldn't load clients");
+      return;
+    }
     setWorkspaces(data ?? []);
   };
 
@@ -102,7 +145,10 @@ function ProjectsPage() {
     let cancelled = false;
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session) { navigate({ to: "/login" }); return; }
+      if (!sess.session) {
+        navigate({ to: "/login" });
+        return;
+      }
       const u = sess.session.user;
       setUserEmail(u.email ?? "");
       const meta = (u.user_metadata ?? {}) as Record<string, any>;
@@ -116,7 +162,9 @@ function ProjectsPage() {
       await refresh();
       if (!cancelled) setLoading(false);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   const openProject = (w: Workspace) => {
@@ -133,13 +181,16 @@ function ProjectsPage() {
     const q = query.trim().toLowerCase();
     if (!q) return workspaces;
     return workspaces.filter((w) =>
-      [w.name, w.website_url, w.industry].some((v) => v?.toLowerCase().includes(q))
+      [w.name, w.website_url, w.industry].some((v) => v?.toLowerCase().includes(q)),
     );
   }, [workspaces, query]);
 
   const handleRename = async (id: string, name: string) => {
     const { error } = await supabase.from("workspaces").update({ name: name.trim() }).eq("id", id);
-    if (error) { toast.error("Couldn't rename"); return; }
+    if (error) {
+      toast.error("Couldn't rename");
+      return;
+    }
     toast.success("Client renamed");
     setRenameTarget(null);
     refresh();
@@ -147,7 +198,10 @@ function ProjectsPage() {
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("workspaces").delete().eq("id", id);
-    if (error) { toast.error("Couldn't remove client"); return; }
+    if (error) {
+      toast.error("Couldn't remove client");
+      return;
+    }
     if (localStorage.getItem(SELECTED_KEY) === id) localStorage.removeItem(SELECTED_KEY);
     toast.success("Client removed");
     setDeleteTarget(null);
@@ -156,8 +210,11 @@ function ProjectsPage() {
 
   const handleStatus = async (id: string, status: ClientStatus) => {
     const prev = workspaces;
-    setWorkspaces((ws) => ws.map((w) => w.id === id ? { ...w, client_status: status } : w));
-    const { error } = await supabase.from("workspaces").update({ client_status: status }).eq("id", id);
+    setWorkspaces((ws) => ws.map((w) => (w.id === id ? { ...w, client_status: status } : w)));
+    const { error } = await supabase
+      .from("workspaces")
+      .update({ client_status: status })
+      .eq("id", id);
     if (error) {
       setWorkspaces(prev);
       toast.error("Couldn't update status");
@@ -172,7 +229,9 @@ function ProjectsPage() {
 
       {/* Top bar */}
       <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-5">
-        <Link to="/projects" aria-label="Raval AI home" className="flex h-9 shrink-0 items-center"><Logo height={30} /></Link>
+        <Link to="/projects" aria-label="Raval AI home" className="flex h-9 shrink-0 items-center">
+          <Logo height={30} />
+        </Link>
         <div className="flex items-center gap-2 sm:gap-3">
           <AgencyHqPill />
           <AccountMenu
@@ -240,7 +299,6 @@ function ProjectsPage() {
             }}
           />
         </motion.div>
-
       </section>
 
       {/* Projects panel — only shown when at least one client exists */}
@@ -279,7 +337,9 @@ function ProjectsPage() {
             {filtered.length === 0 ? (
               <div className="grid place-items-center rounded-2xl border border-dashed border-border/60 bg-background/40 px-6 py-12 text-center">
                 <Search className="h-5 w-5 text-muted-foreground" />
-                <p className="mt-2 text-[13px] text-muted-foreground">No {copy.nounPlural} match "{query}"</p>
+                <p className="mt-2 text-[13px] text-muted-foreground">
+                  No {copy.nounPlural} match "{query}"
+                </p>
                 <button
                   onClick={() => setQuery("")}
                   className="mt-3 text-[12px] font-medium text-foreground underline-offset-4 hover:underline"
@@ -312,7 +372,10 @@ function ProjectsPage() {
         <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-20">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-[210px] animate-pulse rounded-2xl border border-border/60 bg-background/40" />
+              <div
+                key={i}
+                className="h-[210px] animate-pulse rounded-2xl border border-border/60 bg-background/40"
+              />
             ))}
           </div>
         </section>
@@ -331,8 +394,8 @@ function ProjectsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>{copy.deletePromptTitle}</AlertDialogTitle>
             <AlertDialogDescription>
-              "{deleteTarget?.name}" and all its data — chats, content, settings —
-              will be permanently removed. This can't be undone.
+              "{deleteTarget?.name}" and all its data — chats, content, settings — will be
+              permanently removed. This can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -350,7 +413,9 @@ function ProjectsPage() {
       {/* One-time persona picker — blocks everything until answered */}
       <PersonaDialog
         open={!loading && !personaLoading && !persona}
-        onConfirm={async (p) => { await setPersona(p); }}
+        onConfirm={async (p) => {
+          await setPersona(p);
+        }}
       />
     </div>
   );
@@ -375,7 +440,17 @@ function AgencyHqPill() {
   );
 }
 
-function Avatar({ name, email, avatarUrl, size = 36 }: { name?: string; email?: string; avatarUrl?: string; size?: number }) {
+function Avatar({
+  name,
+  email,
+  avatarUrl,
+  size = 36,
+}: {
+  name?: string;
+  email?: string;
+  avatarUrl?: string;
+  size?: number;
+}) {
   const [broken, setBroken] = useState(false);
   const initial = (name || email || "U").trim().charAt(0).toUpperCase();
   const palette = ["#1a73e8", "#d93025", "#188038", "#e8710a", "#9334e6", "#1e8e8e"];
@@ -403,7 +478,17 @@ function Avatar({ name, email, avatarUrl, size = 36 }: { name?: string; email?: 
   );
 }
 
-function AccountMenu({ email, name, avatarUrl, onSignOut }: { email: string; name: string; avatarUrl: string; onSignOut: () => void }) {
+function AccountMenu({
+  email,
+  name,
+  avatarUrl,
+  onSignOut,
+}: {
+  email: string;
+  name: string;
+  avatarUrl: string;
+  onSignOut: () => void;
+}) {
   const navigate = useNavigate();
   return (
     <DropdownMenu>
@@ -415,7 +500,11 @@ function AccountMenu({ email, name, avatarUrl, onSignOut }: { email: string; nam
           <Avatar name={name} email={email} avatarUrl={avatarUrl} size={32} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={10} className="w-[300px] rounded-2xl p-0 overflow-hidden">
+      <DropdownMenuContent
+        align="end"
+        sideOffset={10}
+        className="w-[300px] rounded-2xl p-0 overflow-hidden"
+      >
         <div className="flex flex-col items-center gap-2 px-4 pt-5 pb-4 text-center">
           <Avatar name={name} email={email} avatarUrl={avatarUrl} size={64} />
           <div className="mt-1 text-[14px] font-semibold leading-tight text-foreground">
@@ -431,13 +520,22 @@ function AccountMenu({ email, name, avatarUrl, onSignOut }: { email: string; nam
         </div>
         <DropdownMenuSeparator className="m-0" />
         <div className="p-1.5">
-          <DropdownMenuItem className="gap-2.5 rounded-lg py-2 text-[13px]" onSelect={() => navigate({ to: "/agency" })}>
+          <DropdownMenuItem
+            className="gap-2.5 rounded-lg py-2 text-[13px]"
+            onSelect={() => navigate({ to: "/agency" })}
+          >
             <LayoutDashboard className="h-4 w-4 text-muted-foreground" /> Command Center
           </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2.5 rounded-lg py-2 text-[13px]" onSelect={() => navigate({ to: "/onboarding" })}>
+          <DropdownMenuItem
+            className="gap-2.5 rounded-lg py-2 text-[13px]"
+            onSelect={() => navigate({ to: "/onboarding" })}
+          >
             <UserPlus className="h-4 w-4 text-muted-foreground" /> Add another client
           </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2.5 rounded-lg py-2 text-[13px]" onSelect={() => navigate({ to: "/app" })}>
+          <DropdownMenuItem
+            className="gap-2.5 rounded-lg py-2 text-[13px]"
+            onSelect={() => navigate({ to: "/app" })}
+          >
             <Settings className="h-4 w-4 text-muted-foreground" /> Settings
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -465,7 +563,12 @@ function AccountMenu({ email, name, avatarUrl, onSignOut }: { email: string; nam
 }
 
 function ProjectCard({
-  workspace, index, onOpen, onRename, onDelete, onStatusChange,
+  workspace,
+  index,
+  onOpen,
+  onRename,
+  onDelete,
+  onStatusChange,
 }: {
   workspace: Workspace;
   index: number;
@@ -475,7 +578,10 @@ function ProjectCard({
   onStatusChange: (s: ClientStatus) => void;
 }) {
   const domain = workspace.website_url
-    ? workspace.website_url.replace(/^https?:\/\//i, "").replace(/\/$/, "").split("/")[0]
+    ? workspace.website_url
+        .replace(/^https?:\/\//i, "")
+        .replace(/\/$/, "")
+        .split("/")[0]
     : null;
   const initials = (workspace.name || domain || "W").slice(0, 2).toUpperCase();
   const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : null;
@@ -500,7 +606,10 @@ function ProjectCard({
         <div className="absolute inset-0 bg-gradient-to-br from-brand-green/[0.08] via-transparent to-brand-blue/[0.06]" />
       </div>
 
-      <button onClick={onOpen} className="group/thumb relative block w-full overflow-hidden text-left">
+      <button
+        onClick={onOpen}
+        className="group/thumb relative block w-full overflow-hidden text-left"
+      >
         <div className="relative aspect-[16/9] w-full overflow-hidden bg-secondary/60">
           {/* Monochrome canvas — becomes colorful on hover */}
           <div className="absolute inset-0 transition-opacity duration-500 group-hover:opacity-0 bg-[radial-gradient(circle_at_20%_15%,hsl(var(--foreground)/0.06),transparent_60%),radial-gradient(circle_at_85%_90%,hsl(var(--foreground)/0.05),transparent_55%)]" />
@@ -532,7 +641,7 @@ function ProjectCard({
               className={cn(
                 "absolute inset-0 h-full w-full object-cover object-top transition-all duration-500",
                 "grayscale contrast-[1.05] opacity-0 group-hover/thumb:scale-[1.02] group-hover/thumb:grayscale-0 group-hover/thumb:contrast-100",
-                shotOk && "opacity-90 group-hover/thumb:opacity-100"
+                shotOk && "opacity-90 group-hover/thumb:opacity-100",
               )}
             />
           )}
@@ -552,7 +661,7 @@ function ProjectCard({
                     onError={() => setFaviconOk(false)}
                     className={cn(
                       "h-7 w-7 object-contain transition-opacity",
-                      faviconOk ? "opacity-100" : "opacity-0 absolute"
+                      faviconOk ? "opacity-100" : "opacity-0 absolute",
                     )}
                     draggable={false}
                   />
@@ -571,7 +680,9 @@ function ProjectCard({
 
           {/* Client status chip */}
           <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-[10.5px] font-medium text-foreground/80 backdrop-blur">
-            <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_META[workspace.client_status].dot)} />
+            <span
+              className={cn("h-1.5 w-1.5 rounded-full", STATUS_META[workspace.client_status].dot)}
+            />
             {STATUS_META[workspace.client_status].label}
           </span>
         </div>
@@ -588,7 +699,7 @@ function ProjectCard({
                 onError={() => setFaviconOk(false)}
                 className={cn(
                   "absolute inset-0 h-full w-full object-contain p-1 transition-opacity",
-                  faviconOk ? "opacity-100" : "opacity-0"
+                  faviconOk ? "opacity-100" : "opacity-0",
                 )}
                 draggable={false}
               />
@@ -602,7 +713,9 @@ function ProjectCard({
             <div className="flex items-center gap-1.5 truncate text-[11.5px] text-muted-foreground">
               <Clock className="h-3 w-3 shrink-0" />
               <span className="truncate">
-                {domain || workspace.industry || (workspace.onboarded_at ? "Ready to chat" : "Finish setup")}
+                {domain ||
+                  workspace.industry ||
+                  (workspace.onboarded_at ? "Ready to chat" : "Finish setup")}
                 {" · "}
                 {formatRelative(workspace.created_at)}
               </span>
@@ -639,11 +752,7 @@ function ProjectCard({
               Client status
             </div>
             {(Object.keys(STATUS_META) as ClientStatus[]).map((s) => (
-              <DropdownMenuItem
-                key={s}
-                onClick={() => onStatusChange(s)}
-                className="text-[12.5px]"
-              >
+              <DropdownMenuItem key={s} onClick={() => onStatusChange(s)} className="text-[12.5px]">
                 <span className={cn("mr-2 h-2 w-2 rounded-full", STATUS_META[s].dot)} />
                 {STATUS_META[s].label}
                 {workspace.client_status === s && (
@@ -683,7 +792,8 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 function PasteLinkBar({
-  onCreated, onOpenAdvanced,
+  onCreated,
+  onOpenAdvanced,
 }: {
   onCreated: (id: string) => void;
   onOpenAdvanced: () => void;
@@ -704,14 +814,23 @@ function PasteLinkBar({
     const cleanUrl = url.trim();
     const normalizedUrl = /^https?:\/\//i.test(cleanUrl) ? cleanUrl : `https://${cleanUrl}`;
     let host = "";
-    try { host = new URL(normalizedUrl).hostname.replace(/^www\./i, ""); } catch { host = cleanUrl; }
+    try {
+      host = new URL(normalizedUrl).hostname.replace(/^www\./i, "");
+    } catch {
+      host = cleanUrl;
+    }
     const derivedName = host.split(".")[0]
-      ? host.split(".")[0].replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      ? host
+          .split(".")[0]
+          .replace(/[-_]+/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase())
       : "New project";
 
     setSaving(true);
     try {
-      const data = await createWorkspaceFn({ data: { name: derivedName, websiteUrl: normalizedUrl } });
+      const data = await createWorkspaceFn({
+        data: { name: derivedName, websiteUrl: normalizedUrl },
+      });
       toast.success("Project created — let's set it up");
       onCreated(data as string);
     } catch (error: any) {
@@ -749,7 +868,7 @@ function PasteLinkBar({
         className={cn(
           "group relative flex h-14 items-center gap-1.5 rounded-full border border-border/70 bg-[hsl(0_0%_8%/0.85)] pl-1.5 pr-1.5 backdrop-blur-xl",
           "shadow-[0_1px_0_hsl(0_0%_100%/0.04)_inset,0_20px_60px_-30px_hsl(0_0%_0%/0.9)]",
-          "transition focus-within:border-foreground/30"
+          "transition focus-within:border-foreground/30",
         )}
       >
         <button
@@ -780,7 +899,7 @@ function PasteLinkBar({
             "!mt-0 grid h-11 w-11 shrink-0 place-items-center rounded-full transition",
             isValid && !saving
               ? "bg-gradient-to-br from-aura via-aura-purple to-aura-pink text-white shadow-[0_8px_24px_-10px_hsl(var(--aura)/0.7)] hover:-translate-y-0.5"
-              : "bg-white/5 text-muted-foreground"
+              : "bg-white/5 text-muted-foreground",
           )}
         >
           {saving ? (
@@ -790,15 +909,17 @@ function PasteLinkBar({
           )}
         </button>
       </form>
-
     </div>
   );
 }
 
-
-
 function NewProjectDialog({
-  children, open, onOpenChange, onCreated, mandatory = false, copy,
+  children,
+  open,
+  onOpenChange,
+  onCreated,
+  mandatory = false,
+  copy,
 }: {
   children?: React.ReactNode;
   open: boolean;
@@ -812,7 +933,10 @@ function NewProjectDialog({
   const [saving, setSaving] = useState(false);
   const createWorkspaceFn = useServerFn(createWorkspace);
 
-  const reset = () => { setName(""); setUrl(""); };
+  const reset = () => {
+    setName("");
+    setUrl("");
+  };
 
   // Force the dialog open when it's the user's first workspace — no dismissing.
   const effectiveOpen = mandatory ? true : open;
@@ -821,13 +945,20 @@ function NewProjectDialog({
     e.preventDefault();
     const trimmed = name.trim();
     const cleanUrl = url.trim();
-    if (!trimmed) { toast.error(`Give your ${copy.noun} a name`); return; }
+    if (!trimmed) {
+      toast.error(`Give your ${copy.noun} a name`);
+      return;
+    }
     setSaving(true);
     const normalizedUrl = cleanUrl
-      ? (/^https?:\/\//i.test(cleanUrl) ? cleanUrl : `https://${cleanUrl}`)
+      ? /^https?:\/\//i.test(cleanUrl)
+        ? cleanUrl
+        : `https://${cleanUrl}`
       : undefined;
     try {
-      const data = await createWorkspaceFn({ data: { name: trimmed, websiteUrl: normalizedUrl ?? null } });
+      const data = await createWorkspaceFn({
+        data: { name: trimmed, websiteUrl: normalizedUrl ?? null },
+      });
       toast.success(`${copy.Noun} created`);
       onOpenChange(false);
       reset();
@@ -852,9 +983,15 @@ function NewProjectDialog({
       {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent
         className="sm:max-w-md"
-        onEscapeKeyDown={(e) => { if (mandatory) e.preventDefault(); }}
-        onPointerDownOutside={(e) => { if (mandatory) e.preventDefault(); }}
-        onInteractOutside={(e) => { if (mandatory) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => {
+          if (mandatory) e.preventDefault();
+        }}
+        onPointerDownOutside={(e) => {
+          if (mandatory) e.preventDefault();
+        }}
+        onInteractOutside={(e) => {
+          if (mandatory) e.preventDefault();
+        }}
       >
         <DialogHeader>
           <DialogTitle className="tracking-tight">
@@ -868,10 +1005,18 @@ function NewProjectDialog({
         <form onSubmit={submit} className="space-y-4 pt-1">
           <div className="space-y-1.5">
             <Label htmlFor="np-name">{copy.nameLabel}</Label>
-            <Input id="np-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={copy.namePlaceholder} />
+            <Input
+              id="np-name"
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={copy.namePlaceholder}
+            />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="np-url">Website URL <span className="text-muted-foreground">(optional)</span></Label>
+            <Label htmlFor="np-url">
+              Website URL <span className="text-muted-foreground">(optional)</span>
+            </Label>
             <div className="flex items-center gap-2 rounded-md border border-input bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
               <Globe className="h-3.5 w-3.5 text-muted-foreground" />
               <input
@@ -885,10 +1030,16 @@ function NewProjectDialog({
           </div>
           <DialogFooter className="pt-2">
             {!mandatory && (
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
             )}
             <Button type="submit" disabled={saving} className="btn-aura gap-1.5">
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {saving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Plus className="h-3.5 w-3.5" />
+              )}
               {mandatory ? copy.createFirstCta : copy.createCta}
             </Button>
           </DialogFooter>
@@ -899,14 +1050,18 @@ function NewProjectDialog({
 }
 
 function RenameDialog({
-  workspace, onClose, onSave,
+  workspace,
+  onClose,
+  onSave,
 }: {
   workspace: Workspace | null;
   onClose: () => void;
   onSave: (id: string, name: string) => void;
 }) {
   const [name, setName] = useState("");
-  useEffect(() => { if (workspace) setName(workspace.name ?? ""); }, [workspace]);
+  useEffect(() => {
+    if (workspace) setName(workspace.name ?? "");
+  }, [workspace]);
 
   return (
     <Dialog open={!!workspace} onOpenChange={(o) => !o && onClose()}>
@@ -925,8 +1080,12 @@ function RenameDialog({
         >
           <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
           <DialogFooter className="pt-1">
-            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={!name.trim()} className="btn-aura">Save</Button>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!name.trim()} className="btn-aura">
+              Save
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -937,12 +1096,25 @@ function RenameDialog({
 function AuroraBackdrop() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 -z-0 overflow-hidden">
-      <div className="absolute -top-32 left-1/2 h-[520px] w-[1100px] -translate-x-1/2 rounded-[50%] opacity-80 blur-3xl"
-           style={{ background: "radial-gradient(closest-side, hsl(var(--aura)/0.55), transparent 70%)" }} />
-      <div className="absolute top-40 left-[8%] h-[420px] w-[520px] rounded-full opacity-70 blur-3xl"
-           style={{ background: "radial-gradient(closest-side, hsl(var(--aura-pink)/0.55), transparent 70%)" }} />
-      <div className="absolute top-24 right-[6%] h-[460px] w-[560px] rounded-full opacity-70 blur-3xl"
-           style={{ background: "radial-gradient(closest-side, hsl(var(--aura-purple)/0.55), transparent 70%)" }} />
+      <div
+        className="absolute -top-32 left-1/2 h-[520px] w-[1100px] -translate-x-1/2 rounded-[50%] opacity-80 blur-3xl"
+        style={{
+          background: "radial-gradient(closest-side, hsl(var(--aura)/0.55), transparent 70%)",
+        }}
+      />
+      <div
+        className="absolute top-40 left-[8%] h-[420px] w-[520px] rounded-full opacity-70 blur-3xl"
+        style={{
+          background: "radial-gradient(closest-side, hsl(var(--aura-pink)/0.55), transparent 70%)",
+        }}
+      />
+      <div
+        className="absolute top-24 right-[6%] h-[460px] w-[560px] rounded-full opacity-70 blur-3xl"
+        style={{
+          background:
+            "radial-gradient(closest-side, hsl(var(--aura-purple)/0.55), transparent 70%)",
+        }}
+      />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,hsl(var(--background)),transparent_60%)]" />
     </div>
   );

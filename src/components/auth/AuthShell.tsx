@@ -88,7 +88,10 @@ export function AuthShell({
               <motion.div
                 initial="hidden"
                 animate="show"
-                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06, delayChildren: 0.2 } } }}
+                variants={{
+                  hidden: {},
+                  show: { transition: { staggerChildren: 0.06, delayChildren: 0.2 } },
+                }}
                 className="space-y-4"
               >
                 {children}
@@ -123,8 +126,7 @@ function BrandCanvas({ reduce }: { reduce: boolean }) {
         aria-hidden
         className="absolute inset-0"
         style={{
-          background:
-            "radial-gradient(120% 90% at 0% 0%, #0b2a22 0%, #06120f 48%, #04070a 100%)",
+          background: "radial-gradient(120% 90% at 0% 0%, #0b2a22 0%, #06120f 48%, #04070a 100%)",
         }}
       />
       {!reduce && (
@@ -157,11 +159,9 @@ function BrandCanvas({ reduce }: { reduce: boolean }) {
         aria-hidden
         className="absolute inset-0 opacity-[0.18]"
         style={{
-          backgroundImage:
-            "radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)",
           backgroundSize: "24px 24px",
-          maskImage:
-            "radial-gradient(ellipse 75% 65% at 50% 50%, #000 35%, transparent 85%)",
+          maskImage: "radial-gradient(ellipse 75% 65% at 50% 50%, #000 35%, transparent 85%)",
         }}
       />
       <div

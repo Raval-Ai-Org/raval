@@ -16,22 +16,22 @@ Connect Meta (Facebook Page + Instagram Professional account) to the SDE through
 **Target Platform**: Linux server (FastAPI API + Celery worker)
 **Project Type**: single backend monolith (modular; adapter per platform)
 **Performance Goals**: publish path deterministic, no LLM; API p95 < 200 ms (CLAUDE.md §9); Instagram media publish is a 2-call sequence bounded by Meta, not by us
-**Constraints**: queue-first for publish (never call platform APIs from HTTP handlers) — OAuth *code exchange* in the callback is the existing, necessary exception (auth, not publish); failure classification per CLAUDE.md §3.3 (Transient/Permanent/Unknown)
+**Constraints**: queue-first for publish (never call platform APIs from HTTP handlers) — OAuth _code exchange_ in the callback is the existing, necessary exception (auth, not publish); failure classification per CLAUDE.md §3.3 (Transient/Permanent/Unknown)
 **Scale/Scope**: multi-tenant workspaces; one RavalAI Meta app; Instagram limits (≈20 image / 1 video posts per 24h) respected
 
 ## Constitution Check
 
-*GATE: passes — see rationale per principle. Re-checked after Phase 1 design; no changes.*
+_GATE: passes — see rationale per principle. Re-checked after Phase 1 design; no changes._
 
-| Principle (CLAUDE.md / persona) | How this plan satisfies it |
-|---|---|
-| **4.3 Approval boundary** | Engine only publishes what a prior platform approval passed in. This feature adds no auto-publish decision path. |
-| **4.4 Deterministic dispatch** | Adapter publish path is pure HTTP + token; no LLM, no probabilistic behavior. |
-| **3.3 Failure classification** | Instagram/Facebook adapters classify Auth (code 190/403) vs Rate-limit (429) vs Content (4xx) vs Transient (5xx/timeout) — never silent. |
-| **3.5 Encrypted token storage** | OAuth callback already encrypts with Fernet; new platforms reuse it. No plaintext. |
-| **4.1 Adapters are armor** | All Meta API specifics isolated in `adapters/instagram.py` / `adapters/meta.py`; a Meta API change touches only those files. |
-| **Anti-pattern: no LLM in dispatch, queue everything** | Publish remains queue-first; OAuth exchange stays in the HTTP callback (auth, not dispatch). |
-| **Smallest viable diff** | Reuse existing OAuth flow + publisher special-case + adapter registry; no unrelated refactor. |
+| Principle (CLAUDE.md / persona)                        | How this plan satisfies it                                                                                                               |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **4.3 Approval boundary**                              | Engine only publishes what a prior platform approval passed in. This feature adds no auto-publish decision path.                         |
+| **4.4 Deterministic dispatch**                         | Adapter publish path is pure HTTP + token; no LLM, no probabilistic behavior.                                                            |
+| **3.3 Failure classification**                         | Instagram/Facebook adapters classify Auth (code 190/403) vs Rate-limit (429) vs Content (4xx) vs Transient (5xx/timeout) — never silent. |
+| **3.5 Encrypted token storage**                        | OAuth callback already encrypts with Fernet; new platforms reuse it. No plaintext.                                                       |
+| **4.1 Adapters are armor**                             | All Meta API specifics isolated in `adapters/instagram.py` / `adapters/meta.py`; a Meta API change touches only those files.             |
+| **Anti-pattern: no LLM in dispatch, queue everything** | Publish remains queue-first; OAuth exchange stays in the HTTP callback (auth, not dispatch).                                             |
+| **Smallest viable diff**                               | Reuse existing OAuth flow + publisher special-case + adapter registry; no unrelated refactor.                                            |
 
 ## Project Structure
 

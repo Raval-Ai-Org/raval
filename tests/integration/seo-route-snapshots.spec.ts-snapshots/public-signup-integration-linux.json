@@ -14,10 +14,7 @@
   "hreflang": [],
   "robots": "noindex,nofollow",
   "h1": "Your AI marketing team.",
-  "jsonLdTypes": [
-    "Organization",
-    "WebSite"
-  ],
+  "jsonLdTypes": ["Organization", "WebSite"],
   "jsonLdNodes": [
     {
       "type": "Organization",

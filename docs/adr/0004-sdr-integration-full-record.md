@@ -25,18 +25,20 @@ RavalAI: /api/public/hooks/sdr → verify → upsert content_publications → ag
 ```
 
 ### Decisions (locked + ADRs)
-| # | Decision | Status |
-|---|---|---|
-| D1 | Proxy-through-server (browser never calls SDR directly; credentials server-only) | ✅ ADR-0001 |
-| D2 | Per-workspace SDR credential (minted via admin token, AES-256-GCM encrypted in `workspace_sdr`) | ✅ implemented |
-| D3 | HMAC-verified webhook receiver (timingSafeEqual, idempotent upsert, terminal-wins) | ✅ implemented + tested |
-| D4 | Split scheduling (RavalAI = generation timing; SDR = distribution timing, absolute UTC) | ✅ ADR-0002 |
-| D5 | Additive data model (`workspace_sdr` + `content_publications` + `publishing` status) | ✅ implemented |
-| D6 | Media URL durability (durable public URLs at fire time) | ✅ validated in handler |
-| D7 | Approval gate (publish/schedule only from approved; explicit click = consent) | ✅ implemented |
-| D8 | Deployment: local-first, Oracle free + Cloudflare Tunnel, Netcup fallback | ✅ ADR-0003 |
+
+| #   | Decision                                                                                        | Status                  |
+| --- | ----------------------------------------------------------------------------------------------- | ----------------------- |
+| D1  | Proxy-through-server (browser never calls SDR directly; credentials server-only)                | ✅ ADR-0001             |
+| D2  | Per-workspace SDR credential (minted via admin token, AES-256-GCM encrypted in `workspace_sdr`) | ✅ implemented          |
+| D3  | HMAC-verified webhook receiver (timingSafeEqual, idempotent upsert, terminal-wins)              | ✅ implemented + tested |
+| D4  | Split scheduling (RavalAI = generation timing; SDR = distribution timing, absolute UTC)         | ✅ ADR-0002             |
+| D5  | Additive data model (`workspace_sdr` + `content_publications` + `publishing` status)            | ✅ implemented          |
+| D6  | Media URL durability (durable public URLs at fire time)                                         | ✅ validated in handler |
+| D7  | Approval gate (publish/schedule only from approved; explicit click = consent)                   | ✅ implemented          |
+| D8  | Deployment: local-first, Oracle free + Cloudflare Tunnel, Netcup fallback                       | ✅ ADR-0003             |
 
 ### Additional decisions (execution-time)
+
 - **Queue-first immediate publish (T067):** `publish()` enqueues targets to `process_target` and returns fast with `status: publishing` — no blocking platform calls in the HTTP handler. Live-verified.
 - **Human-readable error surfacing:** clients see plain-language messages ("The Social Distribution Engine is not responding…") with the technical detail as a secondary line; terminal success/failure toasts (green-tick "Successfully posted to LinkedIn" + live link).
 - **brand_id mapping:** RavalAI is one workspace per client brand → `brand_id = workspace_id` when minting the per-workspace SDR key (SDR requires both).
@@ -58,37 +60,41 @@ Migrations: `20260809000001_add_workspace_sdr.sql`, `20260809000002_add_content_
 ## 3. Task ledger (complete — done + remaining)
 
 ### ✅ Completed
-| Task | Summary |
-|---|---|
-| T001–T006 | SDR local standup (docker-compose, 209 tests), DryRun smoke, server env keys, test baseline, MockSDR fixture, dev-server wiring |
+
+| Task      | Summary                                                                                                                                                                                            |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T001–T006 | SDR local standup (docker-compose, 209 tests), DryRun smoke, server env keys, test baseline, MockSDR fixture, dev-server wiring                                                                    |
 | T007–T018 | Foundational: HMAC verifier, idempotency keys, provisioning, platform limits, schema migrations, `publishing` status, FB channel fix, `sdr.server.ts`, `sdr-provisioning.server.ts`, feature flags |
-| T019–T029 | US1 Connect & Manage: oauth/start, accounts, disconnect routes + ConnectionsPanel + rail wiring + target gating |
-| T030–T041 | US2 Publish: publish route + handlers, destination picker, typed client, Studio wiring, `publishing` render |
-| T042–T051 | US3 Schedule: schedule/cancel routes, timezone, reschedule/race, integration test, schedule wiring + cancel affordance |
-| T052–T061 | US4 Delivery: webhook receiver, idempotent apply, aggregation, reconciliation, delivery-view data + **render (T061)** |
-| T062–T066 | US5 Degradation: flag + degraded mode, SDR-unreachable graceful, e2e regression spec |
-| T067 | **Queue-first immediate publish (SDR)** — was reverted earlier; re-landed with root-cause fix (eager-mode leak + SQLite busy-timeout + broker-dispatch stub). SDR 221/221 |
-| T068–T072 | SDR-side fixes: OAuth redirect_after, IG worker token + refresh, webhook retry loop, CORS lockdown, run-demo health check |
-| T073–T074 | RLS security test, observability logging |
-| T075 | Performance indexes (hot-path audit + 2 new indexes) |
-| T076 | Docs: `raval/README.md` (new) + `quickstart.md` (env keys, provisioning, webhook verification) |
-| T077 | ADRs 0001–0003 (proxy-through-server, split scheduling, deployment topology) |
+| T019–T029 | US1 Connect & Manage: oauth/start, accounts, disconnect routes + ConnectionsPanel + rail wiring + target gating                                                                                    |
+| T030–T041 | US2 Publish: publish route + handlers, destination picker, typed client, Studio wiring, `publishing` render                                                                                        |
+| T042–T051 | US3 Schedule: schedule/cancel routes, timezone, reschedule/race, integration test, schedule wiring + cancel affordance                                                                             |
+| T052–T061 | US4 Delivery: webhook receiver, idempotent apply, aggregation, reconciliation, delivery-view data + **render (T061)**                                                                              |
+| T062–T066 | US5 Degradation: flag + degraded mode, SDR-unreachable graceful, e2e regression spec                                                                                                               |
+| T067      | **Queue-first immediate publish (SDR)** — was reverted earlier; re-landed with root-cause fix (eager-mode leak + SQLite busy-timeout + broker-dispatch stub). SDR 221/221                          |
+| T068–T072 | SDR-side fixes: OAuth redirect_after, IG worker token + refresh, webhook retry loop, CORS lockdown, run-demo health check                                                                          |
+| T073–T074 | RLS security test, observability logging                                                                                                                                                           |
+| T075      | Performance indexes (hot-path audit + 2 new indexes)                                                                                                                                               |
+| T076      | Docs: `raval/README.md` (new) + `quickstart.md` (env keys, provisioning, webhook verification)                                                                                                     |
+| T077      | ADRs 0001–0003 (proxy-through-server, split scheduling, deployment topology)                                                                                                                       |
 
 ### ⚠️ In progress
-| Task | Status |
-|---|---|
+
+| Task | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T078 | Full E2E sweep — harness live; **4/6 Playwright specs pass**; **real-login E2E against live Supabase + live SDR verified end-to-end** (login 200 → workspace → `GET /api/sdr/accounts` 200 → `POST /api/sdr/oauth/start` 200 with real LinkedIn auth URL). 2 specs are generation-gated (canvas picker/delivery need a real generated content item — not an integration defect). **2 real bugs found + fixed by the live run:** missing `brand_id` in provisioning (mint 422) and SDR migrations not applied to cloud (PGRST205) |
 
 ### ⬜ Remaining
-| Task | Summary |
-|---|---|
-| T079 | FR/SC audit (28/28 FR, 10/10 SC) + commit branch |
-| T080 | Deploy SDR (Oracle free + Cloudflare Tunnel, real domain, backups, UptimeRobot, CORS locked) |
+
+| Task | Summary                                                                                       |
+| ---- | --------------------------------------------------------------------------------------------- |
+| T079 | FR/SC audit (28/28 FR, 10/10 SC) + commit branch                                              |
+| T080 | Deploy SDR (Oracle free + Cloudflare Tunnel, real domain, backups, UptimeRobot, CORS locked)  |
 | T081 | Platform release gates: Meta app review (FB/IG), X paid tier, real-domain OAuth redirect URIs |
-| T082 | Workspace SDR key revocation/rotation |
-| T083 | Release go/no-go: quickstart checklist + E2E against deployed SDR + FR/SC audit |
+| T082 | Workspace SDR key revocation/rotation                                                         |
+| T083 | Release go/no-go: quickstart checklist + E2E against deployed SDR + FR/SC audit               |
 
 ### 🔒 On hold (integration hold — see ADR-0005/integration-hold)
+
 - Live Vercel deployment is missing (`raval-mu.vercel.app` → `DEPLOYMENT_NOT_FOUND`). Needs dashboard-side check (or ask Zian).
 - Zian's `ad052bc` re-pointed Supabase to a **new, empty project** `slcmqbbjzyztqyucauol`; his migration set excludes the SDR migrations. Decision pending: keep old project `smdravaoaeqdajmnrlpr` (recommended) vs provision the new one.
 

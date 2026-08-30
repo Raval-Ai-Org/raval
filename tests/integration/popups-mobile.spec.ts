@@ -17,50 +17,96 @@ test.use({ ...devices["Pixel 7"] });
 
 function fakeSession() {
   return {
-    access_token: "fake", refresh_token: "fake", token_type: "bearer",
-    expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
+    access_token: "fake",
+    refresh_token: "fake",
+    token_type: "bearer",
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
     user: {
-      id: USER_ID, email: "test@example.com", aud: "authenticated", role: "authenticated",
-      app_metadata: { provider: "email" }, user_metadata: {},
+      id: USER_ID,
+      email: "test@example.com",
+      aud: "authenticated",
+      role: "authenticated",
+      app_metadata: { provider: "email" },
+      user_metadata: {},
     },
   };
 }
 
 async function stubBackend(page: Page) {
-  await page.context().route(
-    new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`),
-    async (route: Route) => {
+  await page
+    .context()
+    .route(new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`), async (route: Route) => {
       const req = route.request();
       const url = req.url();
       const method = req.method();
       const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
-      if (url.includes("/auth/v1/user")) return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession().user) });
-      if (url.includes("/auth/v1/token")) return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession()) });
+      if (url.includes("/auth/v1/user"))
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession().user),
+        });
+      if (url.includes("/auth/v1/token"))
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession()),
+        });
       if (url.includes("/rest/v1/workspaces")) {
         if (method === "GET") {
-          const row = { id: WS_ID, name: "Test Brand", website_url: null, industry: null, onboarded_at: "2024-01-01T00:00:00Z", first_prompt: null };
-          return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(wantsSingle ? row : [row]) });
+          const row = {
+            id: WS_ID,
+            name: "Test Brand",
+            website_url: null,
+            industry: null,
+            onboarded_at: "2024-01-01T00:00:00Z",
+            first_prompt: null,
+          };
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(wantsSingle ? row : [row]),
+          });
         }
         return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
       }
       if (url.includes("/rest/v1/profiles")) {
         const row = { id: USER_ID, persona: "founder", persona_set_at: "2024-01-01T00:00:00Z" };
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(wantsSingle ? row : [row]) });
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(wantsSingle ? row : [row]),
+        });
       }
-      if (url.includes("/rest/v1/chat_messages")) return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: wantsSingle ? "null" : "[]" });
-    },
-  );
-  await page.context().route("**/_serverFn/**", (route) =>
-    route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
-  );
+      if (url.includes("/rest/v1/chat_messages"))
+        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: wantsSingle ? "null" : "[]",
+      });
+    });
+  await page
+    .context()
+    .route("**/_serverFn/**", (route) =>
+      route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
+    );
   await page.context().route("**/api/**", (route) => {
     const u = route.request().url();
     if (u.includes("/api/chat")) {
-      return route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body: "data: [DONE]\n" });
+      return route.fulfill({
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+        body: "data: [DONE]\n",
+      });
     }
     if (u.includes("/api/clarify")) {
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ needs_clarification: false }) });
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ needs_clarification: false }),
+      });
     }
     return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "{}" });
   });
@@ -76,9 +122,17 @@ async function seedSession(page: Page) {
         window.localStorage.setItem("profile:persona", "founder");
         // @ts-expect-error test stub
         window.WebSocket = function () {
-          return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 3 };
+          return {
+            addEventListener() {},
+            removeEventListener() {},
+            send() {},
+            close() {},
+            readyState: 3,
+          };
         };
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
     },
     { storageKey: STORAGE_KEY, sess: fakeSession(), wsId: WS_ID },
   );
@@ -112,7 +166,8 @@ async function waitForAppReady(page: Page) {
 async function assertNoLeaks(page: Page) {
   await expect(page.locator('[role="dialog"]:visible')).toHaveCount(0, { timeout: 5_000 });
   const locked = await page.evaluate(
-    () => document.body.hasAttribute("data-scroll-locked") || document.body.style.overflow === "hidden",
+    () =>
+      document.body.hasAttribute("data-scroll-locked") || document.body.style.overflow === "hidden",
   );
   expect(locked).toBe(false);
 }
@@ -138,13 +193,18 @@ test.describe("Popup smoke — mobile viewport (Pixel 7)", () => {
       // Assert the dialog fits within (or is intentionally full-bleed on) the viewport.
       const metrics = await page.evaluate(() => {
         const dlg = Array.from(document.querySelectorAll('[role="dialog"]')).find(
-          (el) => (el as HTMLElement).offsetParent !== null || getComputedStyle(el).position === "fixed",
+          (el) =>
+            (el as HTMLElement).offsetParent !== null || getComputedStyle(el).position === "fixed",
         ) as HTMLElement | undefined;
         if (!dlg) return null;
         const r = dlg.getBoundingClientRect();
         return {
-          left: r.left, right: r.right, top: r.top, bottom: r.bottom,
-          vw: window.innerWidth, vh: window.innerHeight,
+          left: r.left,
+          right: r.right,
+          top: r.top,
+          bottom: r.bottom,
+          vw: window.innerWidth,
+          vh: window.innerHeight,
           hasLabel: !!dlg.getAttribute("aria-labelledby") || !!dlg.getAttribute("aria-label"),
         };
       });
@@ -201,10 +261,14 @@ test.describe("Swipe gestures — mobile drawers", () => {
     await page.waitForTimeout(400);
     const navOpen = await page.evaluate(() => {
       // Nav drawer is the leftmost fixed panel in the mobile layout.
-      return Array.from(document.querySelectorAll('[data-mobile-nav-drawer], aside, nav')).some(
+      return Array.from(document.querySelectorAll("[data-mobile-nav-drawer], aside, nav")).some(
         (el) => {
           const s = getComputedStyle(el as HTMLElement);
-          return s.position === "fixed" && (el as HTMLElement).getBoundingClientRect().left >= 0 && (el as HTMLElement).getBoundingClientRect().right > 50;
+          return (
+            s.position === "fixed" &&
+            (el as HTMLElement).getBoundingClientRect().left >= 0 &&
+            (el as HTMLElement).getBoundingClientRect().right > 50
+          );
         },
       );
     });
@@ -220,7 +284,9 @@ test.describe("Swipe gestures — mobile drawers", () => {
     await page.waitForTimeout(400);
 
     const stillLocked = await page.evaluate(
-      () => document.body.hasAttribute("data-scroll-locked") || document.body.style.overflow === "hidden",
+      () =>
+        document.body.hasAttribute("data-scroll-locked") ||
+        document.body.style.overflow === "hidden",
     );
     // After close, body should not remain scroll-locked.
     expect(stillLocked).toBe(false);
@@ -236,13 +302,14 @@ test.describe("Swipe gestures — mobile drawers", () => {
 
     const opened = await page.evaluate(() => {
       // Any fixed panel now anchored to the right side.
-      return Array.from(document.querySelectorAll("aside, [role='complementary'], div"))
-        .some((el) => {
+      return Array.from(document.querySelectorAll("aside, [role='complementary'], div")).some(
+        (el) => {
           const s = getComputedStyle(el as HTMLElement);
           if (s.position !== "fixed") return false;
           const r = (el as HTMLElement).getBoundingClientRect();
           return r.right >= window.innerWidth - 4 && r.width > 200 && r.width < window.innerWidth;
-        });
+        },
+      );
     });
     expect(opened, "expected studio drawer after swipe-left from right edge").toBe(true);
   });

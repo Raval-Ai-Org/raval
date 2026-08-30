@@ -97,25 +97,37 @@ export async function snapshot(url: string): Promise<Snapshot> {
   // Tagline: prefer og:title-different-from-title heroic subline
   const heroBlock = html.slice(0, 8000);
   const tagline =
-    pick(heroBlock, /<h2[^>]*>([\s\S]{5,220}?)<\/h2>/i)?.replace(/<[^>]+>/g, "").trim() ??
+    pick(heroBlock, /<h2[^>]*>([\s\S]{5,220}?)<\/h2>/i)
+      ?.replace(/<[^>]+>/g, "")
+      .trim() ??
     pick(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']{1,200})["']/i);
 
   const bodyText = stripTags(html.slice(0, 40_000));
   const promotions = Array.from(
     new Set(
       PROMO_PATTERNS.flatMap((rx) => {
-        const m = bodyText.match(new RegExp(rx.source, rx.flags + (rx.flags.includes("g") ? "" : "g")));
+        const m = bodyText.match(
+          new RegExp(rx.source, rx.flags + (rx.flags.includes("g") ? "" : "g")),
+        );
         return m ? m.map((s) => s.trim()) : [];
       }),
     ),
   ).slice(0, 8);
 
   const ctas = Array.from(
-    new Set([
-      ...pickAll(html, /<a[^>]+class=["'][^"']*(?:btn|button|cta)[^"']*["'][^>]*>([\s\S]{2,60}?)<\/a>/i, 6),
-      ...pickAll(html, /<button[^>]*>([\s\S]{2,60}?)<\/button>/i, 6),
-    ].map((s) => stripTags(s))),
-  ).filter(Boolean).slice(0, 10);
+    new Set(
+      [
+        ...pickAll(
+          html,
+          /<a[^>]+class=["'][^"']*(?:btn|button|cta)[^"']*["'][^>]*>([\s\S]{2,60}?)<\/a>/i,
+          6,
+        ),
+        ...pickAll(html, /<button[^>]*>([\s\S]{2,60}?)<\/button>/i, 6),
+      ].map((s) => stripTags(s)),
+    ),
+  )
+    .filter(Boolean)
+    .slice(0, 10);
 
   // Internal links (same host pathnames)
   const host = new URL(target).host;
@@ -127,9 +139,12 @@ export async function snapshot(url: string): Promise<Snapshot> {
       const u = new URL(lm[1], target);
       if (u.host === host) {
         const p = u.pathname.replace(/\/+$/, "") || "/";
-        if (p.length < 120 && !/\.(png|jpe?g|gif|svg|webp|ico|css|js|pdf|zip)$/i.test(p)) linkPaths.add(p);
+        if (p.length < 120 && !/\.(png|jpe?g|gif|svg|webp|ico|css|js|pdf|zip)$/i.test(p))
+          linkPaths.add(p);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   return {
@@ -170,30 +185,41 @@ export function diffSnapshots(
 
   if (prev.title && next.title && prev.title !== next.title) {
     out.push({
-      workspace_id, watch_id, source_url,
-      kind: "title", severity: "info",
+      workspace_id,
+      watch_id,
+      source_url,
+      kind: "title",
+      severity: "info",
       title: `Homepage title changed`,
       detail: `"${prev.title}" → "${next.title}"`,
-      before_value: prev.title, after_value: next.title,
+      before_value: prev.title,
+      after_value: next.title,
     });
   }
   const prevPos = prev.tagline ?? prev.description ?? prev.h1;
   const nextPos = next.tagline ?? next.description ?? next.h1;
   if (prevPos && nextPos && prevPos !== nextPos) {
     out.push({
-      workspace_id, watch_id, source_url,
-      kind: "positioning", severity: "warning",
+      workspace_id,
+      watch_id,
+      source_url,
+      kind: "positioning",
+      severity: "warning",
       title: `Positioning line changed`,
       detail: `"${prevPos}" → "${nextPos}"`,
-      before_value: prevPos, after_value: nextPos,
+      before_value: prevPos,
+      after_value: nextPos,
     });
   }
 
   const newPromos = next.promotions.filter((p) => !prev.promotions.includes(p));
   for (const p of newPromos.slice(0, 4)) {
     out.push({
-      workspace_id, watch_id, source_url,
-      kind: "promotion", severity: "warning",
+      workspace_id,
+      watch_id,
+      source_url,
+      kind: "promotion",
+      severity: "warning",
       title: `New promotion detected`,
       detail: p,
       after_value: p,
@@ -204,10 +230,17 @@ export function diffSnapshots(
   const newPages = next.internalLinks.filter((p) => !prevLinks.has(p));
   for (const path of newPages.slice(0, 5)) {
     let full = path;
-    try { full = new URL(path, source_url).toString(); } catch { /* keep */ }
+    try {
+      full = new URL(path, source_url).toString();
+    } catch {
+      /* keep */
+    }
     out.push({
-      workspace_id, watch_id, source_url: full,
-      kind: "new_page", severity: "info",
+      workspace_id,
+      watch_id,
+      source_url: full,
+      kind: "new_page",
+      severity: "info",
       title: `New page: ${path}`,
       detail: `First seen on ${new Date(next.fetchedAt).toUTCString()}`,
       after_value: path,
@@ -218,8 +251,11 @@ export function diffSnapshots(
   const newCtas = next.ctas.filter((c) => !prevCtas.has(c.toLowerCase()));
   if (newCtas.length > 0) {
     out.push({
-      workspace_id, watch_id, source_url,
-      kind: "cta", severity: "info",
+      workspace_id,
+      watch_id,
+      source_url,
+      kind: "cta",
+      severity: "info",
       title: `New call-to-action`,
       detail: newCtas.slice(0, 4).join(" · "),
       after_value: newCtas.join(" · "),
@@ -266,7 +302,10 @@ export async function scanWatch(watchId: string): Promise<{ alerts: number; erro
   }
 }
 
-export async function runDueCompetitorScans({ max = 50, staleMinutes = 60 * 20 }: { max?: number; staleMinutes?: number } = {}): Promise<{ scanned: number; alerts: number }> {
+export async function runDueCompetitorScans({
+  max = 50,
+  staleMinutes = 60 * 20,
+}: { max?: number; staleMinutes?: number } = {}): Promise<{ scanned: number; alerts: number }> {
   const cutoff = new Date(Date.now() - staleMinutes * 60_000).toISOString();
   const { data: due } = await supabaseAdmin
     .from("competitor_watches")

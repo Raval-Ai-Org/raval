@@ -26,30 +26,23 @@ import {
 } from "@/components/ui/gemini-icons";
 import { Image as ImageIcon, X as XIcon } from "@/components/ui/gemini-icons";
 import { FileText, Mail } from "@/components/ui/gemini-icons";
-import { Upload, History, RotateCcw, Save, ArrowLeft, ArrowRight } from "@/components/ui/gemini-icons";
+import {
+  Upload,
+  History,
+  RotateCcw,
+  Save,
+  ArrowLeft,
+  ArrowRight,
+} from "@/components/ui/gemini-icons";
 import { BrandLogo, type BrandKey } from "@/components/brand/BrandLogo";
 
 /* ---------------------------------------------------------- */
 /* Types & storage                                            */
 /* ---------------------------------------------------------- */
 
-type Channel =
-  | "instagram"
-  | "linkedin"
-  | "twitter"
-  | "tiktok"
-  | "youtube"
-  | "blog"
-  | "email";
+type Channel = "instagram" | "linkedin" | "twitter" | "tiktok" | "youtube" | "blog" | "email";
 
-type EntryType =
-  | "post"
-  | "reel"
-  | "carousel"
-  | "thread"
-  | "article"
-  | "newsletter"
-  | "video";
+type EntryType = "post" | "reel" | "carousel" | "thread" | "article" | "newsletter" | "video";
 
 type Status = "idea" | "draft" | "approved" | "scheduled" | "publishing" | "published";
 
@@ -90,7 +83,15 @@ const CHANNELS: { id: Channel; label: string; color: string; emoji: string; bran
   { id: "email", label: "Email", color: "#f43f5e", emoji: "✉️" },
 ];
 
-function ChannelIcon({ ch, size = 14, brand = true }: { ch: (typeof CHANNELS)[number]; size?: number; brand?: boolean }) {
+function ChannelIcon({
+  ch,
+  size = 14,
+  brand = true,
+}: {
+  ch: (typeof CHANNELS)[number];
+  size?: number;
+  brand?: boolean;
+}) {
   if (ch.brand) return <BrandLogo name={ch.brand} brand={brand} size={size} />;
   const Icon = ch.id === "blog" ? FileText : Mail;
   return <Icon style={{ width: size, height: size }} strokeWidth={2} />;
@@ -109,8 +110,7 @@ const STATUS_COLORS: Record<Status, string> = {
   published: "bg-foreground/10 text-foreground",
 };
 
-const STORAGE_KEY = (wsId: string | null) =>
-  `content-calendar:${wsId ?? "default"}`;
+const STORAGE_KEY = (wsId: string | null) => `content-calendar:${wsId ?? "default"}`;
 
 function loadEntries(wsId: string | null): CalendarEntry[] {
   if (typeof window === "undefined") return [];
@@ -124,8 +124,8 @@ function loadEntries(wsId: string | null): CalendarEntry[] {
       const images: string[] = Array.isArray(e.images)
         ? e.images.filter((x: any) => typeof x === "string" && x)
         : e.imageUrl
-        ? [e.imageUrl]
-        : [];
+          ? [e.imageUrl]
+          : [];
       return {
         ...e,
         images,
@@ -159,8 +159,7 @@ const addDays = (d: Date, n: number) => {
   return x;
 };
 const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
-const monthLabel = (d: Date) =>
-  d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+const monthLabel = (d: Date) => d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
 function buildMonthGrid(anchor: Date) {
   const first = startOfMonth(anchor);
@@ -198,7 +197,10 @@ Rules:
   const res = await authedFetch("/api/ai-generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ task: "freeform", prompt: `${sys}\n\nBrand context: ${input.prompt || "general brand"}` }),
+    body: JSON.stringify({
+      task: "freeform",
+      prompt: `${sys}\n\nBrand context: ${input.prompt || "general brand"}`,
+    }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || "AI generation failed");
@@ -224,7 +226,10 @@ Rules:
     }));
 }
 
-async function aiRegenerateEntry(entry: CalendarEntry, brandContext: string): Promise<Partial<CalendarEntry>> {
+async function aiRegenerateEntry(
+  entry: CalendarEntry,
+  brandContext: string,
+): Promise<Partial<CalendarEntry>> {
   const sys = `Rewrite ONE social post. Keep the same date, time, channel and type.
 Channel: ${entry.channel}. Type: ${entry.type}. Title concept: "${entry.title}".
 Return ONLY a JSON object (no prose, no fences):
@@ -398,146 +403,150 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
       }
       bodyClassName="flex flex-col"
     >
+      <div className="grid flex-1 min-h-0 grid-cols-1 lg:grid-cols-[1fr_300px] overflow-hidden">
+        {/* LEFT — Calendar */}
+        <div className="relative flex min-w-0 min-h-0 flex-col border-r border-border overflow-hidden">
+          <Toolbar
+            anchor={anchor}
+            onPrev={() => setAnchor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+            onNext={() => setAnchor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+            onToday={() => setAnchor(startOfMonth(new Date()))}
+            view={view}
+            setView={setView}
+            filter={filter}
+            setFilter={setFilter}
+            isNarrow={isNarrow}
+            onNewPost={() => createBlankPost()}
+          />
+          {draggingId && (
+            <ChannelLanes dragging onDropChannel={(ch) => moveEntry(draggingId, { channel: ch })} />
+          )}
 
-        <div className="grid flex-1 min-h-0 grid-cols-1 lg:grid-cols-[1fr_300px] overflow-hidden">
-          {/* LEFT — Calendar */}
-          <div className="relative flex min-w-0 min-h-0 flex-col border-r border-border overflow-hidden">
-            <Toolbar
-              anchor={anchor}
-              onPrev={() => setAnchor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-              onNext={() => setAnchor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-              onToday={() => setAnchor(startOfMonth(new Date()))}
-              view={view}
-              setView={setView}
-              filter={filter}
-              setFilter={setFilter}
-              isNarrow={isNarrow}
-              onNewPost={() => createBlankPost()}
+          {entries.length === 0 ? (
+            <EmptyState
+              onOpenGenerator={() => setShowGenerator(true)}
+              onNewBlank={() => createBlankPost()}
             />
-            {draggingId && (
-              <ChannelLanes
-                dragging
-                onDropChannel={(ch) => moveEntry(draggingId, { channel: ch })}
-              />
-            )}
-
-            {entries.length === 0 ? (
-              <EmptyState
-                onOpenGenerator={() => setShowGenerator(true)}
-                onNewBlank={() => createBlankPost()}
-              />
-            ) : view === "month" ? (
-              <MonthGrid
-                grid={grid}
-                anchor={anchor}
-                byDate={byDate}
-                todayYMD={todayYMD}
-                onPickDate={(d) => setSelectedDate(d)}
-                onPickEntry={(e) => setSelectedEntry(e)}
-                draggingId={draggingId}
-                onDragStartEntry={setDraggingId}
-                onDragEndEntry={() => setDraggingId(null)}
-                onDropOnDay={(ymd) => {
-                  if (draggingId) moveEntry(draggingId, { date: ymd });
-                }}
-                onRegenerate={regenerateEntry}
-                regenIds={regenIds}
-              />
-            ) : (
-              <ListView
-                entries={filtered}
-                onPickEntry={(e) => setSelectedEntry(e)}
-                onRegenerate={regenerateEntry}
-                regenIds={regenIds}
-                onDragStartEntry={setDraggingId}
-                onDragEndEntry={() => setDraggingId(null)}
-              />
-            )}
-
-            {/* Mobile generator overlay */}
-            <AnimatePresence>
-              {showGenerator && (
-                <motion.div
-                  initial={{ y: "100%" }}
-                  animate={{ y: 0 }}
-                  exit={{ y: "100%" }}
-                  transition={{ type: "spring", stiffness: 320, damping: 32 }}
-                  className="absolute inset-x-0 bottom-0 top-12 z-30 flex flex-col overflow-y-auto rounded-t-2xl border-t border-border bg-card shadow-2xl lg:hidden"
-                >
-                  <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-4 py-2 backdrop-blur">
-                    <div className="flex items-center gap-2 text-[12.5px] font-semibold">
-                      <Wand2 className="h-3.5 w-3.5 text-primary" /> AI Generator
-                    </div>
-                    <Button size="icon" variant="ghost" onClick={() => setShowGenerator(false)} className="h-7 w-7" aria-label="Close AI generator">
-                      <span aria-hidden className="text-lg leading-none">×</span>
-                    </Button>
-                  </div>
-                  <Generator
-                    workspaceId={workspaceId}
-                    anchor={anchor}
-                    onGenerated={(items) => {
-                      setEntries((arr) => [...arr, ...items]);
-                      setShowGenerator(false);
-                      toast.success(`Added ${items.length} ideas to the calendar`);
-                    }}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* RIGHT — AI generator + day inspector */}
-          <div className="hidden lg:flex min-h-0 flex-col overflow-y-auto bg-muted/20">
-            <Generator
-              workspaceId={workspaceId}
+          ) : view === "month" ? (
+            <MonthGrid
+              grid={grid}
               anchor={anchor}
-              onGenerated={(items) => {
-                setEntries((arr) => [...arr, ...items]);
-                toast.success(`Added ${items.length} ideas to the calendar`);
+              byDate={byDate}
+              todayYMD={todayYMD}
+              onPickDate={(d) => setSelectedDate(d)}
+              onPickEntry={(e) => setSelectedEntry(e)}
+              draggingId={draggingId}
+              onDragStartEntry={setDraggingId}
+              onDragEndEntry={() => setDraggingId(null)}
+              onDropOnDay={(ymd) => {
+                if (draggingId) moveEntry(draggingId, { date: ymd });
               }}
-            />
-
-            <DayInspector
-              date={selectedDate}
-              entries={selectedDate ? byDate.get(selectedDate) ?? [] : []}
-              onPickEntry={setSelectedEntry}
               onRegenerate={regenerateEntry}
               regenIds={regenIds}
-              onAdd={(date) => {
-                const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-                const item: CalendarEntry = {
-                  id,
-                  date,
-                  time: "09:00",
-                  channel: "instagram",
-                  type: "post",
-                  title: "Untitled post",
-                  status: "idea",
-                };
-                setEntries((arr) => [...arr, item]);
-                setSelectedEntry(item);
-              }}
             />
-          </div>
-        </div>
-
-        {/* Entry editor */}
-        <AnimatePresence>
-          {selectedEntry && (
-            <EntryEditor
-              key={selectedEntry.id}
-              entry={selectedEntry}
-              onClose={() => setSelectedEntry(null)}
-              onChange={(patch) => {
-                updateEntry(selectedEntry.id, patch);
-                setSelectedEntry((e) => (e ? { ...e, ...patch } : e));
-              }}
-              onDelete={() => removeEntry(selectedEntry.id)}
-              onRegenerate={() => regenerateEntry(selectedEntry.id)}
-              regenerating={regenIds.has(selectedEntry.id)}
+          ) : (
+            <ListView
+              entries={filtered}
+              onPickEntry={(e) => setSelectedEntry(e)}
+              onRegenerate={regenerateEntry}
+              regenIds={regenIds}
+              onDragStartEntry={setDraggingId}
+              onDragEndEntry={() => setDraggingId(null)}
             />
           )}
-        </AnimatePresence>
+
+          {/* Mobile generator overlay */}
+          <AnimatePresence>
+            {showGenerator && (
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", stiffness: 320, damping: 32 }}
+                className="absolute inset-x-0 bottom-0 top-12 z-30 flex flex-col overflow-y-auto rounded-t-2xl border-t border-border bg-card shadow-2xl lg:hidden"
+              >
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-4 py-2 backdrop-blur">
+                  <div className="flex items-center gap-2 text-[12.5px] font-semibold">
+                    <Wand2 className="h-3.5 w-3.5 text-primary" /> AI Generator
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setShowGenerator(false)}
+                    className="h-7 w-7"
+                    aria-label="Close AI generator"
+                  >
+                    <span aria-hidden className="text-lg leading-none">
+                      ×
+                    </span>
+                  </Button>
+                </div>
+                <Generator
+                  workspaceId={workspaceId}
+                  anchor={anchor}
+                  onGenerated={(items) => {
+                    setEntries((arr) => [...arr, ...items]);
+                    setShowGenerator(false);
+                    toast.success(`Added ${items.length} ideas to the calendar`);
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* RIGHT — AI generator + day inspector */}
+        <div className="hidden lg:flex min-h-0 flex-col overflow-y-auto bg-muted/20">
+          <Generator
+            workspaceId={workspaceId}
+            anchor={anchor}
+            onGenerated={(items) => {
+              setEntries((arr) => [...arr, ...items]);
+              toast.success(`Added ${items.length} ideas to the calendar`);
+            }}
+          />
+
+          <DayInspector
+            date={selectedDate}
+            entries={selectedDate ? (byDate.get(selectedDate) ?? []) : []}
+            onPickEntry={setSelectedEntry}
+            onRegenerate={regenerateEntry}
+            regenIds={regenIds}
+            onAdd={(date) => {
+              const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+              const item: CalendarEntry = {
+                id,
+                date,
+                time: "09:00",
+                channel: "instagram",
+                type: "post",
+                title: "Untitled post",
+                status: "idea",
+              };
+              setEntries((arr) => [...arr, item]);
+              setSelectedEntry(item);
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Entry editor */}
+      <AnimatePresence>
+        {selectedEntry && (
+          <EntryEditor
+            key={selectedEntry.id}
+            entry={selectedEntry}
+            onClose={() => setSelectedEntry(null)}
+            onChange={(patch) => {
+              updateEntry(selectedEntry.id, patch);
+              setSelectedEntry((e) => (e ? { ...e, ...patch } : e));
+            }}
+            onDelete={() => removeEntry(selectedEntry.id)}
+            onRegenerate={() => regenerateEntry(selectedEntry.id)}
+            regenerating={regenIds.has(selectedEntry.id)}
+          />
+        )}
+      </AnimatePresence>
     </AppModalShell>
   );
 }
@@ -547,7 +556,16 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
 /* ---------------------------------------------------------- */
 
 function Toolbar({
-  anchor, onPrev, onNext, onToday, view, setView, filter, setFilter, isNarrow, onNewPost,
+  anchor,
+  onPrev,
+  onNext,
+  onToday,
+  view,
+  setView,
+  filter,
+  setFilter,
+  isNarrow,
+  onNewPost,
 }: {
   anchor: Date;
   onPrev: () => void;
@@ -563,13 +581,28 @@ function Toolbar({
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 sm:px-4 sm:py-2.5">
       <div className="flex items-center gap-1">
-        <Button size="icon" variant="ghost" onClick={onPrev} className="h-7 w-7" aria-label="Previous month">
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onPrev}
+          className="h-7 w-7"
+          aria-label="Previous month"
+        >
           <ChevronLeft className="h-4 w-4" aria-hidden />
         </Button>
-        <div className="min-w-[110px] text-center text-[12.5px] font-semibold sm:min-w-[140px] sm:text-[13px]" aria-live="polite">
+        <div
+          className="min-w-[110px] text-center text-[12.5px] font-semibold sm:min-w-[140px] sm:text-[13px]"
+          aria-live="polite"
+        >
           {monthLabel(anchor)}
         </div>
-        <Button size="icon" variant="ghost" onClick={onNext} className="h-7 w-7" aria-label="Next month">
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onNext}
+          className="h-7 w-7"
+          aria-label="Next month"
+        >
           <ChevronRight className="h-4 w-4" aria-hidden />
         </Button>
         <Button size="sm" variant="outline" onClick={onToday} className="ml-1 h-7 px-2 text-[11px]">
@@ -591,8 +624,12 @@ function Toolbar({
         {!isNarrow && (
           <Tabs value={view} onValueChange={(v) => setView(v as any)}>
             <TabsList className="h-7">
-              <TabsTrigger value="month" className="px-2 text-[11px]">Month</TabsTrigger>
-              <TabsTrigger value="list" className="px-2 text-[11px]">List</TabsTrigger>
+              <TabsTrigger value="month" className="px-2 text-[11px]">
+                Month
+              </TabsTrigger>
+              <TabsTrigger value="list" className="px-2 text-[11px]">
+                List
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         )}
@@ -601,7 +638,13 @@ function Toolbar({
   );
 }
 
-function ChannelFilter({ value, onChange }: { value: Channel | "all"; onChange: (v: Channel | "all") => void }) {
+function ChannelFilter({
+  value,
+  onChange,
+}: {
+  value: Channel | "all";
+  onChange: (v: Channel | "all") => void;
+}) {
   return (
     <div className="flex items-center gap-1 rounded-full border border-border bg-card px-2 py-1">
       <Filter className="h-3 w-3 text-muted-foreground" />
@@ -612,7 +655,9 @@ function ChannelFilter({ value, onChange }: { value: Channel | "all"; onChange: 
       >
         <option value="all">All channels</option>
         {CHANNELS.map((c) => (
-          <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>
+          <option key={c.id} value={c.id}>
+            {c.emoji} {c.label}
+          </option>
         ))}
       </select>
     </div>
@@ -624,8 +669,12 @@ function ChannelFilter({ value, onChange }: { value: Channel | "all"; onChange: 
 /* ---------------------------------------------------------- */
 
 function ChannelLanes({
-  dragging, onDropChannel,
-}: { dragging: boolean; onDropChannel: (ch: Channel) => void }) {
+  dragging,
+  onDropChannel,
+}: {
+  dragging: boolean;
+  onDropChannel: (ch: Channel) => void;
+}) {
   const [overCh, setOverCh] = useState<Channel | null>(null);
   return (
     <div
@@ -644,7 +693,12 @@ function ChannelLanes({
             key={c.id}
             type="button"
             tabIndex={-1}
-            onDragOver={(ev) => { if (dragging) { ev.preventDefault(); setOverCh(c.id); } }}
+            onDragOver={(ev) => {
+              if (dragging) {
+                ev.preventDefault();
+                setOverCh(c.id);
+              }
+            }}
             onDragLeave={() => setOverCh((cur) => (cur === c.id ? null : cur))}
             onDrop={(ev) => {
               if (!dragging) return;
@@ -654,7 +708,9 @@ function ChannelLanes({
             }}
             className={cn(
               "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition",
-              dragging ? "border-dashed border-foreground/30" : "border-border bg-card text-muted-foreground",
+              dragging
+                ? "border-dashed border-foreground/30"
+                : "border-border bg-card text-muted-foreground",
               isOver && "scale-[1.04] border-solid text-white shadow-md",
             )}
             style={isOver ? { background: c.color, borderColor: c.color } : undefined}
@@ -673,9 +729,18 @@ function ChannelLanes({
 /* ---------------------------------------------------------- */
 
 function MonthGrid({
-  grid, anchor, byDate, todayYMD, onPickDate, onPickEntry,
-  draggingId, onDragStartEntry, onDragEndEntry, onDropOnDay,
-  onRegenerate, regenIds,
+  grid,
+  anchor,
+  byDate,
+  todayYMD,
+  onPickDate,
+  onPickEntry,
+  draggingId,
+  onDragStartEntry,
+  onDragEndEntry,
+  onDropOnDay,
+  onRegenerate,
+  regenIds,
 }: {
   grid: Date[];
   anchor: Date;
@@ -695,7 +760,11 @@ function MonthGrid({
   return (
     <div className="flex min-h-0 flex-1 flex-col p-3">
       <div className="mb-1 grid grid-cols-7 gap-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {DOW.map((d) => <div key={d} className="text-center">{d}</div>)}
+        {DOW.map((d) => (
+          <div key={d} className="text-center">
+            {d}
+          </div>
+        ))}
       </div>
       <div className="grid flex-1 grid-cols-7 grid-rows-6 gap-1">
         {grid.map((d) => {
@@ -709,7 +778,12 @@ function MonthGrid({
             <button
               key={ymd}
               onClick={() => onPickDate(ymd)}
-              onDragOver={(ev) => { if (isDropTarget) { ev.preventDefault(); setOverYmd(ymd); } }}
+              onDragOver={(ev) => {
+                if (isDropTarget) {
+                  ev.preventDefault();
+                  setOverYmd(ymd);
+                }
+              }}
               onDragLeave={() => setOverYmd((c) => (c === ymd ? null : c))}
               onDrop={(ev) => {
                 if (!isDropTarget) return;
@@ -719,18 +793,25 @@ function MonthGrid({
               }}
               className={cn(
                 "group relative flex min-h-[80px] flex-col gap-1 rounded-xl border p-1.5 text-left transition-all",
-                isCurMonth ? "border-border bg-card" : "border-border/40 bg-card/40 text-muted-foreground/60",
-                isToday && "border-[hsl(var(--brand-blue))]/60 ring-1 ring-[hsl(var(--brand-blue))]/30",
+                isCurMonth
+                  ? "border-border bg-card"
+                  : "border-border/40 bg-card/40 text-muted-foreground/60",
+                isToday &&
+                  "border-[hsl(var(--brand-blue))]/60 ring-1 ring-[hsl(var(--brand-blue))]/30",
                 "hover:border-foreground/30 hover:shadow-sm",
                 isDropTarget && "border-dashed",
-                isOver && "border-[hsl(var(--brand-blue))] bg-[hsl(var(--brand-blue))]/10 ring-2 ring-[hsl(var(--brand-blue))]/40",
+                isOver &&
+                  "border-[hsl(var(--brand-blue))] bg-[hsl(var(--brand-blue))]/10 ring-2 ring-[hsl(var(--brand-blue))]/40",
               )}
             >
               <div className="flex items-center justify-between">
-                <span className={cn(
-                  "text-[11px] font-semibold tabular-nums",
-                  isToday && "grid h-5 w-5 place-items-center rounded-full bg-[hsl(var(--brand-blue))] text-white",
-                )}>
+                <span
+                  className={cn(
+                    "text-[11px] font-semibold tabular-nums",
+                    isToday &&
+                      "grid h-5 w-5 place-items-center rounded-full bg-[hsl(var(--brand-blue))] text-white",
+                  )}
+                >
                   {d.getDate()}
                 </span>
                 {items.length > 0 && (
@@ -755,22 +836,35 @@ function MonthGrid({
                       }}
                       onDragEnd={() => onDragEndEntry()}
                       role="button"
-                      onClick={(ev) => { ev.stopPropagation(); onPickEntry(e); }}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onPickEntry(e);
+                      }}
                       className={cn(
                         "group/chip flex items-center gap-1 truncate rounded-md px-1 py-0.5 text-[10px] font-medium hover:brightness-110 cursor-grab active:cursor-grabbing",
                         draggingId === e.id && "opacity-50",
                       )}
                       style={{ background: `${ch.color}22`, color: ch.color }}
                     >
-                      <span className="h-1 w-1 shrink-0 rounded-full" style={{ background: ch.color }} />
+                      <span
+                        className="h-1 w-1 shrink-0 rounded-full"
+                        style={{ background: ch.color }}
+                      />
                       <span className="truncate">{e.title}</span>
                       <button
                         type="button"
                         title="Regenerate hook, caption & hashtags"
-                        onClick={(ev) => { ev.stopPropagation(); onRegenerate(e.id); }}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          onRegenerate(e.id);
+                        }}
                         className="ml-auto hidden h-3.5 w-3.5 shrink-0 place-items-center rounded-sm hover:bg-foreground/10 group-hover/chip:grid"
                       >
-                        {regenning ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
+                        {regenning ? (
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-2.5 w-2.5" />
+                        )}
                       </button>
                       {e.status === "scheduled" && (
                         <button
@@ -779,15 +873,26 @@ function MonthGrid({
                           aria-label="Cancel scheduled post"
                           onClick={(ev) => {
                             ev.stopPropagation();
-                            const wsId = typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
-                            if (!wsId) { toast.error("No workspace selected"); return; }
+                            const wsId =
+                              typeof window !== "undefined"
+                                ? localStorage.getItem("workspace:selected")
+                                : null;
+                            if (!wsId) {
+                              toast.error("No workspace selected");
+                              return;
+                            }
                             cancelScheduled(wsId, e.id)
                               .then(() => {
                                 toast.success("Scheduled post cancelled");
-                                try { window.dispatchEvent(new CustomEvent("content:changed")); } catch {}
+                                try {
+                                  window.dispatchEvent(new CustomEvent("content:changed"));
+                                } catch {}
                               })
                               .catch((err: unknown) =>
-                                toast.error("Couldn't cancel", { description: err instanceof Error ? err.message : "Please try again." }),
+                                toast.error("Couldn't cancel", {
+                                  description:
+                                    err instanceof Error ? err.message : "Please try again.",
+                                }),
                               );
                           }}
                           className="hidden h-3.5 w-3.5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover/chip:grid"
@@ -799,7 +904,9 @@ function MonthGrid({
                   );
                 })}
                 {items.length > 3 && (
-                  <span className="px-1 text-[9.5px] text-muted-foreground">+{items.length - 3} more</span>
+                  <span className="px-1 text-[9.5px] text-muted-foreground">
+                    +{items.length - 3} more
+                  </span>
                 )}
               </div>
             </button>
@@ -815,7 +922,12 @@ function MonthGrid({
 /* ---------------------------------------------------------- */
 
 function ListView({
-  entries, onPickEntry, onRegenerate, regenIds, onDragStartEntry, onDragEndEntry,
+  entries,
+  onPickEntry,
+  onRegenerate,
+  regenIds,
+  onDragStartEntry,
+  onDragEndEntry,
 }: {
   entries: CalendarEntry[];
   onPickEntry: (e: CalendarEntry) => void;
@@ -824,7 +936,9 @@ function ListView({
   onDragStartEntry: (id: string) => void;
   onDragEndEntry: () => void;
 }) {
-  const sorted = [...entries].sort((a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? "")));
+  const sorted = [...entries].sort((a, b) =>
+    (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? "")),
+  );
   if (sorted.length === 0) {
     return (
       <div className="grid flex-1 place-items-center p-8 text-center text-[13px] text-muted-foreground">
@@ -851,30 +965,55 @@ function ListView({
             className="group flex w-full cursor-grab items-center gap-3 rounded-xl border border-border bg-card p-2.5 text-left hover:border-foreground/30 hover:shadow-sm active:cursor-grabbing"
           >
             <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg" style={{ background: `${ch.color}22`, color: ch.color }}>
+            <div
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg"
+              style={{ background: `${ch.color}22`, color: ch.color }}
+            >
               <ChannelIcon ch={ch} size={18} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: ch.color }}>{ch.label}</span>
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-wider"
+                  style={{ color: ch.color }}
+                >
+                  {ch.label}
+                </span>
                 <span className="text-[10px] text-muted-foreground">· {e.type}</span>
               </div>
               <div className="truncate text-[13px] font-medium">{e.title}</div>
-              {e.hook && <div className="truncate text-[11.5px] text-muted-foreground">{e.hook}</div>}
+              {e.hook && (
+                <div className="truncate text-[11.5px] text-muted-foreground">{e.hook}</div>
+              )}
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[10.5px] tabular-nums">
-                {e.date}{e.time ? ` · ${e.time}` : ""}
+                {e.date}
+                {e.time ? ` · ${e.time}` : ""}
               </span>
-              <span className={cn("rounded-full px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide", STATUS_COLORS[e.status])}>{e.status}</span>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide",
+                  STATUS_COLORS[e.status],
+                )}
+              >
+                {e.status}
+              </span>
             </div>
             <button
               type="button"
               title="Regenerate hook, caption & hashtags"
-              onClick={(ev) => { ev.stopPropagation(); onRegenerate(e.id); }}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                onRegenerate(e.id);
+              }}
               className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/30"
             >
-              {regenning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              {regenning ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
             </button>
           </div>
         );
@@ -888,8 +1027,14 @@ function ListView({
 /* ---------------------------------------------------------- */
 
 function Generator({
-  workspaceId, anchor, onGenerated,
-}: { workspaceId: string | null; anchor: Date; onGenerated: (e: CalendarEntry[]) => void }) {
+  workspaceId,
+  anchor,
+  onGenerated,
+}: {
+  workspaceId: string | null;
+  anchor: Date;
+  onGenerated: (e: CalendarEntry[]) => void;
+}) {
   const [prompt, setPrompt] = useState("");
   const [channels, setChannels] = useState<Channel[]>(["instagram", "linkedin", "twitter"]);
   const [postsPerWeek, setPostsPerWeek] = useState(5);
@@ -911,7 +1056,9 @@ function Generator({
   const generate = async () => {
     setLoading(true);
     try {
-      try { localStorage.setItem(`calendar:prompt:${workspaceId ?? "default"}`, prompt); } catch {}
+      try {
+        localStorage.setItem(`calendar:prompt:${workspaceId ?? "default"}`, prompt);
+      } catch {}
       const startDate = fmtYMD(anchor);
       const items = await aiGenerateCalendar({ prompt, channels, startDate, days, postsPerWeek });
       if (items.length === 0) throw new Error("No items returned");
@@ -931,7 +1078,9 @@ function Generator({
         </span>
         <div className="flex-1">
           <h3 className="text-[12.5px] font-semibold">Generate with AI</h3>
-          <p className="text-[10.5px] text-muted-foreground">Tell us about your brand. We do the rest.</p>
+          <p className="text-[10.5px] text-muted-foreground">
+            Tell us about your brand. We do the rest.
+          </p>
         </div>
       </div>
 
@@ -961,7 +1110,9 @@ function Generator({
       {showAdvanced && (
         <div className="space-y-2.5 rounded-lg border border-border bg-background/40 p-2.5">
           <div>
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Channels</div>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Channels
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {CHANNELS.map((c) => {
                 const on = channels.includes(c.id);
@@ -971,11 +1122,14 @@ function Generator({
                     onClick={() => toggleCh(c.id)}
                     className={cn(
                       "flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium transition",
-                      on ? "border-transparent text-white" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                      on
+                        ? "border-transparent text-white"
+                        : "border-border bg-card text-muted-foreground hover:text-foreground",
                     )}
                     style={on ? { background: c.color } : undefined}
                   >
-                    <ChannelIcon ch={c} size={12} brand={!on} />{c.label}
+                    <ChannelIcon ch={c} size={12} brand={!on} />
+                    {c.label}
                   </button>
                 );
               })}
@@ -989,7 +1143,9 @@ function Generator({
                 min={1}
                 max={21}
                 value={postsPerWeek}
-                onChange={(e) => setPostsPerWeek(Math.max(1, Math.min(21, Number(e.target.value) || 1)))}
+                onChange={(e) =>
+                  setPostsPerWeek(Math.max(1, Math.min(21, Number(e.target.value) || 1)))
+                }
                 className="h-8 text-[12px]"
               />
             </label>
@@ -1013,7 +1169,11 @@ function Generator({
         disabled={loading || channels.length === 0}
         className="w-full bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-white shadow-[0_8px_24px_-8px_hsl(var(--brand-blue)/0.7)] hover:opacity-95"
       >
-        {loading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+        {loading ? (
+          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+        )}
         {loading ? "Drafting your plan…" : "Generate my plan"}
       </Button>
     </section>
@@ -1025,7 +1185,12 @@ function Generator({
 /* ---------------------------------------------------------- */
 
 function DayInspector({
-  date, entries, onPickEntry, onAdd, onRegenerate, regenIds,
+  date,
+  entries,
+  onPickEntry,
+  onAdd,
+  onRegenerate,
+  regenIds,
 }: {
   date: string | null;
   entries: CalendarEntry[];
@@ -1046,10 +1211,19 @@ function DayInspector({
     <section className="space-y-2 p-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day</div>
-          <div className="text-[13px] font-semibold">{d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Day
+          </div>
+          <div className="text-[13px] font-semibold">
+            {d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+          </div>
         </div>
-        <Button size="sm" variant="outline" onClick={() => onAdd(date)} className="h-7 gap-1 text-[11px]">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onAdd(date)}
+          className="h-7 gap-1 text-[11px]"
+        >
           <Plus className="h-3 w-3" /> Add
         </Button>
       </div>
@@ -1068,19 +1242,38 @@ function DayInspector({
                 onClick={() => onPickEntry(e)}
                 className="flex w-full cursor-pointer items-start gap-2 rounded-lg border border-border bg-card p-2 text-left hover:border-foreground/30"
               >
-                <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full" style={{ background: ch.color }} />
+                <span
+                  className="mt-0.5 h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: ch.color }}
+                />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[12px] font-medium">{e.title}</div>
-                  <div className="truncate text-[10.5px] text-muted-foreground">{ch.label} · {e.type} · {e.time ?? "09:00"}</div>
+                  <div className="truncate text-[10.5px] text-muted-foreground">
+                    {ch.label} · {e.type} · {e.time ?? "09:00"}
+                  </div>
                 </div>
-                <span className={cn("rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide", STATUS_COLORS[e.status])}>{e.status}</span>
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+                    STATUS_COLORS[e.status],
+                  )}
+                >
+                  {e.status}
+                </span>
                 <button
                   type="button"
                   title="Regenerate"
-                  onClick={(ev) => { ev.stopPropagation(); onRegenerate(e.id); }}
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    onRegenerate(e.id);
+                  }}
                   className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
                 >
-                  {regenning ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                  {regenning ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
                 </button>
               </div>
             );
@@ -1098,7 +1291,12 @@ function DayInspector({
 const STATUSES: Status[] = ["idea", "draft", "approved", "scheduled", "publishing", "published"];
 
 function EntryEditor({
-  entry, onChange, onDelete, onClose, onRegenerate, regenerating,
+  entry,
+  onChange,
+  onDelete,
+  onClose,
+  onRegenerate,
+  regenerating,
 }: {
   entry: CalendarEntry;
   onChange: (patch: Partial<CalendarEntry>) => void;
@@ -1249,7 +1447,8 @@ function EntryEditor({
 
   const copyCaption = () => {
     const text = [entry.title, entry.hook, entry.caption, (entry.hashtags ?? []).join(" ")]
-      .filter(Boolean).join("\n\n");
+      .filter(Boolean)
+      .join("\n\n");
     navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard");
   };
@@ -1297,9 +1496,16 @@ function EntryEditor({
 
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: `${ch.color}22`, color: ch.color }}><ChannelIcon ch={ch} size={14} /></span>
+            <span
+              className="grid h-7 w-7 place-items-center rounded-lg"
+              style={{ background: `${ch.color}22`, color: ch.color }}
+            >
+              <ChannelIcon ch={ch} size={14} />
+            </span>
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{ch.label} · {entry.type}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {ch.label} · {entry.type}
+              </div>
               <div className="text-[12.5px] font-semibold">Edit post</div>
             </div>
           </div>
@@ -1313,11 +1519,21 @@ function EntryEditor({
             >
               <History className="h-3.5 w-3.5" />
               {versions.length > 0 && (
-                <span className="rounded-full bg-foreground/10 px-1.5 text-[10px] tabular-nums">{versions.length}</span>
+                <span className="rounded-full bg-foreground/10 px-1.5 text-[10px] tabular-nums">
+                  {versions.length}
+                </span>
               )}
             </Button>
-            <Button size="icon" variant="ghost" onClick={onClose} className="h-7 w-7" aria-label="Close post editor">
-              <span aria-hidden className="text-lg leading-none">×</span>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={onClose}
+              className="h-7 w-7"
+              aria-label="Close post editor"
+            >
+              <span aria-hidden className="text-lg leading-none">
+                ×
+              </span>
             </Button>
           </div>
         </div>
@@ -1334,10 +1550,20 @@ function EntryEditor({
 
           <div className="grid grid-cols-3 gap-2">
             <Field label="Date">
-              <Input type="date" value={entry.date} onChange={(e) => onChange({ date: e.target.value })} className="h-8 text-[12px]" />
+              <Input
+                type="date"
+                value={entry.date}
+                onChange={(e) => onChange({ date: e.target.value })}
+                className="h-8 text-[12px]"
+              />
             </Field>
             <Field label="Time">
-              <Input type="time" value={entry.time ?? "09:00"} onChange={(e) => onChange({ time: e.target.value })} className="h-8 text-[12px]" />
+              <Input
+                type="time"
+                value={entry.time ?? "09:00"}
+                onChange={(e) => onChange({ time: e.target.value })}
+                className="h-8 text-[12px]"
+              />
             </Field>
             <Field label="Channel">
               <select
@@ -1345,7 +1571,11 @@ function EntryEditor({
                 onChange={(e) => onChange({ channel: e.target.value as Channel })}
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-[12px]"
               >
-                {CHANNELS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                {CHANNELS.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
               </select>
             </Field>
           </div>
@@ -1431,7 +1661,9 @@ function EntryEditor({
                   onClick={() => onChange({ status: s })}
                   className={cn(
                     "rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide capitalize transition",
-                    entry.status === s ? STATUS_COLORS[s] : "bg-secondary text-muted-foreground hover:text-foreground",
+                    entry.status === s
+                      ? STATUS_COLORS[s]
+                      : "bg-secondary text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {s}
@@ -1442,26 +1674,44 @@ function EntryEditor({
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-border p-3">
-          <Button variant="ghost" size="sm" onClick={onDelete} className="text-destructive hover:text-destructive">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            className="text-destructive hover:text-destructive"
+          >
             <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
           </Button>
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { snapshot("manual"); toast.success("Version saved"); }}
+              onClick={() => {
+                snapshot("manual");
+                toast.success("Version saved");
+              }}
               title="Save current version"
             >
               <Save className="mr-1.5 h-3.5 w-3.5" /> Save
             </Button>
             <Button variant="outline" size="sm" onClick={onRegenerate} disabled={regenerating}>
-              {regenerating ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+              {regenerating ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              )}
               Regenerate
             </Button>
             <Button variant="outline" size="sm" onClick={copyCaption}>
               <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
             </Button>
-            <Button size="sm" onClick={() => { onChange({ status: "approved" }); toast.success("Approved"); }}>
+            <Button
+              size="sm"
+              onClick={() => {
+                onChange({ status: "approved" });
+                toast.success("Approved");
+              }}
+            >
               <Check className="mr-1.5 h-3.5 w-3.5" /> Approve
             </Button>
           </div>
@@ -1473,7 +1723,10 @@ function EntryEditor({
               versions={versions}
               onClose={() => setShowHistory(false)}
               onRestore={restoreVersion}
-              onClear={() => { onChange({ versions: [] }); toast.success("History cleared"); }}
+              onClear={() => {
+                onChange({ versions: [] });
+                toast.success("History cleared");
+              }}
             />
           )}
         </AnimatePresence>
@@ -1485,7 +1738,9 @@ function EntryEditor({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
       {children}
     </label>
   );
@@ -1529,7 +1784,9 @@ function ImageGallery({
       >
         <ImageIcon className="h-5 w-5 text-muted-foreground" />
         <div className="text-[12px] font-medium">Drop images here</div>
-        <div className="text-[10.5px] text-muted-foreground">or click to browse · up to 8 MB each</div>
+        <div className="text-[10.5px] text-muted-foreground">
+          or click to browse · up to 8 MB each
+        </div>
         <input
           type="file"
           accept="image/*"
@@ -1554,7 +1811,9 @@ function ImageGallery({
             setDragIdx(i);
             e.dataTransfer.effectAllowed = "move";
             // Prevent file-drop handler from firing on internal reorder
-            try { e.dataTransfer.setData("text/x-image-idx", String(i)); } catch {}
+            try {
+              e.dataTransfer.setData("text/x-image-idx", String(i));
+            } catch {}
           }}
           onDragOver={(e) => {
             if (dragIdx !== null) {
@@ -1572,7 +1831,10 @@ function ImageGallery({
             setDragIdx(null);
             setOverIdx(null);
           }}
-          onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+          onDragEnd={() => {
+            setDragIdx(null);
+            setOverIdx(null);
+          }}
           className={cn(
             "group relative overflow-hidden rounded-xl border bg-muted transition",
             i === 0 ? "border-primary/60 ring-1 ring-primary/30" : "border-border",
@@ -1580,7 +1842,11 @@ function ImageGallery({
             dragIdx === i && "opacity-50",
           )}
         >
-          <img src={src} alt={`Visual ${i + 1}`} className="block aspect-square w-full object-cover" />
+          <img
+            src={src}
+            alt={`Visual ${i + 1}`}
+            className="block aspect-square w-full object-cover"
+          />
 
           {i === 0 && (
             <div className="absolute left-1.5 top-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary-foreground shadow">
@@ -1623,7 +1889,10 @@ function ImageGallery({
             <XIcon className="h-3.5 w-3.5" />
           </button>
 
-          <div className="absolute left-1.5 top-1.5 cursor-grab text-white/0 group-hover:text-white/90" aria-hidden>
+          <div
+            className="absolute left-1.5 top-1.5 cursor-grab text-white/0 group-hover:text-white/90"
+            aria-hidden
+          >
             <GripVertical className="h-3.5 w-3.5 drop-shadow" />
           </div>
         </div>
@@ -1657,7 +1926,10 @@ function ImageGallery({
 /* ---------------------------------------------------------- */
 
 function HistoryPanel({
-  versions, onClose, onRestore, onClear,
+  versions,
+  onClose,
+  onRestore,
+  onClear,
 }: {
   versions: VersionSnapshot[];
   onClose: () => void;
@@ -1682,8 +1954,16 @@ function HistoryPanel({
             </div>
           </div>
         </div>
-        <Button size="icon" variant="ghost" onClick={onClose} className="h-7 w-7" aria-label="Close version history">
-          <span aria-hidden className="text-lg leading-none">×</span>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onClose}
+          className="h-7 w-7"
+          aria-label="Close version history"
+        >
+          <span aria-hidden className="text-lg leading-none">
+            ×
+          </span>
         </Button>
       </div>
 
@@ -1692,7 +1972,8 @@ function HistoryPanel({
           <div className="grid h-full place-items-center text-center text-[12px] text-muted-foreground">
             <div>
               <History className="mx-auto mb-2 h-6 w-6 opacity-40" />
-              Edits will be snapshotted here.<br />
+              Edits will be snapshotted here.
+              <br />
               Click <span className="font-semibold text-foreground">Save</span> to mark milestones.
             </div>
           </div>
@@ -1716,18 +1997,26 @@ function HistoryPanel({
                       )}
                       <span className="text-[10px] text-muted-foreground">{formatAgo(v.at)}</span>
                     </div>
-                    <div className="mt-1 truncate text-[12px] font-medium">{v.title || "Untitled"}</div>
+                    <div className="mt-1 truncate text-[12px] font-medium">
+                      {v.title || "Untitled"}
+                    </div>
                     {v.hook && (
-                      <div className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{v.hook}</div>
+                      <div className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                        {v.hook}
+                      </div>
                     )}
                   </div>
                   {v.images && v.images[0] && (
-                    <img src={v.images[0]} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />
+                    <img
+                      src={v.images[0]}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-md object-cover"
+                    />
                   )}
                 </div>
                 <div className="mt-2 flex items-center justify-between">
                   <div className="text-[10px] text-muted-foreground">
-                    {(v.images?.length ?? 0)} image{(v.images?.length ?? 0) === 1 ? "" : "s"}
+                    {v.images?.length ?? 0} image{(v.images?.length ?? 0) === 1 ? "" : "s"}
                     {v.hashtags?.length ? ` · ${v.hashtags.length} tags` : ""}
                   </div>
                   <Button
@@ -1778,7 +2067,13 @@ function formatAgo(ts: number): string {
 /* Empty state                                                */
 /* ---------------------------------------------------------- */
 
-function EmptyState({ onOpenGenerator, onNewBlank }: { onOpenGenerator: () => void; onNewBlank: () => void }) {
+function EmptyState({
+  onOpenGenerator,
+  onNewBlank,
+}: {
+  onOpenGenerator: () => void;
+  onNewBlank: () => void;
+}) {
   return (
     <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
       <div className="w-full max-w-md text-center">
@@ -1787,7 +2082,8 @@ function EmptyState({ onOpenGenerator, onNewBlank }: { onOpenGenerator: () => vo
         </div>
         <h3 className="text-[16px] font-semibold">Your calendar is empty</h3>
         <p className="mx-auto mt-1 max-w-sm text-[12.5px] text-muted-foreground">
-          Describe your brand and goals on the right and Ravi will draft a full multi-channel plan with hooks, captions and hashtags — ready to schedule.
+          Describe your brand and goals on the right and Ravi will draft a full multi-channel plan
+          with hooks, captions and hashtags — ready to schedule.
         </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           <Button

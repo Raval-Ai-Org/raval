@@ -9,10 +9,9 @@ export function jsonError(status: number, message: string) {
   });
 }
 
-export async function requireUserId(request: Request): Promise<
-  | { ok: true; userId: string }
-  | { ok: false; response: Response }
-> {
+export async function requireUserId(
+  request: Request,
+): Promise<{ ok: true; userId: string } | { ok: false; response: Response }> {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) {

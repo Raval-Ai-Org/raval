@@ -100,18 +100,24 @@ async function walkGuard(page: Page, start: string): Promise<GuardSnapshot> {
     // Router redirects can fire immediately after the first paint. Wait for
     // the URL to stabilize before reading canonical/robots so we snapshot
     // the LANDING page's head, not a transient guard's.
-    await page.waitForFunction(
-      (guardPaths) => !guardPaths.some((p) => location.pathname === p),
-      ["/app/content", "/app/social", "/app/seo", "/app/analytics"],
-      { timeout: 5000 },
-    ).catch(() => { /* fall through to assertion for a clearer failure */ });
+    await page
+      .waitForFunction(
+        (guardPaths) => !guardPaths.some((p) => location.pathname === p),
+        ["/app/content", "/app/social", "/app/seo", "/app/analytics"],
+        { timeout: 5000 },
+      )
+      .catch(() => {
+        /* fall through to assertion for a clearer failure */
+      });
     // Ensure the last framenavigated is captured.
     onNav();
 
     const head = await collectHead(page);
     const finalUrl = new URL(page.url());
     const finalSearch: Record<string, string> = {};
-    finalUrl.searchParams.forEach((v, k) => { finalSearch[k] = v; });
+    finalUrl.searchParams.forEach((v, k) => {
+      finalSearch[k] = v;
+    });
 
     return {
       start,
@@ -134,16 +140,14 @@ test.describe("SEO — /app/* guard redirect canonical + robots contract", () =>
       const snap = await walkGuard(page, guard.start);
 
       // 1. Final path is the intended landing route, not the guard.
-      expect(snap.finalPath, `guard ${guard.start} must land on ${guard.expectedFinalPath}`)
-        .toBe(guard.expectedFinalPath);
+      expect(snap.finalPath, `guard ${guard.start} must land on ${guard.expectedFinalPath}`).toBe(
+        guard.expectedFinalPath,
+      );
 
       // 2. Deep-link params survive the chain.
       if (guard.expectedSearchParams) {
         for (const [k, v] of Object.entries(guard.expectedSearchParams)) {
-          expect(
-            snap.finalSearch[k],
-            `guard ${guard.start} must preserve ?${k}=${v}`,
-          ).toBe(v);
+          expect(snap.finalSearch[k], `guard ${guard.start} must preserve ?${k}=${v}`).toBe(v);
         }
       }
 
@@ -151,7 +155,9 @@ test.describe("SEO — /app/* guard redirect canonical + robots contract", () =>
       //    stays on the canonical host, and is not the site root or a
       //    public page (that would leak private tooling into search).
       expect(snap.canonical, `guard ${guard.start} must ship a canonical`).toBeTruthy();
-      expect(snap.canonical!).toMatch(new RegExp(`^${CANONICAL_HOST}${guard.expectedFinalPath}(?:$|[/?#])`));
+      expect(snap.canonical!).toMatch(
+        new RegExp(`^${CANONICAL_HOST}${guard.expectedFinalPath}(?:$|[/?#])`),
+      );
       expect(snap.canonical!).not.toContain(guard.start.split("?")[0]);
 
       // 4. Robots must contain noindex — /app is a private shell.
@@ -163,7 +169,6 @@ test.describe("SEO — /app/* guard redirect canonical + robots contract", () =>
       //    we only assert the terminal hop, which is what matters for SEO.
       expect(snap.redirectChain.length).toBeGreaterThan(0);
       expect(snap.redirectChain[snap.redirectChain.length - 1]).toContain(guard.expectedFinalPath);
-
 
       // 6. Pin the full chain so a new guard, dropped hop, or reordered
       //    redirect fails loudly instead of silently changing SEO.

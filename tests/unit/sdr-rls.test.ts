@@ -35,7 +35,9 @@ describe("workspace_sdr RLS posture (FR-014)", () => {
 
   it("creates NO client-facing policies on workspace_sdr", () => {
     // A policy for authenticated would expose the table to the user client.
-    expect(sql).not.toMatch(/create policy .* on public\.workspace_sdr for (select|all) to authenticated/i);
+    expect(sql).not.toMatch(
+      /create policy .* on public\.workspace_sdr for (select|all) to authenticated/i,
+    );
   });
 
   it("the app never queries workspace_sdr with a user-scoped client", () => {

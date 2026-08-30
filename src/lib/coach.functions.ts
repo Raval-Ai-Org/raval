@@ -5,7 +5,6 @@ import { runJsonPrompt } from "./ai";
 import { coachSystem } from "./ai/prompts";
 import { assemble } from "./ai/prompts/assemble";
 
-
 const uuid = z.string().uuid();
 
 export type CoachIntent =
@@ -142,7 +141,6 @@ function extractMeta(html: string) {
 /* -------------------- AI call -------------------- */
 
 // callJsonModel removed — coach briefings now use runJsonPrompt.
-
 
 /* -------------------- Server function -------------------- */
 
@@ -316,8 +314,8 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
         label: "Research snippets (competitors/reviews/trends)",
         body: JSON.stringify({
           competitors: compResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
-          reviews:     reviewResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
-          trends:      trendResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
+          reviews: reviewResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
+          trends: trendResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
         }),
         maxChars: 3500,
       },
@@ -326,12 +324,12 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
     const parsed = await runJsonPrompt<Partial<CoachBriefing>>({
       route: "coach.briefing",
       extraction: true,
-      system, user,
+      system,
+      user,
       fallback: {},
       maxTokens: 1600,
       temperature: 0.4,
     });
-
 
     /* 5. Build final briefing (with resilient fallbacks) */
     const focusFallback: CoachBriefing["focus"] = !siteUrl

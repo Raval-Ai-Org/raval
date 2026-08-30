@@ -37,17 +37,11 @@ function pickAll(html: string, re: RegExp): string[] {
 }
 
 function metaContent(html: string, key: "name" | "property", value: string): string | null {
-  const re = new RegExp(
-    `<meta[^>]+${key}=["']${value}["'][^>]+content=["']([^"']+)["']`,
-    "i",
-  );
+  const re = new RegExp(`<meta[^>]+${key}=["']${value}["'][^>]+content=["']([^"']+)["']`, "i");
   const m = html.match(re);
   if (m) return m[1];
   // Handle reverse attribute order (content first, then name/property).
-  const re2 = new RegExp(
-    `<meta[^>]+content=["']([^"']+)["'][^>]+${key}=["']${value}["']`,
-    "i",
-  );
+  const re2 = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+${key}=["']${value}["']`, "i");
   return html.match(re2)?.[1] ?? null;
 }
 
@@ -87,9 +81,8 @@ function extractJsonLd(html: string): unknown[] {
 }
 
 function findByType(nodes: unknown[], type: string): Record<string, unknown> | undefined {
-  return nodes.find(
-    (n) => n && typeof n === "object" && (n as any)["@type"] === type,
-  ) as Record<string, unknown> | undefined;
+  return nodes.find((n) => n && typeof n === "object" && (n as any)["@type"] === type) as
+    Record<string, unknown> | undefined;
 }
 
 function assertNoForbidden(blob: string, label: string) {
@@ -135,7 +128,8 @@ test.describe("OpenGraph + Twitter Card — pitch-deck messaging", () => {
 
       // Deck alignment — every OG/Twitter surface must carry at least one deck term.
       const blob = [og.ogTitle, og.ogDescription, og.twitterTitle, og.twitterDescription]
-        .filter(Boolean).join(" \n ");
+        .filter(Boolean)
+        .join(" \n ");
       const hits = DECK_TERMS.filter((re) => re.test(blob));
       expect(hits.length, `[${route.label}] deck terms in OG/Twitter`).toBeGreaterThanOrEqual(1);
 
@@ -176,7 +170,9 @@ test.describe("JSON-LD structured data — pitch-deck messaging", () => {
     assertNoForbidden(String(site!.description), "WebSite.description");
   });
 
-  test("landing page ships SoftwareApplication with deck-aligned pricing tiers", async ({ request }) => {
+  test("landing page ships SoftwareApplication with deck-aligned pricing tiers", async ({
+    request,
+  }) => {
     const html = await fetchHtml(request, "/");
     const nodes = extractJsonLd(html);
 
@@ -193,7 +189,11 @@ test.describe("JSON-LD structured data — pitch-deck messaging", () => {
     expect(Array.isArray(offers), "offers is array").toBe(true);
     // Pitch deck tiers: Starter $9, Growth $29, Agency OS $79.
     const byName = new Map(offers!.map((o) => [String(o.name), o]));
-    for (const [name, price] of [["Starter", "9"], ["Growth", "29"], ["Agency OS", "79"]] as const) {
+    for (const [name, price] of [
+      ["Starter", "9"],
+      ["Growth", "29"],
+      ["Agency OS", "79"],
+    ] as const) {
       const offer = byName.get(name);
       expect(offer, `${name} offer present`).toBeTruthy();
       expect(offer!.price, `${name} price`).toBe(price);
@@ -202,7 +202,9 @@ test.describe("JSON-LD structured data — pitch-deck messaging", () => {
     }
   });
 
-  test("landing page FAQPage covers deck concepts (AEO/GEO, Ravi, Brand DNA)", async ({ request }) => {
+  test("landing page FAQPage covers deck concepts (AEO/GEO, Ravi, Brand DNA)", async ({
+    request,
+  }) => {
     const html = await fetchHtml(request, "/");
     const nodes = extractJsonLd(html);
 
@@ -233,7 +235,9 @@ test.describe("JSON-LD structured data — pitch-deck messaging", () => {
     assertNoForbidden(answerBlob, "FAQPage");
   });
 
-  test("agency + projects ship WebPage schema tied to Organization/WebSite", async ({ request }) => {
+  test("agency + projects ship WebPage schema tied to Organization/WebSite", async ({
+    request,
+  }) => {
     for (const path of ["/agency", "/projects"]) {
       const html = await fetchHtml(request, path);
       const nodes = extractJsonLd(html);
@@ -256,7 +260,9 @@ test.describe("JSON-LD structured data — pitch-deck messaging", () => {
     }
   });
 
-  test("all JSON-LD blocks across audited routes parse and contain no legacy strings", async ({ request }) => {
+  test("all JSON-LD blocks across audited routes parse and contain no legacy strings", async ({
+    request,
+  }) => {
     for (const route of ROUTES) {
       const html = await fetchHtml(request, route.path);
       const blocks = pickAll(

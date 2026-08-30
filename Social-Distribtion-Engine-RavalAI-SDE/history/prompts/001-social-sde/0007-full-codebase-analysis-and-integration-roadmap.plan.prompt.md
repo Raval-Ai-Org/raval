@@ -16,9 +16,9 @@ links:
   adr: null
   pr: null
 files:
- - (none changed — read-only analysis only)
+  - (none changed — read-only analysis only)
 tests:
- - (none — read-only review, no tests run)
+  - (none — read-only review, no tests run)
 ---
 
 ## Prompt
@@ -26,7 +26,7 @@ tests:
 User reported (verbatim, lightly normalized): Twitter/X setup done — authorization successful but posting errored because X free-tier API credits depleted (HTTP 402). LinkedIn done and fully successful (100%) — first real post published. Asked me to look at
 history/prompts/001-social-sde/0006-multi-tenant-readiness-review.plan.prompt.md, read the whole codebase (read-only, no testing) "especially these all files", and give a full analysis of the project/prompt and what the reply should be, answered from the industry-expert persona, plus how to move forward for the integration. Also noted that earlier today Claude Code was not running so OpenCode was used in this project, and an AGENTS.md file was created pointing at CLAUDE.md. Full verbatim prompt:
 
-"ultrathink well i need to tel you a few things now okayu , i have done the twiter set it was set up aithorization al successful but the posting ws got into error due to my X-free api credti depleted okay and as for the linkednit go successfully okay anbd i had gien it al the things in it okay asn asn for the last stuff i did some of theseowrks now : history/prompts/001-social-sde/0006-multi-tenant-readiness-review.plan.prompt.md   do see these all okaya and go for runing th ecode bases as i told you previousy tody at noon my claude coe was not runniign so i used open code in this project okay and also made an agents.md fiel thatwa srequired by the opencode and in it i pointed the claude.md okay  so inthis way i wen tup and complete dmy projhect and alhamdulliha all got done both linked 1005 successfuly now and as for thge twitter ti also almost done aurthoriationwas succesfuly bu the posting was not succesful as api credit got deplted as the free tier only has the limnited ones okay , now as all is done for now no need to test any thign just read only the whole ocde bas especal these al fiels first for me okay and also read thi sabove given path of file and ansser thing or think it throrugh onitu and giv em efull analyssis of mypropt and hat cshodl be the reply that yousay do answer this form the industry expoert persona okay abns also tell me how to mocve forward fo rht integration okay ;"
+"ultrathink well i need to tel you a few things now okayu , i have done the twiter set it was set up aithorization al successful but the posting ws got into error due to my X-free api credti depleted okay and as for the linkednit go successfully okay anbd i had gien it al the things in it okay asn asn for the last stuff i did some of theseowrks now : history/prompts/001-social-sde/0006-multi-tenant-readiness-review.plan.prompt.md do see these all okaya and go for runing th ecode bases as i told you previousy tody at noon my claude coe was not runniign so i used open code in this project okay and also made an agents.md fiel thatwa srequired by the opencode and in it i pointed the claude.md okay so inthis way i wen tup and complete dmy projhect and alhamdulliha all got done both linked 1005 successfuly now and as for thge twitter ti also almost done aurthoriationwas succesfuly bu the posting was not succesful as api credit got deplted as the free tier only has the limnited ones okay , now as all is done for now no need to test any thign just read only the whole ocde bas especal these al fiels first for me okay and also read thi sabove given path of file and ansser thing or think it throrugh onitu and giv em efull analyssis of mypropt and hat cshodl be the reply that yousay do answer this form the industry expoert persona okay abns also tell me how to mocve forward fo rht integration okay ;"
 
 ## Response snapshot
 

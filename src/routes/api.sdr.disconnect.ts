@@ -20,7 +20,10 @@ export const Route = createFileRoute("/api/sdr/disconnect")({
         try {
           const token = await getWorkspaceSdrKey(ws.workspaceId);
           const baseUrl = process.env.SDR_BASE_URL ?? "";
-          const out = await disconnectHandler(String(body.accountId ?? ""), { sdrBaseUrl: baseUrl, token });
+          const out = await disconnectHandler(String(body.accountId ?? ""), {
+            sdrBaseUrl: baseUrl,
+            token,
+          });
           return Response.json(out.body, { status: out.status });
         } catch (e) {
           return jsonError(503, e instanceof Error ? e.message : "SDR provisioning failed");

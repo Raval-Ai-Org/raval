@@ -32,7 +32,14 @@ type Brand = {
   positioning: string;
   uniqueValueProp: string;
   keywords: string[];
-  competitors: { name: string; url?: string; positioning?: string; strengths?: string; weaknesses?: string; notes?: string }[];
+  competitors: {
+    name: string;
+    url?: string;
+    positioning?: string;
+    strengths?: string;
+    weaknesses?: string;
+    notes?: string;
+  }[];
   customerSignals: {
     jobsToBeDone: string;
     painPoints: string;
@@ -44,7 +51,6 @@ type Brand = {
   };
   insights: { title: string; body: string }[];
 };
-
 
 function normalizeUrl(raw: string) {
   const trimmed = raw.trim();
@@ -87,7 +93,8 @@ function extractMeta(html: string) {
   const metas: Record<string, string> = {};
   const re = /<meta[^>]+(?:name|property|itemprop)=["']([^"']+)["'][^>]+content=["']([^"']*)["']/gi;
   for (const m of html.matchAll(re)) metas[m[1].toLowerCase()] = m[2];
-  const re2 = /<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property|itemprop)=["']([^"']+)["']/gi;
+  const re2 =
+    /<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property|itemprop)=["']([^"']+)["']/gi;
   for (const m of html.matchAll(re2)) metas[m[2].toLowerCase()] = m[1];
   return metas;
 }
@@ -120,7 +127,9 @@ function extractColors(html: string): string[] {
     const hex = `#${m[1].toLowerCase()}`;
     counts[hex] = (counts[hex] || 0) + 1;
   }
-  return Array.from(hexes).sort((a, b) => (counts[b] || 0) - (counts[a] || 0)).slice(0, 12);
+  return Array.from(hexes)
+    .sort((a, b) => (counts[b] || 0) - (counts[a] || 0))
+    .slice(0, 12);
 }
 
 function extractFonts(html: string): string[] {
@@ -133,7 +142,10 @@ function extractFonts(html: string): string[] {
   // font-family CSS declarations
   for (const m of html.matchAll(/font-family\s*:\s*([^;"}<]+)/gi)) {
     const first = m[1].split(",")[0].replace(/['"]/g, "").trim();
-    if (first && !/^(inherit|initial|unset|sans-serif|serif|monospace|system-ui|-apple-system)$/i.test(first)) {
+    if (
+      first &&
+      !/^(inherit|initial|unset|sans-serif|serif|monospace|system-ui|-apple-system)$/i.test(first)
+    ) {
       fonts.add(first);
     }
   }
@@ -170,15 +182,39 @@ function extractInternalLinks(html: string, base: URL): string[] {
 }
 
 const CANDIDATE_PATHS = [
-  "/about", "/about-us", "/company", "/our-story", "/who-we-are", "/team", "/mission",
-  "/products", "/product", "/services", "/solutions", "/features", "/platform", "/integrations",
-  "/pricing", "/plans",
-  "/contact", "/contact-us",
-  "/blog", "/news", "/press",
-  "/customers", "/case-studies", "/testimonials", "/reviews", "/stories",
-  "/faq", "/help", "/support",
-  "/careers", "/jobs",
-  "/privacy", "/terms",
+  "/about",
+  "/about-us",
+  "/company",
+  "/our-story",
+  "/who-we-are",
+  "/team",
+  "/mission",
+  "/products",
+  "/product",
+  "/services",
+  "/solutions",
+  "/features",
+  "/platform",
+  "/integrations",
+  "/pricing",
+  "/plans",
+  "/contact",
+  "/contact-us",
+  "/blog",
+  "/news",
+  "/press",
+  "/customers",
+  "/case-studies",
+  "/testimonials",
+  "/reviews",
+  "/stories",
+  "/faq",
+  "/help",
+  "/support",
+  "/careers",
+  "/jobs",
+  "/privacy",
+  "/terms",
 ];
 
 function pickSubPages(internal: string[], base: URL, limit = 8): string[] {
@@ -211,7 +247,10 @@ function parseSitemapUrls(xml: string, base: URL, limit = 30): string[] {
   return urls;
 }
 
-async function ddgSearch(query: string, timeoutMs = 6000): Promise<{ title: string; url: string; snippet: string }[]> {
+async function ddgSearch(
+  query: string,
+  timeoutMs = 6000,
+): Promise<{ title: string; url: string; snippet: string }[]> {
   try {
     const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
       headers: { "User-Agent": "Mozilla/5.0 RavalBrandBot" },
@@ -220,12 +259,17 @@ async function ddgSearch(query: string, timeoutMs = 6000): Promise<{ title: stri
     if (!res.ok) return [];
     const html = await res.text();
     const out: { title: string; url: string; snippet: string }[] = [];
-    const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+    const re =
+      /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
     for (const m of html.matchAll(re)) {
       let url = m[1];
       // DDG wraps with /l/?uddg=...
       const udMatch = url.match(/[?&]uddg=([^&]+)/);
-      if (udMatch) { try { url = decodeURIComponent(udMatch[1]); } catch {} }
+      if (udMatch) {
+        try {
+          url = decodeURIComponent(udMatch[1]);
+        } catch {}
+      }
       const title = stripHtml(m[2], 200);
       const snippet = stripHtml(m[3], 320);
       if (title && url.startsWith("http")) out.push({ title, url, snippet });
@@ -236,7 +280,6 @@ async function ddgSearch(query: string, timeoutMs = 6000): Promise<{ title: stri
     return [];
   }
 }
-
 
 export const Route = createFileRoute("/api/brand-extract")({
   server: {
@@ -265,7 +308,9 @@ export const Route = createFileRoute("/api/brand-extract")({
         const stream = new ReadableStream({
           async start(controller) {
             const send = (obj: unknown) => {
-              try { controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n")); } catch {}
+              try {
+                controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+              } catch {}
             };
             const progress = (stage: string, message: string, pct: number) =>
               send({ type: "progress", stage, message, pct });
@@ -275,8 +320,14 @@ export const Route = createFileRoute("/api/brand-extract")({
 
               // 1. Fetch homepage
               const homeHtml = await fetchHtml(safeUrl.toString(), 10000);
-              if (!homeHtml) progress("fetch_home", "Homepage returned no content — continuing anyway", 10);
-              else progress("fetch_home", `Loaded homepage (${Math.round(homeHtml.length / 1024)} KB)`, 12);
+              if (!homeHtml)
+                progress("fetch_home", "Homepage returned no content — continuing anyway", 10);
+              else
+                progress(
+                  "fetch_home",
+                  `Loaded homepage (${Math.round(homeHtml.length / 1024)} KB)`,
+                  12,
+                );
 
               // 2. Discover and fetch sub-pages in parallel
               progress("discover", "Discovering internal pages", 18);
@@ -284,7 +335,10 @@ export const Route = createFileRoute("/api/brand-extract")({
               let subUrls = pickSubPages(internalLinks, safeUrl, 8);
 
               progress("sitemap", "Reading sitemap.xml", 24);
-              const sitemapXml = await fetchHtml(new URL("/sitemap.xml", safeUrl).toString(), 4000).catch(() => "");
+              const sitemapXml = await fetchHtml(
+                new URL("/sitemap.xml", safeUrl).toString(),
+                4000,
+              ).catch(() => "");
               const sitemapUrls = parseSitemapUrls(sitemapXml, safeUrl, 60);
               if (subUrls.length < 8 && sitemapUrls.length) {
                 const have = new Set(subUrls);
@@ -293,10 +347,20 @@ export const Route = createFileRoute("/api/brand-extract")({
               }
               subUrls = subUrls.slice(0, 8);
 
-              progress("crawl", subUrls.length ? `Crawling ${subUrls.length} sub-page${subUrls.length === 1 ? "" : "s"}` : "No sub-pages found", 32);
+              progress(
+                "crawl",
+                subUrls.length
+                  ? `Crawling ${subUrls.length} sub-page${subUrls.length === 1 ? "" : "s"}`
+                  : "No sub-pages found",
+                32,
+              );
               const subHtmls = await Promise.all(subUrls.map((u) => fetchHtml(u, 7000)));
               const crawledCount = subHtmls.filter(Boolean).length;
-              progress("crawl", `Crawled ${crawledCount + (homeHtml ? 1 : 0)} page${crawledCount === 0 ? "" : "s"} total`, 48);
+              progress(
+                "crawl",
+                `Crawled ${crawledCount + (homeHtml ? 1 : 0)} page${crawledCount === 0 ? "" : "s"} total`,
+                48,
+              );
 
               // 4. Aggregate signals from all pages
               const allHtml = [homeHtml, ...subHtmls].filter(Boolean);
@@ -304,24 +368,37 @@ export const Route = createFileRoute("/api/brand-extract")({
               const jsonLd = allHtml.flatMap(extractJsonLd);
               const colors = extractColors(allHtml.join("\n"));
               const fonts = extractFonts(allHtml.join("\n"));
-              progress("signals", `Found ${colors.length} colors · ${fonts.length} fonts · ${jsonLd.length} structured data block${jsonLd.length === 1 ? "" : "s"}`, 56);
+              progress(
+                "signals",
+                `Found ${colors.length} colors · ${fonts.length} fonts · ${jsonLd.length} structured data block${jsonLd.length === 1 ? "" : "s"}`,
+                56,
+              );
 
               // Logo / favicon
               const iconHref =
-                pickAll(homeHtml, /<link[^>]+rel=["'](?:apple-touch-icon|icon|shortcut icon|mask-icon)["'][^>]+href=["']([^"']+)["']/gi)[0] ||
-                pickAll(homeHtml, /<link[^>]+href=["']([^"']+)["'][^>]+rel=["'](?:apple-touch-icon|icon|shortcut icon)["']/gi)[0];
+                pickAll(
+                  homeHtml,
+                  /<link[^>]+rel=["'](?:apple-touch-icon|icon|shortcut icon|mask-icon)["'][^>]+href=["']([^"']+)["']/gi,
+                )[0] ||
+                pickAll(
+                  homeHtml,
+                  /<link[^>]+href=["']([^"']+)["'][^>]+rel=["'](?:apple-touch-icon|icon|shortcut icon)["']/gi,
+                )[0];
               const favicon = absoluteUrl(iconHref || "/favicon.ico", safeUrl);
               const ogImage = absoluteUrl(meta["og:image"] || meta["twitter:image"], safeUrl);
 
               let logoFromImg: string | null = null;
-              const logoMatch = homeHtml.match(/<img[^>]+(?:alt|src|class)=["'][^"']*logo[^"']*["'][^>]*>/i);
+              const logoMatch = homeHtml.match(
+                /<img[^>]+(?:alt|src|class)=["'][^"']*logo[^"']*["'][^>]*>/i,
+              );
               if (logoMatch) {
                 const src = logoMatch[0].match(/src=["']([^"']+)["']/i)?.[1];
                 if (src) logoFromImg = absoluteUrl(src, safeUrl);
               }
 
               const socials = new Set<string>();
-              const socialRe = /https?:\/\/(?:www\.)?(?:linkedin\.com|twitter\.com|x\.com|instagram\.com|facebook\.com|youtube\.com|tiktok\.com|github\.com|pinterest\.com|medium\.com|discord\.(?:gg|com)|t\.me|reddit\.com)\/[A-Za-z0-9_\-./?=]+/gi;
+              const socialRe =
+                /https?:\/\/(?:www\.)?(?:linkedin\.com|twitter\.com|x\.com|instagram\.com|facebook\.com|youtube\.com|tiktok\.com|github\.com|pinterest\.com|medium\.com|discord\.(?:gg|com)|t\.me|reddit\.com)\/[A-Za-z0-9_\-./?=]+/gi;
               for (const html of allHtml) {
                 for (const m of html.matchAll(socialRe)) {
                   socials.add(m[0].replace(/["'<>].*$/, "").replace(/[),.;]$/, ""));
@@ -351,12 +428,15 @@ export const Route = createFileRoute("/api/brand-extract")({
               const labeledText = [
                 `[HOMEPAGE ${safeUrl.toString()}]\n${stripHtml(homeHtml, 5000)}`,
                 ...subUrls.map((u, i) => `[PAGE ${u}]\n${stripHtml(subHtmls[i] || "", 3500)}`),
-              ].filter((s) => !s.endsWith("\n")).join("\n\n---\n\n").slice(0, 22000);
+              ]
+                .filter((s) => !s.endsWith("\n"))
+                .join("\n\n---\n\n")
+                .slice(0, 22000);
 
               // 4b. External research
               const seedName =
                 meta["og:site_name"] ||
-                (meta["og:title"]?.split(/[|·\-—]/)[0]?.trim()) ||
+                meta["og:title"]?.split(/[|·\-—]/)[0]?.trim() ||
                 safeUrl.hostname.replace(/^www\./, "").split(".")[0];
 
               progress("search", `Searching the web for "${seedName}" mentions`, 62);
@@ -370,7 +450,11 @@ export const Route = createFileRoute("/api/brand-extract")({
                 ...extResCompetitors.map((r) => ({ ...r, bucket: "Competitors" as const })),
                 ...extResReviews.map((r) => ({ ...r, bucket: "Reviews/Feedback" as const })),
               ].slice(0, 18);
-              progress("search", `Collected ${externalSnippets.length} external snippet${externalSnippets.length === 1 ? "" : "s"}`, 72);
+              progress(
+                "search",
+                `Collected ${externalSnippets.length} external snippet${externalSnippets.length === 1 ? "" : "s"}`,
+                72,
+              );
 
               const sys = `You are a senior brand strategist + market researcher. From the multi-page website crawl AND external web mentions, extract a deep, accurate brand profile, competitors, customer signals, and durable insights.
 Return STRICT JSON only matching the schema. Do NOT invent facts not supported by the provided text.
@@ -406,9 +490,13 @@ Be specific and concrete — use brand's own language where possible.
  "missing": string[]
 }`;
 
-              const jsonLdSummary = jsonLd.length ? JSON.stringify(jsonLd.slice(0, 5)).slice(0, 3000) : "";
+              const jsonLdSummary = jsonLd.length
+                ? JSON.stringify(jsonLd.slice(0, 5)).slice(0, 3000)
+                : "";
               const externalBlock = externalSnippets.length
-                ? externalSnippets.map((r) => `[${r.bucket}] ${r.title}\n${r.url}\n${r.snippet}`).join("\n\n")
+                ? externalSnippets
+                    .map((r) => `[${r.bucket}] ${r.title}\n${r.url}\n${r.snippet}`)
+                    .join("\n\n")
                 : "(no external results)";
 
               const userMsg = `URL: ${safeUrl.toString()}
@@ -433,7 +521,10 @@ EMAILS: ${Array.from(emails).slice(0, 5).join(", ")}
 PHONES: ${Array.from(phones).slice(0, 3).join(", ")}
 
 KEY HEADINGS (across pages):
-${headings.slice(0, 30).map((h) => `• ${h}`).join("\n")}
+${headings
+  .slice(0, 30)
+  .map((h) => `• ${h}`)
+  .join("\n")}
 
 CRAWLED PAGES (${1 + subUrls.length} total):
 ${labeledText}
@@ -466,7 +557,9 @@ ${schemaHint}`;
                 });
                 clearInterval(heartbeat);
                 const text = json?.choices?.[0]?.message?.content ?? "{}";
-                try { extracted = JSON.parse(text); } catch {
+                try {
+                  extracted = JSON.parse(text);
+                } catch {
                   const m = text.match(/\{[\s\S]*\}/);
                   if (m) extracted = JSON.parse(m[0]);
                 }
@@ -483,14 +576,39 @@ ${schemaHint}`;
 
               const org = jsonLd.find((j) => {
                 const t = j?.["@type"];
-                return t === "Organization" || (Array.isArray(t) && t.includes("Organization")) || t === "Corporation" || t === "LocalBusiness";
+                return (
+                  t === "Organization" ||
+                  (Array.isArray(t) && t.includes("Organization")) ||
+                  t === "Corporation" ||
+                  t === "LocalBusiness"
+                );
               });
 
               const titleGuess = meta["og:title"]?.split(/[|·\-—]/)[0]?.trim() || "";
 
-              const result: Brand & { sources: Record<string, { label: string; snippet?: string; url?: string }>; extras: { emails: string[]; phones: string[]; headings: string[]; pagesCrawled: string[]; externalMentions: { bucket: string; title: string; url: string; snippet: string }[] } } = {
-                brandName: extracted.brandName || org?.name || meta["og:site_name"] || titleGuess || "",
-                oneLiner: extracted.oneLiner || meta["description"] || meta["og:description"] || org?.slogan || "",
+              const result: Brand & {
+                sources: Record<string, { label: string; snippet?: string; url?: string }>;
+                extras: {
+                  emails: string[];
+                  phones: string[];
+                  headings: string[];
+                  pagesCrawled: string[];
+                  externalMentions: {
+                    bucket: string;
+                    title: string;
+                    url: string;
+                    snippet: string;
+                  }[];
+                };
+              } = {
+                brandName:
+                  extracted.brandName || org?.name || meta["og:site_name"] || titleGuess || "",
+                oneLiner:
+                  extracted.oneLiner ||
+                  meta["description"] ||
+                  meta["og:description"] ||
+                  org?.slogan ||
+                  "",
                 about: extracted.about || org?.description || "",
                 industry: extracted.industry || "",
                 businessModel: extracted.businessModel || "",
@@ -500,29 +618,59 @@ ${schemaHint}`;
                 products: extracted.products || "",
                 doRules: extracted.doRules || "",
                 dontRules: extracted.dontRules || "",
-                audienceTags: Array.isArray(extracted.audienceTags) ? extracted.audienceTags.slice(0, 6) : [],
-                valueTags: Array.isArray(extracted.valueTags) ? extracted.valueTags.slice(0, 6) : [],
+                audienceTags: Array.isArray(extracted.audienceTags)
+                  ? extracted.audienceTags.slice(0, 6)
+                  : [],
+                valueTags: Array.isArray(extracted.valueTags)
+                  ? extracted.valueTags.slice(0, 6)
+                  : [],
                 colors: Array.isArray(extracted.colors)
                   ? extracted.colors
-                      .filter((c) => c && typeof c.hex === "string" && /^#?[0-9a-f]{6}$/i.test(c.hex))
-                      .map((c) => ({ name: c.name || "Color", hex: c.hex.startsWith("#") ? c.hex : `#${c.hex}` }))
+                      .filter(
+                        (c) => c && typeof c.hex === "string" && /^#?[0-9a-f]{6}$/i.test(c.hex),
+                      )
+                      .map((c) => ({
+                        name: c.name || "Color",
+                        hex: c.hex.startsWith("#") ? c.hex : `#${c.hex}`,
+                      }))
                       .slice(0, 6)
                   : [],
-                fonts: Array.isArray(extracted.fonts) ? extracted.fonts.filter(Boolean).slice(0, 3) : [],
-                logoUrl: logoFromImg || ogImage || (org?.logo && typeof org.logo === "string" ? org.logo : null) || favicon,
+                fonts: Array.isArray(extracted.fonts)
+                  ? extracted.fonts.filter(Boolean).slice(0, 3)
+                  : [],
+                logoUrl:
+                  logoFromImg ||
+                  ogImage ||
+                  (org?.logo && typeof org.logo === "string" ? org.logo : null) ||
+                  favicon,
                 faviconUrl: favicon,
-                socials: Array.from(socials).slice(0, 12).map((url) => {
-                  const platform = url.match(/(linkedin|twitter|x\.com|instagram|facebook|youtube|tiktok|github|pinterest|medium|discord|t\.me|reddit)/i)?.[1]?.toLowerCase().replace("x.com", "x").replace("t.me", "telegram") || "web";
-                  return { platform, url };
-                }),
+                socials: Array.from(socials)
+                  .slice(0, 12)
+                  .map((url) => {
+                    const platform =
+                      url
+                        .match(
+                          /(linkedin|twitter|x\.com|instagram|facebook|youtube|tiktok|github|pinterest|medium|discord|t\.me|reddit)/i,
+                        )?.[1]
+                        ?.toLowerCase()
+                        .replace("x.com", "x")
+                        .replace("t.me", "telegram") || "web";
+                    return { platform, url };
+                  }),
                 missing: Array.isArray(extracted.missing) ? extracted.missing : [],
                 mission: extracted.mission || "",
                 vision: extracted.vision || "",
                 positioning: extracted.positioning || "",
                 uniqueValueProp: extracted.uniqueValueProp || "",
                 keywords: Array.isArray(extracted.keywords)
-                  ? extracted.keywords.filter((k): k is string => typeof k === "string" && k.trim().length > 0).slice(0, 12)
-                  : (meta["keywords"] || "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 12),
+                  ? extracted.keywords
+                      .filter((k): k is string => typeof k === "string" && k.trim().length > 0)
+                      .slice(0, 12)
+                  : (meta["keywords"] || "")
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                      .slice(0, 12),
                 competitors: Array.isArray(extracted.competitors)
                   ? extracted.competitors
                       .filter((c) => c && typeof c.name === "string" && c.name.trim())
@@ -548,7 +696,10 @@ ${schemaHint}`;
                 insights: Array.isArray(extracted.insights)
                   ? extracted.insights
                       .filter((i) => i && typeof i.title === "string" && i.title.trim())
-                      .map((i) => ({ title: i.title.trim().slice(0, 80), body: (typeof i.body === "string" ? i.body : "").trim().slice(0, 240) }))
+                      .map((i) => ({
+                        title: i.title.trim().slice(0, 80),
+                        body: (typeof i.body === "string" ? i.body : "").trim().slice(0, 240),
+                      }))
                       .slice(0, 8)
                   : [],
                 sources: {},
@@ -557,17 +708,30 @@ ${schemaHint}`;
                   phones: Array.from(phones).slice(0, 3),
                   headings: headings.slice(0, 20),
                   pagesCrawled: [safeUrl.toString(), ...subUrls],
-                  externalMentions: externalSnippets.map((r) => ({ bucket: r.bucket, title: r.title, url: r.url, snippet: r.snippet })),
+                  externalMentions: externalSnippets.map((r) => ({
+                    bucket: r.bucket,
+                    title: r.title,
+                    url: r.url,
+                    snippet: r.snippet,
+                  })),
                 },
               };
 
-              if (result.colors.length === 0 && meta["theme-color"] && /^#?[0-9a-f]{6}$/i.test(meta["theme-color"])) {
-                const hex = meta["theme-color"].startsWith("#") ? meta["theme-color"] : `#${meta["theme-color"]}`;
+              if (
+                result.colors.length === 0 &&
+                meta["theme-color"] &&
+                /^#?[0-9a-f]{6}$/i.test(meta["theme-color"])
+              ) {
+                const hex = meta["theme-color"].startsWith("#")
+                  ? meta["theme-color"]
+                  : `#${meta["theme-color"]}`;
                 result.colors = [{ name: "Primary", hex }];
               }
               if (result.colors.length === 0 && colors.length > 0) {
                 const names = ["Primary", "Accent", "Ink", "Surface", "Muted"];
-                result.colors = colors.slice(0, 4).map((hex, i) => ({ name: names[i] || "Color", hex }));
+                result.colors = colors
+                  .slice(0, 4)
+                  .map((hex, i) => ({ name: names[i] || "Color", hex }));
               }
               if (result.fonts.length === 0 && fonts.length > 0) {
                 result.fonts = fonts.slice(0, 3);
@@ -575,20 +739,68 @@ ${schemaHint}`;
 
               const homepage = safeUrl.toString();
               const s = result.sources;
-              if (result.brandName) s.brandName = { label: org?.name ? "JSON-LD Organization" : meta["og:site_name"] ? "og:site_name" : "<title>", snippet: result.brandName, url: homepage };
-              if (result.oneLiner) s.oneLiner = { label: extracted.oneLiner ? "AI synthesis" : "meta description", snippet: result.oneLiner.slice(0, 140), url: homepage };
-              if (result.about) s.about = { label: org?.description ? "JSON-LD" : `AI synthesis across ${1 + subUrls.length} pages`, url: homepage };
-              if (result.logoUrl) s.logo = { label: logoFromImg ? "logo <img>" : ogImage ? "og:image" : org?.logo ? "JSON-LD logo" : "favicon", url: result.logoUrl };
-              if (result.colors.length) s.colors = { label: `${colors.length} hex colors detected in CSS`, snippet: colors.slice(0, 6).join(" "), url: homepage };
-              if (result.fonts.length) s.fonts = { label: fonts.length ? `Detected ${fonts.length} font families` : "AI inference", url: homepage };
+              if (result.brandName)
+                s.brandName = {
+                  label: org?.name
+                    ? "JSON-LD Organization"
+                    : meta["og:site_name"]
+                      ? "og:site_name"
+                      : "<title>",
+                  snippet: result.brandName,
+                  url: homepage,
+                };
+              if (result.oneLiner)
+                s.oneLiner = {
+                  label: extracted.oneLiner ? "AI synthesis" : "meta description",
+                  snippet: result.oneLiner.slice(0, 140),
+                  url: homepage,
+                };
+              if (result.about)
+                s.about = {
+                  label: org?.description
+                    ? "JSON-LD"
+                    : `AI synthesis across ${1 + subUrls.length} pages`,
+                  url: homepage,
+                };
+              if (result.logoUrl)
+                s.logo = {
+                  label: logoFromImg
+                    ? "logo <img>"
+                    : ogImage
+                      ? "og:image"
+                      : org?.logo
+                        ? "JSON-LD logo"
+                        : "favicon",
+                  url: result.logoUrl,
+                };
+              if (result.colors.length)
+                s.colors = {
+                  label: `${colors.length} hex colors detected in CSS`,
+                  snippet: colors.slice(0, 6).join(" "),
+                  url: homepage,
+                };
+              if (result.fonts.length)
+                s.fonts = {
+                  label: fonts.length ? `Detected ${fonts.length} font families` : "AI inference",
+                  url: homepage,
+                };
               if (result.industry) s.industry = { label: "AI inference from crawl", url: homepage };
-              if (result.businessModel) s.businessModel = { label: "AI inference from crawl", url: homepage };
+              if (result.businessModel)
+                s.businessModel = { label: "AI inference from crawl", url: homepage };
               if (result.audience) s.audience = { label: "AI inference from crawl", url: homepage };
               if (result.voice) s.voice = { label: "AI tone analysis", url: homepage };
               if (result.products) s.products = { label: "Headings & pages", url: homepage };
               if (result.values) s.values = { label: "AI inference from crawl", url: homepage };
-              if (result.socials.length) s.socials = { label: `${result.socials.length} link${result.socials.length === 1 ? "" : "s"} across crawl`, url: homepage };
-              if (result.extras.emails.length) s.emails = { label: `${result.extras.emails.length} email${result.extras.emails.length === 1 ? "" : "s"} found`, url: homepage };
+              if (result.socials.length)
+                s.socials = {
+                  label: `${result.socials.length} link${result.socials.length === 1 ? "" : "s"} across crawl`,
+                  url: homepage,
+                };
+              if (result.extras.emails.length)
+                s.emails = {
+                  label: `${result.extras.emails.length} email${result.extras.emails.length === 1 ? "" : "s"} found`,
+                  url: homepage,
+                };
 
               const miss: string[] = [];
               if (!result.brandName) miss.push("brandName");
@@ -604,12 +816,18 @@ ${schemaHint}`;
 
               void sitemapXml;
 
-              progress("done", `Done — ${1 + subUrls.length} pages, ${result.competitors.length} competitor${result.competitors.length === 1 ? "" : "s"}, ${result.insights.length} insight${result.insights.length === 1 ? "" : "s"}`, 100);
+              progress(
+                "done",
+                `Done — ${1 + subUrls.length} pages, ${result.competitors.length} competitor${result.competitors.length === 1 ? "" : "s"}, ${result.insights.length} insight${result.insights.length === 1 ? "" : "s"}`,
+                100,
+              );
               send({ type: "result", data: result });
               controller.close();
             } catch (err) {
               console.error("brand-extract stream error", err);
-              try { send({ type: "error", error: "Extraction failed" }); } catch {}
+              try {
+                send({ type: "error", error: "Extraction failed" });
+              } catch {}
               controller.close();
             }
           },
@@ -622,7 +840,6 @@ ${schemaHint}`;
             "X-Accel-Buffering": "no",
           },
         });
-
       },
     },
   },

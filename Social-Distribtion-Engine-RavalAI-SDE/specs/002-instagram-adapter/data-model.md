@@ -2,22 +2,22 @@
 
 **Feature**: `002-instagram-adapter` · **Phase**: 1 · **Date**: 2026-08-03
 
-No schema migration is required. `Account.platform` is a free-form `String(32)` column; `accounts.metadata` is JSONB. This feature only changes *how existing columns are populated* for Meta accounts and how the publisher builds the account-id for Instagram.
+No schema migration is required. `Account.platform` is a free-form `String(32)` column; `accounts.metadata` is JSONB. This feature only changes _how existing columns are populated_ for Meta accounts and how the publisher builds the account-id for Instagram.
 
 ## Entity: `Account` (existing table — populated differently for Meta)
 
-| Column | facebook (Page) | instagram |
-|---|---|---|
-| `workspace_id` | from OAuth state | from OAuth state |
-| `brand_id` | from OAuth state | from OAuth state |
-| `platform` | `"facebook"` | `"instagram"` |
-| `platform_account_id` | **Page id** (resolved via `/me/accounts`) | **IG user id** (via `instagram_business_account` field) |
-| `platform_username` | Page name | IG username |
-| `encrypted_access_token` | **Page access token** (Fernet-encrypted) | **Page access token** (Fernet-encrypted) |
-| `encrypted_refresh_token` | `NULL` (Meta uses token extension, not refresh grant) | `NULL` |
-| `token_expires_at` | Page token expiry (~60 days) if obtainable | same |
-| `status` | `"active"` | `"active"` |
-| `metadata` | `{"page_id": <str>, "persona": "page"}` | `{"ig_user_id": <str>, "page_id": <str>, "persona": "page"}` |
+| Column                    | facebook (Page)                                       | instagram                                                    |
+| ------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
+| `workspace_id`            | from OAuth state                                      | from OAuth state                                             |
+| `brand_id`                | from OAuth state                                      | from OAuth state                                             |
+| `platform`                | `"facebook"`                                          | `"instagram"`                                                |
+| `platform_account_id`     | **Page id** (resolved via `/me/accounts`)             | **IG user id** (via `instagram_business_account` field)      |
+| `platform_username`       | Page name                                             | IG username                                                  |
+| `encrypted_access_token`  | **Page access token** (Fernet-encrypted)              | **Page access token** (Fernet-encrypted)                     |
+| `encrypted_refresh_token` | `NULL` (Meta uses token extension, not refresh grant) | `NULL`                                                       |
+| `token_expires_at`        | Page token expiry (~60 days) if obtainable            | same                                                         |
+| `status`                  | `"active"`                                            | `"active"`                                                   |
+| `metadata`                | `{"page_id": <str>, "persona": "page"}`               | `{"ig_user_id": <str>, "page_id": <str>, "persona": "page"}` |
 
 ### Metadata contract
 
@@ -29,10 +29,10 @@ No schema migration is required. `Account.platform` is a free-form `String(32)` 
 
 The publisher passes a single `account_id` string to adapters. For Meta:
 
-| Platform | `account_id` passed to adapter | Adapter parses as |
-|---|---|---|
-| facebook | `f"{metadata['page_id']}|{token}"` (existing) | `(page_id, token)` — `meta.py:63` |
-| instagram | `f"{metadata['ig_user_id']}|{token}"` (new) | `(ig_user_id, token)` — `instagram.py` |
+| Platform  | `account_id` passed to adapter | Adapter parses as    |
+| --------- | ------------------------------ | -------------------- |
+| facebook  | `f"{metadata['page_id']}       | {token}"` (existing) | `(page_id, token)` — `meta.py:63`      |
+| instagram | `f"{metadata['ig_user_id']}    | {token}"` (new)      | `(ig_user_id, token)` — `instagram.py` |
 
 ## Validation rules (adapter-level)
 

@@ -8,8 +8,18 @@ describe("MockSDR fixture", () => {
   const sdr = new MockSDR();
   beforeAll(async () => {
     await sdr.start();
-    sdr.addAccount({ account_id: "test-account-1", platform: "dryrun", platform_username: "DryRun One", status: "active" });
-    sdr.addAccount({ account_id: "acc-2", platform: "dryrun", platform_username: "Two", status: "active" });
+    sdr.addAccount({
+      account_id: "test-account-1",
+      platform: "dryrun",
+      platform_username: "DryRun One",
+      status: "active",
+    });
+    sdr.addAccount({
+      account_id: "acc-2",
+      platform: "dryrun",
+      platform_username: "Two",
+      status: "active",
+    });
   });
   afterAll(async () => await sdr.stop());
 
@@ -49,12 +59,20 @@ describe("MockSDR fixture", () => {
       idempotency_key: "smoke-1",
       targets: [{ account_id: "test-account-1", content: { text: "hi" } }],
     };
-    const a = await (await fetch(`${sdr.baseUrl}/api/v1/publish`, {
-      method: "POST", headers: { Authorization: "Bearer mock-token", "Content-Type": "application/json" }, body: JSON.stringify(body),
-    })).json();
-    const b = await (await fetch(`${sdr.baseUrl}/api/v1/publish`, {
-      method: "POST", headers: { Authorization: "Bearer mock-token", "Content-Type": "application/json" }, body: JSON.stringify(body),
-    })).json();
+    const a = await (
+      await fetch(`${sdr.baseUrl}/api/v1/publish`, {
+        method: "POST",
+        headers: { Authorization: "Bearer mock-token", "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+    ).json();
+    const b = await (
+      await fetch(`${sdr.baseUrl}/api/v1/publish`, {
+        method: "POST",
+        headers: { Authorization: "Bearer mock-token", "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+    ).json();
     expect(a.job_id).toBe(b.job_id);
   });
 
@@ -68,8 +86,12 @@ describe("MockSDR fixture", () => {
   it("supports forcing errors (503) and records requests", async () => {
     sdr.force("/api/v1/publish", 503, { error_code: "SDR_DOWN" });
     const res = await fetch(`${sdr.baseUrl}/api/v1/publish`, {
-      method: "POST", headers: { Authorization: "Bearer mock-token", "Content-Type": "application/json" },
-      body: JSON.stringify({ idempotency_key: "x", targets: [{ account_id: "a", content: { text: "t" } }] }),
+      method: "POST",
+      headers: { Authorization: "Bearer mock-token", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        idempotency_key: "x",
+        targets: [{ account_id: "a", content: { text: "t" } }],
+      }),
     });
     expect(res.status).toBe(503);
     const reqs = sdr.getRequests();

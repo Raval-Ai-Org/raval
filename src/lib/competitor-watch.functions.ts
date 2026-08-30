@@ -46,17 +46,21 @@ export const listCompetitorWatches = createServerFn({ method: "POST" })
 export const addCompetitorWatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({
-      workspaceId: uuid,
-      url: z.string().min(3).max(2048),
-      name: z.string().max(120).optional().nullable(),
-    }).parse(d),
+    z
+      .object({
+        workspaceId: uuid,
+        url: z.string().min(3).max(2048),
+        name: z.string().max(120).optional().nullable(),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const clean = data.url.trim().replace(/\/+$/, "");
     const url = /^https?:\/\//i.test(clean) ? clean : `https://${clean}`;
     const { assertPublicUrl } = await import("@/server/api-auth");
-    try { assertPublicUrl(url); } catch (e) {
+    try {
+      assertPublicUrl(url);
+    } catch (e) {
       throw new Error(e instanceof Error ? e.message : "Invalid URL");
     }
     const { data: row, error } = await context.supabase
@@ -74,7 +78,9 @@ export const addCompetitorWatch = createServerFn({ method: "POST" })
     try {
       const { scanWatch } = await import("@/lib/competitor-watch.server");
       await scanWatch(row.id);
-    } catch { /* baseline failure is non-fatal */ }
+    } catch {
+      /* baseline failure is non-fatal */
+    }
     return row as CompetitorWatch;
   });
 
@@ -117,16 +123,20 @@ export const runCompetitorWatchNow = createServerFn({ method: "POST" })
 export const listCompetitorAlerts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({
-      workspaceId: uuid,
-      limit: z.number().int().min(1).max(200).optional(),
-      unreadOnly: z.boolean().optional(),
-    }).parse(d),
+    z
+      .object({
+        workspaceId: uuid,
+        limit: z.number().int().min(1).max(200).optional(),
+        unreadOnly: z.boolean().optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("competitor_alerts")
-      .select("id, workspace_id, watch_id, kind, severity, title, detail, before_value, after_value, source_url, read_at, detected_at")
+      .select(
+        "id, workspace_id, watch_id, kind, severity, title, detail, before_value, after_value, source_url, read_at, detected_at",
+      )
       .eq("workspace_id", data.workspaceId)
       .order("detected_at", { ascending: false })
       .limit(data.limit ?? 50);
@@ -139,10 +149,12 @@ export const listCompetitorAlerts = createServerFn({ method: "POST" })
 export const markCompetitorAlertsRead = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({
-      workspaceId: uuid,
-      ids: z.array(uuid).optional(),
-    }).parse(d),
+    z
+      .object({
+        workspaceId: uuid,
+        ids: z.array(uuid).optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     let q = context.supabase

@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Input**: User description: "Integrate the Social Distribution Engine (SDR) into the RavalAI platform per the finalized plan: proxy-through-server topology, per-workspace key minting, workspace_sdr + content_publications tables, publishing status, Studio Connections panel + destination picker + inline Connect, split scheduling, non-disruptive phased rollout (Phase 0 local SDR + DryRun smoke test first)."
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 User stories are prioritized as independently shippable slices. Each slice maps to a rollout phase so the platform never regresses: each can be developed, deployed, and demonstrated alone and still delivers value.
 
@@ -114,7 +114,7 @@ If the distribution capability is temporarily unavailable, the platform keeps wo
 - **Undeliverable generated variants**: a generated variant for a platform the distribution engine does not support (e.g., Threads, TikTok, YouTube) is clearly shown as not available as a publish destination and never offered as one.
 - **Facebook identity loss**: a Facebook variant must remain a Facebook destination end-to-end (it must not be re-labeled as another channel) so it is actually publishable to Facebook.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -155,7 +155,7 @@ If the distribution capability is temporarily unavailable, the platform keeps wo
 - **Delivery Record**: The per-account outcome of a job — published / retrying / failed, live post link, error category and reason, timestamps. The source of the Studio's delivery view.
 - **Workspace Credential**: The secure, server-side mapping that lets a workspace use the distribution capability; never exposed to the browser.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

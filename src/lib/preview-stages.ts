@@ -22,9 +22,9 @@ export type StageKind =
 
 export interface PreviewStage {
   kind: StageKind;
-  label: string;        // headline ("Analyzing your site")
-  sub?: string;         // sub-line ("Scanning hero, nav, CTAs…")
-  hue?: number;         // accent hue (HSL)
+  label: string; // headline ("Analyzing your site")
+  sub?: string; // sub-line ("Scanning hero, nav, CTAs…")
+  hue?: number; // accent hue (HSL)
   data?: {
     query?: string;
     results?: { title: string; url: string; snippet?: string }[];
@@ -37,7 +37,7 @@ export interface PreviewStage {
     draftKind?: "instagram" | "tweet" | "linkedin" | "blog" | "email";
     imagePrompt?: string;
     imageAspect?: "1:1" | "4:5" | "16:9";
-    channels?: string[];   // social channels for scheduling
+    channels?: string[]; // social channels for scheduling
     metric?: { label: string; from: number; to: number; unit?: string }[];
   };
 }
@@ -86,32 +86,43 @@ function dispatchIdle() {
 // ── Intent planner ────────────────────────────────────────────────────────
 
 const KEYWORDS = {
-  search:   /\b(search|find|look up|reddit|quora|forum|thread|serp|keyword)\b/i,
-  audit:    /\b(audit|scan|analy[sz]e|crawl|inspect|review|seo|aeo|geo)\b/i,
-  competitor:/\b(competitor|competition|rival|vs\.?|versus|compare)\b/i,
-  draft:    /\b(draft|write|blog|article|post|copy|email|caption|brief|outline)\b/i,
-  image:    /\b(image|visual|banner|thumbnail|graphic|poster|creative|photo)\b/i,
+  search: /\b(search|find|look up|reddit|quora|forum|thread|serp|keyword)\b/i,
+  audit: /\b(audit|scan|analy[sz]e|crawl|inspect|review|seo|aeo|geo)\b/i,
+  competitor: /\b(competitor|competition|rival|vs\.?|versus|compare)\b/i,
+  draft: /\b(draft|write|blog|article|post|copy|email|caption|brief|outline)\b/i,
+  image: /\b(image|visual|banner|thumbnail|graphic|poster|creative|photo)\b/i,
   schedule: /\b(schedule|post to|publish|tweet|share|calendar|queue)\b/i,
-  insta:    /\b(insta(gram)?|reel|story|ig)\b/i,
-  tweet:    /\b(tweet|twitter|\bx\b post|thread)\b/i,
+  insta: /\b(insta(gram)?|reel|story|ig)\b/i,
+  tweet: /\b(tweet|twitter|\bx\b post|thread)\b/i,
   linkedin: /\b(linkedin|li post)\b/i,
-  email_:   /\b(email|newsletter|subject line)\b/i,
-  blog:     /\b(blog|article|long.?form)\b/i,
+  email_: /\b(email|newsletter|subject line)\b/i,
+  blog: /\b(blog|article|long.?form)\b/i,
 };
 
 function pickHue(kind: StageKind): number {
   switch (kind) {
-    case "searching":  return 217;
-    case "browsing":   return 195;
-    case "analyzing":  return 200;
-    case "extracting": return 175;
-    case "drafting":   return 38;
-    case "image":      return 320;
-    case "scheduling": return 270;
-    case "optimizing": return 0;
-    case "publishing": return 142;
-    case "complete":   return 150;
-    default:           return 260;
+    case "searching":
+      return 217;
+    case "browsing":
+      return 195;
+    case "analyzing":
+      return 200;
+    case "extracting":
+      return 175;
+    case "drafting":
+      return 38;
+    case "image":
+      return 320;
+    case "scheduling":
+      return 270;
+    case "optimizing":
+      return 0;
+    case "publishing":
+      return 142;
+    case "complete":
+      return 150;
+    default:
+      return 260;
   }
 }
 
@@ -121,11 +132,11 @@ function extractUrls(p: string): string[] {
 }
 
 function detectDraftKind(p: string): NonNullable<PreviewStage["data"]>["draftKind"] {
-  if (KEYWORDS.insta.test(p))    return "instagram";
-  if (KEYWORDS.tweet.test(p))    return "tweet";
+  if (KEYWORDS.insta.test(p)) return "instagram";
+  if (KEYWORDS.tweet.test(p)) return "tweet";
   if (KEYWORDS.linkedin.test(p)) return "linkedin";
-  if (KEYWORDS.email_.test(p))   return "email";
-  if (KEYWORDS.blog.test(p))     return "blog";
+  if (KEYWORDS.email_.test(p)) return "email";
+  if (KEYWORDS.blog.test(p)) return "blog";
   return "blog";
 }
 
@@ -136,14 +147,26 @@ export function planFromPrompt(
   const p = prompt.toLowerCase();
   const brand = ctx.brand || hostFromUrl(ctx.siteUrl) || "your brand";
   const q = prompt.replace(/[?.!]+$/, "").slice(0, 64);
-  const mentionedUrls = extractUrls(prompt).filter((u) => hostFromUrl(u) !== hostFromUrl(ctx.siteUrl));
+  const mentionedUrls = extractUrls(prompt).filter(
+    (u) => hostFromUrl(u) !== hostFromUrl(ctx.siteUrl),
+  );
 
   const stages: PreviewStage[] = [
-    { kind: "thinking", label: "Thinking it through", sub: q ? `"${q}"` : undefined, hue: pickHue("thinking") },
+    {
+      kind: "thinking",
+      label: "Thinking it through",
+      sub: q ? `"${q}"` : undefined,
+      hue: pickHue("thinking"),
+    },
   ];
 
   const did = new Set<StageKind>();
-  const add = (s: PreviewStage) => { if (!did.has(s.kind)) { stages.push({ ...s, hue: s.hue ?? pickHue(s.kind) }); did.add(s.kind); } };
+  const add = (s: PreviewStage) => {
+    if (!did.has(s.kind)) {
+      stages.push({ ...s, hue: s.hue ?? pickHue(s.kind) });
+      did.add(s.kind);
+    }
+  };
 
   // Competitor / explicit URL analysis → browse THEN extract
   if (KEYWORDS.competitor.test(p) || mentionedUrls.length) {
@@ -169,11 +192,11 @@ export function planFromPrompt(
       sub: "Pricing · positioning · CTAs · social proof",
       data: {
         rows: [
-          { label: "Pricing model",   value: "Tiered · from $29/mo" },
-          { label: "Primary CTA",     value: "Start free trial" },
-          { label: "Hero promise",    value: "Ship 10× faster" },
-          { label: "Social proof",    value: "4.6 ★ G2 · 128 reviews" },
-          { label: "Top keyword",     value: "ai marketing platform" },
+          { label: "Pricing model", value: "Tiered · from $29/mo" },
+          { label: "Primary CTA", value: "Start free trial" },
+          { label: "Hero promise", value: "Ship 10× faster" },
+          { label: "Social proof", value: "4.6 ★ G2 · 128 reviews" },
+          { label: "Top keyword", value: "ai marketing platform" },
         ],
       },
     });
@@ -201,8 +224,11 @@ export function planFromPrompt(
   }
 
   if (KEYWORDS.image.test(p)) {
-    const aspect: "1:1" | "4:5" | "16:9" =
-      KEYWORDS.insta.test(p) ? "4:5" : KEYWORDS.tweet.test(p) ? "16:9" : "1:1";
+    const aspect: "1:1" | "4:5" | "16:9" = KEYWORDS.insta.test(p)
+      ? "4:5"
+      : KEYWORDS.tweet.test(p)
+        ? "16:9"
+        : "1:1";
     add({
       kind: "image",
       label: "Generating visual",
@@ -315,8 +341,11 @@ export function stopPreviewPlan(silent = false) {
 
 function hostFromUrl(url?: string | null) {
   if (!url) return null;
-  try { return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, ""); }
-  catch { return null; }
+  try {
+    return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }
 
 function titleCase(s: string) {
@@ -325,10 +354,26 @@ function titleCase(s: string) {
 
 function mockResults(brand: string) {
   return [
-    { title: `${titleCase(brand)} — official site`, url: `${brand}.com`, snippet: "Homepage · About · Pricing" },
-    { title: `r/marketing discussion on ${brand}`,  url: `reddit.com/r/marketing`, snippet: "12 comments · 4d ago" },
-    { title: `${titleCase(brand)} reviews on G2`,   url: `g2.com/products/${brand}`, snippet: "4.6 ★ · 128 reviews" },
-    { title: `Best alternatives to ${brand} (2026)`,url: `producthunt.com`, snippet: "Curated list · trending" },
+    {
+      title: `${titleCase(brand)} — official site`,
+      url: `${brand}.com`,
+      snippet: "Homepage · About · Pricing",
+    },
+    {
+      title: `r/marketing discussion on ${brand}`,
+      url: `reddit.com/r/marketing`,
+      snippet: "12 comments · 4d ago",
+    },
+    {
+      title: `${titleCase(brand)} reviews on G2`,
+      url: `g2.com/products/${brand}`,
+      snippet: "4.6 ★ · 128 reviews",
+    },
+    {
+      title: `Best alternatives to ${brand} (2026)`,
+      url: `producthunt.com`,
+      snippet: "Curated list · trending",
+    },
   ];
 }
 

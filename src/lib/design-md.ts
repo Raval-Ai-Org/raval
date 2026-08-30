@@ -16,7 +16,10 @@ export function buildDesignMd(dna: BrandDna): string {
   if (dna.oneLiner) lines.push(`- **Tagline:** ${dna.oneLiner}`);
   if (dna.industry) lines.push(`- **Industry:** ${dna.industry}`);
   if (dna.businessModel) lines.push(`- **Business model:** ${dna.businessModel}`);
-  if (dna.about) { lines.push(""); lines.push(dna.about); }
+  if (dna.about) {
+    lines.push("");
+    lines.push(dna.about);
+  }
   lines.push("");
 
   if (dna.colors.length) {
@@ -25,7 +28,9 @@ export function buildDesignMd(dna: BrandDna): string {
     lines.push(`| Token | Hex | Sample |`);
     lines.push(`| --- | --- | --- |`);
     for (const c of dna.colors) {
-      lines.push(`| ${c.name} | \`${c.hex.toUpperCase()}\` | ![](https://singlecolorimage.com/get/${c.hex.replace("#", "")}/40x16) |`);
+      lines.push(
+        `| ${c.name} | \`${c.hex.toUpperCase()}\` | ![](https://singlecolorimage.com/get/${c.hex.replace("#", "")}/40x16) |`,
+      );
     }
     lines.push("");
   }
@@ -68,8 +73,16 @@ export function buildDesignMd(dna: BrandDna): string {
 
   if (dna.doRules || dna.dontRules) {
     lines.push(`## Brand rules`);
-    if (dna.doRules) { lines.push(`### Always do`); lines.push(dna.doRules); lines.push(""); }
-    if (dna.dontRules) { lines.push(`### Never do`); lines.push(dna.dontRules); lines.push(""); }
+    if (dna.doRules) {
+      lines.push(`### Always do`);
+      lines.push(dna.doRules);
+      lines.push("");
+    }
+    if (dna.dontRules) {
+      lines.push(`### Never do`);
+      lines.push(dna.dontRules);
+      lines.push("");
+    }
   }
 
   if (dna.socials.length) {
@@ -91,11 +104,17 @@ export function buildDesignMd(dna: BrandDna): string {
 }
 
 export function saveDesignMd(workspaceId: string, content: string) {
-  try { localStorage.setItem(KEY(workspaceId), content); } catch {}
+  try {
+    localStorage.setItem(KEY(workspaceId), content);
+  } catch {}
 }
 
 export function loadDesignMd(workspaceId: string): string | null {
-  try { return localStorage.getItem(KEY(workspaceId)); } catch { return null; }
+  try {
+    return localStorage.getItem(KEY(workspaceId));
+  } catch {
+    return null;
+  }
 }
 
 export function downloadDesignMd(content: string, filename = "Design.md") {

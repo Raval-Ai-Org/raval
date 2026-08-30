@@ -24,9 +24,7 @@ export function useRealtimeContent(workspaceId: string | null) {
         },
         (payload) => {
           try {
-            window.dispatchEvent(
-              new CustomEvent("content:changed", { detail: payload }),
-            );
+            window.dispatchEvent(new CustomEvent("content:changed", { detail: payload }));
           } catch {
             /* noop */
           }
@@ -42,9 +40,7 @@ export function useRealtimeContent(workspaceId: string | null) {
         },
         (payload) => {
           try {
-            window.dispatchEvent(
-              new CustomEvent("approvals:changed", { detail: payload }),
-            );
+            window.dispatchEvent(new CustomEvent("approvals:changed", { detail: payload }));
           } catch {
             /* noop */
           }

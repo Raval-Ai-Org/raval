@@ -16,11 +16,11 @@ links:
   adr: null
   pr: null
 files:
- - specs/001-social-sde/spec.md
- - specs/001-social-sde/checklists/requirements.md
- - history/prompts/001-social-sde/0001-specify-sde-feature-from-full-spec.spec.prompt.md
+  - specs/001-social-sde/spec.md
+  - specs/001-social-sde/checklists/requirements.md
+  - history/prompts/001-social-sde/0001-specify-sde-feature-from-full-spec.spec.prompt.md
 tests:
- - none (spec generation/validation only)
+  - none (spec generation/validation only)
 ---
 
 ## Prompt
@@ -30,15 +30,18 @@ well i qlready have the fully specifications ready fo rhti sproject do analyse i
 ## Response snapshot
 
 Analyzed the full RavalAI SDE build specification and converted it into a business-focused feature specification:
+
 - Created branch `001-social-sde`.
 - Wrote `specs/001-social-sde/spec.md` with prioritized user scenarios, functional requirements, assumptions, and measurable success criteria.
 - Created `specs/001-social-sde/checklists/requirements.md` and validated the spec as ready for planning.
 
 Key readiness assessment:
+
 - The existing spec is strong and implementation-ready from an engineering standpoint.
 - Core gaps are not in core publishing logic, but in adjacent operational areas that could be improved now.
 
 Module improvement recommendations surfaced:
+
 1. Promote Instagram/Threads from Phase A into earlier planning or explicit post-MVP product commitments.
 2. Add clearer workspace/admin controls for webhook configuration, token revocation, and retry governance.
 3. Define stronger operational alerting acceptance criteria beyond metrics outputs.

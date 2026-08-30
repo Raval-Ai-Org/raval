@@ -24,7 +24,11 @@ export function RecentChats({ onNavigate }: { onNavigate?: () => void }) {
           .select("id, name, created_at")
           .order("created_at", { ascending: false })
           .limit(8);
-        if (!ws || cancelled) { setItems([]); setLoading(false); return; }
+        if (!ws || cancelled) {
+          setItems([]);
+          setLoading(false);
+          return;
+        }
 
         // Grab last user message per workspace for a preview.
         const ids = ws.map((w) => w.id);
@@ -54,16 +58,26 @@ export function RecentChats({ onNavigate }: { onNavigate?: () => void }) {
         });
         // Sort by most recent activity (message time or workspace update)
         merged.sort((a, b) => (a.at < b.at ? 1 : -1));
-        if (!cancelled) { setItems(merged); setLoading(false); }
+        if (!cancelled) {
+          setItems(merged);
+          setLoading(false);
+        }
       } catch {
-        if (!cancelled) { setItems([]); setLoading(false); }
+        if (!cancelled) {
+          setItems([]);
+          setLoading(false);
+        }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const pick = (id: string) => {
-    try { localStorage.setItem("workspace:selected", id); } catch {}
+    try {
+      localStorage.setItem("workspace:selected", id);
+    } catch {}
     window.dispatchEvent(new CustomEvent("workspace:changed", { detail: { id } }));
     setSelectedId(id);
     onNavigate?.();

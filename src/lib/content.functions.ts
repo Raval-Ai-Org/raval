@@ -2,24 +2,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { runJsonPrompt } from "./ai";
-import {
-  contentBatchPrompt,
-  nextPostPrompt,
-  regeneratePrompt,
-} from "./ai/prompts";
+import { contentBatchPrompt, nextPostPrompt, regeneratePrompt } from "./ai/prompts";
 import { buildNextSteps } from "./ai/deterministic-suggestions";
-
 
 const uuid = z.string().uuid();
 
-
-type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[];
+type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 const ChannelEnum = z.enum([
   "instagram",
@@ -177,10 +165,7 @@ export const deleteContentItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ id: uuid }).parse(data))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("content_items")
-      .delete()
-      .eq("id", data.id);
+    const { error } = await context.supabase.from("content_items").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -221,10 +206,11 @@ export const rescheduleContentItem = createServerFn({ method: "POST" })
 
 function extractBrandFact(context?: string | null, label = "Brand") {
   if (!context) return "";
-  const line = context.split("\n").find((l) => l.toLowerCase().startsWith(label.toLowerCase() + ":"));
+  const line = context
+    .split("\n")
+    .find((l) => l.toLowerCase().startsWith(label.toLowerCase() + ":"));
   return line?.split(":").slice(1).join(":").trim() ?? "";
 }
-
 
 function fallbackGeneratedItems(args: {
   count: number;
@@ -233,27 +219,40 @@ function fallbackGeneratedItems(args: {
   prompt: string;
 }): Array<{ channel: string; kind: string; title: string; body: string; hashtags: string[] }> {
   const brand = extractBrandFact(args.context, "Brand") || "the brand";
-  const offer = extractBrandFact(args.context, "Products") || extractBrandFact(args.context, "One-liner") || "the core offer";
+  const offer =
+    extractBrandFact(args.context, "Products") ||
+    extractBrandFact(args.context, "One-liner") ||
+    "the core offer";
   const audience = extractBrandFact(args.context, "Audience") || "the target audience";
   return Array.from({ length: args.count }, (_, i) => {
     const channel = args.channels[i % args.channels.length] ?? "linkedin";
     const kind = channel === "web" ? "brief" : channel === "email" ? "email" : "post";
-    const title = kind === "brief"
-      ? `${brand}: SEO brief for ${offer}`
-      : kind === "email"
-      ? `${brand}: customer update`
-      : `${brand}: ${channel} post for ${audience}`;
-    const body = kind === "brief"
-      ? `Target query: ${offer}\nIntent: Help ${audience} understand why ${brand} is relevant now.\nAnswer snippet: ${brand} helps ${audience} with ${offer}. Build the page around the problem, proof, offer, FAQ, and one clear next step.\nRecommended H2s: Problem, Solution, Proof, FAQs, CTA.`
-      : kind === "email"
-      ? `Subject: A practical next step from ${brand}\nPreview: Built for ${audience}.\n\nHi — if ${audience} are looking for a clearer way to move forward, ${brand} can help with ${offer}. The next best step is simple: review the offer, match it to the customer's current need, and make the CTA easy to act on.`
-      : `${brand} is built for ${audience}.\n\nThe message to lead with: ${offer}.\n\nWhen the value is specific, useful, and easy to act on, the right people know why they should pay attention.\n\nWhat would you want your audience to do next?`;
+    const title =
+      kind === "brief"
+        ? `${brand}: SEO brief for ${offer}`
+        : kind === "email"
+          ? `${brand}: customer update`
+          : `${brand}: ${channel} post for ${audience}`;
+    const body =
+      kind === "brief"
+        ? `Target query: ${offer}\nIntent: Help ${audience} understand why ${brand} is relevant now.\nAnswer snippet: ${brand} helps ${audience} with ${offer}. Build the page around the problem, proof, offer, FAQ, and one clear next step.\nRecommended H2s: Problem, Solution, Proof, FAQs, CTA.`
+        : kind === "email"
+          ? `Subject: A practical next step from ${brand}\nPreview: Built for ${audience}.\n\nHi — if ${audience} are looking for a clearer way to move forward, ${brand} can help with ${offer}. The next best step is simple: review the offer, match it to the customer's current need, and make the CTA easy to act on.`
+          : `${brand} is built for ${audience}.\n\nThe message to lead with: ${offer}.\n\nWhen the value is specific, useful, and easy to act on, the right people know why they should pay attention.\n\nWhat would you want your audience to do next?`;
     return {
       channel,
       kind,
       title,
       body,
-      hashtags: [brand, "marketing", "growth"].map((h) => `#${h.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24)}`).filter((h) => h.length > 1),
+      hashtags: [brand, "marketing", "growth"]
+        .map(
+          (h) =>
+            `#${h
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "")
+              .slice(0, 24)}`,
+        )
+        .filter((h) => h.length > 1),
     };
   });
 }
@@ -281,7 +280,8 @@ export const regenerateContentItem = createServerFn({ method: "POST" })
 
     const parsed = await runJsonPrompt<{ title?: string; body?: string; hashtags?: string[] }>({
       route: "content.regenerate",
-      system, user,
+      system,
+      user,
       fallback: {},
       maxTokens: 900,
       temperature: 0.7,
@@ -300,7 +300,6 @@ export const regenerateContentItem = createServerFn({ method: "POST" })
     if (error || !row) throw new Error(error?.message ?? "Update failed");
     return row as ContentItem;
   });
-
 
 /* ------------------------------------------------------------ */
 /* Generate fresh items from a prompt (Spark/Scout/Echo)         */
@@ -331,22 +330,31 @@ export const generateContentBatch = createServerFn({ method: "POST" })
     });
     const user = `${userTail}\n\n## Brief\n${data.prompt}`;
 
-    type Item = { channel?: string; kind?: string; title?: string; body?: string; hashtags?: string[] };
+    type Item = {
+      channel?: string;
+      kind?: string;
+      title?: string;
+      body?: string;
+      hashtags?: string[];
+    };
     const parsed = await runJsonPrompt<{ items?: Item[] }>({
       route: "content.generateBatch",
-      system, user,
+      system,
+      user,
       fallback: { items: [] },
       maxTokens: 1600,
       temperature: 0.72,
     });
 
-    const items = (parsed.items ?? []).filter((it) => typeof it.body === "string" && it.body.trim());
-    const safeItems = items.length > 0
-      ? items.slice(0, count)
-      : fallbackGeneratedItems({ count, channels, context: data.context, prompt: data.prompt });
+    const items = (parsed.items ?? []).filter(
+      (it) => typeof it.body === "string" && it.body.trim(),
+    );
+    const safeItems =
+      items.length > 0
+        ? items.slice(0, count)
+        : fallbackGeneratedItems({ count, channels, context: data.context, prompt: data.prompt });
 
     const rows = safeItems.map((it) => ({
-
       workspace_id: data.workspaceId,
       agent: data.agent,
       kind: (KindEnum.safeParse(it.kind).success ? it.kind : "post") as string,
@@ -384,9 +392,7 @@ export const generateContentBatch = createServerFn({ method: "POST" })
 /* ------------------------------------------------------------ */
 export const setContentItemStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) =>
-    z.object({ id: uuid, status: StatusEnum }).parse(data),
-  )
+  .inputValidator((data) => z.object({ id: uuid, status: StatusEnum }).parse(data))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("content_items")
@@ -449,21 +455,35 @@ export const suggestNextSteps = createServerFn({ method: "POST" })
     let stats = { pending: 0, scheduled: 0, published: 0, recentTitles: [] as string[] };
     if (data.workspaceId) {
       const [p, s, pub, recent] = await Promise.all([
-        context.supabase.from("content_items").select("id", { count: "exact", head: true })
-          .eq("workspace_id", data.workspaceId).eq("status", "pending"),
-        context.supabase.from("content_items").select("id", { count: "exact", head: true })
-          .eq("workspace_id", data.workspaceId).eq("status", "scheduled"),
-        context.supabase.from("content_items").select("id", { count: "exact", head: true })
-          .eq("workspace_id", data.workspaceId).eq("status", "published"),
-        context.supabase.from("content_items").select("title")
-          .eq("workspace_id", data.workspaceId).order("created_at", { ascending: false }).limit(5),
+        context.supabase
+          .from("content_items")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", data.workspaceId)
+          .eq("status", "pending"),
+        context.supabase
+          .from("content_items")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", data.workspaceId)
+          .eq("status", "scheduled"),
+        context.supabase
+          .from("content_items")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", data.workspaceId)
+          .eq("status", "published"),
+        context.supabase
+          .from("content_items")
+          .select("title")
+          .eq("workspace_id", data.workspaceId)
+          .order("created_at", { ascending: false })
+          .limit(5),
       ]);
       stats = {
         pending: p.count ?? 0,
         scheduled: s.count ?? 0,
         published: pub.count ?? 0,
         recentTitles: ((recent.data ?? []) as { title: string | null }[])
-          .map((r) => r.title).filter((t): t is string => !!t),
+          .map((r) => r.title)
+          .filter((t): t is string => !!t),
       };
     }
 
@@ -471,9 +491,7 @@ export const suggestNextSteps = createServerFn({ method: "POST" })
     // real workspace stats + brand facts. Zero tokens, sub-ms.
     const steps = buildNextSteps(stats, data.context, data.lastUserMessage);
     return { steps, stats };
-
   });
-
 
 /* ------------------------------------------------------------ */
 /* Generate next recommended post                                */
@@ -532,9 +550,13 @@ export const generateNextPost = createServerFn({ method: "POST" })
     }
 
     const recentSummary =
-      recentRows.slice(0, 8).map((r, i) =>
-        `${i + 1}. [${r.channel ?? "?"}] ${r.title ?? "(untitled)"}${r.body ? ` — ${r.body.slice(0, 90)}` : ""}`,
-      ).join("\n") || "(no recent posts)";
+      recentRows
+        .slice(0, 8)
+        .map(
+          (r, i) =>
+            `${i + 1}. [${r.channel ?? "?"}] ${r.title ?? "(untitled)"}${r.body ? ` — ${r.body.slice(0, 90)}` : ""}`,
+        )
+        .join("\n") || "(no recent posts)";
 
     const { system, user } = nextPostPrompt({
       brandContext: data.context,
@@ -544,17 +566,20 @@ export const generateNextPost = createServerFn({ method: "POST" })
     });
 
     const parsed = await runJsonPrompt<{
-      title?: string; body?: string; hashtags?: string[]; rationale?: string;
+      title?: string;
+      body?: string;
+      hashtags?: string[];
+      rationale?: string;
     }>({
       route: "content.generateNextPost",
-      system, user,
+      system,
+      user,
       fallback: {},
       maxTokens: 900,
       temperature: 0.72,
     });
 
     if (!parsed.body && !parsed.title) throw new Error("AI returned no content");
-
 
     const { data: row, error } = await context.supabase
       .from("content_items")

@@ -11,20 +11,23 @@ The receiver is `src/routes/api/public/hooks/sdr.ts` (file route, cloned from th
 ## SDR→RavalAI payload (as sent by the SDR's `webhook_out.py`)
 
 SDR sends one event per **target** (per-account delivery unit). Wrapped payload:
+
 ```json
 {
   "event": "post.published | post.failed | post.retrying | account.expired",
   "timestamp": "2026-08-08T10:00:00Z",
   "data": {
-    "post_id": "...",        // SDR job id (== our sdr_post_id)
-    "target_id": "...",      // SDR target id (== our sdr_target_id)
+    "post_id": "...", // SDR job id (== our sdr_post_id)
+    "target_id": "...", // SDR target id (== our sdr_target_id)
     "status": "published | failed | retrying",
-    "platform_post_id": "...",   // when published
-    "platform_post_url": "..."   // when published
+    "platform_post_id": "...", // when published
+    "platform_post_url": "..." // when published
   }
 }
 ```
+
 Headers:
+
 - `X-Signature-256: sha256=<hex>` — HMAC-SHA256 over the literal string `POST|/webhook|<body>` using the workspace's webhook secret.
 - `X-Event-Type: post.published` (etc.)
 
@@ -39,12 +42,12 @@ Headers:
 
 ## Apply rules (idempotent, terminal-wins)
 
-| Event | Action |
-|---|---|
-| `post.published` | upsert row → status `published`, set `platform_post_id`, `platform_post_url`, `delivered_at`; recompute item status (`published` if all rows published) |
-| `post.failed` | upsert row → status `failed`, set `error_category` + `last_error`; recompute item status (`failed` if all failed, `partial_failed` on mix); **do not overwrite a `published` row with `failed`** (per-target terminal state wins) |
-| `post.retrying` | upsert row → status `retrying`, set `attempt`, `last_error`; item → `publishing`; **must not downgrade** a `published` row |
-| `account.expired` | mark the matching `content_publications` row → `failed` (auth), and surface `content_publications`/Connections with "Reconnect required" (FR-004) |
+| Event             | Action                                                                                                                                                                                                                            |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `post.published`  | upsert row → status `published`, set `platform_post_id`, `platform_post_url`, `delivered_at`; recompute item status (`published` if all rows published)                                                                           |
+| `post.failed`     | upsert row → status `failed`, set `error_category` + `last_error`; recompute item status (`failed` if all failed, `partial_failed` on mix); **do not overwrite a `published` row with `failed`** (per-target terminal state wins) |
+| `post.retrying`   | upsert row → status `retrying`, set `attempt`, `last_error`; item → `publishing`; **must not downgrade** a `published` row                                                                                                        |
+| `account.expired` | mark the matching `content_publications` row → `failed` (auth), and surface `content_publications`/Connections with "Reconnect required" (FR-004)                                                                                 |
 
 Response: `200 {"ok":true}` after successful apply; `204` for duplicate/reordered events that change nothing.
 

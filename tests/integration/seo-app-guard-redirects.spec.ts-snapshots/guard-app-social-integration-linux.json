@@ -1,8 +1,6 @@
 {
   "start": "/app/social",
-  "redirectChain": [
-    "/app?tab=social"
-  ],
+  "redirectChain": ["/app?tab=social"],
   "finalPath": "/app",
   "finalSearch": {
     "tab": "social"

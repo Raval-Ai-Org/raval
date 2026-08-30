@@ -20,7 +20,12 @@ describe("connect → appear → expire → reconnect flow", () => {
   it("starts empty, then a connected account appears", async () => {
     expect(await listAccountsHandler(deps())).toEqual({ status: 200, body: [] });
 
-    sdr.addAccount({ account_id: "li-1", platform: "linkedin", platform_username: "Brand Page", status: "active" });
+    sdr.addAccount({
+      account_id: "li-1",
+      platform: "linkedin",
+      platform_username: "Brand Page",
+      status: "active",
+    });
     const listed = (await listAccountsHandler(deps())).body as ConnectedAccount[];
     expect(listed).toHaveLength(1);
     expect(getPublishableAccounts(listed).map((a) => a.accountId)).toEqual(["li-1"]);

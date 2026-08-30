@@ -18,11 +18,11 @@ export type ActivityKind =
 export interface BusEvent {
   id: string;
   kind: ActivityKind;
-  agentSlug?: string;     // seo / content / social / ads / crm / analytics
+  agentSlug?: string; // seo / content / social / ads / crm / analytics
   title: string;
   detail?: string;
   ts: number;
-  toast?: boolean;        // surface as a sonner toast
+  toast?: boolean; // surface as a sonner toast
 }
 
 const MAX = 40;
@@ -47,7 +47,9 @@ export function useActivity() {
   useEffect(() => {
     const cb = (e: BusEvent[]) => setEvents(e);
     subs.add(cb);
-    return () => { subs.delete(cb); };
+    return () => {
+      subs.delete(cb);
+    };
   }, []);
   return events;
 }

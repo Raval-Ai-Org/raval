@@ -15,9 +15,14 @@ export type SdrPlatform = (typeof SDR_PLATFORMS)[number];
 // ─── HMAC webhook verification ──────────────────────────────────────────────
 // The SDR signs the raw body: X-Signature-256 = "sha256=<hex>" of
 // HMAC-SHA256(secret, "POST|/webhook|<rawBody>")  (SDR webhook_out.py:148-153).
-export function verifyWebhookSignature(secret: string, rawBody: string, signatureHeader: string | null): boolean {
+export function verifyWebhookSignature(
+  secret: string,
+  rawBody: string,
+  signatureHeader: string | null,
+): boolean {
   if (!signatureHeader) return false;
-  const expected = "sha256=" + createHmac("sha256", secret).update(`POST|/webhook|${rawBody}`).digest("hex");
+  const expected =
+    "sha256=" + createHmac("sha256", secret).update(`POST|/webhook|${rawBody}`).digest("hex");
   const a = Buffer.from(expected);
   const b = Buffer.from(signatureHeader);
   return a.length === b.length && timingSafeEqual(a, b);
@@ -69,7 +74,10 @@ export function isScheduleWithinWindow(utcIso: string, maxMs: number = ONE_YEAR_
 // Seeded from the SDR adapters' get_capabilities (X 280/4, LinkedIn 3000/1,
 // Facebook 63206/20, Instagram 2200/1 + exactly-one-media). Single source of
 // truth for pre-publish validation.
-export const PLATFORM_LIMITS: Record<SdrPlatform, { maxText: number; maxMedia: number; requiresMedia: boolean }> = {
+export const PLATFORM_LIMITS: Record<
+  SdrPlatform,
+  { maxText: number; maxMedia: number; requiresMedia: boolean }
+> = {
   twitter: { maxText: 280, maxMedia: 4, requiresMedia: false },
   linkedin: { maxText: 3000, maxMedia: 1, requiresMedia: false },
   facebook: { maxText: 63206, maxMedia: 20, requiresMedia: false },
@@ -79,7 +87,10 @@ export const PLATFORM_LIMITS: Record<SdrPlatform, { maxText: number; maxMedia: n
 export type ValidateContentInput = { text?: string | null; mediaUrls?: string[] | null };
 
 /** Returns a list of user-visible validation errors (empty = valid). */
-export function validateContentForPlatform(platform: string, content: ValidateContentInput): string[] {
+export function validateContentForPlatform(
+  platform: string,
+  content: ValidateContentInput,
+): string[] {
   const limits = PLATFORM_LIMITS[platform as SdrPlatform];
   if (!limits) return [`Unsupported platform: ${platform}`];
   const errors: string[] = [];
@@ -162,7 +173,10 @@ export async function callSdr(opts: {
   timeoutMs?: number;
 }): Promise<{ status: number; data: any }> {
   const base = assertSdrBaseUrl(opts.baseUrl);
-  const u = new URL(opts.path.replace(/^\//, ""), base.href.endsWith("/") ? base.href : base.href + "/");
+  const u = new URL(
+    opts.path.replace(/^\//, ""),
+    base.href.endsWith("/") ? base.href : base.href + "/",
+  );
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 10_000);
   const started = Date.now();
@@ -178,15 +192,27 @@ export async function callSdr(opts: {
     });
     const data = res.status === 204 ? null : await res.json().catch(() => null);
     // Observability (Rule 19): log every SDR proxy call — outcome + latency.
-    console.log(`[sdr] ${opts.method ?? "GET"} ${opts.path} → ${res.status} (${Date.now() - started}ms)`);
+    console.log(
+      `[sdr] ${opts.method ?? "GET"} ${opts.path} → ${res.status} (${Date.now() - started}ms)`,
+    );
     return { status: res.status, data };
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
-      console.error(`[sdr] ${opts.method ?? "GET"} ${opts.path} → TIMEOUT (${opts.timeoutMs ?? 10_000}ms)`);
-      throw new SdrError("SDR_UNREACHABLE", `SDR request timed out after ${opts.timeoutMs ?? 10_000}ms`);
+      console.error(
+        `[sdr] ${opts.method ?? "GET"} ${opts.path} → TIMEOUT (${opts.timeoutMs ?? 10_000}ms)`,
+      );
+      throw new SdrError(
+        "SDR_UNREACHABLE",
+        `SDR request timed out after ${opts.timeoutMs ?? 10_000}ms`,
+      );
     }
-    console.error(`[sdr] ${opts.method ?? "GET"} ${opts.path} → UNREACHABLE: ${e instanceof Error ? e.message : String(e)}`);
-    throw new SdrError("SDR_UNREACHABLE", `SDR unreachable: ${e instanceof Error ? e.message : String(e)}`);
+    console.error(
+      `[sdr] ${opts.method ?? "GET"} ${opts.path} → UNREACHABLE: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    throw new SdrError(
+      "SDR_UNREACHABLE",
+      `SDR unreachable: ${e instanceof Error ? e.message : String(e)}`,
+    );
   } finally {
     clearTimeout(timer);
   }

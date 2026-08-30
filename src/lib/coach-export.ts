@@ -3,11 +3,21 @@ import type { CoachBriefing } from "@/lib/coach.functions";
 
 function fmtDate(iso?: string) {
   const d = iso ? new Date(iso) : new Date();
-  return d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function safeFilename(s: string) {
-  return s.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "briefing";
+  return (
+    s
+      .replace(/[^a-z0-9-_]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase() || "briefing"
+  );
 }
 
 export function exportBriefingPDF(b: CoachBriefing, workspaceLabel?: string) {
@@ -25,7 +35,12 @@ export function exportBriefingPDF(b: CoachBriefing, workspaceLabel?: string) {
     }
   };
 
-  const text = (str: string, size = 11, style: "normal" | "bold" = "normal", color: [number, number, number] = [30, 30, 30]) => {
+  const text = (
+    str: string,
+    size = 11,
+    style: "normal" | "bold" = "normal",
+    color: [number, number, number] = [30, 30, 30],
+  ) => {
     doc.setFont("helvetica", style);
     doc.setFontSize(size);
     doc.setTextColor(...color);
@@ -56,7 +71,12 @@ export function exportBriefingPDF(b: CoachBriefing, workspaceLabel?: string) {
   text("Raval AI · Weekly Marketing Coach", 9, "bold", [130, 130, 130]);
   y += 4;
   text(b.headline || "Weekly Briefing", 20, "bold", [15, 15, 15]);
-  text(`${workspaceLabel ? workspaceLabel + " · " : ""}${fmtDate(b.generatedAt)}`, 10, "normal", [120, 120, 120]);
+  text(
+    `${workspaceLabel ? workspaceLabel + " · " : ""}${fmtDate(b.generatedAt)}`,
+    10,
+    "normal",
+    [120, 120, 120],
+  );
   y += 6;
   rule();
 
@@ -65,10 +85,14 @@ export function exportBriefingPDF(b: CoachBriefing, workspaceLabel?: string) {
     heading("Today's focus");
     text(b.focus.title, 13, "bold");
     if (b.focus.why) text(b.focus.why, 11);
-    if (b.focus.action?.label) text(`Next step → ${b.focus.action.label}`, 10, "bold", [80, 80, 80]);
+    if (b.focus.action?.label)
+      text(`Next step → ${b.focus.action.label}`, 10, "bold", [80, 80, 80]);
   }
 
-  const section = (title: string, items: { title: string; detail?: string; action?: { label?: string } }[]) => {
+  const section = (
+    title: string,
+    items: { title: string; detail?: string; action?: { label?: string } }[],
+  ) => {
     if (!items?.length) return;
     heading(title);
     items.forEach((it, i) => {
@@ -116,10 +140,12 @@ export function exportBriefingPDF(b: CoachBriefing, workspaceLabel?: string) {
 }
 
 export function exportBriefingDoc(b: CoachBriefing, workspaceLabel?: string) {
-  const esc = (s = "") =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const esc = (s = "") => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-  const section = (title: string, items: { title: string; detail?: string; action?: { label?: string } }[]) => {
+  const section = (
+    title: string,
+    items: { title: string; detail?: string; action?: { label?: string } }[],
+  ) => {
     if (!items?.length) return "";
     return `<h2>${esc(title)}</h2><ol>${items
       .map(
@@ -169,7 +195,10 @@ export function exportBriefingDoc(b: CoachBriefing, workspaceLabel?: string) {
   ${
     b.sources?.length
       ? `<h2>Citations</h2><ol>${b.sources
-          .map((s) => `<li><strong>${esc(s.label)}</strong><br/><a href="${esc(s.url)}">${esc(s.url)}</a></li>`)
+          .map(
+            (s) =>
+              `<li><strong>${esc(s.label)}</strong><br/><a href="${esc(s.url)}">${esc(s.url)}</a></li>`,
+          )
           .join("")}</ol>`
       : ""
   }

@@ -66,7 +66,10 @@ for (const bp of BREAKPOINTS) {
             !/favicon|manifest|analytics|Tracking Prevention|ResizeObserver loop/i.test(e) &&
             !/hydrat|data-tsd-source|Warning: Prop |did not match/i.test(e),
         );
-        expect(meaningful, `${bp.name} ${route} console errors:\n${meaningful.join("\n")}`).toHaveLength(0);
+        expect(
+          meaningful,
+          `${bp.name} ${route} console errors:\n${meaningful.join("\n")}`,
+        ).toHaveLength(0);
       });
     }
   });

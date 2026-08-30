@@ -29,33 +29,63 @@ const JSON_HEADERS = { "content-type": "application/json" };
 
 function fakeSession() {
   return {
-    access_token: "fake", refresh_token: "fake", token_type: "bearer",
-    expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
+    access_token: "fake",
+    refresh_token: "fake",
+    token_type: "bearer",
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
     user: {
-      id: USER_ID, email: "t@e.com", aud: "authenticated", role: "authenticated",
-      app_metadata: { provider: "email" }, user_metadata: {},
+      id: USER_ID,
+      email: "t@e.com",
+      aud: "authenticated",
+      role: "authenticated",
+      app_metadata: { provider: "email" },
+      user_metadata: {},
     },
   };
 }
 
 async function stubSupabase(context: BrowserContext) {
-  await context.route(new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`), async (route: Route) => {
-    const req = route.request();
-    const url = req.url();
-    const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
-    if (url.includes("/auth/v1/user"))
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession().user) });
-    if (url.includes("/auth/v1/token"))
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession()) });
-    if (url.includes("/rest/v1/workspaces")) {
-      const row = {
-        id: WS_ID, name: "Test", website_url: null, industry: null,
-        onboarded_at: "2024-01-01T00:00:00Z", first_prompt: null,
-      };
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(wantsSingle ? row : [row]) });
-    }
-    return route.fulfill({ status: 200, headers: JSON_HEADERS, body: wantsSingle ? "null" : "[]" });
-  });
+  await context.route(
+    new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`),
+    async (route: Route) => {
+      const req = route.request();
+      const url = req.url();
+      const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
+      if (url.includes("/auth/v1/user"))
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession().user),
+        });
+      if (url.includes("/auth/v1/token"))
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession()),
+        });
+      if (url.includes("/rest/v1/workspaces")) {
+        const row = {
+          id: WS_ID,
+          name: "Test",
+          website_url: null,
+          industry: null,
+          onboarded_at: "2024-01-01T00:00:00Z",
+          first_prompt: null,
+        };
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(wantsSingle ? row : [row]),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: wantsSingle ? "null" : "[]",
+      });
+    },
+  );
   await context.route("**/_serverFn/**", (route) =>
     route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
   );
@@ -73,15 +103,25 @@ async function seed(page: Page) {
         window.localStorage.removeItem("studio:last-canvas");
         // @ts-expect-error stub WS
         window.WebSocket = function () {
-          return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 3 };
+          return {
+            addEventListener() {},
+            removeEventListener() {},
+            send() {},
+            close() {},
+            readyState: 3,
+          };
         };
         // Collect any uncaught errors so tests can assert none happened.
         (window as any).__errors = [];
         window.addEventListener("error", (e) => (window as any).__errors.push(String(e.message)));
         window.addEventListener("unhandledrejection", (e) =>
-          (window as any).__errors.push("unhandledrejection: " + String((e as PromiseRejectionEvent).reason)),
+          (window as any).__errors.push(
+            "unhandledrejection: " + String((e as PromiseRejectionEvent).reason),
+          ),
         );
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
     },
     { storageKey: STORAGE_KEY, sess: fakeSession(), wsId: WS_ID },
   );
@@ -89,7 +129,9 @@ async function seed(page: Page) {
 
 async function freshLoad(page: Page, path = "/app") {
   await page.goto(path, { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({
+    timeout: 15_000,
+  });
   await page.waitForFunction(
     () => !!window.localStorage.getItem("workspace:name") && !!document.querySelector("textarea"),
     null,
@@ -98,10 +140,10 @@ async function freshLoad(page: Page, path = "/app") {
 }
 
 async function dispatch(page: Page, name: string, detail?: unknown) {
-  await page.evaluate(
-    ({ n, d }) => window.dispatchEvent(new CustomEvent(n, { detail: d })),
-    { n: name, d: detail },
-  );
+  await page.evaluate(({ n, d }) => window.dispatchEvent(new CustomEvent(n, { detail: d })), {
+    n: name,
+    d: detail,
+  });
 }
 
 async function readErrors(page: Page): Promise<string[]> {
@@ -118,7 +160,12 @@ test.describe("Malformed / unknown suggestion event deep-links", () => {
     await freshLoad(page);
 
     // Fire a batch of events the app does not listen for.
-    for (const name of ["open:unknown-thing", "open:definitely-not-real", "chat:teleport", "geo:launch-rocket"]) {
+    for (const name of [
+      "open:unknown-thing",
+      "open:definitely-not-real",
+      "chat:teleport",
+      "geo:launch-rocket",
+    ]) {
       await dispatch(page, name, { anything: true });
     }
 
@@ -130,7 +177,9 @@ test.describe("Malformed / unknown suggestion event deep-links", () => {
     await expect(page.locator("textarea").first()).toHaveValue(/still working/);
   });
 
-  test("open:canvas with malformed detail falls back safely and does not corrupt the URL", async ({ page }) => {
+  test("open:canvas with malformed detail falls back safely and does not corrupt the URL", async ({
+    page,
+  }) => {
     await freshLoad(page);
     const initial = await page.evaluate(() => window.location.search);
     expect(initial).toBe("");
@@ -141,7 +190,9 @@ test.describe("Malformed / unknown suggestion event deep-links", () => {
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 5_000 });
     const search1 = await page.evaluate(() => window.location.search);
     expect(search1).not.toMatch(/totally-bogus/);
-    expect(search1).toMatch(/canvas=(social-post|seo-brief|landing-page|email|article|design-asset)/);
+    expect(search1).toMatch(
+      /canvas=(social-post|seo-brief|landing-page|email|article|design-asset)/,
+    );
 
     // Close, then try more malformed detail shapes.
     await page.keyboard.press("Escape");
@@ -186,7 +237,9 @@ test.describe("Malformed / unknown suggestion event deep-links", () => {
     expect(await readErrors(page)).toEqual([]);
   });
 
-  test("open:analytics with a bogus tab opens the modal on the default tab, URL not polluted", async ({ page }) => {
+  test("open:analytics with a bogus tab opens the modal on the default tab, URL not polluted", async ({
+    page,
+  }) => {
     await freshLoad(page);
     await dispatch(page, "open:analytics", { tab: "not-a-tab" });
 
@@ -213,11 +266,17 @@ test.describe("Malformed / unknown suggestion event deep-links", () => {
     expect(await readErrors(page)).toEqual([]);
   });
 
-  test("/app/analytics?tab=garbage normalizes to the default tab via validateSearch", async ({ page }) => {
+  test("/app/analytics?tab=garbage normalizes to the default tab via validateSearch", async ({
+    page,
+  }) => {
     await page.goto("/app/analytics?tab=nope-not-real", { waitUntil: "domcontentloaded" });
     // Bounced to /app…
-    await page.waitForFunction(() => window.location.pathname === "/app", null, { timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({ timeout: 15_000 });
+    await page.waitForFunction(() => window.location.pathname === "/app", null, {
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // …and either (a) opens on the default tab (validateSearch normalized
     // `nope-not-real` → `overview`) or (b) silently opens nothing because
@@ -232,11 +291,15 @@ test.describe("Malformed / unknown suggestion event deep-links", () => {
   });
 
   test("unknown routes render the 404 boundary with a clear error", async ({ page }) => {
-    const response = await page.goto("/this-route-does-not-exist", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/this-route-does-not-exist", {
+      waitUntil: "domcontentloaded",
+    });
     expect(response?.status()).toBe(404);
 
     // The 404 component from __root.tsx renders a big "404".
-    await expect(page.getByRole("heading", { level: 1, name: /404/ })).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole("heading", { level: 1, name: /404/ })).toBeVisible({
+      timeout: 8_000,
+    });
     // A recovery affordance is present (a link back home).
     const links = page.getByRole("link");
     await expect(links.first()).toBeVisible();

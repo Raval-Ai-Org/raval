@@ -5,14 +5,16 @@ import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { runJsonPrompt } from "@/lib/ai";
 import { system as sysBuilder } from "@/lib/ai/prompts/assemble";
 import { assemble } from "@/lib/ai/prompts/assemble";
-import {
-  FMT_JSON_STRICT,
-  FMT_NO_FENCES,
-  identitySocialPM,
-} from "@/lib/ai/prompts/fragments";
+import { FMT_JSON_STRICT, FMT_NO_FENCES, identitySocialPM } from "@/lib/ai/prompts/fragments";
 
 const PlatformEnum = z.enum([
-  "linkedin", "twitter", "instagram", "facebook", "threads", "tiktok", "youtube",
+  "linkedin",
+  "twitter",
+  "instagram",
+  "facebook",
+  "threads",
+  "tiktok",
+  "youtube",
 ]);
 
 const BodySchema = z.object({
@@ -21,7 +23,13 @@ const BodySchema = z.object({
   platforms: z.array(PlatformEnum).min(1).max(7),
 });
 
-type Variant = { platform: PlatformId; title: string; body: string; hashtags: string[]; chars: number };
+type Variant = {
+  platform: PlatformId;
+  title: string;
+  body: string;
+  hashtags: string[];
+  chars: number;
+};
 
 /* --- Deterministic helpers (no AI) --- */
 function clampChars(text: string, max: number): string {
@@ -39,9 +47,14 @@ function normalizeHashtag(raw: unknown): string | null {
   return `#${clean}`;
 }
 
-function finalizeVariant(platform: PlatformId, raw: { title?: unknown; body?: unknown; hashtags?: unknown }): Variant {
+function finalizeVariant(
+  platform: PlatformId,
+  raw: { title?: unknown; body?: unknown; hashtags?: unknown },
+): Variant {
   const spec = PLATFORMS[platform];
-  const rawTags = Array.isArray(raw.hashtags) ? (raw.hashtags as unknown[]).map(normalizeHashtag).filter((x): x is string => !!x) : [];
+  const rawTags = Array.isArray(raw.hashtags)
+    ? (raw.hashtags as unknown[]).map(normalizeHashtag).filter((x): x is string => !!x)
+    : [];
   // Dedupe (case-insensitive) + cap to platform max.
   const seen = new Set<string>();
   const tags: string[] = [];
@@ -69,15 +82,21 @@ export const Route = createFileRoute("/api/social-multi")({
         if (!auth.ok) return auth.response;
 
         let body: z.infer<typeof BodySchema>;
-        try { body = BodySchema.parse(await request.json()); }
-        catch { return jsonError(400, "Invalid request body"); }
+        try {
+          body = BodySchema.parse(await request.json());
+        } catch {
+          return jsonError(400, "Invalid request body");
+        }
 
         // ── Single LLM call for all platforms (was N calls) ─────────
         // Build a per-platform rubric deterministically, and ask the
         // model to emit one JSON object with one variant per platform.
         const specs = body.platforms.map((p) => PLATFORMS[p]);
         const rubric = specs
-          .map((s) => `- ${s.id} (${s.label}): body ≤ ${s.maxChars - 60}c, sweet spot ~${s.optimalChars}c, ${s.hashtags[0]}-${s.hashtags[1]} hashtags. Style: ${s.style}`)
+          .map(
+            (s) =>
+              `- ${s.id} (${s.label}): body ≤ ${s.maxChars - 60}c, sweet spot ~${s.optimalChars}c, ${s.hashtags[0]}-${s.hashtags[1]} hashtags. Style: ${s.style}`,
+          )
           .join("\n");
 
         const system = sysBuilder(
@@ -97,16 +116,27 @@ export const Route = createFileRoute("/api/social-multi")({
         ]);
 
         try {
-          const parsed = await runJsonPrompt<{ variants?: Array<{ platform?: string; title?: unknown; body?: unknown; hashtags?: unknown }> }>({
+          const parsed = await runJsonPrompt<{
+            variants?: Array<{
+              platform?: string;
+              title?: unknown;
+              body?: unknown;
+              hashtags?: unknown;
+            }>;
+          }>({
             route: "social.multi",
-            system, user,
+            system,
+            user,
             fallback: { variants: [] },
             // Scales with platform count but capped — one call, not N.
             maxTokens: Math.min(2400, 400 + specs.length * 260),
             temperature: 0.75,
           });
 
-          const byPlatform = new Map<string, { title?: unknown; body?: unknown; hashtags?: unknown }>();
+          const byPlatform = new Map<
+            string,
+            { title?: unknown; body?: unknown; hashtags?: unknown }
+          >();
           for (const v of parsed.variants ?? []) {
             if (v && typeof v.platform === "string") byPlatform.set(v.platform, v);
           }

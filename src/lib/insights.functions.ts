@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { buildSmartSuggestions, type SmartSuggestion as DetSuggestion } from "./ai/deterministic-suggestions";
-
-
+import {
+  buildSmartSuggestions,
+  type SmartSuggestion as DetSuggestion,
+} from "./ai/deterministic-suggestions";
 
 const uuid = z.string().uuid();
 
@@ -107,7 +108,6 @@ export type SmartSuggestion = {
 // The old `callJsonModel` helper is gone — all suggestion calls now go
 // through `runJsonPrompt` (shared cache, telemetry, safe parsing).
 
-
 export const refreshSuggestions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) =>
@@ -126,48 +126,55 @@ export const refreshSuggestions = createServerFn({ method: "POST" })
     const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString();
 
     // Gather grounding signals
-    const [publishedRecent, scheduledNext, draftsCount, blogCount, sharesCount, latestAudit, insights] =
-      await Promise.all([
-        context.supabase
-          .from("content_items")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", data.workspaceId)
-          .eq("status", "published")
-          .gte("updated_at", weekAgo),
-        context.supabase
-          .from("content_items")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", data.workspaceId)
-          .eq("status", "scheduled")
-          .lte("scheduled_at", nextWeek),
-        context.supabase
-          .from("content_items")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", data.workspaceId)
-          .in("status", ["draft", "pending"]),
-        context.supabase
-          .from("content_items")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", data.workspaceId)
-          .in("kind", ["blog", "brief"]),
-        context.supabase
-          .from("client_shares")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", data.workspaceId),
-        context.supabase
-          .from("geo_audit_runs")
-          .select("score, subscores, created_at")
-          .eq("workspace_id", data.workspaceId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        context.supabase
-          .from("memory_insights")
-          .select("body")
-          .eq("workspace_id", data.workspaceId)
-          .order("created_at", { ascending: false })
-          .limit(20),
-      ]);
+    const [
+      publishedRecent,
+      scheduledNext,
+      draftsCount,
+      blogCount,
+      sharesCount,
+      latestAudit,
+      insights,
+    ] = await Promise.all([
+      context.supabase
+        .from("content_items")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", data.workspaceId)
+        .eq("status", "published")
+        .gte("updated_at", weekAgo),
+      context.supabase
+        .from("content_items")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", data.workspaceId)
+        .eq("status", "scheduled")
+        .lte("scheduled_at", nextWeek),
+      context.supabase
+        .from("content_items")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", data.workspaceId)
+        .in("status", ["draft", "pending"]),
+      context.supabase
+        .from("content_items")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", data.workspaceId)
+        .in("kind", ["blog", "brief"]),
+      context.supabase
+        .from("client_shares")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", data.workspaceId),
+      context.supabase
+        .from("geo_audit_runs")
+        .select("score, subscores, created_at")
+        .eq("workspace_id", data.workspaceId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      context.supabase
+        .from("memory_insights")
+        .select("body")
+        .eq("workspace_id", data.workspaceId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+    ]);
 
     const signals = {
       publishedLast7d: publishedRecent.count ?? 0,
@@ -181,16 +188,10 @@ export const refreshSuggestions = createServerFn({ method: "POST" })
     };
 
     // Deterministic — no LLM needed. Pure signal→template mapping.
-    const suggestions: DetSuggestion[] = buildSmartSuggestions(
-      signals,
-      data.brandContext,
-      max,
-    );
+    const suggestions: DetSuggestion[] = buildSmartSuggestions(signals, data.brandContext, max);
 
     return { suggestions, signals };
-
   });
-
 
 /* ------------------------------------------------------------------ */
 /* Memory insights persistence                                        */

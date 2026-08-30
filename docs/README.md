@@ -37,15 +37,15 @@ docs/
 
 ## 🧭 Where to look
 
-| If you want to... | Read this |
-|---|---|
-| Set up your local dev environment | [README.md](../README.md) → Quick start |
-| Get `.env` values from a teammate | [TEAM-CREDENTIALS.md](TEAM-CREDENTIALS.md) |
-| Understand a past architectural decision | [adr/](adr/) — start with `0001` and read forward |
-| Understand the SDR integration design | [specs/001-sdr-integration/spec.md](specs/001-sdr-integration/spec.md) |
-| See the launch plan (timeline + phases) | [specs/001-sdr-integration/CLIENT-LAUNCH-PLAN.md](specs/001-sdr-integration/CLIENT-LAUNCH-PLAN.md) |
-| See what's currently blocked / in progress | [specs/001-sdr-integration/INTEGRATION-HOLD.md](specs/001-sdr-integration/INTEGRATION-HOLD.md) |
-| Deploy SDR to AWS Lightsail | [adr/0005-aws-lightsail-sdr-production-deployment.md](adr/0005-aws-lightsail-sdr-production-deployment.md) |
+| If you want to...                          | Read this                                                                                                  |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Set up your local dev environment          | [README.md](../README.md) → Quick start                                                                    |
+| Get `.env` values from a teammate          | [TEAM-CREDENTIALS.md](TEAM-CREDENTIALS.md)                                                                 |
+| Understand a past architectural decision   | [adr/](adr/) — start with `0001` and read forward                                                          |
+| Understand the SDR integration design      | [specs/001-sdr-integration/spec.md](specs/001-sdr-integration/spec.md)                                     |
+| See the launch plan (timeline + phases)    | [specs/001-sdr-integration/CLIENT-LAUNCH-PLAN.md](specs/001-sdr-integration/CLIENT-LAUNCH-PLAN.md)         |
+| See what's currently blocked / in progress | [specs/001-sdr-integration/INTEGRATION-HOLD.md](specs/001-sdr-integration/INTEGRATION-HOLD.md)             |
+| Deploy SDR to AWS Lightsail                | [adr/0005-aws-lightsail-sdr-production-deployment.md](adr/0005-aws-lightsail-sdr-production-deployment.md) |
 
 ## 🆕 Adding new docs
 

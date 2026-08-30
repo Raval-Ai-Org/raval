@@ -47,9 +47,9 @@ function stripLeadingLabel(children: any, re: RegExp): any {
     return [first.replace(re, ""), ...arr.slice(1)];
   }
   if (isValidElement(first) && (first.type === "strong" || first.type === "b")) {
-    return arr.slice(1).map((n, i) =>
-      i === 0 && typeof n === "string" ? n.replace(/^\s+/, "") : n,
-    );
+    return arr
+      .slice(1)
+      .map((n, i) => (i === 0 && typeof n === "string" ? n.replace(/^\s+/, "") : n));
   }
   return arr;
 }
@@ -166,9 +166,7 @@ function ChatMessageContentInner({
             );
           },
           ul: ({ children }) => <ul>{children}</ul>,
-          ol: ({ children }) => (
-            <ol className="space-y-1.5 [counter-reset:step]">{children}</ol>
-          ),
+          ol: ({ children }) => <ol className="space-y-1.5 [counter-reset:step]">{children}</ol>,
           li: ({ children, ...props }: any) => {
             const ordered =
               (props.node?.parent?.type === "list" && props.node?.parent?.ordered) ?? false;
@@ -235,7 +233,9 @@ function ChatMessageContentInner({
                 </code>
               );
             }
-            return <CodeBlock className={className}>{String(children).replace(/\n$/, "")}</CodeBlock>;
+            return (
+              <CodeBlock className={className}>{String(children).replace(/\n$/, "")}</CodeBlock>
+            );
           },
           pre: ({ children }) => <>{children}</>,
         }}
@@ -246,4 +246,7 @@ function ChatMessageContentInner({
   );
 }
 
-export const ChatMessageContent = memo(ChatMessageContentInner, (a, b) => a.content === b.content && a.role === b.role);
+export const ChatMessageContent = memo(
+  ChatMessageContentInner,
+  (a, b) => a.content === b.content && a.role === b.role,
+);

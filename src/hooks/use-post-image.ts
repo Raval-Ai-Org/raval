@@ -29,13 +29,17 @@ export function usePostImage(args: {
   size?: ImgSize;
 }) {
   const {
-    postId, postBody, postTitle, brand, workspaceName, platform,
+    postId,
+    postBody,
+    postTitle,
+    brand,
+    workspaceName,
+    platform,
     autoSize = false,
     size: explicitSize,
   } = args;
 
   const activeSize: ImgSize = autoSize ? sizeForPlatform(platform) : (explicitSize ?? "1024x1024");
-
 
   const [image, setImage] = useState<string | null>(() => getCachedImage(postId, activeSize));
   const [status, setStatus] = useState<ImageStatus>("idle");
@@ -71,12 +75,24 @@ export function usePostImage(args: {
   const generate = useCallback(async () => {
     if (status === "loading") return;
     const body = (postBody || "").trim();
-    if (!body) { toast.error("No post text yet — write or generate the post first"); return; }
-    if (!postId) { toast.error("Save the draft first, then generate an image"); return; }
+    if (!body) {
+      toast.error("No post text yet — write or generate the post first");
+      return;
+    }
+    if (!postId) {
+      toast.error("Save the draft first, then generate an image");
+      return;
+    }
 
     const prompt = buildImagePrompt({
-      postBody: body, postTitle, brand, workspaceName,
-      platform, size: activeSize, seedKey: postId, autoSize,
+      postBody: body,
+      postTitle,
+      brand,
+      workspaceName,
+      platform,
+      size: activeSize,
+      seedKey: postId,
+      autoSize,
     });
 
     abortRef.current?.abort();
@@ -95,34 +111,46 @@ export function usePostImage(args: {
     try {
       const { streamImage } = await import("@/lib/streamImage");
       const style = deriveRecraftStyle(brand?.voice, brand?.industry);
-      await streamImage(prompt, (dataUrl, isFinal) => {
-        setImage(dataUrl);
-        if (isFinal) {
-          void (async () => {
-            let finalUrl = dataUrl;
-            if (brand?.logoUrl) {
-              const corner = logoCorner(activeSize) === "top-left" ? "tl" : "br";
-              finalUrl = await compositeLogoOnImage(dataUrl, {
-                logoUrl: brand.logoUrl,
-                size: activeSize,
-                corner,
-                widthPct: 0.12,
-                insetPct: 0.04,
+      await streamImage(
+        prompt,
+        (dataUrl, isFinal) => {
+          setImage(dataUrl);
+          if (isFinal) {
+            void (async () => {
+              let finalUrl = dataUrl;
+              if (brand?.logoUrl) {
+                const corner = logoCorner(activeSize) === "top-left" ? "tl" : "br";
+                finalUrl = await compositeLogoOnImage(dataUrl, {
+                  logoUrl: brand.logoUrl,
+                  size: activeSize,
+                  corner,
+                  widthPct: 0.12,
+                  insetPct: 0.04,
+                });
+                setImage(finalUrl);
+              }
+              setProgress(100);
+              setStatus("success");
+              if (timerRef.current) window.clearInterval(timerRef.current);
+              setCachedImage(postId, activeSize, finalUrl);
+              toast.success("Image ready", {
+                description: brand?.logoUrl
+                  ? "Brand logo composited · cached for this post."
+                  : "1 credit used · cached for this post.",
               });
-              setImage(finalUrl);
-            }
-            setProgress(100);
-            setStatus("success");
-            if (timerRef.current) window.clearInterval(timerRef.current);
-            setCachedImage(postId, activeSize, finalUrl);
-            toast.success("Image ready", { description: brand?.logoUrl ? "Brand logo composited · cached for this post." : "1 credit used · cached for this post." });
-            window.setTimeout(() => setStatus((s) => (s === "success" ? "idle" : s)), 1800);
-          })();
-        }
-      }, { signal: ctrl.signal, size: activeSize, style });
+              window.setTimeout(() => setStatus((s) => (s === "success" ? "idle" : s)), 1800);
+            })();
+          }
+        },
+        { signal: ctrl.signal, size: activeSize, style },
+      );
     } catch (e: any) {
       if (timerRef.current) window.clearInterval(timerRef.current);
-      if (e?.name === "AbortError") { setStatus("idle"); setProgress(0); return; }
+      if (e?.name === "AbortError") {
+        setStatus("idle");
+        setProgress(0);
+        return;
+      }
       const msg = e?.message ?? "Image generation failed";
       setError(msg);
       setStatus("error");

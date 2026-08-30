@@ -30,8 +30,10 @@ const SIZE: Record<Size, string> = {
   lg: "h-6 w-6",
 };
 
-export interface LoadingIndicatorProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "children"> {
+export interface LoadingIndicatorProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "children"
+> {
   /** Accessible label announced to screen readers. Default: "Loading". */
   label?: string;
   /** Show label visually. Default false (sr-only). */

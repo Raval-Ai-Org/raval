@@ -25,44 +25,45 @@ This document is the **single source of truth** for everything that must happen 
 
 ### 1.1 What's working (verified live)
 
-| Component | Status | Evidence |
-|---|---|---|
-| RavalAI app boots | ✅ | `npm run dev` → http://localhost:8080, HTTP 200 |
-| Login with `junaidsajjad2298@gmail.com` | ✅ | e2e test 1, 12.5s |
-| All major routes load | ✅ | e2e test 2, 8/8 routes |
-| Hydration warnings resolved | ✅ | commit `50469ed` |
-| `/studio` → `/app/social` redirect | ✅ | 307 verified |
-| Vitest unit tests | ✅ | 115/115 in 5.88s |
-| Live e2e tests | ✅ | 7/7 in 2.6 min |
-| Supabase auth + workspace | ✅ | real Supabase project `smdravaoaeqdajmnrlpr` |
-| SDR proxy from RavalAI | ✅ | `/api/sdr/accounts` returns 401 (auth-protected) |
-| SDR tunnel live | ✅ | `https://spice-carlo-cure-commonwealth.trycloudflare.com` |
-| LinkedIn OAuth code | ✅ | `app/api/accounts.py` lines for `linkedin` |
-| X/Twitter OAuth code | ✅ | `app/api/accounts.py` lines for `twitter` |
-| Facebook OAuth code | ✅ | `app/api/accounts.py` lines for `facebook` |
-| Instagram OAuth code | ✅ | `app/api/accounts.py` lines for `instagram` |
-| Token encryption (Fernet) | ✅ | `app/security.py` |
-| Webhook receiver | ✅ | `/api/v1/webhooks/...` |
-| Celery worker + beat | ✅ | `app/celery_app.py` |
+| Component                               | Status | Evidence                                                  |
+| --------------------------------------- | ------ | --------------------------------------------------------- |
+| RavalAI app boots                       | ✅     | `npm run dev` → http://localhost:8080, HTTP 200           |
+| Login with `junaidsajjad2298@gmail.com` | ✅     | e2e test 1, 12.5s                                         |
+| All major routes load                   | ✅     | e2e test 2, 8/8 routes                                    |
+| Hydration warnings resolved             | ✅     | commit `50469ed`                                          |
+| `/studio` → `/app/social` redirect      | ✅     | 307 verified                                              |
+| Vitest unit tests                       | ✅     | 115/115 in 5.88s                                          |
+| Live e2e tests                          | ✅     | 7/7 in 2.6 min                                            |
+| Supabase auth + workspace               | ✅     | real Supabase project `smdravaoaeqdajmnrlpr`              |
+| SDR proxy from RavalAI                  | ✅     | `/api/sdr/accounts` returns 401 (auth-protected)          |
+| SDR tunnel live                         | ✅     | `https://spice-carlo-cure-commonwealth.trycloudflare.com` |
+| LinkedIn OAuth code                     | ✅     | `app/api/accounts.py` lines for `linkedin`                |
+| X/Twitter OAuth code                    | ✅     | `app/api/accounts.py` lines for `twitter`                 |
+| Facebook OAuth code                     | ✅     | `app/api/accounts.py` lines for `facebook`                |
+| Instagram OAuth code                    | ✅     | `app/api/accounts.py` lines for `instagram`               |
+| Token encryption (Fernet)               | ✅     | `app/security.py`                                         |
+| Webhook receiver                        | ✅     | `/api/v1/webhooks/...`                                    |
+| Celery worker + beat                    | ✅     | `app/celery_app.py`                                       |
 
 ### 1.2 What's missing or in progress
 
-| Gap | Severity | Owner | ETA |
-|---|---|---|---|
-| Meta (Facebook) Developer App | **CRITICAL** | Junaid | 5-7 business days (App Review) |
-| Instagram enabled on Meta app | **CRITICAL** | Junaid | Same as above |
-| X/Twitter production credentials | High | Junaid | 1-2 days |
-| LinkedIn production credentials | High | Junaid | 1-2 days |
-| SDR permanent URL (`sdr.raval.ai`) | **CRITICAL** | Junaid | 1 day (ADR-0005) |
-| RavalAI production URL (`app.raval.ai`) | **CRITICAL** | Junaid | 0.5 day (Vercel) |
-| Landing page (`raval.ai`) | High | Junaid | 1 day |
-| Stripe integration | High | Junaid | 1-2 days |
-| Friendly-client dogfood | Medium | Junaid + 1 client | 2-3 days |
-| Public launch announcement | Low | Zian | 0.5 day |
+| Gap                                     | Severity     | Owner             | ETA                            |
+| --------------------------------------- | ------------ | ----------------- | ------------------------------ |
+| Meta (Facebook) Developer App           | **CRITICAL** | Junaid            | 5-7 business days (App Review) |
+| Instagram enabled on Meta app           | **CRITICAL** | Junaid            | Same as above                  |
+| X/Twitter production credentials        | High         | Junaid            | 1-2 days                       |
+| LinkedIn production credentials         | High         | Junaid            | 1-2 days                       |
+| SDR permanent URL (`sdr.raval.ai`)      | **CRITICAL** | Junaid            | 1 day (ADR-0005)               |
+| RavalAI production URL (`app.raval.ai`) | **CRITICAL** | Junaid            | 0.5 day (Vercel)               |
+| Landing page (`raval.ai`)               | High         | Junaid            | 1 day                          |
+| Stripe integration                      | High         | Junaid            | 1-2 days                       |
+| Friendly-client dogfood                 | Medium       | Junaid + 1 client | 2-3 days                       |
+| Public launch announcement              | Low          | Zian              | 0.5 day                        |
 
 ### 1.3 What the client sees (current state)
 
 If a client tried to sign up **today**, they would:
+
 1. Land on `https://localhost:8080` ❌ — wrong URL, only works on Junaid's machine
 2. Sign up via Supabase auth ✅
 3. Create a workspace ✅
@@ -108,6 +109,7 @@ The client clicks "Authorize" and is sent back to RavalAI. **They never see a de
 ### 2.3 The four developer apps — current status
 
 #### LinkedIn Developer App
+
 - **Status:** Partially done per CLAUDE.md ("✅ LinkedIn (connection done)")
 - **What we have:** LinkedIn client credentials (need to verify)
 - **What we need:** Production callback URL registered
@@ -117,6 +119,7 @@ The client clicks "Authorize" and is sent back to RavalAI. **They never see a de
 - **Verification:** LinkedIn requires app verification (business verification) for production use. Check that the verification is still active.
 
 #### X (Twitter) Developer App
+
 - **Status:** Partially done per CLAUDE.md ("✅ X/Twitter (setup done)")
 - **What we have:** X client credentials (need to verify)
 - **What we need:** Production callback URL registered, "User authentication" enabled
@@ -127,6 +130,7 @@ The client clicks "Authorize" and is sent back to RavalAI. **They never see a de
 - **Critical:** Apply for "Elevated" access if you want to post on behalf of accounts you don't personally own (which is the whole point of this product)
 
 #### Meta Developer App (covers Facebook + Instagram)
+
 - **Status:** **NOT DONE** (per CLAUDE.md: "❌ Facebook (remaining) · ❌ Instagram (remaining)")
 - **What we need to create:** A new app at https://developers.facebook.com/apps
 - **App type:** "Business" type (required for Instagram Graph API)
@@ -145,6 +149,7 @@ The client clicks "Authorize" and is sent back to RavalAI. **They never see a de
 - **Test users:** Add Junaid + Zian as test users so you can develop without waiting for review.
 
 #### Instagram (standalone, optional)
+
 - **Status:** Covered by Meta app above
 - **Why mention separately:** Some teams think Instagram is a separate platform. It's not — it's a product inside Meta's app ecosystem. The Meta app covers both.
 
@@ -230,6 +235,7 @@ When you have these ready, I will execute Phase 1 below.
 Reference: [`history/adr/0005-aws-lightsail-sdr-production-deployment.md`](../../history/adr/0005-aws-lightsail-sdr-production-deployment.md)
 
 Steps:
+
 - [ ] Provision AWS Lightsail instance (Ubuntu 22.04, 1GB RAM, $5/mo)
 - [ ] Point DNS `sdr.raval.ai` → instance IP
 - [ ] SSH in, install Python 3.12, Docker, docker-compose, Caddy
@@ -248,6 +254,7 @@ Steps:
 **Why now:** App Review is the longest pole. Start it the moment you create the app.
 
 Steps:
+
 - [ ] Go to https://developers.facebook.com/apps
 - [ ] Click "Create App" → Type: **Business** → Name: "RavalAI" → Contact email: `team@raval.ai`
 - [ ] Add product: **Facebook Login for Business**
@@ -264,6 +271,7 @@ Steps:
 #### 0.3 — Verify LinkedIn and X credentials (Day 0, ~1 hour)
 
 Steps:
+
 - [ ] LinkedIn: log into https://www.linkedin.com/developers/apps, find RavalAI app, copy Client ID and Client Secret
 - [ ] X: log into https://developer.twitter.com/en/portal, find RavalAI app, copy OAuth 2.0 Client ID, Client Secret, and Bearer Token
 - [ ] Verify each app is in "Live" or "Production" mode (not "Development")
@@ -340,6 +348,7 @@ curl -X POST https://sdr.raval.ai/api/v1/accounts/oauth/start \
 ```
 
 **Expected response for each:**
+
 ```json
 {
   "auth_url": "https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=...",
@@ -364,6 +373,7 @@ FACEBOOK_CLIENT_ID=
 ```
 
 Commit:
+
 ```bash
 git commit -am "chore: document developer app env var template"
 ```
@@ -381,6 +391,7 @@ This is the step most teams miss. If your callback URL isn't registered with the
 #### 2.1 — LinkedIn
 
 In https://www.linkedin.com/developers/apps → RavalAI app → **Auth** tab:
+
 - **Authorized redirect URLs:** add:
   - `https://sdr.raval.ai/api/v1/oauth/linkedin/callback` (production)
   - `http://localhost:8080/api/sdr/oauth/linkedin/callback` (dev — for local testing)
@@ -388,12 +399,14 @@ In https://www.linkedin.com/developers/apps → RavalAI app → **Auth** tab:
 #### 2.2 — X / Twitter
 
 In https://developer.twitter.com/en/portal → RavalAI app → **User authentication settings** → **Callback URI / Redirect URL**:
+
 - Add: `https://sdr.raval.ai/api/v1/oauth/x/callback`
 - Add: `http://localhost:8080/api/sdr/oauth/x/callback` (dev)
 
 #### 2.3 — Facebook
 
 In https://developers.facebook.com/apps → RavalAI app → **Facebook Login for Business** → **Settings** → **Valid OAuth Redirect URIs**:
+
 - Add: `https://sdr.raval.ai/api/v1/oauth/facebook/callback`
 - Add: `http://localhost:8080/api/sdr/oauth/facebook/callback` (dev)
 
@@ -436,7 +449,7 @@ test.describe("Live OAuth (manual consent step)", () => {
     test(`OAuth start for ${platform} returns real consent URL`, async ({ page, context }) => {
       await loginAndGoToSocial(page);
       const button = page.locator(`button:has-text("Connect ${platform}")`).first();
-      if (await button.count() === 0) {
+      if ((await button.count()) === 0) {
         test.skip();
         return;
       }
@@ -448,7 +461,9 @@ test.describe("Live OAuth (manual consent step)", () => {
         const url = popup.url();
         console.log(`${platform} consent URL: ${url}`);
         // Assert it's a real platform URL, not a stub
-        expect(url).toMatch(new RegExp(platform === "X" ? "twitter\\.com|x\\.com" : platform.toLowerCase()));
+        expect(url).toMatch(
+          new RegExp(platform === "X" ? "twitter\\.com|x\\.com" : platform.toLowerCase()),
+        );
         await popup.close();
       } else {
         // Same-window redirect
@@ -464,6 +479,7 @@ test.describe("Live OAuth (manual consent step)", () => {
 #### 3.2 — Manually complete one full flow per platform (you, 30 min)
 
 For each platform:
+
 1. Run the test
 2. When the consent screen appears, **manually click "Authorize"** in the browser
 3. Verify you land back in RavalAI with the connection marked "Connected"
@@ -485,6 +501,7 @@ For each platform:
 LinkedIn tokens expire in 60 days. X tokens in 2 hours. Meta tokens in 60 days.
 
 Test that the SDR auto-refreshes:
+
 - Pick the platform with shortest expiry (X, 2 hours)
 - Connect an X account
 - Wait 2+ hours (or stub the token to look expired)
@@ -494,6 +511,7 @@ Test that the SDR auto-refreshes:
 This catches a class of bug that's invisible until 2am on a Sunday.
 
 Commit:
+
 ```bash
 git commit -am "test: add live OAuth e2e tests for all 4 platforms"
 ```
@@ -511,6 +529,7 @@ git commit -am "test: add live OAuth e2e tests for all 4 platforms"
 Vercel has first-class TanStack Start support.
 
 Steps:
+
 - [ ] Sign up at https://vercel.com with `team@raval.ai`
 - [ ] Click "Add New Project" → Import `Raval-Ai-Org/raval` from GitHub
 - [ ] Framework preset: **TanStack Start** (Vercel auto-detects)
@@ -558,6 +577,7 @@ Now that `sdr.raval.ai` and `app.raval.ai` exist, update all 4 platform develope
 - [ ] Verify each post appears on the actual social account
 
 Commit:
+
 ```bash
 git commit -am "chore: configure production deployment (Vercel + Lightsail)"
 ```
@@ -573,6 +593,7 @@ git commit -am "chore: configure production deployment (Vercel + Lightsail)"
 #### 5.1 — Pick a friendly client
 
 Zian's network, your network — anyone with:
+
 - A LinkedIn account
 - An X account
 - 30 minutes to spare
@@ -595,12 +616,14 @@ Zian's network, your network — anyone with:
 I'll be on standby. Every "wait, how do I...?" is a bug or missing doc. Fix and document immediately.
 
 Common friction points to watch for:
+
 - OAuth consent screen text is confusing → write better copy in the platform's developer app settings
 - Multi-step onboarding is overwhelming → simplify the wizard
 - Post preview doesn't match what actually gets published → fix the preview vs reality
 - Client doesn't understand "draft vs scheduled vs published" → add tooltips
 
 Commit each fix:
+
 ```bash
 git commit -am "fix: address first client feedback (e.g. onboarding wizard too long)"
 ```
@@ -618,6 +641,7 @@ git commit -am "fix: address first client feedback (e.g. onboarding wizard too l
 You need a marketing site (not the app) at `https://raval.ai`.
 
 I can build it as a route in the same TanStack Start app:
+
 - `src/routes/_landing.tsx` (separate route tree from the app)
 - Hero section: "AI-native marketing that posts for you"
 - "How it works" 3-step section
@@ -630,13 +654,14 @@ Or use a separate static site (Astro, Next.js, etc.) if you prefer.
 
 Three tiers as outlined:
 
-| Tier | Price | Features |
-|---|---|---|
-| **Solo** | $99/mo | 1 workspace, 3 social accounts, 30 posts/mo |
-| **Studio** | $499/mo | 5 workspaces, 15 social accounts, 200 posts/mo |
+| Tier       | Price     | Features                                                       |
+| ---------- | --------- | -------------------------------------------------------------- |
+| **Solo**   | $99/mo    | 1 workspace, 3 social accounts, 30 posts/mo                    |
+| **Studio** | $499/mo   | 5 workspaces, 15 social accounts, 200 posts/mo                 |
 | **Agency** | $1,999/mo | 20 workspaces, 60 social accounts, 1,000 posts/mo, white-label |
 
 Stripe Checkout integration:
+
 - Sign up at https://stripe.com
 - Create 3 products matching the tiers
 - Add a `subscriptions` table to Supabase
@@ -647,6 +672,7 @@ Stripe Checkout integration:
 #### 6.3 — Launch announcement (Day 7, ~1 hour)
 
 Zian posts on LinkedIn and X:
+
 - Personal story of building RavalAI
 - "Try it free for 14 days" link to `https://raval.ai`
 - Demo video (2 min Loom of using the platform)
@@ -654,6 +680,7 @@ Zian posts on LinkedIn and X:
 #### 6.4 — Onboard 5 more clients in the first week (Day 7-14)
 
 Track each:
+
 - Signup → onboarding → first connection → first publish
 - NPS score after 7 days
 - Churn risk flag (no login in 7 days, no publish in 14 days)
@@ -664,27 +691,29 @@ Track each:
 
 ## 5. Risks and Mitigations
 
-| Risk | Probability | Impact | Mitigation |
-|---|---|---|---|
-| Meta App Review takes longer than 7 days | Medium | High | Start it Phase 0. Submit screencast videos showing clear use cases. |
-| Meta rejects a permission scope | Medium | High | Re-submit with more detailed screencast. Budget 1 week for back-and-forth. |
-| LinkedIn rate limit (100 posts/day) hit by an agency | Low | Medium | Show client "X of Y posts used today" in the Studio UI. Cap agency tier at 1,000 posts/mo. |
-| X API Basic tier ($100/mo) needed before 15 clients | Low | Low | Monitor usage. Upgrade to Basic when free tier (1,500/mo) reaches 80% utilization. |
-| Token refresh breaks at 2am Sunday | Medium | High | Test in Phase 3. Set up health check + alerting in Phase 4. |
-| First client has unique setup we didn't anticipate | Certain | Medium | This is why Phase 5 exists. Budget 2-3 days of iteration. |
-| Stripe webhook fails to fire on subscription cancellation | Low | High | Test in staging. Add dead-letter queue for failed webhooks. |
-| Production URL DNS propagation takes >24h | Low | Low | Set up DNS 48h before launch. |
-| Meta "App not in production" mode limits to test users | Medium | High | Submit for App Review immediately (Phase 0.2). |
+| Risk                                                      | Probability | Impact | Mitigation                                                                                 |
+| --------------------------------------------------------- | ----------- | ------ | ------------------------------------------------------------------------------------------ |
+| Meta App Review takes longer than 7 days                  | Medium      | High   | Start it Phase 0. Submit screencast videos showing clear use cases.                        |
+| Meta rejects a permission scope                           | Medium      | High   | Re-submit with more detailed screencast. Budget 1 week for back-and-forth.                 |
+| LinkedIn rate limit (100 posts/day) hit by an agency      | Low         | Medium | Show client "X of Y posts used today" in the Studio UI. Cap agency tier at 1,000 posts/mo. |
+| X API Basic tier ($100/mo) needed before 15 clients       | Low         | Low    | Monitor usage. Upgrade to Basic when free tier (1,500/mo) reaches 80% utilization.         |
+| Token refresh breaks at 2am Sunday                        | Medium      | High   | Test in Phase 3. Set up health check + alerting in Phase 4.                                |
+| First client has unique setup we didn't anticipate        | Certain     | Medium | This is why Phase 5 exists. Budget 2-3 days of iteration.                                  |
+| Stripe webhook fails to fire on subscription cancellation | Low         | High   | Test in staging. Add dead-letter queue for failed webhooks.                                |
+| Production URL DNS propagation takes >24h                 | Low         | Low    | Set up DNS 48h before launch.                                                              |
+| Meta "App not in production" mode limits to test users    | Medium      | High   | Submit for App Review immediately (Phase 0.2).                                             |
 
 ---
 
 ## 6. Cost Summary
 
 ### One-time costs
+
 - Domain registration (`raval.ai`): ~$15/year
 - AWS Lightsail setup: $0 (free tier covers initial setup)
 
 ### Recurring monthly costs (at launch)
+
 - AWS Lightsail (SDR): $5-10/mo
 - Vercel Pro (RavalAI): $20/mo (free tier works for first 3 months)
 - Supabase Pro: $25/mo (free tier works for first 3 clients)
@@ -692,6 +721,7 @@ Track each:
 - **Total: ~$50-60/mo + Stripe fees** before any clients
 
 ### Scaling costs (at 10 clients, ~$5,000 MRR)
+
 - AWS Lightsail: $20-40/mo (more CPU for Celery)
 - Vercel Pro: $20/mo
 - Supabase Pro: $25/mo
@@ -699,6 +729,7 @@ Track each:
 - **Total: ~$165-185/mo** for $5,000 MRR = ~3.5% infra cost (healthy)
 
 ### Scaling costs (at 50 clients, ~$25,000 MRR)
+
 - AWS Lightsail → AWS ECS or Fargate: ~$200/mo
 - Vercel Enterprise: $250+/mo
 - Supabase Team: $599/mo
@@ -754,6 +785,6 @@ Before I start executing, I need answers to:
 
 ## 9. Change Log
 
-| Date | Author | Change |
-|---|---|---|
+| Date       | Author                 | Change                                                                              |
+| ---------- | ---------------------- | ----------------------------------------------------------------------------------- |
 | 2026-08-27 | Muhammad-Junaid-Sajjad | Initial plan created. Platform + SDR verified live. 6-phase launch plan documented. |

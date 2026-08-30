@@ -10,7 +10,8 @@ export type ChatAction =
   | { kind: "calendar"; label: string; hint: string };
 
 const RE = {
-  audit: /\b(audit|scan|ai\s*visibil|geo\b|aeo\b|llms?\.txt|robots\.txt|schema|structured\s*data|how\s*do\s*(ai|engines|chatgpt|gemini|perplexity)\s*see)/i,
+  audit:
+    /\b(audit|scan|ai\s*visibil|geo\b|aeo\b|llms?\.txt|robots\.txt|schema|structured\s*data|how\s*do\s*(ai|engines|chatgpt|gemini|perplexity)\s*see)/i,
   social: /\b(social\s*post|linkedin|instagram|tweet|x\s*post|tiktok|carousel|reel)\b/i,
   article: /\b(blog|article|long[-\s]?form|pillar\s*post)\b/i,
   landing: /\b(landing\s*page|hero\s*section|pricing\s*page|sales\s*page)\b/i,
@@ -25,23 +26,61 @@ export function detectChatActions(prompt: string): ChatAction[] {
   const out: ChatAction[] = [];
   const t = prompt;
   if (RE.audit.test(t))
-    out.push({ kind: "audit", label: "Run AI visibility audit", hint: "Scan your site for GEO + AEO issues" });
+    out.push({
+      kind: "audit",
+      label: "Run AI visibility audit",
+      hint: "Scan your site for GEO + AEO issues",
+    });
   if (RE.social.test(t))
-    out.push({ kind: "studio", canvas: "social-post", label: "Open Social Post studio", hint: "Draft LinkedIn / IG / X" });
+    out.push({
+      kind: "studio",
+      canvas: "social-post",
+      label: "Open Social Post studio",
+      hint: "Draft LinkedIn / IG / X",
+    });
   if (RE.article.test(t))
-    out.push({ kind: "studio", canvas: "article", label: "Open Article studio", hint: "Outline & draft long-form" });
+    out.push({
+      kind: "studio",
+      canvas: "article",
+      label: "Open Article studio",
+      hint: "Outline & draft long-form",
+    });
   if (RE.landing.test(t))
-    out.push({ kind: "studio", canvas: "landing-page", label: "Open Landing Page studio", hint: "Hero · CTA · sections" });
+    out.push({
+      kind: "studio",
+      canvas: "landing-page",
+      label: "Open Landing Page studio",
+      hint: "Hero · CTA · sections",
+    });
   if (RE.email.test(t))
-    out.push({ kind: "studio", canvas: "email", label: "Open Email studio", hint: "Newsletter or drip" });
+    out.push({
+      kind: "studio",
+      canvas: "email",
+      label: "Open Email studio",
+      hint: "Newsletter or drip",
+    });
   if (RE.seo.test(t))
-    out.push({ kind: "studio", canvas: "seo-brief", label: "Open SEO Brief studio", hint: "AEO-ready outline" });
+    out.push({
+      kind: "studio",
+      canvas: "seo-brief",
+      label: "Open SEO Brief studio",
+      hint: "AEO-ready outline",
+    });
   if (RE.design.test(t))
-    out.push({ kind: "studio", canvas: "design-asset", label: "Open Design studio", hint: "Creative & brand kit" });
+    out.push({
+      kind: "studio",
+      canvas: "design-asset",
+      label: "Open Design studio",
+      hint: "Creative & brand kit",
+    });
   if (RE.memory.test(t))
     out.push({ kind: "memory", label: "Open Memory", hint: "Extract brand DNA from your site" });
   if (RE.calendar.test(t))
-    out.push({ kind: "calendar", label: "Open Content Calendar", hint: "Plan & schedule the week" });
+    out.push({
+      kind: "calendar",
+      label: "Open Content Calendar",
+      hint: "Plan & schedule the week",
+    });
 
   // Dedup by label, cap at 3 chips
   const seen = new Set<string>();

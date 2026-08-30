@@ -8,12 +8,28 @@ import { Button } from "@/components/ui/button";
 import {
   BarChart3,
   Calendar as CalendarIcon,
-  Settings, Rocket, ChevronDown, Sun, Moon, Menu, X, MessageSquare, Share2,
-  PanelRightClose, PanelRightOpen,
-  
+  Settings,
+  Rocket,
+  ChevronDown,
+  Sun,
+  Moon,
+  Menu,
+  X,
+  MessageSquare,
+  Share2,
+  PanelRightClose,
+  PanelRightOpen,
   type LucideIcon,
 } from "@/components/brand/icons";
-import { MoreHorizontal, Brain, Bot, ArrowLeft, Users, Sparkles, Radio } from "@/components/ui/gemini-icons";
+import {
+  MoreHorizontal,
+  Brain,
+  Bot,
+  ArrowLeft,
+  Users,
+  Sparkles,
+  Radio,
+} from "@/components/ui/gemini-icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,15 +78,22 @@ const AiVisibilityDialog = lazy(() =>
   import("@/components/app/AiVisibilityDialog").then((m) => ({ default: m.AiVisibilityDialog })),
 );
 const CompetitorWatchButton = lazy(() =>
-  import("@/components/app/CompetitorWatchButton").then((m) => ({ default: m.CompetitorWatchButton })),
+  import("@/components/app/CompetitorWatchButton").then((m) => ({
+    default: m.CompetitorWatchButton,
+  })),
 );
 const MarketingCoachPanel = lazy(() =>
   import("@/components/app/MarketingCoachPanel").then((m) => ({ default: m.MarketingCoachPanel })),
 );
 
-
 import { useStudioCanvas } from "@/hooks/use-studio";
-import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { useTheme } from "@/hooks/use-theme";
 import { useIsMobile, useIsCompact } from "@/hooks/use-mobile";
@@ -81,8 +104,6 @@ import { useRealtimeContent } from "@/hooks/use-realtime-content";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
-
-
 
 // Preserve deep-link query params (?tab, ?canvas, ?artifact, ?invite_token, ?next)
 // through the router. Without validateSearch, TanStack Router drops unknown
@@ -113,10 +134,18 @@ export const Route = createFileRoute("/app")({
   }),
 });
 
-
 function ChevronRightSep() {
   return (
-    <svg className="h-3 w-3 shrink-0 text-border" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg
+      className="h-3 w-3 shrink-0 text-border"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
       <path d="M9 6l6 6-6 6" />
     </svg>
   );
@@ -133,7 +162,6 @@ type ModuleDef = {
 const modules: ModuleDef[] = [
   { to: "/app", label: "Chat", icon: MessageSquare, slug: "home", exact: true },
 ];
-
 
 const GROWTH_PATHS: string[] = [];
 
@@ -171,9 +199,16 @@ function AppShell() {
     if (brandDna.positioning) parts.push(`Positioning: ${brandDna.positioning}`);
     if (brandDna.uniqueValueProp) parts.push(`UVP: ${brandDna.uniqueValueProp}`);
     if (brandDna.competitors?.length) {
-      parts.push(`Known competitors: ${brandDna.competitors.map((c) => c.name).filter(Boolean).slice(0, 6).join(", ")}`);
+      parts.push(
+        `Known competitors: ${brandDna.competitors
+          .map((c) => c.name)
+          .filter(Boolean)
+          .slice(0, 6)
+          .join(", ")}`,
+      );
     }
-    if (brandDna.keywords?.length) parts.push(`Keywords: ${brandDna.keywords.slice(0, 10).join(", ")}`);
+    if (brandDna.keywords?.length)
+      parts.push(`Keywords: ${brandDna.keywords.slice(0, 10).join(", ")}`);
     return parts.join("\n").slice(0, 6000);
   }, [brandDna]);
   // Subscribe to realtime updates for content_items + approvals so Studio and
@@ -206,11 +241,13 @@ function AppShell() {
   useSwipe({
     enabled: isMobile,
     edgeStartLeftPx: navOpen ? undefined : 24,
-    onSwipeRight: () => { if (!navOpen) setNavOpen(true); },
-    onSwipeLeft: () => { if (navOpen) setNavOpen(false); },
+    onSwipeRight: () => {
+      if (!navOpen) setNavOpen(true);
+    },
+    onSwipeLeft: () => {
+      if (navOpen) setNavOpen(false);
+    },
   });
-
-
 
   // Hydrate persisted sidebar state after mount (avoids SSR hydration mismatch).
   useEffect(() => {
@@ -220,7 +257,9 @@ function AppShell() {
     } catch {}
   }, []);
   useEffect(() => {
-    try { localStorage.setItem("app:navOpen", navOpen ? "1" : "0"); } catch {}
+    try {
+      localStorage.setItem("app:navOpen", navOpen ? "1" : "0");
+    } catch {}
   }, [navOpen]);
   const [, setChatOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
@@ -238,12 +277,13 @@ function AppShell() {
   const toggleChat = () => {
     setChatCollapsed((v) => {
       const next = !v;
-      try { localStorage.setItem("chat:collapsed", next ? "1" : "0"); } catch {}
+      try {
+        localStorage.setItem("chat:collapsed", next ? "1" : "0");
+      } catch {}
       return next;
     });
   };
   const [dragging, setDragging] = useState(false);
-
 
   useEffect(() => {
     if (!dragging) return;
@@ -271,7 +311,14 @@ function AppShell() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const VALID_TABS = new Set(["overview","organic","social","content","audience","automations"]);
+    const VALID_TABS = new Set([
+      "overview",
+      "organic",
+      "social",
+      "content",
+      "audience",
+      "automations",
+    ]);
     const isValidTab = (t: unknown): t is string => typeof t === "string" && VALID_TABS.has(t);
 
     const openWith = (tab?: string) => {
@@ -300,7 +347,6 @@ function AppShell() {
       }
     } catch {}
 
-
     const onOpen = (e: Event) => {
       const tab = (e as CustomEvent).detail?.tab;
       openWith(typeof tab === "string" ? tab : undefined);
@@ -324,7 +370,6 @@ function AppShell() {
     };
   }, []);
 
-
   useEffect(() => {
     let cancelled = false;
     const currentAppPath = () => {
@@ -344,7 +389,6 @@ function AppShell() {
         navigate({ to: "/login", search: { next: currentAppPath() } as any });
         return;
       }
-
 
       // Handle ?invite_token=... — accept invite and select that workspace
       if (typeof window !== "undefined") {
@@ -367,7 +411,8 @@ function AppShell() {
         }
       }
 
-      const selectedId = typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
+      const selectedId =
+        typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
       let query = supabase
         .from("workspaces")
         .select("id, name, website_url, industry, onboarded_at");
@@ -376,11 +421,17 @@ function AppShell() {
         : await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (cancelled) return;
       if (data?.id) {
-        if (!data.onboarded_at) { navigate({ to: "/onboarding" }); return; }
+        if (!data.onboarded_at) {
+          navigate({ to: "/onboarding" });
+          return;
+        }
         localStorage.setItem("workspace:selected", data.id);
         setWorkspaceId(data.id);
         const domain = data.website_url
-          ? data.website_url.replace(/^https?:\/\//i, "").replace(/\/$/, "").split("/")[0]
+          ? data.website_url
+              .replace(/^https?:\/\//i, "")
+              .replace(/\/$/, "")
+              .split("/")[0]
           : null;
         const name = domain || data.name || data.industry || "Workspace";
         setWorkspaceName(name);
@@ -390,7 +441,6 @@ function AppShell() {
           if (data.website_url) localStorage.setItem("workspace:website", data.website_url);
           else localStorage.removeItem("workspace:website");
         } catch {}
-
       } else {
         // No workspace (or stale selection) — send user to project picker
         localStorage.removeItem("workspace:selected");
@@ -401,11 +451,15 @@ function AppShell() {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (!session) navigate({ to: "/login", search: { next: currentAppPath() } as any });
     });
-    return () => { cancelled = true; sub.subscription.unsubscribe(); };
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, [acceptWorkspaceInviteFn, navigate]);
 
-
-  useEffect(() => { setChatOpen(false); }, [path]);
+  useEffect(() => {
+    setChatOpen(false);
+  }, [path]);
 
   // Active state for the top tabs
   const isActive = (m: ModuleDef) => {
@@ -435,7 +489,13 @@ function AppShell() {
                 className="absolute inset-0 -z-10 rounded-full bg-card ring-1 ring-border/80 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_14px_-6px_hsl(var(--brand-blue)/0.35)]"
               />
             )}
-            <Icon className={cn("h-3.5 w-3.5 transition-colors", active && "text-[hsl(var(--brand-blue))]")} strokeWidth={2.2} />
+            <Icon
+              className={cn(
+                "h-3.5 w-3.5 transition-colors",
+                active && "text-[hsl(var(--brand-blue))]",
+              )}
+              strokeWidth={2.2}
+            />
             <span>{m.label}</span>
           </Link>
         );
@@ -454,7 +514,10 @@ function AppShell() {
     return (
       <button
         key={opts.label}
-        onClick={() => { opts.onClick(); setNavOpen(false); }}
+        onClick={() => {
+          opts.onClick();
+          setNavOpen(false);
+        }}
         className="group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-secondary/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       >
         <span
@@ -482,7 +545,6 @@ function AppShell() {
     </div>
   );
 
-
   const MobileNav = (
     <div className="flex h-full flex-col overflow-y-auto pb-2">
       {/* Brand row — sticky; height matches main header (h-14) for aligned baseline */}
@@ -493,9 +555,19 @@ function AppShell() {
           title="Back to all workspaces"
           className="group flex h-9 items-center gap-1 rounded-md pl-1 pr-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <img src={ravalBrandMark.url} alt="" className="h-[22px] w-[22px] shrink-0 select-none" draggable={false} />
-          <span className="text-sm font-semibold tracking-tight text-foreground leading-none">Raval AI</span>
-          <ArrowLeft aria-hidden className="h-3.5 w-3.5 opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0" />
+          <img
+            src={ravalBrandMark.url}
+            alt=""
+            className="h-[22px] w-[22px] shrink-0 select-none"
+            draggable={false}
+          />
+          <span className="text-sm font-semibold tracking-tight text-foreground leading-none">
+            Raval AI
+          </span>
+          <ArrowLeft
+            aria-hidden
+            className="h-3.5 w-3.5 opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0"
+          />
         </Link>
         <button
           type="button"
@@ -528,27 +600,79 @@ function AppShell() {
 
         {/* Workspace actions */}
         <SidebarSection label="Workspace">
-          {sidebarAction({ icon: BarChart3, label: "Analytics", hint: "⌘.", accent: "hsl(var(--brand-green))", onClick: () => setAnalyticsOpen(true) })}
-          {sidebarAction({ icon: CalendarIcon, label: "Content calendar", accent: "hsl(var(--brand-blue))", onClick: () => window.dispatchEvent(new CustomEvent("open:content-calendar")) })}
+          {sidebarAction({
+            icon: BarChart3,
+            label: "Analytics",
+            hint: "⌘.",
+            accent: "hsl(var(--brand-green))",
+            onClick: () => setAnalyticsOpen(true),
+          })}
+          {sidebarAction({
+            icon: CalendarIcon,
+            label: "Content calendar",
+            accent: "hsl(var(--brand-blue))",
+            onClick: () => window.dispatchEvent(new CustomEvent("open:content-calendar")),
+          })}
         </SidebarSection>
 
         <div className="h-px bg-border/50" />
 
         {/* Intelligence */}
         <SidebarSection label="Intelligence">
-          {sidebarAction({ icon: Sparkles, label: "AI Visibility", hint: "GEO · AEO", accent: "hsl(var(--brand-blue))", onClick: () => { window.dispatchEvent(new CustomEvent("open:ai-visibility")); setNavOpen(false); } })}
-          {sidebarAction({ icon: Brain, label: "Brand DNA", accent: "hsl(var(--brand-blue))", onClick: () => window.dispatchEvent(new CustomEvent("open:brand-dna")) })}
-          {sidebarAction({ icon: CalendarIcon, label: "Schedule", onClick: () => window.dispatchEvent(new CustomEvent("open:schedule")) })}
-          {sidebarAction({ icon: Bot, label: "24/7 Autopilot", accent: "rgb(16 185 129)", onClick: () => window.dispatchEvent(new CustomEvent("open:autopilot")) })}
-          {sidebarAction({ icon: Radio, label: "Competitor watch", hint: "Alerts", accent: "hsl(var(--brand-green))", onClick: () => { window.dispatchEvent(new CustomEvent("open:competitor-watch")); setNavOpen(false); } })}
+          {sidebarAction({
+            icon: Sparkles,
+            label: "AI Visibility",
+            hint: "GEO · AEO",
+            accent: "hsl(var(--brand-blue))",
+            onClick: () => {
+              window.dispatchEvent(new CustomEvent("open:ai-visibility"));
+              setNavOpen(false);
+            },
+          })}
+          {sidebarAction({
+            icon: Brain,
+            label: "Brand DNA",
+            accent: "hsl(var(--brand-blue))",
+            onClick: () => window.dispatchEvent(new CustomEvent("open:brand-dna")),
+          })}
+          {sidebarAction({
+            icon: CalendarIcon,
+            label: "Schedule",
+            onClick: () => window.dispatchEvent(new CustomEvent("open:schedule")),
+          })}
+          {sidebarAction({
+            icon: Bot,
+            label: "24/7 Autopilot",
+            accent: "rgb(16 185 129)",
+            onClick: () => window.dispatchEvent(new CustomEvent("open:autopilot")),
+          })}
+          {sidebarAction({
+            icon: Radio,
+            label: "Competitor watch",
+            hint: "Alerts",
+            accent: "hsl(var(--brand-green))",
+            onClick: () => {
+              window.dispatchEvent(new CustomEvent("open:competitor-watch"));
+              setNavOpen(false);
+            },
+          })}
         </SidebarSection>
 
         <div className="h-px bg-border/50" />
 
         {/* Collaborate */}
         <SidebarSection label="Collaborate">
-          {sidebarAction({ icon: Rocket, label: "Client portal", onClick: () => window.dispatchEvent(new CustomEvent("open:client-portal")) })}
-          {sidebarAction({ icon: Share2, label: "Share workspace", accent: "hsl(var(--brand-green))", onClick: () => window.dispatchEvent(new CustomEvent("open:share")) })}
+          {sidebarAction({
+            icon: Rocket,
+            label: "Client portal",
+            onClick: () => window.dispatchEvent(new CustomEvent("open:client-portal")),
+          })}
+          {sidebarAction({
+            icon: Share2,
+            label: "Share workspace",
+            accent: "hsl(var(--brand-green))",
+            onClick: () => window.dispatchEvent(new CustomEvent("open:share")),
+          })}
         </SidebarSection>
 
         <div className="mt-2 border-t border-border/50 pt-2">
@@ -558,11 +682,8 @@ function AppShell() {
           />
         </div>
       </div>
-
     </div>
-
   );
-
 
   return (
     <div className="flex h-[100dvh] w-full bg-sidebar text-foreground">
@@ -581,7 +702,12 @@ function AppShell() {
             title="Back to all workspaces"
             className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <img src={ravalBrandMark.url} alt="Raval AI" className="h-[20px] w-[20px] select-none" draggable={false} />
+            <img
+              src={ravalBrandMark.url}
+              alt="Raval AI"
+              className="h-[20px] w-[20px] select-none"
+              draggable={false}
+            />
           </Link>
 
           {/* Divider between brand and actions */}
@@ -601,18 +727,40 @@ function AppShell() {
                     <PanelRightClose className="h-[18px] w-[18px]" strokeWidth={1.9} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>Open sidebar</TooltipContent>
+                <TooltipContent side="right" sideOffset={8}>
+                  Open sidebar
+                </TooltipContent>
               </Tooltip>
 
               {/* Divider between primary and quick actions */}
               <div aria-hidden className="my-1 h-px w-6 bg-border/50" />
 
               {[
-                { icon: Sparkles, label: "AI Visibility", onClick: () => window.dispatchEvent(new CustomEvent("open:ai-visibility")) },
-                { icon: BarChart3, label: "Analytics", onClick: () => window.dispatchEvent(new CustomEvent("open:analytics")) },
-                { icon: CalendarIcon, label: "Content calendar", onClick: () => window.dispatchEvent(new CustomEvent("open:content-calendar")) },
-                { icon: Brain, label: "Brand DNA", onClick: () => window.dispatchEvent(new CustomEvent("open:brand-dna")) },
-                { icon: Radio, label: "Competitor watch", onClick: () => window.dispatchEvent(new CustomEvent("open:competitor-watch")) },
+                {
+                  icon: Sparkles,
+                  label: "AI Visibility",
+                  onClick: () => window.dispatchEvent(new CustomEvent("open:ai-visibility")),
+                },
+                {
+                  icon: BarChart3,
+                  label: "Analytics",
+                  onClick: () => window.dispatchEvent(new CustomEvent("open:analytics")),
+                },
+                {
+                  icon: CalendarIcon,
+                  label: "Content calendar",
+                  onClick: () => window.dispatchEvent(new CustomEvent("open:content-calendar")),
+                },
+                {
+                  icon: Brain,
+                  label: "Brand DNA",
+                  onClick: () => window.dispatchEvent(new CustomEvent("open:brand-dna")),
+                },
+                {
+                  icon: Radio,
+                  label: "Competitor watch",
+                  onClick: () => window.dispatchEvent(new CustomEvent("open:competitor-watch")),
+                },
               ].map(({ icon: Icon, label, onClick }) => (
                 <Tooltip key={label}>
                   <TooltipTrigger asChild>
@@ -622,22 +770,28 @@ function AppShell() {
                       aria-label={label}
                       className="group flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
-                      <Icon className="h-[18px] w-[18px] transition-transform group-hover:scale-[1.08]" strokeWidth={1.8} />
+                      <Icon
+                        className="h-[18px] w-[18px] transition-transform group-hover:scale-[1.08]"
+                        strokeWidth={1.8}
+                      />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+                  <TooltipContent side="right" sideOffset={8}>
+                    {label}
+                  </TooltipContent>
                 </Tooltip>
               ))}
             </div>
 
             {/* Account avatar pinned to bottom (ChatGPT-style) */}
             <div className="mt-2 border-t border-border/60 pt-3">
-              <AccountMenuCompact onOpenSettings={() => window.dispatchEvent(new CustomEvent("open:settings"))} />
+              <AccountMenuCompact
+                onOpenSettings={() => window.dispatchEvent(new CustomEvent("open:settings"))}
+              />
             </div>
           </TooltipProvider>
         </aside>
       )}
-
 
       <AnimatePresence initial={false} mode="sync">
         {navOpen && isInlineNav && (
@@ -677,208 +831,222 @@ function AppShell() {
 
       {/* Right column: header + workspace — one continuous surface (ChatGPT style) */}
       <div className="flex min-w-0 flex-1 flex-col bg-background">
-      {/* Top bar — seamless: no border, same bg as chat, sticky at top */}
-      <header role="banner" className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-3 bg-background px-3 sm:px-4">
-
-
-
-        {/* LEFT — logo · breadcrumb */}
-        <div className="flex min-w-0 items-center gap-2">
-          {/* Logo lives in the full-height sidebar / icon rail (Qwen/ChatGPT layout). No duplicate here. */}
-
-
-
-
-
-          {/* Workspace breadcrumb — opens workspace menu */}
-          <WorkspaceMenu
-            workspaceName={workspaceName}
-            workspaceId={workspaceId}
-            trigger={
-              <motion.button
-                initial={{ opacity: 0, x: -4 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                title="Workspace menu"
-                className="group flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] font-medium tracking-tight text-foreground/90 transition-colors hover:bg-secondary/80 hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
-              >
-                {brandLogo ? (
-                  <img
-                    src={brandLogo}
-                    alt=""
-                    className="h-4 w-4 shrink-0 rounded-[4px] object-contain bg-background ring-1 ring-border/60"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                  />
-                ) : (
-                  <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[9px] font-bold uppercase text-background shadow-sm">
-                    {(workspaceName?.[0] ?? "W").toUpperCase()}
-                  </span>
-                )}
-                <span className="truncate max-w-[180px]">{workspaceName}</span>
-                <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/80 transition group-hover:text-foreground group-data-[state=open]:rotate-180" />
-              </motion.button>
-            }
-          />
-
-
-
-          {modules.length > 1 && <span className="hidden md:block ml-1.5">{TopTabs}</span>}
-        </div>
-
-
-
-        {/* RIGHT — status cluster + actions */}
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-          className="flex min-w-0 shrink items-center gap-1 sm:gap-1.5"
+        {/* Top bar — seamless: no border, same bg as chat, sticky at top */}
+        <header
+          role="banner"
+          className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-3 bg-background px-3 sm:px-4"
         >
-          {/* Desktop-only (xl+) — full action row stays untouched */}
-          <div className="hidden items-center gap-1.5">{/* xl action row disabled — unified layout */}
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setAnalyticsOpen(true)}
-              title="Analytics  ·  ⌘ ."
-              aria-label="Open analytics"
-              className="group inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
-            >
-              <BarChart3 className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-green))]" strokeWidth={2} />
-              <span>Analytics</span>
-            </motion.button>
+          {/* LEFT — logo · breadcrumb */}
+          <div className="flex min-w-0 items-center gap-2">
+            {/* Logo lives in the full-height sidebar / icon rail (Qwen/ChatGPT layout). No duplicate here. */}
 
-            <span className="mx-0.5 h-4 w-px bg-border/70" />
+            {/* Workspace breadcrumb — opens workspace menu */}
+            <WorkspaceMenu
+              workspaceName={workspaceName}
+              workspaceId={workspaceId}
+              trigger={
+                <motion.button
+                  initial={{ opacity: 0, x: -4 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                  title="Workspace menu"
+                  className="group flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] font-medium tracking-tight text-foreground/90 transition-colors hover:bg-secondary/80 hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
+                >
+                  {brandLogo ? (
+                    <img
+                      src={brandLogo}
+                      alt=""
+                      className="h-4 w-4 shrink-0 rounded-[4px] object-contain bg-background ring-1 ring-border/60"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[9px] font-bold uppercase text-background shadow-sm">
+                      {(workspaceName?.[0] ?? "W").toUpperCase()}
+                    </span>
+                  )}
+                  <span className="truncate max-w-[180px]">{workspaceName}</span>
+                  <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/80 transition group-hover:text-foreground group-data-[state=open]:rotate-180" />
+                </motion.button>
+              }
+            />
 
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent("open:content-calendar"))}
-              aria-label="Open content calendar"
-              title="Content calendar"
-              className="group flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
-            >
-              <CalendarIcon className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-blue))]" />
-              <span>Calendar</span>
-            </button>
-
-            <Suspense fallback={null}><ClientPortalButton workspaceId={workspaceId} /></Suspense>
-
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent("open:share"))}
-              aria-label="Share project"
-              title="Share with workspace members"
-              className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
-            >
-              <Share2 className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-green))]" />
-            </button>
+            {modules.length > 1 && <span className="hidden md:block ml-1.5">{TopTabs}</span>}
           </div>
 
-          {/* Mount Schedule + 24/7 Autopilot dialogs off-screen so their
+          {/* RIGHT — status cluster + actions */}
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="flex min-w-0 shrink items-center gap-1 sm:gap-1.5"
+          >
+            {/* Desktop-only (xl+) — full action row stays untouched */}
+            <div className="hidden items-center gap-1.5">
+              {/* xl action row disabled — unified layout */}
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setAnalyticsOpen(true)}
+                title="Analytics  ·  ⌘ ."
+                aria-label="Open analytics"
+                className="group inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
+              >
+                <BarChart3
+                  className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-green))]"
+                  strokeWidth={2}
+                />
+                <span>Analytics</span>
+              </motion.button>
+
+              <span className="mx-0.5 h-4 w-px bg-border/70" />
+
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("open:content-calendar"))}
+                aria-label="Open content calendar"
+                title="Content calendar"
+                className="group flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
+              >
+                <CalendarIcon className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-blue))]" />
+                <span>Calendar</span>
+              </button>
+
+              <Suspense fallback={null}>
+                <ClientPortalButton workspaceId={workspaceId} />
+              </Suspense>
+
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent("open:share"))}
+                aria-label="Share project"
+                title="Share with workspace members"
+                className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
+              >
+                <Share2 className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-green))]" />
+              </button>
+            </div>
+
+            {/* Mount Schedule + 24/7 Autopilot dialogs off-screen so their
               open:schedule / open:autopilot event listeners are always live,
               even though the visible triggers now live in the sidebar. */}
-          <div className="sr-only" aria-hidden>
-            <TopBarActions workspaceId={workspaceId} />
-          </div>
+            <div className="sr-only" aria-hidden>
+              <TopBarActions workspaceId={workspaceId} />
+            </div>
 
-          {/* Tablet & mobile (<xl): all actions live in the left sidebar (menu). */}
+            {/* Tablet & mobile (<xl): all actions live in the left sidebar (menu). */}
 
+            {/* Studio toggle + Publish share one flex container to lock spacing */}
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Suspense fallback={null}>
+                <CompetitorWatchButton workspaceId={workspaceId} />
+              </Suspense>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("toggle:studio"))}
+                aria-label="Open Studio"
+                title="Open Studio"
+                className="group relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-[hsl(var(--brand-green)/0.35)] bg-[hsl(var(--brand-green)/0.10)] px-2.5 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-[hsl(var(--brand-green)/0.18)] hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97]"
+              >
+                <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
+                <span className="hidden sm:inline">Studio</span>
+              </button>
 
-          {/* Studio toggle + Publish share one flex container to lock spacing */}
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Suspense fallback={null}><CompetitorWatchButton workspaceId={workspaceId} /></Suspense>
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent("toggle:studio"))}
-              aria-label="Open Studio"
-              title="Open Studio"
-              className="group relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-[hsl(var(--brand-green)/0.35)] bg-[hsl(var(--brand-green)/0.10)] px-2.5 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-[hsl(var(--brand-green)/0.18)] hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97]"
-            >
-              <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">Studio</span>
-            </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    aria-label="Share workspace"
+                    title="Share"
+                    className="group relative inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-md bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] px-2.5 sm:px-3 text-[12px] font-semibold tracking-tight text-background shadow-[0_1px_0_hsl(0_0%_100%/0.25)_inset,0_4px_14px_-4px_hsl(var(--brand-blue)/0.55)] transition-all hover:shadow-[0_1px_0_hsl(0_0%_100%/0.3)_inset,0_6px_20px_-4px_hsl(var(--brand-blue)/0.7)] active:scale-[0.97] data-[state=open]:shadow-[0_1px_0_hsl(0_0%_100%/0.3)_inset,0_6px_20px_-4px_hsl(var(--brand-blue)/0.7)]"
+                  >
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+                    />
+                    <Share2 className="relative h-3.5 w-3.5" strokeWidth={2.4} aria-hidden />
+                    <span className="relative hidden sm:inline">Share</span>
+                    <ChevronDown
+                      className="relative h-3 w-3 opacity-80 transition group-data-[state=open]:rotate-180"
+                      aria-hidden
+                    />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={8} className="w-64 p-1.5">
+                  <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Share workspace
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      window.dispatchEvent(new CustomEvent("open:share"));
+                    }}
+                    className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
+                  >
+                    <Share2 className="mt-0.5 h-4 w-4 text-[hsl(var(--brand-green))]" />
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-medium leading-tight">Invite teammates</div>
+                      <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
+                        Share workspace access with your team
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      window.dispatchEvent(new CustomEvent("open:client-portal"));
+                    }}
+                    className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
+                  >
+                    <Users className="mt-0.5 h-4 w-4 text-[hsl(var(--brand-blue))]" />
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-medium leading-tight">Client portal</div>
+                      <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
+                        Share plans with clients for approval
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      window.dispatchEvent(new CustomEvent("open:publish"));
+                    }}
+                    className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
+                  >
+                    <Rocket className="mt-0.5 h-4 w-4 text-foreground/80" />
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-medium leading-tight">Publish</div>
+                      <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
+                        Deploy the latest version live
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  aria-label="Share workspace"
-                  title="Share"
-                  className="group relative inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-md bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] px-2.5 sm:px-3 text-[12px] font-semibold tracking-tight text-background shadow-[0_1px_0_hsl(0_0%_100%/0.25)_inset,0_4px_14px_-4px_hsl(var(--brand-blue)/0.55)] transition-all hover:shadow-[0_1px_0_hsl(0_0%_100%/0.3)_inset,0_6px_20px_-4px_hsl(var(--brand-blue)/0.7)] active:scale-[0.97] data-[state=open]:shadow-[0_1px_0_hsl(0_0%_100%/0.3)_inset,0_6px_20px_-4px_hsl(var(--brand-blue)/0.7)]"
-                >
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full"
-                  />
-                  <Share2 className="relative h-3.5 w-3.5" strokeWidth={2.4} aria-hidden />
-                  <span className="relative hidden sm:inline">Share</span>
-                  <ChevronDown className="relative h-3 w-3 opacity-80 transition group-data-[state=open]:rotate-180" aria-hidden />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={8} className="w-64 p-1.5">
-                <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Share workspace
-                </DropdownMenuLabel>
-                <DropdownMenuItem
-                  onSelect={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent("open:share")); }}
-                  className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
-                >
-                  <Share2 className="mt-0.5 h-4 w-4 text-[hsl(var(--brand-green))]" />
-                  <div className="min-w-0">
-                    <div className="text-[13px] font-medium leading-tight">Invite teammates</div>
-                    <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">Share workspace access with your team</div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent("open:client-portal")); }}
-                  className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
-                >
-                  <Users className="mt-0.5 h-4 w-4 text-[hsl(var(--brand-blue))]" />
-                  <div className="min-w-0">
-                    <div className="text-[13px] font-medium leading-tight">Client portal</div>
-                    <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">Share plans with clients for approval</div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent("open:publish")); }}
-                  className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
-                >
-                  <Rocket className="mt-0.5 h-4 w-4 text-foreground/80" />
-                  <div className="min-w-0">
-                    <div className="text-[13px] font-medium leading-tight">Publish</div>
-                    <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">Deploy the latest version live</div>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              {/* Mounted (hidden) so events open the underlying dialogs */}
+              <Suspense fallback={null}>
+                <PublishDialog workspaceId={workspaceId}>
+                  <span data-publish-trigger className="hidden" aria-hidden />
+                </PublishDialog>
+                <ShareDialog workspaceId={workspaceId}>
+                  <span data-share-trigger className="hidden" aria-hidden />
+                </ShareDialog>
+                <AiVisibilityDialog workspaceId={workspaceId} />
+              </Suspense>
+            </div>
+          </motion.div>
+        </header>
 
-            {/* Mounted (hidden) so events open the underlying dialogs */}
-            <Suspense fallback={null}>
-              <PublishDialog workspaceId={workspaceId}>
-                <span data-publish-trigger className="hidden" aria-hidden />
-              </PublishDialog>
-              <ShareDialog workspaceId={workspaceId}>
-                <span data-share-trigger className="hidden" aria-hidden />
-              </ShareDialog>
-              <AiVisibilityDialog workspaceId={workspaceId} />
-            </Suspense>
-          </div>
-
-
-
-        </motion.div>
-      </header>
-
-
-
-      {/* Workspace — chat area to the right of the full-height sidebar */}
-      <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
-        <main data-workspace-main="true" className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
-          <MobileManusLayout workspaceId={workspaceId} brandContext={brandContextForCoach} />
-        </main>
+        {/* Workspace — chat area to the right of the full-height sidebar */}
+        <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
+          <main
+            data-workspace-main="true"
+            className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background"
+          >
+            <MobileManusLayout workspaceId={workspaceId} brandContext={brandContextForCoach} />
+          </main>
+        </div>
       </div>
-
-      </div>
-
-
 
       <CommandBar />
       <Suspense fallback={null}>
@@ -902,23 +1070,39 @@ function AppShell() {
         )}
 
         {studioCanvas && (
-          <StudioCanvasModal canvas={studioCanvas} onClose={closeStudio} workspaceName={workspaceName} workspaceId={workspaceId} />
+          <StudioCanvasModal
+            canvas={studioCanvas}
+            onClose={closeStudio}
+            workspaceName={workspaceName}
+            workspaceId={workspaceId}
+          />
         )}
-        <WorkspaceDialogs workspaceId={workspaceId} workspaceName={workspaceName} onRenamed={setWorkspaceName} />
+        <WorkspaceDialogs
+          workspaceId={workspaceId}
+          workspaceName={workspaceName}
+          onRenamed={setWorkspaceName}
+        />
         <ContentCalendar workspaceId={workspaceId} />
       </Suspense>
-
     </div>
   );
 }
 
-function MobileManusLayout({ workspaceId, brandContext }: { workspaceId: string | null; brandContext?: string }) {
+function MobileManusLayout({
+  workspaceId,
+  brandContext,
+}: {
+  workspaceId: string | null;
+  brandContext?: string;
+}) {
   const isMobile = useIsMobile();
   const [studioOpen, setStudioOpen] = useState(false);
   useEffect(() => {
     try {
       if (window.localStorage.getItem("raval:studioOpen") === "1") setStudioOpen(true);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
   useEffect(() => {
     try {
@@ -956,30 +1140,30 @@ function MobileManusLayout({ workspaceId, brandContext }: { workspaceId: string 
   useSwipe({
     enabled: isMobile,
     edgeStartRightPx: studioOpen ? undefined : 24,
-    onSwipeLeft: () => { if (!studioOpen) setStudioOpen(true); },
-    onSwipeRight: () => { if (studioOpen) setStudioOpen(false); },
+    onSwipeLeft: () => {
+      if (!studioOpen) setStudioOpen(true);
+    },
+    onSwipeRight: () => {
+      if (studioOpen) setStudioOpen(false);
+    },
   });
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-row bg-background">
-
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {workspaceId ? (
           <ChatPanel
             workspaceId={workspaceId}
             variant="centered"
-            mobileAccessory={(
+            mobileAccessory={
               <Suspense fallback={null}>
                 <MarketingCoachPanel
                   workspaceId={workspaceId}
                   brandContext={brandContext}
                   leading={<MiniSiteThumb workspaceId={workspaceId} />}
                 />
-                
               </Suspense>
-            )}
-
-
+            }
           />
         ) : (
           <div className="p-6 text-sm text-muted-foreground">Loading workspace…</div>
@@ -1029,8 +1213,6 @@ function MobileManusLayout({ workspaceId, brandContext }: { workspaceId: string 
   );
 }
 
-
-
 function MiniSiteThumb({ workspaceId }: { workspaceId: string | null }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -1048,7 +1230,9 @@ function MiniSiteThumb({ workspaceId }: { workspaceId: string | null }) {
         if (!raw) return;
         setUrl(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [workspaceId]);
 
   const shot = url
@@ -1057,7 +1241,6 @@ function MiniSiteThumb({ workspaceId }: { workspaceId: string | null }) {
 
   return (
     <span className="relative grid h-12 w-[68px] shrink-0 place-items-center overflow-hidden rounded-lg bg-gradient-to-br from-[hsl(var(--brand-blue)/0.18)] to-[hsl(var(--brand-green)/0.18)] ring-1 ring-border/60 shadow-sm">
-
       {shot && (
         <img
           src={shot}

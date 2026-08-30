@@ -9,8 +9,8 @@
 
 Keep the two schedulers **separate and non-overlapping**:
 
-- **RavalAI** owns content *generation* timing only (`scheduled_jobs` + pg_cron, unchanged, untouched).
-- **The SDR** owns distribution *timing* via `POST /api/v1/schedule` with an absolute UTC instant; its Celery beat claims due targets and publishes.
+- **RavalAI** owns content _generation_ timing only (`scheduled_jobs` + pg_cron, unchanged, untouched).
+- **The SDR** owns distribution _timing_ via `POST /api/v1/schedule` with an absolute UTC instant; its Celery beat claims due targets and publishes.
 - `content_items.scheduled_at` remains the display source of truth in the Studio; the SDR receives an ISO-8601 UTC instant on the wire (FR-025 — local accept/render, absolute instant storage, UTC on wire).
 - A scheduled item's publish/schedule action is idempotent (schedule idempotency key `schedule:{item}:{platform}:{account}:{revision}`); reschedule = cancel-old + schedule-new.
 

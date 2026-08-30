@@ -3,7 +3,10 @@
 // prose paragraph; the helpers below tolerate both.
 
 export function stripJsonFences(raw: string): string {
-  return raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  return raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
 }
 
 export function extractFirstJsonObject(raw: string): string | null {
@@ -19,6 +22,10 @@ export function safeParseJson<T>(raw: string, fallback: T): T {
   } catch {
     const inner = extractFirstJsonObject(raw);
     if (!inner) return fallback;
-    try { return JSON.parse(inner) as T; } catch { return fallback; }
+    try {
+      return JSON.parse(inner) as T;
+    } catch {
+      return fallback;
+    }
   }
 }

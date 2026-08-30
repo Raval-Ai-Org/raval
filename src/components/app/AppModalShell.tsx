@@ -74,9 +74,15 @@ export function AppModalShell({
 
             <DialogPrimitive.Content
               asChild
-              onEscapeKeyDown={(e) => { if (disableClose) e.preventDefault(); }}
-              onPointerDownOutside={(e) => { if (disableClose) e.preventDefault(); }}
-              onInteractOutside={(e) => { if (disableClose) e.preventDefault(); }}
+              onEscapeKeyDown={(e) => {
+                if (disableClose) e.preventDefault();
+              }}
+              onPointerDownOutside={(e) => {
+                if (disableClose) e.preventDefault();
+              }}
+              onInteractOutside={(e) => {
+                if (disableClose) e.preventDefault();
+              }}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.96, y: 14 }}
@@ -160,7 +166,12 @@ export function AppModalShell({
                 </header>
 
                 {/* Body */}
-                <div className={cn("relative z-10 min-h-0 flex-1 overflow-y-auto scrollbar-thin", bodyClassName)}>
+                <div
+                  className={cn(
+                    "relative z-10 min-h-0 flex-1 overflow-y-auto scrollbar-thin",
+                    bodyClassName,
+                  )}
+                >
                   {children}
                 </div>
               </motion.div>

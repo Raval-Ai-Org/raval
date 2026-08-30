@@ -25,7 +25,12 @@ import {
 } from "@/components/ui/gemini-icons";
 import { NotesTabBody } from "./NotesPanel";
 import { cn } from "@/lib/utils";
-import { getCoachBriefing, type CoachBriefing, type CoachInsight, type CoachAction } from "@/lib/coach.functions";
+import {
+  getCoachBriefing,
+  type CoachBriefing,
+  type CoachInsight,
+  type CoachAction,
+} from "@/lib/coach.functions";
 import { exportBriefingPDF, exportBriefingDoc } from "@/lib/coach-export";
 import {
   DropdownMenu,
@@ -155,7 +160,9 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
   const [briefing, setBriefing] = useState<CoachBriefing | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes">("today");
+  const [tab, setTab] = useState<
+    "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes"
+  >("today");
   const fetchBriefing = useServerFn(getCoachBriefing);
 
   const load = useCallback(
@@ -241,12 +248,20 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
               {error && !loading && (
                 <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3">
                   <div className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+                    <AlertTriangle
+                      className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
+                      aria-hidden="true"
+                    />
                     <div className="min-w-0 flex-1">
-                      <div className="text-[12px] font-semibold text-destructive">Couldn't refresh your briefing</div>
-                      <div className="mt-0.5 text-[11.5px] leading-snug text-destructive/85">{error}</div>
+                      <div className="text-[12px] font-semibold text-destructive">
+                        Couldn't refresh your briefing
+                      </div>
+                      <div className="mt-0.5 text-[11.5px] leading-snug text-destructive/85">
+                        {error}
+                      </div>
                       <div className="mt-1 text-[11px] leading-snug text-destructive/70">
-                        Tip: check your connection, then retry. If this keeps happening, ask Ravi in chat and I'll run the scan manually.
+                        Tip: check your connection, then retry. If this keeps happening, ask Ravi in
+                        chat and I'll run the scan manually.
                       </div>
                       <div className="mt-2 flex items-center gap-2">
                         <button
@@ -258,7 +273,11 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
                         </button>
                         <button
                           type="button"
-                          onClick={() => fireChat("My marketing briefing failed to load — can you run a fresh scan and summarize what you find?")}
+                          onClick={() =>
+                            fireChat(
+                              "My marketing briefing failed to load — can you run a fresh scan and summarize what you find?",
+                            )
+                          }
                           className="text-[11px] font-medium text-destructive/85 underline underline-offset-2 hover:text-destructive"
                         >
                           Ask Ravi instead
@@ -282,7 +301,6 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
                   <CoachWalkthrough onJumpTab={setTab} />
                 </>
               )}
-
             </div>
             <div className="h-px bg-border/60" />
           </motion.div>
@@ -313,7 +331,9 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
                   : "· Daily brief & next plays"}
             </span>
           </span>
-          {loading && !open && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
+          {loading && !open && (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+          )}
           <ChevronDown
             className={cn(
               "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
@@ -322,21 +342,13 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
           />
         </button>
       </div>
-
     </motion.div>
   );
 }
 
 /* -------------------- Tabs (a11y) ------------------------- */
 
-type CoachTabId =
-  | "today"
-  | "checklist"
-  | "competitors"
-  | "market"
-  | "plays"
-  | "week"
-  | "notes";
+type CoachTabId = "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes";
 
 interface CoachTabDef {
   id: CoachTabId;
@@ -360,9 +372,7 @@ function CoachTabs({
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const focusTab = (id: CoachTabId) => {
-    const el = listRef.current?.querySelector<HTMLButtonElement>(
-      `[data-tab-id="${id}"]`,
-    );
+    const el = listRef.current?.querySelector<HTMLButtonElement>(`[data-tab-id="${id}"]`);
     el?.focus();
     el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   };
@@ -442,7 +452,9 @@ function CoachTabs({
                 aria-hidden="true"
                 className={cn(
                   "ml-0.5 rounded-full px-1.5 text-[9.5px] font-semibold tabular-nums",
-                  active ? "bg-background/20 text-background" : "bg-foreground/10 text-foreground/80",
+                  active
+                    ? "bg-background/20 text-background"
+                    : "bg-foreground/10 text-foreground/80",
                 )}
               >
                 {t.count}
@@ -454,7 +466,6 @@ function CoachTabs({
     </div>
   );
 }
-
 
 /* -------------------------- Body -------------------------- */
 
@@ -480,9 +491,6 @@ function TabPanel({
     </div>
   );
 }
-
-
-
 
 function CoachBody({
   workspaceId,
@@ -534,9 +542,7 @@ function CoachBody({
                 className="inline-flex items-center gap-1 rounded-full bg-secondary/60 px-1.5 py-[1px] text-[10px] font-medium text-muted-foreground"
                 aria-live="polite"
                 title={
-                  briefing.generatedAt
-                    ? new Date(briefing.generatedAt).toLocaleString()
-                    : undefined
+                  briefing.generatedAt ? new Date(briefing.generatedAt).toLocaleString() : undefined
                 }
               >
                 <span
@@ -573,35 +579,51 @@ function CoachBody({
             title={loading ? "Refreshing briefing…" : "Refresh briefing"}
             className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:cursor-wait disabled:opacity-60 disabled:hover:bg-transparent sm:h-7 sm:w-7"
           >
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            {loading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
           </button>
           <ExportMenu briefing={briefing} disabled={loading} />
         </div>
       </div>
 
-
-
       {/* Tabs — segmented control with roving-tabindex keyboard nav */}
       <CoachTabs tabs={tabs} value={tab} onChange={onTab} />
-
-
 
       {/* Panels */}
       <TabPanel id="today" active={tab === "today"}>
         <div className="space-y-2">
           <FocusCard briefing={briefing} sources={briefing.sources} />
           {briefing.wins.length > 0 && (
-            <Section title="Working well" icon={Trophy} tint="emerald" items={briefing.wins} sources={briefing.sources} />
+            <Section
+              title="Working well"
+              icon={Trophy}
+              tint="emerald"
+              items={briefing.wins}
+              sources={briefing.sources}
+            />
           )}
           {briefing.risks.length > 0 && (
-            <Section title="Watch outs" icon={AlertTriangle} tint="amber" items={briefing.risks} sources={briefing.sources} />
+            <Section
+              title="Watch outs"
+              icon={AlertTriangle}
+              tint="amber"
+              items={briefing.risks}
+              sources={briefing.sources}
+            />
           )}
           {briefing.wins.length === 0 && briefing.risks.length === 0 && (
             <EmptyState
               icon={Sparkles}
               title="You're all clear for today"
               body="No new wins or watch-outs since your last scan. Ship the focus above, then check the Checklist or ask Ravi for a fresh sweep."
-              action={{ label: "Run a fresh scan", prompt: "Scan my brand, competitors and market and tell me what's changed today.", icon: RefreshCw }}
+              action={{
+                label: "Run a fresh scan",
+                prompt: "Scan my brand, competitors and market and tell me what's changed today.",
+                icon: RefreshCw,
+              }}
             />
           )}
         </div>
@@ -631,7 +653,11 @@ function CoachBody({
           tint="rose"
           emptyTitle="No competitor moves yet"
           empty="Add 3–5 competitors in Brand DNA and I'll track their launches, positioning shifts and content weekly."
-          emptyAction={{ label: "Add competitors", prompt: "Help me list my top 5 competitors and what they're doing this month", intent: "brand-dna" }}
+          emptyAction={{
+            label: "Add competitors",
+            prompt: "Help me list my top 5 competitors and what they're doing this month",
+            intent: "brand-dna",
+          }}
           emptyHint="Not sure who to add? Ask: “Who are my top competitors?”"
         />
       </TabPanel>
@@ -644,7 +670,11 @@ function CoachBody({
           tint="sky"
           emptyTitle="No market signals yet"
           empty="Tell me your category and audience once — I'll monitor trends, search demand and cultural shifts every week."
-          emptyAction={{ label: "Scan my market", prompt: "What are the biggest marketing trends in my category this week?", intent: "market" }}
+          emptyAction={{
+            label: "Scan my market",
+            prompt: "What are the biggest marketing trends in my category this week?",
+            intent: "market",
+          }}
           emptyHint="Trends refresh automatically after your first scan."
         />
       </TabPanel>
@@ -657,7 +687,11 @@ function CoachBody({
           tint="violet"
           emptyTitle="No plays queued up"
           empty="Once I have a scan I'll suggest 3 experiments a week tailored to your funnel and channels — copy, campaigns and quick wins."
-          emptyAction={{ label: "Suggest experiments", prompt: "Suggest 3 marketing experiments I could run this week", intent: "ideate" }}
+          emptyAction={{
+            label: "Suggest experiments",
+            prompt: "Suggest 3 marketing experiments I could run this week",
+            intent: "ideate",
+          }}
           emptyHint="Each play comes with a hypothesis, effort estimate and success metric."
         />
       </TabPanel>
@@ -672,7 +706,11 @@ function CoachBody({
               icon={CalendarRange}
               title="No weekly plan yet"
               body="Run a scan and I'll draft a 5-step plan for the week — sequenced by impact, ready to schedule."
-              action={{ label: "Draft this week's plan", prompt: "Draft a 5-step marketing plan for me this week, ordered by impact.", icon: Sparkles }}
+              action={{
+                label: "Draft this week's plan",
+                prompt: "Draft a 5-step marketing plan for me this week, ordered by impact.",
+                icon: Sparkles,
+              }}
               tone="soft"
             />
           ) : (
@@ -707,7 +745,6 @@ function CoachBody({
         </TabPanel>
       )}
 
-
       {briefing.sources && briefing.sources.length > 0 && (
         <SourcesPanel sources={briefing.sources} />
       )}
@@ -717,7 +754,6 @@ function CoachBody({
           Updated {generatedLabel} · Grounded in your site + live web research
         </div>
       )}
-
     </div>
   );
 }
@@ -740,13 +776,7 @@ function findSourceIndex(sources: SourceEntry[] | undefined, s: string | undefin
   return sources.findIndex((src) => src.url === s || src.label === s || hostOf(src.url) === host);
 }
 
-function CitationChip({
-  sources,
-  source,
-}: {
-  sources?: SourceEntry[];
-  source?: string;
-}) {
+function CitationChip({ sources, source }: { sources?: SourceEntry[]; source?: string }) {
   if (!source) return null;
   const idx = findSourceIndex(sources, source);
   const url = idx >= 0 ? sources![idx].url : /^https?:\/\//.test(source) ? source : null;
@@ -836,7 +866,9 @@ function FocusCard({ briefing, sources }: { briefing: CoachBriefing; sources?: S
         {focus.title}
         <CitationChip sources={sources} source={(focus as { source?: string }).source} />
       </div>
-      <div className="mt-1 text-[12px] leading-snug text-muted-foreground sm:text-[11.5px]">{focus.why}</div>
+      <div className="mt-1 text-[12px] leading-snug text-muted-foreground sm:text-[11.5px]">
+        {focus.why}
+      </div>
       {focus.action && (
         <button
           type="button"
@@ -848,7 +880,6 @@ function FocusCard({ briefing, sources }: { briefing: CoachBriefing; sources?: S
         </button>
       )}
     </div>
-
   );
 }
 
@@ -877,7 +908,12 @@ function Section({
 }) {
   return (
     <div className="rounded-xl border border-border/70 bg-card p-3">
-      <div className={cn("mb-2 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em]", tintMap[tint])}>
+      <div
+        className={cn(
+          "mb-2 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em]",
+          tintMap[tint],
+        )}
+      >
         <Icon className="h-3 w-3" /> {title}
       </div>
       <ul className="space-y-2">
@@ -915,7 +951,11 @@ function SectionOrEmpty({
         title={emptyTitle ?? "Nothing here yet"}
         body={empty}
         hint={emptyHint}
-        action={emptyAction ? { label: emptyAction.label, prompt: emptyAction.prompt, icon: Sparkles } : undefined}
+        action={
+          emptyAction
+            ? { label: emptyAction.label, prompt: emptyAction.prompt, icon: Sparkles }
+            : undefined
+        }
         tone="soft"
       />
     );
@@ -963,7 +1003,9 @@ const WALKTHROUGH_STEPS: {
 function CoachWalkthrough({
   onJumpTab,
 }: {
-  onJumpTab: (t: "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes") => void;
+  onJumpTab: (
+    t: "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes",
+  ) => void;
 }) {
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(false);
@@ -1028,7 +1070,10 @@ function CoachWalkthrough({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
-                <div id="coach-walkthrough-title" className="text-[13px] font-semibold leading-snug text-foreground">
+                <div
+                  id="coach-walkthrough-title"
+                  className="text-[13px] font-semibold leading-snug text-foreground"
+                >
                   {current.title}
                 </div>
                 <button
@@ -1040,7 +1085,9 @@ function CoachWalkthrough({
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">{current.body}</p>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
+                {current.body}
+              </p>
 
               <div className="mt-4 flex items-center justify-between gap-2">
                 <div
@@ -1110,7 +1157,6 @@ function CoachWalkthrough({
   return createPortal(node, document.body);
 }
 
-
 function ExportMenu({ briefing, disabled }: { briefing: CoachBriefing; disabled?: boolean }) {
   const [busy, setBusy] = useState<null | "pdf" | "doc">(null);
   const run = async (kind: "pdf" | "doc") => {
@@ -1135,24 +1181,42 @@ function ExportMenu({ briefing, disabled }: { briefing: CoachBriefing; disabled?
           title={isBusy ? "Preparing export…" : "Export briefing"}
           className="grid h-7 w-7 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:cursor-wait disabled:opacity-60 disabled:hover:bg-transparent"
         >
-          {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          {isBusy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="h-3.5 w-3.5" />
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem
           disabled={isBusy}
-          onSelect={(e) => { e.preventDefault(); void run("pdf"); }}
+          onSelect={(e) => {
+            e.preventDefault();
+            void run("pdf");
+          }}
           className="gap-2 text-xs"
         >
-          {busy === "pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+          {busy === "pdf" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <FileText className="h-3.5 w-3.5" />
+          )}
           {busy === "pdf" ? "Preparing PDF…" : "Download PDF"}
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={isBusy}
-          onSelect={(e) => { e.preventDefault(); void run("doc"); }}
+          onSelect={(e) => {
+            e.preventDefault();
+            void run("doc");
+          }}
           className="gap-2 text-xs"
         >
-          {busy === "doc" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileType2 className="h-3.5 w-3.5" />}
+          {busy === "doc" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <FileType2 className="h-3.5 w-3.5" />
+          )}
           {busy === "doc" ? "Preparing Word…" : "Download Word (.doc)"}
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -1187,7 +1251,9 @@ function EmptyState({
         <Icon className="h-4 w-4" aria-hidden="true" />
       </div>
       <div className="text-[12.5px] font-semibold text-foreground">{title}</div>
-      <p className="mx-auto mt-1 max-w-[42ch] text-[11.5px] leading-snug text-muted-foreground">{body}</p>
+      <p className="mx-auto mt-1 max-w-[42ch] text-[11.5px] leading-snug text-muted-foreground">
+        {body}
+      </p>
       {action && (
         <button
           type="button"
@@ -1221,7 +1287,9 @@ function InsightRow({ insight, sources }: { insight: CoachInsight; sources?: Sou
           {insight.title}
           <CitationChip sources={sources} source={insight.source} />
         </div>
-        <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">{insight.detail}</div>
+        <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
+          {insight.detail}
+        </div>
         {insight.action && (
           <button
             type="button"
@@ -1280,7 +1348,12 @@ function ChecklistPanel({
         title="No actions queued up"
         body="Once your first briefing lands I'll prioritize the highest-impact moves for today and this week — check them off as you ship."
         hint="Tasks re-prioritize automatically as new signals come in."
-        action={{ label: "Generate my checklist", prompt: "Generate a prioritized marketing checklist for me based on my brand, competitors and market.", icon: Sparkles }}
+        action={{
+          label: "Generate my checklist",
+          prompt:
+            "Generate a prioritized marketing checklist for me based on my brand, competitors and market.",
+          icon: Sparkles,
+        }}
         tone="soft"
       />
     );
@@ -1324,13 +1397,7 @@ function ChecklistPanel({
         />
       )}
       {week.length > 0 && (
-        <ChecklistGroup
-          label="This week"
-          tint="sky"
-          tasks={week}
-          done={done}
-          onToggle={onToggle}
-        />
+        <ChecklistGroup label="This week" tint="sky" tasks={week} done={done} onToggle={onToggle} />
       )}
     </div>
   );
@@ -1349,13 +1416,15 @@ function ChecklistGroup({
   done: Record<string, boolean>;
   onToggle: (id: string) => void;
 }) {
-  const tintClass =
-    tint === "emerald"
-      ? "text-emerald-500"
-      : "text-sky-500";
+  const tintClass = tint === "emerald" ? "text-emerald-500" : "text-sky-500";
   return (
     <div className="rounded-xl border border-border/70 bg-card/60 p-2.5">
-      <div className={cn("mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em]", tintClass)}>
+      <div
+        className={cn(
+          "mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em]",
+          tintClass,
+        )}
+      >
         <CheckSquare className="h-3 w-3" /> {label}
         <span className="ml-auto text-[10px] font-medium text-muted-foreground">
           {tasks.filter((t) => done[t.id]).length}/{tasks.length}
@@ -1365,7 +1434,10 @@ function ChecklistGroup({
         {tasks.map((t) => {
           const isDone = !!done[t.id];
           return (
-            <li key={t.id} className="group flex items-start gap-2 rounded-lg px-1.5 py-1.5 hover:bg-secondary/40">
+            <li
+              key={t.id}
+              className="group flex items-start gap-2 rounded-lg px-1.5 py-1.5 hover:bg-secondary/40"
+            >
               <button
                 type="button"
                 onClick={() => onToggle(t.id)}

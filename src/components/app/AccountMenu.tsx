@@ -28,13 +28,19 @@ function useCurrentUser() {
       if (cancelled || !user) return;
       const meta = (user.user_metadata || {}) as Record<string, any>;
       const name =
-        meta.full_name || meta.name || meta.display_name || (user.email ? user.email.split("@")[0] : "You");
+        meta.full_name ||
+        meta.name ||
+        meta.display_name ||
+        (user.email ? user.email.split("@")[0] : "You");
       const avatar = meta.avatar_url || meta.picture || null;
       setU({ email: user.email || "", name, avatar });
     };
     load();
     const { data: sub } = supabase.auth.onAuthStateChange(() => load());
-    return () => { cancelled = true; sub.subscription.unsubscribe(); };
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
   return u;
 }
@@ -46,7 +52,13 @@ function initialsFrom(name: string, email: string) {
   return src.slice(0, 2).toUpperCase();
 }
 
-export function AccountMenu({ onOpenSettings, onClose }: { onOpenSettings?: () => void; onClose?: () => void }) {
+export function AccountMenu({
+  onOpenSettings,
+  onClose,
+}: {
+  onOpenSettings?: () => void;
+  onClose?: () => void;
+}) {
   const user = useCurrentUser();
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
@@ -69,56 +81,88 @@ export function AccountMenu({ onOpenSettings, onClose }: { onOpenSettings?: () =
           <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[11px] font-semibold text-white ring-1 ring-border/60">
             {user?.avatar ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+              <img
+                src={user.avatar}
+                alt=""
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
             ) : (
               <span>{initials}</span>
             )}
           </span>
           <span className="flex min-w-0 flex-1 flex-col leading-tight">
             <span className="truncate text-[13px] font-medium text-foreground">{name}</span>
-            <span className="truncate text-[11.5px] text-muted-foreground">{email || "Signed in"}</span>
+            <span className="truncate text-[11.5px] text-muted-foreground">
+              {email || "Signed in"}
+            </span>
           </span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-colors group-hover:text-foreground" aria-hidden />
+          <ChevronDown
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-colors group-hover:text-foreground"
+            aria-hidden
+          />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" sideOffset={8} className="w-64 p-1.5">
         <DropdownMenuLabel className="flex items-center gap-2.5 px-2 py-2">
           <span className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[12px] font-semibold text-white">
             {user?.avatar ? (
-              <img src={user.avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+              <img
+                src={user.avatar}
+                alt=""
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
             ) : (
               <span>{initials}</span>
             )}
           </span>
           <span className="flex min-w-0 flex-1 flex-col leading-tight">
             <span className="truncate text-[13px] font-semibold text-foreground">{name}</span>
-            <span className="truncate text-[11.5px] font-normal text-muted-foreground">{email}</span>
+            <span className="truncate text-[11.5px] font-normal text-muted-foreground">
+              {email}
+            </span>
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={() => { onOpenSettings?.(); onClose?.(); }}
+          onSelect={() => {
+            onOpenSettings?.();
+            onClose?.();
+          }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <Settings className="h-4 w-4 text-muted-foreground" />
           Settings
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={(e) => { e.preventDefault(); toggle(); }}
+          onSelect={(e) => {
+            e.preventDefault();
+            toggle();
+          }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
-          {theme === "dark" ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
+          {theme === "dark" ? (
+            <Sun className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <Moon className="h-4 w-4 text-muted-foreground" />
+          )}
           {theme === "dark" ? "Light mode" : "Dark mode"}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => { window.dispatchEvent(new CustomEvent("open:upgrade")); onClose?.(); }}
+          onSelect={() => {
+            window.dispatchEvent(new CustomEvent("open:upgrade"));
+            onClose?.();
+          }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" />
           Upgrade plan
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => { window.open(`${BASE_URL}/#help`, "_blank", "noopener,noreferrer"); }}
+          onSelect={() => {
+            window.open(`${BASE_URL}/#help`, "_blank", "noopener,noreferrer");
+          }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <HelpCircle className="h-4 w-4 text-muted-foreground" />
@@ -126,7 +170,10 @@ export function AccountMenu({ onOpenSettings, onClose }: { onOpenSettings?: () =
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={async () => { await signOutAndRedirect(); navigate({ to: "/login" }); }}
+          onSelect={async () => {
+            await signOutAndRedirect();
+            navigate({ to: "/login" });
+          }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px] text-destructive focus:text-destructive"
         >
           <LogOut className="h-4 w-4" />
@@ -154,7 +201,12 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           className="grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[10px] font-semibold text-white ring-1 ring-border/60 transition hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           {user?.avatar ? (
-            <img src={user.avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+            <img
+              src={user.avatar}
+              alt=""
+              className="h-full w-full object-cover"
+              referrerPolicy="no-referrer"
+            />
           ) : (
             <span>{initials}</span>
           )}
@@ -163,29 +215,65 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
       <DropdownMenuContent align="start" side="right" sideOffset={10} className="w-64 p-1.5">
         <DropdownMenuLabel className="flex items-center gap-2.5 px-2 py-2">
           <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[12px] font-semibold text-white">
-            {user?.avatar ? <img src={user.avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : <span>{initials}</span>}
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt=""
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span>{initials}</span>
+            )}
           </span>
           <span className="flex min-w-0 flex-1 flex-col leading-tight">
             <span className="truncate text-[13px] font-semibold text-foreground">{name}</span>
-            <span className="truncate text-[11.5px] font-normal text-muted-foreground">{email}</span>
+            <span className="truncate text-[11.5px] font-normal text-muted-foreground">
+              {email}
+            </span>
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => onOpenSettings?.()} className="gap-2 rounded-lg px-2 py-1.5 text-[13px]">
+        <DropdownMenuItem
+          onSelect={() => onOpenSettings?.()}
+          className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
+        >
           <Settings className="h-4 w-4 text-muted-foreground" /> Settings
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toggle(); }} className="gap-2 rounded-lg px-2 py-1.5 text-[13px]">
-          {theme === "dark" ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault();
+            toggle();
+          }}
+          className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
+        >
+          {theme === "dark" ? (
+            <Sun className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <Moon className="h-4 w-4 text-muted-foreground" />
+          )}
           {theme === "dark" ? "Light mode" : "Dark mode"}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => window.dispatchEvent(new CustomEvent("open:upgrade"))} className="gap-2 rounded-lg px-2 py-1.5 text-[13px]">
+        <DropdownMenuItem
+          onSelect={() => window.dispatchEvent(new CustomEvent("open:upgrade"))}
+          className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
+        >
           <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" /> Upgrade plan
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => window.open(`${BASE_URL}/#help`, "_blank", "noopener,noreferrer")} className="gap-2 rounded-lg px-2 py-1.5 text-[13px]">
+        <DropdownMenuItem
+          onSelect={() => window.open(`${BASE_URL}/#help`, "_blank", "noopener,noreferrer")}
+          className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
+        >
           <HelpCircle className="h-4 w-4 text-muted-foreground" /> Help & FAQ
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={async () => { await signOutAndRedirect(); navigate({ to: "/login" }); }} className="gap-2 rounded-lg px-2 py-1.5 text-[13px] text-destructive focus:text-destructive">
+        <DropdownMenuItem
+          onSelect={async () => {
+            await signOutAndRedirect();
+            navigate({ to: "/login" });
+          }}
+          className="gap-2 rounded-lg px-2 py-1.5 text-[13px] text-destructive focus:text-destructive"
+        >
           <LogOut className="h-4 w-4" /> Log out
         </DropdownMenuItem>
       </DropdownMenuContent>

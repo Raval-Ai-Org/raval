@@ -42,7 +42,11 @@ export type MockAccount = {
   token_expires_at?: string | null;
 };
 
-export type MockWebhookEndpoint = { webhook_id: string; url: string; status: "active" | "disabled" };
+export type MockWebhookEndpoint = {
+  webhook_id: string;
+  url: string;
+  status: "active" | "disabled";
+};
 
 function readBody(req: IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -78,7 +82,12 @@ export class MockSDR {
   private accounts: MockAccount[] = [];
   private webhooks: MockWebhookEndpoint[] = [];
   private apiKeys: string[] = [];
-  private requests: Array<{ method: string; path: string; body: any; headers: Record<string, string> }> = [];
+  private requests: Array<{
+    method: string;
+    path: string;
+    body: any;
+    headers: Record<string, string>;
+  }> = [];
   private forced: Map<string, Forced> = new Map();
   /** If true, no auth token is required (default mirrors SDR: Bearer required). */
   requireAuth = true;

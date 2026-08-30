@@ -13,11 +13,12 @@ url := 'https://raval6.lovable.app/api/public/hooks/competitor-watch'
 This must be updated to point to your production domain. There are two approaches:
 
 #### Option A: Update via Supabase SQL Editor (Immediate Fix)
+
 1. Go to Supabase Dashboard → SQL Editor
 2. Run this query to update the existing cron job:
    ```sql
    SELECT cron.unschedule('competitor-watch-scan');
-   
+
    SELECT cron.schedule(
      'competitor-watch-scan',
      '*/30 * * * *',
@@ -33,6 +34,7 @@ This must be updated to point to your production domain. There are two approache
 3. Replace `YOUR_PRODUCTION_DOMAIN.com` with your actual production domain
 
 #### Option B: Create New Migration for Production
+
 1. Create a new migration file in `supabase/migrations/`:
    ```
    [timestamp]_update-competitor-watch-webhook.sql
@@ -62,6 +64,7 @@ The application now uses the `APP_URL` environment variable for all dynamic URL 
 - **Production**: Set `APP_URL=https://your-domain.com`
 
 This controls:
+
 - SEO meta tags (og:url, canonical)
 - JSON-LD structured data
 - Favicon and logo paths

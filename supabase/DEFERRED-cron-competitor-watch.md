@@ -17,7 +17,7 @@
    back to the publishable/service-role key). As written, the job would be rejected (401).
 4. **Not required to build the schema.** `competitor_watches` / `competitor_alerts` tables
    are created by `20260709194343` and exist without this job. The cron only triggers the
-   background scan that *populates* alerts.
+   background scan that _populates_ alerts.
 
 ## What the original SQL does
 
@@ -28,12 +28,14 @@
 ## The hook it must call
 
 Route: `POST /api/public/hooks/competitor-watch`
+
 - Requires header `x-cron-secret` == `process.env.CRON_SECRET` (length ≥ 16).
 - Returns 401 without a matching secret; 503 if `CRON_SECRET` is unset/too short.
 
 ## Required before this can be applied
 
 Fill in **real** values (do not guess / do not commit placeholders):
+
 1. `CRON_SECRET` — a long random string (32+ chars) set as an env var on the deployed app
    (and in `.env` for local cron testing). This must match what the hook checks.
 2. `APP_BASE_URL` — the real deployed production origin, e.g. `https://<vercel-domain>`.

@@ -51,8 +51,13 @@ function userClient(token: string) {
 }
 
 function makeSlug(): string {
-  return randomBytes(6).toString("base64url").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10) +
-    Math.random().toString(36).slice(2, 6);
+  return (
+    randomBytes(6)
+      .toString("base64url")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 10) + Math.random().toString(36).slice(2, 6)
+  );
 }
 
 function makeToken(): string {
@@ -94,7 +99,9 @@ export const Route = createFileRoute("/api/shares")({
           if (ids.length) {
             const { data: ev } = await supabase
               .from("client_events")
-              .select("id, share_id, item_id, kind, body, actor_name, actor_email, marketer_decision, created_at")
+              .select(
+                "id, share_id, item_id, kind, body, actor_name, actor_email, marketer_decision, created_at",
+              )
               .in("share_id", ids)
               .order("created_at", { ascending: false })
               .limit(200);
@@ -128,7 +135,12 @@ export const Route = createFileRoute("/api/shares")({
           if (evErr) return jsonError(500, evErr.message);
 
           // If client approved a content item and marketer accepts → flip its status to approved.
-          if (decision === "accepted" && ev && (ev as any).kind === "approved" && (ev as any).item_id) {
+          if (
+            decision === "accepted" &&
+            ev &&
+            (ev as any).kind === "approved" &&
+            (ev as any).item_id
+          ) {
             const { data: item } = await supabase
               .from("client_share_items")
               .select("ref_id, kind")

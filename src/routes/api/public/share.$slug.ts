@@ -153,7 +153,9 @@ export const Route = createFileRoute("/api/public/share/$slug")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data: share } = await supabaseAdmin
           .from("client_shares")
-          .select("id, token_hash, password_hash, status, expires_at, allow_comments, allow_approvals")
+          .select(
+            "id, token_hash, password_hash, status, expires_at, allow_comments, allow_approvals",
+          )
           .eq("slug", params.slug)
           .maybeSingle();
         if (!share) return json(404, { error: "Not found" });
@@ -174,7 +176,9 @@ export const Route = createFileRoute("/api/public/share/$slug")({
         if (body.kind === "commented" && !(share as any).allow_comments)
           return json(403, { error: "Comments disabled" });
         if (
-          (body.kind === "approved" || body.kind === "rejected" || body.kind === "requested_changes") &&
+          (body.kind === "approved" ||
+            body.kind === "rejected" ||
+            body.kind === "requested_changes") &&
           !(share as any).allow_approvals
         )
           return json(403, { error: "Approvals disabled" });
@@ -194,4 +198,3 @@ export const Route = createFileRoute("/api/public/share/$slug")({
     },
   },
 });
-

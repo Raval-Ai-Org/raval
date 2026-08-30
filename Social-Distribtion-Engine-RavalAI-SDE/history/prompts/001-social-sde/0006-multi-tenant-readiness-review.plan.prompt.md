@@ -16,9 +16,9 @@ links:
   adr: null
   pr: null
 files:
- - (none — architecture review only; no code changed)
+  - (none — architecture review only; no code changed)
 tests:
- - (none — design discussion)
+  - (none — design discussion)
 ---
 
 ## Prompt
@@ -42,6 +42,7 @@ model (Buffer/Omni-style); each client authorizes through it and gets their own 
 pair stored per account. BUT the module is not yet operationally ready for real clients.
 
 Identified 6 gaps:
+
 1. Worker-to-adapter token wiring broken — process_target passes platform_account_id, adapters
    expect the OAuth bearer token; worker must decrypt encrypted_access_token (Fernet) and pass
    the real token (scheduler_tasks.py:233, linkedin.py:122, twitter.py:136).
@@ -121,16 +122,16 @@ matches CLAUDE.md 3.1 (modular-monolith/extraction doctrine) and 3.2 (queue-firs
 
 ### 7 W + 1 H analysis
 
-| Q | Answer |
-|---|--------|
-| **WHO** | Actors: RavalAI clients (brands) authorize their own social accounts via OAuth and approve every publish (approval gate = brand's human); RavalAI engineering owns/operates the module; the system posts on the brand's behalf; platform AI agents interact via a capability layer. |
-| **WHAT** | The module = last-mile distribution engine (schedule → queue → retry → publish; adapters for X/LinkedIn/Facebook/Instagram; idempotency; HMAC webhooks; encrypted token storage). Still needed around it: tenancy/auth, brand ingestion, LLM content orchestration, UI, analytics, billing. NOT needed: a rebuilt SDE. |
-| **WHEN** | Integrate now as the Phase-1 distribution service; first close gaps 1–6; deploy to public HTTPS; then onboard a pilot brand. Clients connect accounts at onboarding; posts fire at scheduled time after approval. |
-| **WHERE** | Runs today on local Ubuntu (venv + Docker Compose). Production = Docker on Linux servers; host OS irrelevant (Docker/WSL2 on Windows is fine). In-platform position: a backend service behind the platform API, reached by the frontend via REST + webhooks. |
-| **WHY** | One RavalAI dev app per platform: platform OAuth rules require a single registered app; centralizes cost/quota; per-account tokens isolate consent, quotas, and revocations per client. Queue-first durability prevents lost posts when platforms fail (CLAUDE.md 2.1/2.2/3.2). |
-| **WHICH** | Phase-1 platforms: X, LinkedIn, Facebook, Instagram (Instagram shares the Meta app). Reusable from this module: adapters, scheduler, webhooks, idempotency, models, security. To build: tenancy, frontend, analytics, content/LLM layer, billing. |
-| **WHOM** | Serves brand clients and their audiences; answers to RavalAI leadership (Zain) and the platform's AI agents via a capability layer; final approval authority = the brand's human (approval boundary, CLAUDE.md 4.3). |
-| **HOW** | (1) Close gap 1+5 — dogfood a real LinkedIn publish through POST /api/v1/publish; (2) close gap 4 — per-workspace API keys; (3) close gaps 2+3 — real per-platform token refresh + Redis-backed OAuth state; (4) Meta live publish; (5) HTTPS deploy + hosted Postgres/Redis; (6) pilot brand onboarding. Integrate as REST service + HMAC webhooks; add MCP wrapper later (CLAUDE.md 4.5). |
+| Q         | Answer                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **WHO**   | Actors: RavalAI clients (brands) authorize their own social accounts via OAuth and approve every publish (approval gate = brand's human); RavalAI engineering owns/operates the module; the system posts on the brand's behalf; platform AI agents interact via a capability layer.                                                                                                         |
+| **WHAT**  | The module = last-mile distribution engine (schedule → queue → retry → publish; adapters for X/LinkedIn/Facebook/Instagram; idempotency; HMAC webhooks; encrypted token storage). Still needed around it: tenancy/auth, brand ingestion, LLM content orchestration, UI, analytics, billing. NOT needed: a rebuilt SDE.                                                                      |
+| **WHEN**  | Integrate now as the Phase-1 distribution service; first close gaps 1–6; deploy to public HTTPS; then onboard a pilot brand. Clients connect accounts at onboarding; posts fire at scheduled time after approval.                                                                                                                                                                           |
+| **WHERE** | Runs today on local Ubuntu (venv + Docker Compose). Production = Docker on Linux servers; host OS irrelevant (Docker/WSL2 on Windows is fine). In-platform position: a backend service behind the platform API, reached by the frontend via REST + webhooks.                                                                                                                                |
+| **WHY**   | One RavalAI dev app per platform: platform OAuth rules require a single registered app; centralizes cost/quota; per-account tokens isolate consent, quotas, and revocations per client. Queue-first durability prevents lost posts when platforms fail (CLAUDE.md 2.1/2.2/3.2).                                                                                                             |
+| **WHICH** | Phase-1 platforms: X, LinkedIn, Facebook, Instagram (Instagram shares the Meta app). Reusable from this module: adapters, scheduler, webhooks, idempotency, models, security. To build: tenancy, frontend, analytics, content/LLM layer, billing.                                                                                                                                           |
+| **WHOM**  | Serves brand clients and their audiences; answers to RavalAI leadership (Zain) and the platform's AI agents via a capability layer; final approval authority = the brand's human (approval boundary, CLAUDE.md 4.3).                                                                                                                                                                        |
+| **HOW**   | (1) Close gap 1+5 — dogfood a real LinkedIn publish through POST /api/v1/publish; (2) close gap 4 — per-workspace API keys; (3) close gaps 2+3 — real per-platform token refresh + Redis-backed OAuth state; (4) Meta live publish; (5) HTTPS deploy + hosted Postgres/Redis; (6) pilot brand onboarding. Integrate as REST service + HMAC webhooks; add MCP wrapper later (CLAUDE.md 4.5). |
 
 ### Bottom line
 

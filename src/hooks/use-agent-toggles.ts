@@ -31,7 +31,9 @@ function getState() {
 function setState(updater: (prev: Toggles) => Toggles) {
   const next = updater(getState());
   memo = next;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {}
   subscribers.forEach((cb) => cb(next));
 }
 
@@ -44,19 +46,22 @@ export function useAgentToggles() {
     setLocal(getState());
     const cb = (t: Toggles) => setLocal(t);
     subscribers.add(cb);
-    return () => { subscribers.delete(cb); };
+    return () => {
+      subscribers.delete(cb);
+    };
   }, []);
 
   const set = useCallback((id: string, on: boolean) => {
     setState((prev) => ({ ...prev, [id]: on }));
     const a = agentList.find((x) => x.id === id);
-    if (a) emit({
-      kind: "agent.toggle",
-      agentSlug: a.slug,
-      title: `${a.name} ${on ? "activated" : "paused"}`,
-      detail: on ? `${a.role} is back online.` : `${a.role} stays silent until re-enabled.`,
-      toast: true,
-    });
+    if (a)
+      emit({
+        kind: "agent.toggle",
+        agentSlug: a.slug,
+        title: `${a.name} ${on ? "activated" : "paused"}`,
+        detail: on ? `${a.role} is back online.` : `${a.role} stays silent until re-enabled.`,
+        toast: true,
+      });
   }, []);
 
   const setAll = useCallback((on: boolean) => {
@@ -77,7 +82,10 @@ export function useAgentToggles() {
 
 // ----- Token usage tracker (local proxy) ----------------------------
 
-interface Usage { used: number; updated: number }
+interface Usage {
+  used: number;
+  updated: number;
+}
 
 function readUsage(): Usage {
   try {
@@ -97,9 +105,14 @@ function getUsage() {
 }
 
 export function recordTokens(count: number) {
-  const next: Usage = { used: getUsage().used + Math.max(0, Math.floor(count)), updated: Date.now() };
+  const next: Usage = {
+    used: getUsage().used + Math.max(0, Math.floor(count)),
+    updated: Date.now(),
+  };
   usageMemo = next;
-  try { localStorage.setItem(TOKENS_KEY, JSON.stringify(next)); } catch {}
+  try {
+    localStorage.setItem(TOKENS_KEY, JSON.stringify(next));
+  } catch {}
   usageSubs.forEach((cb) => cb(next));
 }
 
@@ -111,7 +124,9 @@ export function useTokenUsage() {
     setU(getUsage());
     const cb = (v: Usage) => setU(v);
     usageSubs.add(cb);
-    return () => { usageSubs.delete(cb); };
+    return () => {
+      usageSubs.delete(cb);
+    };
   }, []);
   const remaining = Math.max(0, MONTHLY_BUDGET - u.used);
   const pct = Math.min(100, (u.used / MONTHLY_BUDGET) * 100);
@@ -121,9 +136,35 @@ export function useTokenUsage() {
 // ----- Prompt → agent router ----------------------------------------
 
 const KEYWORDS: { slug: string; words: string[] }[] = [
-  { slug: "seo",     words: ["seo", "aeo", "geo", "search", "ranking", "serp", "citation", "backlink"] },
-  { slug: "content", words: ["blog", "article", "draft", "copy", "content", "newsletter", "email", "write"] },
-  { slug: "social",  words: ["social", "linkedin", "twitter", "x post", "instagram", "reel", "tweet", "post", "schedule", "reddit", "subreddit", "quora", "community", "thread", "ama", "answer"] },
+  {
+    slug: "seo",
+    words: ["seo", "aeo", "geo", "search", "ranking", "serp", "citation", "backlink"],
+  },
+  {
+    slug: "content",
+    words: ["blog", "article", "draft", "copy", "content", "newsletter", "email", "write"],
+  },
+  {
+    slug: "social",
+    words: [
+      "social",
+      "linkedin",
+      "twitter",
+      "x post",
+      "instagram",
+      "reel",
+      "tweet",
+      "post",
+      "schedule",
+      "reddit",
+      "subreddit",
+      "quora",
+      "community",
+      "thread",
+      "ama",
+      "answer",
+    ],
+  },
 ];
 
 export function routePromptToAgent(prompt: string): string | null {

@@ -16,11 +16,11 @@ links:
   adr: null
   pr: null
 files:
- - /home/nauman_sajjad/Desktop/Raval-AI/scripts/twitter_oauth_and_post.py
- - /home/nauman_sajjad/Desktop/Raval-AI/scripts/linkedin_oauth_and_post.py
- - /home/nauman_sajjad/Desktop/Raval-AI/.env
+  - /home/nauman_sajjad/Desktop/Raval-AI/scripts/twitter_oauth_and_post.py
+  - /home/nauman_sajjad/Desktop/Raval-AI/scripts/linkedin_oauth_and_post.py
+  - /home/nauman_sajjad/Desktop/Raval-AI/.env
 tests:
- - none (live external API smoke test, not a repo test suite)
+  - none (live external API smoke test, not a repo test suite)
 ---
 
 ## Prompt
@@ -37,6 +37,7 @@ Asked to post first LinkedIn test post "hi this is test post happy to see you he
 ## Response snapshot
 
 Twitter:
+
 - Wrote scripts/twitter_oauth_and_post.py (OAuth 2.0 PKCE with localhost:3000 callback server).
 - Confirmed X app callback URI via OCR of screenshot; PKCE challenge fixed (urlsafe_b64encode).
 - User supplied access+refresh tokens; saved to .env (had to fix a line-concatenation bug
@@ -47,6 +48,7 @@ Twitter:
   Posting blocked pending tier upgrade or monthly reset.
 
 LinkedIn:
+
 - Wrote scripts/linkedin_oauth_and_post.py (callback server on port 8000 matching the
   registered redirect URI http://localhost:8000/api/v1/oauth/linkedin/callback).
 - Iteration 1: scope "w_member_social r_liteprofile openid" → LinkedIn error

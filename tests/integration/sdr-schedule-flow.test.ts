@@ -9,17 +9,35 @@ describe("schedule flow → delivery mirror (US3 → US4 handoff)", () => {
   const sdr = new MockSDR();
   beforeAll(async () => {
     await sdr.start();
-    sdr.addAccount({ account_id: "li-1", platform: "linkedin", platform_username: "Brand", status: "active" });
+    sdr.addAccount({
+      account_id: "li-1",
+      platform: "linkedin",
+      platform_username: "Brand",
+      status: "active",
+    });
   });
   afterAll(async () => await sdr.stop());
 
   it("creates a pending SDR job, pending publications, and marks the item scheduled", async () => {
-    const item: MockContentItem = { id: "item-1", workspace_id: "ws-1", body: "scheduled", media_url: null, status: "approved", meta: { platform: "linkedin" } };
+    const item: MockContentItem = {
+      id: "item-1",
+      workspace_id: "ws-1",
+      body: "scheduled",
+      media_url: null,
+      status: "approved",
+      meta: { platform: "linkedin" },
+    };
     const db = makeMockContentDb([item]);
     const deps: PublishDeps = { sdrBaseUrl: sdr.baseUrl, token: "ws-key", db };
 
     const out = await scheduleContentItemsHandler(
-      { workspaceId: "ws-1", items: [{ contentItemId: "item-1", scheduledAt: new Date(Date.now() + 3600_000).toISOString() }], selection: { type: "all" } },
+      {
+        workspaceId: "ws-1",
+        items: [
+          { contentItemId: "item-1", scheduledAt: new Date(Date.now() + 3600_000).toISOString() },
+        ],
+        selection: { type: "all" },
+      },
       deps,
     );
     expect(out.status).toBe(200);

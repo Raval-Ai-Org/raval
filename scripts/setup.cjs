@@ -33,11 +33,7 @@ if (isWindows) {
   // PowerShell script. We use `powershell -ExecutionPolicy Bypass -File ...`
   // Bypass is required because the default Windows policy blocks .ps1 scripts.
   cmd = "powershell";
-  args = [
-    "-NoProfile",
-    "-ExecutionPolicy", "Bypass",
-    "-File", scriptPath,
-  ];
+  args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath];
 } else {
   cmd = "bash";
   args = [scriptPath];

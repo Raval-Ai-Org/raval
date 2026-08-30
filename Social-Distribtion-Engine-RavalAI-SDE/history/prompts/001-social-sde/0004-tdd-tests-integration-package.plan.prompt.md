@@ -32,6 +32,7 @@ tests:
 User asked for: expert analysis on OAuth/developer account requirements for social media publishing, dry-run demo of the SDE module, running all tests, adopting TDD for coverage gaps, and preparing integration readiness package. Approved plan: A → B → D → E (skipping C: Twitter setup).
 
 Key questions:
+
 1. Do clients need their own developer accounts? (No — just standard OAuth)
 2. How does token refresh work? (Daily Celery beat task, platform-specific refresh logic)
 3. Dry run demo to prove system works?
@@ -41,6 +42,7 @@ Key questions:
 ## Response snapshot
 
 Completed all 4 steps:
+
 - **Step A**: Started Docker stack (PostgreSQL + Redis), API server (port 8001), Celery worker + beat. Ran 8-check visible demo: health ✅, publish ✅, job status ✅, schedule ✅, cancel ✅, auth rejection ✅, multi-target ✅.
 - **Step B**: Ran all 153 unit + 13 E2E = 166 tests. All passing. Fixed 2 scheduler tests (task name mismatch).
 - **Step D**: Added 13 new TDD tests:
@@ -49,6 +51,7 @@ Completed all 4 steps:
 - **Step E**: Updated COMPLETION_REPORT.md with latest metrics (166 tests, 50% coverage)
 
 Fixed issues found:
+
 1. Circular import in celery_app.py → inline beat schedule
 2. Beat scheduler task name mismatch → fixed task names
 3. Docker Compose v1 incompatibility → used docker run directly

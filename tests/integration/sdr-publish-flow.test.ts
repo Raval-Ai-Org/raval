@@ -11,12 +11,24 @@ describe("publish flow → delivery mirror (US2 → US4 handoff)", () => {
   const sdr = new MockSDR();
   beforeAll(async () => {
     await sdr.start();
-    sdr.addAccount({ account_id: "li-1", platform: "linkedin", platform_username: "Brand", status: "active" });
+    sdr.addAccount({
+      account_id: "li-1",
+      platform: "linkedin",
+      platform_username: "Brand",
+      status: "active",
+    });
   });
   afterAll(async () => await sdr.stop());
 
   it("one job per item, one content_publications row per target, item set to publishing", async () => {
-    const item: MockContentItem = { id: "item-1", workspace_id: "ws-1", body: "post", media_url: null, status: "approved", meta: { platform: "linkedin" } };
+    const item: MockContentItem = {
+      id: "item-1",
+      workspace_id: "ws-1",
+      body: "post",
+      media_url: null,
+      status: "approved",
+      meta: { platform: "linkedin" },
+    };
     const db = makeMockContentDb([item]);
     const deps: PublishDeps = { sdrBaseUrl: sdr.baseUrl, token: "ws-key", db };
 

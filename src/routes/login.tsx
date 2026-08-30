@@ -16,14 +16,25 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       { title: "Sign in · Raval AI" },
-      { name: "description", content: "Sign in to Raval AI — the Marketing Intelligence Layer for brands and agencies." },
+      {
+        name: "description",
+        content: "Sign in to Raval AI — the Marketing Intelligence Layer for brands and agencies.",
+      },
       { property: "og:title", content: "Sign in · Raval AI" },
-      { property: "og:description", content: "Access your Raval AI workspace to plan, create and optimize marketing that gets you visible inside LLMs." },
+      {
+        property: "og:description",
+        content:
+          "Access your Raval AI workspace to plan, create and optimize marketing that gets you visible inside LLMs.",
+      },
       { property: "og:url", content: `${BASE_URL}/login` },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Sign in · Raval AI" },
-      { name: "twitter:description", content: "Access your Raval AI workspace to plan, create and optimize marketing that gets you visible inside LLMs." },
+      {
+        name: "twitter:description",
+        content:
+          "Access your Raval AI workspace to plan, create and optimize marketing that gets you visible inside LLMs.",
+      },
       { name: "robots", content: "noindex,nofollow" },
     ],
     links: [{ rel: "canonical", href: `${BASE_URL}/login` }],
@@ -34,10 +45,22 @@ export const Route = createFileRoute("/login")({
 function GoogleMark() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.49h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.63z" />
-      <path fill="#34A853" d="M9 18c2.43 0 4.47-.81 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18z" />
-      <path fill="#FBBC05" d="M3.96 10.71A5.4 5.4 0 0 1 3.68 9c0-.59.1-1.17.28-1.71V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.04l3-2.33z" />
-      <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z" />
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.49h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.63z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.47-.81 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.96 10.71A5.4 5.4 0 0 1 3.68 9c0-.59.1-1.17.28-1.71V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.04l3-2.33z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"
+      />
     </svg>
   );
 }
@@ -62,7 +85,9 @@ function LoginPage() {
     supabase.auth.getSession().then(({ data }) => {
       if (!cancelled && data.session) navigate({ to: nextPath as any, replace: true });
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [navigate, nextPath]);
 
   const onEmailSignIn = async (event: FormEvent<HTMLFormElement>) => {
@@ -106,7 +131,9 @@ function LoginPage() {
       return;
     }
     setResetLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: passwordResetUrl() });
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: passwordResetUrl(),
+    });
     setResetLoading(false);
     if (error) toast.error("Could not send reset link", { description: friendlyAuthError(error) });
     else toast.success("Reset link sent");
@@ -118,7 +145,10 @@ function LoginPage() {
       footer={
         <p className="text-center text-sm text-muted-foreground">
           New here?{" "}
-          <Link to="/signup" className="font-semibold text-primary underline-offset-4 hover:underline">
+          <Link
+            to="/signup"
+            className="font-semibold text-primary underline-offset-4 hover:underline"
+          >
             Create an account
           </Link>
         </p>
@@ -139,7 +169,10 @@ function LoginPage() {
         </Button>
       </motion.div>
 
-      <motion.div variants={authRow} className="flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+      <motion.div
+        variants={authRow}
+        className="flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground"
+      >
         <span className="h-px flex-1 bg-border" />
         or
         <span className="h-px flex-1 bg-border" />

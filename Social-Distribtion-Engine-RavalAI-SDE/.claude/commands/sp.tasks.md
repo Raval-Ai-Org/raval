@@ -1,6 +1,6 @@
 ---
 description: Generate an actionable, dependency-ordered tasks.md for the feature based on available design artifacts.
-handoffs: 
+handoffs:
   - label: Analyze For Consistency
     agent: sp.analyze
     prompt: Run a project analysis for consistency
@@ -86,7 +86,7 @@ Every task MUST strictly follow this format:
 4. **[Story] label**: REQUIRED for user story phase tasks only
    - Format: [US1], [US2], [US3], etc. (maps to user stories from spec.md)
    - Setup phase: NO story label
-   - Foundational phase: NO story label  
+   - Foundational phase: NO story label
    - User Story phases: MUST have story label
    - Polish phase: NO story label
 5. **Description**: Clear action with exact file path
@@ -140,17 +140,17 @@ Every task MUST strictly follow this format:
 
 As the main request completes, you MUST create and complete a PHR (Prompt History Record) using agent‑native tools when possible.
 
-1) Determine Stage
+1. Determine Stage
    - Stage: constitution | spec | plan | tasks | red | green | refactor | explainer | misc | general
 
-2) Generate Title and Determine Routing:
+2. Generate Title and Determine Routing:
    - Generate Title: 3–7 words (slug for filename)
    - Route is automatically determined by stage:
      - `constitution` → `history/prompts/constitution/`
      - Feature stages → `history/prompts/<feature-name>/` (spec, plan, tasks, red, green, refactor, explainer, misc)
      - `general` → `history/prompts/general/`
 
-3) Create and Fill PHR (Shell first; fallback agent‑native)
+3. Create and Fill PHR (Shell first; fallback agent‑native)
    - Run: `.specify/scripts/bash/create-phr.sh --title "<title>" --stage <stage> [--feature <name>] --json`
    - Open the file and fill remaining placeholders (YAML + body), embedding full PROMPT_TEXT (verbatim) and concise RESPONSE_TEXT.
    - If the script fails:
@@ -158,6 +158,6 @@ As the main request completes, you MUST create and complete a PHR (Prompt Histor
      - Allocate an ID; compute the output path based on stage from step 2; write the file
      - Fill placeholders and embed full PROMPT_TEXT and concise RESPONSE_TEXT
 
-4) Validate + report
+4. Validate + report
    - No unresolved placeholders; path under `history/prompts/` and matches stage; stage/title/date coherent; print ID + path + stage + title.
    - On failure: warn, don't block. Skip only for `/sp.phr`.

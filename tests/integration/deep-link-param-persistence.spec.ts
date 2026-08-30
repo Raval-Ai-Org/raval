@@ -26,30 +26,57 @@ function fakeSession() {
     expires_in: 3600,
     expires_at: Math.floor(Date.now() / 1000) + 3600,
     user: {
-      id: USER_ID, email: "t@e.com", aud: "authenticated", role: "authenticated",
-      app_metadata: { provider: "email" }, user_metadata: {},
+      id: USER_ID,
+      email: "t@e.com",
+      aud: "authenticated",
+      role: "authenticated",
+      app_metadata: { provider: "email" },
+      user_metadata: {},
     },
   };
 }
 
 async function stubSupabase(context: BrowserContext) {
-  await context.route(new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`), async (route: Route) => {
-    const req = route.request();
-    const url = req.url();
-    const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
-    if (url.includes("/auth/v1/user"))
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession().user) });
-    if (url.includes("/auth/v1/token"))
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession()) });
-    if (url.includes("/rest/v1/workspaces")) {
-      const row = {
-        id: WS_ID, name: "Test", website_url: null, industry: null,
-        onboarded_at: "2024-01-01T00:00:00Z", first_prompt: null,
-      };
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(wantsSingle ? row : [row]) });
-    }
-    return route.fulfill({ status: 200, headers: JSON_HEADERS, body: wantsSingle ? "null" : "[]" });
-  });
+  await context.route(
+    new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`),
+    async (route: Route) => {
+      const req = route.request();
+      const url = req.url();
+      const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
+      if (url.includes("/auth/v1/user"))
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession().user),
+        });
+      if (url.includes("/auth/v1/token"))
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession()),
+        });
+      if (url.includes("/rest/v1/workspaces")) {
+        const row = {
+          id: WS_ID,
+          name: "Test",
+          website_url: null,
+          industry: null,
+          onboarded_at: "2024-01-01T00:00:00Z",
+          first_prompt: null,
+        };
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(wantsSingle ? row : [row]),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: wantsSingle ? "null" : "[]",
+      });
+    },
+  );
   await context.route("**/_serverFn/**", (route) =>
     route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
   );
@@ -66,9 +93,17 @@ async function seed(page: Page) {
         window.localStorage.removeItem(`studio:suggestions:${wsId}`);
         // @ts-expect-error WS stub
         window.WebSocket = function () {
-          return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 3 };
+          return {
+            addEventListener() {},
+            removeEventListener() {},
+            send() {},
+            close() {},
+            readyState: 3,
+          };
         };
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
     },
     { storageKey: STORAGE_KEY, sess: fakeSession(), wsId: WS_ID },
   );
@@ -76,7 +111,9 @@ async function seed(page: Page) {
 
 async function freshLoad(page: Page, path: string) {
   await page.goto(path, { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({
+    timeout: 15_000,
+  });
   await page.waitForFunction(
     () => !!window.localStorage.getItem("workspace:name") && !!document.querySelector("textarea"),
     null,
@@ -94,7 +131,9 @@ test.describe("Deep-link query param persistence", () => {
     await seed(page);
   });
 
-  test("?canvas=<type>&artifact=<id> — hydrates modal on fresh load and survives refresh", async ({ page }) => {
+  test("?canvas=<type>&artifact=<id> — hydrates modal on fresh load and survives refresh", async ({
+    page,
+  }) => {
     await freshLoad(page, "/app?canvas=seo-brief&artifact=abc-123");
 
     // Canvas modal should be open on the requested tile after cold load.
@@ -113,12 +152,16 @@ test.describe("Deep-link query param persistence", () => {
     expect(await currentSearch(page)).toMatch(/artifact=abc-123/);
   });
 
-  test("?canvas — dispatching open:canvas writes URL, closing strips both keys", async ({ page }) => {
+  test("?canvas — dispatching open:canvas writes URL, closing strips both keys", async ({
+    page,
+  }) => {
     await freshLoad(page, "/app");
     expect(await currentSearch(page)).toBe("");
 
     await page.evaluate(() =>
-      window.dispatchEvent(new CustomEvent("open:canvas", { detail: { type: "landing-page", id: "lp-42" } })),
+      window.dispatchEvent(
+        new CustomEvent("open:canvas", { detail: { type: "landing-page", id: "lp-42" } }),
+      ),
     );
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.waitForFunction(() => /canvas=landing-page/.test(window.location.search));
@@ -132,7 +175,9 @@ test.describe("Deep-link query param persistence", () => {
     );
   });
 
-  test("/app?tab=<t> — hydrates Analytics modal on the requested tab across refresh", async ({ page }) => {
+  test("/app?tab=<t> — hydrates Analytics modal on the requested tab across refresh", async ({
+    page,
+  }) => {
     await freshLoad(page, "/app?tab=organic");
 
     const modal = page.getByRole("dialog");
@@ -165,15 +210,23 @@ test.describe("Deep-link query param persistence", () => {
     await page.waitForFunction(() => !/tab=/.test(window.location.search));
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 
-  test("/app/analytics?tab=<t> — legacy route redirects and opens on the requested tab", async ({ page }) => {
+  test("/app/analytics?tab=<t> — legacy route redirects and opens on the requested tab", async ({
+    page,
+  }) => {
     await page.goto("/app/analytics?tab=audience", { waitUntil: "domcontentloaded" });
     // Router bounces us to /app; then the shell + modal hydrate.
-    await page.waitForFunction(() => window.location.pathname === "/app", null, { timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({ timeout: 15_000 });
+    await page.waitForFunction(() => window.location.pathname === "/app", null, {
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({
+      timeout: 15_000,
+    });
     const modal = page.getByRole("dialog");
     await expect(modal).toBeVisible({ timeout: 8_000 });
     await expect(modal).toContainText(/Who's visiting and where from/i);
@@ -198,4 +251,3 @@ test.describe("Deep-link query param persistence", () => {
     expect(await currentSearch(page)).toBe("");
   });
 });
-

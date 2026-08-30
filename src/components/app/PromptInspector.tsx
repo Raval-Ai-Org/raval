@@ -3,11 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Check, Info, Sparkles, FileText as CopyIcon } from "@/components/brand/icons";
 import { cn } from "@/lib/utils";
-import {
-  buildImagePromptDetailed,
-  type BrandDnaLite,
-  type ImgSize,
-} from "@/lib/post-image";
+import { buildImagePromptDetailed, type BrandDnaLite, type ImgSize } from "@/lib/post-image";
 import type { PlatformId } from "@/lib/social-platforms";
 
 type Props = {
@@ -30,14 +26,32 @@ type Props = {
  * tune what Ravi is actually looking at.
  */
 export function PromptInspector({
-  postBody, postTitle, brand, workspaceName, platform, size, seedKey, autoSize,
-  className, compact = false,
+  postBody,
+  postTitle,
+  brand,
+  workspaceName,
+  platform,
+  size,
+  seedKey,
+  autoSize,
+  className,
+  compact = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const inspection = useMemo(
-    () => buildImagePromptDetailed({ postBody, postTitle, brand, workspaceName, platform, size, seedKey, autoSize }),
+    () =>
+      buildImagePromptDetailed({
+        postBody,
+        postTitle,
+        brand,
+        workspaceName,
+        platform,
+        size,
+        seedKey,
+        autoSize,
+      }),
     [postBody, postTitle, brand, workspaceName, platform, size, seedKey, autoSize],
   );
 
@@ -101,18 +115,20 @@ export function PromptInspector({
                 Palette · {palette.label}
               </div>
               <div className="flex items-center gap-1.5">
-                {[palette.bg, palette.surface, palette.fg, palette.muted, palette.accent].map((hex, i) => (
-                  <div key={i} className="flex flex-col items-center gap-0.5">
-                    <span
-                      className="h-6 w-6 rounded-md border border-border/40 shadow-sm"
-                      style={{ background: hex }}
-                      aria-hidden
-                    />
-                    <span className="font-mono text-[9px] leading-none text-muted-foreground/80">
-                      {hex.replace("#", "")}
-                    </span>
-                  </div>
-                ))}
+                {[palette.bg, palette.surface, palette.fg, palette.muted, palette.accent].map(
+                  (hex, i) => (
+                    <div key={i} className="flex flex-col items-center gap-0.5">
+                      <span
+                        className="h-6 w-6 rounded-md border border-border/40 shadow-sm"
+                        style={{ background: hex }}
+                        aria-hidden
+                      />
+                      <span className="font-mono text-[9px] leading-none text-muted-foreground/80">
+                        {hex.replace("#", "")}
+                      </span>
+                    </div>
+                  ),
+                )}
               </div>
             </div>
 
@@ -125,7 +141,8 @@ export function PromptInspector({
             <TokenRow label="Aspect" value={inspection.aspectLine} />
             <TokenRow label="Platform" value={inspection.platformLine} />
             <div className="pt-0.5 text-[10px] font-mono text-muted-foreground/70">
-              anchor: <span className="font-mono">{inspection.styleSeed}</span> · size: {inspection.size}
+              anchor: <span className="font-mono">{inspection.styleSeed}</span> · size:{" "}
+              {inspection.size}
               {inspection.autoSize ? " · auto" : ""}
             </div>
           </div>
@@ -136,8 +153,14 @@ export function PromptInspector({
           <SectionHeading>Brand DNA fields used</SectionHeading>
           <ul className="mt-2 space-y-1.5">
             {usedFields.map((f) => (
-              <li key={f.key} className="flex items-start gap-2 rounded-lg bg-secondary/40 px-2.5 py-1.5">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-green" aria-hidden />
+              <li
+                key={f.key}
+                className="flex items-start gap-2 rounded-lg bg-secondary/40 px-2.5 py-1.5"
+              >
+                <span
+                  className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-green"
+                  aria-hidden
+                />
                 <div className="min-w-0 flex-1">
                   <div className="text-[10.5px] font-semibold uppercase tracking-wide text-foreground/70">
                     {f.label}
@@ -209,7 +232,11 @@ export function PromptInspector({
             className="h-7 gap-1.5 rounded-full px-2.5 text-[11.5px]"
             onClick={copyPrompt}
           >
-            {copied ? <Check className="h-3 w-3 text-brand-green" strokeWidth={2.5} /> : <CopyIcon className="h-3 w-3" strokeWidth={2.25} />}
+            {copied ? (
+              <Check className="h-3 w-3 text-brand-green" strokeWidth={2.5} />
+            ) : (
+              <CopyIcon className="h-3 w-3" strokeWidth={2.25} />
+            )}
             {copied ? "Copied" : "Copy full prompt"}
           </Button>
         </div>

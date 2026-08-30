@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "@tanstack/react-router";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ArrowLeft, Check, Gift, Plus, Search, Sparkles, LayoutGrid, LogOut } from "@/components/brand/icons";
+import {
+  ArrowLeft,
+  Check,
+  Gift,
+  Plus,
+  Search,
+  Sparkles,
+  LayoutGrid,
+  LogOut,
+} from "@/components/brand/icons";
 import { useTokenUsage } from "@/hooks/use-agent-toggles";
 import { supabase } from "@/integrations/supabase/client";
 import { signOutAndRedirect } from "@/lib/auth";
@@ -25,13 +34,19 @@ type Props = {
 
 function displayName(w: Workspace) {
   const domain = w.website_url
-    ? w.website_url.replace(/^https?:\/\//i, "").replace(/\/$/, "").split("/")[0]
+    ? w.website_url
+        .replace(/^https?:\/\//i, "")
+        .replace(/\/$/, "")
+        .split("/")[0]
     : null;
   return domain || w.name || w.industry || "Workspace";
 }
 
 function initials(name: string) {
-  const parts = name.trim().split(/\s+|\.|-/).filter(Boolean);
+  const parts = name
+    .trim()
+    .split(/\s+|\.|-/)
+    .filter(Boolean);
   return ((parts[0]?.[0] ?? "W") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
@@ -59,7 +74,9 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
       setWorkspaces((data ?? []) as Workspace[]);
       setLoading(false);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
   const filtered = useMemo(() => {
@@ -76,7 +93,10 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
   }, [q, workspaces, workspaceId]);
 
   const pick = (w: Workspace) => {
-    if (w.id === workspaceId) { setOpen(false); return; }
+    if (w.id === workspaceId) {
+      setOpen(false);
+      return;
+    }
     const name = displayName(w);
     try {
       localStorage.setItem("workspace:selected", w.id);
@@ -89,7 +109,9 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
   };
 
   const remainingDisplay =
-    remaining >= 1000 ? `${(remaining / 1000).toFixed(remaining >= 10_000 ? 0 : 1)}k` : `${remaining}`;
+    remaining >= 1000
+      ? `${(remaining / 1000).toFixed(remaining >= 10_000 ? 0 : 1)}k`
+      : `${remaining}`;
   const remainingPct = Math.max(2, 100 - pct);
   const low = remainingPct < 20;
 
@@ -103,7 +125,10 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
       >
         {/* Back to workspaces dashboard */}
         <button
-          onClick={() => { setOpen(false); navigate({ to: "/projects" }); }}
+          onClick={() => {
+            setOpen(false);
+            navigate({ to: "/projects" });
+          }}
           className="group flex w-full items-center gap-2 border-b border-border/60 px-3 py-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
           aria-label="Back to workspaces dashboard"
         >
@@ -149,13 +174,15 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
           </div>
 
           <button
-            onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent("open:publish")); }}
+            onClick={() => {
+              setOpen(false);
+              window.dispatchEvent(new CustomEvent("open:publish"));
+            }}
             className="relative mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] px-2 py-1.5 text-[11.5px] font-semibold text-background shadow-[inset_0_1px_0_hsl(0_0%_100%/0.3),0_3px_10px_-3px_hsl(var(--brand-green)/0.5)] transition-transform active:scale-[0.98]"
           >
             <Gift className="h-3.5 w-3.5" strokeWidth={2.2} />
             Get more credits
           </button>
-
         </div>
 
         <div className="h-px bg-border/60" />
@@ -192,30 +219,38 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
             </div>
           )}
 
-          {!loading && filtered.map((w) => {
-            const active = w.id === workspaceId;
-            const name = displayName(w);
-            return (
-              <button
-                key={w.id}
-                onClick={() => pick(w)}
-                className={cn(
-                  "group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors",
-                  active ? "bg-secondary text-foreground" : "text-foreground/85 hover:bg-secondary/70",
-                )}
-              >
-                <WorkspaceLogo name={name} websiteUrl={w.website_url} size={28} />
+          {!loading &&
+            filtered.map((w) => {
+              const active = w.id === workspaceId;
+              const name = displayName(w);
+              return (
+                <button
+                  key={w.id}
+                  onClick={() => pick(w)}
+                  className={cn(
+                    "group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors",
+                    active
+                      ? "bg-secondary text-foreground"
+                      : "text-foreground/85 hover:bg-secondary/70",
+                  )}
+                >
+                  <WorkspaceLogo name={name} websiteUrl={w.website_url} size={28} />
 
-                <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{name}</span>
-                {active && <Check className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]" aria-hidden />}
-              </button>
-            );
-          })}
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{name}</span>
+                  {active && (
+                    <Check className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]" aria-hidden />
+                  )}
+                </button>
+              );
+            })}
         </div>
 
         <div className="border-t border-border/60 p-1.5">
           <button
-            onClick={() => { setOpen(false); navigate({ to: "/projects" }); }}
+            onClick={() => {
+              setOpen(false);
+              navigate({ to: "/projects" });
+            }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-foreground/85 transition-colors hover:bg-secondary/70 hover:text-foreground"
           >
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-secondary/80 text-muted-foreground">
@@ -224,7 +259,10 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
             <span className="flex-1 truncate">New workspace</span>
           </button>
           <button
-            onClick={() => { setOpen(false); navigate({ to: "/projects" }); }}
+            onClick={() => {
+              setOpen(false);
+              navigate({ to: "/projects" });
+            }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
           >
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-secondary/80 text-muted-foreground">

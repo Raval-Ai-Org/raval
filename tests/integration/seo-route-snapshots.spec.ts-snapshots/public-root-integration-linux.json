@@ -14,12 +14,7 @@
   "hreflang": [],
   "robots": null,
   "h1": null,
-  "jsonLdTypes": [
-    "FAQPage",
-    "Organization",
-    "SoftwareApplication",
-    "WebSite"
-  ],
+  "jsonLdTypes": ["FAQPage", "Organization", "SoftwareApplication", "WebSite"],
   "jsonLdNodes": [
     {
       "type": "FAQPage",
@@ -58,11 +53,7 @@
       "publisherRef": null,
       "logoUrl": null,
       "offersCount": 3,
-      "offerPrices": [
-        "USD29",
-        "USD79",
-        "USD9"
-      ],
+      "offerPrices": ["USD29", "USD79", "USD9"],
       "faqQuestionCount": null,
       "breadcrumbDepth": null,
       "inLanguage": null

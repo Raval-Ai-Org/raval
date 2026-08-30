@@ -17,7 +17,8 @@ export const Route = createFileRoute("/api/sdr/cancel")({
         }
         const ws = await requireWorkspaceAccess(request, body?.workspaceId);
         if (!ws.ok) return ws.response;
-        if (typeof body?.contentItemId !== "string") return jsonError(400, "contentItemId required");
+        if (typeof body?.contentItemId !== "string")
+          return jsonError(400, "contentItemId required");
 
         try {
           const token = await getWorkspaceSdrKey(ws.workspaceId);

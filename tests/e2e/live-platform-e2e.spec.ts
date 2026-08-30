@@ -54,7 +54,11 @@ test.describe.serial("Live Platform E2E", () => {
       console.log("✅ Login successful, navigated to:", page.url());
     } catch (e) {
       console.log("❌ Login failed or didn't redirect. Current URL:", page.url());
-      const errorMessage = await page.locator('[role="alert"], .error, .text-red-500').first().textContent().catch(() => null);
+      const errorMessage = await page
+        .locator('[role="alert"], .error, .text-red-500')
+        .first()
+        .textContent()
+        .catch(() => null);
       if (errorMessage) console.log("Error message:", errorMessage);
       throw e;
     }
@@ -83,7 +87,7 @@ test.describe.serial("Live Platform E2E", () => {
       "/app/social",
       "/app/analytics",
       "/app/seo",
-      "/studio",   // Should redirect to /app/social
+      "/studio", // Should redirect to /app/social
       "/projects",
       "/agency",
     ];
@@ -108,11 +112,13 @@ test.describe.serial("Live Platform E2E", () => {
         results.push({ route, status: "error", url: (e as Error).message.slice(0, 80) });
         console.log(`❌ ${route} - ${(e as Error).message.slice(0, 80)}`);
         // Try to recover the page for next iteration
-        try { await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 5000 }); } catch {}
+        try {
+          await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 5000 });
+        } catch {}
       }
     }
 
-    const okCount = results.filter(r => r.status === "ok").length;
+    const okCount = results.filter((r) => r.status === "ok").length;
     console.log(`\nRoute summary: ${okCount}/${routes.length} loaded successfully`);
   });
 
@@ -132,7 +138,9 @@ test.describe.serial("Live Platform E2E", () => {
     await page.waitForTimeout(2000); // Let the SDR UI load
 
     // Look for connection buttons
-    const connectButtons = await page.locator('button:has-text("Connect"), button:has-text("Link")').count();
+    const connectButtons = await page
+      .locator('button:has-text("Connect"), button:has-text("Link")')
+      .count();
     console.log(`Found ${connectButtons} connection buttons`);
 
     if (connectButtons > 0) {
@@ -142,12 +150,14 @@ test.describe.serial("Live Platform E2E", () => {
     }
 
     // Check for platform logos/names
-    const hasLinkedIn = await page.locator('text=/linkedin/i').count();
-    const hasTwitter = await page.locator('text=/twitter|x\\.com/i').count();
-    const hasFacebook = await page.locator('text=/facebook/i').count();
-    const hasInstagram = await page.locator('text=/instagram/i').count();
+    const hasLinkedIn = await page.locator("text=/linkedin/i").count();
+    const hasTwitter = await page.locator("text=/twitter|x\\.com/i").count();
+    const hasFacebook = await page.locator("text=/facebook/i").count();
+    const hasInstagram = await page.locator("text=/instagram/i").count();
 
-    console.log(`Platforms found - LinkedIn: ${hasLinkedIn}, X/Twitter: ${hasTwitter}, Facebook: ${hasFacebook}, Instagram: ${hasInstagram}`);
+    console.log(
+      `Platforms found - LinkedIn: ${hasLinkedIn}, X/Twitter: ${hasTwitter}, Facebook: ${hasFacebook}, Instagram: ${hasInstagram}`,
+    );
   });
 
   test("4. LinkedIn OAuth flow", async ({ page, context }) => {
@@ -166,9 +176,13 @@ test.describe.serial("Live Platform E2E", () => {
     await page.waitForTimeout(2000);
 
     // Find LinkedIn connect button
-    const linkedinButton = page.locator('button:has-text("Connect LinkedIn"), button:has-text("Link LinkedIn"), a:has-text("Connect LinkedIn")').first();
+    const linkedinButton = page
+      .locator(
+        'button:has-text("Connect LinkedIn"), button:has-text("Link LinkedIn"), a:has-text("Connect LinkedIn")',
+      )
+      .first();
 
-    if (await linkedinButton.count() === 0) {
+    if ((await linkedinButton.count()) === 0) {
       console.log("⚠️  LinkedIn connect button not found");
       return;
     }
@@ -217,9 +231,13 @@ test.describe.serial("Live Platform E2E", () => {
     await page.waitForTimeout(2000);
 
     // Find X/Twitter connect button
-    const twitterButton = page.locator('button:has-text("Connect X"), button:has-text("Connect Twitter"), button:has-text("Link X"), button:has-text("Link Twitter")').first();
+    const twitterButton = page
+      .locator(
+        'button:has-text("Connect X"), button:has-text("Connect Twitter"), button:has-text("Link X"), button:has-text("Link Twitter")',
+      )
+      .first();
 
-    if (await twitterButton.count() === 0) {
+    if ((await twitterButton.count()) === 0) {
       console.log("⚠️  X/Twitter connect button not found");
       return;
     }

@@ -96,7 +96,11 @@ export function suggestionsPrompt(args: {
     user: assemble([
       { label: "Workspace signals", body: JSON.stringify(args.signals) },
       { label: "Brand context", body: args.brandContext, maxChars: 4000 },
-      { label: "User just said", body: args.lastUserMessage && `"${args.lastUserMessage}"`, maxChars: 800 },
+      {
+        label: "User just said",
+        body: args.lastUserMessage && `"${args.lastUserMessage}"`,
+        maxChars: 800,
+      },
     ]),
   };
 }
@@ -113,9 +117,14 @@ export function nextStepsPrompt(args: {
     `scheduled:${args.stats.scheduled}`,
     `published:${args.stats.published}`,
     args.stats.recentTitles.length
-      ? `recent:${args.stats.recentTitles.slice(0, 5).map((t) => `"${t}"`).join(",")}`
+      ? `recent:${args.stats.recentTitles
+          .slice(0, 5)
+          .map((t) => `"${t}"`)
+          .join(",")}`
       : "",
-  ].filter(Boolean).join(" | ");
+  ]
+    .filter(Boolean)
+    .join(" | ");
 
   return {
     system: system(
@@ -227,7 +236,7 @@ export function socialMultiPrompt(spec: {
     `Style: ${spec.style}`,
     FMT_JSON_STRICT,
     FMT_NO_FENCES,
-    'Body includes emojis/line breaks/CTA — NOT hashtags (hashtags go in the array).',
+    "Body includes emojis/line breaks/CTA — NOT hashtags (hashtags go in the array).",
     `Schema: ${SCHEMA_POST}`,
   );
 }
@@ -381,7 +390,7 @@ export const BRAND_EXTRACT_SYSTEM = system(
   IDENTITY_BRAND_ANALYST,
   "From the multi-page crawl AND external web mentions, extract a deep brand profile, competitors, customer signals, and durable insights.",
   FMT_JSON_STRICT,
-  "Do NOT invent facts not supported by provided text. If a field is unknown, set to \"\" (or []) and add its name to `missing`.",
+  'Do NOT invent facts not supported by provided text. If a field is unknown, set to "" (or []) and add its name to `missing`.',
   "Be specific and concrete — reuse the brand's own language.",
   "Constraints: oneLiner ≤100c; about ≤320c; mission/vision/positioning/uniqueValueProp ≤200c each (only if clearly stated/implied); voice ≤160c (tone descriptors).",
   "products = comma-separated actual names; values = 3-5; doRules/dontRules = 2-3 short guidelines each; tags/keywords = 3-8 short.",

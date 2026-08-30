@@ -16,12 +16,12 @@ links:
   adr: null
   pr: null
 files:
- - /home/nauman_sajjad/Desktop/Raval-AI/CLAUDE.md
- - /home/nauman_sajjad/Desktop/Raval-AI/.specify/memory/constitution.md
- - /home/nauman_sajjad/Desktop/Raval-AI/.claude/settings.local.json
- - /home/nauman_sajjad/Desktop/Raval-AI/history/prompts/general/0001-personas-and-dev-rules-into-claudemd.general.prompt.md
+  - /home/nauman_sajjad/Desktop/Raval-AI/CLAUDE.md
+  - /home/nauman_sajjad/Desktop/Raval-AI/.specify/memory/constitution.md
+  - /home/nauman_sajjad/Desktop/Raval-AI/.claude/settings.local.json
+  - /home/nauman_sajjad/Desktop/Raval-AI/history/prompts/general/0001-personas-and-dev-rules-into-claudemd.general.prompt.md
 tests:
- - none (read-only audit)
+  - none (read-only audit)
 ---
 
 ## Prompt
@@ -33,6 +33,7 @@ Hi please do go for fully code base read only to understand all the current stat
 Completed a full read-only inspection of `/home/nauman_sajjad/Desktop/Raval-AI`.
 
 Key findings:
+
 - **Current state:** The repo is primarily governance/scaffolding, not product implementation yet.
 - **Implemented artifacts:**
   - `CLAUDE.md` now contains SDD process governance, persona layers, 25 dev rules, and company context.

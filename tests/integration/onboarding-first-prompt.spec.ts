@@ -55,58 +55,73 @@ test.describe("Onboarding first-prompt flow", () => {
     const chatCalls: { body: string }[] = [];
 
     // ----- Stub Supabase auth + REST -----
-    await context.route(new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`), async (route: Route) => {
-      const req = route.request();
-      const url = req.url();
-      const method = req.method();
-      const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
+    await context.route(
+      new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`),
+      async (route: Route) => {
+        const req = route.request();
+        const url = req.url();
+        const method = req.method();
+        const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
 
-      // Auth endpoints
-      if (url.includes("/auth/v1/user")) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession().user) });
-      }
-      if (url.includes("/auth/v1/token")) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession()) });
-      }
-      if (url.includes("/auth/v1/logout")) {
-        return route.fulfill({ status: 204, body: "" });
-      }
-
-      // REST tables
-      if (url.includes("/rest/v1/workspaces")) {
-        if (method === "GET") {
-          const row = {
-            id: WS_ID,
-            name: "Test Brand",
-            website_url: null,
-            industry: null,
-            onboarded_at: "2024-01-01T00:00:00Z",
-            first_prompt: FIRST_PROMPT,
-          };
+        // Auth endpoints
+        if (url.includes("/auth/v1/user")) {
           return route.fulfill({
             status: 200,
             headers: JSON_HEADERS,
-            body: JSON.stringify(wantsSingle ? row : [row]),
+            body: JSON.stringify(fakeSession().user),
           });
         }
-        // PATCH/POST/DELETE — succeed silently.
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
-      }
+        if (url.includes("/auth/v1/token")) {
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(fakeSession()),
+          });
+        }
+        if (url.includes("/auth/v1/logout")) {
+          return route.fulfill({ status: 204, body: "" });
+        }
 
-      if (url.includes("/rest/v1/chat_messages")) {
-        if (method === "GET") {
+        // REST tables
+        if (url.includes("/rest/v1/workspaces")) {
+          if (method === "GET") {
+            const row = {
+              id: WS_ID,
+              name: "Test Brand",
+              website_url: null,
+              industry: null,
+              onboarded_at: "2024-01-01T00:00:00Z",
+              first_prompt: FIRST_PROMPT,
+            };
+            return route.fulfill({
+              status: 200,
+              headers: JSON_HEADERS,
+              body: JSON.stringify(wantsSingle ? row : [row]),
+            });
+          }
+          // PATCH/POST/DELETE — succeed silently.
           return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
         }
-        return route.fulfill({ status: 201, headers: JSON_HEADERS, body: "[]" });
-      }
 
-      if (url.includes("/rest/v1/content_items")) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
-      }
+        if (url.includes("/rest/v1/chat_messages")) {
+          if (method === "GET") {
+            return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
+          }
+          return route.fulfill({ status: 201, headers: JSON_HEADERS, body: "[]" });
+        }
 
-      // Any other table read/write — empty success.
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: wantsSingle ? "null" : "[]" });
-    });
+        if (url.includes("/rest/v1/content_items")) {
+          return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
+        }
+
+        // Any other table read/write — empty success.
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: wantsSingle ? "null" : "[]",
+        });
+      },
+    );
 
     // ----- Stub app API endpoints -----
     await context.route("**/api/clarify", (route) => {
@@ -143,7 +158,13 @@ test.describe("Onboarding first-prompt flow", () => {
           const origWS = window.WebSocket;
           // @ts-expect-error test-only stub
           window.WebSocket = function () {
-            return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 3 };
+            return {
+              addEventListener() {},
+              removeEventListener() {},
+              send() {},
+              close() {},
+              readyState: 3,
+            };
           };
           // Reference host so linter doesn't complain about unused param.
           void host;
@@ -162,10 +183,12 @@ test.describe("Onboarding first-prompt flow", () => {
     //    onboarding prompt) and the streamed assistant reply. The transient
     //    "Kicking off…" indicator is intentionally not asserted here because
     //    with mocked instant responses it may render for < a frame.
-    await expect(page.getByText(FIRST_PROMPT, { exact: false }).first())
-      .toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(ASSISTANT_REPLY, { exact: false }).first())
-      .toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(FIRST_PROMPT, { exact: false }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(ASSISTANT_REPLY, { exact: false }).first()).toBeVisible({
+      timeout: 15_000,
+    });
 
     // 2. /api/chat was actually called with the onboarding prompt in history.
     expect(chatCalls.length).toBeGreaterThanOrEqual(1);
@@ -177,8 +200,10 @@ test.describe("Onboarding first-prompt flow", () => {
     await expect(page.getByText(/Kicking off your first request/i)).toHaveCount(0);
 
     // 4. Per-workspace lock is set so a remount would NOT re-fire.
-    const lock = await page.evaluate((wsId) =>
-      window.localStorage.getItem(`raval:first-prompt-fired:${wsId}`), WS_ID);
+    const lock = await page.evaluate(
+      (wsId) => window.localStorage.getItem(`raval:first-prompt-fired:${wsId}`),
+      WS_ID,
+    );
     expect(lock).toBe("1");
   });
 });

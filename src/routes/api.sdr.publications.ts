@@ -13,7 +13,8 @@ export const Route = createFileRoute("/api/sdr/publications")({
         const url = new URL(request.url);
         const workspaceId = url.searchParams.get("workspaceId");
         const contentItemId = url.searchParams.get("contentItemId");
-        if (!workspaceId || !contentItemId) return jsonError(400, "workspaceId + contentItemId required");
+        if (!workspaceId || !contentItemId)
+          return jsonError(400, "workspaceId + contentItemId required");
 
         const supabaseUrl = process.env.SUPABASE_URL;
         const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
@@ -26,7 +27,9 @@ export const Route = createFileRoute("/api/sdr/publications")({
 
         const { data, error } = await supabase
           .from("content_publications")
-          .select("id, platform, account_id, status, platform_post_url, platform_post_id, error_category, last_error, delivered_at")
+          .select(
+            "id, platform, account_id, status, platform_post_url, platform_post_id, error_category, last_error, delivered_at",
+          )
           .eq("workspace_id", workspaceId)
           .eq("content_item_id", contentItemId)
           .order("created_at", { ascending: true });

@@ -24,7 +24,7 @@ tests:
 
 ## Prompt
 
-Generate implementation tasks for the instagram-adapter feature per specs/002-instagram-adapter/plan.md, research.md, data-model.md, contracts/meta-api.md, and spec.md. Cover: (1) extend facebook OAuth to resolve a Page (page_id + Page token via GET /me/accounts) instead of /me, (2) add instagram to OAuth platform allowlist + _exchange_code_for_token + _fetch_user_profile with IG resolution via GET /{page_id}?fields=instagram_business_account, (3) new app/adapters/instagram.py implementing two-stage media -> media_publish (image + video, caption, permalink), (4) register instagram in adapters/__init__.py, (5) publisher instagram account_id composite (ig_user_id|token), (6) scripts/seed_meta_account.py dev-only fallback, (7) unit tests (adapter success + error taxonomy + publisher composite). Baseline 182 tests must stay passing.
+Generate implementation tasks for the instagram-adapter feature per specs/002-instagram-adapter/plan.md, research.md, data-model.md, contracts/meta-api.md, and spec.md. Cover: (1) extend facebook OAuth to resolve a Page (page_id + Page token via GET /me/accounts) instead of /me, (2) add instagram to OAuth platform allowlist + _exchange_code_for_token + _fetch_user_profile with IG resolution via GET /{page_id}?fields=instagram_business_account, (3) new app/adapters/instagram.py implementing two-stage media -> media_publish (image + video, caption, permalink), (4) register instagram in adapters/**init**.py, (5) publisher instagram account_id composite (ig_user_id|token), (6) scripts/seed_meta_account.py dev-only fallback, (7) unit tests (adapter success + error taxonomy + publisher composite). Baseline 182 tests must stay passing.
 
 ## Response snapshot
 
@@ -32,7 +32,7 @@ Ran check-prerequisites.sh (FEATURE_DIR specs/002-instagram-adapter; docs resear
 
 ## Outcome
 
-- ✅ Impact: Immediately executable task list for the Meta feature; TDD; clear file paths (accounts.py:228/472/529, publisher.py:420, adapters/__init__.py, new instagram.py); MVP slice identified.
+- ✅ Impact: Immediately executable task list for the Meta feature; TDD; clear file paths (accounts.py:228/472/529, publisher.py:420, adapters/**init**.py, new instagram.py); MVP slice identified.
 - 🧪 Tests: Format validation passed (27 tasks, sequential, US-labeled). Baseline suite = 182 passed / 9 warnings (not re-run this stage — gate is T025 at implementation).
 - 📁 Files: tasks.md, PHR 0003.
 - 🔁 Next prompts: /sp.implement (execute tasks) → red/green, then live wiring (fb → ig) with approved posts.

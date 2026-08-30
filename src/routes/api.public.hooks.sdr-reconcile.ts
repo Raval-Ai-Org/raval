@@ -31,7 +31,10 @@ export const Route = createFileRoute("/api/public/hooks/sdr-reconcile")({
           return Response.json(out);
         } catch (e) {
           console.error("sdr-reconcile error", e);
-          return new Response(JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: { "Content-Type": "application/json" } });
+          return new Response(
+            JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+            { status: 500, headers: { "Content-Type": "application/json" } },
+          );
         }
       },
     },

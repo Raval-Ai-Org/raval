@@ -5,7 +5,7 @@
 **Status**: Draft
 **Input**: User description: "Add an Instagram Content Publishing adapter to the RavalAI Social Distribution Engine, plus the wiring to connect a Facebook Page live."
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Client authorizes only; no developer account (Priority: P1)
 
@@ -96,7 +96,7 @@ As a brand, I want to know exactly what happened to each Meta post — published
 - What happens when the media step succeeds but the publish step fails? → Engine records the state accurately and reports the failure; it must not leave the brand believing the post is live.
 - What happens when publishing is attempted while the engine's Meta credentials are missing from `.env`? → Engine fails fast with a clear configuration error, not a vague network error.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -113,13 +113,13 @@ As a brand, I want to know exactly what happened to each Meta post — published
 - **FR-011**: The engine MUST keep existing platform capabilities (X, LinkedIn, scheduling, webhooks) fully functional — adding Meta support MUST NOT regress them.
 - **FR-012**: The engine MUST NOT expose any token, author URN, or credential in any API response or log (FR-MT-08).
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **Account**: A connected social platform identity (here: `facebook` or `instagram`). Stores the encrypted token, the platform account ID, a display username, token expiry, and status (`active` / `expired` / `disconnected`). For Facebook the platform identity is the Page ID; for Instagram it is the Instagram user ID resolved from the linked Page.
 - **Post / PostTarget**: A publish request targeting one or more accounts. Each target records which account was targeted and, once delivered, the platform post ID and public URL.
 - **DeliveryLog**: The auditable record of each publish attempt — platform, outcome, error classification, and detail — so "what happened to that post?" is always answerable.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

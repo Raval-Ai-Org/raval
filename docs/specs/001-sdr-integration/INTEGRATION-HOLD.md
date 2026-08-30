@@ -5,6 +5,7 @@
 > `history/adr/0004-sdr-integration-full-record.md`.
 
 ## TL;DR
+
 The SDR integration is **built and live-verified locally** (vitest 115/115, SDR 221/221,
 real-login E2E against live Supabase + live SDR passed). Two things changed outside our
 SDR work that we are treating as **on hold** until discussed:
@@ -19,6 +20,7 @@ SDR work that we are treating as **on hold** until discussed:
    (`20260809000001-3`). Google provider is OFF on the old project too.
 
 ## Key facts verified (read-only, 2026-08-10)
+
 - Old Supabase `smdravaoaeqdajmnrlpr` (raval-dev-v2): **live, has data + migrations + test
   user** (`junaidsajjad2298@gmail.com`). `workspace_sdr` row present (`status: active`).
 - New Supabase `slcmqbbjzyztqyucauol` ("Raval"): **empty** — "Invalid API key" for the
@@ -29,6 +31,7 @@ SDR work that we are treating as **on hold** until discussed:
   password login via the test credentials is unaffected by OAuth.
 
 ## Decisions pending (not executed)
+
 - **Supabase project:** use the old `smdravaoaeqdajmnrlpr` (recommended — everything works
   there) vs provision the new `slcmqbbjzyztqyucauol` properly (apply all migrations incl.
   SDR ones, create test user, enable Google provider).
@@ -38,5 +41,6 @@ SDR work that we are treating as **on hold** until discussed:
   project re-point only.
 
 ## Guardrail
+
 No branch switches, stashes, resets, reverts, or force-pushes on `raval` without explicit
 user go-ahead. Documentation + commits to the planning branch (`001-sdr-integration`) only.

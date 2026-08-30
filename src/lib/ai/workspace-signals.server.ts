@@ -22,14 +22,27 @@ export async function getWorkspaceSignals(workspaceId: string): Promise<Workspac
   if (hit && hit.expires > now) return hit.value;
 
   const [p, s, pub, recent] = await Promise.all([
-    supabaseAdmin.from("content_items").select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId).eq("status", "pending"),
-    supabaseAdmin.from("content_items").select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId).eq("status", "scheduled"),
-    supabaseAdmin.from("content_items").select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId).eq("status", "published"),
-    supabaseAdmin.from("content_items").select("title")
-      .eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(5),
+    supabaseAdmin
+      .from("content_items")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "pending"),
+    supabaseAdmin
+      .from("content_items")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "scheduled"),
+    supabaseAdmin
+      .from("content_items")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "published"),
+    supabaseAdmin
+      .from("content_items")
+      .select("title")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .limit(5),
   ]);
 
   const value: WorkspaceSignals = {

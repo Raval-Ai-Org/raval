@@ -17,7 +17,8 @@ function getEncryptionKey(): Buffer {
   const raw = process.env.SDR_SECRET_ENCRYPTION_KEY;
   if (!raw) throw new Error("SDR_SECRET_ENCRYPTION_KEY not set (server-only env)");
   const key = Buffer.from(raw, "base64");
-  if (key.length !== 32) throw new Error("SDR_SECRET_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
+  if (key.length !== 32)
+    throw new Error("SDR_SECRET_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
   return key;
 }
 
@@ -31,9 +32,16 @@ export function encryptSecret(plaintext: string): string {
 export function decryptSecret(payload: string): string {
   const [ver, ivB64, tagB64, ctB64] = payload.split(":");
   if (ver !== "v1") throw new Error("Unknown secret format");
-  const decipher = createDecipheriv("aes-256-gcm", getEncryptionKey(), Buffer.from(ivB64, "base64url"));
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    getEncryptionKey(),
+    Buffer.from(ivB64, "base64url"),
+  );
   decipher.setAuthTag(Buffer.from(tagB64, "base64url"));
-  return Buffer.concat([decipher.update(Buffer.from(ctB64, "base64url")), decipher.final()]).toString("utf8");
+  return Buffer.concat([
+    decipher.update(Buffer.from(ctB64, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
 }
 
 // ─── Provisioning ─────────────────────────────────────────────────────────────

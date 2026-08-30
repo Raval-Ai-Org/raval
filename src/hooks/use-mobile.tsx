@@ -23,4 +23,3 @@ export function useIsMobile() {
 export function useIsCompact() {
   return useBreakpoint(COMPACT_BREAKPOINT);
 }
-

@@ -107,16 +107,16 @@ const buttonVariants = cva(
       size: {
         /* ChatGPT-aligned scale — 8px/32/36/40/48 rhythm, consistent 10px radius.
            `pill` is the only opt-in to a rounded-full shape. */
-        xs:      "h-7  px-2.5 text-[12.5px] rounded-md  [&_svg]:size-4",
-        sm:      "h-8  px-3   text-[13px]              [&_svg]:size-[18px]",
+        xs: "h-7  px-2.5 text-[12.5px] rounded-md  [&_svg]:size-4",
+        sm: "h-8  px-3   text-[13px]              [&_svg]:size-[18px]",
         default: "h-9  px-4   text-[14px]              [&_svg]:size-[18px]",
-        lg:      "h-10 px-5   text-[14.5px]            [&_svg]:size-5",
-        xl:      "h-12 px-6   text-[15px]              [&_svg]:size-5",
-        icon:      "h-9  w-9  [&_svg]:size-[18px]",
+        lg: "h-10 px-5   text-[14.5px]            [&_svg]:size-5",
+        xl: "h-12 px-6   text-[15px]              [&_svg]:size-5",
+        icon: "h-9  w-9  [&_svg]:size-[18px]",
         "icon-xs": "h-7  w-7  rounded-md [&_svg]:size-4",
         "icon-sm": "h-8  w-8  [&_svg]:size-[18px]",
         "icon-lg": "h-10 w-10 [&_svg]:size-5",
-        pill:      "h-9  px-4  rounded-full text-[13px] [&_svg]:size-4",
+        pill: "h-9  px-4  rounded-full text-[13px] [&_svg]:size-4",
       },
     },
     defaultVariants: {
@@ -125,7 +125,6 @@ const buttonVariants = cva(
     },
   },
 );
-
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
@@ -141,7 +140,10 @@ const Spinner = () => (
 );
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
+  (
+    { className, variant, size, asChild = false, loading = false, disabled, children, ...props },
+    ref,
+  ) => {
     const Comp = asChild ? Slot : "button";
     const isDisabled = disabled || loading;
 

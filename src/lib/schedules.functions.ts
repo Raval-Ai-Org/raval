@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-type JsonValue = string | number | boolean | null | { [k: string]: JsonValue | undefined } | JsonValue[];
+type JsonValue =
+  string | number | boolean | null | { [k: string]: JsonValue | undefined } | JsonValue[];
 
 const uuid = z.string().uuid();
 
@@ -44,9 +45,7 @@ export type ScheduledJob = {
 /* List */
 export const listScheduledJobs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) =>
-    z.object({ workspaceId: uuid.optional() }).parse(data ?? {}),
-  )
+  .inputValidator((data) => z.object({ workspaceId: uuid.optional() }).parse(data ?? {}))
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("scheduled_jobs")
@@ -143,10 +142,7 @@ export const deleteScheduledJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ id: uuid }).parse(data))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("scheduled_jobs")
-      .delete()
-      .eq("id", data.id);
+    const { error } = await context.supabase.from("scheduled_jobs").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

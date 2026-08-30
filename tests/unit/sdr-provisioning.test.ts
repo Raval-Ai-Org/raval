@@ -36,7 +36,11 @@ const callSdrMock = vi.fn(async (opts: { path: string; token: string; body?: any
 describe("ensureWorkspaceSdrProvisioning", () => {
   it("mints a per-workspace key and stores it ENCRYPTED (FR-014)", async () => {
     const db = makeMockDb();
-    const record = await ensureWorkspaceSdrProvisioning("ws-1", { db, callSdrFn: callSdrMock, webhookBaseUrl: "https://raval.example" });
+    const record = await ensureWorkspaceSdrProvisioning("ws-1", {
+      db,
+      callSdrFn: callSdrMock,
+      webhookBaseUrl: "https://raval.example",
+    });
 
     expect(record.status).toBe("active");
     expect(record.encrypted_api_key).not.toContain("per-workspace-key-1"); // not plaintext
@@ -47,7 +51,11 @@ describe("ensureWorkspaceSdrProvisioning", () => {
 
   it("registers the webhook with the MINTED key, not the admin token (FR-MT-02)", async () => {
     const db = makeMockDb();
-    await ensureWorkspaceSdrProvisioning("ws-2", { db, callSdrFn: callSdrMock, webhookBaseUrl: "https://raval.example" });
+    await ensureWorkspaceSdrProvisioning("ws-2", {
+      db,
+      callSdrFn: callSdrMock,
+      webhookBaseUrl: "https://raval.example",
+    });
 
     const adminCall = callSdrMock.mock.calls.find((c) => c[0].path === "/api/v1/admin/api-keys");
     const webhookCall = callSdrMock.mock.calls.find((c) => c[0].path === "/api/v1/webhooks/config");
@@ -78,7 +86,12 @@ describe("ensureWorkspaceSdrProvisioning", () => {
   it("throws when SDR admin env is not configured", async () => {
     const db = makeMockDb();
     await expect(
-      ensureWorkspaceSdrProvisioning("ws-4", { db, callSdrFn: callSdrMock, sdrBaseUrl: "", adminToken: "" }),
+      ensureWorkspaceSdrProvisioning("ws-4", {
+        db,
+        callSdrFn: callSdrMock,
+        sdrBaseUrl: "",
+        adminToken: "",
+      }),
     ).rejects.toThrow("not configured");
   });
 
@@ -86,7 +99,11 @@ describe("ensureWorkspaceSdrProvisioning", () => {
     const failingSdr = vi.fn(async () => ({ status: 500, data: { error_code: "INTERNAL" } }));
     const db = makeMockDb();
     await expect(
-      ensureWorkspaceSdrProvisioning("ws-5", { db, callSdrFn: failingSdr as any, webhookBaseUrl: "https://raval.example" }),
+      ensureWorkspaceSdrProvisioning("ws-5", {
+        db,
+        callSdrFn: failingSdr as any,
+        webhookBaseUrl: "https://raval.example",
+      }),
     ).rejects.toThrow("mint failed");
   });
 });

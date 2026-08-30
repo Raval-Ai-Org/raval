@@ -6,9 +6,7 @@
   },
   "auth": {
     "type": "bearer",
-    "bearer": [
-      { "key": "token", "value": "{{SDE_API_TOKEN}}", "type": "string" }
-    ]
+    "bearer": [{ "key": "token", "value": "{{SDE_API_TOKEN}}", "type": "string" }]
   },
   "variable": [
     { "key": "base_url", "value": "http://localhost:8000" },

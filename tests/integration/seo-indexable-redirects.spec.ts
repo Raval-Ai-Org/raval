@@ -43,7 +43,10 @@ const ENTRY_VARIANTS: EntryVariant[] = [
   // slash-less form. Either way canonical must NOT keep the slash.
   { id: "trailing-slash", build: (p) => (p === "/" ? "/" : `${p}/`) },
   // Tracking params must be stripped from canonical.
-  { id: "utm-params", build: (p) => `${p}${p.includes("?") ? "&" : "?"}utm_source=ci&utm_campaign=seo` },
+  {
+    id: "utm-params",
+    build: (p) => `${p}${p.includes("?") ? "&" : "?"}utm_source=ci&utm_campaign=seo`,
+  },
   { id: "ref-param", build: (p) => `${p}${p.includes("?") ? "&" : "?"}ref=twitter` },
   // Hash fragments never affect canonical; assert they don't leak.
   { id: "hash-fragment", build: (p) => `${p}#section` },
@@ -91,7 +94,9 @@ async function walk(page: Page, entryId: string, start: string): Promise<RouteSn
     const head = await collectHead(page);
     const finalUrl = new URL(page.url());
     const finalSearch: Record<string, string> = {};
-    finalUrl.searchParams.forEach((v, k) => { finalSearch[k] = v; });
+    finalUrl.searchParams.forEach((v, k) => {
+      finalSearch[k] = v;
+    });
 
     return {
       entryId,

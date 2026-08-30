@@ -1,18 +1,17 @@
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
-import type {
-  BrandDna,
-  Competitor,
-  MemoryNote,
-  SignalEvidence,
-} from "@/hooks/use-brand-dna";
+import type { BrandDna, Competitor, MemoryNote, SignalEvidence } from "@/hooks/use-brand-dna";
 
 const uid = () =>
-  (typeof crypto !== "undefined" && "randomUUID" in crypto)
+  typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const norm = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 
 const similar = (a: string, b: string) => {
   const x = norm(a);
@@ -200,7 +199,11 @@ export async function syncMemoryFromChat(
         sourceLabel: "Chat",
       })),
       ...newTriggers.map((t) => ({ body: t.text, kind: "trigger", sourceLabel: t.sourceLabel })),
-      ...newObjections.map((o) => ({ body: o.text, kind: "objection", sourceLabel: o.sourceLabel })),
+      ...newObjections.map((o) => ({
+        body: o.text,
+        kind: "objection",
+        sourceLabel: o.sourceLabel,
+      })),
       ...newFeedback.map((f) => ({ body: f.text, kind: "feedback", sourceLabel: f.sourceLabel })),
       ...newCompetitors.map((c) => ({
         body: `Competitor: ${c.name}${c.positioning ? ` — ${c.positioning}` : ""}`,
@@ -213,7 +216,9 @@ export async function syncMemoryFromChat(
       const { upsertMemoryInsights } = await import("@/lib/insights.functions");
       await upsertMemoryInsights({ data: { workspaceId, items } }).catch(() => {});
     }
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
 
   return { added };
 }

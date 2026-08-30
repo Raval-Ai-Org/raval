@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
 import { buildDesignMd, saveDesignMd } from "@/lib/design-md";
 
-export interface BrandColor { name: string; hex: string }
-export interface BrandSocial { platform: string; url: string }
-export interface BrandSource { label: string; snippet?: string; url?: string }
+export interface BrandColor {
+  name: string;
+  hex: string;
+}
+export interface BrandSocial {
+  platform: string;
+  url: string;
+}
+export interface BrandSource {
+  label: string;
+  snippet?: string;
+  url?: string;
+}
 
 export type ExtractStatus = "idle" | "loading" | "ok" | "error";
 
@@ -52,7 +62,6 @@ export interface MemoryNote {
   createdAt: number;
   source?: "user" | "chat" | "manual";
 }
-
 
 export interface SignalEvidence {
   id: string;
@@ -119,7 +128,6 @@ export interface BrandDna {
   memoryUpdatedAt?: number;
 }
 
-
 export const emptyCustomer: CustomerSignals = {
   jobsToBeDone: "",
   painPoints: "",
@@ -171,39 +179,57 @@ export const emptyDna: BrandDna = {
   uniqueValueProp: "",
   keywords: [],
   userInsights: [],
-
 };
 
 const TEXT_FIELDS: (keyof BrandDna)[] = [
-  "brandName", "oneLiner", "about", "industry", "businessModel",
-  "voice", "audience", "values", "products", "doRules", "dontRules",
+  "brandName",
+  "oneLiner",
+  "about",
+  "industry",
+  "businessModel",
+  "voice",
+  "audience",
+  "values",
+  "products",
+  "doRules",
+  "dontRules",
 ];
 
 export function useBrandDna(workspaceId: string | null) {
   const key = workspaceId ? `brand-dna:v3:${workspaceId}` : null;
-  const legacyKeys = workspaceId
-    ? [`brand-dna:v2:${workspaceId}`, `brand-dna:${workspaceId}`]
-    : [];
+  const legacyKeys = workspaceId ? [`brand-dna:v2:${workspaceId}`, `brand-dna:${workspaceId}`] : [];
   const [dna, setDna] = useState<BrandDna>(emptyDna);
 
   useEffect(() => {
     if (!key) return;
     try {
       const raw = localStorage.getItem(key);
-      if (raw) { setDna({ ...emptyDna, ...JSON.parse(raw) }); return; }
+      if (raw) {
+        setDna({ ...emptyDna, ...JSON.parse(raw) });
+        return;
+      }
       for (const lk of legacyKeys) {
         const legacy = localStorage.getItem(lk);
-        if (legacy) { setDna({ ...emptyDna, ...JSON.parse(legacy) }); return; }
+        if (legacy) {
+          setDna({ ...emptyDna, ...JSON.parse(legacy) });
+          return;
+        }
       }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   const persist = (next: BrandDna) => {
-    if (key) { try { localStorage.setItem(key, JSON.stringify(next)); } catch {} }
+    if (key) {
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {}
+    }
     // Sync Design.md
     if (workspaceId) {
-      try { saveDesignMd(workspaceId, buildDesignMd(next)); } catch {}
+      try {
+        saveDesignMd(workspaceId, buildDesignMd(next));
+      } catch {}
     }
   };
 

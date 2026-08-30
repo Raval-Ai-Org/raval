@@ -34,7 +34,10 @@ function NotFoundComponent() {
       if (cancelled) return;
       const ensure = (selector: string, create: () => HTMLElement) => {
         let el = document.head.querySelector(selector) as HTMLElement | null;
-        if (!el) { el = create(); document.head.appendChild(el); }
+        if (!el) {
+          el = create();
+          document.head.appendChild(el);
+        }
         return el;
       };
       const robots = ensure('meta[name="robots"][data-nf="1"]', () => {
@@ -83,7 +86,6 @@ function NotFoundComponent() {
   );
 }
 
-
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
@@ -97,7 +99,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <h1 className="text-xl font-semibold">Something went wrong</h1>
         <p className="mt-2 text-sm text-muted-foreground">{display}</p>
         <button
-          onClick={() => { router.invalidate(); reset(); }}
+          onClick={() => {
+            router.invalidate();
+            reset();
+          }}
           className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
         >
           Try again
@@ -117,24 +122,50 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { title: "Raval AI — The Marketing Intelligence Layer" },
-      { name: "description", content: "Raval AI is the AI-native platform that helps brands and agencies plan, create, optimize and grow their marketing from one workspace — powered by Brand DNA, AEO/GEO intelligence and multi-client operations to get you visible inside LLMs." },
+      {
+        name: "description",
+        content:
+          "Raval AI is the AI-native platform that helps brands and agencies plan, create, optimize and grow their marketing from one workspace — powered by Brand DNA, AEO/GEO intelligence and multi-client operations to get you visible inside LLMs.",
+      },
       { property: "og:title", content: "Raval AI — The Marketing Intelligence Layer" },
-      { property: "og:description", content: "Get visible inside LLMs. Raval AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA." },
+      {
+        property: "og:description",
+        content:
+          "Get visible inside LLMs. Raval AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+      },
       { property: "og:site_name", content: "Raval AI" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Raval AI — The Marketing Intelligence Layer" },
-      { name: "twitter:description", content: "Get visible inside LLMs. Raval AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp" },
+      {
+        name: "twitter:description",
+        content:
+          "Get visible inside LLMs. Raval AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp",
+      },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: faviconAsset.url },
       { rel: "apple-touch-icon", href: faviconAsset.url },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700;800&display=swap" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..600,0..1,-25..0&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700;800&display=swap",
+      },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..600,0..1,-25..0&display=swap",
+      },
       { rel: "stylesheet", href: appCss },
     ],
     scripts: [
@@ -234,9 +265,15 @@ function RouteProgress() {
       raf = window.requestAnimationFrame(tick);
     } else if (visible) {
       setProgress(100);
-      timeout = setTimeout(() => { setVisible(false); setProgress(0); }, 260);
+      timeout = setTimeout(() => {
+        setVisible(false);
+        setProgress(0);
+      }, 260);
     }
-    return () => { if (raf) cancelAnimationFrame(raf); if (timeout) clearTimeout(timeout); };
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      if (timeout) clearTimeout(timeout);
+    };
   }, [isLoading, visible]);
 
   return (

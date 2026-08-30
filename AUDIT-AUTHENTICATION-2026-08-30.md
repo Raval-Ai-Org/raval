@@ -1,4 +1,5 @@
 # Raval AI Authentication Audit Report
+
 **Date**: 2026-08-30  
 **Status**: READ-ONLY AUDIT COMPLETE  
 **Supabase Project**: `slcmqbbjzyztqyucauol`
@@ -18,6 +19,7 @@
 - Logout with complete state cleanup
 
 ⚠️ **Architecture Issues Found** (non-critical for dev, but important for production):
+
 1. **Supabase project mismatch**: Configuration points to new empty project `slcmqbbjzyztqyucauol` but has no schema/migrations
 2. **Google OAuth not configured**: Provider not enabled in Supabase project
 3. **Lovable URL hardcoded**: Production URLs point to `raval6.lovable.app` (likely Lovable-hosted deployment URL)
@@ -27,6 +29,7 @@
 ## A. CURRENT AUTHENTICATION ARCHITECTURE
 
 ### Browser Flow
+
 ```
 User → /login or /signup
   ↓
@@ -43,6 +46,7 @@ App authenticated, session in localStorage
 ```
 
 ### Server Flow
+
 ```
 Browser (authenticated)
   ↓ serverFn call with Bearer token (attached by middleware)
@@ -61,6 +65,7 @@ Handler executes with userId from token claims
 ## B. FILES INVOLVED
 
 ### Authentication Routes
+
 - **Login**: `src/routes/login.tsx` - Email/password + Google sign-in
 - **Signup**: `src/routes/signup.tsx` - Email/password registration + Google
 - **Callback**: `src/routes/auth.callback.tsx` - OAuth callback, code→session exchange
@@ -71,6 +76,7 @@ Handler executes with userId from token claims
 - **Projects**: `src/routes/projects.tsx` - Protected route
 
 ### Auth Libraries
+
 - **Core auth functions**: `src/lib/auth.ts`
   - `signInWithGoogle(nextPath)` - Initiates Google OAuth with PKCE
   - `signOutAndRedirect(queryClient)` - Logout and cleanup
@@ -83,6 +89,7 @@ Handler executes with userId from token claims
   - `ensureAuthWorkspace()` - Creates/fetches user profile, returns first workspace or null
 
 ### Supabase Integration
+
 - **Browser client**: `src/integrations/supabase/client.ts`
   - Creates Supabase client with PKCE enabled, localStorage persistence, auto-refresh
   - Validates environment variables (throws early on placeholder values)
@@ -101,11 +108,13 @@ Handler executes with userId from token claims
   - `assertPublicUrl(raw)` - SSRF protection for URLs
 
 ### Configuration
+
 - **Vite config**: `vite.config.ts` - Uses Lovable's build config plugin
 - **Supabase config**: `supabase/config.toml` - References project `slcmqbbjzyztqyucauol`
 - **Environment template**: `.env.example` - Documents required variables
 
 ### Middleware Registration
+
 - **Start instance**: `src/start.ts`
   - Registers `attachSupabaseAuth` as functionMiddleware
   - Registers error handler as requestMiddleware
@@ -117,8 +126,9 @@ Handler executes with userId from token claims
 ✅ **IMPLEMENTED AND WORKING**
 
 ### Sign Up
+
 - **File**: `src/routes/signup.tsx`
-- **Implementation**: 
+- **Implementation**:
   ```typescript
   const { data, error } = await supabase.auth.signUp({
     email: email.trim(),
@@ -136,6 +146,7 @@ Handler executes with userId from token claims
   - Stores name in auth metadata
 
 ### Login
+
 - **File**: `src/routes/login.tsx`
 - **Implementation**:
   ```typescript
@@ -144,12 +155,13 @@ Handler executes with userId from token claims
     password,
   });
   ```
-- **Behavior**: 
+- **Behavior**:
   - Authenticates with credentials
   - Returns session on success
   - Fails with "invalid login credentials" if email/password incorrect or unconfirmed
 
 ### Password Reset
+
 - **File**: `src/routes/reset-password.tsx`
 - **Implementation**:
   - `supabase.auth.resetPasswordForEmail(email, { redirectTo: passwordResetUrl() })`
@@ -157,6 +169,7 @@ Handler executes with userId from token claims
   - User sets new password via `supabase.auth.updateUser({ password })`
 
 ### Error Handling
+
 - **File**: `src/lib/auth.ts` - `friendlyAuthError(error)`
 - Translates technical errors to user-friendly messages:
   - "invalid login credentials" → "Email or password is incorrect"
@@ -170,6 +183,7 @@ Handler executes with userId from token claims
 ⚠️ **IMPLEMENTED BUT PROVIDER NOT ENABLED IN SUPABASE PROJECT**
 
 ### Implementation
+
 - **File**: `src/lib/auth.ts` - `signInWithGoogle(nextPath)`
 - **Code**:
   ```typescript
@@ -182,6 +196,7 @@ Handler executes with userId from token claims
   ```
 
 ### Flow
+
 1. User clicks "Continue with Google"
 2. Browser redirected to Google OAuth URL (returned by signInWithOAuth)
 3. User authenticates with Google
@@ -189,22 +204,25 @@ Handler executes with userId from token claims
 5. Callback handler exchanges code for session
 
 ### Callback URL Generation
+
 - **File**: `src/lib/auth.ts` - `authCallbackUrl(nextPath)`
 - **Output**: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`
 - **Dynamic**: Works on any domain (dev localhost, production domain)
 
 ### PKCE Configuration
+
 - **Status**: ✅ ENABLED
 - **File**: `src/integrations/supabase/client.ts`
 - **Config**: `flowType: 'pkce'`
-- **Behavior**: 
+- **Behavior**:
   - Google redirects back with `?code=...` query parameter
   - Callback exchanges code for session via `exchangeCodeForSession()`
   - Implicit hash flow NOT used (more secure)
 
 ### Issue: Provider Not Configured
+
 - **Problem**: Supabase project lacks Google OAuth app credentials
-- **Evidence**: 
+- **Evidence**:
   - Error message in friendly error handler: "Google sign-in is not enabled correctly. Enable Google in Supabase → Authentication → Sign In / Providers"
   - Google credentials not found in Supabase project `slcmqbbjzyztqyucauol`
 
@@ -215,9 +233,11 @@ Handler executes with userId from token claims
 ✅ **IMPLEMENTED CORRECTLY**
 
 ### File
+
 `src/routes/auth.callback.tsx`
 
 ### Callback Handler
+
 ```typescript
 export const Route = createFileRoute("/auth/callback")({
   component: AuthCallbackPage,
@@ -225,11 +245,13 @@ export const Route = createFileRoute("/auth/callback")({
 ```
 
 ### Session Exchange Logic
+
 1. **Extract tokens from URL**:
    - Hash params: `access_token` + `refresh_token` (implicit flow)
    - Query params: `code` (PKCE flow) — **THIS IS USED**
 
 2. **Handle implicit flow** (if tokens present):
+
    ```typescript
    const { error: sessionError } = await supabase.auth.setSession({
      access_token: accessToken,
@@ -238,11 +260,15 @@ export const Route = createFileRoute("/auth/callback")({
    ```
 
 3. **Handle PKCE flow** (if code present) — **USED FOR GOOGLE OAUTH**:
+
    ```typescript
-   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(window.location.href);
+   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(
+     window.location.href,
+   );
    ```
 
 4. **Verify session was created**:
+
    ```typescript
    const { data } = await supabase.auth.getSession();
    if (!data.session) {
@@ -252,16 +278,18 @@ export const Route = createFileRoute("/auth/callback")({
    ```
 
 5. **Initialize workspace**:
+
    ```typescript
    await ensureAuthWorkspace();
    ```
 
 6. **Redirect to next path**:
    ```typescript
-   navigate({ to: nextPath as any, replace: true })
+   navigate({ to: nextPath as any, replace: true });
    ```
 
 ### Error Handling
+
 - Decodes URL-encoded error messages from both hash and query params
 - Displays friendly errors via `friendlyAuthError()`
 - User can retry or go back to sign-up
@@ -273,12 +301,14 @@ export const Route = createFileRoute("/auth/callback")({
 ✅ **PROPERLY CONFIGURED**
 
 ### Configuration
+
 - **File**: `src/integrations/supabase/client.ts`
 - **Setting**: `flowType: 'pkce'` in auth options
 
 ### Why It Matters
+
 - **Security**: Prevents authorization code interception attacks
-- **Flow**: 
+- **Flow**:
   1. Browser generates `code_challenge` + `code_verifier`
   2. Browser redirected to OAuth provider with `code_challenge`
   3. Provider returns `code` in redirect URL
@@ -287,6 +317,7 @@ export const Route = createFileRoute("/auth/callback")({
   6. Tokens never appear in browser URL (safer than implicit flow)
 
 ### Implementation Details
+
 - Supabase client handles PKCE automatically
 - No manual code_verifier generation needed
 - `exchangeCodeForSession(window.location.href)` does the verification
@@ -298,11 +329,13 @@ export const Route = createFileRoute("/auth/callback")({
 ✅ **WORKING CORRECTLY**
 
 ### Browser Storage
+
 - **Storage method**: localStorage
 - **Session key**: `sb-[project-id]-auth-token` (managed by Supabase)
 - **Content**: Full session object including access_token + refresh_token
 
 ### Persistence Settings
+
 ```typescript
 // src/integrations/supabase/client.ts
 auth: {
@@ -314,11 +347,13 @@ auth: {
 ```
 
 ### Auto-Refresh Mechanism
+
 - Supabase client automatically refreshes access token before expiry
 - Refresh token (typically 1 week) stored in localStorage
 - No user action needed; happens in background
 
 ### Session Rehydration After Reload
+
 - **On page reload**:
   1. Supabase client reads localStorage
   2. Loads stored session
@@ -326,6 +361,7 @@ auth: {
   4. Updates UI if user is authenticated
 
 ### Example: Login then Reload
+
 ```
 1. User logs in
 2. Session stored in localStorage
@@ -335,6 +371,7 @@ auth: {
 ```
 
 ### Routes Check Session on Mount
+
 - `src/routes/login.tsx`:
   ```typescript
   useEffect(() => {
@@ -352,16 +389,19 @@ auth: {
 ⚠️ **BUILD TOOL ONLY, NO AUTH DEPENDENCY**
 
 ### Packages in package.json
+
 ```json
 "@lovable.dev/vite-tanstack-config": "2.7.7"  // devDependencies only
 ```
 
 ### What This Package Does
+
 - Provides base Vite + TanStack config for the build system
 - Includes plugins for dev server, HMR, etc.
 - Does NOT involve authentication
 
 ### Cloud Auth Package
+
 - **Package**: `@lovable.dev/cloud-auth-js`
 - **Listed in**: `tsconfig.tsbuildinfo` (build artifact)
 - **Actually used**: ❌ ZERO active imports
@@ -369,11 +409,13 @@ auth: {
 - **Status**: Completely unused, legacy reference only
 
 ### Search Results
+
 - Grepped entire codebase: NO imports of `@lovable.dev/cloud-auth-js`
 - Grepped entire codebase: NO imports from `lovable` (except vite config tool)
 - Only reference: `"No Lovable broker involved"` comment in `signInWithGoogle()`
 
 ### Conclusion
+
 ✅ **Lovable Cloud OAuth is completely removed. App is 100% native Supabase auth.**
 
 ---
@@ -381,12 +423,14 @@ auth: {
 ## I. ENVIRONMENT VARIABLES REQUIRED
 
 ### Browser (Runtime via Vite)
+
 ```bash
 VITE_SUPABASE_URL="https://slcmqbbjzyztqyucauol.supabase.co"
 VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_[your-key]"
 ```
 
 ### Server (Node.js / Cloudflare Workers)
+
 ```bash
 SUPABASE_URL="https://slcmqbbjzyztqyucauol.supabase.co"
 SUPABASE_PUBLISHABLE_KEY="sb_publishable_[your-key]"
@@ -394,17 +438,20 @@ SUPABASE_SERVICE_ROLE_KEY="sb_secret_[your-key]"  # Server-only, admin ops
 ```
 
 ### Other Features
+
 ```bash
 CRON_SECRET="[long-random-string-32+chars]"  # For /api/public/hooks/*
 OPENROUTER_API_KEY="sk-or-v1-..."            # AI gateway
 ```
 
 ### Optional
+
 ```bash
 VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo component
 ```
 
 ### Source of Truth
+
 - **File**: `.env.example` in repository root
 
 ---
@@ -412,13 +459,14 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 ## J. EXACT PROBLEMS FOUND
 
 ### 1. ⚠️ Supabase Project Is New/Empty
+
 - **Issue**: Config points to `slcmqbbjzyztqyucauol` (new project)
-- **Evidence**: 
+- **Evidence**:
   - `supabase/config.toml` → `project_id = "slcmqbbjzyztqyucauol"`
   - ADR notes mention "brand-new empty project"
   - No migrations applied (SDR migrations missing)
   - No test user account
-- **Impact**: 
+- **Impact**:
   - Database schema not set up
   - Workspace/profile tables don't exist
   - `ensureAuthWorkspace()` will fail
@@ -426,34 +474,37 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 - **Evidence file**: `docs/specs/001-sdr-integration/INTEGRATION-HOLD.md`
 
 ### 2. ⚠️ Google OAuth Provider Not Configured
+
 - **Issue**: Google credentials not in Supabase project
-- **Evidence**: 
+- **Evidence**:
   - Error message in code mentions it
   - Trying to use Google OAuth returns provider error
   - Supabase Dashboard → Authentication → Sign-in providers shows Google disabled
-- **Impact**: 
+- **Impact**:
   - Google OAuth flow fails at first step
   - Error message: "Google sign-in is not enabled correctly"
 - **To fix**: Upload Google OAuth app credentials to Supabase
 
 ### 3. ⚠️ Production URL Hardcoded to `raval6.lovable.app`
+
 - **Issue**: Multiple files hardcode `https://raval6.lovable.app` for:
   - SEO canonical URLs
   - OG meta tags
   - Social sharing metadata
   - Referer headers for external requests
-- **Files**: 
+- **Files**:
   - `src/routes/index.tsx`, `login.tsx`, `signup.tsx`
   - `src/lib/seo.ts`, `ai-gateway.server.ts`, `competitor-watch.server.ts`
   - `scripts/validate-*.mjs`
   - Database migration with cron job
-- **Impact**: 
+- **Impact**:
   - If deploying to different domain (e.g., `raval.ai`), all meta tags will be wrong
   - OAuth callbacks may still work (they use `window.location.origin` dynamically)
   - Social preview URLs will point to wrong domain
 - **To fix**: Make this configurable or update when deploying to production
 
 ### 4. ⚠️ Email Confirmation May Be Required
+
 - **Behavior**: If Supabase project has `autoConfirm` disabled:
   - User signs up → account created but session NOT returned
   - User sees "Check your email to confirm"
@@ -464,7 +515,8 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 - **Impact**: If `autoConfirm` is off, email-based sign-up has extra step
 
 ### 5. ⚠️ Missing Protected Routes for Some Paths
-- **Paths without `beforeLoad` check**: 
+
+- **Paths without `beforeLoad` check**:
   - `/projects` has `beforeLoad` ✅
   - `/app` has `beforeLoad` ✅
   - `/onboarding` has `beforeLoad` ✅
@@ -479,17 +531,20 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 ### Priority 1: Get Production Ready (BLOCKING)
 
 **Task P1.1**: Set up Supabase project `slcmqbbjzyztqyucauol` properly
+
 - [ ] Create/restore complete schema (migrations)
 - [ ] Create test user account
 - [ ] Enable Google OAuth provider (add app credentials)
 - [ ] Verify email confirmation setting (choose `autoConfirm` or not)
 
 **Task P1.2**: Update production URL references (if changing domain)
+
 - [ ] Replace `raval6.lovable.app` with actual production domain
 - [ ] Files: `src/lib/seo.ts`, all route files, scripts, migrations
 - [ ] Consider making this an environment variable for flexibility
 
 **Task P1.3**: Verify OAuth redirect URLs in Supabase
+
 - [ ] Console → Authentication → URL Configuration
 - [ ] Set `Site URL` to production domain or `http://localhost:5173` for dev
 - [ ] Set `Redirect URLs` to include `/auth/callback`
@@ -497,6 +552,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 ### Priority 2: Verify Functionality (NON-BLOCKING)
 
 **Task P2.1**: E2E test all flows
+
 - [ ] Email sign-up (with confirmation if enabled)
 - [ ] Email sign-in
 - [ ] Google OAuth (requires P1.1 complete)
@@ -505,6 +561,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 - [ ] Protected route guards (try accessing `/app` without session)
 
 **Task P2.2**: Check workspace initialization
+
 - [ ] Sign up → ensure `ensureAuthWorkspace()` succeeds
 - [ ] New user should land on `/projects` (no auto-created workspace)
 - [ ] Can create first workspace
@@ -512,17 +569,20 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 ### Priority 3: Nice to Have (OPTIONAL)
 
 **Task P3.1**: Make production URLs environment-configurable
+
 - Add `VITE_PUBLIC_APP_URL` or similar
 - Replace hardcoded `raval6.lovable.app`
 - Update scripts and migrations
 
 **Task P3.2**: Document auth setup for future maintainers
+
 - [ ] Create `docs/AUTH-SETUP.md`
 - [ ] Include Supabase project creation steps
 - [ ] Include Google OAuth setup steps
 - [ ] Include environment variable setup
 
 **Task P3.3**: Add integration tests
+
 - [ ] Test email sign-up flow
 - [ ] Test email sign-in flow
 - [ ] Test Google OAuth flow
@@ -567,7 +627,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 
 7. **PKCE code exchange fails**
    - Callback receives `code` but exchange fails
-   - Possible causes: 
+   - Possible causes:
      - `code` expired (default 10 minutes)
      - `code_verifier` mismatch (shouldn't happen, Supabase handles it)
      - Network error during exchange
@@ -577,6 +637,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 ## SESSION PERSISTENCE VERIFICATION
 
 ### Test Procedure
+
 1. Open `http://localhost:5173/login`
 2. Sign in with email/password
 3. Verify localStorage contains `sb-[project-id]-auth-token`
@@ -587,6 +648,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
    - localStorage still contains session token
 
 ### What Could Break Persistence
+
 - localStorage cleared (user actions or browser settings)
 - Session token expired (> 1 hour for access, > 1 week for refresh)
 - Supabase project changed (project ID in token doesn't match)
@@ -678,6 +740,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 ## IMPLEMENTATION CHECKLIST
 
 ### Core Auth Implemented ✅
+
 - [x] Supabase browser client (PKCE enabled)
 - [x] Email/password sign up
 - [x] Email/password login
@@ -692,6 +755,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 - [x] Error handling & friendly messages
 
 ### Needs Configuration ⚠️
+
 - [ ] Supabase project schema setup (migrations)
 - [ ] Google OAuth provider credentials
 - [ ] Email confirmation setting (autoConfirm or manual)
@@ -699,6 +763,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 - [ ] URL Configuration in Supabase (redirect URLs)
 
 ### Testing Needed 🧪
+
 - [ ] Email sign-up flow (end-to-end)
 - [ ] Email login flow
 - [ ] Google OAuth flow
@@ -715,6 +780,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 This audit is complete. The architecture is sound. All core authentication features are implemented using native Supabase, with zero Lovable Cloud Auth dependencies.
 
 **Next steps depend on your goals:**
+
 1. **To continue development on dev environment**: Configure Supabase project with schema and test user
 2. **To deploy to production**: Update hardcoded URLs, configure Google OAuth, set up env vars
 3. **To verify all flows work**: Follow testing checklist above

@@ -20,7 +20,7 @@ The file stays on disk — the running stack still reads it.
 
 **Remaining exposure (not fully resolved by untracking):** the secrets still exist
 in the two past commits' history (`05ed8b9`, `8bb6a9f`) and in the pushed remote.
-Untracking prevents them from appearing in *future* commits; it does not scrub the
+Untracking prevents them from appearing in _future_ commits; it does not scrub the
 past. **Recommended follow-up: rotate the exposed secrets** — regenerate the
 Postgres password, `FERNET_KEY`, and `SDE_API_TOKEN`, and re-issue the LinkedIn
 tokens via OAuth. Optionally rewrite git history (requires a force-push).
@@ -29,25 +29,25 @@ tokens via OAuth. Optionally rewrite git history (requires a force-push).
 
 ## Trash manifest (recoverable via OS Trash)
 
-| Item | Action | Reason | Priority |
-|---|---|---|---|
-| `.env` | untrack + gitignore (kept on disk) | Live secrets committed & pushed — security | **P0** |
-| `**/__pycache__/*.pyc` (4,505 files) | untrack + trash dirs | 37% of the repo was compiled bytecode; regenerable | **P1** |
-| `celerybeat-schedule` | untrack + trash | Runtime beat state; regenerates on next tick | **P3** |
-| `.coverage` | trash | Coverage data artifact; regenerates on `pytest --cov` | **P3** |
-| `htmlcov/` | trash | Generated HTML coverage report; regenerable | **P3** |
-| `raval_sde.egg-info/` | untrack + trash | Build metadata from `pip install -e .`; regenerable | **P3** |
-| `.mypy_cache/` | trash | mypy cache; regenerable | **P3** |
-| `.pytest_cache/` | trash | pytest cache; regenerable | **P3** |
-| `.ruff_cache/` | trash | ruff cache; regenerable | **P3** |
-| `.hypothesis/` | trash | Hypothesis test database; regenerable | **P3** |
-| `specs/001-social-sde/COMPLETION_REPORT.md` | trash | One-time status snapshot, superseded by spec/plan/tasks | **P2** |
-| `specs/001-social-sde/PROJECT_STATUS.md` | trash | Stale phase-5 snapshot (2026-07-27), out of date | **P2** |
-| `specs/001-social-sde/SUMMARY_AND_NEXT_STEPS.md` | trash | Stale handoff snapshot, superseded | **P2** |
-| `specs/001-social-sde/TEST_EXECUTION_ROADMAP.md` | trash | Historical plan, superseded by tasks.md | **P2** |
-| `specs/001-social-sde/PHASE_3_IMPLEMENTATION_PLAN.md` | trash | Already-executed plan (T015–T024 done) | **P2** |
-| `specs/001-social-sde/DECISION_FRAMEWORK.md` | trash | Stale decision snapshot (end of Phase 2) | **P2** |
-| `specs/001-social-sde/TESTING_STRATEGY.md` | trash | Draft superseded by test suite + tasks.md | **P2** |
+| Item                                                  | Action                             | Reason                                                  | Priority |
+| ----------------------------------------------------- | ---------------------------------- | ------------------------------------------------------- | -------- |
+| `.env`                                                | untrack + gitignore (kept on disk) | Live secrets committed & pushed — security              | **P0**   |
+| `**/__pycache__/*.pyc` (4,505 files)                  | untrack + trash dirs               | 37% of the repo was compiled bytecode; regenerable      | **P1**   |
+| `celerybeat-schedule`                                 | untrack + trash                    | Runtime beat state; regenerates on next tick            | **P3**   |
+| `.coverage`                                           | trash                              | Coverage data artifact; regenerates on `pytest --cov`   | **P3**   |
+| `htmlcov/`                                            | trash                              | Generated HTML coverage report; regenerable             | **P3**   |
+| `raval_sde.egg-info/`                                 | untrack + trash                    | Build metadata from `pip install -e .`; regenerable     | **P3**   |
+| `.mypy_cache/`                                        | trash                              | mypy cache; regenerable                                 | **P3**   |
+| `.pytest_cache/`                                      | trash                              | pytest cache; regenerable                               | **P3**   |
+| `.ruff_cache/`                                        | trash                              | ruff cache; regenerable                                 | **P3**   |
+| `.hypothesis/`                                        | trash                              | Hypothesis test database; regenerable                   | **P3**   |
+| `specs/001-social-sde/COMPLETION_REPORT.md`           | trash                              | One-time status snapshot, superseded by spec/plan/tasks | **P2**   |
+| `specs/001-social-sde/PROJECT_STATUS.md`              | trash                              | Stale phase-5 snapshot (2026-07-27), out of date        | **P2**   |
+| `specs/001-social-sde/SUMMARY_AND_NEXT_STEPS.md`      | trash                              | Stale handoff snapshot, superseded                      | **P2**   |
+| `specs/001-social-sde/TEST_EXECUTION_ROADMAP.md`      | trash                              | Historical plan, superseded by tasks.md                 | **P2**   |
+| `specs/001-social-sde/PHASE_3_IMPLEMENTATION_PLAN.md` | trash                              | Already-executed plan (T015–T024 done)                  | **P2**   |
+| `specs/001-social-sde/DECISION_FRAMEWORK.md`          | trash                              | Stale decision snapshot (end of Phase 2)                | **P2**   |
+| `specs/001-social-sde/TESTING_STRATEGY.md`            | trash                              | Draft superseded by test suite + tasks.md               | **P2**   |
 
 ## Untracked but kept on disk
 

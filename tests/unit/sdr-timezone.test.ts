@@ -31,7 +31,9 @@ describe("isScheduleWithinWindow", () => {
   });
 
   it("rejects more than 1 year out", () => {
-    expect(isScheduleWithinWindow(new Date(Date.now() + 400 * 24 * 3600_000).toISOString())).toBe(false);
+    expect(isScheduleWithinWindow(new Date(Date.now() + 400 * 24 * 3600_000).toISOString())).toBe(
+      false,
+    );
   });
 
   it("rejects a malformed string", () => {

@@ -54,6 +54,7 @@ The token is configured via the `SDE_API_TOKEN` environment variable (min 16 cha
 ### `POST /api/v1/publish` — Publish immediately
 
 **Request**:
+
 ```json
 {
   "idempotency_key": "unique-string-1-128-chars",
@@ -64,7 +65,7 @@ The token is configured via the `SDE_API_TOKEN` environment variable (min 16 cha
       "content": {
         "text": "Hello world!",
         "media_urls": ["https://example.com/image.jpg"],
-        "metadata": {"tags": ["tech"]}
+        "metadata": { "tags": ["tech"] }
       }
     }
   ]
@@ -72,22 +73,23 @@ The token is configured via the `SDE_API_TOKEN` environment variable (min 16 cha
 ```
 
 **Response (201)**:
+
 ```json
 {
   "job_id": "uuid-...",
   "status": "published",
-  "targets": [{"target_id": "...", "status": "published", "platform_post_id": "dryrun_abc123"}]
+  "targets": [{ "target_id": "...", "status": "published", "platform_post_id": "dryrun_abc123" }]
 }
 ```
 
 **Validation rules per platform**:
 
-| Platform   | Max Text | Max Media | Supported Media |
-|------------|----------|-----------|-----------------|
-| Twitter/X  | 280      | 4         | image, video, gif |
-| LinkedIn   | 3,000    | 1         | image, video     |
-| Facebook   | 63,206   | 20        | image, video     |
-| DryRun     | 63,206   | 20        | any (simulated)   |
+| Platform  | Max Text | Max Media | Supported Media   |
+| --------- | -------- | --------- | ----------------- |
+| Twitter/X | 280      | 4         | image, video, gif |
+| LinkedIn  | 3,000    | 1         | image, video      |
+| Facebook  | 63,206   | 20        | image, video      |
+| DryRun    | 63,206   | 20        | any (simulated)   |
 
 ### `POST /api/v1/schedule` — Schedule for later
 
@@ -108,7 +110,7 @@ Query params: `?status=published&limit=10&offset=0`
 ### `GET /healthz` — Health check
 
 ```json
-{"status": "healthy", "database": true, "redis": true, "workers": true}
+{ "status": "healthy", "database": true, "redis": true, "workers": true }
 ```
 
 ### Account Management
@@ -152,10 +154,12 @@ DELETE /api/v1/webhooks/config/{webhook_id}
 Webhooks are POSTed to your registered URL with HMAC-SHA256 signatures.
 
 **Headers**:
+
 - `X-Signature-256`: HMAC-SHA256 hex signature
 - `X-Event-Type`: Event type string
 
 **Verification** (Python):
+
 ```python
 import hmac, hashlib
 
@@ -167,6 +171,7 @@ def verify_webhook(body, signature, secret):
 ```
 
 **Events**:
+
 - `post.published` — Post published successfully
 - `post.failed` — Post failed after retries exhausted
 - `post.scheduled` — Post scheduled for future
@@ -177,6 +182,7 @@ def verify_webhook(body, signature, secret):
 ## Error Handling
 
 **Status codes**:
+
 - 200/201: Success
 - 400: Bad request (validation)
 - 401: Unauthorized (invalid token)
@@ -187,6 +193,7 @@ def verify_webhook(body, signature, secret):
 - 500: Internal server error
 
 Error response format:
+
 ```json
 {
   "error_code": "VALIDATION_ERROR",

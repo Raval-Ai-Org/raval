@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { MoreHorizontal, Sparkles } from "@/components/ui/gemini-icons";
 import { STUDIO_TILES, type CanvasType } from "@/lib/studio";

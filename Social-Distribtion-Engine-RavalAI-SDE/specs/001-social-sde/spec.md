@@ -5,7 +5,7 @@
 **Status**: Draft
 **Input**: Existing full-build specification analyzed for readiness and module improvements.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Immediate Publishing (Priority: P1)
 
@@ -82,7 +82,7 @@ Workspace users can securely connect social accounts through an OAuth-style cons
 - What happens when token refresh fails repeatedly and the account remains in an invalid state?
 - How does the system behave when due jobs backlog after a prolonged outage?
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -124,7 +124,7 @@ Workspace users can securely connect social accounts through an OAuth-style cons
 - The system should be deployable as a single stack rather than as a distributed microservices platform during MVP.
 - Business owners will separately submit provider app approvals and business verification requirements; those external approval timelines are not owned by the module itself.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

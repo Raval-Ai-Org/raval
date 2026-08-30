@@ -2,9 +2,12 @@
 // The application domain is now configurable via APP_URL environment variable
 // to support both local development and production deployments.
 
-export const BASE_URL = (typeof import.meta.env.VITE_APP_URL === 'string' && import.meta.env.VITE_APP_URL)
-  ? import.meta.env.VITE_APP_URL
-  : (typeof window !== 'undefined' ? window.location.origin : 'https://raval.ai');
+export const BASE_URL =
+  typeof import.meta.env.VITE_APP_URL === "string" && import.meta.env.VITE_APP_URL
+    ? import.meta.env.VITE_APP_URL
+    : typeof window !== "undefined"
+      ? window.location.origin
+      : "https://raval.ai";
 
 export const BRAND_NAME = "Raval AI";
 // Logo is served from the same domain as the application
@@ -74,4 +77,3 @@ export function webPageLd(opts: { title: string; description: string; path: stri
     publisher: { "@type": "Organization", name: BRAND_NAME, url: BASE_URL, logo: BRAND_LOGO },
   };
 }
-

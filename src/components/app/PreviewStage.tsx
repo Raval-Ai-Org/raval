@@ -1,10 +1,27 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import {
-  Brain, Search, ScanLine, PenLine, ImageIcon, CalendarClock,
-  TrendingUp, Rocket, CheckCircle2, Globe, ExternalLink,
-  Compass, Database, Heart, MessageCircle, Repeat2, Bookmark,
-  ThumbsUp, Send, Wifi, Lock,
+  Brain,
+  Search,
+  ScanLine,
+  PenLine,
+  ImageIcon,
+  CalendarClock,
+  TrendingUp,
+  Rocket,
+  CheckCircle2,
+  Globe,
+  ExternalLink,
+  Compass,
+  Database,
+  Heart,
+  MessageCircle,
+  Repeat2,
+  Bookmark,
+  ThumbsUp,
+  Send,
+  Wifi,
+  Lock,
 } from "@/components/ui/gemini-icons";
 import type { PreviewStageEvent } from "@/lib/preview-stages";
 
@@ -35,9 +52,16 @@ export function PreviewStage({ stage }: { stage: PreviewStageEvent }) {
           >
             <motion.div
               animate={{ rotate: stage.kind === "complete" ? 0 : 360 }}
-              transition={{ duration: 6, repeat: stage.kind === "complete" ? 0 : Infinity, ease: "linear" }}
+              transition={{
+                duration: 6,
+                repeat: stage.kind === "complete" ? 0 : Infinity,
+                ease: "linear",
+              }}
               className="absolute inset-0 rounded-2xl"
-              style={{ background: `conic-gradient(from 0deg, transparent, ${accent}66, transparent)`, opacity: 0.4 }}
+              style={{
+                background: `conic-gradient(from 0deg, transparent, ${accent}66, transparent)`,
+                opacity: 0.4,
+              }}
             />
             <Icon className="relative h-4 w-4" style={{ color: accent }} />
           </div>
@@ -76,34 +100,44 @@ export function PreviewStage({ stage }: { stage: PreviewStageEvent }) {
 }
 
 const ICONS = {
-  thinking:   Brain,
-  searching:  Search,
-  browsing:   Compass,
-  analyzing:  ScanLine,
+  thinking: Brain,
+  searching: Search,
+  browsing: Compass,
+  analyzing: ScanLine,
   extracting: Database,
-  drafting:   PenLine,
-  image:      ImageIcon,
+  drafting: PenLine,
+  image: ImageIcon,
   scheduling: CalendarClock,
   optimizing: TrendingUp,
   publishing: Rocket,
-  complete:   CheckCircle2,
+  complete: CheckCircle2,
 } as const;
 
 /* ── Stage bodies ─────────────────────────────────────────────────────── */
 
 function StageBody({ stage, accent }: { stage: PreviewStageEvent; accent: string }) {
   switch (stage.kind) {
-    case "searching":  return <SearchingBody stage={stage} accent={accent} />;
-    case "browsing":   return <BrowsingBody stage={stage} accent={accent} />;
-    case "analyzing":  return <AnalyzingBody stage={stage} accent={accent} />;
-    case "extracting": return <ExtractingBody stage={stage} accent={accent} />;
-    case "drafting":   return <DraftingBody stage={stage} accent={accent} />;
-    case "image":      return <ImageBody stage={stage} accent={accent} />;
-    case "scheduling": return <SchedulingBody stage={stage} accent={accent} />;
-    case "optimizing": return <OptimizingBody stage={stage} accent={accent} />;
-    case "complete":   return <CompleteBody stage={stage} accent={accent} />;
+    case "searching":
+      return <SearchingBody stage={stage} accent={accent} />;
+    case "browsing":
+      return <BrowsingBody stage={stage} accent={accent} />;
+    case "analyzing":
+      return <AnalyzingBody stage={stage} accent={accent} />;
+    case "extracting":
+      return <ExtractingBody stage={stage} accent={accent} />;
+    case "drafting":
+      return <DraftingBody stage={stage} accent={accent} />;
+    case "image":
+      return <ImageBody stage={stage} accent={accent} />;
+    case "scheduling":
+      return <SchedulingBody stage={stage} accent={accent} />;
+    case "optimizing":
+      return <OptimizingBody stage={stage} accent={accent} />;
+    case "complete":
+      return <CompleteBody stage={stage} accent={accent} />;
     case "thinking":
-    default:           return <ThinkingBody accent={accent} />;
+    default:
+      return <ThinkingBody accent={accent} />;
   }
 }
 
@@ -139,7 +173,10 @@ function SearchingBody({ stage, accent }: { stage: PreviewStageEvent; accent: st
   return (
     <div className="flex h-full flex-col gap-3 p-4">
       {/* Search bar */}
-      <div className="flex items-center gap-2 rounded-2xl border bg-card px-3 py-2 shadow-sm" style={{ borderColor: `${accent}33` }}>
+      <div
+        className="flex items-center gap-2 rounded-2xl border bg-card px-3 py-2 shadow-sm"
+        style={{ borderColor: `${accent}33` }}
+      >
         <Search className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-[12px] font-medium text-foreground truncate">{q}</span>
         <span className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -180,13 +217,23 @@ function SearchingBody({ stage, accent }: { stage: PreviewStageEvent; accent: st
 }
 
 function AnalyzingBody({ stage, accent }: { stage: PreviewStageEvent; accent: string }) {
-  const targets = ["Hero copy", "Primary CTA", "Meta description", "H1 / H2 structure", "Schema markup", "Open Graph"];
+  const targets = [
+    "Hero copy",
+    "Primary CTA",
+    "Meta description",
+    "H1 / H2 structure",
+    "Schema markup",
+    "Open Graph",
+  ];
   const shot = stage.data?.screenshotUrl;
   const host = stage.data?.siteUrl ? hostOnly(stage.data.siteUrl) : null;
   return (
     <div className="relative flex h-full w-full flex-col p-3">
       <BrowserChrome url={host ?? "your-site.com"} accent={accent} />
-      <div className="relative flex-1 overflow-hidden rounded-b-2xl border border-t-0" style={{ borderColor: `${accent}44` }}>
+      <div
+        className="relative flex-1 overflow-hidden rounded-b-2xl border border-t-0"
+        style={{ borderColor: `${accent}44` }}
+      >
         {/* Real site screenshot underneath the scanner */}
         {shot ? (
           <img
@@ -207,42 +254,45 @@ function AnalyzingBody({ stage, accent }: { stage: PreviewStageEvent; accent: st
           />
         )}
         <div className="absolute inset-0 bg-background/30 backdrop-blur-[1px]" />
-      {/* scanner */}
-      <motion.div
-        className="absolute inset-x-0 h-20"
-        initial={{ y: "-30%" }}
-        animate={{ y: "120%" }}
-        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-        style={{ background: `linear-gradient(to bottom, transparent, ${accent}44, transparent)`, filter: "blur(2px)" }}
-      />
-      <motion.div
-        className="absolute inset-x-0 h-px"
-        initial={{ y: "-20%" }}
-        animate={{ y: "110%" }}
-        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-        style={{ background: accent, boxShadow: `0 0 10px ${accent}` }}
-      />
+        {/* scanner */}
+        <motion.div
+          className="absolute inset-x-0 h-20"
+          initial={{ y: "-30%" }}
+          animate={{ y: "120%" }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            background: `linear-gradient(to bottom, transparent, ${accent}44, transparent)`,
+            filter: "blur(2px)",
+          }}
+        />
+        <motion.div
+          className="absolute inset-x-0 h-px"
+          initial={{ y: "-20%" }}
+          animate={{ y: "110%" }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          style={{ background: accent, boxShadow: `0 0 10px ${accent}` }}
+        />
         {/* checklist — floats over screenshot */}
         <div className="relative grid h-full grid-cols-2 gap-1.5 p-3 content-center">
-        {targets.map((t, i) => (
-          <motion.div
-            key={t}
-            initial={{ opacity: 0, x: -6 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 + i * 0.12 }}
-            className="flex items-center gap-1.5 rounded-md bg-background/85 px-2 py-1.5 backdrop-blur"
-            style={{ boxShadow: `inset 0 0 0 1px ${accent}33` }}
-          >
-            <motion.span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: accent }}
-              animate={{ opacity: [0.3, 1, 0.3] }}
-              transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15 }}
-            />
-            <span className="truncate text-[10.5px] font-medium">{t}</span>
-          </motion.div>
-        ))}
-      </div>
+          {targets.map((t, i) => (
+            <motion.div
+              key={t}
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 + i * 0.12 }}
+              className="flex items-center gap-1.5 rounded-md bg-background/85 px-2 py-1.5 backdrop-blur"
+              style={{ boxShadow: `inset 0 0 0 1px ${accent}33` }}
+            >
+              <motion.span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: accent }}
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15 }}
+              />
+              <span className="truncate text-[10.5px] font-medium">{t}</span>
+            </motion.div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -250,14 +300,22 @@ function AnalyzingBody({ stage, accent }: { stage: PreviewStageEvent; accent: st
 
 /* ── Browser chrome (used by Analyzing, Browsing, Searching) ─────────── */
 
-function BrowserChrome({ url, accent, tabs, activeTab = 0 }: {
+function BrowserChrome({
+  url,
+  accent,
+  tabs,
+  activeTab = 0,
+}: {
   url: string;
   accent: string;
   tabs?: { url: string; title: string }[];
   activeTab?: number;
 }) {
   return (
-    <div className="rounded-t-2xl border border-b-0 bg-card/95 backdrop-blur" style={{ borderColor: `${accent}44` }}>
+    <div
+      className="rounded-t-2xl border border-b-0 bg-card/95 backdrop-blur"
+      style={{ borderColor: `${accent}44` }}
+    >
       {/* Top bar */}
       <div className="flex items-center gap-2 px-3 py-1.5">
         <div className="flex gap-1">
@@ -315,7 +373,12 @@ function BrowsingBody({ stage, accent }: { stage: PreviewStageEvent; accent: str
   const current = tabs[active];
   return (
     <div className="flex h-full flex-col p-3">
-      <BrowserChrome url={current?.url ?? "loading…"} accent={accent} tabs={tabs} activeTab={active} />
+      <BrowserChrome
+        url={current?.url ?? "loading…"}
+        accent={accent}
+        tabs={tabs}
+        activeTab={active}
+      />
       <div
         className="relative flex-1 overflow-hidden rounded-b-2xl border border-t-0 bg-background/50"
         style={{ borderColor: `${accent}44` }}
@@ -337,8 +400,14 @@ function BrowsingBody({ stage, accent }: { stage: PreviewStageEvent; accent: str
             </div>
             <div className="h-2 w-2/3 rounded bg-foreground/15" />
             <div className="h-2 w-1/2 rounded bg-foreground/10" />
-            <div className="mt-auto flex items-center gap-2 rounded-md bg-background/70 p-2" style={{ boxShadow: `inset 0 0 0 1px ${accent}33` }}>
-              <span className="grid h-5 w-5 place-items-center rounded-full" style={{ background: `${accent}33` }}>
+            <div
+              className="mt-auto flex items-center gap-2 rounded-md bg-background/70 p-2"
+              style={{ boxShadow: `inset 0 0 0 1px ${accent}33` }}
+            >
+              <span
+                className="grid h-5 w-5 place-items-center rounded-full"
+                style={{ background: `${accent}33` }}
+              >
                 <Compass className="h-3 w-3" style={{ color: accent }} />
               </span>
               <span className="truncate text-[10.5px] font-medium" style={{ color: accent }}>
@@ -403,7 +472,10 @@ function ExtractingBody({ stage, accent }: { stage: PreviewStageEvent; accent: s
             style={{ borderColor: `${accent}22` }}
           >
             <span className="truncate text-[10.5px] text-muted-foreground">{r.label}</span>
-            <span className="truncate text-[11px] font-medium tabular-nums" style={{ color: accent }}>
+            <span
+              className="truncate text-[11px] font-medium tabular-nums"
+              style={{ color: accent }}
+            >
               <TypewriterText text={r.value} delay={0.2 + i * 0.25} />
             </span>
           </motion.div>
@@ -430,9 +502,9 @@ function DraftingBody({ stage, accent }: { stage: PreviewStageEvent; accent: str
   const lines = stage.data?.draftLines ?? [];
   const kind = stage.data?.draftKind ?? "blog";
   if (kind === "instagram") return <InstagramDraft lines={lines} accent={accent} />;
-  if (kind === "tweet")     return <TweetDraft lines={lines} accent={accent} />;
-  if (kind === "linkedin")  return <LinkedInDraft lines={lines} accent={accent} />;
-  if (kind === "email")     return <EmailDraft lines={lines} accent={accent} />;
+  if (kind === "tweet") return <TweetDraft lines={lines} accent={accent} />;
+  if (kind === "linkedin") return <LinkedInDraft lines={lines} accent={accent} />;
+  if (kind === "email") return <EmailDraft lines={lines} accent={accent} />;
   return (
     <div className="flex h-full flex-col gap-2 p-4">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -459,10 +531,18 @@ function InstagramDraft({ lines, accent }: { lines: string[]; accent: string }) 
   const tags = lines.find((l) => l.startsWith("#")) ?? "";
   return (
     <div className="flex h-full items-center justify-center p-3">
-      <div className="w-full max-w-[260px] overflow-hidden rounded-2xl border bg-card shadow-xl" style={{ borderColor: `${accent}33` }}>
+      <div
+        className="w-full max-w-[260px] overflow-hidden rounded-2xl border bg-card shadow-xl"
+        style={{ borderColor: `${accent}33` }}
+      >
         {/* header */}
         <div className="flex items-center gap-2 px-3 py-2">
-          <div className="h-7 w-7 rounded-full" style={{ background: `conic-gradient(from 0deg, ${accent}, hsl(320 90% 60%), ${accent})` }} />
+          <div
+            className="h-7 w-7 rounded-full"
+            style={{
+              background: `conic-gradient(from 0deg, ${accent}, hsl(320 90% 60%), ${accent})`,
+            }}
+          />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-semibold">your.brand</div>
             <div className="truncate text-[9px] text-muted-foreground">Sponsored · just now</div>
@@ -471,8 +551,14 @@ function InstagramDraft({ lines, accent }: { lines: string[]; accent: string }) 
         {/* image */}
         <div className="relative aspect-[4/5] w-full overflow-hidden bg-gradient-to-br from-foreground/5 to-foreground/15">
           {[0, 1, 2].map((i) => (
-            <motion.div key={i} className="absolute inset-x-0 h-8"
-              style={{ top: `${i * 30}%`, background: `linear-gradient(90deg, transparent, ${accent}55, transparent)`, filter: "blur(6px)" }}
+            <motion.div
+              key={i}
+              className="absolute inset-x-0 h-8"
+              style={{
+                top: `${i * 30}%`,
+                background: `linear-gradient(90deg, transparent, ${accent}55, transparent)`,
+                filter: "blur(6px)",
+              }}
               animate={{ x: ["-100%", "100%"] }}
               transition={{ duration: 2, repeat: Infinity, delay: i * 0.3 }}
             />
@@ -508,7 +594,10 @@ function InstagramDraft({ lines, accent }: { lines: string[]; accent: string }) 
 function TweetDraft({ lines, accent }: { lines: string[]; accent: string }) {
   return (
     <div className="flex h-full items-center justify-center p-3">
-      <div className="w-full max-w-[320px] rounded-2xl border bg-card p-3 shadow-xl" style={{ borderColor: `${accent}33` }}>
+      <div
+        className="w-full max-w-[320px] rounded-2xl border bg-card p-3 shadow-xl"
+        style={{ borderColor: `${accent}33` }}
+      >
         <div className="flex items-start gap-2">
           <div className="h-8 w-8 shrink-0 rounded-full" style={{ background: `${accent}55` }} />
           <div className="min-w-0 flex-1">
@@ -518,13 +607,21 @@ function TweetDraft({ lines, accent }: { lines: string[]; accent: string }) {
             </div>
             <div className="mt-1 space-y-0.5 text-[11.5px] leading-relaxed">
               {lines.map((l, i) => (
-                <div key={i}><TypewriterText text={l || "\u00a0"} delay={i * 0.35} /></div>
+                <div key={i}>
+                  <TypewriterText text={l || "\u00a0"} delay={i * 0.35} />
+                </div>
               ))}
             </div>
             <div className="mt-2 flex items-center gap-5 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> 12</span>
-              <span className="flex items-center gap-1"><Repeat2 className="h-3 w-3" /> 34</span>
-              <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> 218</span>
+              <span className="flex items-center gap-1">
+                <MessageCircle className="h-3 w-3" /> 12
+              </span>
+              <span className="flex items-center gap-1">
+                <Repeat2 className="h-3 w-3" /> 34
+              </span>
+              <span className="flex items-center gap-1">
+                <Heart className="h-3 w-3" /> 218
+              </span>
             </div>
           </div>
         </div>
@@ -536,23 +633,36 @@ function TweetDraft({ lines, accent }: { lines: string[]; accent: string }) {
 function LinkedInDraft({ lines, accent }: { lines: string[]; accent: string }) {
   return (
     <div className="flex h-full items-center justify-center p-3">
-      <div className="w-full max-w-[320px] rounded-2xl border bg-card p-3 shadow-xl" style={{ borderColor: `${accent}33` }}>
+      <div
+        className="w-full max-w-[320px] rounded-2xl border bg-card p-3 shadow-xl"
+        style={{ borderColor: `${accent}33` }}
+      >
         <div className="flex items-center gap-2">
           <div className="h-9 w-9 rounded-full" style={{ background: `${accent}55` }} />
           <div className="min-w-0">
             <div className="truncate text-[11px] font-semibold">Your Brand</div>
-            <div className="truncate text-[9.5px] text-muted-foreground">Marketing · 1,204 followers · 1m</div>
+            <div className="truncate text-[9.5px] text-muted-foreground">
+              Marketing · 1,204 followers · 1m
+            </div>
           </div>
         </div>
         <div className="mt-2 space-y-0.5 text-[11px] leading-relaxed">
           {lines.map((l, i) => (
-            <div key={i}><TypewriterText text={l || "\u00a0"} delay={i * 0.35} /></div>
+            <div key={i}>
+              <TypewriterText text={l || "\u00a0"} delay={i * 0.35} />
+            </div>
           ))}
         </div>
         <div className="mt-2 flex items-center gap-4 border-t pt-2 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1"><ThumbsUp className="h-3 w-3" /> Like</span>
-          <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> Comment</span>
-          <span className="flex items-center gap-1"><Repeat2 className="h-3 w-3" /> Repost</span>
+          <span className="flex items-center gap-1">
+            <ThumbsUp className="h-3 w-3" /> Like
+          </span>
+          <span className="flex items-center gap-1">
+            <MessageCircle className="h-3 w-3" /> Comment
+          </span>
+          <span className="flex items-center gap-1">
+            <Repeat2 className="h-3 w-3" /> Repost
+          </span>
         </div>
       </div>
     </div>
@@ -564,14 +674,21 @@ function EmailDraft({ lines, accent }: { lines: string[]; accent: string }) {
   const body = lines.slice(2);
   return (
     <div className="flex h-full items-center justify-center p-3">
-      <div className="w-full max-w-[340px] overflow-hidden rounded-2xl border bg-card shadow-xl" style={{ borderColor: `${accent}33` }}>
+      <div
+        className="w-full max-w-[340px] overflow-hidden rounded-2xl border bg-card shadow-xl"
+        style={{ borderColor: `${accent}33` }}
+      >
         <div className="border-b px-3 py-2" style={{ borderColor: `${accent}22` }}>
           <div className="text-[9.5px] uppercase tracking-wider text-muted-foreground">Subject</div>
-          <div className="text-[12px] font-semibold"><TypewriterText text={subject} delay={0.1} /></div>
+          <div className="text-[12px] font-semibold">
+            <TypewriterText text={subject} delay={0.1} />
+          </div>
         </div>
         <div className="space-y-1 px-3 py-3 text-[11px] leading-relaxed">
           {body.map((l, i) => (
-            <div key={i}><TypewriterText text={l || "\u00a0"} delay={0.3 + i * 0.3} /></div>
+            <div key={i}>
+              <TypewriterText text={l || "\u00a0"} delay={0.3 + i * 0.3} />
+            </div>
           ))}
         </div>
       </div>
@@ -586,7 +703,10 @@ function Typewriter({ text, delay, accent }: { text: string; delay: number; acce
       animate={{ width: "100%" }}
       transition={{ delay, duration: Math.max(0.4, text.length * 0.02), ease: "linear" }}
       className="overflow-hidden whitespace-nowrap"
-      style={{ color: text.startsWith("#") ? accent : undefined, fontWeight: text.startsWith("#") ? 600 : 400 }}
+      style={{
+        color: text.startsWith("#") ? accent : undefined,
+        fontWeight: text.startsWith("#") ? 600 : 400,
+      }}
     >
       {text || "\u00a0"}
     </motion.div>
@@ -670,7 +790,8 @@ function SchedulingBody({ stage, accent }: { stage: PreviewStageEvent; accent: s
         ))}
       </div>
       <div className="rounded-lg border bg-background/70 px-3 py-1.5 text-[10.5px]">
-        Best slot · <span style={{ color: accent, fontWeight: 600 }}>3:00 PM</span> · +38% engagement
+        Best slot · <span style={{ color: accent, fontWeight: 600 }}>3:00 PM</span> · +38%
+        engagement
       </div>
     </div>
   );
@@ -692,11 +813,21 @@ function OptimizingBody({ stage, accent }: { stage: PreviewStageEvent; accent: s
           >
             <span className="text-[11px] font-medium text-muted-foreground">{m.label}</span>
             <div className="flex items-center gap-2 text-[12px] tabular-nums">
-              <span className="text-muted-foreground">{m.unit === "$" ? `$${m.from}` : `${m.from}${m.unit ?? ""}`}</span>
-              <motion.span animate={{ x: [0, 3, 0] }} transition={{ duration: 1.2, repeat: Infinity }}>
+              <span className="text-muted-foreground">
+                {m.unit === "$" ? `$${m.from}` : `${m.from}${m.unit ?? ""}`}
+              </span>
+              <motion.span
+                animate={{ x: [0, 3, 0] }}
+                transition={{ duration: 1.2, repeat: Infinity }}
+              >
                 →
               </motion.span>
-              <span style={{ color: up ? "hsl(var(--brand-green))" : "hsl(var(--brand-red, 0 70% 55%))", fontWeight: 600 }}>
+              <span
+                style={{
+                  color: up ? "hsl(var(--brand-green))" : "hsl(var(--brand-red, 0 70% 55%))",
+                  fontWeight: 600,
+                }}
+              >
                 {m.unit === "$" ? `$${m.to}` : `${m.to}${m.unit ?? ""}`}
               </span>
             </div>
@@ -735,7 +866,10 @@ function CompleteBody({ stage, accent }: { stage: PreviewStageEvent; accent: str
 
 function StepPill({ index, total, accent }: { index: number; total: number; accent: string }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-full border bg-background/80 px-2 py-1" style={{ borderColor: `${accent}33` }}>
+    <div
+      className="flex items-center gap-1.5 rounded-full border bg-background/80 px-2 py-1"
+      style={{ borderColor: `${accent}33` }}
+    >
       <span className="text-[10px] font-semibold tabular-nums" style={{ color: accent }}>
         {index + 1}/{total}
       </span>
@@ -769,6 +903,9 @@ function TypingDots({ accent }: { accent: string }) {
 }
 
 function hostOnly(url: string) {
-  try { return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, ""); }
-  catch { return url; }
+  try {
+    return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }

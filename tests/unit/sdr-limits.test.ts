@@ -21,8 +21,12 @@ describe("validateContentForPlatform", () => {
   });
 
   it("requires exactly one media on Instagram (FR-020)", () => {
-    expect(validateContentForPlatform("instagram", { text: "cap", mediaUrls: [] })[0]).toContain("exactly one");
-    expect(validateContentForPlatform("instagram", { text: "cap", mediaUrls: ["a", "b"] }).length).toBeGreaterThan(0);
+    expect(validateContentForPlatform("instagram", { text: "cap", mediaUrls: [] })[0]).toContain(
+      "exactly one",
+    );
+    expect(
+      validateContentForPlatform("instagram", { text: "cap", mediaUrls: ["a", "b"] }).length,
+    ).toBeGreaterThan(0);
     expect(validateContentForPlatform("instagram", { text: "cap", mediaUrls: ["a"] })).toEqual([]);
   });
 

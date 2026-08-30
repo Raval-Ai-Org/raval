@@ -171,6 +171,7 @@ fired on success.
 - [x] T067 **Dogfood gate**: seed LinkedIn account from `.env` tokens, run the stack, publish a real post via `/publish` and via `/schedule` + worker, capture share URN
 
 **Dogfood evidence (2026-08-01):**
+
 - Immediate: `POST /api/v1/publish` → `urn:li:share:7489056989533253633` (published)
 - Scheduled: `/schedule` → beat → worker → `POST https://api.linkedin.com/v2/ugcPosts` → `201` → `urn:li:share:7489060292774211584` (published, post status synced)
 
@@ -206,13 +207,16 @@ through the engine's own pipeline; job responses report real platforms; webhooks
 ### Parallel Execution Opportunities
 
 Within Phase 3 (US1 Immediate Publish):
+
 - T015, T016, and T017 can be implemented in parallel.
 - Once T019 (Publisher Service) is complete, T020 (Publish API) and T021 (Jobs API) can be built in parallel.
 
 Within Phase 4 (US2 Scheduling):
+
 - T027 (Ops Health check for workers) can be written in parallel with T026 (Celery Tasks).
 
 Within Phase 6 (US4 Adapters):
+
 - X, LinkedIn, and Facebook adapters can be built completely in parallel once T017 (Base Adapter) is done.
 
 ---
@@ -227,6 +231,7 @@ Within Phase 6 (US4 Adapters):
 4. **Demonstrate MVP endpoint**: POST `/publish` works instantly, returns ID, status is terminal, and duplicates are handled
 
 ### Incremental Feature Additions
+
 5. Layer in scheduling durability (Phase 4), allowing workers to grab due jobs asynchronously
 6. Add failure logic retries and outbound webhooks updates (Phase 5)
 7. Build real network adapters and OAuth loops in isolation (Phase 6)

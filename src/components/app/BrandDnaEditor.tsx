@@ -3,7 +3,14 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Users, Megaphone, ShieldCheck, CheckCircle2, AlertTriangle, Sparkles } from "@/components/ui/gemini-icons";
+import {
+  Users,
+  Megaphone,
+  ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
+  Sparkles,
+} from "@/components/ui/gemini-icons";
 import { cn } from "@/lib/utils";
 import type { BrandDna } from "@/hooks/use-brand-dna";
 import { getBrandVisualSystem } from "@/lib/post-image";
@@ -18,16 +25,43 @@ const FIELDS: {
   icon: any;
   accent?: "green" | "red";
 }[] = [
-  { key: "audience",  label: "Who you're for",  hint: "One sentence naming the person you write for.",
-    placeholder: "Early-stage B2B founders scaling from $0 → $1M ARR", icon: Users },
-  { key: "voice",     label: "Voice & tone",    hint: "How you sound: 3–5 adjectives + a short example.",
-    placeholder: "Direct, confident, warm. Short sentences. No jargon.", icon: Megaphone },
-  { key: "values",    label: "Core values",     hint: "Comma-separated. What the brand stands for.",
-    placeholder: "Craft, Speed, Honesty, Optimism", icon: ShieldCheck },
-  { key: "doRules",   label: "Always do",       hint: "Non-negotiable behaviours in every post.",
-    placeholder: "Lead with a real customer moment. Cite numbers.", icon: CheckCircle2, accent: "green" },
-  { key: "dontRules", label: "Never do",        hint: "Hard no's — Ravi will avoid these forever.",
-    placeholder: "No hype words. No emoji spam. No competitor bashing.", icon: AlertTriangle, accent: "red" },
+  {
+    key: "audience",
+    label: "Who you're for",
+    hint: "One sentence naming the person you write for.",
+    placeholder: "Early-stage B2B founders scaling from $0 → $1M ARR",
+    icon: Users,
+  },
+  {
+    key: "voice",
+    label: "Voice & tone",
+    hint: "How you sound: 3–5 adjectives + a short example.",
+    placeholder: "Direct, confident, warm. Short sentences. No jargon.",
+    icon: Megaphone,
+  },
+  {
+    key: "values",
+    label: "Core values",
+    hint: "Comma-separated. What the brand stands for.",
+    placeholder: "Craft, Speed, Honesty, Optimism",
+    icon: ShieldCheck,
+  },
+  {
+    key: "doRules",
+    label: "Always do",
+    hint: "Non-negotiable behaviours in every post.",
+    placeholder: "Lead with a real customer moment. Cite numbers.",
+    icon: CheckCircle2,
+    accent: "green",
+  },
+  {
+    key: "dontRules",
+    label: "Never do",
+    hint: "Hard no's — Ravi will avoid these forever.",
+    placeholder: "No hype words. No emoji spam. No competitor bashing.",
+    icon: AlertTriangle,
+    accent: "red",
+  },
 ];
 
 export function BrandDnaEditor({
@@ -77,7 +111,9 @@ export function BrandDnaEditor({
               animate={{ width: `${pct}%` }}
               transition={{ type: "spring", stiffness: 140, damping: 22 }}
               className="h-full rounded-full"
-              style={{ background: "linear-gradient(90deg, hsl(var(--brand-green)), hsl(220 90% 60%))" }}
+              style={{
+                background: "linear-gradient(90deg, hsl(var(--brand-green)), hsl(220 90% 60%))",
+              }}
             />
           </div>
           <span className="shrink-0 whitespace-nowrap rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-medium leading-4 tabular-nums text-foreground">
@@ -96,18 +132,22 @@ export function BrandDnaEditor({
                 key={f.key}
                 className={cn(
                   "group rounded-2xl border bg-card/40 p-4 sm:p-5 transition-colors",
-                  isFilled ? "border-border/70" : "border-dashed border-border/50 hover:border-border",
+                  isFilled
+                    ? "border-border/70"
+                    : "border-dashed border-border/50 hover:border-border",
                 )}
               >
                 <div className="flex items-start gap-3 sm:gap-4">
-                  <span className={cn(
-                    "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ring-1 transition-colors",
-                    isFilled
-                      ? f.accent === "red"
-                        ? "bg-rose-500/10 text-rose-600 ring-rose-500/25 dark:text-rose-300"
-                        : "bg-emerald-500/10 text-emerald-600 ring-emerald-500/25 dark:text-emerald-300"
-                      : "bg-secondary/60 text-muted-foreground ring-border/60"
-                  )}>
+                  <span
+                    className={cn(
+                      "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ring-1 transition-colors",
+                      isFilled
+                        ? f.accent === "red"
+                          ? "bg-rose-500/10 text-rose-600 ring-rose-500/25 dark:text-rose-300"
+                          : "bg-emerald-500/10 text-emerald-600 ring-emerald-500/25 dark:text-emerald-300"
+                        : "bg-secondary/60 text-muted-foreground ring-border/60",
+                    )}
+                  >
                     {isFilled ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -118,12 +158,14 @@ export function BrandDnaEditor({
                       >
                         {f.label}
                       </label>
-                      <span className={cn(
-                        "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase leading-4 tracking-wide",
-                        isFilled
-                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                          : "bg-secondary/70 text-muted-foreground",
-                      )}>
+                      <span
+                        className={cn(
+                          "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase leading-4 tracking-wide",
+                          isFilled
+                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            : "bg-secondary/70 text-muted-foreground",
+                        )}
+                      >
                         {isFilled ? "Done" : "Empty"}
                       </span>
                     </div>
@@ -135,7 +177,9 @@ export function BrandDnaEditor({
                       value={value}
                       placeholder={f.placeholder}
                       rows={2}
-                      onFocus={() => { focusedRef.current = f.key; }}
+                      onFocus={() => {
+                        focusedRef.current = f.key;
+                      }}
                       onChange={(e) => setBuffer((b) => ({ ...b, [f.key]: e.target.value }))}
                       onBlur={() => {
                         focusedRef.current = null;
@@ -156,7 +200,9 @@ export function BrandDnaEditor({
       <div className="min-w-0 xl:sticky xl:top-2 xl:self-start">
         <div className="mb-2 flex items-center gap-2 px-1">
           <Sparkles className="h-3.5 w-3.5 shrink-0 text-brand-green" />
-          <p className="text-[11px] font-semibold uppercase leading-4 tracking-wide text-muted-foreground">Live preview</p>
+          <p className="text-[11px] font-semibold uppercase leading-4 tracking-wide text-muted-foreground">
+            Live preview
+          </p>
         </div>
         <LivePostPreview dna={dna} buffer={buffer} workspaceName={workspaceName} />
         <p className="mt-2 px-1 text-[12.5px] leading-5 text-muted-foreground">
@@ -181,11 +227,12 @@ function LivePostPreview({
   // Deterministic seed → same visual language as the image generator.
   const seedKey = `preview:${dna.brandName || workspaceName || "brand"}`;
   const vis = useMemo(
-    () => getBrandVisualSystem(
-      { ...dna, voice: buffer.voice, audience: buffer.audience, values: buffer.values },
-      seedKey,
-      workspaceName,
-    ),
+    () =>
+      getBrandVisualSystem(
+        { ...dna, voice: buffer.voice, audience: buffer.audience, values: buffer.values },
+        seedKey,
+        workspaceName,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dna.brandName, dna.industry, buffer.voice, workspaceName],
   );
@@ -193,8 +240,17 @@ function LivePostPreview({
   // Prefer real brand colors when the extractor found them.
   const brandAccent = dna.colors?.[0]?.hex || vis.palette.accent;
   const brandName = dna.brandName || workspaceName || "Your brand";
-  const initials = brandName.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
-  const values = (buffer.values || "").split(/[,·|]/).map((v) => v.trim()).filter(Boolean).slice(0, 3);
+  const initials = brandName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+  const values = (buffer.values || "")
+    .split(/[,·|]/)
+    .map((v) => v.trim())
+    .filter(Boolean)
+    .slice(0, 3);
   const audience = buffer.audience.trim();
   const voice = buffer.voice.trim();
   const doRule = firstClause(buffer.doRules);
@@ -211,7 +267,10 @@ function LivePostPreview({
       style={{ background: palette.bg }}
     >
       {/* Post chrome — mimics an IG-style card */}
-      <div className="flex items-center gap-2.5 px-3.5 py-2.5" style={{ background: palette.surface }}>
+      <div
+        className="flex items-center gap-2.5 px-3.5 py-2.5"
+        style={{ background: palette.surface }}
+      >
         <div
           className="grid h-8 w-8 place-items-center rounded-full text-[11px] font-bold"
           style={{
@@ -220,7 +279,11 @@ function LivePostPreview({
           }}
         >
           {dna.logoUrl ? (
-            <img src={dna.logoUrl} alt={brandName} className="h-full w-full rounded-full object-cover" />
+            <img
+              src={dna.logoUrl}
+              alt={brandName}
+              className="h-full w-full rounded-full object-cover"
+            />
           ) : (
             <span>{initials || "?"}</span>
           )}
@@ -233,7 +296,9 @@ function LivePostPreview({
           >
             {brandName}
           </p>
-          <p className="truncate text-[10.5px] leading-4" style={{ color: palette.muted }}>Sponsored · Just now</p>
+          <p className="truncate text-[10.5px] leading-4" style={{ color: palette.muted }}>
+            Sponsored · Just now
+          </p>
         </div>
       </div>
 
@@ -355,7 +420,8 @@ function deriveHook(voice: string, audience: string): string {
   const v = voice.toLowerCase();
   const aud = audience ? clampWords(audience, 3) : "founders";
   if (/(punchy|bold|direct|confident|sharp)/.test(v)) return `Stop guessing.\nStart shipping.`;
-  if (/(warm|friendly|human|consultative|approachable)/.test(v)) return `A better way\nto reach ${aud}.`;
+  if (/(warm|friendly|human|consultative|approachable)/.test(v))
+    return `A better way\nto reach ${aud}.`;
   if (/(playful|witty|fun|clever)/.test(v)) return `Marketing that\nactually lands.`;
   if (/(premium|luxury|elevated|refined)/.test(v)) return `Crafted for the\nfew who notice.`;
   return `Meet your\nnext unfair edge.`;
@@ -364,10 +430,14 @@ function deriveHook(voice: string, audience: string): string {
 function sampleCaption(voice: string, audience: string): string {
   const v = voice.toLowerCase();
   const aud = audience ? clampWords(audience, 4) : "your audience";
-  if (/(punchy|bold|direct|confident)/.test(v)) return `Built for ${aud}. No fluff, no filler — just results you can measure this week.`;
-  if (/(warm|friendly|human|consultative)/.test(v)) return `We spend our days thinking about ${aud}. Here's the one thing we wish more people understood.`;
-  if (/(playful|witty|fun|clever)/.test(v)) return `Ok but seriously — ${aud} deserve better than yet another dashboard. Here's what we're doing about it. ↓`;
-  if (/(premium|luxury|elevated|refined)/.test(v)) return `Considered work for ${aud} who care about the details. A small note on what we shipped this week.`;
+  if (/(punchy|bold|direct|confident)/.test(v))
+    return `Built for ${aud}. No fluff, no filler — just results you can measure this week.`;
+  if (/(warm|friendly|human|consultative)/.test(v))
+    return `We spend our days thinking about ${aud}. Here's the one thing we wish more people understood.`;
+  if (/(playful|witty|fun|clever)/.test(v))
+    return `Ok but seriously — ${aud} deserve better than yet another dashboard. Here's what we're doing about it. ↓`;
+  if (/(premium|luxury|elevated|refined)/.test(v))
+    return `Considered work for ${aud} who care about the details. A small note on what we shipped this week.`;
   return `A quick note for ${aud} — the pattern we keep seeing, and the small change that fixes it.`;
 }
 

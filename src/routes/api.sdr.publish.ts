@@ -5,7 +5,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { jsonError } from "@/server/api-auth";
 import { requireWorkspaceAccess, getWorkspaceSdrKey } from "@/lib/sdr.helpers.server";
-import { publishContentItemsHandler, handleSdrDisabled, type PublishSelection } from "@/lib/sdr.handlers";
+import {
+  publishContentItemsHandler,
+  handleSdrDisabled,
+  type PublishSelection,
+} from "@/lib/sdr.handlers";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { isSdrEnabled } from "@/lib/feature-flags";
 
@@ -35,7 +39,10 @@ export const Route = createFileRoute("/api/sdr/publish")({
 
         // US5 (FR-017): flag off → degrade to today's mock (status flip) server-side.
         if (!isSdrEnabled()) {
-          const out = await handleSdrDisabled({ workspaceId: ws.workspaceId, contentItemIds, kind: "publish" }, { db: supabaseAdmin });
+          const out = await handleSdrDisabled(
+            { workspaceId: ws.workspaceId, contentItemIds, kind: "publish" },
+            { db: supabaseAdmin },
+          );
           return Response.json(out.body, { status: out.status });
         }
 

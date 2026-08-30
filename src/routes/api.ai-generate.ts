@@ -6,8 +6,14 @@ import { TASK_SYSTEMS } from "@/lib/ai/prompts";
 import { assemble } from "@/lib/ai/prompts/assemble";
 
 const TaskEnum = z.enum([
-  "seo-audit", "content-gen", "ad-copy", "social-post",
-  "crm-message", "competitor", "analytics-insight", "freeform",
+  "seo-audit",
+  "content-gen",
+  "ad-copy",
+  "social-post",
+  "crm-message",
+  "competitor",
+  "analytics-insight",
+  "freeform",
 ]);
 
 const BodySchema = z.object({
@@ -25,8 +31,11 @@ export const Route = createFileRoute("/api/ai-generate")({
         if (!auth.ok) return auth.response;
 
         let body: z.infer<typeof BodySchema>;
-        try { body = BodySchema.parse(await request.json()); }
-        catch { return jsonError(400, "Invalid request body"); }
+        try {
+          body = BodySchema.parse(await request.json());
+        } catch {
+          return jsonError(400, "Invalid request body");
+        }
 
         const system = TASK_SYSTEMS[body.task] ?? TASK_SYSTEMS.freeform;
 
@@ -48,15 +57,18 @@ export const Route = createFileRoute("/api/ai-generate")({
                 .replace(/\s+/g, " ")
                 .slice(0, 4000);
             }
-          } catch (e) { console.warn("scrape failed", e); }
+          } catch (e) {
+            console.warn("scrape failed", e);
+          }
         }
 
-        const user = assemble([
-          { label: "Request", body: body.prompt },
-          { label: "Context", body: body.context, maxChars: 3800 },
-          { label: "Target URL", body: body.url },
-          { label: "Page content", body: scraped, maxChars: 4000 },
-        ]) || "Generate a useful default response.";
+        const user =
+          assemble([
+            { label: "Request", body: body.prompt },
+            { label: "Context", body: body.context, maxChars: 3800 },
+            { label: "Target URL", body: body.url },
+            { label: "Page content", body: scraped, maxChars: 4000 },
+          ]) || "Generate a useful default response.";
 
         try {
           const json: any = await chatCompletion({

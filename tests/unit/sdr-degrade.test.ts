@@ -6,7 +6,14 @@ import { SdrError } from "@/lib/sdr.server";
 import { publishContentItemsHandler, scheduleContentItemsHandler } from "@/lib/sdr.handlers";
 import { makeMockContentDb, type MockContentItem } from "../fixtures/mock-db";
 
-const item: MockContentItem = { id: "item-1", workspace_id: "ws-1", body: "x", media_url: null, status: "approved", meta: { platform: "twitter" } };
+const item: MockContentItem = {
+  id: "item-1",
+  workspace_id: "ws-1",
+  body: "x",
+  media_url: null,
+  status: "approved",
+  meta: { platform: "twitter" },
+};
 const unreachable = vi.fn(async () => {
   throw new SdrError("SDR_UNREACHABLE", "connection refused");
 });
@@ -28,7 +35,13 @@ describe("graceful degradation on SDR unreachable (FR-015/SC-008)", () => {
     const db = makeMockContentDb([item]);
     await expect(
       scheduleContentItemsHandler(
-        { workspaceId: "ws-1", items: [{ contentItemId: "item-1", scheduledAt: new Date(Date.now() + 3600_000).toISOString() }], selection: { type: "all" } },
+        {
+          workspaceId: "ws-1",
+          items: [
+            { contentItemId: "item-1", scheduledAt: new Date(Date.now() + 3600_000).toISOString() },
+          ],
+          selection: { type: "all" },
+        },
         { sdrBaseUrl: "http://127.0.0.1:1", token: "ws-key", callSdrFn: unreachable, db },
       ),
     ).rejects.toThrow(SdrError);

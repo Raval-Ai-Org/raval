@@ -42,7 +42,10 @@ export function useSwipe({
     let active = false;
 
     const onStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1) { active = false; return; }
+      if (e.touches.length !== 1) {
+        active = false;
+        return;
+      }
       const t = e.touches[0];
       startX = t.clientX;
       startY = t.clientY;
@@ -71,5 +74,13 @@ export function useSwipe({
       window.removeEventListener("touchstart", onStart);
       window.removeEventListener("touchend", onEnd);
     };
-  }, [onSwipeRight, onSwipeLeft, edgeStartLeftPx, edgeStartRightPx, threshold, maxVertical, enabled]);
+  }, [
+    onSwipeRight,
+    onSwipeLeft,
+    edgeStartLeftPx,
+    edgeStartRightPx,
+    threshold,
+    maxVertical,
+    enabled,
+  ]);
 }

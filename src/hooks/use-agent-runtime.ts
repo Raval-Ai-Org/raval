@@ -68,7 +68,9 @@ export function useAgentRuntime(agent: Agent) {
         return { ...c, progress: pct };
       });
     }, 250);
-    return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
+    return () => {
+      if (tickRef.current) window.clearInterval(tickRef.current);
+    };
   }, [active, current?.mission.id]);
 
   return { active, setActive, current, queue, tasksToday, lastRun, events, deploy };

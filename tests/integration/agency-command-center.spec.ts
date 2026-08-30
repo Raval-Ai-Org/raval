@@ -41,75 +41,137 @@ function fakeSession() {
 }
 
 const workspaces = [
-  { id: WS_A, name: "Acme Coffee", website_url: "https://acme.test", client_status: "active", created_at: "2024-01-01T00:00:00Z" },
-  { id: WS_B, name: "Northwind Yoga", website_url: "https://northwind.test", client_status: "active", created_at: "2024-01-02T00:00:00Z" },
+  {
+    id: WS_A,
+    name: "Acme Coffee",
+    website_url: "https://acme.test",
+    client_status: "active",
+    created_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: WS_B,
+    name: "Northwind Yoga",
+    website_url: "https://northwind.test",
+    client_status: "active",
+    created_at: "2024-01-02T00:00:00Z",
+  },
 ];
 
 const contentItems = [
   {
     id: "11111111-1111-1111-1111-111111111111",
-    workspace_id: WS_A, agent: "writer", kind: "post", channel: "instagram",
-    title: "Acme launch teaser", body: "Coming soon", hashtags: [],
-    media_url: null, status: "pending", scheduled_at: null,
+    workspace_id: WS_A,
+    agent: "writer",
+    kind: "post",
+    channel: "instagram",
+    title: "Acme launch teaser",
+    body: "Coming soon",
+    hashtags: [],
+    media_url: null,
+    status: "pending",
+    scheduled_at: null,
     created_at: "2024-06-01T00:00:00Z",
   },
   {
     id: "22222222-2222-2222-2222-222222222222",
-    workspace_id: WS_B, agent: "writer", kind: "post", channel: "instagram",
-    title: "Northwind sunrise flow", body: "Join us Saturday", hashtags: [],
-    media_url: null, status: "pending", scheduled_at: null,
+    workspace_id: WS_B,
+    agent: "writer",
+    kind: "post",
+    channel: "instagram",
+    title: "Northwind sunrise flow",
+    body: "Join us Saturday",
+    hashtags: [],
+    media_url: null,
+    status: "pending",
+    scheduled_at: null,
     created_at: "2024-06-02T00:00:00Z",
   },
 ];
 
 const members = workspaces.map((w) => ({
-  workspace_id: w.id, user_id: USER_ID, role: "owner",
+  workspace_id: w.id,
+  user_id: USER_ID,
+  role: "owner",
 }));
 
 async function stubBackend(page: Page) {
-  await page.context().route(
-    new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/v1/.*`),
-    async (route: Route) => {
-      const req = route.request();
-      const url = req.url();
-      const method = req.method();
-      const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
+  await page
+    .context()
+    .route(
+      new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/v1/.*`),
+      async (route: Route) => {
+        const req = route.request();
+        const url = req.url();
+        const method = req.method();
+        const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
 
-      if (url.includes("/auth/v1/user")) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession().user) });
-      }
-      if (url.includes("/auth/v1/token")) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession()) });
-      }
-      if (url.includes("/rest/v1/workspaces")) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(wantsSingle ? workspaces[0] : workspaces) });
-      }
-      if (url.includes("/rest/v1/workspace_members")) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(members) });
-      }
-      if (url.includes("/rest/v1/profiles")) {
-        const row = { id: USER_ID, persona: "agency", persona_set_at: "2024-01-01T00:00:00Z" };
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(wantsSingle ? row : [row]) });
-      }
-      if (url.includes("/rest/v1/content_items")) {
-        if (method === "GET") {
-          return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(contentItems) });
+        if (url.includes("/auth/v1/user")) {
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(fakeSession().user),
+          });
         }
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
-      }
-      if (url.includes("/rest/v1/approvals")) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
-      }
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: wantsSingle ? "null" : "[]" });
-    },
-  );
+        if (url.includes("/auth/v1/token")) {
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(fakeSession()),
+          });
+        }
+        if (url.includes("/rest/v1/workspaces")) {
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(wantsSingle ? workspaces[0] : workspaces),
+          });
+        }
+        if (url.includes("/rest/v1/workspace_members")) {
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(members),
+          });
+        }
+        if (url.includes("/rest/v1/profiles")) {
+          const row = { id: USER_ID, persona: "agency", persona_set_at: "2024-01-01T00:00:00Z" };
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(wantsSingle ? row : [row]),
+          });
+        }
+        if (url.includes("/rest/v1/content_items")) {
+          if (method === "GET") {
+            return route.fulfill({
+              status: 200,
+              headers: JSON_HEADERS,
+              body: JSON.stringify(contentItems),
+            });
+          }
+          return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
+        }
+        if (url.includes("/rest/v1/approvals")) {
+          return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
+        }
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: wantsSingle ? "null" : "[]",
+        });
+      },
+    );
 
-  await page.context().route("**/_serverFn/**", (route) =>
-    route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
-  );
-  await page.context().route("**/api/**", (route) =>
-    route.fulfill({ status: 200, headers: JSON_HEADERS, body: "{}" }),
-  );
+  await page
+    .context()
+    .route("**/_serverFn/**", (route) =>
+      route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
+    );
+  await page
+    .context()
+    .route("**/api/**", (route) =>
+      route.fulfill({ status: 200, headers: JSON_HEADERS, body: "{}" }),
+    );
 }
 
 async function seedSession(page: Page) {
@@ -127,8 +189,12 @@ async function seedSession(page: Page) {
             configurable: true,
             value: { writeText: async () => {} },
           });
-        } catch { /* noop */ }
-      } catch { /* noop */ }
+        } catch {
+          /* noop */
+        }
+      } catch {
+        /* noop */
+      }
     },
     { storageKey: STORAGE_KEY, sess: fakeSession(), wsId: WS_A },
   );
@@ -140,8 +206,9 @@ async function gotoAgency(page: Page) {
   // "Hello." greeting + MOCK_APPROVALS across a "Demo brand" — filter chips
   // and per-client palette entries don't exist yet.
   await expect(page.getByText(/2 clients/i).first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: /Jump to anything/i }).first())
-    .toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: /Jump to anything/i }).first()).toBeVisible({
+    timeout: 10_000,
+  });
 }
 
 const VIEWPORTS = [
@@ -169,15 +236,22 @@ for (const vp of VIEWPORTS) {
       // on Linux for the address bar), so a direct window event is the only
       // reliable way to exercise the app's `keydown` handler headlessly.
       await page.evaluate(() => {
-        window.dispatchEvent(new KeyboardEvent("keydown", {
-          key: "k", ctrlKey: true, bubbles: true, cancelable: true,
-        }));
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "k",
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
       });
       await expect(paletteInput).toBeVisible({ timeout: 5_000 });
 
       // Scope all lookups to the palette so filter chips like "Acme Coffee · 1"
       // rendered elsewhere on the page don't confuse strict-mode matches.
-      const palette = paletteInput.locator("xpath=ancestor::div[contains(@class,'rounded-2xl')][1]");
+      const palette = paletteInput.locator(
+        "xpath=ancestor::div[contains(@class,'rounded-2xl')][1]",
+      );
 
       // Default items include bulk actions + "Open client" for each workspace.
       await expect(palette.getByRole("button", { name: /Approve all pending/i })).toBeVisible();
@@ -214,18 +288,24 @@ for (const vp of VIEWPORTS) {
 
       // Clicking "Jump to anything" opens the palette (proves the strip is
       // interactive on this viewport, not just visually rendered).
-      await page.getByRole("button", { name: /Jump to anything/i }).first().click();
-      await expect(page.locator('input[placeholder="Search clients, actions…"]'))
-        .toBeVisible({ timeout: 5_000 });
+      await page
+        .getByRole("button", { name: /Jump to anything/i })
+        .first()
+        .click();
+      await expect(page.locator('input[placeholder="Search clients, actions…"]')).toBeVisible({
+        timeout: 5_000,
+      });
       await page.keyboard.press("Escape");
 
       // "Copy weekly digest" should succeed silently (clipboard is stubbed).
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));
-      await page.getByRole("button", { name: /Copy weekly digest/i }).first().click();
+      await page
+        .getByRole("button", { name: /Copy weekly digest/i })
+        .first()
+        .click();
       await page.waitForTimeout(300);
-      expect(errors, `runtime errors after copy digest: ${errors.join(" | ")}`)
-        .toHaveLength(0);
+      expect(errors, `runtime errors after copy digest: ${errors.join(" | ")}`).toHaveLength(0);
     });
 
     test("Approval filter chips render per client and switch the list", async ({ page }) => {

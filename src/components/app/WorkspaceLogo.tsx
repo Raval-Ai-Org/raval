@@ -14,13 +14,19 @@ function extractDomain(url: string | null | undefined): string | null {
     const host = new URL(withProto).hostname.replace(/^www\./i, "");
     return host || null;
   } catch {
-    const cleaned = url.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
+    const cleaned = url
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .replace(/\/.*$/, "");
     return cleaned || null;
   }
 }
 
 function initials(name: string) {
-  const parts = name.trim().split(/\s+|\.|-/).filter(Boolean);
+  const parts = name
+    .trim()
+    .split(/\s+|\.|-/)
+    .filter(Boolean);
   return ((parts[0]?.[0] ?? "W") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
@@ -32,13 +38,7 @@ type Props = {
   rounded?: "md" | "lg";
 };
 
-export function WorkspaceLogo({
-  name,
-  websiteUrl,
-  size = 28,
-  className,
-  rounded = "md",
-}: Props) {
+export function WorkspaceLogo({ name, websiteUrl, size = 28, className, rounded = "md" }: Props) {
   const domain = extractDomain(websiteUrl);
   const px = `${size}px`;
   const radius = rounded === "lg" ? "rounded-lg" : "rounded-md";
@@ -48,8 +48,7 @@ export function WorkspaceLogo({
   // Cascade of real-logo sources — first to load wins. Each has different
   // coverage, so on error we swap to the next before falling back to initials.
   const logoDevToken = import.meta.env.VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY as
-    | string
-    | undefined;
+    string | undefined;
   const sources: string[] = domain
     ? [
         logoDevToken

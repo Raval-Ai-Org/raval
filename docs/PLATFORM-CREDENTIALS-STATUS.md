@@ -5,12 +5,12 @@
 
 ## Current Status
 
-| Platform | App Status | Credentials in `.env`? | App Review | Can publish? |
-|---|---|---|---|---|
-| **LinkedIn** | ✅ Verified (RavalAI Marketing Developer Platform) | ✅ Yes | ✅ Approved (2026-08-28) | ✅ Yes (after SDR is up) |
-| **X / Twitter** | ⏳ Pending setup | ❌ No | ⏳ Not submitted | ❌ No |
-| **Facebook** | 🆕 Just configured (2026-08-28) | ✅ Yes | ⏳ Not yet submitted (use test users for now) | ⚠️ Test users only until approved |
-| **Instagram** | 🆕 Just configured (2026-08-28) | ✅ Yes (same App ID/Secret as Facebook) | ⏳ Not yet submitted | ⚠️ Test users only until approved |
+| Platform        | App Status                                         | Credentials in `.env`?                  | App Review                                    | Can publish?                      |
+| --------------- | -------------------------------------------------- | --------------------------------------- | --------------------------------------------- | --------------------------------- |
+| **LinkedIn**    | ✅ Verified (RavalAI Marketing Developer Platform) | ✅ Yes                                  | ✅ Approved (2026-08-28)                      | ✅ Yes (after SDR is up)          |
+| **X / Twitter** | ⏳ Pending setup                                   | ❌ No                                   | ⏳ Not submitted                              | ❌ No                             |
+| **Facebook**    | 🆕 Just configured (2026-08-28)                    | ✅ Yes                                  | ⏳ Not yet submitted (use test users for now) | ⚠️ Test users only until approved |
+| **Instagram**   | 🆕 Just configured (2026-08-28)                    | ✅ Yes (same App ID/Secret as Facebook) | ⏳ Not yet submitted                          | ⚠️ Test users only until approved |
 
 ## LinkedIn — fully ready ✅
 

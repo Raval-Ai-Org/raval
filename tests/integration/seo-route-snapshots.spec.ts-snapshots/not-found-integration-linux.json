@@ -14,10 +14,7 @@
   "hreflang": [],
   "robots": "noindex,nofollow",
   "h1": "404",
-  "jsonLdTypes": [
-    "Organization",
-    "WebSite"
-  ],
+  "jsonLdTypes": ["Organization", "WebSite"],
   "jsonLdNodes": [
     {
       "type": "Organization",

@@ -211,7 +211,9 @@ export const getAnalyticsSummary = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const meta = (auditRow?.meta ?? {}) as { actions?: Array<{ id: string; priority: string; title: string; detail: string }> };
+    const meta = (auditRow?.meta ?? {}) as {
+      actions?: Array<{ id: string; priority: string; title: string; detail: string }>;
+    };
     const latestAudit = auditRow
       ? {
           id: auditRow.id as string,
@@ -230,7 +232,10 @@ export const getAnalyticsSummary = createServerFn({ method: "POST" })
       .eq("id", data.workspaceId)
       .maybeSingle();
     const workspace = wsRow
-      ? { name: (wsRow.name as string | null) ?? null, website_url: (wsRow.website_url as string | null) ?? null }
+      ? {
+          name: (wsRow.name as string | null) ?? null,
+          website_url: (wsRow.website_url as string | null) ?? null,
+        }
       : null;
 
     return {
@@ -277,7 +282,8 @@ export const getAnalyticsDrilldown = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const days = data.days ?? 14;
     const since = new Date(Date.now() - days * 86_400_000).toISOString();
-    const column = data.dimension === "channel" ? "channel" : data.dimension === "agent" ? "agent" : "kind";
+    const column =
+      data.dimension === "channel" ? "channel" : data.dimension === "agent" ? "agent" : "kind";
     const q = context.supabase
       .from("content_items")
       .select("id, title, status, channel, agent, kind, body, created_at, updated_at")
@@ -285,9 +291,8 @@ export const getAnalyticsDrilldown = createServerFn({ method: "POST" })
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(data.limit ?? 50);
-    const { data: rows, error } = data.value === "(none)"
-      ? await q.is(column, null)
-      : await q.eq(column, data.value);
+    const { data: rows, error } =
+      data.value === "(none)" ? await q.is(column, null) : await q.eq(column, data.value);
     if (error) throw new Error(error.message);
     return (rows ?? []).map((r) => ({
       id: r.id as string,
@@ -301,4 +306,3 @@ export const getAnalyticsDrilldown = createServerFn({ method: "POST" })
       words: typeof r.body === "string" ? r.body.trim().split(/\s+/).filter(Boolean).length : 0,
     })) satisfies DrilldownItem[];
   });
-

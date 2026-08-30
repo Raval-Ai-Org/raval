@@ -17,11 +17,12 @@ This resolves the technical unknowns for the plan. Every decision is grounded in
 ## R2. Facebook connect must resolve a Page, not `/me`
 
 **Decision**: Extend the `facebook` OAuth branch so that after code exchange it:
+
 1. Fetches the user profile (`GET /me?fields=id,name`).
 2. Lists pages the user manages: `GET /me/accounts?fields=id,name,access_token`.
 3. Selects the first page (MVP) and uses the **Page access token** + Page id as the stored account (`platform_account_id` = page_id, metadata `{page_id, persona:"page"}`).
 
-**Rationale**: The current callback stores the *user* token/profile from `/me` (`accounts.py:529-540`), but the publisher already builds `page_id|token` from `metadata.get("page_id","me")` (`publisher.py:420-423`) and the FacebookAdapter publishes to `/{page_id}/feed`. Storing the user token would post to the user's own timeline, not a Page — wrong identity (FR-MT-07). Resolving the Page at connect time makes the existing publisher path produce a real `page_id|token`.
+**Rationale**: The current callback stores the _user_ token/profile from `/me` (`accounts.py:529-540`), but the publisher already builds `page_id|token` from `metadata.get("page_id","me")` (`publisher.py:420-423`) and the FacebookAdapter publishes to `/{page_id}/feed`. Storing the user token would post to the user's own timeline, not a Page — wrong identity (FR-MT-07). Resolving the Page at connect time makes the existing publisher path produce a real `page_id|token`.
 
 **Alternatives considered**: Store user token + `page_id="me"` and post to `/me/feed` — rejected (publishes to the user's personal feed, not the Page the client chose).
 
@@ -29,13 +30,14 @@ This resolves the technical unknowns for the plan. Every decision is grounded in
 
 **Decision**: For `platform="instagram"`, use the same Facebook OAuth dialog with IG scopes. After code exchange + page resolution (R2), call `GET /{page_id}?fields=instagram_business_account&access_token={page_token}` to obtain the linked Instagram Business/Creator account id. Store `platform_account_id` = ig_user_id, metadata `{ig_user_id, page_id, persona:"page"}`, token = Page token.
 
-**Rationale**: Instagram Content Publishing operates on the IG *user id* but authenticates with a token that has IG scope; the IG account must be linked to the Page. Resolving via `instagram_business_account` field is Meta's documented path and requires no second OAuth consent.
+**Rationale**: Instagram Content Publishing operates on the IG _user id_ but authenticates with a token that has IG scope; the IG account must be linked to the Page. Resolving via `instagram_business_account` field is Meta's documented path and requires no second OAuth consent.
 
 **Alternatives considered**: Instagram Login separately — rejected (the IG account is discovered off the Page; separate login adds friction and a second consent).
 
 ## R4. Instagram two-stage publish flow
 
 **Decision**: `InstagramAdapter.publish`:
+
 1. `POST https://graph.facebook.com/v18.0/{ig_user_id}/media` with `image_url` + `caption` (image) **or** `video_url` + `media_type=VIDEO` + `caption` (video), plus `access_token` → returns `{id: creation_id}`.
 2. `POST /{ig_user_id}/media_publish` with `creation_id` + `access_token` → returns `{id: media_id}`.
 3. `GET /{media_id}?fields=permalink` → public URL for the result.
@@ -47,6 +49,7 @@ This resolves the technical unknowns for the plan. Every decision is grounded in
 ## R5. Adapter error taxonomy (per CLAUDE.md §3.3)
 
 **Decision**: Classify Meta errors by HTTP status + error code:
+
 - **Auth** (Permanent): HTTP 401, or 400 with `error.code == 190` (invalid OAuth token), or 403 → `AuthError`, `retryable=False`, account should be marked for reconnect.
 - **Rate limit**: HTTP 429 or error code 18/613 → `RateLimitError` with `Retry-After`, `retryable=True`.
 - **Transient**: 5xx, timeouts, connection errors → `TransientError`, `retryable=True`.
@@ -57,6 +60,7 @@ This resolves the technical unknowns for the plan. Every decision is grounded in
 ## R6. Scopes
 
 **Decision**:
+
 - facebook: `pages_manage_posts,pages_read_engagement,pages_show_list`
 - instagram: `pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish`
 

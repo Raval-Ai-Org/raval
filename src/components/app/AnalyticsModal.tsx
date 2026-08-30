@@ -15,7 +15,9 @@ function readTabFromUrl(): AnalyticsTab {
 }
 
 export function AnalyticsModal({
-  open, onOpenChange, workspaceName,
+  open,
+  onOpenChange,
+  workspaceName,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -30,9 +32,6 @@ export function AnalyticsModal({
   useEffect(() => {
     if (open) setTab(readTabFromUrl());
   }, [open]);
-
-
-
 
   const updateTab = (t: AnalyticsTab) => {
     setTab(t);
@@ -91,7 +90,9 @@ export function AnalyticsModal({
                     </span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <h2 className="truncate text-[14px] font-semibold tracking-tight">Analytics</h2>
+                        <h2 className="truncate text-[14px] font-semibold tracking-tight">
+                          Analytics
+                        </h2>
                         {workspaceName && (
                           <span className="hidden truncate text-[12px] text-muted-foreground sm:inline">
                             · {workspaceName}

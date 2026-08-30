@@ -83,7 +83,10 @@ export function serializeBrandContext(
     push("Voice", dna.voice);
     push(
       "Audience",
-      [dna.audience, dna.audienceTags?.length ? `tags: ${dna.audienceTags.slice(0, 6).join(", ")}` : ""]
+      [
+        dna.audience,
+        dna.audienceTags?.length ? `tags: ${dna.audienceTags.slice(0, 6).join(", ")}` : "",
+      ]
         .filter(Boolean)
         .join(" | "),
     );
@@ -97,7 +100,13 @@ export function serializeBrandContext(
     push("Do", dna.doRules);
     push("Don't", dna.dontRules);
     if (dna.colors?.length) {
-      push("Colors", dna.colors.slice(0, 4).map((c) => `${c.name ?? "Color"} ${c.hex}`).join(", "));
+      push(
+        "Colors",
+        dna.colors
+          .slice(0, 4)
+          .map((c) => `${c.name ?? "Color"} ${c.hex}`)
+          .join(", "),
+      );
     }
     if (dna.fonts?.length) push("Fonts", dna.fonts.slice(0, 3).join(", "));
     push("Website", opts.siteUrl || dna.websiteUrl);
@@ -108,26 +117,46 @@ export function serializeBrandContext(
     if (dna.userInsights?.length) {
       lines.push("");
       lines.push("## Operator-stated insights (respect these)");
-      dna.userInsights.slice(0, 10).forEach((n) => lines.push(`- ${n.title}: ${clip(n.body) ?? ""}`));
+      dna.userInsights
+        .slice(0, 10)
+        .forEach((n) => lines.push(`- ${n.title}: ${clip(n.body) ?? ""}`));
     }
 
     if (dna.competitors?.length) {
       lines.push("");
       lines.push("## Competitors");
-      dna.competitors.slice(0, 6).forEach((c) =>
-        lines.push(`- ${c.name}${c.positioning ? ` — ${clip(c.positioning)}` : ""}`),
-      );
+      dna.competitors
+        .slice(0, 6)
+        .forEach((c) =>
+          lines.push(`- ${c.name}${c.positioning ? ` — ${clip(c.positioning)}` : ""}`),
+        );
     }
 
     const cs = dna.customer;
     if (cs && (cs.personas?.length || cs.triggerSignals?.length || cs.objectionSignals?.length)) {
       lines.push("");
       lines.push("## Customer signals");
-      if (cs.personas?.length) lines.push(`- Personas: ${cs.personas.slice(0, 4).map((p) => p.name).join(", ")}`);
+      if (cs.personas?.length)
+        lines.push(
+          `- Personas: ${cs.personas
+            .slice(0, 4)
+            .map((p) => p.name)
+            .join(", ")}`,
+        );
       if (cs.triggerSignals?.length)
-        lines.push(`- Triggers: ${cs.triggerSignals.slice(0, 4).map((s) => s.text).join(" | ")}`);
+        lines.push(
+          `- Triggers: ${cs.triggerSignals
+            .slice(0, 4)
+            .map((s) => s.text)
+            .join(" | ")}`,
+        );
       if (cs.objectionSignals?.length)
-        lines.push(`- Objections: ${cs.objectionSignals.slice(0, 4).map((s) => s.text).join(" | ")}`);
+        lines.push(
+          `- Objections: ${cs.objectionSignals
+            .slice(0, 4)
+            .map((s) => s.text)
+            .join(" | ")}`,
+        );
     }
   }
 
@@ -138,7 +167,8 @@ export function serializeBrandContext(
     if (sig.pending) lines.push(`- Pending approvals: ${sig.pending}`);
     if (sig.scheduled) lines.push(`- Scheduled: ${sig.scheduled}`);
     if (sig.published) lines.push(`- Published recently: ${sig.published}`);
-    if (sig.recentTitles?.length) lines.push(`- Recent: ${sig.recentTitles.slice(0, 4).join(" • ")}`);
+    if (sig.recentTitles?.length)
+      lines.push(`- Recent: ${sig.recentTitles.slice(0, 4).join(" • ")}`);
   }
 
   if (opts.coachSummary) {
@@ -159,7 +189,10 @@ export function serializeBrandContext(
  * Ultra-compact single-line context for lightweight prompts (clarify, tools).
  * Only the fields that actually change the model's answer.
  */
-export function compactBrandTagline(dna: BrandCtxDna | null | undefined, siteUrl?: string | null): string {
+export function compactBrandTagline(
+  dna: BrandCtxDna | null | undefined,
+  siteUrl?: string | null,
+): string {
   if (!dna) return "";
   const bits: string[] = [];
   if (dna.brandName) bits.push(`brand=${dna.brandName}`);

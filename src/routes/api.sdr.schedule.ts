@@ -4,7 +4,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { jsonError } from "@/server/api-auth";
 import { requireWorkspaceAccess, getWorkspaceSdrKey } from "@/lib/sdr.helpers.server";
-import { scheduleContentItemsHandler, handleSdrDisabled, type PublishSelection, type ScheduleItem } from "@/lib/sdr.handlers";
+import {
+  scheduleContentItemsHandler,
+  handleSdrDisabled,
+  type PublishSelection,
+  type ScheduleItem,
+} from "@/lib/sdr.handlers";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { isSdrEnabled } from "@/lib/feature-flags";
 
@@ -22,9 +27,13 @@ export const Route = createFileRoute("/api/sdr/schedule")({
         if (!ws.ok) return ws.response;
 
         const items: ScheduleItem[] = Array.isArray(body?.items)
-          ? body.items.filter((it: any) => it && typeof it.contentItemId === "string" && typeof it.scheduledAt === "string")
+          ? body.items.filter(
+              (it: any) =>
+                it && typeof it.contentItemId === "string" && typeof it.scheduledAt === "string",
+            )
           : [];
-        if (items.length === 0) return jsonError(400, "items[] with contentItemId + scheduledAt required");
+        if (items.length === 0)
+          return jsonError(400, "items[] with contentItemId + scheduledAt required");
         const selection = body?.selection as PublishSelection | undefined;
         if (!selection || !["account", "platform", "all"].includes(selection.type)) {
           return jsonError(400, "Invalid destination selection");
@@ -33,7 +42,12 @@ export const Route = createFileRoute("/api/sdr/schedule")({
         // US5 (FR-017): flag off → degrade to today's mock (status flip) server-side.
         if (!isSdrEnabled()) {
           const out = await handleSdrDisabled(
-            { workspaceId: ws.workspaceId, contentItemIds: items.map((i) => i.contentItemId), kind: "schedule", scheduledAt: items[0]?.scheduledAt },
+            {
+              workspaceId: ws.workspaceId,
+              contentItemIds: items.map((i) => i.contentItemId),
+              kind: "schedule",
+              scheduledAt: items[0]?.scheduledAt,
+            },
             { db: supabaseAdmin },
           );
           return Response.json(out.body, { status: out.status });

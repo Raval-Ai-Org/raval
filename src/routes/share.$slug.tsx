@@ -1,7 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, X, MessageSquare, ThumbsUp, ThumbsDown, Lightbulb, Loader2, Lock, ExternalLink, Sparkles } from "@/components/ui/gemini-icons";
+import {
+  Check,
+  X,
+  MessageSquare,
+  ThumbsUp,
+  ThumbsDown,
+  Lightbulb,
+  Loader2,
+  Lock,
+  ExternalLink,
+  Sparkles,
+} from "@/components/ui/gemini-icons";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +22,9 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/share/$slug")({
   component: SharePage,
-  notFoundComponent: () => <FullPage title="Not found" body="This share link doesn't exist or has been revoked." />,
+  notFoundComponent: () => (
+    <FullPage title="Not found" body="This share link doesn't exist or has been revoked." />
+  ),
   errorComponent: () => <FullPage title="Something went wrong" body="Try refreshing the page." />,
 });
 
@@ -60,7 +73,10 @@ function SharePage() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [identity, setIdentity] = useState<{ name: string; email: string }>({ name: "", email: "" });
+  const [identity, setIdentity] = useState<{ name: string; email: string }>({
+    name: "",
+    email: "",
+  });
   const [identityLocked, setIdentityLocked] = useState(false);
 
   const load = async (t: string, pw?: string) => {
@@ -70,8 +86,14 @@ function SharePage() {
       const res = await fetch(`/api/public/share/${slug}?${qs.toString()}`, {
         headers: pw ? { "X-Share-Password": pw } : undefined,
       });
-      if (res.status === 410) { setError("This share link has expired or was revoked."); return; }
-      if (res.status === 404) { setError("This share link doesn't exist."); return; }
+      if (res.status === 410) {
+        setError("This share link has expired or was revoked.");
+        return;
+      }
+      if (res.status === 404) {
+        setError("This share link doesn't exist.");
+        return;
+      }
       const data = await res.json().catch(() => ({}));
       if (res.status === 401) {
         if (data?.passwordRequired) {
@@ -83,10 +105,16 @@ function SharePage() {
         setError("Invalid or missing access token.");
         return;
       }
-      if (!res.ok) { setError("Unable to load share."); return; }
+      if (!res.ok) {
+        setError("Unable to load share.");
+        return;
+      }
       setShare(data.share);
       setItems(data.items ?? []);
-      if (data.locked) { setLocked(true); return; }
+      if (data.locked) {
+        setLocked(true);
+        return;
+      }
       setLocked(false);
       setPwError(null);
       // viewed event
@@ -126,22 +154,35 @@ function SharePage() {
 
   const submitPassword = async () => {
     const pw = pwInput.trim();
-    if (!pw) { setPwError("Enter the password"); return; }
+    if (!pw) {
+      setPwError("Enter the password");
+      return;
+    }
     setPassword(pw);
-    try { sessionStorage.setItem(`share:pw:${slug}`, pw); } catch {}
+    try {
+      sessionStorage.setItem(`share:pw:${slug}`, pw);
+    } catch {}
     await load(token, pw);
   };
 
   const saveIdentity = () => {
-    if (!identity.name.trim()) { toast.error("Please enter your name"); return; }
-    try { localStorage.setItem(`share:identity:${slug}`, JSON.stringify(identity)); } catch {}
+    if (!identity.name.trim()) {
+      toast.error("Please enter your name");
+      return;
+    }
+    try {
+      localStorage.setItem(`share:identity:${slug}`, JSON.stringify(identity));
+    } catch {}
     setIdentityLocked(true);
     toast.success("Welcome " + identity.name.split(" ")[0]);
   };
 
   const sendEvent = async (kind: string, payload: { itemId?: string; body?: string } = {}) => {
     if (!share) return;
-    if (!identityLocked) { toast.error("Add your name first"); return; }
+    if (!identityLocked) {
+      toast.error("Add your name first");
+      return;
+    }
     const res = await fetch(`/api/public/share/${slug}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -155,13 +196,20 @@ function SharePage() {
         actorEmail: identity.email || undefined,
       }),
     });
-    if (!res.ok) { toast.error("Couldn't send — try again"); return; }
+    if (!res.ok) {
+      toast.error("Couldn't send — try again");
+      return;
+    }
     toast.success(
-      kind === "approved" ? "Approved — sent to marketer for confirmation"
-      : kind === "rejected" ? "Rejection sent"
-      : kind === "requested_changes" ? "Change request sent"
-      : kind === "suggested" ? "Suggestion sent to marketer"
-      : "Comment sent",
+      kind === "approved"
+        ? "Approved — sent to marketer for confirmation"
+        : kind === "rejected"
+          ? "Rejection sent"
+          : kind === "requested_changes"
+            ? "Change request sent"
+            : kind === "suggested"
+              ? "Suggestion sent to marketer"
+              : "Comment sent",
     );
   };
 
@@ -178,24 +226,31 @@ function SharePage() {
             <div className="text-[13px] font-semibold">Password required</div>
           </div>
           <p className="text-[12.5px] text-muted-foreground">
-            {share.title ? `“${share.title}” is password protected.` : "This review link is password protected."}
+            {share.title
+              ? `“${share.title}” is password protected.`
+              : "This review link is password protected."}
           </p>
           <Input
             type="password"
             autoFocus
             placeholder="Enter password"
             value={pwInput}
-            onChange={(e) => { setPwInput(e.target.value); setPwError(null); }}
-            onKeyDown={(e) => { if (e.key === "Enter") submitPassword(); }}
+            onChange={(e) => {
+              setPwInput(e.target.value);
+              setPwError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submitPassword();
+            }}
           />
           {pwError && <div className="text-[12px] text-red-600">{pwError}</div>}
-          <Button className="w-full" onClick={submitPassword}>Unlock</Button>
+          <Button className="w-full" onClick={submitPassword}>
+            Unlock
+          </Button>
         </div>
       </div>
     );
   }
-
-
 
   const accent = share.branding?.accent || "hsl(var(--brand-blue))";
 
@@ -206,7 +261,9 @@ function SharePage() {
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <Logo height={32} />
-            <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Client Review</span>
+            <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              Client Review
+            </span>
           </div>
           <div className="text-right">
             <div className="text-[12.5px] font-semibold">{share.workspaceName}</div>
@@ -222,7 +279,8 @@ function SharePage() {
       <section className="mx-auto max-w-4xl px-4 py-8 space-y-6">
         {/* Hero */}
         <motion.div
-          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-border/60 bg-card p-6 sm:p-8 shadow-sm"
           style={{ background: `linear-gradient(135deg, ${accent}10, transparent 60%)` }}
         >
@@ -231,21 +289,38 @@ function SharePage() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">{share.title}</h1>
           {share.clientName && (
-            <p className="mt-2 text-muted-foreground">Prepared for <span className="text-foreground">{share.clientName}</span></p>
+            <p className="mt-2 text-muted-foreground">
+              Prepared for <span className="text-foreground">{share.clientName}</span>
+            </p>
           )}
         </motion.div>
 
         {/* Identity gate */}
         {!identityLocked && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="rounded-xl border border-dashed border-border/70 bg-card/60 p-5">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="rounded-xl border border-dashed border-border/70 bg-card/60 p-5"
+          >
             <div className="text-[13px] font-semibold mb-1">Tell us who you are</div>
-            <div className="text-[12px] text-muted-foreground mb-3">So your marketer can attribute comments and approvals to you.</div>
-            <div className="grid sm:grid-cols-2 gap-2">
-              <Input placeholder="Your name" value={identity.name} onChange={(e) => setIdentity((p) => ({ ...p, name: e.target.value }))} />
-              <Input placeholder="Email (optional)" value={identity.email} onChange={(e) => setIdentity((p) => ({ ...p, email: e.target.value }))} />
+            <div className="text-[12px] text-muted-foreground mb-3">
+              So your marketer can attribute comments and approvals to you.
             </div>
-            <Button className="mt-3" onClick={saveIdentity}>Continue</Button>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <Input
+                placeholder="Your name"
+                value={identity.name}
+                onChange={(e) => setIdentity((p) => ({ ...p, name: e.target.value }))}
+              />
+              <Input
+                placeholder="Email (optional)"
+                value={identity.email}
+                onChange={(e) => setIdentity((p) => ({ ...p, email: e.target.value }))}
+              />
+            </div>
+            <Button className="mt-3" onClick={saveIdentity}>
+              Continue
+            </Button>
           </motion.div>
         )}
 
@@ -272,7 +347,8 @@ function SharePage() {
         </div>
 
         <footer className="pt-8 pb-6 text-center text-[11px] text-muted-foreground">
-          Powered by Raval AI · This is a read-only review link. All decisions need marketer confirmation.
+          Powered by Raval AI · This is a read-only review link. All decisions need marketer
+          confirmation.
         </footer>
       </section>
     </div>
@@ -280,9 +356,17 @@ function SharePage() {
 }
 
 function ItemCard({
-  item, index, allowApprovals, allowComments, onAction, disabled,
+  item,
+  index,
+  allowApprovals,
+  allowComments,
+  onAction,
+  disabled,
 }: {
-  item: Item; index: number; allowApprovals: boolean; allowComments: boolean;
+  item: Item;
+  index: number;
+  allowApprovals: boolean;
+  allowComments: boolean;
   onAction: (kind: string, p?: { itemId?: string; body?: string }) => void;
   disabled: boolean;
 }) {
@@ -298,11 +382,16 @@ function ItemCard({
 
   const kindLabel = useMemo(() => {
     switch (item.kind) {
-      case "content_item": return channel ? `${channel} post` : "Content";
-      case "audit": return "GEO / AEO audit";
-      case "brand_dna": return "Brand snapshot";
-      case "calendar": return "Content calendar";
-      default: return "Note";
+      case "content_item":
+        return channel ? `${channel} post` : "Content";
+      case "audit":
+        return "GEO / AEO audit";
+      case "brand_dna":
+        return "Brand snapshot";
+      case "calendar":
+        return "Content calendar";
+      default:
+        return "Note";
     }
   }, [item.kind, channel]);
 
@@ -322,9 +411,13 @@ function ItemCard({
     >
       <div className="px-5 sm:px-6 pt-5 pb-3 border-b border-border/40">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">{kindLabel}</span>
+          <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">
+            {kindLabel}
+          </span>
           {scheduledAt && (
-            <span className="text-[10.5px] text-muted-foreground">{new Date(scheduledAt).toLocaleString()}</span>
+            <span className="text-[10.5px] text-muted-foreground">
+              {new Date(scheduledAt).toLocaleString()}
+            </span>
           )}
         </div>
         {item.title && <h2 className="text-[16px] font-semibold tracking-tight">{item.title}</h2>}
@@ -337,7 +430,9 @@ function ItemCard({
       {hashtags.length > 0 && (
         <div className="px-5 sm:px-6 pb-3 flex flex-wrap gap-1.5">
           {hashtags.map((h) => (
-            <span key={h} className="text-[11px] text-[hsl(var(--brand-blue))]">#{h.replace(/^#/, "")}</span>
+            <span key={h} className="text-[11px] text-[hsl(var(--brand-blue))]">
+              #{h.replace(/^#/, "")}
+            </span>
           ))}
         </div>
       )}
@@ -391,25 +486,53 @@ function ItemCard({
       <AnimatePresence>
         {drawer && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden border-t border-border/40 bg-background"
           >
             <div className="px-4 sm:px-5 py-3 space-y-2">
               <div className="text-[11.5px] uppercase tracking-[0.08em] text-muted-foreground">
-                {drawer === "changes" ? "What changes would you like?"
-                  : drawer === "reject" ? "Why are you rejecting this?"
-                  : drawer === "suggest" ? "Your suggestion"
-                  : "Add a comment"}
+                {drawer === "changes"
+                  ? "What changes would you like?"
+                  : drawer === "reject"
+                    ? "Why are you rejecting this?"
+                    : drawer === "suggest"
+                      ? "Your suggestion"
+                      : "Add a comment"}
               </div>
-              <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3}
-                placeholder="Be specific — your marketer reads every word." />
+              <Textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={3}
+                placeholder="Be specific — your marketer reads every word."
+              />
               <div className="flex items-center justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => { setDrawer(null); setText(""); }}>Cancel</Button>
-                <Button size="sm" onClick={() => submit(
-                  drawer === "changes" ? "requested_changes"
-                  : drawer === "reject" ? "rejected"
-                  : drawer === "suggest" ? "suggested" : "commented",
-                )} disabled={!text.trim()}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setDrawer(null);
+                    setText("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    submit(
+                      drawer === "changes"
+                        ? "requested_changes"
+                        : drawer === "reject"
+                          ? "rejected"
+                          : drawer === "suggest"
+                            ? "suggested"
+                            : "commented",
+                    )
+                  }
+                  disabled={!text.trim()}
+                >
                   Send
                 </Button>
               </div>
@@ -419,10 +542,16 @@ function ItemCard({
       </AnimatePresence>
 
       {done && (
-        <div className={cn(
-          "px-5 py-2 text-[12px] flex items-center gap-1.5",
-          done === "approved" ? "text-emerald-600" : done === "rejected" ? "text-red-600" : "text-foreground"
-        )}>
+        <div
+          className={cn(
+            "px-5 py-2 text-[12px] flex items-center gap-1.5",
+            done === "approved"
+              ? "text-emerald-600"
+              : done === "rejected"
+                ? "text-red-600"
+                : "text-foreground",
+          )}
+        >
           <Check className="h-3.5 w-3.5" /> Sent — your marketer will see this in their inbox.
         </div>
       )}
@@ -431,9 +560,16 @@ function ItemCard({
 }
 
 function ActionButton({
-  icon: Icon, label, onClick, disabled, variant,
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  variant,
 }: {
-  icon: any; label: string; onClick: () => void; disabled?: boolean;
+  icon: any;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
   variant?: "success" | "danger";
 }) {
   return (
@@ -443,8 +579,10 @@ function ActionButton({
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1.5 text-[12px] font-medium transition disabled:opacity-50",
         "border-border/70 hover:border-foreground/30 hover:bg-card",
-        variant === "success" && "hover:border-emerald-500/50 hover:text-emerald-700 dark:hover:text-emerald-400",
-        variant === "danger" && "hover:border-red-500/50 hover:text-red-700 dark:hover:text-red-400",
+        variant === "success" &&
+          "hover:border-emerald-500/50 hover:text-emerald-700 dark:hover:text-emerald-400",
+        variant === "danger" &&
+          "hover:border-red-500/50 hover:text-red-700 dark:hover:text-red-400",
       )}
     >
       <Icon className="h-3.5 w-3.5" />

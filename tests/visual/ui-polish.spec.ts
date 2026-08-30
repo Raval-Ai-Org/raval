@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "@playwright/test";
 
 /**
  * Visual regression suite for the global UI polish pass.
@@ -11,14 +11,14 @@ import { test, expect } from '@playwright/test';
  * Update baselines: bunx playwright test tests/visual/ui-polish.spec.ts --update-snapshots
  */
 
-const BASE = 'http://localhost:8080';
+const BASE = "http://localhost:8080";
 
 const surfaces = [
-  { name: 'landing', path: '/' },
-  { name: 'auth', path: '/auth' },
+  { name: "landing", path: "/" },
+  { name: "auth", path: "/auth" },
 ];
 
-const themes = ['light', 'dark'] as const;
+const themes = ["light", "dark"] as const;
 
 for (const theme of themes) {
   test.describe(`UI polish · ${theme}`, () => {
@@ -27,19 +27,19 @@ for (const theme of themes) {
     test.beforeEach(async ({ page }) => {
       await page.addInitScript((t) => {
         try {
-          localStorage.setItem('theme', t);
-          localStorage.setItem('vite-ui-theme', t);
+          localStorage.setItem("theme", t);
+          localStorage.setItem("vite-ui-theme", t);
         } catch {}
       }, theme);
     });
 
     for (const surface of surfaces) {
       test(`${surface.name} matches baseline`, async ({ page }) => {
-        await page.goto(`${BASE}${surface.path}`, { waitUntil: 'networkidle' });
+        await page.goto(`${BASE}${surface.path}`, { waitUntil: "networkidle" });
         // ensure theme class present
         await page.evaluate((t) => {
-          document.documentElement.classList.toggle('dark', t === 'dark');
-          document.documentElement.classList.toggle('light', t === 'light');
+          document.documentElement.classList.toggle("dark", t === "dark");
+          document.documentElement.classList.toggle("light", t === "light");
         }, theme);
         // freeze animations for stable diffs
         await page.addStyleTag({
@@ -49,20 +49,20 @@ for (const theme of themes) {
         await expect(page).toHaveScreenshot(`${surface.name}-${theme}.png`, {
           fullPage: false,
           maxDiffPixelRatio: 0.02,
-          animations: 'disabled',
+          animations: "disabled",
         });
       });
     }
 
     test(`primitives gallery matches baseline`, async ({ page }) => {
-      await page.goto(BASE, { waitUntil: 'networkidle' });
+      await page.goto(BASE, { waitUntil: "networkidle" });
       await page.evaluate((t) => {
-        document.documentElement.classList.toggle('dark', t === 'dark');
-        document.documentElement.classList.toggle('light', t === 'light');
-        const host = document.createElement('div');
-        host.id = 'vr-gallery';
+        document.documentElement.classList.toggle("dark", t === "dark");
+        document.documentElement.classList.toggle("light", t === "light");
+        const host = document.createElement("div");
+        host.id = "vr-gallery";
         host.style.cssText =
-          'position:fixed;inset:0;z-index:99999;background:hsl(var(--background));color:hsl(var(--foreground));padding:32px;display:grid;gap:16px;grid-template-columns:repeat(2,minmax(0,1fr));font-family:inherit;';
+          "position:fixed;inset:0;z-index:99999;background:hsl(var(--background));color:hsl(var(--foreground));padding:32px;display:grid;gap:16px;grid-template-columns:repeat(2,minmax(0,1fr));font-family:inherit;";
         host.innerHTML = `
           <button class="ui-btn" style="height:40px;padding:0 16px;border-radius:12px;background:hsl(var(--primary));color:hsl(var(--primary-foreground));border:0;">Primary</button>
           <button class="ui-btn" style="height:40px;padding:0 16px;border-radius:12px;background:hsl(var(--secondary));color:hsl(var(--secondary-foreground));border:1px solid hsl(var(--border));">Secondary</button>
@@ -77,10 +77,10 @@ for (const theme of themes) {
         content: `*,*::before,*::after{animation-duration:0s !important;transition-duration:0s !important;}`,
       });
       await page.waitForTimeout(200);
-      const gallery = page.locator('#vr-gallery');
+      const gallery = page.locator("#vr-gallery");
       await expect(gallery).toHaveScreenshot(`primitives-${theme}.png`, {
         maxDiffPixelRatio: 0.02,
-        animations: 'disabled',
+        animations: "disabled",
       });
     });
   });

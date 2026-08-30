@@ -21,14 +21,14 @@ Full design: [`specs/001-sdr-integration/`](../specs/001-sdr-integration/)
 Set these in the server environment / `.env` (they are read via `process.env`
 in server modules only):
 
-| Key | Purpose |
-|---|---|
-| `SDR_BASE_URL` | Base URL of the SDR service (default; a per-workspace override may be stored in `workspace_sdr.sdr_base_url`) |
-| `SDR_ADMIN_TOKEN` | Server-only admin token used to mint per-workspace SDR API keys (`POST /api/v1/admin/api-keys`) — never used for tenant traffic |
-| `SDR_SECRET_ENCRYPTION_KEY` | Base64 key for AES-256-GCM encryption of per-workspace keys + webhook secrets at rest in `workspace_sdr` |
-| `SDR_WEBHOOK_BASE_URL` | Public base URL the SDR registers as the delivery callback receiver for each workspace |
-| `CRON_SECRET` | Guards the reconciliation sweep (`/api/public/hooks/sdr-reconcile`) |
-| `FEATURE_FLAG_SDR_ENABLED` | `"true"`/`"1"`/`"yes"` enables the real SDR path; **off by default** so the platform never regresses during rollout (FR-017). Per-workspace override: `FEATURE_FLAG_SDR_ENABLED_WS_<workspaceId>`. |
+| Key                         | Purpose                                                                                                                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SDR_BASE_URL`              | Base URL of the SDR service (default; a per-workspace override may be stored in `workspace_sdr.sdr_base_url`)                                                                                      |
+| `SDR_ADMIN_TOKEN`           | Server-only admin token used to mint per-workspace SDR API keys (`POST /api/v1/admin/api-keys`) — never used for tenant traffic                                                                    |
+| `SDR_SECRET_ENCRYPTION_KEY` | Base64 key for AES-256-GCM encryption of per-workspace keys + webhook secrets at rest in `workspace_sdr`                                                                                           |
+| `SDR_WEBHOOK_BASE_URL`      | Public base URL the SDR registers as the delivery callback receiver for each workspace                                                                                                             |
+| `CRON_SECRET`               | Guards the reconciliation sweep (`/api/public/hooks/sdr-reconcile`)                                                                                                                                |
+| `FEATURE_FLAG_SDR_ENABLED`  | `"true"`/`"1"`/`"yes"` enables the real SDR path; **off by default** so the platform never regresses during rollout (FR-017). Per-workspace override: `FEATURE_FLAG_SDR_ENABLED_WS_<workspaceId>`. |
 
 ### How it works
 
@@ -72,6 +72,7 @@ The repo's `.env` file is **gitignored** (it holds secrets like the Supabase ser
 **Never commit `.env` to the repo, even if it's private.** Git history is forever, and the Supabase service-role key + SDR encryption key would be exposed to anyone with future read access.
 
 **Safe procedure:**
+
 1. Ask Junaid to share the "RavalAI local dev .env" item in 1Password
 2. Copy each line from 1Password into your local `.env`
 3. Run `npm run setup` to verify
@@ -96,6 +97,7 @@ npm run dev                       # http://localhost:8080
 ```
 
 **Windows PowerShell notes:**
+
 - `npm run setup` auto-detects Windows and runs `scripts/setup.ps1` under the hood (no need to manually invoke PowerShell)
 - If you see a script execution policy error when running `setup.ps1` directly, run `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` once
 - The Node.js-based wrappers (`scripts/setup.cjs`, `scripts/predev-check.cjs`) work on every platform and don't need PowerShell at all
@@ -103,11 +105,11 @@ npm run dev                       # http://localhost:8080
 
 **Per-platform commands** (if you want to run the underlying script directly):
 
-| Platform | Setup | Predev check |
-|---|---|---|
-| Linux / macOS | `bash scripts/setup.sh` | `bash scripts/predev-check.sh` |
+| Platform           | Setup                                                        | Predev check                                                        |
+| ------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Linux / macOS      | `bash scripts/setup.sh`                                      | `bash scripts/predev-check.sh`                                      |
 | Windows PowerShell | `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1` | `powershell -ExecutionPolicy Bypass -File scripts\predev-check.ps1` |
-| Any (Node.js) | `node scripts/setup.cjs` | `node scripts/predev-check.cjs` |
+| Any (Node.js)      | `node scripts/setup.cjs`                                     | `node scripts/predev-check.cjs`                                     |
 
 ### What `npm run setup` does
 
@@ -121,6 +123,7 @@ It's idempotent — safe to run multiple times.
 ### What `npm run dev` does before starting Vite
 
 A `predev` hook automatically runs `scripts/predev-check.sh`, which:
+
 - Verifies `.env` exists and has real (non-placeholder) values
 - Verifies `node_modules` is installed
 - Pings the SDR tunnel to confirm reachability
@@ -129,23 +132,23 @@ If anything is wrong, it prints a loud warning. The dev server still starts (so 
 
 ### Test login (works once `.env` has real values)
 
-| Field | Value |
-|---|---|
-| Email | `junaidsajjad2298@gmail.com` |
-| Password | `Junaid@1234` |
-| URL | `http://localhost:8080/login` |
+| Field    | Value                         |
+| -------- | ----------------------------- |
+| Email    | `junaidsajjad2298@gmail.com`  |
+| Password | `Junaid@1234`                 |
+| URL      | `http://localhost:8080/login` |
 
 If login doesn't work after entering these credentials, the issue is almost always in `.env` — open your browser's DevTools (F12), check the Console for `[Supabase] .env contains placeholder values` and fix accordingly.
 
 ### Common "404 on /login" causes (and fixes)
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| Page loads, form submits, nothing happens | `.env` has placeholder values | Replace `YOUR_*` with real values in `.env`, restart `npm run dev` |
-| Hard-refresh (Ctrl+Shift+R) fixes it | Browser cached the old page | Always do a hard refresh after pulling new code |
-| Page loads but text is unstyled | Vite build cache stale | `rm -rf node_modules/.vite && npm run dev` |
-| `Cannot find module '@/...'` | TS path aliases not resolving | `rm -rf node_modules && npm install && npm run dev` |
-| Port 8080 already in use | Another service on 8080 | `lsof -i :8080` to find the process, or change the port in `vite.config.ts` |
+| Symptom                                   | Cause                         | Fix                                                                         |
+| ----------------------------------------- | ----------------------------- | --------------------------------------------------------------------------- |
+| Page loads, form submits, nothing happens | `.env` has placeholder values | Replace `YOUR_*` with real values in `.env`, restart `npm run dev`          |
+| Hard-refresh (Ctrl+Shift+R) fixes it      | Browser cached the old page   | Always do a hard refresh after pulling new code                             |
+| Page loads but text is unstyled           | Vite build cache stale        | `rm -rf node_modules/.vite && npm run dev`                                  |
+| `Cannot find module '@/...'`              | TS path aliases not resolving | `rm -rf node_modules && npm install && npm run dev`                         |
+| Port 8080 already in use                  | Another service on 8080       | `lsof -i :8080` to find the process, or change the port in `vite.config.ts` |
 
 ### Development
 

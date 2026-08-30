@@ -51,7 +51,12 @@ function AuthCallbackPage() {
     async function finishSignIn() {
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
       const queryParams = new URLSearchParams(window.location.search);
-      const error = decodeOAuthError(hashParams.get("error_description") || queryParams.get("error_description") || hashParams.get("error") || queryParams.get("error"));
+      const error = decodeOAuthError(
+        hashParams.get("error_description") ||
+          queryParams.get("error_description") ||
+          hashParams.get("error") ||
+          queryParams.get("error"),
+      );
 
       if (error) {
         setState({
@@ -76,7 +81,10 @@ function AuthCallbackPage() {
       } else {
         const authCode = queryParams.get("code");
         if (!authCode) {
-          setState({ status: "error", message: "Sign-in did not return an authorization code. Please try again." });
+          setState({
+            status: "error",
+            message: "Sign-in did not return an authorization code. Please try again.",
+          });
           return;
         }
 
@@ -92,7 +100,10 @@ function AuthCallbackPage() {
 
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
-        setState({ status: "error", message: "Sign-in did not return a valid session. Please try again." });
+        setState({
+          status: "error",
+          message: "Sign-in did not return a valid session. Please try again.",
+        });
         return;
       }
 
@@ -110,13 +121,17 @@ function AuthCallbackPage() {
     }
 
     finishSignIn();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [navigate, nextPath]);
 
   return (
     <div className="grid min-h-dvh place-items-center bg-background px-6 text-foreground">
       <div className="w-full max-w-md rounded-3xl border border-border/70 bg-card/80 p-8 text-center shadow-card backdrop-blur-xl">
-        <div className="mb-6 flex justify-center"><Logo height={32} /></div>
+        <div className="mb-6 flex justify-center">
+          <Logo height={32} />
+        </div>
         {state.status === "loading" ? (
           <Loader2 className="mx-auto h-9 w-9 animate-spin text-primary" />
         ) : state.status === "success" ? (
@@ -124,12 +139,18 @@ function AuthCallbackPage() {
         ) : (
           <AlertTriangle className="mx-auto h-9 w-9 text-amber-500" />
         )}
-        <h1 className="mt-5 text-xl font-semibold">{state.status === "error" ? "Sign-in needs setup" : "Signing you in"}</h1>
+        <h1 className="mt-5 text-xl font-semibold">
+          {state.status === "error" ? "Sign-in needs setup" : "Signing you in"}
+        </h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{state.message}</p>
         {state.status === "error" && (
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <Button asChild><Link to="/login">Back to login</Link></Button>
-            <Button variant="outline" asChild><Link to="/signup">Create account</Link></Button>
+            <Button asChild>
+              <Link to="/login">Back to login</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to="/signup">Create account</Link>
+            </Button>
           </div>
         )}
       </div>

@@ -45,8 +45,7 @@ function LogoBase({ className = "", height: heightProp = 18, markOnly = false }:
         <span
           className="text-foreground leading-none"
           style={{
-            fontFamily:
-              '"Inter Tight", ui-sans-serif, system-ui, -apple-system, sans-serif',
+            fontFamily: '"Inter Tight", ui-sans-serif, system-ui, -apple-system, sans-serif',
             fontSize: textCss,
             fontWeight: 600,
             letterSpacing: "-0.022em",

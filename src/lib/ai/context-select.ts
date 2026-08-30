@@ -11,11 +11,11 @@
 
 export type CtxSection = {
   id: string;
-  label: string;                 // section heading in output
-  body: string;                  // section content (already stringified)
-  keywords: string[];            // triggers that activate this section
-  baseScore?: number;            // >0 always considered (still competes on budget)
-  maxChars?: number;             // per-section cap
+  label: string; // section heading in output
+  body: string; // section content (already stringified)
+  keywords: string[]; // triggers that activate this section
+  baseScore?: number; // >0 always considered (still competes on budget)
+  maxChars?: number; // per-section cap
 };
 
 export type CtxSources = {
@@ -30,11 +30,63 @@ export type CtxSources = {
 };
 
 const STOP = new Set([
-  "the","a","an","and","or","but","of","to","in","on","for","with","is","are",
-  "be","this","that","it","as","at","by","i","we","you","my","our","your",
-  "please","can","could","would","should","do","does","did","have","has","had",
-  "make","help","need","want","give","show","tell","use","about","from","into",
-  "some","any","also","just","not","no","yes","ok",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "but",
+  "of",
+  "to",
+  "in",
+  "on",
+  "for",
+  "with",
+  "is",
+  "are",
+  "be",
+  "this",
+  "that",
+  "it",
+  "as",
+  "at",
+  "by",
+  "i",
+  "we",
+  "you",
+  "my",
+  "our",
+  "your",
+  "please",
+  "can",
+  "could",
+  "would",
+  "should",
+  "do",
+  "does",
+  "did",
+  "have",
+  "has",
+  "had",
+  "make",
+  "help",
+  "need",
+  "want",
+  "give",
+  "show",
+  "tell",
+  "use",
+  "about",
+  "from",
+  "into",
+  "some",
+  "any",
+  "also",
+  "just",
+  "not",
+  "no",
+  "yes",
+  "ok",
 ]);
 
 function tokens(s: string): Set<string> {

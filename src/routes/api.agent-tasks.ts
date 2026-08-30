@@ -4,14 +4,25 @@ import { jsonError, requireUserId } from "@/server/api-auth";
 import { buildAgentTasks } from "@/lib/ai/deterministic-suggestions";
 
 const safeText = (max: number) =>
-  z.string().min(1).max(max).transform((s) =>
-    s.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/[`<>]/g, "").replace(/\s+/g, " ").trim(),
-  );
+  z
+    .string()
+    .min(1)
+    .max(max)
+    .transform((s) =>
+      s
+        .replace(/[\u0000-\u001F\u007F]/g, " ")
+        .replace(/[`<>]/g, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    );
 
 const BodySchema = z.object({
   agentName: safeText(60),
   agentRole: safeText(120),
-  missions: z.array(z.object({ label: safeText(80), description: safeText(280) })).min(1).max(10),
+  missions: z
+    .array(z.object({ label: safeText(80), description: safeText(280) }))
+    .min(1)
+    .max(10),
   existing: z.array(safeText(160)).max(20).optional(),
 });
 
@@ -23,8 +34,11 @@ export const Route = createFileRoute("/api/agent-tasks")({
         if (!auth.ok) return auth.response;
 
         let body: z.infer<typeof BodySchema>;
-        try { body = BodySchema.parse(await request.json()); }
-        catch { return jsonError(400, "Invalid request body"); }
+        try {
+          body = BodySchema.parse(await request.json());
+        } catch {
+          return jsonError(400, "Invalid request body");
+        }
 
         // Deterministic — no LLM. Templated tasks from missions + existing dedupe.
         const tasks = buildAgentTasks(body);

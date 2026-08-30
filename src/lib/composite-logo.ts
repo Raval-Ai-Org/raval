@@ -46,10 +46,7 @@ export async function compositeLogoOnImage(
 ): Promise<string> {
   if (typeof document === "undefined") return baseDataUrl;
   try {
-    const [base, logo] = await Promise.all([
-      loadImage(baseDataUrl),
-      loadImage(opts.logoUrl),
-    ]);
+    const [base, logo] = await Promise.all([loadImage(baseDataUrl), loadImage(opts.logoUrl)]);
     const { w, h } = dimensions(opts.size);
     const canvas = document.createElement("canvas");
     canvas.width = w;
@@ -69,9 +66,16 @@ export async function compositeLogoOnImage(
 
     let x = w - logoW - inset;
     let y = h - logoH - inset;
-    if (corner === "tl") { x = inset; y = inset; }
-    else if (corner === "tr") { x = w - logoW - inset; y = inset; }
-    else if (corner === "bl") { x = inset; y = h - logoH - inset; }
+    if (corner === "tl") {
+      x = inset;
+      y = inset;
+    } else if (corner === "tr") {
+      x = w - logoW - inset;
+      y = inset;
+    } else if (corner === "bl") {
+      x = inset;
+      y = h - logoH - inset;
+    }
 
     // Optional soft chip behind the logo for legibility on busy scenes.
     if (opts.chip) {
@@ -89,7 +93,14 @@ export async function compositeLogoOnImage(
   }
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);

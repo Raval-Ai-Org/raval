@@ -18,7 +18,8 @@ const BASE = "http://localhost:8080";
 const SUPA_URL = process.env.SUPABASE_URL!;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const USER_TOKEN = process.env.LOVABLE_BROWSER_SUPABASE_ACCESS_TOKEN!;
-const PUBLISHABLE = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
+const PUBLISHABLE =
+  process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
 
 const haveEnv = Boolean(SUPA_URL && SERVICE_KEY && USER_TOKEN && PUBLISHABLE);
 
@@ -40,7 +41,9 @@ async function pickWorkspaceId(): Promise<string> {
 }
 
 async function createShare(overrides: Record<string, unknown> = {}): Promise<{
-  id: string; slug: string; token: string;
+  id: string;
+  slug: string;
+  token: string;
 }> {
   const ctx = await pwRequest.newContext();
   const workspaceId = await pickWorkspaceId();
@@ -101,8 +104,14 @@ test.describe("Client share end-to-end", () => {
       "User-Agent": "node-fetch",
     };
     for (const id of createdShareIds) {
-      await fetch(`${SUPA_URL}/rest/v1/client_share_items?share_id=eq.${id}`, { method: "DELETE", headers });
-      await fetch(`${SUPA_URL}/rest/v1/client_events?share_id=eq.${id}`, { method: "DELETE", headers });
+      await fetch(`${SUPA_URL}/rest/v1/client_share_items?share_id=eq.${id}`, {
+        method: "DELETE",
+        headers,
+      });
+      await fetch(`${SUPA_URL}/rest/v1/client_events?share_id=eq.${id}`, {
+        method: "DELETE",
+        headers,
+      });
       await fetch(`${SUPA_URL}/rest/v1/client_shares?id=eq.${id}`, { method: "DELETE", headers });
     }
   });
@@ -167,7 +176,9 @@ test.describe("Client share end-to-end", () => {
     expect(p.status()).toBe(410);
   });
 
-  test("approvals disabled → POST approve returns 403; comments disabled → 403", async ({ request }) => {
+  test("approvals disabled → POST approve returns 403; comments disabled → 403", async ({
+    request,
+  }) => {
     const { slug, token } = await createShare({ allowApprovals: false, allowComments: false });
 
     // A read is still fine so the client can view the share.

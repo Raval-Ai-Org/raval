@@ -95,7 +95,9 @@ async function primeSuggestions(
           JSON.stringify({ at: Date.now(), items }),
         );
         window.localStorage.removeItem("studio:suggest-dismissed");
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
     },
     { wsId: WS_ID, items },
   );
@@ -140,45 +142,67 @@ const EXTREME_SUGGESTIONS: readonly SeededSuggestion[] = [
   },
 ];
 
-
 async function stubBackend(context: import("@playwright/test").BrowserContext) {
-  await context.route(new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`), async (route: Route) => {
-    const req = route.request();
-    const url = req.url();
-    const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
+  await context.route(
+    new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`),
+    async (route: Route) => {
+      const req = route.request();
+      const url = req.url();
+      const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
 
-    if (url.includes("/auth/v1/user")) {
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession().user) });
-    }
-    if (url.includes("/auth/v1/token")) {
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession()) });
-    }
-    if (url.includes("/auth/v1/logout")) {
-      return route.fulfill({ status: 204, body: "" });
-    }
-    if (url.includes("/rest/v1/workspaces")) {
-      const row = {
-        id: WS_ID,
-        name: "Acme Studio",
-        website_url: null,
-        industry: null,
-        onboarded_at: "2024-01-01T00:00:00Z",
-        first_prompt: null,
-      };
+      if (url.includes("/auth/v1/user")) {
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession().user),
+        });
+      }
+      if (url.includes("/auth/v1/token")) {
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession()),
+        });
+      }
+      if (url.includes("/auth/v1/logout")) {
+        return route.fulfill({ status: 204, body: "" });
+      }
+      if (url.includes("/rest/v1/workspaces")) {
+        const row = {
+          id: WS_ID,
+          name: "Acme Studio",
+          website_url: null,
+          industry: null,
+          onboarded_at: "2024-01-01T00:00:00Z",
+          first_prompt: null,
+        };
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(wantsSingle ? row : [row]),
+        });
+      }
       return route.fulfill({
         status: 200,
         headers: JSON_HEADERS,
-        body: JSON.stringify(wantsSingle ? row : [row]),
+        body: wantsSingle ? "null" : "[]",
       });
-    }
-    return route.fulfill({ status: 200, headers: JSON_HEADERS, body: wantsSingle ? "null" : "[]" });
-  });
+    },
+  );
 
   await context.route("**/api/clarify", (route) =>
-    route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ needs_clarification: false }) }),
+    route.fulfill({
+      status: 200,
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ needs_clarification: false }),
+    }),
   );
   await context.route("**/api/chat", (route) =>
-    route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body: "data: [DONE]\n" }),
+    route.fulfill({
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+      body: "data: [DONE]\n",
+    }),
   );
   await context.route("**/api/geo-audit", (route) =>
     route.fulfill({ status: 200, headers: JSON_HEADERS, body: "{}" }),
@@ -202,9 +226,17 @@ async function seedSession(page: import("@playwright/test").Page) {
         window.localStorage.setItem("reach-theme", "light");
         // @ts-expect-error test stub
         window.WebSocket = function () {
-          return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 3 };
+          return {
+            addEventListener() {},
+            removeEventListener() {},
+            send() {},
+            close() {},
+            readyState: 3,
+          };
         };
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
     },
     { storageKey: STORAGE_KEY, sess: fakeSession(), wsId: WS_ID },
   );
@@ -248,9 +280,24 @@ async function forceRailVisibleForMobile(page: import("@playwright/test").Page) 
 }
 
 const CASES = [
-  { name: "mobile", viewport: { width: 375, height: 812 }, snapshot: "studio-suggestions-mobile.png", forceMobile: true },
-  { name: "tablet", viewport: { width: 1280, height: 900 }, snapshot: "studio-suggestions-tablet.png", forceMobile: false },
-  { name: "desktop", viewport: { width: 1440, height: 900 }, snapshot: "studio-suggestions-desktop.png", forceMobile: false },
+  {
+    name: "mobile",
+    viewport: { width: 375, height: 812 },
+    snapshot: "studio-suggestions-mobile.png",
+    forceMobile: true,
+  },
+  {
+    name: "tablet",
+    viewport: { width: 1280, height: 900 },
+    snapshot: "studio-suggestions-tablet.png",
+    forceMobile: false,
+  },
+  {
+    name: "desktop",
+    viewport: { width: 1440, height: 900 },
+    snapshot: "studio-suggestions-desktop.png",
+    forceMobile: false,
+  },
 ] as const;
 
 test.describe("Studio rail suggestion cards", () => {
@@ -266,10 +313,16 @@ test.describe("Studio rail suggestion cards", () => {
       if (c.forceMobile) await forceRailVisibleForMobile(page);
 
       // Wait for the rail + the seeded suggestion cards to render.
-      await expect(page.getByRole("button", { name: /create a new canvas/i })).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByRole("heading", { name: /suggestions for you/i })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole("button", { name: /create a new canvas/i })).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page.getByRole("heading", { name: /suggestions for you/i })).toBeVisible({
+        timeout: 15_000,
+      });
       // Ensure at least the seeded cards mounted before snapshotting.
-      await expect(page.getByRole("button", { name: /Run suggestion:/i }).first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole("button", { name: /Run suggestion:/i }).first()).toBeVisible({
+        timeout: 15_000,
+      });
       await page.waitForTimeout(300);
 
       await freezeVisuals(page);
@@ -296,9 +349,24 @@ test.describe("Studio rail suggestion cards", () => {
  *      when Tailwind's `line-clamp-*` failed to emit `display:-webkit-box`.
  */
 const EXTREME_CASES = [
-  { name: "mobile", viewport: { width: 375, height: 812 }, snapshot: "studio-suggestions-extreme-mobile.png", forceMobile: true },
-  { name: "tablet", viewport: { width: 1280, height: 900 }, snapshot: "studio-suggestions-extreme-tablet.png", forceMobile: false },
-  { name: "desktop", viewport: { width: 1440, height: 900 }, snapshot: "studio-suggestions-extreme-desktop.png", forceMobile: false },
+  {
+    name: "mobile",
+    viewport: { width: 375, height: 812 },
+    snapshot: "studio-suggestions-extreme-mobile.png",
+    forceMobile: true,
+  },
+  {
+    name: "tablet",
+    viewport: { width: 1280, height: 900 },
+    snapshot: "studio-suggestions-extreme-tablet.png",
+    forceMobile: false,
+  },
+  {
+    name: "desktop",
+    viewport: { width: 1440, height: 900 },
+    snapshot: "studio-suggestions-extreme-desktop.png",
+    forceMobile: false,
+  },
 ] as const;
 
 // Card min-height in StudioRail.tsx is min-h-[72px]; a 1px tolerance covers
@@ -308,7 +376,10 @@ const HEIGHT_TOLERANCE = 1;
 
 test.describe("Studio rail suggestion cards — extreme content", () => {
   for (const c of EXTREME_CASES) {
-    test(`${c.name} (${c.viewport.width}px) never overflows or jitters`, async ({ page, context }) => {
+    test(`${c.name} (${c.viewport.width}px) never overflows or jitters`, async ({
+      page,
+      context,
+    }) => {
       await page.setViewportSize(c.viewport);
       await stubBackend(context);
       await seedSession(page);
@@ -318,8 +389,12 @@ test.describe("Studio rail suggestion cards — extreme content", () => {
 
       if (c.forceMobile) await forceRailVisibleForMobile(page);
 
-      await expect(page.getByRole("button", { name: /create a new canvas/i })).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByRole("heading", { name: /suggestions for you/i })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole("button", { name: /create a new canvas/i })).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page.getByRole("heading", { name: /suggestions for you/i })).toBeVisible({
+        timeout: 15_000,
+      });
       // At minimum every seeded card must have mounted (the hook also merges
       // runtime-computed defaults, so allow >=).
       // Wait for every seeded card specifically — the hook merges seeded
@@ -347,7 +422,9 @@ test.describe("Studio rail suggestion cards — extreme content", () => {
         return runBtns.map((run) => {
           // The card is the flex row containing the icon, text button and actions.
           const card = run.closest("div")!.parentElement as HTMLElement;
-          const railWidth = (card.parentElement?.parentElement as HTMLElement | null)?.getBoundingClientRect().width ?? 0;
+          const railWidth =
+            (card.parentElement?.parentElement as HTMLElement | null)?.getBoundingClientRect()
+              .width ?? 0;
           const textBtn = card.querySelector<HTMLButtonElement>("button[title]");
           const spans = Array.from(card.querySelectorAll<HTMLSpanElement>("button[title] > span"));
           const labelSpan = spans[0];
@@ -386,7 +463,9 @@ test.describe("Studio rail suggestion cards — extreme content", () => {
       const maxH = Math.max(...heights);
 
       // 1) Row-height jitter guard: every card is the same height.
-      expect(maxH - minH, `card heights jitter: ${JSON.stringify(heights)}`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+      expect(maxH - minH, `card heights jitter: ${JSON.stringify(heights)}`).toBeLessThanOrEqual(
+        HEIGHT_TOLERANCE,
+      );
       // 2) Cards honour the min-h-[72px] contract exactly (no accidental growth).
       expect(minH).toBeGreaterThanOrEqual(EXPECTED_CARD_HEIGHT - HEIGHT_TOLERANCE);
       expect(maxH).toBeLessThanOrEqual(EXPECTED_CARD_HEIGHT + HEIGHT_TOLERANCE);
@@ -395,12 +474,16 @@ test.describe("Studio rail suggestion cards — extreme content", () => {
         const m = bySeedLabel.get(seed.label)!;
         // 3) No horizontal overflow, even with unbroken URL/token labels.
         expect(m.cardHorizOverflow, `card ${seed.id} overflowed horizontally`).toBe(false);
-        expect(m.textBtnHorizOverflow, `text button ${seed.id} overflowed horizontally`).toBe(false);
+        expect(m.textBtnHorizOverflow, `text button ${seed.id} overflowed horizontally`).toBe(
+          false,
+        );
         expect(m.cardWidth, `card ${seed.id} wider than rail`).toBeLessThanOrEqual(m.railWidth);
         // 4) Line clamps hold: label ≤ 2 lines (~40px), hint ≤ 1 line (~18px).
         //    Bounds are generous to absorb font-metric drift across engines
         //    without letting a real regression slip through.
-        expect(m.labelClientH, `label span for ${seed.id} exceeded 2 lines`).toBeLessThanOrEqual(40);
+        expect(m.labelClientH, `label span for ${seed.id} exceeded 2 lines`).toBeLessThanOrEqual(
+          40,
+        );
         expect(m.hintClientH, `hint span for ${seed.id} exceeded 1 line`).toBeLessThanOrEqual(18);
         // 5) Long text is actually being clipped (proves clamp is active,
         //    not just that the text happened to be short).
@@ -424,4 +507,3 @@ test.describe("Studio rail suggestion cards — extreme content", () => {
     });
   }
 });
-

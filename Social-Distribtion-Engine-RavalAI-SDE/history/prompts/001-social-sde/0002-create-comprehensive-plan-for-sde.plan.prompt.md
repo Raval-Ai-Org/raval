@@ -16,13 +16,13 @@ links:
   adr: null
   pr: null
 files:
- - specs/001-social-sde/plan.md
- - specs/001-social-sde/research.md
- - specs/001-social-sde/data-model.md
- - specs/001-social-sde/quickstart.md
- - specs/001-social-sde/contracts/openapi.yaml
+  - specs/001-social-sde/plan.md
+  - specs/001-social-sde/research.md
+  - specs/001-social-sde/data-model.md
+  - specs/001-social-sde/quickstart.md
+  - specs/001-social-sde/contracts/openapi.yaml
 tests:
- - none (planning phase only)
+  - none (planning phase only)
 ---
 
 ## Prompt
@@ -30,6 +30,7 @@ tests:
 okay then continue please and go for creating plan for this specifications that already gave me and do make sure it fully robust one and excellent one and also can be build fastest and also in the best of our interest okay
 
 Plus ultrathink analysis on:
+
 1. How to make the plan more powerful
 2. How to deliver the module to integration teams
 3. What integration packaging is needed
@@ -39,6 +40,7 @@ Plus ultrathink analysis on:
 Completed a comprehensive, integration-first implementation plan that includes:
 
 **Plan Phase Outputs**:
+
 - `plan.md`: Full 9-section architecture + 6-day build order with improvements for integration, consumer experience, delivery readiness
 - `research.md`: Research findings on queue-first execution, DB-as-truth, registry dispatch, token encryption, backoff strategy, webhook signing
 - `data-model.md`: 5 core entities (accounts, posts, post_targets, webhook_endpoints, delivery_log) with concurrency guarantees and example workflows
@@ -46,6 +48,7 @@ Completed a comprehensive, integration-first implementation plan that includes:
 - `contracts/openapi.yaml`: Full OpenAPI 3.1 contract with error standardization, status replay, and consumer-friendly design
 
 **Integration-First Improvements Applied**:
+
 1. Module Boundary Layer: Clear ownership (publish, schedule, retry, token lifecycle, webhooks) vs not-owned (content generation, user auth, analytics)
 2. Consumer Error Contract: Standardized error response with error_code, detail, how_to_fix, field, platform
 3. Status Replay APIs: Enhanced GET /jobs/{id} with full event timeline and target details
@@ -56,6 +59,7 @@ Completed a comprehensive, integration-first implementation plan that includes:
 8. Day-by-Day Build Order: Optimized for fastest value (DryRun → publish → schedule → webhooks → platforms → integration package)
 
 **How the Module Will Be Delivered**:
+
 - Deployed service (Docker Compose on VPS)
 - OpenAPI contract (auto-generated, machine-readable)
 - Integration guide (step-by-step for RavalAI backend team)
@@ -66,6 +70,7 @@ Completed a comprehensive, integration-first implementation plan that includes:
 - Operational runbook (health checks, logs, metrics, recovery steps)
 
 **Key Architectural Decisions Justified**:
+
 - Queue-first execution (not direct API calls from handlers)
 - PostgreSQL as single source of truth (not Redis, not external backend)
 - Registry-based adapter dispatch (not factory pattern or direct imports)

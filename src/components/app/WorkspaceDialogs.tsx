@@ -56,7 +56,11 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
 }
 
 function RenameDialog({
-  open, onOpenChange, workspaceId, currentName, onRenamed,
+  open,
+  onOpenChange,
+  workspaceId,
+  currentName,
+  onRenamed,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -68,17 +72,24 @@ function RenameDialog({
   const [name, setName] = useState(currentName);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (open) setName(currentName); }, [open, currentName]);
+  useEffect(() => {
+    if (open) setName(currentName);
+  }, [open, currentName]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!workspaceId) return;
     const trimmed = name.trim();
-    if (!trimmed || trimmed === currentName) { onOpenChange(false); return; }
+    if (!trimmed || trimmed === currentName) {
+      onOpenChange(false);
+      return;
+    }
     setSaving(true);
     try {
       await rename({ data: { workspaceId, name: trimmed } });
-      try { localStorage.setItem("workspace:name", trimmed); } catch {}
+      try {
+        localStorage.setItem("workspace:name", trimmed);
+      } catch {}
       onRenamed?.(trimmed);
       toast.success("Workspace renamed");
       onOpenChange(false);
@@ -114,7 +125,9 @@ function RenameDialog({
           />
         </div>
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button type="submit" loading={saving} disabled={!name.trim() || !workspaceId}>
             Save changes
           </Button>
@@ -125,10 +138,18 @@ function RenameDialog({
 }
 
 function DetailsDialog({
-  open, onOpenChange, workspaceId,
-}: { open: boolean; onOpenChange: (v: boolean) => void; workspaceId: string | null }) {
+  open,
+  onOpenChange,
+  workspaceId,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  workspaceId: string | null;
+}) {
   const fetchDetails = useServerFn(getWorkspaceDetails);
-  const [details, setDetails] = useState<Awaited<ReturnType<typeof getWorkspaceDetails>> | null>(null);
+  const [details, setDetails] = useState<Awaited<ReturnType<typeof getWorkspaceDetails>> | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -140,15 +161,39 @@ function DetailsDialog({
       .finally(() => setLoading(false));
   }, [open, workspaceId, fetchDetails]);
 
-  const rows: Array<[string, React.ReactNode]> = details ? [
-    ["Name", <span className="font-medium">{details.name}</span>],
-    ["Plan", <span className="inline-flex items-center rounded-full border border-border/60 bg-secondary/50 px-2 py-0.5 text-[11px] font-medium capitalize">{details.plan}</span>],
-    ["Members", <span className="font-medium tabular-nums">{details.memberCount}</span>],
-    ["Your role", <span className="font-medium">{details.isOwner ? "Owner" : "Member"}</span>],
-    ...(details.websiteUrl ? [["Website", <span className="truncate font-medium">{details.websiteUrl}</span>] as [string, React.ReactNode] ] : []),
-    ...(details.industry ? [["Industry", <span className="font-medium">{details.industry}</span>] as [string, React.ReactNode] ] : []),
-    ["Created", <span className="font-medium">{new Date(details.createdAt).toLocaleDateString()}</span>],
-  ] : [];
+  const rows: Array<[string, React.ReactNode]> = details
+    ? [
+        ["Name", <span className="font-medium">{details.name}</span>],
+        [
+          "Plan",
+          <span className="inline-flex items-center rounded-full border border-border/60 bg-secondary/50 px-2 py-0.5 text-[11px] font-medium capitalize">
+            {details.plan}
+          </span>,
+        ],
+        ["Members", <span className="font-medium tabular-nums">{details.memberCount}</span>],
+        ["Your role", <span className="font-medium">{details.isOwner ? "Owner" : "Member"}</span>],
+        ...(details.websiteUrl
+          ? [
+              ["Website", <span className="truncate font-medium">{details.websiteUrl}</span>] as [
+                string,
+                React.ReactNode,
+              ],
+            ]
+          : []),
+        ...(details.industry
+          ? [
+              ["Industry", <span className="font-medium">{details.industry}</span>] as [
+                string,
+                React.ReactNode,
+              ],
+            ]
+          : []),
+        [
+          "Created",
+          <span className="font-medium">{new Date(details.createdAt).toLocaleDateString()}</span>,
+        ],
+      ]
+    : [];
 
   return (
     <AppModalShell
@@ -173,7 +218,10 @@ function DetailsDialog({
       ) : (
         <dl className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card/40">
           {rows.map(([k, v]) => (
-            <div key={k} className="flex items-center justify-between gap-4 px-3.5 py-2.5 text-[13px]">
+            <div
+              key={k}
+              className="flex items-center justify-between gap-4 px-3.5 py-2.5 text-[13px]"
+            >
               <dt className="text-muted-foreground">{k}</dt>
               <dd className="truncate text-right">{v}</dd>
             </div>
@@ -181,13 +229,21 @@ function DetailsDialog({
         </dl>
       )}
       <div className="mt-4 flex justify-end">
-        <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          Close
+        </Button>
       </div>
     </AppModalShell>
   );
 }
 
-function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+function SettingsDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
   const [notifications, setNotifications] = useState(true);
   const [sounds, setSounds] = useState(true);
 
@@ -200,7 +256,9 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
   }, [open]);
 
   const save = (key: string, value: boolean) => {
-    try { localStorage.setItem(key, value ? "1" : "0"); } catch {}
+    try {
+      localStorage.setItem(key, value ? "1" : "0");
+    } catch {}
   };
 
   return (
@@ -219,13 +277,19 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
           label="Approval notifications"
           description="Toast me when an agent needs a sign-off."
           checked={notifications}
-          onChange={(v) => { setNotifications(v); save("settings:notifications", v); }}
+          onChange={(v) => {
+            setNotifications(v);
+            save("settings:notifications", v);
+          }}
         />
         <ToggleRow
           label="Interface sounds"
           description="Subtle chimes when actions complete."
           checked={sounds}
-          onChange={(v) => { setSounds(v); save("settings:sounds", v); }}
+          onChange={(v) => {
+            setSounds(v);
+            save("settings:sounds", v);
+          }}
         />
       </ul>
       <p className="mt-3 text-[11.5px] text-muted-foreground">
@@ -239,8 +303,16 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
 }
 
 function ToggleRow({
-  label, description, checked, onChange,
-}: { label: string; description: string; checked: boolean; onChange: (v: boolean) => void }) {
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <li className="flex items-start justify-between gap-3 px-3.5 py-3">
       <div className="min-w-0">
@@ -252,12 +324,38 @@ function ToggleRow({
   );
 }
 
-function ConnectorsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+function ConnectorsDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
   const connectors = [
-    { id: "meta", label: "Meta Ads", desc: "Facebook & Instagram campaigns", icon: <BrandLogo name="meta" brand size={18} /> },
-    { id: "google", label: "Google Ads", desc: "Search, YouTube & Performance Max", icon: <BrandLogo name="google" brand size={18} /> },
-    { id: "github", label: "GitHub", desc: "Read repos, ship pull requests", icon: <Github className="h-4 w-4" /> },
-    { id: "wordpress", label: "WordPress", desc: "Publish posts and pages", icon: <Globe className="h-4 w-4" /> },
+    {
+      id: "meta",
+      label: "Meta Ads",
+      desc: "Facebook & Instagram campaigns",
+      icon: <BrandLogo name="meta" brand size={18} />,
+    },
+    {
+      id: "google",
+      label: "Google Ads",
+      desc: "Search, YouTube & Performance Max",
+      icon: <BrandLogo name="google" brand size={18} />,
+    },
+    {
+      id: "github",
+      label: "GitHub",
+      desc: "Read repos, ship pull requests",
+      icon: <Github className="h-4 w-4" />,
+    },
+    {
+      id: "wordpress",
+      label: "WordPress",
+      desc: "Publish posts and pages",
+      icon: <Globe className="h-4 w-4" />,
+    },
   ];
   return (
     <AppModalShell
@@ -272,7 +370,10 @@ function ConnectorsDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
     >
       <ul className="space-y-2">
         {connectors.map((c) => (
-          <li key={c.id} className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2.5 transition hover:border-border">
+          <li
+            key={c.id}
+            className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2.5 transition hover:border-border"
+          >
             <div className="grid h-9 w-9 place-items-center rounded-lg bg-secondary">{c.icon}</div>
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-medium">{c.label}</div>
@@ -289,7 +390,9 @@ function ConnectorsDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
         ))}
       </ul>
       <div className="mt-4 flex justify-end">
-        <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
+        <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          Close
+        </Button>
       </div>
     </AppModalShell>
   );

@@ -55,7 +55,9 @@ export function PersonaDialog({
   return (
     <AppModalShell
       open={open}
-      onOpenChange={() => { /* forced */ }}
+      onOpenChange={() => {
+        /* forced */
+      }}
       size="sm"
       Icon={Sparkles}
       eyebrow="Welcome"
@@ -80,21 +82,23 @@ export function PersonaDialog({
                 "group relative flex h-full flex-col overflow-hidden rounded-2xl border p-5 text-left transition",
                 "border-border/60 bg-card/60 hover:border-brand-green/70 hover:bg-brand-green/[0.04]",
                 isSaving && "border-brand-green/70 bg-brand-green/[0.06]",
-                (!!saving && !isSaving) && "opacity-50"
+                !!saving && !isSaving && "opacity-50",
               )}
             >
               <div
                 aria-hidden
                 className={cn(
                   "pointer-events-none absolute inset-0 bg-gradient-to-br opacity-40 transition-opacity group-hover:opacity-80",
-                  opt.gradient
+                  opt.gradient,
                 )}
               />
               <div className="relative flex items-center justify-between">
                 <div className="grid h-10 w-10 place-items-center rounded-xl bg-background/70 ring-1 ring-border/70">
                   <opt.Icon className="h-[18px] w-[18px] text-foreground" />
                 </div>
-                {isSaving && !isSaved && <Loader2 className="h-4 w-4 animate-spin text-brand-green" />}
+                {isSaving && !isSaved && (
+                  <Loader2 className="h-4 w-4 animate-spin text-brand-green" />
+                )}
                 {isSaved && <Check className="h-4 w-4 text-brand-green" strokeWidth={3} />}
               </div>
               <div className="relative mt-4">

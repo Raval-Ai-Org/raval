@@ -119,7 +119,10 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
           <div className="flex items-start gap-4">
             <div
               className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl ring-1"
-              style={{ background: accentSoft, boxShadow: `0 0 0 1px ${accentSoft}, 0 8px 32px -8px ${accent}` }}
+              style={{
+                background: accentSoft,
+                boxShadow: `0 0 0 1px ${accentSoft}, 0 8px 32px -8px ${accent}`,
+              }}
             >
               <StarAgent mood={mood.mood} size={52} animate={on} hue={agent.accentHue} />
             </div>
@@ -240,7 +243,12 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
                   placeholder="Or type your own task…"
                   className="h-10 text-sm"
                 />
-                <Button type="submit" size="sm" className="h-10 gap-1 px-3" disabled={!title.trim()}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="h-10 gap-1 px-3"
+                  disabled={!title.trim()}
+                >
                   <Plus className="h-4 w-4" /> Add
                 </Button>
               </form>
@@ -329,7 +337,8 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
             {/* MISSIONS */}
             <TabsContent value="missions" className="mt-0 space-y-3">
               <p className="text-xs text-muted-foreground">
-                One-off jobs you can hand to {agent.name} right now. Pick one and it runs in the background.
+                One-off jobs you can hand to {agent.name} right now. Pick one and it runs in the
+                background.
               </p>
               <ul className="space-y-2.5">
                 {agent.missions.map((m) => {
@@ -364,7 +373,11 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
                           toast.success(`${agent.name} deployed: ${m.label}`);
                         }}
                         className="h-9 shrink-0 text-xs"
-                        style={!running && !queued && on ? { background: accent, color: "white" } : undefined}
+                        style={
+                          !running && !queued && on
+                            ? { background: accent, color: "white" }
+                            : undefined
+                        }
                       >
                         {running ? "Running…" : queued ? "Queued" : "Run"}
                       </Button>
@@ -377,7 +390,12 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
             {/* ACTIVITY */}
             <TabsContent value="activity" className="mt-0 space-y-4">
               <div className="grid grid-cols-3 gap-2.5">
-                <Stat label="Today" value={String(runtime.tasksToday)} icon={<CheckCircle2 className="h-3 w-3" />} accent={accent} />
+                <Stat
+                  label="Today"
+                  value={String(runtime.tasksToday)}
+                  icon={<CheckCircle2 className="h-3 w-3" />}
+                  accent={accent}
+                />
                 <Stat
                   label="Queue"
                   value={String(runtime.queue.length)}
@@ -406,27 +424,27 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
                   </div>
                 ) : (
                   <ul className="space-y-1.5">
-                  {runtime.events.slice(0, 20).map((e) => (
-                    <li
-                      key={e.id}
-                      className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-xs"
-                    >
-                      <span
-                        className={cn(
-                          "h-1.5 w-1.5 rounded-full",
-                          e.type === "complete" ? "bg-success" : "bg-muted-foreground/60",
-                        )}
-                        style={e.type === "deploy" ? { background: accent } : undefined}
-                      />
-                      <span className="flex-1 truncate">{e.message}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {new Date(e.timestamp).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </li>
-                  ))}
+                    {runtime.events.slice(0, 20).map((e) => (
+                      <li
+                        key={e.id}
+                        className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-xs"
+                      >
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full",
+                            e.type === "complete" ? "bg-success" : "bg-muted-foreground/60",
+                          )}
+                          style={e.type === "deploy" ? { background: accent } : undefined}
+                        />
+                        <span className="flex-1 truncate">{e.message}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(e.timestamp).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </div>

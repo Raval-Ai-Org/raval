@@ -60,41 +60,79 @@ async function stubSupabase(context: BrowserContext) {
   // expired session. After password sign-in, subsequent refreshes succeed.
   const state = { signedIn: false };
 
-  await context.route(new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`), async (route: Route) => {
-    const req = route.request();
-    const url = req.url();
-    const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
+  await context.route(
+    new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`),
+    async (route: Route) => {
+      const req = route.request();
+      const url = req.url();
+      const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
 
-    if (url.includes("/auth/v1/token")) {
-      const grant = new URL(url).searchParams.get("grant_type");
-      if (grant === "password") {
-        state.signedIn = true;
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(freshSession()) });
+      if (url.includes("/auth/v1/token")) {
+        const grant = new URL(url).searchParams.get("grant_type");
+        if (grant === "password") {
+          state.signedIn = true;
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(freshSession()),
+          });
+        }
+        // Refresh grant (or anything else) — succeed once the user has signed
+        // in, fail otherwise so the initial expired session gets cleared.
+        if (state.signedIn) {
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(freshSession()),
+          });
+        }
+        return route.fulfill({
+          status: 401,
+          headers: JSON_HEADERS,
+          body: JSON.stringify({
+            error: "invalid_grant",
+            error_description: "Refresh token expired",
+          }),
+        });
       }
-      // Refresh grant (or anything else) — succeed once the user has signed
-      // in, fail otherwise so the initial expired session gets cleared.
-      if (state.signedIn) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(freshSession()) });
+
+      if (url.includes("/auth/v1/user")) {
+        if (state.signedIn)
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(freshSession().user),
+          });
+        return route.fulfill({
+          status: 401,
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ error: "invalid_token" }),
+        });
       }
+
+      if (url.includes("/rest/v1/workspaces")) {
+        const row = {
+          id: WS_ID,
+          name: "Test",
+          website_url: null,
+          industry: null,
+          onboarded_at: "2024-01-01T00:00:00Z",
+          first_prompt: null,
+        };
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(wantsSingle ? row : [row]),
+        });
+      }
+
       return route.fulfill({
-        status: 401,
+        status: 200,
         headers: JSON_HEADERS,
-        body: JSON.stringify({ error: "invalid_grant", error_description: "Refresh token expired" }),
+        body: wantsSingle ? "null" : "[]",
       });
-    }
-
-    if (url.includes("/auth/v1/user")) {
-      if (state.signedIn) return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(freshSession().user) });
-      return route.fulfill({ status: 401, headers: JSON_HEADERS, body: JSON.stringify({ error: "invalid_token" }) });
-    }
-
-    if (url.includes("/rest/v1/workspaces")) {
-      const row = { id: WS_ID, name: "Test", website_url: null, industry: null, onboarded_at: "2024-01-01T00:00:00Z", first_prompt: null };
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(wantsSingle ? row : [row]) });
-    }
-
-    return route.fulfill({ status: 200, headers: JSON_HEADERS, body: wantsSingle ? "null" : "[]" });
-  });
+    },
+  );
 
   await context.route("**/_serverFn/**", (route) =>
     route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
@@ -112,9 +150,17 @@ async function seedExpired(page: Page) {
         window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
         // @ts-expect-error test stub
         window.WebSocket = function () {
-          return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 3 };
+          return {
+            addEventListener() {},
+            removeEventListener() {},
+            send() {},
+            close() {},
+            readyState: 3,
+          };
         };
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
     },
     { storageKey: STORAGE_KEY, sess: expiredSession(), wsId: WS_ID },
   );
@@ -152,10 +198,15 @@ test.describe("Expired session deep-link recovery", () => {
     await signIn(page);
     await page.waitForURL(/\/app(\/|$|\?)/, { timeout: 15_000 });
     // Confirm the app shell actually mounted (not a bare redirect loop).
-    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
-  test("session cleared mid-session on /app forces /login?next=/app and returns after sign-in", async ({ context, page }) => {
+  test("session cleared mid-session on /app forces /login?next=/app and returns after sign-in", async ({
+    context,
+    page,
+  }) => {
     // Different failure mode: the user is already signed in and on /app,
     // then their session is invalidated (server-side logout, expiring
     // refresh token, another tab signing out). AppShell's
@@ -172,26 +223,39 @@ test.describe("Expired session deep-link recovery", () => {
           window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
           // @ts-expect-error test stub
           window.WebSocket = function () {
-            return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 3 };
+            return {
+              addEventListener() {},
+              removeEventListener() {},
+              send() {},
+              close() {},
+              readyState: 3,
+            };
           };
-        } catch { /* noop */ }
+        } catch {
+          /* noop */
+        }
       },
       { storageKey: STORAGE_KEY, sess: freshSession(), wsId: WS_ID },
     );
 
     await page.goto("/app", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Simulate the session going away (e.g. another tab signed out).
     await page.evaluate(async () => {
       const mod = await import("/src/integrations/supabase/client.ts");
-      await (mod as unknown as { supabase: { auth: { signOut(): Promise<unknown> } } }).supabase.auth.signOut();
+      await (
+        mod as unknown as { supabase: { auth: { signOut(): Promise<unknown> } } }
+      ).supabase.auth.signOut();
     });
 
     await page.waitForURL(/\/login\?.*next=%2Fapp/, { timeout: 15_000 });
     await signIn(page);
     await page.waitForURL(/\/app(\/|$|\?)/, { timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({
+      timeout: 15_000,
+    });
   });
-
 });

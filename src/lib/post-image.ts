@@ -39,7 +39,6 @@ export const OPTIMAL_SIZE_BY_PLATFORM: Record<PlatformId, ImgSize> = {
 export const sizeForPlatform = (p?: PlatformId | null): ImgSize =>
   (p && OPTIMAL_SIZE_BY_PLATFORM[p]) || DEFAULT_IMG_SIZE;
 
-
 export type BrandColorLite = { name?: string; hex: string };
 
 export type BrandDnaLite = {
@@ -70,7 +69,11 @@ export type BrandDnaLite = {
 
 export function loadBrandDna(workspaceId?: string | null): BrandDnaLite | null {
   if (!workspaceId || typeof window === "undefined") return null;
-  const keys = [`brand-dna:v3:${workspaceId}`, `brand-dna:v2:${workspaceId}`, `brand-dna:${workspaceId}`];
+  const keys = [
+    `brand-dna:v3:${workspaceId}`,
+    `brand-dna:v2:${workspaceId}`,
+    `brand-dna:${workspaceId}`,
+  ];
   for (const k of keys) {
     try {
       const raw = localStorage.getItem(k);
@@ -80,33 +83,83 @@ export function loadBrandDna(workspaceId?: string | null): BrandDnaLite | null {
   return null;
 }
 
-
 /* ---------------- Shared visual system ---------------- */
 
 export type VisualPalette = {
   id: string;
   label: string;
   promptDescription: string;
-  bg: string;        // background hex
-  surface: string;   // card surface hex
-  fg: string;        // primary text hex
-  muted: string;     // muted text hex
-  accent: string;    // brand accent hex
+  bg: string; // background hex
+  surface: string; // card surface hex
+  fg: string; // primary text hex
+  muted: string; // muted text hex
+  accent: string; // brand accent hex
 };
 
 const PALETTES: VisualPalette[] = [
-  { id: "cool-editorial", label: "Cool editorial", promptDescription: "cool editorial palette — deep slate, off-white, and one warm coral accent",
-    bg: "#0F172A", surface: "#F8FAFC", fg: "#0B1220", muted: "#475569", accent: "#F97066" },
-  { id: "warm-neutral",   label: "Warm neutral",   promptDescription: "warm neutral palette — sand, cream, espresso, with a single vivid accent",
-    bg: "#F5EFE6", surface: "#FFFDF8", fg: "#2A1E12", muted: "#7A6A55", accent: "#C2410C" },
-  { id: "mono-contrast",  label: "Mono contrast",  promptDescription: "high-contrast monochrome — near-black on bone-white with one saturated accent",
-    bg: "#0A0A0A", surface: "#FAFAF7", fg: "#0A0A0A", muted: "#525252", accent: "#22C55E" },
-  { id: "soft-gradient",  label: "Soft modern",    promptDescription: "soft modern gradient — pastel-to-neutral wash with crisp black type",
-    bg: "#EEF2FF", surface: "#FFFFFF", fg: "#111827", muted: "#6B7280", accent: "#6366F1" },
-  { id: "premium-dark",   label: "Premium dark",   promptDescription: "premium dark palette — midnight navy background with luminous highlights and a mint accent",
-    bg: "#0B1220", surface: "#111827", fg: "#F8FAFC", muted: "#94A3B8", accent: "#5EEAD4" },
-  { id: "brand-forward",  label: "Brand-forward",  promptDescription: "clean brand-forward palette — off-white base, charcoal type, one confident accent",
-    bg: "#FAFAF9", surface: "#FFFFFF", fg: "#18181B", muted: "#71717A", accent: "#2563EB" },
+  {
+    id: "cool-editorial",
+    label: "Cool editorial",
+    promptDescription: "cool editorial palette — deep slate, off-white, and one warm coral accent",
+    bg: "#0F172A",
+    surface: "#F8FAFC",
+    fg: "#0B1220",
+    muted: "#475569",
+    accent: "#F97066",
+  },
+  {
+    id: "warm-neutral",
+    label: "Warm neutral",
+    promptDescription: "warm neutral palette — sand, cream, espresso, with a single vivid accent",
+    bg: "#F5EFE6",
+    surface: "#FFFDF8",
+    fg: "#2A1E12",
+    muted: "#7A6A55",
+    accent: "#C2410C",
+  },
+  {
+    id: "mono-contrast",
+    label: "Mono contrast",
+    promptDescription:
+      "high-contrast monochrome — near-black on bone-white with one saturated accent",
+    bg: "#0A0A0A",
+    surface: "#FAFAF7",
+    fg: "#0A0A0A",
+    muted: "#525252",
+    accent: "#22C55E",
+  },
+  {
+    id: "soft-gradient",
+    label: "Soft modern",
+    promptDescription: "soft modern gradient — pastel-to-neutral wash with crisp black type",
+    bg: "#EEF2FF",
+    surface: "#FFFFFF",
+    fg: "#111827",
+    muted: "#6B7280",
+    accent: "#6366F1",
+  },
+  {
+    id: "premium-dark",
+    label: "Premium dark",
+    promptDescription:
+      "premium dark palette — midnight navy background with luminous highlights and a mint accent",
+    bg: "#0B1220",
+    surface: "#111827",
+    fg: "#F8FAFC",
+    muted: "#94A3B8",
+    accent: "#5EEAD4",
+  },
+  {
+    id: "brand-forward",
+    label: "Brand-forward",
+    promptDescription:
+      "clean brand-forward palette — off-white base, charcoal type, one confident accent",
+    bg: "#FAFAF9",
+    surface: "#FFFFFF",
+    fg: "#18181B",
+    muted: "#71717A",
+    accent: "#2563EB",
+  },
 ];
 
 const COMPOSITIONS = [
@@ -118,18 +171,30 @@ const COMPOSITIONS = [
 ];
 
 const TYPOGRAPHIES = [
-  { promptDescription: "modern grotesque sans-serif, tight tracking, confident hierarchy",
-    fontFamily: `"Inter", "Helvetica Neue", system-ui, sans-serif`, weight: 700, tracking: "-0.02em" },
-  { promptDescription: "clean geometric sans-serif, generous leading, editorial restraint",
-    fontFamily: `"Space Grotesk", "Inter", system-ui, sans-serif`, weight: 600, tracking: "-0.01em" },
-  { promptDescription: "premium serif display + minimal sans support, magazine feel",
-    fontFamily: `"Fraunces", "Playfair Display", Georgia, serif`, weight: 600, tracking: "-0.015em" },
+  {
+    promptDescription: "modern grotesque sans-serif, tight tracking, confident hierarchy",
+    fontFamily: `"Inter", "Helvetica Neue", system-ui, sans-serif`,
+    weight: 700,
+    tracking: "-0.02em",
+  },
+  {
+    promptDescription: "clean geometric sans-serif, generous leading, editorial restraint",
+    fontFamily: `"Space Grotesk", "Inter", system-ui, sans-serif`,
+    weight: 600,
+    tracking: "-0.01em",
+  },
+  {
+    promptDescription: "premium serif display + minimal sans support, magazine feel",
+    fontFamily: `"Fraunces", "Playfair Display", Georgia, serif`,
+    weight: 600,
+    tracking: "-0.015em",
+  },
 ];
 
 export type BrandVisualSystem = {
   palette: VisualPalette;
   composition: string;
-  typography: typeof TYPOGRAPHIES[number];
+  typography: (typeof TYPOGRAPHIES)[number];
 };
 
 /**
@@ -152,7 +217,11 @@ function fnv1a(str: string): number {
  * the prompt as an explicit "style anchor" so the model has a repeatable
  * handle across regenerations of the same post.
  */
-export function getStyleSeed(brand: BrandDnaLite | null, seedKey: string, workspaceName?: string | null): string {
+export function getStyleSeed(
+  brand: BrandDnaLite | null,
+  seedKey: string,
+  workspaceName?: string | null,
+): string {
   const brandName = (brand?.brandName || workspaceName || "brand").trim().toLowerCase();
   // Intentionally exclude mutable brand fields (voice/industry/values) from
   // the seed basis — editing Brand DNA must never change a post's visual
@@ -165,7 +234,15 @@ export function getStyleSeed(brand: BrandDnaLite | null, seedKey: string, worksp
 function normalizeHex(input?: string | null): string | null {
   if (!input) return null;
   const s = input.trim().replace(/^#/, "");
-  if (/^[0-9a-f]{3}$/i.test(s)) return "#" + s.split("").map((c) => c + c).join("").toLowerCase();
+  if (/^[0-9a-f]{3}$/i.test(s))
+    return (
+      "#" +
+      s
+        .split("")
+        .map((c) => c + c)
+        .join("")
+        .toLowerCase()
+    );
   if (/^[0-9a-f]{6}$/i.test(s)) return "#" + s.toLowerCase();
   return null;
 }
@@ -189,8 +266,13 @@ function pickTextOn(bg: string): string {
 
 /** Build a palette from the user's real brand colors when available.
  *  Falls back to the deterministic seeded palette otherwise. */
-function paletteFromBrand(brand: BrandDnaLite | null, fallback: VisualPalette): VisualPalette | null {
-  const raw = (brand?.colors ?? []).map((c) => ({ name: c?.name, hex: normalizeHex(c?.hex) })).filter((c) => c.hex) as { name?: string; hex: string }[];
+function paletteFromBrand(
+  brand: BrandDnaLite | null,
+  fallback: VisualPalette,
+): VisualPalette | null {
+  const raw = (brand?.colors ?? [])
+    .map((c) => ({ name: c?.name, hex: normalizeHex(c?.hex) }))
+    .filter((c) => c.hex) as { name?: string; hex: string }[];
   if (raw.length === 0) return null;
 
   // Sort by luminance to identify surface / bg / accent slots.
@@ -198,12 +280,14 @@ function paletteFromBrand(brand: BrandDnaLite | null, fallback: VisualPalette): 
   const lightest = sorted[0].hex;
   const darkest = sorted[sorted.length - 1].hex;
   // Accent = the most saturated color (max range between channels).
-  const accent = raw.reduce<{ hex: string; range: number }>((best, c) => {
-    const [r, g, b] = hexToRgb(c.hex);
-    const range = Math.max(r, g, b) - Math.min(r, g, b);
-    return range > best.range ? { hex: c.hex, range } : best;
-  }, { hex: raw[0].hex, range: -1 }).hex;
-
+  const accent = raw.reduce<{ hex: string; range: number }>(
+    (best, c) => {
+      const [r, g, b] = hexToRgb(c.hex);
+      const range = Math.max(r, g, b) - Math.min(r, g, b);
+      return range > best.range ? { hex: c.hex, range } : best;
+    },
+    { hex: raw[0].hex, range: -1 },
+  ).hex;
 
   // Prefer light surface + dark ink; if brand is dark-first, invert.
   const brandIsDark = relLuminance(lightest) < 0.45;
@@ -212,17 +296,27 @@ function paletteFromBrand(brand: BrandDnaLite | null, fallback: VisualPalette): 
   const fg = pickTextOn(surface);
   const muted = brandIsDark ? "#94A3B8" : "#525252";
 
-  const named = raw.slice(0, 5).map((c) => `${c.name ? c.name + " " : ""}${c.hex}`).join(", ");
+  const named = raw
+    .slice(0, 5)
+    .map((c) => `${c.name ? c.name + " " : ""}${c.hex}`)
+    .join(", ");
 
   return {
     id: "brand-real",
     label: "Brand palette",
     promptDescription: `EXACT brand palette (use these hex values verbatim, do not invent new colors): ${named}. Accent color: ${accent}.`,
-    bg, surface, fg, muted, accent,
+    bg,
+    surface,
+    fg,
+    muted,
+    accent,
   };
 }
 
-function typographyFromBrand(brand: BrandDnaLite | null, fallback: typeof TYPOGRAPHIES[number]): typeof TYPOGRAPHIES[number] | null {
+function typographyFromBrand(
+  brand: BrandDnaLite | null,
+  fallback: (typeof TYPOGRAPHIES)[number],
+): (typeof TYPOGRAPHIES)[number] | null {
   const fonts = (brand?.fonts ?? []).map((f) => (f || "").trim()).filter(Boolean);
   if (fonts.length === 0) return null;
   const primary = fonts[0];
@@ -258,9 +352,6 @@ export function getBrandVisualSystem(
   };
 }
 
-
-
-
 /* ---------------- Voice → visual mood mapping ---------------- */
 
 /** Derive an explicit visual mood + Recraft-style hint from brand voice keywords.
@@ -275,13 +366,20 @@ export function deriveMoodFromVoice(
   const moods: string[] = [];
   const has = (...kw: string[]) => kw.some((k) => text.includes(k));
 
-  if (has("playful", "fun", "friendly", "quirky", "bold")) moods.push("energetic, expressive, high-saturation accents, dynamic composition");
-  if (has("premium", "luxury", "elegant", "sophisticated", "refined")) moods.push("understated luxury, editorial restraint, generous whitespace, museum-grade craft");
-  if (has("technical", "engineer", "developer", "b2b", "enterprise", "saas")) moods.push("precise, systematic, grid-aligned, information-dense but clean");
-  if (has("wellness", "calm", "mindful", "gentle", "warm", "human")) moods.push("soft, warm, humanist, natural light, organic shapes");
-  if (has("modern", "minimal", "clean", "simple")) moods.push("modernist minimalism, high whitespace ratio, one hero element");
-  if (has("creative", "artistic", "design", "studio")) moods.push("art-directed, editorial magazine cover energy, confident negative space");
-  if (has("finance", "fintech", "trust", "secure", "reliable")) moods.push("confident, structured, restrained palette, precise geometry");
+  if (has("playful", "fun", "friendly", "quirky", "bold"))
+    moods.push("energetic, expressive, high-saturation accents, dynamic composition");
+  if (has("premium", "luxury", "elegant", "sophisticated", "refined"))
+    moods.push("understated luxury, editorial restraint, generous whitespace, museum-grade craft");
+  if (has("technical", "engineer", "developer", "b2b", "enterprise", "saas"))
+    moods.push("precise, systematic, grid-aligned, information-dense but clean");
+  if (has("wellness", "calm", "mindful", "gentle", "warm", "human"))
+    moods.push("soft, warm, humanist, natural light, organic shapes");
+  if (has("modern", "minimal", "clean", "simple"))
+    moods.push("modernist minimalism, high whitespace ratio, one hero element");
+  if (has("creative", "artistic", "design", "studio"))
+    moods.push("art-directed, editorial magazine cover energy, confident negative space");
+  if (has("finance", "fintech", "trust", "secure", "reliable"))
+    moods.push("confident, structured, restrained palette, precise geometry");
   if (moods.length === 0) moods.push("modern editorial, premium, confident, feed-native");
   return moods.slice(0, 2).join("; ");
 }
@@ -293,14 +391,14 @@ export function deriveRecraftStyle(
   industry?: string | null,
 ): "realistic_image" | "digital_illustration" | "vector_illustration" {
   const text = `${voice ?? ""} ${industry ?? ""}`.toLowerCase();
-  if (/(photo|realistic|lifestyle|product shot|wellness|food|fashion|travel)/.test(text)) return "realistic_image";
-  if (/(tech|saas|b2b|fintech|enterprise|developer|api|platform)/.test(text)) return "vector_illustration";
+  if (/(photo|realistic|lifestyle|product shot|wellness|food|fashion|travel)/.test(text))
+    return "realistic_image";
+  if (/(tech|saas|b2b|fintech|enterprise|developer|api|platform)/.test(text))
+    return "vector_illustration";
   return "digital_illustration";
 }
 
-
 /* ---------------- Prompt builder ---------------- */
-
 
 export type PromptInspection = {
   brandName: string;
@@ -343,7 +441,13 @@ export function buildImagePromptDetailed(args: {
 }): PromptInspection {
   const { postBody, postTitle, brand, workspaceName, platform, size, seedKey, autoSize } = args;
   const body = (postBody || "").trim();
-  const firstLine = body.split(/\n+/).find((l) => l.trim().length > 0)?.trim() ?? postTitle ?? "";
+  const firstLine =
+    body
+      .split(/\n+/)
+      .find((l) => l.trim().length > 0)
+      ?.trim() ??
+    postTitle ??
+    "";
   const hook = firstLine.slice(0, 180);
   const snippet = body.slice(0, 480);
 
@@ -364,35 +468,46 @@ export function buildImagePromptDetailed(args: {
   const audienceTags = (brand?.audienceTags ?? []).filter(Boolean).slice(0, 6).join(", ");
   const valueTags = (brand?.valueTags ?? []).filter(Boolean).slice(0, 6).join(", ");
   const keywords = (brand?.keywords ?? []).filter(Boolean).slice(0, 8).join(", ");
-  const brandColors = (brand?.colors ?? []).map((c) => normalizeHex(c?.hex)).filter(Boolean).slice(0, 6) as string[];
+  const brandColors = (brand?.colors ?? [])
+    .map((c) => normalizeHex(c?.hex))
+    .filter(Boolean)
+    .slice(0, 6) as string[];
   const brandFonts = (brand?.fonts ?? []).filter(Boolean).slice(0, 3);
   const hasLogo = !!brand?.logoUrl;
 
   const brandFields: PromptInspection["brandFields"] = [
-    { key: "brandName",   label: "Brand name",    value: brandName,             used: !!brandName },
-    { key: "industry",    label: "Industry",      value: industry ?? "",        used: !!industry },
-    { key: "oneLiner",    label: "Positioning",   value: oneLiner ?? "",        used: !!oneLiner },
-    { key: "uvp",         label: "UVP",           value: uvp ?? "",             used: !!uvp },
-    { key: "mission",     label: "Mission",       value: mission ?? "",         used: !!mission },
-    { key: "products",    label: "Offer",         value: offer ?? "",           used: !!offer },
-    { key: "audience",    label: "Audience",      value: audience ?? "",        used: !!audience },
-    { key: "audienceTags",label: "Audience tags", value: audienceTags,          used: !!audienceTags },
-    { key: "voice",       label: "Voice",         value: voice ?? "",           used: !!voice },
-    { key: "values",      label: "Values",        value: values ?? "",          used: !!values },
-    { key: "valueTags",   label: "Value tags",    value: valueTags,             used: !!valueTags },
-    { key: "keywords",    label: "Keywords",      value: keywords,              used: !!keywords },
-    { key: "doRules",     label: "Brand do's",    value: doRules ?? "",         used: !!doRules },
-    { key: "dontRules",   label: "Brand don'ts",  value: dontRules ?? "",       used: !!dontRules },
-    { key: "colors",      label: "Brand colors",  value: brandColors.join(", "), used: brandColors.length > 0 },
-    { key: "fonts",       label: "Brand fonts",   value: brandFonts.join(", "), used: brandFonts.length > 0 },
-    { key: "logoUrl",     label: "Logo",          value: hasLogo ? "provided" : "", used: hasLogo },
+    { key: "brandName", label: "Brand name", value: brandName, used: !!brandName },
+    { key: "industry", label: "Industry", value: industry ?? "", used: !!industry },
+    { key: "oneLiner", label: "Positioning", value: oneLiner ?? "", used: !!oneLiner },
+    { key: "uvp", label: "UVP", value: uvp ?? "", used: !!uvp },
+    { key: "mission", label: "Mission", value: mission ?? "", used: !!mission },
+    { key: "products", label: "Offer", value: offer ?? "", used: !!offer },
+    { key: "audience", label: "Audience", value: audience ?? "", used: !!audience },
+    { key: "audienceTags", label: "Audience tags", value: audienceTags, used: !!audienceTags },
+    { key: "voice", label: "Voice", value: voice ?? "", used: !!voice },
+    { key: "values", label: "Values", value: values ?? "", used: !!values },
+    { key: "valueTags", label: "Value tags", value: valueTags, used: !!valueTags },
+    { key: "keywords", label: "Keywords", value: keywords, used: !!keywords },
+    { key: "doRules", label: "Brand do's", value: doRules ?? "", used: !!doRules },
+    { key: "dontRules", label: "Brand don'ts", value: dontRules ?? "", used: !!dontRules },
+    {
+      key: "colors",
+      label: "Brand colors",
+      value: brandColors.join(", "),
+      used: brandColors.length > 0,
+    },
+    {
+      key: "fonts",
+      label: "Brand fonts",
+      value: brandFonts.join(", "),
+      used: brandFonts.length > 0,
+    },
+    { key: "logoUrl", label: "Logo", value: hasLogo ? "provided" : "", used: hasLogo },
   ];
 
   const vis = getBrandVisualSystem(brand, seedKey, workspaceName);
   const styleSeed = getStyleSeed(brand, seedKey, workspaceName);
   const moodLine = deriveMoodFromVoice(voice, values, industry);
-
-
 
   // Instagram-aware crop-safe zones. Instagram re-crops the same asset
   // across surfaces: feed shows 1:1 (or 4:5 portrait), Explore/Profile grid
@@ -409,31 +524,44 @@ export function buildImagePromptDetailed(args: {
           "GRID-CROP SAFE: Instagram profile grid center-crops slightly — nothing critical within 40px of any edge.",
           "STORY REUSE: if this same image were re-cropped to 9:16, only the CENTER VERTICAL BAND (≈576px wide, centered) would survive — put the anchor subject inside that band.",
         ].join(" ")
-    : size === "1792x1024"
-      ? [
-          "LANDSCAPE 16:9 (LinkedIn / X / YouTube thumbnail).",
-          "SAFE ZONE: keep logo, headline, faces, and CTAs inside the CENTER 88% horizontally (≈108px inset left/right) and CENTER 82% vertically (≈92px inset top/bottom).",
-          "SQUARE-CROP SAFE: assume Instagram may center-crop this to 1:1 — put the anchor subject inside the CENTER SQUARE (1024×1024 crop of the 1792 canvas). Nothing critical in the outer left/right 384px bands.",
-          "THUMBNAIL LEGIBILITY: headline must remain readable at 320px wide.",
-        ].join(" ")
-      : [
-          "PORTRAIT 9:16 (Instagram Story / Reel / TikTok).",
-          "TOP UI CHROME SAFE ZONE: top 14% of the canvas (≈250px on 1024×1792) is reserved for platform UI (profile pill, close button) — no text, logo, or face there.",
-          "BOTTOM UI CHROME SAFE ZONE: bottom 20% (≈360px) is reserved for caption, reactions, and CTA sticker — no critical content there.",
-          "CORE SAFE ZONE: keep logo, headline, and subject inside the MIDDLE 66% vertically (rows ~250–1430) and CENTER 86% horizontally (≈72px inset).",
-          "FEED-CROP SAFE: if re-cropped to 1:1 for the feed, only the CENTER SQUARE (1024×1024, vertically centered) survives — anchor subject must sit inside that square.",
-        ].join(" ");
+      : size === "1792x1024"
+        ? [
+            "LANDSCAPE 16:9 (LinkedIn / X / YouTube thumbnail).",
+            "SAFE ZONE: keep logo, headline, faces, and CTAs inside the CENTER 88% horizontally (≈108px inset left/right) and CENTER 82% vertically (≈92px inset top/bottom).",
+            "SQUARE-CROP SAFE: assume Instagram may center-crop this to 1:1 — put the anchor subject inside the CENTER SQUARE (1024×1024 crop of the 1792 canvas). Nothing critical in the outer left/right 384px bands.",
+            "THUMBNAIL LEGIBILITY: headline must remain readable at 320px wide.",
+          ].join(" ")
+        : [
+            "PORTRAIT 9:16 (Instagram Story / Reel / TikTok).",
+            "TOP UI CHROME SAFE ZONE: top 14% of the canvas (≈250px on 1024×1792) is reserved for platform UI (profile pill, close button) — no text, logo, or face there.",
+            "BOTTOM UI CHROME SAFE ZONE: bottom 20% (≈360px) is reserved for caption, reactions, and CTA sticker — no critical content there.",
+            "CORE SAFE ZONE: keep logo, headline, and subject inside the MIDDLE 66% vertically (rows ~250–1430) and CENTER 86% horizontally (≈72px inset).",
+            "FEED-CROP SAFE: if re-cropped to 1:1 for the feed, only the CENTER SQUARE (1024×1024, vertically centered) survives — anchor subject must sit inside that square.",
+          ].join(" ");
 
-  const platformLine = autoSize && platform
-    ? `Optimized for ${PLATFORMS[platform]?.label ?? platform} feed context.`
-    : "Instagram-first default sizing — works across every social surface.";
+  const platformLine =
+    autoSize && platform
+      ? `Optimized for ${PLATFORMS[platform]?.label ?? platform} feed context.`
+      : "Instagram-first default sizing — works across every social surface.";
 
   const cropSafeRule =
     "CROP-SAFE COMPOSITION (non-negotiable): the same asset is reused across 1:1 feed, 9:16 Story, and 16:9 landscape placements. NEVER place logos, wordmarks, headline text, faces, or CTAs against any edge. Treat every edge as a potential crop line. When in doubt, pull critical elements inward toward the CENTER SQUARE of the canvas — that square is the only region guaranteed to survive every crop.";
 
-
-  const brandDnaHasAny =
-    !!(oneLiner || uvp || mission || positioning || about || offer || audience || voice || values || audienceTags || valueTags || keywords || doRules);
+  const brandDnaHasAny = !!(
+    oneLiner ||
+    uvp ||
+    mission ||
+    positioning ||
+    about ||
+    offer ||
+    audience ||
+    voice ||
+    values ||
+    audienceTags ||
+    valueTags ||
+    keywords ||
+    doRules
+  );
 
   const prompt = [
     `Design ONE premium, on-brand social image for ${brandName}${industry ? ` (${industry})` : ""}.`,
@@ -491,8 +619,9 @@ export function buildImagePromptDetailed(args: {
     cropSafeRule,
     aspectLine,
     platformLine,
-  ].filter(Boolean).join("\n");
-
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   return {
     brandName,
@@ -521,8 +650,6 @@ export function buildImagePrompt(args: Parameters<typeof buildImagePromptDetaile
   return buildImagePromptDetailed(args).prompt;
 }
 
-
-
 /* ---------------- Session cache ---------------- */
 
 const CACHE_KEY = "studio:image-cache:v1";
@@ -533,7 +660,9 @@ function readCache(): Cache {
   try {
     const raw = window.sessionStorage.getItem(CACHE_KEY);
     return raw ? (JSON.parse(raw) as Cache) : {};
-  } catch { return {}; }
+  } catch {
+    return {};
+  }
 }
 
 function writeCache(next: Cache) {
@@ -545,7 +674,9 @@ function writeCache(next: Cache) {
     const ids = Object.keys(next).slice(-6);
     const trimmed: Cache = {};
     for (const id of ids) trimmed[id] = next[id];
-    try { window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(trimmed)); } catch {}
+    try {
+      window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(trimmed));
+    } catch {}
   }
 }
 
@@ -607,8 +738,8 @@ export function removeCachedImage(postId: string, size?: ImgSize) {
   }
   writeCache(c);
   try {
-    window.dispatchEvent(new CustomEvent("post-image:cached", { detail: { postId, size, removed: true } }));
+    window.dispatchEvent(
+      new CustomEvent("post-image:cached", { detail: { postId, size, removed: true } }),
+    );
   } catch {}
 }
-
-

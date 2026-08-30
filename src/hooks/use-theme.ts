@@ -9,8 +9,7 @@ export function useTheme() {
 
   useEffect(() => {
     const saved = localStorage.getItem("reach-theme") as Theme | null;
-    const initial: Theme =
-      saved === "light" || saved === "dark" ? saved : "dark";
+    const initial: Theme = saved === "light" || saved === "dark" ? saved : "dark";
     setTheme(initial);
     setMounted(true);
   }, []);

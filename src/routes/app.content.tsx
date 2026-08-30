@@ -9,5 +9,7 @@ export const Route = createFileRoute("/app/content")({
     meta: [{ name: "robots", content: "noindex,nofollow" }],
     links: [{ rel: "canonical", href: `${BASE_URL}/app` }],
   }),
-  beforeLoad: () => { throw redirect({ to: "/app/analytics", search: { tab: "content" } }); },
+  beforeLoad: () => {
+    throw redirect({ to: "/app/analytics", search: { tab: "content" } });
+  },
 });

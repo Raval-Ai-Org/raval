@@ -10,7 +10,12 @@ describe("republish-after-failure (FR-023)", () => {
   const sdr = new MockSDR();
   beforeAll(async () => {
     await sdr.start();
-    sdr.addAccount({ account_id: "tw-1", platform: "twitter", platform_username: "Brand", status: "active" });
+    sdr.addAccount({
+      account_id: "tw-1",
+      platform: "twitter",
+      platform_username: "Brand",
+      status: "active",
+    });
   });
   afterAll(async () => await sdr.stop());
 
@@ -45,10 +50,26 @@ describe("republish-after-failure (FR-023)", () => {
   });
 
   it("first publish uses revision 0 (no prior job)", async () => {
-    sdr.reset(); sdr.addAccount({ account_id: "tw-1", platform: "twitter", platform_username: "Brand", status: "active" });
-    const fresh: MockContentItem = { id: "item-2", workspace_id: "ws-1", body: "hi", media_url: null, status: "approved", meta: { platform: "twitter" } };
+    sdr.reset();
+    sdr.addAccount({
+      account_id: "tw-1",
+      platform: "twitter",
+      platform_username: "Brand",
+      status: "active",
+    });
+    const fresh: MockContentItem = {
+      id: "item-2",
+      workspace_id: "ws-1",
+      body: "hi",
+      media_url: null,
+      status: "approved",
+      meta: { platform: "twitter" },
+    };
     const db = makeMockContentDb([fresh]);
-    await publishContentItemsHandler({ workspaceId: "ws-1", contentItemIds: ["item-2"], selection: { type: "all" } }, { sdrBaseUrl: sdr.baseUrl, token: "ws-key", db });
+    await publishContentItemsHandler(
+      { workspaceId: "ws-1", contentItemIds: ["item-2"], selection: { type: "all" } },
+      { sdrBaseUrl: sdr.baseUrl, token: "ws-key", db },
+    );
     const req = sdr.getRequests().find((r) => r.path === "/api/v1/publish" && r.method === "POST");
     expect(req?.body.idempotency_key.endsWith(":0")).toBe(true);
   });

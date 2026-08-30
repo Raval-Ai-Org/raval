@@ -13,7 +13,10 @@ export const Route = createFileRoute("/app/analytics")({
     links: [{ rel: "canonical", href: `${BASE_URL}/app` }],
   }),
   validateSearch: (s: Record<string, unknown>): { tab: AnalyticsTab } => {
-    const t = typeof s.tab === "string" && VALID.has(s.tab as AnalyticsTab) ? (s.tab as AnalyticsTab) : "overview";
+    const t =
+      typeof s.tab === "string" && VALID.has(s.tab as AnalyticsTab)
+        ? (s.tab as AnalyticsTab)
+        : "overview";
     return { tab: t };
   },
   // Analytics is now an in-app modal launched from /app. Old bookmarks
@@ -25,4 +28,3 @@ export const Route = createFileRoute("/app/analytics")({
     throw redirect({ to: "/app", search: { tab } as any });
   },
 });
-

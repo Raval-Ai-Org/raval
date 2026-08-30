@@ -3,10 +3,7 @@ import { flushSync } from "react-dom";
 import { authedFetch } from "./authed-fetch";
 
 type Payload = { b64_json: string; mime_type?: string };
-const IMAGE_EVENTS = new Set([
-  "image_generation.partial_image",
-  "image_generation.completed",
-]);
+const IMAGE_EVENTS = new Set(["image_generation.partial_image", "image_generation.completed"]);
 
 function payloadToFrame(data: string, eventName?: string) {
   if (!data || data === "[DONE]") return null;

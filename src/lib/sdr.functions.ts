@@ -3,7 +3,13 @@
 // attached); the server validates membership + resolves the per-workspace SDR key.
 // Never exposes SDR credentials to the browser.
 import { authedFetch } from "@/lib/authed-fetch";
-import type { ConnectedAccount, PublishSelection, PublishOutcome, ScheduleItem, ScheduleOutcome } from "@/lib/sdr.handlers";
+import type {
+  ConnectedAccount,
+  PublishSelection,
+  PublishOutcome,
+  ScheduleItem,
+  ScheduleOutcome,
+} from "@/lib/sdr.handlers";
 
 export type OauthStartResult = { authorizationUrl: string; stateToken: string; expiresIn: number };
 
@@ -26,7 +32,10 @@ const SDR_ERROR_MESSAGES: Record<string, string> = {
   UNKNOWN: "Something went wrong while publishing. Please try again.",
 };
 
-function describeSdrError(j: { error?: { code?: string; detail?: string } }, status: number): string {
+function describeSdrError(
+  j: { error?: { code?: string; detail?: string } },
+  status: number,
+): string {
   const code = j?.error?.code ?? "";
   const detail = j?.error?.detail ?? "";
   // Platform validation carries a real reason worth showing verbatim (e.g.
@@ -130,7 +139,10 @@ export type PublicationRow = {
 /** Per-platform delivery status + live links for a content item (FR-010).
  * Re-fetched by the Studio on content:changed so webhook-driven updates appear
  * without a manual refresh (US4 / R2d). */
-export async function getPublications(workspaceId: string, contentItemId: string): Promise<PublicationRow[]> {
+export async function getPublications(
+  workspaceId: string,
+  contentItemId: string,
+): Promise<PublicationRow[]> {
   const res = await authedFetch(
     `/api/sdr/publications?workspaceId=${encodeURIComponent(workspaceId)}&contentItemId=${encodeURIComponent(contentItemId)}`,
   );

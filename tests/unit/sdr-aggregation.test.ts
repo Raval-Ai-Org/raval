@@ -5,11 +5,15 @@ import { aggregateItemStatus } from "@/lib/sdr.webhook";
 
 describe("aggregateItemStatus", () => {
   it("all published → published", () => {
-    expect(aggregateItemStatus([{ status: "published" }, { status: "published" }])).toBe("published");
+    expect(aggregateItemStatus([{ status: "published" }, { status: "published" }])).toBe(
+      "published",
+    );
   });
 
   it("mix published + failed → partial_failed (FR-011)", () => {
-    expect(aggregateItemStatus([{ status: "published" }, { status: "failed" }])).toBe("partial_failed");
+    expect(aggregateItemStatus([{ status: "published" }, { status: "failed" }])).toBe(
+      "partial_failed",
+    );
   });
 
   it("all failed → failed", () => {
@@ -17,7 +21,9 @@ describe("aggregateItemStatus", () => {
   });
 
   it("any in-flight (publishing/pending/retrying) → publishing", () => {
-    expect(aggregateItemStatus([{ status: "published" }, { status: "retrying" }])).toBe("publishing");
+    expect(aggregateItemStatus([{ status: "published" }, { status: "retrying" }])).toBe(
+      "publishing",
+    );
     expect(aggregateItemStatus([{ status: "pending" }])).toBe("publishing");
   });
 
@@ -37,13 +43,29 @@ describe("aggregation guard (R2a)", () => {
     const { createHmac } = await import("node:crypto");
     process.env.SDR_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 5).toString("base64");
     const SECRET = "ws-secret";
-    const sign = (body: string) => "sha256=" + createHmac("sha256", SECRET).update(`POST|/webhook|${body}`).digest("hex");
+    const sign = (body: string) =>
+      "sha256=" + createHmac("sha256", SECRET).update(`POST|/webhook|${body}`).digest("hex");
     const db = makeMockDb({
       workspace_sdr: [{ workspace_id: "ws-1", webhook_secret: encryptSecret(SECRET) }],
-      content_items: [{ id: "non-social", workspace_id: "ws-1", body: "landing", media_url: null, status: "published", meta: {} }],
+      content_items: [
+        {
+          id: "non-social",
+          workspace_id: "ws-1",
+          body: "landing",
+          media_url: null,
+          status: "published",
+          meta: {},
+        },
+      ],
     });
-    const body = JSON.stringify({ event: "post.published", data: { post_id: "unknown", target_id: "unknown", status: "published" } });
-    const out = await handleSdrWebhook({ rawBody: body, signature: sign(body), eventType: "post.published" }, { db });
+    const body = JSON.stringify({
+      event: "post.published",
+      data: { post_id: "unknown", target_id: "unknown", status: "published" },
+    });
+    const out = await handleSdrWebhook(
+      { rawBody: body, signature: sign(body), eventType: "post.published" },
+      { db },
+    );
     expect(out.status).toBe(404); // no delivery row → item untouched
     expect(db._state.content_items[0].status).toBe("published"); // unchanged
   });

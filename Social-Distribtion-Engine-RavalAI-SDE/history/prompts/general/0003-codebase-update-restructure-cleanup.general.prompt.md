@@ -16,17 +16,17 @@ links:
   adr: null
   pr: null
 files:
- - app/services/webhook_out.py (committed: delivery-log FK fix)
- - alembic/versions/003_delivery_logs_post_id_nullable.py (new, committed)
- - history/prompts/001-social-sde/0009-live-webhook-and-multi-tenant-isolation-proof.green.prompt.md (new, committed)
- - .gitignore (new, committed)
- - CLEANUP_MANIFEST.md (new, committed)
- - .env (untracked from git, kept on disk)
- - untracked: 4,505 *.pyc files, celerybeat-schedule, raval_sde.egg-info, .env
- - moved to OS trash (recoverable): .coverage, htmlcov/, all __pycache__/, .mypy_cache/, .pytest_cache/, .ruff_cache/, .hypothesis/, raval_sde.egg-info/, 7 stale spec status docs
+  - app/services/webhook_out.py (committed: delivery-log FK fix)
+  - alembic/versions/003_delivery_logs_post_id_nullable.py (new, committed)
+  - history/prompts/001-social-sde/0009-live-webhook-and-multi-tenant-isolation-proof.green.prompt.md (new, committed)
+  - .gitignore (new, committed)
+  - CLEANUP_MANIFEST.md (new, committed)
+  - .env (untracked from git, kept on disk)
+  - untracked: 4,505 *.pyc files, celerybeat-schedule, raval_sde.egg-info, .env
+  - moved to OS trash (recoverable): .coverage, htmlcov/, all __pycache__/, .mypy_cache/, .pytest_cache/, .ruff_cache/, .hypothesis/, raval_sde.egg-info/, 7 stale spec status docs
 tests:
- - Full suite 182 passed (regression-free after hygiene)
- - /healthz healthy (db+redis+workers); git status clean after hygiene
+  - Full suite 182 passed (regression-free after hygiene)
+  - /healthz healthy (db+redis+workers); git status clean after hygiene
 ---
 
 ## Prompt
@@ -36,6 +36,7 @@ User asked to: (1) update the full codebase with all our latest session changes,
 ## Response snapshot
 
 Explored the repo: no `.gitignore` existed; **4,505 committed `.pyc` files = 37% of all tracked files**; **`.env` with live secrets (LinkedIn tokens, FERNET_KEY, SDE_API_TOKEN, DB password) was committed and pushed**. User approved: trash the 7 stale one-time spec status docs; untrack + gitignore `.env`. Executed:
+
 - Commit A `b5519fb`: webhook delivery-log FK fix + migration 003 + PHR 0009 (the "latest changes").
 - Created a comprehensive `.gitignore`; `git rm --cached` the 4,505 `.pyc`, `celerybeat-schedule`, `.env`, `raval_sde.egg-info` (all kept on disk).
 - Moved to OS trash via `gio` (verified 22 items + `.trashinfo` in `~/.local/share/Trash/`, restore-capable): `.coverage`, `htmlcov/`, all 11 `__pycache__/`, `.mypy_cache/`, `.pytest_cache/`, `.ruff_cache/`, `.hypothesis/`, `raval_sde.egg-info/`, and the 7 stale spec docs.

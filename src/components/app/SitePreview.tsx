@@ -52,7 +52,6 @@ export function SitePreview({ workspaceId }: { workspaceId: string | null }) {
   const [nonce, setNonce] = useState(0);
   const [working, setWorking] = useState<WorkingState>({ active: false, label: "" });
   const stage = usePreviewStage();
-  
 
   const cardRef = useRef<HTMLDivElement | null>(null);
 
@@ -109,7 +108,7 @@ export function SitePreview({ workspaceId }: { workspaceId: string | null }) {
   useEffect(() => {
     setPreviewContext({
       siteUrl: siteUrl ?? null,
-      screenshotUrl: loaded && !errored ? currentShot ?? null : null,
+      screenshotUrl: loaded && !errored ? (currentShot ?? null) : null,
     });
   }, [siteUrl, currentShot, loaded, errored]);
 
@@ -165,7 +164,10 @@ export function SitePreview({ workspaceId }: { workspaceId: string | null }) {
                 working.active
                   ? { background: accent, boxShadow: `0 0 10px ${accent}` }
                   : loaded && siteUrl
-                    ? { background: "hsl(var(--brand-green))", boxShadow: "0 0 10px hsl(var(--brand-green) / 0.7)" }
+                    ? {
+                        background: "hsl(var(--brand-green))",
+                        boxShadow: "0 0 10px hsl(var(--brand-green) / 0.7)",
+                      }
                     : { background: "hsl(var(--muted-foreground) / 0.35)" }
               }
             />
@@ -178,7 +180,6 @@ export function SitePreview({ workspaceId }: { workspaceId: string | null }) {
                 : errored
                   ? "Preview offline"
                   : "Site preview"}
-
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -187,10 +188,15 @@ export function SitePreview({ workspaceId }: { workspaceId: string | null }) {
               <IconButton title="Refresh preview" onClick={refresh}>
                 <RefreshCw className={`h-3.5 w-3.5 ${working.active ? "animate-spin" : ""}`} />
               </IconButton>
-              <IconButton as="a" href={siteUrl} target="_blank" rel="noreferrer" title="Open in new tab">
+              <IconButton
+                as="a"
+                href={siteUrl}
+                target="_blank"
+                rel="noreferrer"
+                title="Open in new tab"
+              >
                 <ExternalLink className="h-3.5 w-3.5" />
               </IconButton>
-
             </>
           )}
         </div>
@@ -222,104 +228,111 @@ export function SitePreview({ workspaceId }: { workspaceId: string | null }) {
           }}
         >
           <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[1.62rem] bg-card">
-          <div aria-hidden className="pointer-events-none absolute inset-0 z-50 rounded-[1.62rem] ring-1 ring-inset ring-border/70" />
-          {/* Stage */}
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded-[1.62rem] bg-secondary/30">
-            {siteUrl ? (
-              <>
-                {!errored && currentShot && (
-                  <motion.img
-                    key={`${currentShot}-${nonce}`}
-                    src={`${currentShot}${currentShot.includes("?") ? "&" : "?"}_t=${nonce}`}
-                    alt={`Preview of ${displayHost}`}
-                    onLoad={() => setLoaded(true)}
-                    onError={handleImgError}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: loaded ? 1 : 0 }}
-                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                    className="absolute inset-0 h-full w-full object-cover object-top"
-                    draggable={false}
-                  />
-                )}
-
-
-                <AnimatePresence>
-                  {!loaded && !errored && (
-                    <motion.div
-                      key="skeleton"
-                      initial={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="absolute inset-0 z-10 bg-secondary/40"
-                    >
-                      <motion.div
-                        initial={{ x: "-100%" }}
-                        animate={{ x: "100%" }}
-                        transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
-                        className="absolute inset-y-0 w-1/2"
-                        style={{
-                          background:
-                            "linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.05), transparent)",
-                        }}
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="flex items-center gap-2 rounded-full border border-border bg-background/90 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--brand-green))]" />
-                          Capturing snapshot…
-                        </div>
-                      </div>
-                    </motion.div>
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-50 rounded-[1.62rem] ring-1 ring-inset ring-border/70"
+            />
+            {/* Stage */}
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-[1.62rem] bg-secondary/30">
+              {siteUrl ? (
+                <>
+                  {!errored && currentShot && (
+                    <motion.img
+                      key={`${currentShot}-${nonce}`}
+                      src={`${currentShot}${currentShot.includes("?") ? "&" : "?"}_t=${nonce}`}
+                      alt={`Preview of ${displayHost}`}
+                      onLoad={() => setLoaded(true)}
+                      onError={handleImgError}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: loaded ? 1 : 0 }}
+                      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                      className="absolute inset-0 h-full w-full object-cover object-top"
+                      draggable={false}
+                    />
                   )}
-                </AnimatePresence>
 
-                {errored && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 p-6 text-center">
-                    <div className="grid h-10 w-10 place-items-center rounded-full bg-secondary ring-1 ring-border">
-                      <Globe className="h-4 w-4 text-muted-foreground" />
+                  <AnimatePresence>
+                    {!loaded && !errored && (
+                      <motion.div
+                        key="skeleton"
+                        initial={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="absolute inset-0 z-10 bg-secondary/40"
+                      >
+                        <motion.div
+                          initial={{ x: "-100%" }}
+                          animate={{ x: "100%" }}
+                          transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
+                          className="absolute inset-y-0 w-1/2"
+                          style={{
+                            background:
+                              "linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.05), transparent)",
+                          }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="flex items-center gap-2 rounded-full border border-border bg-background/90 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--brand-green))]" />
+                            Capturing snapshot…
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {errored && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 p-6 text-center">
+                      <div className="grid h-10 w-10 place-items-center rounded-full bg-secondary ring-1 ring-border">
+                        <Globe className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="text-[13px] font-semibold tracking-tight">
+                        Preview unavailable
+                      </div>
+                      <p className="max-w-[260px] text-[11.5px] leading-relaxed text-muted-foreground">
+                        Couldn't capture a snapshot. Try refreshing, switching to Live, or opening
+                        the site directly.
+                      </p>
+                      <button
+                        onClick={refresh}
+                        className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-[11.5px] font-medium hover:bg-secondary"
+                      >
+                        <RefreshCw className="h-3 w-3" /> Try again
+                      </button>
                     </div>
-                    <div className="text-[13px] font-semibold tracking-tight">Preview unavailable</div>
-                    <p className="max-w-[260px] text-[11.5px] leading-relaxed text-muted-foreground">
-                      Couldn't capture a snapshot. Try refreshing, switching to Live, or opening the site directly.
-                    </p>
-                    <button
-                      onClick={refresh}
-                      className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-[11.5px] font-medium hover:bg-secondary"
-                    >
-                      <RefreshCw className="h-3 w-3" /> Try again
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <EmptyState />
-            )}
-
-            <AnimatePresence>
-              {stage ? (
-                <motion.div
-                  key={`stage-${stage.kind}-${stage.index}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="absolute inset-0 z-40 overflow-hidden rounded-[1.62rem] bg-background/92 backdrop-blur"
-                >
-                  <PreviewStage stage={stage} />
-                </motion.div>
-              ) : working.active && (
-                <motion.div
-                  key="working"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="pointer-events-none absolute inset-0 z-40"
-                >
-                  <WorkingOverlay accent={accent} label={working.label} />
-                </motion.div>
+                  )}
+                </>
+              ) : (
+                <EmptyState />
               )}
-            </AnimatePresence>
-          </div>
+
+              <AnimatePresence>
+                {stage ? (
+                  <motion.div
+                    key={`stage-${stage.kind}-${stage.index}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="absolute inset-0 z-40 overflow-hidden rounded-[1.62rem] bg-background/92 backdrop-blur"
+                  >
+                    <PreviewStage stage={stage} />
+                  </motion.div>
+                ) : (
+                  working.active && (
+                    <motion.div
+                      key="working"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="pointer-events-none absolute inset-0 z-40"
+                    >
+                      <WorkingOverlay accent={accent} label={working.label} />
+                    </motion.div>
+                  )
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -334,7 +347,8 @@ function IconButton({
 }: {
   children: React.ReactNode;
   as?: "a";
-} & React.ButtonHTMLAttributes<HTMLButtonElement> & React.AnchorHTMLAttributes<HTMLAnchorElement>) {
+} & React.ButtonHTMLAttributes<HTMLButtonElement> &
+  React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   const cls =
     "flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground";
   if (as === "a") {
@@ -455,10 +469,7 @@ function AgentsWorkingBanner({ label, accent }: { label: string; accent: string 
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span
-                className="text-[12px] font-semibold tracking-tight"
-                style={{ color: accent }}
-              >
+              <span className="text-[12px] font-semibold tracking-tight" style={{ color: accent }}>
                 {label || "Agents working on your site"}
               </span>
               <TypingDots accent={accent} />
@@ -686,9 +697,16 @@ function WorkingOverlay({ accent, label }: { accent: string; label: string }) {
                   <motion.span
                     aria-hidden
                     className="absolute inset-0 -z-10 rounded-full blur-xl"
-                    style={{ background: `radial-gradient(circle, ${hueAccent}cc, transparent 70%)` }}
+                    style={{
+                      background: `radial-gradient(circle, ${hueAccent}cc, transparent 70%)`,
+                    }}
                     animate={{ opacity: [0.45, 0.95, 0.45], scale: [0.9, 1.15, 0.9] }}
-                    transition={{ duration: 2.2, repeat: Infinity, delay: i * 0.2, ease: "easeInOut" }}
+                    transition={{
+                      duration: 2.2,
+                      repeat: Infinity,
+                      delay: i * 0.2,
+                      ease: "easeInOut",
+                    }}
                   />
                   <motion.img
                     src={star.src}

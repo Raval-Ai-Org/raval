@@ -7,12 +7,14 @@ import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/app/")({
   component: CommandCenter,
-  head: () => pageHead({
-    title: "Studio · Raval AI",
-    description: "Your Marketing Intelligence Layer — chat with Ravi to plan, create, optimize and grow content, SEO/AEO/GEO and social for the active brand.",
-    path: "/app",
-    noindex: true,
-  }),
+  head: () =>
+    pageHead({
+      title: "Studio · Raval AI",
+      description:
+        "Your Marketing Intelligence Layer — chat with Ravi to plan, create, optimize and grow content, SEO/AEO/GEO and social for the active brand.",
+      path: "/app",
+      noindex: true,
+    }),
 });
 
 function CommandCenter() {
@@ -60,4 +62,3 @@ function CommandCenter() {
     </div>
   );
 }
-

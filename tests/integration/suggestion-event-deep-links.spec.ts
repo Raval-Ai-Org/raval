@@ -47,24 +47,46 @@ function fakeSession() {
 
 async function stubSupabase(context: BrowserContext, opts: { websiteUrl?: string | null } = {}) {
   const websiteUrl = opts.websiteUrl ?? null;
-  await context.route(new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`), async (route: Route) => {
-    const req = route.request();
-    const url = req.url();
-    const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
-    if (url.includes("/auth/v1/user"))
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession().user) });
-    if (url.includes("/auth/v1/token"))
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession()) });
-    if (url.includes("/rest/v1/workspaces")) {
-      const row = {
-        id: WS_ID, name: "Test",
-        website_url: websiteUrl, industry: null,
-        onboarded_at: "2024-01-01T00:00:00Z", first_prompt: null,
-      };
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(wantsSingle ? row : [row]) });
-    }
-    return route.fulfill({ status: 200, headers: JSON_HEADERS, body: wantsSingle ? "null" : "[]" });
-  });
+  await context.route(
+    new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`),
+    async (route: Route) => {
+      const req = route.request();
+      const url = req.url();
+      const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
+      if (url.includes("/auth/v1/user"))
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession().user),
+        });
+      if (url.includes("/auth/v1/token"))
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession()),
+        });
+      if (url.includes("/rest/v1/workspaces")) {
+        const row = {
+          id: WS_ID,
+          name: "Test",
+          website_url: websiteUrl,
+          industry: null,
+          onboarded_at: "2024-01-01T00:00:00Z",
+          first_prompt: null,
+        };
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(wantsSingle ? row : [row]),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: wantsSingle ? "null" : "[]",
+      });
+    },
+  );
   await context.route("**/_serverFn/**", (route) =>
     route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
   );
@@ -88,9 +110,17 @@ async function seed(page: Page, opts: SeedOpts = {}) {
         }
         // @ts-expect-error test stub
         window.WebSocket = function () {
-          return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 3 };
+          return {
+            addEventListener() {},
+            removeEventListener() {},
+            send() {},
+            close() {},
+            readyState: 3,
+          };
         };
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
     },
     { storageKey: STORAGE_KEY, sess: fakeSession(), wsId: WS_ID, brandDna: opts.brandDna ?? null },
   );
@@ -101,7 +131,9 @@ async function freshLoad(page: Page) {
   // Wait for the shell + workspace to hydrate. AppShell only mounts the
   // ChatPanel / dialog listeners once workspaceId is set, so a naive wait
   // on the Studio rail races the event dispatch.
-  await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({
+    timeout: 15_000,
+  });
   await page.waitForFunction(
     () => !!window.localStorage.getItem("workspace:name") && !!document.querySelector("textarea"),
     null,
@@ -110,14 +142,17 @@ async function freshLoad(page: Page) {
 }
 
 async function dispatch(page: Page, name: string, detail?: unknown) {
-  await page.evaluate(
-    ({ n, d }) => window.dispatchEvent(new CustomEvent(n, { detail: d })),
-    { n: name, d: detail },
-  );
+  await page.evaluate(({ n, d }) => window.dispatchEvent(new CustomEvent(n, { detail: d })), {
+    n: name,
+    d: detail,
+  });
 }
 
 test.describe("Suggestion event deep-links", () => {
-  test("chat:prefill fills and focuses the composer on a fresh /app load", async ({ context, page }) => {
+  test("chat:prefill fills and focuses the composer on a fresh /app load", async ({
+    context,
+    page,
+  }) => {
     await stubSupabase(context);
     await seed(page);
     await freshLoad(page);
@@ -148,10 +183,15 @@ test.describe("Suggestion event deep-links", () => {
     // ContentCalendar is lazy-loaded and its listener only registers after
     // the chunk mounts, so retry the dispatch until the dialog appears.
     const dialog = page.getByRole("dialog", { name: /Content Calendar/i });
-    await expect.poll(async () => {
-      await dispatch(page, "open:content-calendar");
-      return dialog.isVisible().catch(() => false);
-    }, { timeout: 10_000, intervals: [250, 500, 1000] }).toBe(true);
+    await expect
+      .poll(
+        async () => {
+          await dispatch(page, "open:content-calendar");
+          return dialog.isVisible().catch(() => false);
+        },
+        { timeout: 10_000, intervals: [250, 500, 1000] },
+      )
+      .toBe(true);
   });
 
   test("open:client-portal opens the Client Portal dialog", async ({ context, page }) => {
@@ -162,10 +202,15 @@ test.describe("Suggestion event deep-links", () => {
     await dispatch(page, "open:client-portal");
     // The dialog's accessible name is "Share your work. Stay in control." —
     // match on the distinctive phrase so a copy tweak doesn't break the test.
-    await expect(page.getByRole("dialog", { name: /Stay in control/i })).toBeVisible({ timeout: 3_000 });
+    await expect(page.getByRole("dialog", { name: /Stay in control/i })).toBeVisible({
+      timeout: 3_000,
+    });
   });
 
-  test("open:canvas opens the Studio canvas modal on the requested tile", async ({ context, page }) => {
+  test("open:canvas opens the Studio canvas modal on the requested tile", async ({
+    context,
+    page,
+  }) => {
     await stubSupabase(context);
     await seed(page);
     await freshLoad(page);
@@ -175,7 +220,10 @@ test.describe("Suggestion event deep-links", () => {
     await expect(page.getByRole("dialog", { name: /SEO Brief/i })).toBeVisible({ timeout: 3_000 });
   });
 
-  test("geo:run-audit triggers a POST to /api/geo-audit from GeoAeoPanel", async ({ context, page }) => {
+  test("geo:run-audit triggers a POST to /api/geo-audit from GeoAeoPanel", async ({
+    context,
+    page,
+  }) => {
     // Panel gates run() on having a website URL — seed via brand-dna cache.
     await stubSupabase(context, { websiteUrl: "https://example.com" });
     await seed(page, { brandDna: { brandName: "Example", websiteUrl: "https://example.com" } });

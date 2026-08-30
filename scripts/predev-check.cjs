@@ -29,11 +29,7 @@ if (!fs.existsSync(scriptPath)) {
 let cmd, args;
 if (isWindows) {
   cmd = "powershell";
-  args = [
-    "-NoProfile",
-    "-ExecutionPolicy", "Bypass",
-    "-File", scriptPath,
-  ];
+  args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath];
 } else {
   cmd = "bash";
   args = [scriptPath];

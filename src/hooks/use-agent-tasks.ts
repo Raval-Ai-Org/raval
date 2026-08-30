@@ -49,20 +49,34 @@ export function useAgentTasks(agentId: string) {
   }, [agentId, key]);
 
   useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(tasks)); } catch {}
+    try {
+      localStorage.setItem(key, JSON.stringify(tasks));
+    } catch {}
   }, [key, tasks]);
 
   const add = (title: string, note?: string, due?: string) => {
     if (!title.trim()) return;
     setTasks((t) => [
-      { id: crypto.randomUUID(), title: title.trim(), note: note?.trim() || undefined, due: due?.trim() || undefined, done: false, createdAt: Date.now() },
+      {
+        id: crypto.randomUUID(),
+        title: title.trim(),
+        note: note?.trim() || undefined,
+        due: due?.trim() || undefined,
+        done: false,
+        createdAt: Date.now(),
+      },
       ...t,
     ]);
   };
-  const toggle = (id: string) => setTasks((t) => t.map((x) => x.id === id ? { ...x, done: !x.done } : x));
+  const toggle = (id: string) =>
+    setTasks((t) => t.map((x) => (x.id === id ? { ...x, done: !x.done } : x)));
   const remove = (id: string) => setTasks((t) => t.filter((x) => x.id !== id));
 
-  const generate = async (payload: { agentName: string; agentRole: string; missions: { label: string; description: string }[] }) => {
+  const generate = async (payload: {
+    agentName: string;
+    agentRole: string;
+    missions: { label: string; description: string }[];
+  }) => {
     setGenerating(true);
     try {
       const existing = tasks.filter((t) => !t.done).map((t) => t.title);
@@ -72,7 +86,9 @@ export function useAgentTasks(agentId: string) {
         body: JSON.stringify({ ...payload, existing }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as { tasks: { title: string; note?: string; due?: string }[] };
+      const data = (await res.json()) as {
+        tasks: { title: string; note?: string; due?: string }[];
+      };
       const fresh: AgentTask[] = (data.tasks ?? []).map((t) => ({
         id: crypto.randomUUID(),
         title: t.title,

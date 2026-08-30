@@ -1,17 +1,18 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 
-const BASE_URL = (typeof import.meta.env.VITE_APP_URL === 'string' && import.meta.env.VITE_APP_URL)
-  ? import.meta.env.VITE_APP_URL.replace(/\/$/, '')  // Remove trailing slash
-  : (typeof window !== 'undefined' ? window.location.origin : "https://raval.ai");
+const BASE_URL =
+  typeof import.meta.env.VITE_APP_URL === "string" && import.meta.env.VITE_APP_URL
+    ? import.meta.env.VITE_APP_URL.replace(/\/$/, "") // Remove trailing slash
+    : typeof window !== "undefined"
+      ? window.location.origin
+      : "https://raval.ai";
 
 export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [{ property: "og:url", content: `${BASE_URL}/` }],
-    links: [
-      { rel: "canonical", href: `${BASE_URL}/` },
-    ],
+    links: [{ rel: "canonical", href: `${BASE_URL}/` }],
     scripts: [
       {
         type: "application/ld+json",

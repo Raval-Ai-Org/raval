@@ -18,9 +18,7 @@ export const Route = createFileRoute("/sitemap.xml")({
         // Only include public, indexable, canonical routes. Anything with a
         // noindex directive (e.g. authenticated /app shells) must stay out —
         // scripts/validate-sitemap.mjs enforces this in CI.
-        const entries: SitemapEntry[] = [
-          { path: "/", changefreq: "weekly", priority: "1.0" },
-        ];
+        const entries: SitemapEntry[] = [{ path: "/", changefreq: "weekly", priority: "1.0" }];
 
         const urls = entries.map((e) =>
           [

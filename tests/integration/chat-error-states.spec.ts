@@ -38,9 +38,17 @@ async function stubSupabase(context: import("@playwright/test").BrowserContext) 
       const url = req.url();
       const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
       if (url.includes("/auth/v1/user"))
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession().user) });
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession().user),
+        });
       if (url.includes("/auth/v1/token"))
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession()) });
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(fakeSession()),
+        });
       if (url.includes("/rest/v1/workspaces")) {
         const row = {
           id: WS_ID,
@@ -56,7 +64,11 @@ async function stubSupabase(context: import("@playwright/test").BrowserContext) 
           body: JSON.stringify(wantsSingle ? row : [row]),
         });
       }
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: wantsSingle ? "null" : "[]" });
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: wantsSingle ? "null" : "[]",
+      });
     },
   );
   await context.route("**/_serverFn/**", (route) =>
@@ -81,7 +93,13 @@ async function seed(page: import("@playwright/test").Page) {
         window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
         // @ts-expect-error test stub
         window.WebSocket = function () {
-          return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 3 };
+          return {
+            addEventListener() {},
+            removeEventListener() {},
+            send() {},
+            close() {},
+            readyState: 3,
+          };
         };
       } catch {
         /* noop */
@@ -127,8 +145,9 @@ test.describe("Chat error handling", () => {
     await typeAndSend(page, "First try — should hit rate limit");
 
     // 1. The rate-limit toast is shown to the user.
-    await expect(page.getByText(/Rate limit hit\. Wait a moment and try again\./i))
-      .toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Rate limit hit\. Wait a moment and try again\./i)).toBeVisible({
+      timeout: 10_000,
+    });
 
     // 2. Composer & Send button recover (not stuck streaming).
     const sendBtn = page.getByRole("button", { name: /Send message/i });
@@ -153,7 +172,9 @@ test.describe("Chat error handling", () => {
         return route.fulfill({
           status: 402,
           headers: JSON_HEADERS,
-          body: JSON.stringify({ error: "AI credits exhausted. Add credits in Settings → Plans & credits." }),
+          body: JSON.stringify({
+            error: "AI credits exhausted. Add credits in Settings → Plans & credits.",
+          }),
         });
       }
       return route.fulfill({
@@ -170,8 +191,7 @@ test.describe("Chat error handling", () => {
     await typeAndSend(page, "First try — should hit credits");
 
     // 1. The credits-exhausted toast is shown to the user.
-    await expect(page.getByText(/AI credits exhausted\./i))
-      .toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/AI credits exhausted\./i)).toBeVisible({ timeout: 10_000 });
 
     // 2. Composer & Send button recover.
     const sendBtn = page.getByRole("button", { name: /Send message/i });

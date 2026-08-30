@@ -9,7 +9,7 @@ feature: 001-social-sde
 branch: 001-social-sde
 user: Muhammad Junaid Sajjad
 command: /sp.analyze --feature 001-social-sde
-labels: [analysis,tasks,verification,spec-driven]
+labels: [analysis, tasks, verification, spec-driven]
 links:
   spec: specs/001-social-sde/spec.md
   ticket: null
@@ -30,6 +30,7 @@ Since now that our /sp.tasks commands has ran and created the tasks no please do
 ## Response snapshot
 
 Executed /sp.analyze skill to verify task consistency:
+
 - Verified 54 tasks across 8 phases
 - Mapped all 20 functional requirements to tasks
 - Checked constitution alignment (all MUST principles satisfied)
@@ -38,6 +39,7 @@ Executed /sp.analyze skill to verify task consistency:
 - Coverage: 95% (19/20 requirements explicitly covered)
 
 Key findings:
+
 - Tasks are consistent with plan.md and spec.md
 - Minor gap: Platform feature flags (FR-016) handled at adapter level
 - All constitution gates pass

@@ -46,6 +46,7 @@ docker compose up
 ```
 
 This starts:
+
 - **api**: FastAPI server on localhost:8000
 - **worker**: Celery worker for background jobs
 - **beat**: Celery beat for scheduled tasks
@@ -105,6 +106,7 @@ curl http://localhost:8000/api/v1/jobs/post_uuid \
 ```
 
 You'll see:
+
 - Job status (PENDING, COMPLETED, FAILED)
 - Target statuses
 - Platform URLs if published
@@ -159,13 +161,15 @@ POST /publish with idempotency_key="post_abc" → 200 OK (existing post)
 ### Scheduling
 
 Immediate publish:
+
 ```json
-{ "scheduled_at": "2026-07-26T21:00:00Z" }  // now or past
+{ "scheduled_at": "2026-07-26T21:00:00Z" } // now or past
 ```
 
 Scheduled publish:
+
 ```json
-{ "scheduled_at": "2026-07-26T14:00:00Z", "timezone": "America/New_York" }  // future
+{ "scheduled_at": "2026-07-26T14:00:00Z", "timezone": "America/New_York" } // future
 ```
 
 The system will publish at exactly that time, even if your service is down.
@@ -174,11 +178,11 @@ The system will publish at exactly that time, even if your service is down.
 
 Failures are classified:
 
-| Class | Example | SDE Behavior |
-|-------|---------|--------------|
-| Retryable | 429 (rate limit), 503 (server error) | Retry with backoff |
-| Auth | 401 (token expired), 403 (scope insufficient) | Mark account `needs_reauth`, webhook sent |
-| Fatal | 400 (bad content), policy violation | Mark target FAILED, webhook sent |
+| Class     | Example                                       | SDE Behavior                              |
+| --------- | --------------------------------------------- | ----------------------------------------- |
+| Retryable | 429 (rate limit), 503 (server error)          | Retry with backoff                        |
+| Auth      | 401 (token expired), 403 (scope insufficient) | Mark account `needs_reauth`, webhook sent |
+| Fatal     | 400 (bad content), policy violation           | Mark target FAILED, webhook sent          |
 
 ---
 
@@ -257,6 +261,7 @@ curl http://localhost:8000/api/v1/accounts?workspace_id=ws_1
 ```
 
 Response:
+
 ```json
 [
   {
@@ -317,6 +322,7 @@ curl http://localhost:8000/api/v1/metrics
 ```
 
 Prometheus-format output with:
+
 - Posts published by platform
 - Posts failed by error code
 - Queue depth
@@ -337,6 +343,7 @@ docker compose exec worker celery inspect registered
 ```
 
 Or open Flower (Celery web UI):
+
 ```
 http://localhost:5555
 Login: admin / change-me
@@ -361,6 +368,7 @@ docker compose down -v
 ### "Connection refused" to API
 
 Wait 10 seconds for services to start. Check:
+
 ```bash
 docker compose ps
 ```
@@ -370,6 +378,7 @@ All should show `healthy`.
 ### "401 Unauthorized"
 
 Check that you're sending:
+
 - `Authorization: Bearer <SDE_API_TOKEN>` header
 - `X-Signature` header with valid HMAC
 - `X-Timestamp` header (not older than 300 seconds)
@@ -392,4 +401,4 @@ Check that you're sending:
 
 ---
 
-*Quickstart guide: 2026-07-26*
+_Quickstart guide: 2026-07-26_

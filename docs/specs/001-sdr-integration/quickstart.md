@@ -9,6 +9,7 @@ How to stand up the SDR locally, smoke-test all 4 adapters in DryRun, and point 
 Repo: `../Social-Distribtion-Engine-RavalAI-SDE-/` (its own git repo, Python 3.12).
 
 **Option A — Docker Compose (full parity):**
+
 ```bash
 cd Social-Distribtion-Engine-RavalAI-SDE-
 cp .env.example .env
@@ -17,9 +18,11 @@ cp .env.example .env
 docker compose up -d --build          # postgres, redis, api, worker, beat (+flower)
 docker compose run --rm api alembic upgrade head
 ```
+
 > Disk-sensitive machine: pull images, run the smoke test, then `docker compose down` and prune to reclaim disk.
 
 **Option B — local venv (lighter, for tests):**
+
 ```bash
 cd Social-Distribtion-Engine-Ravalai-SDE-   # (note repo dir name)
 source venv/bin/activate
@@ -37,9 +40,11 @@ DryRun activates automatically for accounts whose platform is `dryrun` (or an un
 cd Social-Distribtion-Engine-RavalAI-SDE-/specs/001-social-sde/demo
 ./run-demo.sh          # health → publish → job status → idempotency → schedule → cancel → 401 → multi-target
 ```
+
 Verify in the output: 201 publish, job reaches `published`, duplicate key returns the same job, cancel returns 204, missing Bearer → 401. Then a DryRun failure pass with `FORCE_FATAL` text → status `failed` with `error_category=fatal`.
 
 **RavalAI dev pointed at the local SDR:**
+
 ```bash
 cd raval
 # server-only env (never VITE_*):

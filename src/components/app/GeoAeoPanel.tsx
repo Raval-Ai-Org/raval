@@ -1,10 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import {
-  Sparkles, ShieldCheck, Search, Bot, FileCode2, Gauge, ListTree,
-  CheckCircle2, AlertTriangle, XCircle, Info, RefreshCw, ChevronDown,
-  Globe, Zap, Lightbulb, Loader2, ArrowUpRight, Wand2, Star,
-  Github, Plug, ExternalLink, Wrench, Copy, Check,
+  Sparkles,
+  ShieldCheck,
+  Search,
+  Bot,
+  FileCode2,
+  Gauge,
+  ListTree,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Info,
+  RefreshCw,
+  ChevronDown,
+  Globe,
+  Zap,
+  Lightbulb,
+  Loader2,
+  ArrowUpRight,
+  Wand2,
+  Star,
+  Github,
+  Plug,
+  ExternalLink,
+  Wrench,
+  Copy,
+  Check,
 } from "@/components/ui/gemini-icons";
 import { cn } from "@/lib/utils";
 import { authedFetch } from "@/lib/authed-fetch";
@@ -14,10 +36,30 @@ import { persistGeoAudit } from "@/lib/insights.functions";
 import { StarAgent as BrandStar, type StarMood } from "@/components/StarAgent";
 
 type CheckStatus = "pass" | "warn" | "fail" | "info";
-interface Check { id: string; label: string; status: CheckStatus; detail: string; weight?: number }
-interface Section { id: string; title: string; blurb: string; checks: Check[] }
-interface Subscore { id: string; title: string; score: number }
-interface ActionItem { id: string; priority: "high" | "med" | "low"; title: string; detail: string }
+interface Check {
+  id: string;
+  label: string;
+  status: CheckStatus;
+  detail: string;
+  weight?: number;
+}
+interface Section {
+  id: string;
+  title: string;
+  blurb: string;
+  checks: Check[];
+}
+interface Subscore {
+  id: string;
+  title: string;
+  score: number;
+}
+interface ActionItem {
+  id: string;
+  priority: "high" | "med" | "low";
+  title: string;
+  detail: string;
+}
 interface AuditResult {
   url: string;
   fetchedAt: number;
@@ -28,22 +70,22 @@ interface AuditResult {
 }
 
 /* ─────────────── Section metadata (colors + icons) ─────────────── */
-const SECTION_META: Record<string, { icon: React.ComponentType<any>; hue: number; short: string }> = {
-  "ai-access":   { icon: Bot,         hue: 268, short: "AI bots" },
-  "schema":      { icon: FileCode2,   hue: 217, short: "Schema" },
-  "crawl":       { icon: Search,      hue: 42,  short: "Crawl" },
-  "content":     { icon: ListTree,    hue: 152, short: "Content" },
-  "trust":       { icon: ShieldCheck, hue: 198, short: "Trust" },
-  "performance": { icon: Gauge,       hue: 4,   short: "Perf" },
-};
+const SECTION_META: Record<string, { icon: React.ComponentType<any>; hue: number; short: string }> =
+  {
+    "ai-access": { icon: Bot, hue: 268, short: "AI bots" },
+    schema: { icon: FileCode2, hue: 217, short: "Schema" },
+    crawl: { icon: Search, hue: 42, short: "Crawl" },
+    content: { icon: ListTree, hue: 152, short: "Content" },
+    trust: { icon: ShieldCheck, hue: 198, short: "Trust" },
+    performance: { icon: Gauge, hue: 4, short: "Perf" },
+  };
 
 function StatusGlyph({ status }: { status: CheckStatus }) {
   if (status === "pass")
     return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" strokeWidth={2.4} />;
   if (status === "warn")
     return <AlertTriangle className="h-3.5 w-3.5 text-amber-500" strokeWidth={2.4} />;
-  if (status === "fail")
-    return <XCircle className="h-3.5 w-3.5 text-rose-500" strokeWidth={2.4} />;
+  if (status === "fail") return <XCircle className="h-3.5 w-3.5 text-rose-500" strokeWidth={2.4} />;
   return <Info className="h-3.5 w-3.5 text-muted-foreground/70" strokeWidth={2.2} />;
 }
 
@@ -71,7 +113,15 @@ function AnimatedNumber({ value, className }: { value: number; className?: strin
 }
 
 /* ─────────────── Orbit halo (legacy, kept for ring decoration if needed) ─────────────── */
-function OrbitStar({ size = 28, hue = 217, idle = false }: { size?: number; hue?: number; idle?: boolean }) {
+function OrbitStar({
+  size = 28,
+  hue = 217,
+  idle = false,
+}: {
+  size?: number;
+  hue?: number;
+  idle?: boolean;
+}) {
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       {/* Soft glow */}
@@ -92,7 +142,11 @@ function OrbitStar({ size = 28, hue = 217, idle = false }: { size?: number; hue?
         transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
       />
       <span className="absolute inset-[2px] grid place-items-center rounded-full bg-background">
-        <Sparkles className="h-3.5 w-3.5" strokeWidth={2.4} style={{ color: `hsl(${hue} 75% 58%)` }} />
+        <Sparkles
+          className="h-3.5 w-3.5"
+          strokeWidth={2.4}
+          style={{ color: `hsl(${hue} 75% 58%)` }}
+        />
       </span>
       {/* Orbiting micro stars */}
       {[0, 1, 2].map((i) => (
@@ -104,10 +158,7 @@ function OrbitStar({ size = 28, hue = 217, idle = false }: { size?: number; hue?
           transition={{ duration: 6 + i * 2, repeat: Infinity, ease: "linear", delay: i * -1.2 }}
           style={{ translateX: "-50%", translateY: "-50%" }}
         >
-          <span
-            className="absolute"
-            style={{ left: size * 0.55, top: -1 - i * 0.5 }}
-          >
+          <span className="absolute" style={{ left: size * 0.55, top: -1 - i * 0.5 }}>
             <motion.span
               animate={{ opacity: [0.4, 1, 0.4], scale: [0.7, 1.1, 0.7] }}
               transition={{ duration: 1.6 + i * 0.3, repeat: Infinity, ease: "easeInOut" }}
@@ -150,10 +201,23 @@ function HeroScoreRing({ value, size = 96 }: { value: number; size?: number }) {
             <stop offset="100%" stopColor={color} stopOpacity="0.5" />
           </linearGradient>
         </defs>
-        <circle cx={size / 2} cy={size / 2} r={r} stroke="hsl(var(--border))" strokeOpacity={0.45} strokeWidth={stroke} fill="none" />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke="hsl(var(--border))"
+          strokeOpacity={0.45}
+          strokeWidth={stroke}
+          fill="none"
+        />
         <motion.circle
-          cx={size / 2} cy={size / 2} r={r}
-          stroke={`url(#${gradId})`} strokeWidth={stroke} fill="none" strokeLinecap="round"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke={`url(#${gradId})`}
+          strokeWidth={stroke}
+          fill="none"
+          strokeLinecap="round"
           strokeDasharray={c}
           initial={{ strokeDashoffset: c }}
           animate={{ strokeDashoffset: offset }}
@@ -167,11 +231,18 @@ function HeroScoreRing({ value, size = 96 }: { value: number; size?: number }) {
         animate={{ rotate: 360 }}
         transition={{ duration: 9, repeat: Infinity, ease: "linear" }}
       >
-        <Star className="absolute -top-0.5 left-1/2 h-2 w-2 -translate-x-1/2" strokeWidth={0} fill={color} />
+        <Star
+          className="absolute -top-0.5 left-1/2 h-2 w-2 -translate-x-1/2"
+          strokeWidth={0}
+          fill={color}
+        />
       </motion.div>
       <div className="absolute inset-0 grid place-items-center">
         <div className="flex items-baseline gap-0.5">
-          <AnimatedNumber value={value} className="text-[24px] font-semibold tabular-nums tracking-tight" />
+          <AnimatedNumber
+            value={value}
+            className="text-[24px] font-semibold tabular-nums tracking-tight"
+          />
           <span className="text-[10px] font-medium text-muted-foreground">/100</span>
         </div>
       </div>
@@ -199,7 +270,9 @@ function SubscoreChip({ s, i }: { s: Subscore; i: number }) {
         </span>
       </div>
       <div className="mt-1 flex items-baseline gap-0.5">
-        <span className="text-[16px] font-semibold tabular-nums" style={{ color }}>{s.score}</span>
+        <span className="text-[16px] font-semibold tabular-nums" style={{ color }}>
+          {s.score}
+        </span>
         <span className="text-[9.5px] text-muted-foreground/70">/100</span>
       </div>
       <div className="mt-1 h-1 overflow-hidden rounded-full bg-border/40">
@@ -216,7 +289,9 @@ function SubscoreChip({ s, i }: { s: Subscore; i: number }) {
 }
 
 /* ─────────────── Fix recipes (snippets the user can apply) ─────────────── */
-function fixRecipe(action: ActionItem): { title: string; code: string; lang: string; placement: string } | null {
+function fixRecipe(
+  action: ActionItem,
+): { title: string; code: string; lang: string; placement: string } | null {
   const t = (action.title + " " + action.detail).toLowerCase();
   if (t.includes("llms.txt")) {
     return {
@@ -303,7 +378,9 @@ function FixDrawer({ action, onClose }: { action: ActionItem; onClose: () => voi
       await navigator.clipboard.writeText(recipe.code);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
   };
   return (
     <motion.div
@@ -324,7 +401,9 @@ function FixDrawer({ action, onClose }: { action: ActionItem; onClose: () => voi
               <button
                 onClick={onClose}
                 className="text-[10px] text-muted-foreground hover:text-foreground"
-              >Close</button>
+              >
+                Close
+              </button>
             </div>
             <div className="mt-1 text-[10.5px] text-muted-foreground">{recipe.placement}</div>
             <div className="mt-2 relative">
@@ -336,7 +415,15 @@ function FixDrawer({ action, onClose }: { action: ActionItem; onClose: () => voi
                 onClick={copy}
                 className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-md border border-border/60 bg-card px-1.5 py-1 text-[9.5px] font-medium text-foreground/80 hover:bg-secondary"
               >
-                {copied ? <><Check className="h-2.5 w-2.5 text-emerald-500" /> Copied</> : <><Copy className="h-2.5 w-2.5" /> Copy</>}
+                {copied ? (
+                  <>
+                    <Check className="h-2.5 w-2.5 text-emerald-500" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-2.5 w-2.5" /> Copy
+                  </>
+                )}
               </motion.button>
             </div>
           </>
@@ -344,8 +431,14 @@ function FixDrawer({ action, onClose }: { action: ActionItem; onClose: () => voi
           <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
             <Info className="mt-0.5 h-3 w-3" />
             <div>
-              No prebuilt snippet for this one — apply the recommendation as described. The Raval agent can draft a fix on request.
-              <button onClick={onClose} className="ml-1 text-foreground/70 underline-offset-2 hover:underline">Close</button>
+              No prebuilt snippet for this one — apply the recommendation as described. The Raval
+              agent can draft a fix on request.
+              <button
+                onClick={onClose}
+                className="ml-1 text-foreground/70 underline-offset-2 hover:underline"
+              >
+                Close
+              </button>
             </div>
           </div>
         )}
@@ -371,13 +464,17 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
     try {
       const raw = localStorage.getItem(CACHE_KEY(workspaceId));
       if (raw) setResult(JSON.parse(raw));
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
   }, [workspaceId]);
 
   // Listen for chat-driven "run audit" requests so the panel responds when
   // the user asks Raval Ai to scan their site from chat.
   useEffect(() => {
-    const onRun = () => { void run(); };
+    const onRun = () => {
+      void run();
+    };
     window.addEventListener("geo:run-audit", onRun);
     return () => window.removeEventListener("geo:run-audit", onRun);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -385,7 +482,8 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
 
   const run = async () => {
     if (!url || running) return;
-    setRunning(true); setErr(null);
+    setRunning(true);
+    setErr(null);
     try {
       const res = await authedFetch("/api/geo-audit", {
         method: "POST",
@@ -402,9 +500,15 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
         try {
           localStorage.setItem(CACHE_KEY(workspaceId), JSON.stringify(json));
           localStorage.setItem(`geo:lastRun:${workspaceId}`, String(Date.now()));
-        } catch { /* noop */ }
+        } catch {
+          /* noop */
+        }
       }
-      try { window.dispatchEvent(new CustomEvent("geo:audit-complete")); } catch { /* noop */ }
+      try {
+        window.dispatchEvent(new CustomEvent("geo:audit-complete"));
+      } catch {
+        /* noop */
+      }
       if (workspaceId) {
         try {
           await savePersist({
@@ -418,7 +522,9 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
               meta: { actionsCount: (json.actions ?? []).length, fetchedAt: json.fetchedAt },
             },
           });
-        } catch { /* persistence is best-effort */ }
+        } catch {
+          /* persistence is best-effort */
+        }
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Audit failed");
@@ -446,7 +552,11 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
       {/* ── Header ─────────────────────────────────────────────── */}
       <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pb-3 sm:gap-4">
         <div className="flex min-w-0 items-center gap-2.5">
-          <BrandStar mood={running ? "scanning" : (result ? "excited" : "waving")} size={40} animate />
+          <BrandStar
+            mood={running ? "scanning" : result ? "excited" : "waving"}
+            size={40}
+            animate
+          />
           <div className="min-w-0 leading-tight">
             <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground/95 sm:text-[14px]">
               <span className="truncate">AI Search Visibility</span>
@@ -457,8 +567,19 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
               />
             </div>
             <div className="truncate text-[11px] text-muted-foreground/80 sm:text-[12px]">
-              {url ? <>How AI engines see <span className="text-foreground/80">{url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span></> : "Connect a website in Memory to begin"}
-              {lastScan && <span className="ml-1.5 text-muted-foreground/60">· scanned {lastScan}</span>}
+              {url ? (
+                <>
+                  How AI engines see{" "}
+                  <span className="text-foreground/80">
+                    {url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                  </span>
+                </>
+              ) : (
+                "Connect a website in Memory to begin"
+              )}
+              {lastScan && (
+                <span className="ml-1.5 text-muted-foreground/60">· scanned {lastScan}</span>
+              )}
             </div>
           </div>
         </div>
@@ -476,11 +597,17 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
           )}
         >
           {running ? (
-            <><Loader2 className="h-3 w-3 animate-spin" /> Scanning…</>
+            <>
+              <Loader2 className="h-3 w-3 animate-spin" /> Scanning…
+            </>
           ) : result ? (
-            <><RefreshCw className="h-3 w-3" /> Re-scan</>
+            <>
+              <RefreshCw className="h-3 w-3" /> Re-scan
+            </>
           ) : (
-            <><Zap className="h-3 w-3" /> Run audit</>
+            <>
+              <Zap className="h-3 w-3" /> Run audit
+            </>
           )}
           {!running && !result && (
             <motion.span
@@ -518,7 +645,9 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
               <BrandStar mood="happy" size={44} animate />
               <div className="min-w-0 flex-1">
                 <p className="text-[12.5px] font-semibold text-foreground/95">
-                  {url ? "See how ChatGPT, Gemini & Perplexity read your site" : "Connect your website first"}
+                  {url
+                    ? "See how ChatGPT, Gemini & Perplexity read your site"
+                    : "Connect your website first"}
                 </p>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
                   40+ checks · crawler access, schema, content shape and trust.
@@ -605,13 +734,21 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                   GEO score · {result.subscores.length} signals
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                  <span className="text-[15px] font-semibold tracking-tight sm:text-[16px]" style={{ color: verdictColor }}>
+                  <span
+                    className="text-[15px] font-semibold tracking-tight sm:text-[16px]"
+                    style={{ color: verdictColor }}
+                  >
                     {verdict.label}
                   </span>
-                  <span className="text-[12px] text-muted-foreground sm:text-[12.5px]">— {verdict.tone}</span>
+                  <span className="text-[12px] text-muted-foreground sm:text-[12.5px]">
+                    — {verdict.tone}
+                  </span>
                 </div>
                 <div className="mt-1 truncate text-[11px] text-muted-foreground/80 sm:text-[11.5px]">
-                  Auditing <span className="font-medium text-foreground/80">{result.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
+                  Auditing{" "}
+                  <span className="font-medium text-foreground/80">
+                    {result.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                  </span>
                 </div>
               </div>
             </div>
@@ -641,9 +778,13 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                   >
                     <Lightbulb className="h-3 w-3 text-amber-500" strokeWidth={2.4} />
                   </motion.span>
-                  <span className="text-[13px] font-semibold text-foreground/95 sm:text-[13.5px]">Do this next</span>
+                  <span className="text-[13px] font-semibold text-foreground/95 sm:text-[13.5px]">
+                    Do this next
+                  </span>
                 </div>
-                <span className="text-[10.5px] text-muted-foreground sm:text-[11px]">Top {Math.min(5, result.actions.length)} of {result.actions.length}</span>
+                <span className="text-[10.5px] text-muted-foreground sm:text-[11px]">
+                  Top {Math.min(5, result.actions.length)} of {result.actions.length}
+                </span>
               </div>
               <ul className="space-y-1.5">
                 {result.actions.slice(0, 5).map((a, i) => {
@@ -660,16 +801,23 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                         <span
                           className={cn(
                             "mt-0.5 inline-flex h-5 shrink-0 items-center rounded-full px-1.5 text-[9.5px] font-bold uppercase tracking-wider",
-                            a.priority === "high" && "bg-rose-500/15 text-rose-500 ring-1 ring-rose-500/30",
-                            a.priority === "med" && "bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30",
-                            a.priority === "low" && "bg-muted text-muted-foreground ring-1 ring-border/60",
+                            a.priority === "high" &&
+                              "bg-rose-500/15 text-rose-500 ring-1 ring-rose-500/30",
+                            a.priority === "med" &&
+                              "bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30",
+                            a.priority === "low" &&
+                              "bg-muted text-muted-foreground ring-1 ring-border/60",
                           )}
                         >
                           {a.priority === "high" ? "P0" : a.priority === "med" ? "P1" : "P2"}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <div className="font-medium text-foreground/95 break-words">{a.title}</div>
-                          <div className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground sm:text-[11.5px]">{a.detail}</div>
+                          <div className="font-medium text-foreground/95 break-words">
+                            {a.title}
+                          </div>
+                          <div className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground sm:text-[11.5px]">
+                            {a.detail}
+                          </div>
                         </div>
                         <motion.button
                           whileHover={{ scale: 1.04 }}
@@ -709,7 +857,9 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
           >
             <div className="mb-2 flex items-center gap-1.5">
               <ListTree className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.4} />
-              <span className="text-[13px] font-semibold text-foreground/95 sm:text-[13.5px]">Full breakdown</span>
+              <span className="text-[13px] font-semibold text-foreground/95 sm:text-[13.5px]">
+                Full breakdown
+              </span>
             </div>
             <div className="space-y-1.5">
               {result.sections.map((s, i) => {
@@ -742,17 +892,27 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                           background: `linear-gradient(135deg, hsl(${meta.hue} 75% 58% / 0.24), hsl(${meta.hue} 75% 58% / 0.06))`,
                         }}
                       >
-                        <Icon className="h-3.5 w-3.5" strokeWidth={2.2} style={{ color: `hsl(${meta.hue} 70% 55%)` }} />
+                        <Icon
+                          className="h-3.5 w-3.5"
+                          strokeWidth={2.2}
+                          style={{ color: `hsl(${meta.hue} 70% 55%)` }}
+                        />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-medium text-foreground/95 sm:text-[13.5px]">{s.title}</div>
-                        <div className="truncate text-[11px] text-muted-foreground sm:text-[11.5px]">{s.blurb}</div>
+                        <div className="truncate text-[13px] font-medium text-foreground/95 sm:text-[13.5px]">
+                          {s.title}
+                        </div>
+                        <div className="truncate text-[11px] text-muted-foreground sm:text-[11.5px]">
+                          {s.blurb}
+                        </div>
                       </div>
                       <div className="flex items-center gap-1.5 text-[10px]">
                         <AnimatePresence>
                           {failing > 0 && (
                             <motion.span
-                              initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              exit={{ scale: 0 }}
                               className="rounded-full bg-rose-500/15 px-1.5 py-0.5 font-semibold text-rose-500"
                             >
                               {failing}
@@ -760,7 +920,9 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                           )}
                           {warning > 0 && (
                             <motion.span
-                              initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              exit={{ scale: 0 }}
                               className="rounded-full bg-amber-500/15 px-1.5 py-0.5 font-semibold text-amber-600"
                             >
                               {warning}
@@ -768,7 +930,9 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                           )}
                           {failing === 0 && warning === 0 && passing > 0 && (
                             <motion.span
-                              initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              exit={{ scale: 0 }}
                               className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 font-semibold text-emerald-500"
                             >
                               ✓
@@ -776,10 +940,21 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                           )}
                         </AnimatePresence>
                         {sub && (
-                          <span className="tabular-nums font-semibold" style={{ color: scoreColor(sub.score) }}>{sub.score}</span>
+                          <span
+                            className="tabular-nums font-semibold"
+                            style={{ color: scoreColor(sub.score) }}
+                          >
+                            {sub.score}
+                          </span>
                         )}
-                        <motion.span animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.25 }}>
-                          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2} />
+                        <motion.span
+                          animate={{ rotate: isOpen ? 180 : 0 }}
+                          transition={{ duration: 0.25 }}
+                        >
+                          <ChevronDown
+                            className="h-3.5 w-3.5 text-muted-foreground"
+                            strokeWidth={2}
+                          />
                         </motion.span>
                       </div>
                     </button>
@@ -814,7 +989,9 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                             exit="closed"
                             variants={{
                               open: { transition: { staggerChildren: 0.035, delayChildren: 0.12 } },
-                              closed: { transition: { staggerChildren: 0.015, staggerDirection: -1 } },
+                              closed: {
+                                transition: { staggerChildren: 0.015, staggerDirection: -1 },
+                              },
                             }}
                           >
                             {s.checks.map((c) => (
@@ -836,10 +1013,16 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                                 }}
                                 className="flex items-start gap-2.5 px-3 py-2 text-[12px] transition-colors hover:bg-secondary/30 sm:text-[12.5px]"
                               >
-                                <span className="mt-[3px]"><StatusGlyph status={c.status} /></span>
+                                <span className="mt-[3px]">
+                                  <StatusGlyph status={c.status} />
+                                </span>
                                 <div className="min-w-0 flex-1">
-                                  <div className="font-medium text-foreground/90 break-words">{c.label}</div>
-                                  <div className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground sm:text-[11.5px]">{c.detail}</div>
+                                  <div className="font-medium text-foreground/90 break-words">
+                                    {c.label}
+                                  </div>
+                                  <div className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground sm:text-[11.5px]">
+                                    {c.detail}
+                                  </div>
                                 </div>
                               </motion.li>
                             ))}
@@ -875,9 +1058,12 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                 <Plug className="h-3.5 w-3.5 text-[hsl(var(--brand-blue))]" strokeWidth={2.2} />
               </motion.span>
               <div className="min-w-0 flex-1">
-                <div className="text-[12.5px] font-semibold text-foreground/95 sm:text-[13px]">Deploy this fix automatically</div>
+                <div className="text-[12.5px] font-semibold text-foreground/95 sm:text-[13px]">
+                  Deploy this fix automatically
+                </div>
                 <div className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground sm:text-[11.5px]">
-                  Connect your codebase or CMS and Raval will open PRs / post drafts with the recommended schema, llms.txt and meta fixes.
+                  Connect your codebase or CMS and Raval will open PRs / post drafts with the
+                  recommended schema, llms.txt and meta fixes.
                 </div>
               </div>
             </div>
@@ -899,7 +1085,9 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
             </div>
             <div className="mt-2 flex items-center gap-1 text-[10.5px] text-muted-foreground/80 sm:text-[11px]">
               <Info className="h-3 w-3 shrink-0" />
-              <span className="min-w-0">Connectors arrive in your Settings → Integrations soon.</span>
+              <span className="min-w-0">
+                Connectors arrive in your Settings → Integrations soon.
+              </span>
             </div>
           </motion.div>
         )}
@@ -910,8 +1098,18 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
 
 /* ─────────────── Connect tile ─────────────── */
 function ConnectTile({
-  icon, label, hint, hue, disabled,
-}: { icon: React.ReactNode; label: string; hint: string; hue: number; disabled?: boolean }) {
+  icon,
+  label,
+  hint,
+  hue,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint: string;
+  hue: number;
+  disabled?: boolean;
+}) {
   return (
     <motion.button
       whileHover={{ y: disabled ? 0 : -2 }}
@@ -924,18 +1122,26 @@ function ConnectTile({
     >
       <span
         className="grid h-7 w-7 shrink-0 place-items-center rounded-lg ring-1 ring-border/60"
-        style={{ background: `linear-gradient(135deg, hsl(${hue} 75% 58% / 0.22), hsl(${hue} 75% 58% / 0.05))`, color: `hsl(${hue} 70% 55%)` }}
+        style={{
+          background: `linear-gradient(135deg, hsl(${hue} 75% 58% / 0.22), hsl(${hue} 75% 58% / 0.05))`,
+          color: `hsl(${hue} 70% 55%)`,
+        }}
       >
         {icon}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1 text-[12px] font-semibold text-foreground/95 sm:text-[12.5px]">
           <span className="truncate">{label}</span>
-          <span className="shrink-0 rounded-full bg-muted px-1.5 py-[1px] text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Soon</span>
+          <span className="shrink-0 rounded-full bg-muted px-1.5 py-[1px] text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+            Soon
+          </span>
         </div>
         <div className="truncate text-[10.5px] text-muted-foreground sm:text-[11px]">{hint}</div>
       </div>
-      <ExternalLink className="h-3 w-3 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5" strokeWidth={2.2} />
+      <ExternalLink
+        className="h-3 w-3 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5"
+        strokeWidth={2.2}
+      />
     </motion.button>
   );
 }

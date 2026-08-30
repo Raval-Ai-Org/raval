@@ -19,9 +19,24 @@ describe("publishContentItemsHandler", () => {
   const sdr = new MockSDR();
   beforeAll(async () => {
     await sdr.start();
-    sdr.addAccount({ account_id: "tw-1", platform: "twitter", platform_username: "Brand", status: "active" });
-    sdr.addAccount({ account_id: "tw-2", platform: "twitter", platform_username: "Brand2", status: "active" });
-    sdr.addAccount({ account_id: "li-1", platform: "linkedin", platform_username: "Brand LI", status: "active" });
+    sdr.addAccount({
+      account_id: "tw-1",
+      platform: "twitter",
+      platform_username: "Brand",
+      status: "active",
+    });
+    sdr.addAccount({
+      account_id: "tw-2",
+      platform: "twitter",
+      platform_username: "Brand2",
+      status: "active",
+    });
+    sdr.addAccount({
+      account_id: "li-1",
+      platform: "linkedin",
+      platform_username: "Brand LI",
+      status: "active",
+    });
   });
   afterAll(async () => await sdr.stop());
 
@@ -44,7 +59,9 @@ describe("publishContentItemsHandler", () => {
     expect(out.body.results[0].targets).toBe(2);
 
     // the SDR request body was well-formed
-    const publishReq = sdr.getRequests().find((r) => r.path === "/api/v1/publish" && r.method === "POST");
+    const publishReq = sdr
+      .getRequests()
+      .find((r) => r.path === "/api/v1/publish" && r.method === "POST");
     expect(publishReq?.body.idempotency_key).toContain("publish:item-1:twitter:");
     expect(publishReq?.body.targets).toHaveLength(2);
     expect(publishReq?.body.targets[0].content.text).toBe("Hello world");
@@ -58,11 +75,26 @@ describe("publishContentItemsHandler", () => {
   });
 
   it("supports platform and account selections", async () => {
-    sdr.reset(); sdr.addAccount({ account_id: "tw-1", platform: "twitter", platform_username: "Brand", status: "active" });
-    sdr.addAccount({ account_id: "li-1", platform: "linkedin", platform_username: "Brand LI", status: "active" });
+    sdr.reset();
+    sdr.addAccount({
+      account_id: "tw-1",
+      platform: "twitter",
+      platform_username: "Brand",
+      status: "active",
+    });
+    sdr.addAccount({
+      account_id: "li-1",
+      platform: "linkedin",
+      platform_username: "Brand LI",
+      status: "active",
+    });
 
     const byPlatform = await publishContentItemsHandler(
-      { workspaceId: "ws-1", contentItemIds: ["item-1"], selection: { type: "platform", platform: "twitter" } },
+      {
+        workspaceId: "ws-1",
+        contentItemIds: ["item-1"],
+        selection: { type: "platform", platform: "twitter" },
+      },
       deps([item()]),
     );
     expect(byPlatform.status).toBe(200);
@@ -70,9 +102,18 @@ describe("publishContentItemsHandler", () => {
 
     // Fresh SDR state so the account selection is not deduped by idempotency.
     sdr.reset();
-    sdr.addAccount({ account_id: "tw-1", platform: "twitter", platform_username: "Brand", status: "active" });
+    sdr.addAccount({
+      account_id: "tw-1",
+      platform: "twitter",
+      platform_username: "Brand",
+      status: "active",
+    });
     const byAccount = await publishContentItemsHandler(
-      { workspaceId: "ws-1", contentItemIds: ["item-1"], selection: { type: "account", accountId: "tw-1" } },
+      {
+        workspaceId: "ws-1",
+        contentItemIds: ["item-1"],
+        selection: { type: "account", accountId: "tw-1" },
+      },
       deps([item()]),
     );
     expect(byAccount.status).toBe(200);
@@ -80,7 +121,13 @@ describe("publishContentItemsHandler", () => {
   });
 
   it("skips an item with no active target accounts for the selection", async () => {
-    sdr.reset(); sdr.addAccount({ account_id: "tw-1", platform: "twitter", platform_username: "Brand", status: "expired" });
+    sdr.reset();
+    sdr.addAccount({
+      account_id: "tw-1",
+      platform: "twitter",
+      platform_username: "Brand",
+      status: "expired",
+    });
     const out = await publishContentItemsHandler(
       { workspaceId: "ws-1", contentItemIds: ["item-1"], selection: { type: "all" } },
       deps([item()]),
@@ -98,7 +145,13 @@ describe("publishContentItemsHandler", () => {
   });
 
   it("rejects a pending (AI, unapproved) item with 403 (FR-024 approval gate)", async () => {
-    sdr.reset(); sdr.addAccount({ account_id: "tw-1", platform: "twitter", platform_username: "Brand", status: "active" });
+    sdr.reset();
+    sdr.addAccount({
+      account_id: "tw-1",
+      platform: "twitter",
+      platform_username: "Brand",
+      status: "active",
+    });
     const out = await publishContentItemsHandler(
       { workspaceId: "ws-1", contentItemIds: ["item-1"], selection: { type: "all" } },
       deps([item({ status: "pending" })]),

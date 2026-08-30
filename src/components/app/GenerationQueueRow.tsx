@@ -1,12 +1,7 @@
 import { motion } from "framer-motion";
 import { TILE_BY_ID } from "@/lib/studio";
 import { TINT_HEX } from "@/components/app/StudioRail";
-import {
-  PHASE_ORDER,
-  phaseIndex,
-  type GenJob,
-  type GenPhase,
-} from "@/lib/generation-queue";
+import { PHASE_ORDER, phaseIndex, type GenJob, type GenPhase } from "@/lib/generation-queue";
 
 // Phase labels are 1:1 with real generation events fired by the producer.
 // The row never advances past `job.phase` — it only animates within it.
@@ -101,7 +96,10 @@ export function GenerationQueueRow({ job }: { job: GenJob }) {
               >
                 <tile.icon className="h-2 w-2" strokeWidth={2.5} style={{ color }} />
               </span>
-              <span className="truncate text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color }}>
+              <span
+                className="truncate text-[10px] font-semibold uppercase tracking-[0.1em]"
+                style={{ color }}
+              >
                 {tile.label}
               </span>
             </div>

@@ -16,9 +16,9 @@ links:
   adr: null
   pr: null
 files:
- - /home/nauman_sajjad/Desktop/Raval-AI/CLAUDE.md
+  - /home/nauman_sajjad/Desktop/Raval-AI/CLAUDE.md
 tests:
- - none (documentation/governance change)
+  - none (documentation/governance change)
 ---
 
 ## Prompt
@@ -41,6 +41,7 @@ the Product Runtime persona (end-user assistant behavior), and the existing CLAU
 The only true overlap is the approval boundary, which is consistent across layers.
 
 Applied to CLAUDE.md (append-only, nothing removed):
+
 1. 25 Claude Development Rules — verbatim, word-for-word.
 2. Backend Architect & Agentic AI Engineer Persona — kept substance intact, added 3 tie-ins:
    ADR path -> history/adr/ + /sp.adr; "One Platform First" aligned to Phase 1/2/3 roadmap;

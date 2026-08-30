@@ -136,20 +136,24 @@ curl http://localhost:8000/api/v1/jobs/{job_id} \
 ## Troubleshooting
 
 ### "Callback URL doesn't match"
+
 - Make sure `TWITTER_CALLBACK_URL` in `.env` EXACTLY matches what you entered in Step 4
 - No trailing slash differences
 - Protocol must match (http vs https)
 
 ### "Invalid client_id"
+
 - Double-check your `TWITTER_CLIENT_ID` value
 - Make sure there are no extra spaces or quotes
 
 ### "401 Unauthorized when publishing"
+
 - The Bearer token might be expired
 - Re-run the OAuth flow to get fresh tokens
 - Check that app permissions include "Write" (not just "Read")
 
 ### "Rate limit exceeded"
+
 - Twitter has 200 tweets/day and 15 per 15-minute window
 - Wait for the Retry-After period
 - Or use the DryRun adapter to test without hitting real limits

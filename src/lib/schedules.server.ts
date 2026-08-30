@@ -17,20 +17,22 @@ const KIND_BY_TYPE: Record<string, string> = {
   custom: "post",
 };
 
-
 function computeNext(prev: Date, cadence: Cadence): Date | null {
   const now = new Date();
   const next = new Date(prev);
   // Advance until strictly in the future, so a backlogged job doesn't re-fire instantly.
-  const stepMs = cadence === "hourly"
-    ? 60 * 60 * 1000
-    : cadence === "daily"
-    ? 24 * 60 * 60 * 1000
-    : cadence === "weekly"
-    ? 7 * 24 * 60 * 60 * 1000
-    : 0;
+  const stepMs =
+    cadence === "hourly"
+      ? 60 * 60 * 1000
+      : cadence === "daily"
+        ? 24 * 60 * 60 * 1000
+        : cadence === "weekly"
+          ? 7 * 24 * 60 * 60 * 1000
+          : 0;
   if (stepMs === 0) return null;
-  do { next.setTime(next.getTime() + stepMs); } while (next <= now);
+  do {
+    next.setTime(next.getTime() + stepMs);
+  } while (next <= now);
   return next;
 }
 
@@ -50,10 +52,22 @@ async function loadBrandContext(workspaceId: string): Promise<string> {
     if (ws.goals) lines.push(`Goals: ${ws.goals}`);
     if (ws.website_url) lines.push(`Website: ${ws.website_url}`);
     if (brand.voice) lines.push(`Voice: ${String(brand.voice)}`);
-    if (brand.values) lines.push(`Values: ${Array.isArray(brand.values) ? (brand.values as unknown[]).join(", ") : String(brand.values)}`);
-    if (brand.products) lines.push(`Products: ${Array.isArray(brand.products) ? (brand.products as unknown[]).join(", ") : String(brand.products)}`);
-    if (brand.do) lines.push(`Do: ${Array.isArray(brand.do) ? (brand.do as unknown[]).join(", ") : String(brand.do)}`);
-    if (brand.dont) lines.push(`Don't: ${Array.isArray(brand.dont) ? (brand.dont as unknown[]).join(", ") : String(brand.dont)}`);
+    if (brand.values)
+      lines.push(
+        `Values: ${Array.isArray(brand.values) ? (brand.values as unknown[]).join(", ") : String(brand.values)}`,
+      );
+    if (brand.products)
+      lines.push(
+        `Products: ${Array.isArray(brand.products) ? (brand.products as unknown[]).join(", ") : String(brand.products)}`,
+      );
+    if (brand.do)
+      lines.push(
+        `Do: ${Array.isArray(brand.do) ? (brand.do as unknown[]).join(", ") : String(brand.do)}`,
+      );
+    if (brand.dont)
+      lines.push(
+        `Don't: ${Array.isArray(brand.dont) ? (brand.dont as unknown[]).join(", ") : String(brand.dont)}`,
+      );
     return lines.join("\n");
   } catch {
     return "";
@@ -79,7 +93,8 @@ async function generateOne(args: {
   try {
     const parsed = await runJsonPrompt<{ title?: string; body?: string; hashtags?: string[] }>({
       route: `schedule.${args.taskType}`,
-      system, user,
+      system,
+      user,
       fallback: {},
       maxTokens: 1100,
       temperature: 0.7,
@@ -98,12 +113,13 @@ async function generateOne(args: {
   }
 }
 
-
 export async function runDueScheduledJobs(opts: { onlyJobId?: string; max?: number } = {}) {
   const nowIso = new Date().toISOString();
   let q = supabaseAdmin
     .from("scheduled_jobs")
-    .select("id, workspace_id, title, task_type, channel, agent, cadence, prompt, next_run_at, created_by")
+    .select(
+      "id, workspace_id, title, task_type, channel, agent, cadence, prompt, next_run_at, created_by",
+    )
     .eq("active", true)
     .lte("next_run_at", nowIso)
     .order("next_run_at", { ascending: true })
@@ -147,18 +163,21 @@ export async function runDueScheduledJobs(opts: { onlyJobId?: string; max?: numb
 
       const cadence = job.cadence as Cadence;
       const next = computeNext(new Date(job.next_run_at), cadence);
-      await supabaseAdmin.from("scheduled_jobs").update({
-        last_run_at: nowIso,
-        last_run_status: "ok",
-        last_run_error: null,
-        last_content_item_id: inserted?.id ?? null,
-        run_count: undefined as never, // ignored; we increment via RPC-less update below
-        next_run_at: next ? next.toISOString() : job.next_run_at,
-        active: next ? true : false,
-      } as never).eq("id", job.id);
+      await supabaseAdmin
+        .from("scheduled_jobs")
+        .update({
+          last_run_at: nowIso,
+          last_run_status: "ok",
+          last_run_error: null,
+          last_content_item_id: inserted?.id ?? null,
+          run_count: undefined as never, // ignored; we increment via RPC-less update below
+          next_run_at: next ? next.toISOString() : job.next_run_at,
+          active: next ? true : false,
+        } as never)
+        .eq("id", job.id);
 
       // Increment run_count in a second statement (avoid raw SQL dependency).
-      await supabaseAdmin.rpc as unknown; // no-op placeholder; counts updated via fetch+update below
+      (await supabaseAdmin.rpc) as unknown; // no-op placeholder; counts updated via fetch+update below
       // Best-effort increment:
       try {
         const { data: cur } = await supabaseAdmin
@@ -175,11 +194,14 @@ export async function runDueScheduledJobs(opts: { onlyJobId?: string; max?: numb
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("scheduled job failed", job.id, msg);
-      await supabaseAdmin.from("scheduled_jobs").update({
-        last_run_at: nowIso,
-        last_run_status: "error",
-        last_run_error: msg.slice(0, 500),
-      } as never).eq("id", job.id);
+      await supabaseAdmin
+        .from("scheduled_jobs")
+        .update({
+          last_run_at: nowIso,
+          last_run_status: "error",
+          last_run_error: msg.slice(0, 500),
+        } as never)
+        .eq("id", job.id);
     }
   }
   return { ran };

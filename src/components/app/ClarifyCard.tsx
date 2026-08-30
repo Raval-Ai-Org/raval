@@ -34,7 +34,7 @@ export function ClarifyCard({ payload, onSubmit, onSkip, done, submittedAnswers 
   const [step, setStep] = useState(() => {
     // Resume at first unanswered when reopening
     if (!submittedAnswers) return 0;
-    const idx = payload.questions.findIndex((q) => !(submittedAnswers[q.id]?.length));
+    const idx = payload.questions.findIndex((q) => !submittedAnswers[q.id]?.length);
     return idx === -1 ? payload.questions.length - 1 : idx;
   });
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -142,8 +142,7 @@ export function ClarifyCard({ payload, onSubmit, onSkip, done, submittedAnswers 
           <motion.div
             className="h-full origin-left"
             style={{
-              background:
-                "linear-gradient(90deg, hsl(var(--aura-pink)), hsl(var(--aura-indigo)))",
+              background: "linear-gradient(90deg, hsl(var(--aura-pink)), hsl(var(--aura-indigo)))",
             }}
             initial={false}
             animate={{ width: `${progress}%` }}

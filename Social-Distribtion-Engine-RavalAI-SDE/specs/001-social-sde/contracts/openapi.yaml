@@ -45,7 +45,7 @@ paths:
       tags:
         - Operations
       responses:
-        '200':
+        "200":
           description: All components healthy
           content:
             application/json:
@@ -64,12 +64,12 @@ paths:
                   beat_last_tick:
                     type: string
                     format: date-time
-        '503':
+        "503":
           description: One or more components unhealthy
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /publish:
     post:
@@ -89,38 +89,38 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PublishRequest'
+              $ref: "#/components/schemas/PublishRequest"
       responses:
-        '200':
+        "200":
           description: Idempotent duplicate - existing post returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PublishResponse'
-        '201':
+                $ref: "#/components/schemas/PublishResponse"
+        "201":
           description: Post created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PublishResponse'
-        '400':
+                $ref: "#/components/schemas/PublishResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationErrorResponse'
-        '401':
+                $ref: "#/components/schemas/ValidationErrorResponse"
+        "401":
           description: Authentication failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '422':
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
           description: Platform-specific validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationErrorResponse'
+                $ref: "#/components/schemas/ValidationErrorResponse"
 
   /schedule:
     post:
@@ -140,38 +140,38 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PublishRequest'
+              $ref: "#/components/schemas/PublishRequest"
       responses:
-        '200':
+        "200":
           description: Idempotent duplicate - existing post returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PublishResponse'
-        '201':
+                $ref: "#/components/schemas/PublishResponse"
+        "201":
           description: Post scheduled successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PublishResponse'
-        '400':
+                $ref: "#/components/schemas/PublishResponse"
+        "400":
           description: Validation error (scheduled_at in past)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
           description: Authentication failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '422':
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
           description: Platform-specific validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationErrorResponse'
+                $ref: "#/components/schemas/ValidationErrorResponse"
 
   /jobs/{post_id}:
     get:
@@ -193,24 +193,24 @@ paths:
             format: uuid
           description: Post UUID
       responses:
-        '200':
+        "200":
           description: Job details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JobDetailResponse'
-        '401':
+                $ref: "#/components/schemas/JobDetailResponse"
+        "401":
           description: Authentication failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
           description: Job not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
     delete:
       summary: Cancel job
@@ -233,30 +233,30 @@ paths:
             format: uuid
           description: Post UUID
       responses:
-        '200':
+        "200":
           description: Job cancelled
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JobDetailResponse'
-        '401':
+                $ref: "#/components/schemas/JobDetailResponse"
+        "401":
           description: Authentication failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
           description: Job not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
           description: Job cannot be cancelled (already publishing or published)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /jobs:
     get:
@@ -307,18 +307,18 @@ paths:
             type: string
           description: Pagination cursor
       responses:
-        '200':
+        "200":
           description: Job list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JobListResponse'
-        '401':
+                $ref: "#/components/schemas/JobListResponse"
+        "401":
           description: Authentication failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /accounts:
     get:
@@ -338,20 +338,20 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Account list
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/AccountResponse'
-        '401':
+                  $ref: "#/components/schemas/AccountResponse"
+        "401":
           description: Authentication failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /oauth/{platform}/start:
     get:
@@ -385,14 +385,14 @@ paths:
             type: string
             format: uri
       responses:
-        '302':
+        "302":
           description: Redirect to platform OAuth consent
-        '400':
+        "400":
           description: Invalid platform
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /oauth/{platform}/callback:
     get:
@@ -419,14 +419,14 @@ paths:
           schema:
             type: string
       responses:
-        '302':
+        "302":
           description: Redirect to redirect_after URL
-        '400':
+        "400":
           description: Invalid code or state
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /accounts/{account_id}:
     delete:
@@ -447,20 +447,20 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Account disconnected
-        '401':
+        "401":
           description: Authentication failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
           description: Account not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /webhooks/config:
     post:
@@ -493,7 +493,7 @@ paths:
                   type: string
                   description: Secret for HMAC signing
       responses:
-        '200':
+        "200":
           description: Webhook configured
           content:
             application/json:
@@ -504,12 +504,12 @@ paths:
                     type: string
                   url:
                     type: string
-        '401':
+        "401":
           description: Authentication failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /metrics:
     get:
@@ -519,7 +519,7 @@ paths:
       tags:
         - Operations
       responses:
-        '200':
+        "200":
           description: Metrics in Prometheus text format
           content:
             text/plain:
@@ -574,7 +574,7 @@ components:
           type: array
           minItems: 1
           items:
-            $ref: '#/components/schemas/PublishTarget'
+            $ref: "#/components/schemas/PublishTarget"
 
     PublishTarget:
       type: object
@@ -591,7 +591,7 @@ components:
           type: string
           enum: [x, linkedin, facebook, dryrun]
         content:
-          $ref: '#/components/schemas/TargetContent'
+          $ref: "#/components/schemas/TargetContent"
 
     TargetContent:
       type: object
@@ -636,7 +636,7 @@ components:
         targets:
           type: array
           items:
-            $ref: '#/components/schemas/TargetStatus'
+            $ref: "#/components/schemas/TargetStatus"
 
     TargetStatus:
       type: object
@@ -676,11 +676,11 @@ components:
         targets:
           type: array
           items:
-            $ref: '#/components/schemas/JobTargetDetail'
+            $ref: "#/components/schemas/JobTargetDetail"
         events:
           type: array
           items:
-            $ref: '#/components/schemas/JobEvent'
+            $ref: "#/components/schemas/JobEvent"
 
     JobTargetDetail:
       type: object
@@ -716,7 +716,8 @@ components:
       properties:
         event:
           type: string
-          enum: [post.queued, post.publishing, post.published, post.retrying, post.failed, post.partial]
+          enum:
+            [post.queued, post.publishing, post.published, post.retrying, post.failed, post.partial]
         timestamp:
           type: string
           format: date-time
@@ -731,7 +732,7 @@ components:
         jobs:
           type: array
           items:
-            $ref: '#/components/schemas/JobSummary'
+            $ref: "#/components/schemas/JobSummary"
         next_cursor:
           type: string
           nullable: true

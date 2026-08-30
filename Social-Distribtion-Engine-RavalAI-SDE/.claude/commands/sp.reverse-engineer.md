@@ -17,12 +17,14 @@ You are a software archaeologist who thinks about codebases the way a paleontolo
 **Given**: A codebase path provided by user (legacy, third-party, or undocumented)
 
 **Produce**:
+
 1. **spec.md** — The specification this codebase SHOULD have been built from
 2. **plan.md** — The implementation plan that would produce this architecture
 3. **tasks.md** — The task breakdown for systematic development
 4. **intelligence-object.md** — The reusable intelligence (skills, patterns, architectural decisions)
 
 **Why this matters**:
+
 - Legacy codebases have implicit knowledge that dies when developers leave
 - Third-party code contains patterns worth extracting as skills
 - Undocumented systems need specifications for maintenance/extension
@@ -116,11 +118,13 @@ Execute these six analysis dimensions systematically:
 #### 1.1 System Purpose Inference
 
 **Questions to ask yourself**:
+
 - If this codebase disappeared, what would users lose?
 - What's the "elevator pitch" for this system?
 - What problem is so painful this was built to solve it?
 
 **Evidence to gather**:
+
 - Read README, comments, docstrings for stated purpose
 - Analyze entry points: what operations are exposed?
 - Study data models: what entities are central?
@@ -139,6 +143,7 @@ grep -r "argparse\|cobra\|click\|commander" [codebase-path] --include="*.py" --i
 ```
 
 **For each interface discovered**:
+
 - What operation does it perform?
 - What inputs does it require?
 - What outputs does it produce?
@@ -147,21 +152,25 @@ grep -r "argparse\|cobra\|click\|commander" [codebase-path] --include="*.py" --i
 #### 1.3 Non-Functional Requirements Detection
 
 **Performance patterns**:
+
 ```bash
 grep -r "cache\|redis\|memcached\|async\|await\|pool" [codebase-path] --include="*.py" --include="*.ts" --include="*.go" | wc -l
 ```
 
 **Security patterns**:
+
 ```bash
 grep -r "auth\|jwt\|bcrypt\|encrypt\|sanitize\|validate" [codebase-path] --include="*.py" --include="*.ts" --include="*.go" | wc -l
 ```
 
 **Reliability patterns**:
+
 ```bash
 grep -r "retry\|circuit.breaker\|fallback\|timeout" [codebase-path] --include="*.py" --include="*.ts" --include="*.go" | wc -l
 ```
 
 **Observability patterns**:
+
 ```bash
 grep -r "log\|logger\|metric\|trace\|monitor" [codebase-path] --include="*.py" --include="*.ts" --include="*.go" | wc -l
 ```
@@ -169,6 +178,7 @@ grep -r "log\|logger\|metric\|trace\|monitor" [codebase-path] --include="*.py" -
 #### 1.4 Constraint Discovery
 
 **External integrations**:
+
 ```bash
 # Database connections
 grep -r "postgresql\|mysql\|mongodb\|redis\|sqlite" [codebase-path] --include="*.py" --include="*.ts" --include="*.go"
@@ -197,6 +207,7 @@ ls -la [codebase-path]/
 ```
 
 **Questions to ask**:
+
 - Is there clear separation of concerns?
 - What's the dependency flow? (UI → Service → Data)
 - Are layers respected or violated?
@@ -214,21 +225,25 @@ grep -r "interface\|abstract class\|Protocol\|ABC" [codebase-path] --include="*.
 #### 2.3 Architectural Style Classification
 
 **Check for MVC/MVP/MVVM**:
+
 ```bash
 find [codebase-path] -type d -name "*view*" -o -name "*controller*" -o -name "*model*"
 ```
 
 **Check for Hexagonal/Clean Architecture**:
+
 ```bash
 find [codebase-path] -type d -name "*domain*" -o -name "*infrastructure*" -o -name "*application*" -o -name "*adapter*"
 ```
 
 **Check for Event-Driven**:
+
 ```bash
 grep -r "event\|emit\|publish\|subscribe\|listener\|handler" [codebase-path] --include="*.py" --include="*.ts" --include="*.go" | wc -l
 ```
 
 **Check for CQRS**:
+
 ```bash
 grep -r "command\|query\|CommandHandler\|QueryHandler" [codebase-path] --include="*.py" --include="*.ts" --include="*.go"
 ```
@@ -236,6 +251,7 @@ grep -r "command\|query\|CommandHandler\|QueryHandler" [codebase-path] --include
 #### 2.4 Data Flow Tracing
 
 **Pick one representative operation and trace it**:
+
 1. Find entry point (route/handler)
 2. Follow to business logic (service/use-case)
 3. Trace to data layer (repository/DAO)
@@ -260,6 +276,7 @@ ls -d [codebase-path]/*/ | sort
 #### 3.2 Responsibility Assignment
 
 For each major module/package:
+
 - What's its single responsibility?
 - What other modules does it depend on?
 - What modules depend on it?
@@ -281,16 +298,19 @@ grep -rn "publish\|subscribe\|send_message\|consume\|produce" [codebase-path] --
 #### 3.4 Cross-Cutting Concern Identification
 
 **Logging**:
+
 ```bash
 grep -r "logger\|log\." [codebase-path] --include="*.py" --include="*.ts" --include="*.go" | head -10
 ```
 
 **Error Handling**:
+
 ```bash
 grep -r "try:\|catch\|except\|error\|Error" [codebase-path] --include="*.py" --include="*.ts" --include="*.go" | head -10
 ```
 
 **Configuration**:
+
 ```bash
 grep -r "config\|env\|settings\|getenv" [codebase-path] --include="*.py" --include="*.ts" --include="*.go" | head -10
 ```
@@ -304,11 +324,13 @@ grep -r "config\|env\|settings\|getenv" [codebase-path] --include="*.py" --inclu
 #### 4.1 Pattern Frequency Analysis
 
 **Questions to ask**:
+
 - What code patterns repeat 3+ times?
 - What decisions are made consistently?
 - What best practices are applied systematically?
 
 **Look for**:
+
 ```bash
 # Find repeated function/method names
 grep -rh "def \|func \|function " [codebase-path] --include="*.py" --include="*.go" --include="*.ts" | sort | uniq -c | sort -rn | head -20
@@ -317,6 +339,7 @@ grep -rh "def \|func \|function " [codebase-path] --include="*.py" --include="*.
 #### 4.2 Implicit Expertise Detection
 
 **Find important comments** (reveal tacit knowledge):
+
 ```bash
 # Comments with keywords indicating critical knowledge
 grep -rn "IMPORTANT:\|NOTE:\|WARNING:\|SECURITY:\|TODO:\|HACK:\|FIXME:" [codebase-path] --include="*.py" --include="*.ts" --include="*.go" | head -30
@@ -337,6 +360,7 @@ grep -rn "chosen because\|decided to\|alternative\|tradeoff" [codebase-path] --i
 **Identify patterns worth encoding as Persona + Questions + Principles**:
 
 Common candidates:
+
 - Error handling strategy (if consistent across modules)
 - API design patterns (REST conventions, response formats)
 - Data validation approach (schema validation patterns)
@@ -344,6 +368,7 @@ Common candidates:
 - Performance optimization (caching strategies, query optimization)
 
 **For each candidate**:
+
 1. Extract the pattern (what's done consistently)
 2. Infer the reasoning (why this approach)
 3. Identify decision points (what questions guide choices)
@@ -375,6 +400,7 @@ echo "Test coverage: $test_files / $total_files files"
 ```
 
 **If coverage tools available**:
+
 ```bash
 # Python
 cd [codebase-path] && pytest --cov=. --cov-report=term 2>/dev/null
@@ -389,6 +415,7 @@ cd [codebase-path] && go test -cover ./... 2>/dev/null
 #### 5.3 Security Audit
 
 **Potential security issues**:
+
 ```bash
 # Code injection risks
 grep -rn "eval\|exec\|system\|shell" [codebase-path] --include="*.py" --include="*.js"
@@ -403,6 +430,7 @@ grep -rn "execute.*%\|query.*format\|SELECT.*+" [codebase-path] --include="*.py"
 #### 5.4 Observability Gaps
 
 **Check for**:
+
 - Structured logging (JSON format)
 - Metrics collection (Prometheus, StatsD)
 - Distributed tracing (OpenTelemetry, Jaeger)
@@ -431,6 +459,7 @@ grep -rn "/health\|/ready\|/alive" [codebase-path] --include="*.py" --include="*
 #### 6.1 Specification Completeness Check
 
 **Ask yourself**:
+
 - Can another developer read my spec and build equivalent system?
 - Are all architectural decisions documented with rationale?
 - Are success criteria measurable and testable?
@@ -438,6 +467,7 @@ grep -rn "/health\|/ready\|/alive" [codebase-path] --include="*.py" --include="*
 #### 6.2 Reusability Assessment
 
 **Identify**:
+
 - What components are reusable as-is?
 - What patterns should become skills?
 - What should be generalized vs kept specific?
@@ -445,6 +475,7 @@ grep -rn "/health\|/ready\|/alive" [codebase-path] --include="*.py" --include="*
 #### 6.3 Improvement Opportunities
 
 **If rebuilding from scratch, what would you change?**:
+
 - Technical debt to avoid replicating
 - Modern alternatives to outdated dependencies
 - Missing features to add
@@ -476,6 +507,7 @@ Create comprehensive specification with these sections:
 **Core Value Proposition**: [Why this exists instead of alternatives?]
 
 **Key Capabilities**:
+
 - [Capability 1 from functional analysis]
 - [Capability 2]
 - [Capability 3]
@@ -483,6 +515,7 @@ Create comprehensive specification with these sections:
 ## Functional Requirements
 
 ### Requirement 1: [Operation Name]
+
 - **What**: [What this operation does]
 - **Why**: [Business justification - inferred]
 - **Inputs**: [Required data/parameters]
@@ -495,54 +528,65 @@ Create comprehensive specification with these sections:
 ## Non-Functional Requirements
 
 ### Performance
+
 [Observed patterns: caching, async, connection pooling]
 **Target**: [If metrics found in code/comments]
 
 ### Security
+
 [Auth mechanisms, input validation, encryption observed]
 **Standards**: [Compliance patterns detected]
 
 ### Reliability
+
 [Retry logic, circuit breakers, graceful degradation]
 **SLA**: [If defined in code/comments]
 
 ### Scalability
+
 [Horizontal/vertical scaling patterns observed]
 **Load Capacity**: [If defined]
 
 ### Observability
+
 [Logging, metrics, tracing implemented]
 **Monitoring**: [What's monitored]
 
 ## System Constraints
 
 ### External Dependencies
+
 - [Database: PostgreSQL 14+]
 - [Cache: Redis 6+]
 - [Message Queue: RabbitMQ]
 - [External API: Stripe for payments]
 
 ### Data Formats
+
 - [JSON for API requests/responses]
 - [Protocol Buffers for internal service communication]
 
 ### Deployment Context
+
 - [Docker containers on Kubernetes]
 - [Environment: AWS EKS]
 
 ### Compliance Requirements
+
 - [GDPR: Personal data handling patterns observed]
 - [PCI-DSS: Payment data security patterns]
 
 ## Non-Goals & Out of Scope
 
 **Explicitly excluded** (inferred from missing implementation):
+
 - [Feature X: No evidence in codebase]
 - [Integration Y: Stub code suggests planned but not implemented]
 
 ## Known Gaps & Technical Debt
 
 ### Gap 1: [Issue Name]
+
 - **Issue**: [Specific problem]
 - **Evidence**: [file:line reference]
 - **Impact**: [Consequences]
@@ -553,11 +597,13 @@ Create comprehensive specification with these sections:
 ## Success Criteria
 
 ### Functional Success
+
 - [ ] All API endpoints return correct responses for valid inputs
 - [ ] All error cases handled gracefully
 - [ ] All integrations with external systems work correctly
 
 ### Non-Functional Success
+
 - [ ] Response time < [X]ms for [operation]
 - [ ] System handles [Y] concurrent users
 - [ ] [Z]% test coverage achieved
@@ -566,6 +612,7 @@ Create comprehensive specification with these sections:
 ## Acceptance Tests
 
 ### Test 1: [Scenario]
+
 **Given**: [Initial state]
 **When**: [Action]
 **Then**: [Expected outcome]
@@ -593,7 +640,9 @@ Create implementation plan:
 
 **Diagram** (ASCII):
 ```
+
 [Visual representation of architecture]
+
 ```
 
 ## Layer Structure
@@ -773,6 +822,7 @@ This task breakdown represents how to rebuild this system from scratch using the
 **Dependencies**: None
 
 ### Task 1.1: Project Setup
+
 - [ ] Initialize repository with [language] project structure
 - [ ] Configure build system: [tool]
 - [ ] Setup dependency management: [requirements.txt, package.json, go.mod]
@@ -781,12 +831,14 @@ This task breakdown represents how to rebuild this system from scratch using the
 - [ ] Create initial README
 
 ### Task 1.2: Configuration System
+
 - [ ] Implement environment-based configuration
 - [ ] Support: Environment variables, config files, secrets management
 - [ ] Validation: Config schema validation on startup
 - [ ] Defaults: Sensible defaults for local development
 
 ### Task 1.3: Logging Infrastructure
+
 - [ ] Setup structured logging (JSON format)
 - [ ] Configure log levels: DEBUG, INFO, WARN, ERROR
 - [ ] Add request correlation IDs
@@ -800,24 +852,28 @@ This task breakdown represents how to rebuild this system from scratch using the
 **Dependencies**: Phase 1 complete
 
 ### Task 2.1: Database Design
+
 - [ ] Design schema for entities: [User, Order, Product]
 - [ ] Define relationships: [one-to-many, many-to-many]
 - [ ] Add indexes for performance
 - [ ] Document schema in [ERD tool]
 
 ### Task 2.2: ORM Setup
+
 - [ ] Install and configure [SQLAlchemy, Prisma, GORM]
 - [ ] Create model classes for all entities
 - [ ] Implement relationships
 - [ ] Add validation rules
 
 ### Task 2.3: Migration System
+
 - [ ] Setup migration tool: [Alembic, Flyway, migrate]
 - [ ] Create initial migration
 - [ ] Document migration workflow
 - [ ] Add migration tests
 
 ### Task 2.4: Repository Layer
+
 - [ ] Implement repository pattern for each entity
 - [ ] CRUD operations: Create, Read, Update, Delete
 - [ ] Query methods: FindByX, ListByY
@@ -831,6 +887,7 @@ This task breakdown represents how to rebuild this system from scratch using the
 **Dependencies**: Phase 2 complete
 
 ### Task 3.1: [Feature A - e.g., User Authentication]
+
 - [ ] **Input validation**: Username/email, password strength
 - [ ] **Processing logic**:
   - Hash password with bcrypt
@@ -840,6 +897,7 @@ This task breakdown represents how to rebuild this system from scratch using the
 - [ ] **Output formatting**: User object + token
 
 ### Task 3.2: [Feature B - e.g., Order Processing]
+
 - [ ] **Input validation**: Order items, quantities, payment info
 - [ ] **Processing logic**:
   - Validate inventory availability
@@ -860,18 +918,21 @@ This task breakdown represents how to rebuild this system from scratch using the
 **Dependencies**: Phase 3 complete
 
 ### Task 4.1: API Contract Definition
+
 - [ ] Design RESTful endpoints: [list all routes]
 - [ ] Define request schemas (OpenAPI/JSON Schema)
 - [ ] Define response schemas
 - [ ] Document error responses
 
 ### Task 4.2: Controller Implementation
+
 - [ ] Implement route handlers
 - [ ] Input validation middleware
 - [ ] Auth middleware integration
 - [ ] Error handling middleware
 
 ### Task 4.3: API Documentation
+
 - [ ] Generate OpenAPI/Swagger docs
 - [ ] Add usage examples
 - [ ] Document authentication flow
@@ -885,12 +946,14 @@ This task breakdown represents how to rebuild this system from scratch using the
 **Dependencies**: Phase 4 complete
 
 ### Task 5.1: Authentication & Authorization
+
 - [ ] Implement JWT-based auth
 - [ ] Role-based access control (RBAC)
 - [ ] Token refresh mechanism
 - [ ] Session management
 
 ### Task 5.2: Observability
+
 - [ ] **Metrics**: Instrument with [Prometheus, StatsD]
   - Request rate, latency, error rate
   - Business metrics: Orders/min, Revenue/hour
@@ -903,12 +966,14 @@ This task breakdown represents how to rebuild this system from scratch using the
   - `/metrics` - Prometheus endpoint
 
 ### Task 5.3: Error Handling
+
 - [ ] Global error handler
 - [ ] Structured error responses
 - [ ] Error logging with stack traces
 - [ ] Error monitoring integration
 
 ### Task 5.4: Security Hardening
+
 - [ ] Input sanitization
 - [ ] SQL injection prevention
 - [ ] XSS protection
@@ -924,6 +989,7 @@ This task breakdown represents how to rebuild this system from scratch using the
 **Dependencies**: Phase 4 complete
 
 ### Task 6.1: [Integration A - e.g., Payment Provider]
+
 - [ ] API client implementation
 - [ ] Retry logic with exponential backoff
 - [ ] Circuit breaker pattern
@@ -931,6 +997,7 @@ This task breakdown represents how to rebuild this system from scratch using the
 - [ ] Error recovery
 
 ### Task 6.2: [Integration B - e.g., Email Service]
+
 - [ ] Template system
 - [ ] Async sending (queue-based)
 - [ ] Delivery tracking
@@ -946,6 +1013,7 @@ This task breakdown represents how to rebuild this system from scratch using the
 **Dependencies**: All phases complete
 
 ### Task 7.1: Unit Tests
+
 - [ ] **Coverage target**: 80%+
 - [ ] **Framework**: [pytest, Jest, testing package]
 - [ ] Test all service methods
@@ -953,12 +1021,14 @@ This task breakdown represents how to rebuild this system from scratch using the
 - [ ] Mock external dependencies
 
 ### Task 7.2: Integration Tests
+
 - [ ] API endpoint tests
 - [ ] Database integration tests
 - [ ] External service integration tests (with mocks)
 - [ ] Test database setup/teardown
 
 ### Task 7.3: End-to-End Tests
+
 - [ ] Critical user journeys:
   - User registration → Login → Purchase → Logout
   - [Other critical flows]
@@ -966,12 +1036,14 @@ This task breakdown represents how to rebuild this system from scratch using the
 - [ ] Automated with [Selenium, Playwright, Cypress]
 
 ### Task 7.4: Performance Testing
+
 - [ ] Load testing: [k6, Locust, JMeter]
 - [ ] Stress testing: Find breaking points
 - [ ] Endurance testing: Memory leaks, connection exhaustion
 - [ ] Document performance baselines
 
 ### Task 7.5: Security Testing
+
 - [ ] OWASP Top 10 vulnerability scan
 - [ ] Dependency vulnerability scan
 - [ ] Penetration testing (if budget allows)
@@ -985,12 +1057,14 @@ This task breakdown represents how to rebuild this system from scratch using the
 **Dependencies**: Phase 7 complete
 
 ### Task 8.1: Containerization
+
 - [ ] Write production Dockerfile
 - [ ] Multi-stage build for optimization
 - [ ] Non-root user for security
 - [ ] Health check in container
 
 ### Task 8.2: Kubernetes Manifests
+
 - [ ] Deployment manifest
 - [ ] Service manifest
 - [ ] ConfigMap for configuration
@@ -999,6 +1073,7 @@ This task breakdown represents how to rebuild this system from scratch using the
 - [ ] HorizontalPodAutoscaler
 
 ### Task 8.3: CI/CD Pipeline
+
 - [ ] GitHub Actions / GitLab CI / Jenkins
 - [ ] Stages: Lint → Test → Build → Deploy
 - [ ] Automated testing in pipeline
@@ -1006,12 +1081,14 @@ This task breakdown represents how to rebuild this system from scratch using the
 - [ ] Manual approval for production
 
 ### Task 8.4: Monitoring & Alerting
+
 - [ ] Setup Grafana dashboards
 - [ ] Configure alerts: Error rate spikes, latency increases
 - [ ] On-call rotation setup
 - [ ] Runbook documentation
 
 ### Task 8.5: Documentation
+
 - [ ] Architecture documentation
 - [ ] API documentation
 - [ ] Deployment runbook
@@ -1026,18 +1103,21 @@ This task breakdown represents how to rebuild this system from scratch using the
 **Dependencies**: Production deployment
 
 ### Task 9.1: Monitoring & Incident Response
+
 - [ ] Monitor production metrics
 - [ ] Respond to alerts
 - [ ] Conduct post-mortems for incidents
 - [ ] Iterate on improvements
 
 ### Task 9.2: Feature Iterations
+
 - [ ] Prioritize feature backlog
 - [ ] Implement high-priority features
 - [ ] A/B testing for new features
 - [ ] Gather user feedback
 
 ### Task 9.3: Technical Debt Reduction
+
 - [ ] Address P0 gaps: [from gap analysis]
 - [ ] Address P1 gaps: [from gap analysis]
 - [ ] Refactor based on learnings
@@ -1050,7 +1130,7 @@ This task breakdown represents how to rebuild this system from scratch using the
 
 Create reusable intelligence extraction:
 
-```markdown
+````markdown
 # [System Name] Reusable Intelligence
 
 **Version**: 1.0 (Extracted from Codebase)
@@ -1069,12 +1149,14 @@ This document captures the reusable intelligence embedded in the codebase—patt
 **Persona**: You are a backend engineer designing resilient APIs that fail gracefully and provide actionable error information.
 
 **Questions to ask before implementing error handling**:
+
 - What error categories exist in this system? (Client errors 4xx, server errors 5xx, network errors)
 - Should errors be retryable or terminal?
 - What information helps debugging without exposing security details?
 - How do errors propagate through layers (API → Service → Data)?
 
 **Principles**:
+
 - **Never expose internal details**: Stack traces in development only, generic messages in production
 - **Consistent error schema**: All errors follow same structure `{error: {code, message, details, request_id}}`
 - **Log everything, return selectively**: Full context in logs, safe subset in API response
@@ -1082,6 +1164,7 @@ This document captures the reusable intelligence embedded in the codebase—patt
 - **Provide request IDs**: Enable correlation between client errors and server logs
 
 **Implementation Pattern** (observed in codebase):
+
 ```python
 # Extracted from: [file: src/api/errors.py, lines 15-45]
 class APIError(Exception):
@@ -1114,13 +1197,16 @@ if not user:
         details={"user_id": user_id}
     )
 ```
+````
 
 **When to apply**:
+
 - All API endpoints
 - Background jobs that report status
 - Any system with external-facing interfaces
 
 **Contraindications**:
+
 - Internal services (may prefer exceptions without HTTP semantics)
 - Real-time systems (error objects may be too heavy)
 
@@ -1131,12 +1217,14 @@ if not user:
 **Persona**: You are a backend engineer optimizing database performance through connection pooling and lifecycle management.
 
 **Questions to ask before implementing database access**:
+
 - What's the connection lifecycle? (Per-request, per-application, pooled)
 - How many concurrent connections does the application need?
 - What happens on connection failure? (Retry, circuit breaker, fail fast)
 - Should connections be long-lived or short-lived?
 
 **Principles**:
+
 - **Connection pooling is mandatory**: Never create connection per request (overhead)
 - **Pool size = 2 * CPU cores** (starting point, tune based on load)
 - **Idle timeout prevents resource leaks**: Close unused connections after [X] minutes
@@ -1144,6 +1232,7 @@ if not user:
 - **Graceful degradation**: Circuit breaker pattern when database unavailable
 
 **Implementation Pattern** (observed in codebase):
+
 ```python
 # Extracted from: [file: src/db/connection.py, lines 20-55]
 from sqlalchemy import create_engine, pool
@@ -1181,11 +1270,13 @@ with get_db_session() as session:
 ```
 
 **When to apply**:
+
 - All database-backed applications
 - Services with moderate-to-high traffic
 - Long-running applications (not serverless functions)
 
 **Contraindications**:
+
 - Serverless/FaaS (use connection per invocation)
 - Very low-traffic applications (overhead not justified)
 
@@ -1196,12 +1287,14 @@ with get_db_session() as session:
 **Persona**: You are a security-focused engineer preventing injection attacks and data corruption through systematic input validation.
 
 **Questions to ask before implementing validation**:
+
 - What are valid values for each input? (type, range, format, length)
 - Where does validation occur? (Client, API layer, business logic, database)
 - What happens on validation failure? (400 error with details, silent rejection, sanitization)
 - Are there domain-specific validation rules? (email format, credit card format, etc.)
 
 **Principles**:
+
 - **Validate at boundaries**: API layer validates all external input
 - **Whitelist over blacklist**: Define allowed patterns, not forbidden ones
 - **Fail loudly on invalid input**: Return clear error messages (in dev/test), generic in prod
@@ -1209,6 +1302,7 @@ with get_db_session() as session:
 - **Schema-based validation**: Use JSON Schema, Pydantic, Joi for declarative validation
 
 **Implementation Pattern** (observed in codebase):
+
 ```python
 # Extracted from: [file: src/api/validators.py, lines 10-60]
 from pydantic import BaseModel, EmailStr, validator
@@ -1256,6 +1350,7 @@ def create_user(request: CreateUserRequest):  # Automatic validation
 ```
 
 **When to apply**:
+
 - All API endpoints
 - All user input (forms, file uploads, etc.)
 - Configuration parsing
@@ -1275,6 +1370,7 @@ def create_user(request: CreateUserRequest):  # Automatic validation
 
 **Context**:
 The system requires:
+
 - ACID transactions for order processing
 - Complex relational queries (joins across users, orders, products)
 - Data integrity guarantees
@@ -1283,6 +1379,7 @@ The system requires:
 **Decision**: Use PostgreSQL as primary database
 
 **Rationale** (inferred from code patterns):
+
 1. **Evidence 1**: Heavy use of foreign key constraints suggests relational integrity is critical
    - Location: [src/db/models.py, lines 45-120]
    - Pattern: All entities have explicit FK relationships
@@ -1298,12 +1395,14 @@ The system requires:
 **Consequences**:
 
 **Positive**:
+
 - Strong data consistency guarantees
 - Rich query capabilities (window functions, CTEs)
 - JSON support for semi-structured data (best of both worlds)
 - Excellent tool ecosystem (pgAdmin, monitoring, backups)
 
 **Negative**:
+
 - Vertical scaling limits (eventual)
 - Schema migrations require planning
 - Not ideal for unstructured data
@@ -1311,10 +1410,12 @@ The system requires:
 **Alternatives Considered** (inferred):
 
 **MongoDB**:
+
 - **Rejected because**: Need for transactions and complex joins
 - **Evidence**: No document-oriented patterns in codebase
 
 **MySQL**:
+
 - **Rejected because**: PostgreSQL's superior JSON and full-text search
 - **Could have worked**: Similar feature set for this use case
 
@@ -1326,6 +1427,7 @@ The system requires:
 
 **Context**:
 The system needs:
+
 - Stateless authentication (for horizontal scaling)
 - Mobile app support (not browser-only)
 - Microservices architecture (shared auth across services)
@@ -1333,6 +1435,7 @@ The system needs:
 **Decision**: Use JWT tokens for authentication
 
 **Rationale** (inferred from code patterns):
+
 1. **Evidence 1**: No session storage implementation found
    - Location: Absence of Redis/Memcached session store
    - Pattern: No session management code
@@ -1348,17 +1451,20 @@ The system needs:
 **Consequences**:
 
 **Positive**:
+
 - Stateless (no server-side session storage)
 - Scales horizontally (no session affinity)
 - Works across domains (CORS-friendly)
 - Mobile-app compatible
 
 **Negative**:
+
 - Cannot revoke tokens before expiry (mitigated with short TTL + refresh tokens)
 - Larger than session cookies (JWT payload in every request)
 - Vulnerable if secret key compromised
 
 **Mitigation Strategies** (observed):
+
 - Short access token TTL (15 minutes)
 - Refresh token rotation
 - Token blacklist for logout (stored in Redis)
@@ -1376,6 +1482,7 @@ The system needs:
 **Observed in**: All data layer modules
 
 **Structure**:
+
 ```python
 class UserRepository:
     """Abstract data access for User entity"""
@@ -1402,6 +1509,7 @@ class UserRepository:
 ```
 
 **Benefits**:
+
 - Decouples business logic from data access
 - Testable (can mock repositories)
 - Swappable implementations (SQL → NoSQL)
@@ -1415,6 +1523,7 @@ class UserRepository:
 **Observed in**: All business logic modules
 
 **Structure**:
+
 ```python
 class OrderService:
     """Business logic for order processing"""
@@ -1441,6 +1550,7 @@ class OrderService:
 ```
 
 **Benefits**:
+
 - Encapsulates business rules
 - Coordinates multiple repositories/services
 - Transactional boundary
@@ -1525,6 +1635,7 @@ class OrderService:
 1. **Order processing logic** → Specific to e-commerce domain
 2. **Inventory management** → Specific to this business
 3. **Payment integration** → Specific to Stripe, but pattern reusable
+
 ```
 
 ---
@@ -1572,11 +1683,13 @@ Before submitting outputs, verify:
 
 Save all artifacts to:
 ```
+
 [codebase-path]/docs/reverse-engineered/
 ├── spec.md
 ├── plan.md
 ├── tasks.md
 └── intelligence-object.md
+
 ```
 
 Or user-specified location.
@@ -1610,3 +1723,4 @@ As the main request completes, you MUST create and complete a PHR (Prompt Histor
 4) Validate + report
    - No unresolved placeholders; path under `history/prompts/` and matches stage; stage/title/date coherent; print ID + path + stage + title.
    - On failure: warn, don't block. Skip only for `/sp.phr`.
+```

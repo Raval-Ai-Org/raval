@@ -9,8 +9,18 @@ describe("listAccountsHandler (GET /api/sdr/accounts)", () => {
   const sdr = new MockSDR();
   beforeAll(async () => {
     await sdr.start();
-    sdr.addAccount({ account_id: "test-account-1", platform: "dryrun", platform_username: "DryRun One", status: "active" });
-    sdr.addAccount({ account_id: "exp-1", platform: "linkedin", platform_username: "Expired Page", status: "expired" });
+    sdr.addAccount({
+      account_id: "test-account-1",
+      platform: "dryrun",
+      platform_username: "DryRun One",
+      status: "active",
+    });
+    sdr.addAccount({
+      account_id: "exp-1",
+      platform: "linkedin",
+      platform_username: "Expired Page",
+      status: "expired",
+    });
   });
   afterAll(async () => await sdr.stop());
 
@@ -56,7 +66,12 @@ describe("disconnectHandler (POST /api/sdr/disconnect)", () => {
   const sdr = new MockSDR();
   beforeAll(async () => {
     await sdr.start();
-    sdr.addAccount({ account_id: "test-account-1", platform: "dryrun", platform_username: "One", status: "active" });
+    sdr.addAccount({
+      account_id: "test-account-1",
+      platform: "dryrun",
+      platform_username: "One",
+      status: "active",
+    });
   });
   afterAll(async () => await sdr.stop());
 

@@ -6,12 +6,10 @@ import { agentList, type Agent } from "@/lib/agents";
 import { AgentManageDialog } from "@/components/agents/AgentManageDialog";
 import { cn } from "@/lib/utils";
 
-
-
 const FEATURE: Record<string, { title: string; icon: LucideIcon }> = {
-  seo:       { title: "Search visibility",  icon: Search },
-  content:   { title: "Content creation",   icon: PenLine },
-  social:    { title: "Social & community", icon: MessageCircle },
+  seo: { title: "Search visibility", icon: Search },
+  content: { title: "Content creation", icon: PenLine },
+  social: { title: "Social & community", icon: MessageCircle },
 };
 
 export function AgentManagementPanel() {
@@ -19,7 +17,6 @@ export function AgentManagementPanel() {
   const allOn = activeCount === total;
   const anyOn = activeCount > 0;
   const [openAgent, setOpenAgent] = useState<Agent | null>(null);
-
 
   return (
     <section className="ui-section-gap px-1">
@@ -45,13 +42,9 @@ export function AgentManagementPanel() {
           const meta = FEATURE[a.slug] ?? { title: a.role, icon: Search };
           const Icon = meta.icon;
           const on = isOn(a.id);
-          
 
           return (
-            <li
-              key={a.id}
-              className="group flex items-center gap-3 py-2.5 text-[13px]"
-            >
+            <li key={a.id} className="group flex items-center gap-3 py-2.5 text-[13px]">
               <button
                 type="button"
                 onClick={() => setOpenAgent(a)}
@@ -78,13 +71,7 @@ export function AgentManagementPanel() {
                 </span>
               </button>
 
-
-
-              <Switch
-                checked={on}
-                onCheckedChange={(v) => set(a.id, v)}
-                className="scale-75"
-              />
+              <Switch checked={on} onCheckedChange={(v) => set(a.id, v)} className="scale-75" />
             </li>
           );
         })}

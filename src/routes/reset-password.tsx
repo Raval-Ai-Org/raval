@@ -22,7 +22,6 @@ export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordPage,
 });
 
-
 function ResetPasswordPage() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
@@ -40,7 +39,10 @@ function ResetPasswordPage() {
       const refreshToken = hashParams.get("refresh_token");
 
       if (accessToken && refreshToken) {
-        const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
         if (error) {
           toast.error("Reset link failed", { description: friendlyAuthError(error) });
           return;
@@ -60,7 +62,9 @@ function ResetPasswordPage() {
     }
 
     prepareRecoverySession();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -80,15 +84,22 @@ function ResetPasswordPage() {
 
   return (
     <div className="relative grid min-h-dvh place-items-center overflow-hidden bg-background px-5 py-8 text-foreground">
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,hsl(var(--brand-green)/0.18),transparent_34%),radial-gradient(circle_at_82%_24%,hsl(var(--brand-blue)/0.14),transparent_30%)]" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,hsl(var(--brand-green)/0.18),transparent_34%),radial-gradient(circle_at_82%_24%,hsl(var(--brand-blue)/0.14),transparent_30%)]"
+      />
       <section className="relative z-10 w-full max-w-md">
-        <div className="mb-8 flex justify-center"><Logo height={32} /></div>
+        <div className="mb-8 flex justify-center">
+          <Logo height={32} />
+        </div>
         <div className="rounded-3xl border border-border/70 bg-card/85 p-6 shadow-card backdrop-blur-xl sm:p-8">
           <div className="mb-7 text-center">
             <KeyRound className="mx-auto h-9 w-9 text-primary" />
             <h1 className="mt-4 text-3xl font-semibold">Set new password</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {ready ? "Choose a new password for your Raval AI account." : "Open the reset link from your email to continue."}
+              {ready
+                ? "Choose a new password for your Raval AI account."
+                : "Open the reset link from your email to continue."}
             </p>
           </div>
 
@@ -118,7 +129,9 @@ function ResetPasswordPage() {
                   </button>
                 </div>
               </div>
-              <Button type="submit" size="xl" className="w-full rounded-xl" loading={loading}>Update password</Button>
+              <Button type="submit" size="xl" className="w-full rounded-xl" loading={loading}>
+                Update password
+              </Button>
             </form>
           ) : (
             <Button asChild variant="outline" size="xl" className="w-full rounded-xl">

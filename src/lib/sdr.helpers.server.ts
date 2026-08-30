@@ -19,11 +19,13 @@ function createUserClientFromRequest(request: Request) {
 }
 
 export type WorkspaceAccess =
-  | { ok: true; userId: string; workspaceId: string }
-  | { ok: false; response: Response };
+  { ok: true; userId: string; workspaceId: string } | { ok: false; response: Response };
 
 /** 401 if not authenticated; 400 if workspaceId missing; 403 if not a member. */
-export async function requireWorkspaceAccess(request: Request, workspaceId: unknown): Promise<WorkspaceAccess> {
+export async function requireWorkspaceAccess(
+  request: Request,
+  workspaceId: unknown,
+): Promise<WorkspaceAccess> {
   const auth = await requireUserId(request);
   if (!auth.ok) return auth;
   if (typeof workspaceId !== "string" || workspaceId.length === 0) {

@@ -21,23 +21,23 @@ Integrate the **Social Distribution Engine (SDR)** — an existing standalone Fa
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-checked after design.*
+_GATE: Must pass before Phase 0 research. Re-checked after design._
 
 Gates drawn from the project's governing rules (CLAUDE.md Rule 1–25 + default policies):
 
-| Gate | Status | Justification |
-|---|---|---|
-| Specification is source of truth (Rule 12) | ✅ PASS | plan.md implements spec.md exactly (US1–5, FR-001..028, SC-001..010); no scope additions |
-| Surgical changes / smallest viable diff (Rule 3, default policies) | ✅ PASS | RavalAI changes are additive (2 tables, 1 enum value, new server fns/routes, new components, 3 call-site edits); SDR changes are isolated fixes; no refactors of unrelated code |
-| Backward compatibility (Rule 15, SC-007) | ✅ PASS | real publish is feature-flagged; all existing flows degrade to current behavior when SDR is unreachable or flag is off |
-| Security by default (Rule 13, FR-014/021) | ✅ PASS | per-workspace keys server-only; HMAC-verified webhooks; RLS on all new tables; no secrets in client |
-| No invented APIs/contracts (default policies) | ✅ PASS | all SDR endpoints verified against the SDR codebase (`app/api/*`, `app/schemas.py`); RavalAI patterns verified (`api.social-multi.ts`, `run-schedules.ts`, `api-auth.ts`) |
-| Single source of truth (Rule 16, FR-027) | ✅ PASS | platform limits sourced from the SDR's authoritative capabilities; editorial state (RavalAI) vs distribution state (SDR) separated, with `content_publications` as a webhook-driven mirror only |
-| Idempotency + error handling (Rule 6, FR-006/016) | ✅ PASS | idempotency key derivation + retry taxonomy designed in §Idempotency & Failure Handling |
-| Observability (Rule 19) | ✅ PASS | SDR `delivery_logs` = audit trail; RavalAI logs proxied calls + webhook receipts; status visible in Studio |
-| Test edge cases (Rule 24) | ✅ PASS | extreme edge-case matrix in §Edge Cases; TDD coverage in §Testing |
-| Dependency discipline (Rule 21) | ✅ PASS | no new npm deps required; uses existing server-fn + `crypto` patterns |
-| Complexity justified (Rule 2/22) | ✅ PASS | proxy layer + mirror table are the minimum structure for security + separation (see Complexity Tracking) |
+| Gate                                                               | Status  | Justification                                                                                                                                                                                   |
+| ------------------------------------------------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Specification is source of truth (Rule 12)                         | ✅ PASS | plan.md implements spec.md exactly (US1–5, FR-001..028, SC-001..010); no scope additions                                                                                                        |
+| Surgical changes / smallest viable diff (Rule 3, default policies) | ✅ PASS | RavalAI changes are additive (2 tables, 1 enum value, new server fns/routes, new components, 3 call-site edits); SDR changes are isolated fixes; no refactors of unrelated code                 |
+| Backward compatibility (Rule 15, SC-007)                           | ✅ PASS | real publish is feature-flagged; all existing flows degrade to current behavior when SDR is unreachable or flag is off                                                                          |
+| Security by default (Rule 13, FR-014/021)                          | ✅ PASS | per-workspace keys server-only; HMAC-verified webhooks; RLS on all new tables; no secrets in client                                                                                             |
+| No invented APIs/contracts (default policies)                      | ✅ PASS | all SDR endpoints verified against the SDR codebase (`app/api/*`, `app/schemas.py`); RavalAI patterns verified (`api.social-multi.ts`, `run-schedules.ts`, `api-auth.ts`)                       |
+| Single source of truth (Rule 16, FR-027)                           | ✅ PASS | platform limits sourced from the SDR's authoritative capabilities; editorial state (RavalAI) vs distribution state (SDR) separated, with `content_publications` as a webhook-driven mirror only |
+| Idempotency + error handling (Rule 6, FR-006/016)                  | ✅ PASS | idempotency key derivation + retry taxonomy designed in §Idempotency & Failure Handling                                                                                                         |
+| Observability (Rule 19)                                            | ✅ PASS | SDR `delivery_logs` = audit trail; RavalAI logs proxied calls + webhook receipts; status visible in Studio                                                                                      |
+| Test edge cases (Rule 24)                                          | ✅ PASS | extreme edge-case matrix in §Edge Cases; TDD coverage in §Testing                                                                                                                               |
+| Dependency discipline (Rule 21)                                    | ✅ PASS | no new npm deps required; uses existing server-fn + `crypto` patterns                                                                                                                           |
+| Complexity justified (Rule 2/22)                                   | ✅ PASS | proxy layer + mirror table are the minimum structure for security + separation (see Complexity Tracking)                                                                                        |
 
 All gates PASS — no violations requiring justification.
 
@@ -69,16 +69,16 @@ Supabase realtime (content_items already REPLICA IDENTITY FULL) ──► Studio
 
 ### Key decisions (with alternatives considered)
 
-| Decision | Rationale | Alternatives rejected |
-|---|---|---|
-| **D1 — Proxy-through-server** (browser → server fn → SDR) | SDR keys never in browser (FR-014); server fn re-validates Supabase JWT + workspace RLS before any outbound call; gives one choke point for audit + idempotency | (a) direct browser→SDR: exposes per-workspace keys to the client, no RLS, breaks isolation — **rejected**; (b) shared Supabase DB between RavalAI and SDR: couples data planes, violates SDR's own-DB doctrine and build-for-extraction — **rejected**; (c) merge SDR into `raval/`: one failure domain, kills service independence — **rejected** |
-| **D2 — Per-workspace SDR credential** | Minted once via `POST /api/v1/admin/api-keys` (using server-only `SDR_ADMIN_TOKEN`), stored encrypted in `workspace_sdr` (service-role only), never the SDR global token (satisfies SDR FR-MT-02) | single shared key: no per-tenant isolation/audit — **rejected**; client-held keys: insecure — **rejected** |
-| **D3 — HMAC-verified webhook receiver** | SDR signs `POST\|/webhook\|body` with the workspace's secret (`webhook_out.py:148-153`); receiver verifies with `timingSafeEqual` before applying anything (FR-021); apply is idempotent upsert | unverified endpoint: anyone can flip post status — **rejected**; polling only: slower, weaker consistency — **rejected as primary** (reconciliation still added as a backstop) |
-| **D4 — Split scheduling** | RavalAI `scheduled_jobs`+pg_cron = content **generation** (unchanged, untouched); SDR = distribution **timing** via `POST /schedule` with an absolute UTC instant; `content_items.scheduled_at` remains the display source of truth | double-scheduling social posts through both systems — **rejected** (two schedulers = double-post risk) |
-| **D5 — Additive data model** | `workspace_sdr` + `content_publications` + one enum value; no destructive changes; reconcile the divergent `20260707*` migrations before adding columns | reusing `content_items.meta` only: loses per-platform delivery queryability and audit shape — **rejected**; migrating SDR state into RavalAI — **rejected** |
-| **D6 — Media URL durability** | Media handed to SDR must be fetchable at fire time (FR-019); use durable public URLs (public bucket or re-signed proxy), never short-lived signed URLs for scheduled posts | passing short-lived signed URLs: scheduled image posts break at fire time — **rejected** |
-| **D7 — Approval gate** | Publish/schedule only from `approved` (or higher) content; the explicit user click is the consent (FR-024) — mirrors the SDR approval-boundary doctrine | auto-publish on approval: violates the approval boundary — **rejected** |
-| **D8 — Deployment: local-first, Oracle free + Cloudflare Tunnel, Netcup fallback** | Phase 0 runs the SDR locally (dry-run); production deploys Docker Compose on Oracle Always Free ARM (Singapore/Mumbai) behind Cloudflare Tunnel on a real domain, `pg_dump`→object storage + UptimeRobot; one-command migration to Netcup (~$5.40, SG) if needed | serverless for the SDR — **impossible** (Celery worker/beat need an always-on host); paid PaaS at launch — deferred (portability hedge makes free safe) |
+| Decision                                                                           | Rationale                                                                                                                                                                                                                                                        | Alternatives rejected                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D1 — Proxy-through-server** (browser → server fn → SDR)                          | SDR keys never in browser (FR-014); server fn re-validates Supabase JWT + workspace RLS before any outbound call; gives one choke point for audit + idempotency                                                                                                  | (a) direct browser→SDR: exposes per-workspace keys to the client, no RLS, breaks isolation — **rejected**; (b) shared Supabase DB between RavalAI and SDR: couples data planes, violates SDR's own-DB doctrine and build-for-extraction — **rejected**; (c) merge SDR into `raval/`: one failure domain, kills service independence — **rejected** |
+| **D2 — Per-workspace SDR credential**                                              | Minted once via `POST /api/v1/admin/api-keys` (using server-only `SDR_ADMIN_TOKEN`), stored encrypted in `workspace_sdr` (service-role only), never the SDR global token (satisfies SDR FR-MT-02)                                                                | single shared key: no per-tenant isolation/audit — **rejected**; client-held keys: insecure — **rejected**                                                                                                                                                                                                                                         |
+| **D3 — HMAC-verified webhook receiver**                                            | SDR signs `POST\|/webhook\|body` with the workspace's secret (`webhook_out.py:148-153`); receiver verifies with `timingSafeEqual` before applying anything (FR-021); apply is idempotent upsert                                                                  | unverified endpoint: anyone can flip post status — **rejected**; polling only: slower, weaker consistency — **rejected as primary** (reconciliation still added as a backstop)                                                                                                                                                                     |
+| **D4 — Split scheduling**                                                          | RavalAI `scheduled_jobs`+pg_cron = content **generation** (unchanged, untouched); SDR = distribution **timing** via `POST /schedule` with an absolute UTC instant; `content_items.scheduled_at` remains the display source of truth                              | double-scheduling social posts through both systems — **rejected** (two schedulers = double-post risk)                                                                                                                                                                                                                                             |
+| **D5 — Additive data model**                                                       | `workspace_sdr` + `content_publications` + one enum value; no destructive changes; reconcile the divergent `20260707*` migrations before adding columns                                                                                                          | reusing `content_items.meta` only: loses per-platform delivery queryability and audit shape — **rejected**; migrating SDR state into RavalAI — **rejected**                                                                                                                                                                                        |
+| **D6 — Media URL durability**                                                      | Media handed to SDR must be fetchable at fire time (FR-019); use durable public URLs (public bucket or re-signed proxy), never short-lived signed URLs for scheduled posts                                                                                       | passing short-lived signed URLs: scheduled image posts break at fire time — **rejected**                                                                                                                                                                                                                                                           |
+| **D7 — Approval gate**                                                             | Publish/schedule only from `approved` (or higher) content; the explicit user click is the consent (FR-024) — mirrors the SDR approval-boundary doctrine                                                                                                          | auto-publish on approval: violates the approval boundary — **rejected**                                                                                                                                                                                                                                                                            |
+| **D8 — Deployment: local-first, Oracle free + Cloudflare Tunnel, Netcup fallback** | Phase 0 runs the SDR locally (dry-run); production deploys Docker Compose on Oracle Always Free ARM (Singapore/Mumbai) behind Cloudflare Tunnel on a real domain, `pg_dump`→object storage + UptimeRobot; one-command migration to Netcup (~$5.40, SG) if needed | serverless for the SDR — **impossible** (Celery worker/beat need an always-on host); paid PaaS at launch — deferred (portability hedge makes free safe)                                                                                                                                                                                            |
 
 ### Interfaces & integration contract
 
@@ -96,12 +96,13 @@ Supabase realtime (content_items already REPLICA IDENTITY FULL) ──► Studio
 **Publish naming (US2 UX clarity):** the social **Publish** action (the canvas destination step) is distinct from the existing app-deploy "Publish" in the Share menu (`PublishDialog.tsx`, which deploys the RavalAI app). The social publish is wired only in the social-post canvas + approval rail, and the UI labels it as distributing the post — never confused with app deployment.
 
 **Error taxonomy (RavalAI server → Studio):**
-| SDR category | RavalAI handling | Studio UX |
-|---|---|---|
-| `transient` / `rate_limit` (429, 5xx, timeout) | retry via SDR backoff; surface "Retrying" | status chip Retrying + timing |
-| `auth` (401/403, expired token) | mark account Expired; never retry | "Reconnect required" + inline Connect |
-| `fatal` / `media` (4xx, invalid content) | permanent; surface reason | actionable error + edit/republish |
-| validation (422) | pre-validate server-side (FR-027) | warning before submit |
+
+| SDR category                                   | RavalAI handling                          | Studio UX                             |
+| ---------------------------------------------- | ----------------------------------------- | ------------------------------------- |
+| `transient` / `rate_limit` (429, 5xx, timeout) | retry via SDR backoff; surface "Retrying" | status chip Retrying + timing         |
+| `auth` (401/403, expired token)                | mark account Expired; never retry         | "Reconnect required" + inline Connect |
+| `fatal` / `media` (4xx, invalid content)       | permanent; surface reason                 | actionable error + edit/republish     |
+| validation (422)                               | pre-validate server-side (FR-027)         | warning before submit                 |
 
 ## Data Model
 
@@ -124,7 +125,7 @@ Additive only. Full detail in [data-model.md](./data-model.md). Summary:
 
 ## Idempotency & Failure Handling
 
-- **Idempotency key**: `publish:{content_item_id}:{platform}:{account_id}:{sdr_revision}`. `sdr_revision` increments whenever a previously-failed post is edited and republished → the SDR treats it as a fresh job (FR-023), never returning the old failed result. Re-submitting the *same* key returns the existing job (no duplicate — SC-003).
+- **Idempotency key**: `publish:{content_item_id}:{platform}:{account_id}:{sdr_revision}`. `sdr_revision` increments whenever a previously-failed post is edited and republished → the SDR treats it as a fresh job (FR-023), never returning the old failed result. Re-submitting the _same_ key returns the existing job (no duplicate — SC-003).
 - **Schedule idempotency**: `schedule:{content_item_id}:{platform}:{account_id}:{sdr_revision}`; reschedule = cancel old + schedule new (SDR cancel is only valid for pending/retrying targets).
 - **Retry taxonomy**: transient/rate-limit → SDR exponential backoff (60→3600s, `MAX_RETRIES=5`); auth → expire account + Reconnect; fatal/media → permanent + reason surfaced. Webhook misses → **reconciliation** = a pg_cron row invoking `POST /api/public/hooks/sdr-reconcile` (guarded with `CRON_SECRET`, mirroring the existing `run-schedules.ts` pattern — not a Cloudflare cron trigger), sweeping `content_publications` stuck in `publishing`/`pending` >10 min against `GET /api/v1/jobs/{id}` and reconciling to a definitive state (FR-018).
 - **Partial success**: per-target status in `content_publications`; overall item status derived (`published` if all, `partial_failed` on mix, `failed` if all failed) — never a blanket success/failure (FR-011).
@@ -147,13 +148,13 @@ Additive only. Full detail in [data-model.md](./data-model.md). Summary:
 
 ## Rollout Phases (non-disruptive, flag-gated)
 
-| Phase | Scope | Gate to next |
-|---|---|---|
-| **0** | Stand up SDR locally (venv or `docker compose up` + `alembic upgrade head`); run the DryRun smoke test (`specs/001-social-sde/demo/run-demo.sh`) incl. FORCE_* failure modes | all 4 adapters dry-run pass |
-| **1** | Connections view + OAuth connect (read-only; publish still mock) | connect works end-to-end for LinkedIn + X |
-| **2** | Real publish behind env flag; degrade to mock when SDR unreachable | live publish + live link on LinkedIn + X |
-| **3** | Schedule + webhook confirmation + partial-success surfacing | schedule + status verified; **Meta app-review obtained** before FB/IG |
-| **4** | Deploy (Oracle free + Cloudflare Tunnel; Netcup fallback) + hardening: CORS lockdown, gate Flower, nightly `pg_dump`, UptimeRobot, reconciliation sweep, SDR-side queue fix | live E2E across platforms; load/DR drill |
+| Phase | Scope                                                                                                                                                                        | Gate to next                                                          |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **0** | Stand up SDR locally (venv or `docker compose up` + `alembic upgrade head`); run the DryRun smoke test (`specs/001-social-sde/demo/run-demo.sh`) incl. FORCE_* failure modes | all 4 adapters dry-run pass                                           |
+| **1** | Connections view + OAuth connect (read-only; publish still mock)                                                                                                             | connect works end-to-end for LinkedIn + X                             |
+| **2** | Real publish behind env flag; degrade to mock when SDR unreachable                                                                                                           | live publish + live link on LinkedIn + X                              |
+| **3** | Schedule + webhook confirmation + partial-success surfacing                                                                                                                  | schedule + status verified; **Meta app-review obtained** before FB/IG |
+| **4** | Deploy (Oracle free + Cloudflare Tunnel; Netcup fallback) + hardening: CORS lockdown, gate Flower, nightly `pg_dump`, UptimeRobot, reconciliation sweep, SDR-side queue fix  | live E2E across platforms; load/DR drill                              |
 
 ## SDR-side fixes (required by this plan; isolated)
 
@@ -180,61 +181,61 @@ Additive only. Full detail in [data-model.md](./data-model.md). Summary:
 
 ## Risks & Mitigations
 
-| Risk | Impact | Mitigation |
-|---|---|---|
-| Meta app-review delay blocks FB/IG at launch | Med-High | launch LinkedIn + X first (Phases 2–3); start Meta review early; FB/IG gate is explicit in Phase 3 |
-| Oracle free tier changes/reclaim | Med | portability (one `docker compose up -d` to Netcup); backups + monitoring; keep the paid fallback ready |
-| X/Twitter paid developer tier cost | Med | budget Basic tier; dry-run CI avoids live API cost |
-| Divergent `20260707*` migrations corrupt schema work | High | reconcile migrations before adding columns (pre-schema gate) |
-| Webhook loss strands posts in `publishing` | Med | reconciliation sweep + alerts (FR-018) |
+| Risk                                                 | Impact   | Mitigation                                                                                             |
+| ---------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| Meta app-review delay blocks FB/IG at launch         | Med-High | launch LinkedIn + X first (Phases 2–3); start Meta review early; FB/IG gate is explicit in Phase 3     |
+| Oracle free tier changes/reclaim                     | Med      | portability (one `docker compose up -d` to Netcup); backups + monitoring; keep the paid fallback ready |
+| X/Twitter paid developer tier cost                   | Med      | budget Basic tier; dry-run CI avoids live API cost                                                     |
+| Divergent `20260707*` migrations corrupt schema work | High     | reconcile migrations before adding columns (pre-schema gate)                                           |
+| Webhook loss strands posts in `publishing`           | Med      | reconciliation sweep + alerts (FR-018)                                                                 |
 
 ## Spec Traceability (FR/SC → plan coverage)
 
 Every spec requirement is mapped to where this plan satisfies it. Verified complete (2026-08-08) after **two review passes**: the six first-pass gaps (G1–G6) and eight second-pass refinements (R2a aggregation guard, R2b concrete reconciliation, R2c replay mitigation, R2d realtime delivery path, R2e approval-rail behavior, R2f cancel UI + 1-yr cap, R2g `publishing` migration + UI filters, R2h dev-mode polling) were all closed.
 
-| Spec | Satisfied by |
-|---|---|
-| FR-001 connect | D2, `POST /api/sdr/oauth/start` (contracts/sdr-proxy.md) |
-| FR-002 display accounts | `GET /api/sdr/accounts`, Connections view (US1) |
-| FR-003 disconnect | **G1-closed:** `POST /api/sdr/disconnect` (contracts/sdr-proxy.md) → SDR `DELETE /api/v1/accounts/{id}` |
-| FR-004 expired → Reconnect | **G4-closed:** `oauth/start` reused for expired accounts; `account.expired` webhook; error taxonomy auth→Reconnect |
-| FR-005 publish single/platform/all | `destinationSelection` in `POST /api/sdr/publish` |
-| FR-006 idempotent | idempotency key `publish:{item}:{platform}:{account}:{revision}` (SC-003) |
-| FR-007 inline Connect, no block | **G5-closed:** destination-picker behavior (disabled + inline Connect; never blocks connected) |
-| FR-008 schedule | `POST /api/sdr/schedule`, SDR beat (SC-004) |
-| FR-009 reschedule + cancel | `POST /api/sdr/cancel` + calendar reschedule |
-| FR-010 per-destination status | `content_publications` + webhook receiver (US4) |
-| FR-011 partial success | status aggregation (`partial_failed`); per-target rows |
-| FR-012 limits validated visibly | FR-027 single-source limits; error taxonomy validation |
-| FR-013 isolation | D2 per-workspace key + RLS (`is_workspace_member`) |
-| FR-014 no creds in browser | D1 proxy-through-server; `workspace_sdr` service-role-only |
-| FR-015 graceful failure | US5; 503 degrade-to-mock behind flag (SC-008) |
-| FR-016 retry + permanent surfaced | retry taxonomy (60→3600s backoff; auth/fatal surfaced) |
-| FR-017 feature flag | D8 rollout flag (SC-007) |
-| FR-018 reconcile stale | reconciliation sweep backstop (contracts/sdr-webhook.md) |
-| FR-019 media durable | D6 + media rule (SC-010) |
-| FR-020 IG media guidance | picker pre-flight (IG exactly one image) |
-| FR-021 verify webhook | D3 + contracts/sdr-webhook.md (SC-009) |
-| FR-022 provisioning | `ensureWorkspaceSdrProvisioning` (idempotent) |
-| FR-023 republish fresh identity | `meta.sdr_revision` increments on republish |
-| FR-024 approval gate | D7; publish only from approved content + explicit click |
-| FR-025 timezone | **G3-closed:** timezone rule (local accept/render, absolute instant, UTC on wire) |
-| FR-026 platform identity preserved | **G2-closed:** `facebook→"web"` fix (pre-schema) + calendar/render |
-| FR-027 limits single source | authoritative SDR capabilities mirror (server-side) |
-| FR-028 undeliverable variants | picker "Not available"; never offered (FR-028) |
+| Spec                               | Satisfied by                                                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| FR-001 connect                     | D2, `POST /api/sdr/oauth/start` (contracts/sdr-proxy.md)                                                           |
+| FR-002 display accounts            | `GET /api/sdr/accounts`, Connections view (US1)                                                                    |
+| FR-003 disconnect                  | **G1-closed:** `POST /api/sdr/disconnect` (contracts/sdr-proxy.md) → SDR `DELETE /api/v1/accounts/{id}`            |
+| FR-004 expired → Reconnect         | **G4-closed:** `oauth/start` reused for expired accounts; `account.expired` webhook; error taxonomy auth→Reconnect |
+| FR-005 publish single/platform/all | `destinationSelection` in `POST /api/sdr/publish`                                                                  |
+| FR-006 idempotent                  | idempotency key `publish:{item}:{platform}:{account}:{revision}` (SC-003)                                          |
+| FR-007 inline Connect, no block    | **G5-closed:** destination-picker behavior (disabled + inline Connect; never blocks connected)                     |
+| FR-008 schedule                    | `POST /api/sdr/schedule`, SDR beat (SC-004)                                                                        |
+| FR-009 reschedule + cancel         | `POST /api/sdr/cancel` + calendar reschedule                                                                       |
+| FR-010 per-destination status      | `content_publications` + webhook receiver (US4)                                                                    |
+| FR-011 partial success             | status aggregation (`partial_failed`); per-target rows                                                             |
+| FR-012 limits validated visibly    | FR-027 single-source limits; error taxonomy validation                                                             |
+| FR-013 isolation                   | D2 per-workspace key + RLS (`is_workspace_member`)                                                                 |
+| FR-014 no creds in browser         | D1 proxy-through-server; `workspace_sdr` service-role-only                                                         |
+| FR-015 graceful failure            | US5; 503 degrade-to-mock behind flag (SC-008)                                                                      |
+| FR-016 retry + permanent surfaced  | retry taxonomy (60→3600s backoff; auth/fatal surfaced)                                                             |
+| FR-017 feature flag                | D8 rollout flag (SC-007)                                                                                           |
+| FR-018 reconcile stale             | reconciliation sweep backstop (contracts/sdr-webhook.md)                                                           |
+| FR-019 media durable               | D6 + media rule (SC-010)                                                                                           |
+| FR-020 IG media guidance           | picker pre-flight (IG exactly one image)                                                                           |
+| FR-021 verify webhook              | D3 + contracts/sdr-webhook.md (SC-009)                                                                             |
+| FR-022 provisioning                | `ensureWorkspaceSdrProvisioning` (idempotent)                                                                      |
+| FR-023 republish fresh identity    | `meta.sdr_revision` increments on republish                                                                        |
+| FR-024 approval gate               | D7; publish only from approved content + explicit click                                                            |
+| FR-025 timezone                    | **G3-closed:** timezone rule (local accept/render, absolute instant, UTC on wire)                                  |
+| FR-026 platform identity preserved | **G2-closed:** `facebook→"web"` fix (pre-schema) + calendar/render                                                 |
+| FR-027 limits single source        | authoritative SDR capabilities mirror (server-side)                                                                |
+| FR-028 undeliverable variants      | picker "Not available"; never offered (FR-028)                                                                     |
 
-| SC | Satisfied by |
-|---|---|
-| SC-001 connect <2min | US1 + OAuth start/callback flow (test: Playwright e2e) |
-| SC-002 published + link ≤60s | webhook → realtime → Studio (US4, SC-002) |
-| SC-003 0 duplicates | idempotency key + SDR 409 handling |
-| SC-004 scheduled ≤5min ≥99% | SDR beat claim + webhook (US3) |
-| SC-005 expired never silent | `account.expired` + Reconnect path |
-| SC-006 all outcomes visible | `content_publications` drives Studio |
-| SC-007 non-regression | flag-gated rollout; Phase 5 degrade |
-| SC-008 no content loss | graceful failure paths; terminal-wins reconciliation |
-| SC-009 verified-only state change | HMAC verify before apply (contracts/sdr-webhook.md) |
-| SC-010 media delivery ≥99% | durable media URLs + retryable media failure |
+| SC                                | Satisfied by                                           |
+| --------------------------------- | ------------------------------------------------------ |
+| SC-001 connect <2min              | US1 + OAuth start/callback flow (test: Playwright e2e) |
+| SC-002 published + link ≤60s      | webhook → realtime → Studio (US4, SC-002)              |
+| SC-003 0 duplicates               | idempotency key + SDR 409 handling                     |
+| SC-004 scheduled ≤5min ≥99%       | SDR beat claim + webhook (US3)                         |
+| SC-005 expired never silent       | `account.expired` + Reconnect path                     |
+| SC-006 all outcomes visible       | `content_publications` drives Studio                   |
+| SC-007 non-regression             | flag-gated rollout; Phase 5 degrade                    |
+| SC-008 no content loss            | graceful failure paths; terminal-wins reconciliation   |
+| SC-009 verified-only state change | HMAC verify before apply (contracts/sdr-webhook.md)    |
+| SC-010 media delivery ≥99%        | durable media URLs + retryable media failure           |
 
 ## Complexity Tracking
 

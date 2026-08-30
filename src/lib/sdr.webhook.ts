@@ -34,7 +34,12 @@ export function aggregateItemStatus(rows: Array<{ status: string }>): string {
 }
 
 export async function handleSdrWebhook(
-  args: { rawBody: string; signature: string | null; eventType: string | null; maxBodyBytes?: number },
+  args: {
+    rawBody: string;
+    signature: string | null;
+    eventType: string | null;
+    maxBodyBytes?: number;
+  },
   deps: WebhookDeps,
 ): Promise<WebhookResult> {
   // C1: reject oversized bodies before parsing/verification.
@@ -58,7 +63,12 @@ export async function handleSdrWebhook(
     if (!accountId) return { status: 400, body: { error: "account.expired missing account_id" } };
     const { error } = await deps.db
       .from("content_publications")
-      .update({ status: "failed", error_category: "auth", last_error: "Account authorization expired", updated_at: new Date().toISOString() })
+      .update({
+        status: "failed",
+        error_category: "auth",
+        last_error: "Account authorization expired",
+        updated_at: new Date().toISOString(),
+      })
       .eq("account_id", accountId)
       .in("status", ["publishing", "retrying", "pending"]);
     if (error) return { status: 500, body: { error: error.message } };
@@ -100,7 +110,9 @@ export async function handleSdrWebhook(
   }
 
   // 3. Apply terminal-wins (R2c). A published/failed row is never downgraded.
-  const status = data.status ?? (event === "post.published" ? "published" : event === "post.retrying" ? "retrying" : "failed");
+  const status =
+    data.status ??
+    (event === "post.published" ? "published" : event === "post.retrying" ? "retrying" : "failed");
   const current = row.status;
   const isDowngrade = TERMINAL.has(current) && status !== current;
   if (!isDowngrade) {

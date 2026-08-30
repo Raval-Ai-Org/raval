@@ -4,7 +4,9 @@
 // destination picker (US2) and the Connections view (US1).
 import type { ConnectedAccount } from "@/lib/sdr.handlers";
 
-export function isAccountPublishable(account: Pick<ConnectedAccount, "status"> | undefined | null): boolean {
+export function isAccountPublishable(
+  account: Pick<ConnectedAccount, "status"> | undefined | null,
+): boolean {
   return account?.status === "active";
 }
 
@@ -20,7 +22,10 @@ export function getPublishableAccounts(accounts: ConnectedAccount[]): ConnectedA
  */
 export function resolveTargetAccounts(
   accounts: ConnectedAccount[],
-  selection: { type: "account"; accountId: string } | { type: "platform"; platform: string } | { type: "all" },
+  selection:
+    | { type: "account"; accountId: string }
+    | { type: "platform"; platform: string }
+    | { type: "all" },
 ): ConnectedAccount[] {
   const publishable = getPublishableAccounts(accounts);
   switch (selection.type) {

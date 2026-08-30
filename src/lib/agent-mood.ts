@@ -4,7 +4,7 @@ import type { StarMood } from "@/components/StarAgent";
 export interface MoodState {
   mood: StarMood;
   intensity: number; // 0..1 — drives halo brightness
-  progress: number;  // 0..100
+  progress: number; // 0..100
 }
 
 /**

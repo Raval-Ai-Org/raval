@@ -13,9 +13,9 @@
 
 export type ChatTurn = { role: "user" | "assistant" | "system"; content: string };
 
-const KEEP_TAIL = 12;               // last N turns kept verbatim
-const MAX_OLDER_CHARS = 900;        // hard cap on the summary block
-const PER_TURN_CHARS = 110;         // per-turn snippet inside summary
+const KEEP_TAIL = 12; // last N turns kept verbatim
+const MAX_OLDER_CHARS = 900; // hard cap on the summary block
+const PER_TURN_CHARS = 110; // per-turn snippet inside summary
 
 export function compactHistory(
   messages: ChatTurn[],
@@ -50,16 +50,12 @@ function heuristicSummary(older: ChatTurn[]): string {
     if (m.role !== "user") continue;
     const next = older[i + 1];
     const q = firstSentence(m.content, PER_TURN_CHARS);
-    const a = next && next.role === "assistant"
-      ? firstSentence(next.content, PER_TURN_CHARS)
-      : "";
+    const a = next && next.role === "assistant" ? firstSentence(next.content, PER_TURN_CHARS) : "";
     lines.push(a ? `- Q: ${q} → A: ${a}` : `- Q: ${q}`);
   }
   // Cap total size, prefer most recent older exchanges.
   const joined = lines.slice(-24).join("\n");
-  return joined.length > MAX_OLDER_CHARS
-    ? joined.slice(joined.length - MAX_OLDER_CHARS)
-    : joined;
+  return joined.length > MAX_OLDER_CHARS ? joined.slice(joined.length - MAX_OLDER_CHARS) : joined;
 }
 
 function firstSentence(text: string, n: number): string {

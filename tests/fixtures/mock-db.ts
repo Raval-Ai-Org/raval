@@ -82,7 +82,12 @@ export function makeMockDb(seed: Partial<Record<TableKey, MockRow[]>> = {}) {
   const mutations: Array<{ table: string; patch: any }> = [];
   const upserts: any[] = [];
 
-  function matches(row: MockRow, filters: Record<string, any>, inF: Record<string, any[]>, ltF: Record<string, any>) {
+  function matches(
+    row: MockRow,
+    filters: Record<string, any>,
+    inF: Record<string, any[]>,
+    ltF: Record<string, any>,
+  ) {
     for (const [k, v] of Object.entries(filters)) if (row[k] !== v) return false;
     for (const [k, vals] of Object.entries(inF)) if (!vals.includes(row[k])) return false;
     for (const [k, v] of Object.entries(ltF)) if (!(row[k] < v)) return false;
@@ -98,9 +103,18 @@ export function makeMockDb(seed: Partial<Record<TableKey, MockRow[]>> = {}) {
     // `then` makes this builder awaitable to { data, error } for select chains.
     const b: any = {
       select: () => b,
-      eq: (col: string, val: any) => { filters[col] = val; return b; },
-      in: (col: string, vals: any[]) => { inF[col] = vals; return b; },
-      lt: (col: string, val: any) => { ltF[col] = val; return b; },
+      eq: (col: string, val: any) => {
+        filters[col] = val;
+        return b;
+      },
+      in: (col: string, vals: any[]) => {
+        inF[col] = vals;
+        return b;
+      },
+      lt: (col: string, val: any) => {
+        ltF[col] = val;
+        return b;
+      },
       limit: () => b,
       maybeSingle: async () => ({ data: find()[0] ?? null, error: null }),
       upsert: async (rows: any[]) => {

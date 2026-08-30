@@ -29,6 +29,7 @@ tests:
 User's resumed request (from prior context): Verify that 54 tasks are consistent with implementation plan and specifications, check for missed/skipped items, then proceed with `/sp.implement` to create full implementation structure for Social Distribution Engine backend, accurately and robustly.
 
 Current context: Phase 2 (Foundational, T007-T014) was 7 of 8 files complete. T010 (Alembic migrations) was blocked on `ModuleNotFoundError: No module named 'psycopg2'` because:
+
 1. The sync database URL was using generic `postgresql://` protocol
 2. SQLAlchemy defaults to psycopg2 driver for generic postgres URIs
 3. Only psycopg v3 (not psycopg2) was installed
@@ -40,12 +41,14 @@ Current context: Phase 2 (Foundational, T007-T014) was 7 of 8 files complete. T0
 **Root cause identified**: DATABASE_URL_SYNC was using `postgresql://` instead of explicit `postgresql+psycopg://` driver specification. SQLAlchemy interprets generic postgres URIs as psycopg2, but the project uses psycopg v3.
 
 **Solution executed**:
+
 1. Modified `app/config.py`: Changed sync URL scheme from `postgresql://` to `postgresql+psycopg://`
 2. Modified `.env`: Updated DATABASE_URL_SYNC to use explicit psycopg driver
 3. Modified `alembic/env.py`: Added fallback to offline mode when database unavailable
 4. Created `/alembic/versions/001_initial_schema.py`: Hand-crafted initial migration based on our SQLAlchemy models
 
 **Migration includes**:
+
 - `accounts` table (OAuth credentials, status, token expiry tracking)
 - `posts` table (core post entity with idempotency keys, status, scheduling)
 - `post_targets` table (per-platform delivery, retry logic, error tracking)
@@ -55,6 +58,7 @@ Current context: Phase 2 (Foundational, T007-T014) was 7 of 8 files complete. T0
 - Performance indexes: (status, next_attempt_at), (scheduled_at WHERE status='PENDING'), (token_expires_at WHERE status='active')
 
 **Verification**: `alembic history` output confirms migration is recognized:
+
 ```
 <base> -> 001 (head), 001_initial_schema
 ```
@@ -69,7 +73,7 @@ Current context: Phase 2 (Foundational, T007-T014) was 7 of 8 files complete. T0
 
 ## Evaluation notes (flywheel)
 
-- **Failure modes observed**: 
+- **Failure modes observed**:
   - Initial attempt: alembic revision --autogenerate failed with psycopg2 module not found (incorrect driver URI)
   - Second attempt: Offline mode configuration error (literal_binds without as_sql mode)
   - Resolution: Switched to hand-crafted migration (verified against models, full control, no DB dependency)
@@ -88,13 +92,13 @@ Current context: Phase 2 (Foundational, T007-T014) was 7 of 8 files complete. T0
 
 ## Technical Decision Log
 
-| Aspect | Decision | Rationale |
-|--------|----------|-----------|
-| **Driver URI** | `postgresql+psycopg://` for sync engine | Explicit driver eliminates SQLAlchemy ambiguity; psycopg v3 is the modern, async-first driver |
-| **Migration creation** | Hand-crafted (not auto-generated) | No DB connection required; full control over schema; matches models 1:1; can be verified without running database |
-| **Offline mode fallback** | Attempted but abandoned | Alembic's offline + autogenerate combination unreliable; manual migration cleaner and more reliable |
-| **Index strategy** | Partial indexes for WHERE clauses | Reduces index size; speeds common queries (claiming due targets, finding scheduled posts, checking token expiry) |
-| **Cascade deletes** | Enabled on all FK relationships | Maintains referential integrity; when a post is deleted, all related targets and logs clean up automatically |
+| Aspect                    | Decision                                | Rationale                                                                                                         |
+| ------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Driver URI**            | `postgresql+psycopg://` for sync engine | Explicit driver eliminates SQLAlchemy ambiguity; psycopg v3 is the modern, async-first driver                     |
+| **Migration creation**    | Hand-crafted (not auto-generated)       | No DB connection required; full control over schema; matches models 1:1; can be verified without running database |
+| **Offline mode fallback** | Attempted but abandoned                 | Alembic's offline + autogenerate combination unreliable; manual migration cleaner and more reliable               |
+| **Index strategy**        | Partial indexes for WHERE clauses       | Reduces index size; speeds common queries (claiming due targets, finding scheduled posts, checking token expiry)  |
+| **Cascade deletes**       | Enabled on all FK relationships         | Maintains referential integrity; when a post is deleted, all related targets and logs clean up automatically      |
 
 ---
 
@@ -104,18 +108,19 @@ Current context: Phase 2 (Foundational, T007-T014) was 7 of 8 files complete. T0
 
 All 8 foundational tasks completed:
 
-| Task | File | Status | Notes |
-|------|------|--------|-------|
-| T007 | app/config.py | ✅ | Pydantic settings, environment validation, computed URLs |
-| T008 | app/database.py | ✅ | Async + sync engines, connection pooling, health checks |
-| T009 | app/models.py | ✅ | 5 ORM models, relationships, JSONB fields, encrypted tokens |
-| T010 | alembic/versions/001_initial_schema.py | ✅ | Initial schema migration, all tables + indexes |
-| T011 | app/schemas.py | ✅ | Pydantic request/response schemas with validation |
-| T012 | app/adapters/errors.py | ✅ | Error taxonomy (6 categories, retry logic classification) |
-| T013 | app/api/ops.py | ✅ | Health check endpoint (/healthz) |
-| T014 | app/main.py | ✅ | FastAPI factory, middleware, exception handlers |
+| Task | File                                   | Status | Notes                                                       |
+| ---- | -------------------------------------- | ------ | ----------------------------------------------------------- |
+| T007 | app/config.py                          | ✅     | Pydantic settings, environment validation, computed URLs    |
+| T008 | app/database.py                        | ✅     | Async + sync engines, connection pooling, health checks     |
+| T009 | app/models.py                          | ✅     | 5 ORM models, relationships, JSONB fields, encrypted tokens |
+| T010 | alembic/versions/001_initial_schema.py | ✅     | Initial schema migration, all tables + indexes              |
+| T011 | app/schemas.py                         | ✅     | Pydantic request/response schemas with validation           |
+| T012 | app/adapters/errors.py                 | ✅     | Error taxonomy (6 categories, retry logic classification)   |
+| T013 | app/api/ops.py                         | ✅     | Health check endpoint (/healthz)                            |
+| T014 | app/main.py                            | ✅     | FastAPI factory, middleware, exception handlers             |
 
 **Checkpoint Verified**:
+
 - ✅ Configuration loads without errors
 - ✅ Migration recognized by Alembic (alembic history shows 001 as head)
 - ✅ All models properly typed and decorated

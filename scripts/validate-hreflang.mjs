@@ -147,7 +147,9 @@ async function main() {
 
       // a. Non-empty cluster
       if (hreflangs.length === 0) {
-        problems.push("no hreflang tags, but other pages declare a cluster — every URL must ship the cluster");
+        problems.push(
+          "no hreflang tags, but other pages declare a cluster — every URL must ship the cluster",
+        );
         errors.push({ loc, problems });
         continue;
       }
@@ -164,8 +166,7 @@ async function main() {
       // d. Duplicate locales
       const seen = new Set();
       for (const h of hreflangs) {
-        if (seen.has(h.hreflang))
-          problems.push(`duplicate hreflang locale "${h.hreflang}"`);
+        if (seen.has(h.hreflang)) problems.push(`duplicate hreflang locale "${h.hreflang}"`);
         seen.add(h.hreflang);
       }
 
@@ -188,9 +189,7 @@ async function main() {
         const altPage = [...pages.entries()].find(([l]) => normalizeUrl(l) === altNorm);
         if (!altPage) continue;
         const [, altData] = altPage;
-        const backLink = altData.hreflangs.find(
-          (x) => normalizeUrl(x.href) === locNorm,
-        );
+        const backLink = altData.hreflangs.find((x) => normalizeUrl(x.href) === locNorm);
         if (!backLink) {
           problems.push(
             `hreflang="${h.hreflang}" → "${h.href}" is not reciprocated (target page has no hreflang entry pointing back to "${loc}")`,

@@ -23,9 +23,15 @@ const WORKSPACE_STORAGE_KEYS = [
  * query cache) so the next signed-in user starts with fresh workspace context.
  */
 export async function signOutAndRedirect(queryClient?: QueryClient) {
-  try { await queryClient?.cancelQueries(); } catch {}
-  try { queryClient?.clear(); } catch {}
-  try { await supabase.auth.signOut(); } catch {}
+  try {
+    await queryClient?.cancelQueries();
+  } catch {}
+  try {
+    queryClient?.clear();
+  } catch {}
+  try {
+    await supabase.auth.signOut();
+  } catch {}
   if (typeof window !== "undefined") {
     try {
       for (const key of WORKSPACE_STORAGE_KEYS) window.localStorage.removeItem(key);
@@ -71,7 +77,11 @@ export function friendlyAuthError(error: unknown) {
   if (lower.includes("email not confirmed") || lower.includes("confirm your email")) {
     return "Please confirm your email address first, then sign in again.";
   }
-  if (lower.includes("provider") && lower.includes("google") && (lower.includes("not supported") || lower.includes("missing oauth secret"))) {
+  if (
+    lower.includes("provider") &&
+    lower.includes("google") &&
+    (lower.includes("not supported") || lower.includes("missing oauth secret"))
+  ) {
     return "Google sign-in is not enabled correctly. Enable Google in Supabase → Authentication → Sign In / Providers and save it, then try again.";
   }
   if (lower.includes("popup") && lower.includes("blocked")) {

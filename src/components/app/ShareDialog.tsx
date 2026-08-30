@@ -121,7 +121,7 @@ export function ShareDialog({
         name: m.name,
         avatar_url: m.avatar_url,
         joined_at: m.joined_at,
-        email: m.user_id === me?.id ? me?.email ?? null : null,
+        email: m.user_id === me?.id ? (me?.email ?? null) : null,
         isYou: m.user_id === me?.id,
       }));
       rows.sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : 0));
@@ -243,11 +243,12 @@ export function ShareDialog({
         bodyClassName="px-6 py-5"
       >
         <div className="space-y-5">
-
-
           {/* Invite form */}
           <section aria-labelledby="invite-heading" className="space-y-2">
-            <div id="invite-heading" className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <div
+              id="invite-heading"
+              className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+            >
               <Send className="h-3 w-3" /> Send an invite
             </div>
             <div className="flex items-stretch gap-2">
@@ -271,7 +272,10 @@ export function ShareDialog({
                 onValueChange={(v) => setRole(v as any)}
                 disabled={!isOwner || inviting}
               >
-                <SelectTrigger className="h-9 w-[112px] bg-background/60 text-[12px]" aria-label="Role">
+                <SelectTrigger
+                  className="h-9 w-[112px] bg-background/60 text-[12px]"
+                  aria-label="Role"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -306,8 +310,9 @@ export function ShareDialog({
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               {isOwner ? (
                 <>
-                  <span className="font-medium text-foreground/80">Editors</span> can create and edit content ·{" "}
-                  <span className="font-medium text-foreground/80">Viewers</span> have read-only access.
+                  <span className="font-medium text-foreground/80">Editors</span> can create and
+                  edit content · <span className="font-medium text-foreground/80">Viewers</span>{" "}
+                  have read-only access.
                 </>
               ) : (
                 <>Only the workspace owner can invite or remove members.</>
@@ -317,7 +322,10 @@ export function ShareDialog({
 
           {/* Copy invite link */}
           <section aria-labelledby="link-heading" className="space-y-2">
-            <div id="link-heading" className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <div
+              id="link-heading"
+              className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+            >
               <LinkIcon className="h-3 w-3" /> Shareable workspace link
             </div>
             <div className="flex items-stretch gap-2 rounded-lg border border-border/60 bg-background/50 p-1 pl-3">
@@ -494,9 +502,7 @@ export function ShareDialog({
                     : "Only people added above can access"}
                 </span>
               </span>
-              <span className="text-[10.5px] font-medium text-muted-foreground">
-                Switch
-              </span>
+              <span className="text-[10.5px] font-medium text-muted-foreground">Switch</span>
             </button>
           </section>
         </div>
@@ -504,4 +510,3 @@ export function ShareDialog({
     </>
   );
 }
-

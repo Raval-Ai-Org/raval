@@ -11,18 +11,38 @@ describe("scheduleContentItemsHandler", () => {
   const sdr = new MockSDR();
   beforeAll(async () => {
     await sdr.start();
-    sdr.addAccount({ account_id: "tw-1", platform: "twitter", platform_username: "Brand", status: "active" });
+    sdr.addAccount({
+      account_id: "tw-1",
+      platform: "twitter",
+      platform_username: "Brand",
+      status: "active",
+    });
   });
   afterAll(async () => await sdr.stop());
 
-  const item: MockContentItem = { id: "item-1", workspace_id: "ws-1", body: "scheduled post", media_url: null, status: "approved", meta: { platform: "twitter" } };
-  const deps = (): PublishDeps => ({ sdrBaseUrl: sdr.baseUrl, token: "ws-key", db: makeMockContentDb([item]) });
+  const item: MockContentItem = {
+    id: "item-1",
+    workspace_id: "ws-1",
+    body: "scheduled post",
+    media_url: null,
+    status: "approved",
+    meta: { platform: "twitter" },
+  };
+  const deps = (): PublishDeps => ({
+    sdrBaseUrl: sdr.baseUrl,
+    token: "ws-key",
+    db: makeMockContentDb([item]),
+  });
 
   it("schedules an approved item: SDR request has UTC scheduled_at + schedule idempotency key", async () => {
     const depsObj = deps();
     const db = depsObj.db;
     const out = await scheduleContentItemsHandler(
-      { workspaceId: "ws-1", items: [{ contentItemId: "item-1", scheduledAt: future() }], selection: { type: "all" } },
+      {
+        workspaceId: "ws-1",
+        items: [{ contentItemId: "item-1", scheduledAt: future() }],
+        selection: { type: "all" },
+      },
       depsObj,
     );
     expect(out.status).toBe(200);
@@ -41,7 +61,13 @@ describe("scheduleContentItemsHandler", () => {
 
   it("skips a past scheduled time", async () => {
     const out = await scheduleContentItemsHandler(
-      { workspaceId: "ws-1", items: [{ contentItemId: "item-1", scheduledAt: new Date(Date.now() - 1000).toISOString() }], selection: { type: "all" } },
+      {
+        workspaceId: "ws-1",
+        items: [
+          { contentItemId: "item-1", scheduledAt: new Date(Date.now() - 1000).toISOString() },
+        ],
+        selection: { type: "all" },
+      },
       deps(),
     );
     expect(out.body.results[0].status).toBe("skipped");
@@ -50,7 +76,16 @@ describe("scheduleContentItemsHandler", () => {
 
   it("skips a schedule more than 1 year out (SDR cap)", async () => {
     const out = await scheduleContentItemsHandler(
-      { workspaceId: "ws-1", items: [{ contentItemId: "item-1", scheduledAt: new Date(Date.now() + 400 * 24 * 3600_000).toISOString() }], selection: { type: "all" } },
+      {
+        workspaceId: "ws-1",
+        items: [
+          {
+            contentItemId: "item-1",
+            scheduledAt: new Date(Date.now() + 400 * 24 * 3600_000).toISOString(),
+          },
+        ],
+        selection: { type: "all" },
+      },
       deps(),
     );
     expect(out.body.results[0].status).toBe("skipped");
@@ -60,7 +95,11 @@ describe("scheduleContentItemsHandler", () => {
   it("rejects a pending (unapproved) item with 403 (FR-024)", async () => {
     const db = makeMockContentDb([{ ...item, status: "pending" }]);
     const out = await scheduleContentItemsHandler(
-      { workspaceId: "ws-1", items: [{ contentItemId: "item-1", scheduledAt: future() }], selection: { type: "all" } },
+      {
+        workspaceId: "ws-1",
+        items: [{ contentItemId: "item-1", scheduledAt: future() }],
+        selection: { type: "all" },
+      },
       { sdrBaseUrl: sdr.baseUrl, token: "ws-key", db },
     );
     expect(out.status).toBe(403);

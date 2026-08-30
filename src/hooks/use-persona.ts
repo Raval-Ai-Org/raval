@@ -129,7 +129,10 @@ export function usePersona() {
     let cancelled = false;
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session) { if (!cancelled) setLoading(false); return; }
+      if (!sess.session) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
       const { data } = await supabase
         .from("profiles")
         .select("persona")
@@ -144,29 +147,33 @@ export function usePersona() {
       } catch {}
       setLoading(false);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const setPersona = useCallback(async (p: Persona) => {
-    // Client-side guard — cheap short-circuit for the common case.
-    if (persona) return;
-    const { data: sess } = await supabase.auth.getSession();
-    if (!sess.session) throw new Error("Not signed in");
+  const setPersona = useCallback(
+    async (p: Persona) => {
+      // Client-side guard — cheap short-circuit for the common case.
+      if (persona) return;
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) throw new Error("Not signed in");
 
-    // Atomic first-writer-wins via SECURITY DEFINER RPC. Concurrent calls
-    // (multiple tabs, double-tap, retry after a network hiccup) all resolve
-    // to the same persisted value — the DB serializes the UPDATE and
-    // subsequent callers observe the already-set persona.
-    const { data, error } = await supabase
-      .rpc("set_persona_once", { _persona: p })
-      .maybeSingle();
-    if (error) throw error;
+      // Atomic first-writer-wins via SECURITY DEFINER RPC. Concurrent calls
+      // (multiple tabs, double-tap, retry after a network hiccup) all resolve
+      // to the same persisted value — the DB serializes the UPDATE and
+      // subsequent callers observe the already-set persona.
+      const { data, error } = await supabase.rpc("set_persona_once", { _persona: p }).maybeSingle();
+      if (error) throw error;
 
-    const persisted = (data?.persona ?? p) as Persona;
-    try { localStorage.setItem(CACHE_KEY, persisted); } catch {}
-    setPersonaState(persisted);
-  }, [persona]);
-
+      const persisted = (data?.persona ?? p) as Persona;
+      try {
+        localStorage.setItem(CACHE_KEY, persisted);
+      } catch {}
+      setPersonaState(persisted);
+    },
+    [persona],
+  );
 
   const copy = COPY[persona ?? "agency"];
   return { persona, copy, loading, setPersona };

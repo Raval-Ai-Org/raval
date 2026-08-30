@@ -1,8 +1,6 @@
 {
   "start": "/app/analytics?tab=content",
-  "redirectChain": [
-    "/app?tab=content"
-  ],
+  "redirectChain": ["/app?tab=content"],
   "finalPath": "/app",
   "finalSearch": {
     "tab": "content"

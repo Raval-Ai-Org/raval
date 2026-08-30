@@ -2,11 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Check, ChevronsUpDown, Plus, Search, LayoutGrid } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { WorkspaceLogo } from "./WorkspaceLogo";
 
@@ -19,11 +15,13 @@ type Workspace = {
 
 function displayName(w: Workspace) {
   const domain = w.website_url
-    ? w.website_url.replace(/^https?:\/\//i, "").replace(/\/$/, "").split("/")[0]
+    ? w.website_url
+        .replace(/^https?:\/\//i, "")
+        .replace(/\/$/, "")
+        .split("/")[0]
     : null;
   return domain || w.name || w.industry || "Workspace";
 }
-
 
 export function WorkspaceSwitcher({
   workspaceId,
@@ -36,7 +34,6 @@ export function WorkspaceSwitcher({
   workspaceWebsite?: string | null;
   onSwitch?: () => void;
 }) {
-
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -65,9 +62,7 @@ export function WorkspaceSwitcher({
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return workspaces;
-    return workspaces.filter((w) =>
-      displayName(w).toLowerCase().includes(needle),
-    );
+    return workspaces.filter((w) => displayName(w).toLowerCase().includes(needle));
   }, [q, workspaces]);
 
   const pick = (w: Workspace) => {
@@ -80,9 +75,7 @@ export function WorkspaceSwitcher({
       localStorage.setItem("workspace:selected", w.id);
       localStorage.setItem("workspace:name", name);
     } catch {}
-    window.dispatchEvent(
-      new CustomEvent("workspace:changed", { detail: { id: w.id } }),
-    );
+    window.dispatchEvent(new CustomEvent("workspace:changed", { detail: { id: w.id } }));
     setOpen(false);
     onSwitch?.();
     // Hard reload to reinitialize all workspace-scoped state (chat, studio, brand DNA).
@@ -143,10 +136,7 @@ export function WorkspaceSwitcher({
           {loading && (
             <div className="space-y-1 px-1 py-1">
               {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-9 animate-pulse rounded-lg bg-surface/60"
-                />
+                <div key={i} className="h-9 animate-pulse rounded-lg bg-surface/60" />
               ))}
             </div>
           )}
@@ -174,14 +164,9 @@ export function WorkspaceSwitcher({
                 >
                   <WorkspaceLogo name={name} websiteUrl={w.website_url} size={28} />
 
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
-                    {name}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{name}</span>
                   {active && (
-                    <Check
-                      className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]"
-                      aria-hidden
-                    />
+                    <Check className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]" aria-hidden />
                   )}
                 </button>
               );

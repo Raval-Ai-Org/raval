@@ -18,21 +18,26 @@ export const Route = createFileRoute("/api/file-extract")({
         if (!auth.ok) return auth.response;
 
         let body: z.infer<typeof Body>;
-        try { body = Body.parse(await request.json()); }
-        catch { return jsonError(400, "Invalid request body"); }
+        try {
+          body = Body.parse(await request.json());
+        } catch {
+          return jsonError(400, "Invalid request body");
+        }
 
         const isImage = body.mime.startsWith("image/") || body.dataUrl.startsWith("data:image/");
         if (!isImage) return jsonError(400, "Only images are supported by this endpoint");
 
         try {
           const j: any = await extractionCompletion({
-            messages: [{
-              role: "user",
-              content: [
-                { type: "text", text: FILE_EXTRACT_SYSTEM },
-                { type: "image_url", image_url: { url: body.dataUrl } },
-              ],
-            }],
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: FILE_EXTRACT_SYSTEM },
+                  { type: "image_url", image_url: { url: body.dataUrl } },
+                ],
+              },
+            ],
           });
           const text: string = j?.choices?.[0]?.message?.content ?? "";
           return Response.json({ text });

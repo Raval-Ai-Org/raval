@@ -9,9 +9,27 @@ import {
 } from "@/lib/sdr.targets";
 import type { ConnectedAccount } from "@/lib/sdr.handlers";
 
-const active: ConnectedAccount = { accountId: "a1", platform: "linkedin", platformUsername: "A", status: "active", tokenExpiresAt: null };
-const expired: ConnectedAccount = { accountId: "a2", platform: "twitter", platformUsername: "B", status: "expired", tokenExpiresAt: "2026-08-01T00:00:00Z" };
-const disconnected: ConnectedAccount = { accountId: "a3", platform: "instagram", platformUsername: "C", status: "disconnected", tokenExpiresAt: null };
+const active: ConnectedAccount = {
+  accountId: "a1",
+  platform: "linkedin",
+  platformUsername: "A",
+  status: "active",
+  tokenExpiresAt: null,
+};
+const expired: ConnectedAccount = {
+  accountId: "a2",
+  platform: "twitter",
+  platformUsername: "B",
+  status: "expired",
+  tokenExpiresAt: "2026-08-01T00:00:00Z",
+};
+const disconnected: ConnectedAccount = {
+  accountId: "a3",
+  platform: "instagram",
+  platformUsername: "C",
+  status: "disconnected",
+  tokenExpiresAt: null,
+};
 
 describe("isAccountPublishable", () => {
   it("only active accounts are publishable (FR-004)", () => {
@@ -29,7 +47,18 @@ describe("getPublishableAccounts", () => {
 });
 
 describe("resolveTargetAccounts", () => {
-  const accounts = [active, expired, disconnected, { accountId: "a4", platform: "linkedin", platformUsername: "D", status: "active", tokenExpiresAt: null }];
+  const accounts = [
+    active,
+    expired,
+    disconnected,
+    {
+      accountId: "a4",
+      platform: "linkedin",
+      platformUsername: "D",
+      status: "active",
+      tokenExpiresAt: null,
+    },
+  ];
 
   it("resolves a specific active account", () => {
     expect(resolveTargetAccounts(accounts, { type: "account", accountId: "a1" })).toEqual([active]);
@@ -40,10 +69,17 @@ describe("resolveTargetAccounts", () => {
   });
 
   it("resolves a platform to only its active accounts", () => {
-    expect(resolveTargetAccounts(accounts, { type: "platform", platform: "linkedin" }).map((a) => a.accountId)).toEqual(["a1", "a4"]);
+    expect(
+      resolveTargetAccounts(accounts, { type: "platform", platform: "linkedin" }).map(
+        (a) => a.accountId,
+      ),
+    ).toEqual(["a1", "a4"]);
   });
 
   it("resolves 'all' to every active account", () => {
-    expect(resolveTargetAccounts(accounts, { type: "all" }).map((a) => a.accountId)).toEqual(["a1", "a4"]);
+    expect(resolveTargetAccounts(accounts, { type: "all" }).map((a) => a.accountId)).toEqual([
+      "a1",
+      "a4",
+    ]);
   });
 });

@@ -57,7 +57,10 @@ function snapshot(html: string): MetaSnapshot {
     title: pick(html, /<title[^>]*>([^<]*)<\/title>/i),
     description: pick(html, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i),
     ogTitle: pick(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i),
-    ogDescription: pick(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i),
+    ogDescription: pick(
+      html,
+      /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i,
+    ),
     ogUrl: pick(html, /<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']/i),
     ogType: pick(html, /<meta[^>]+property=["']og:type["'][^>]+content=["']([^"']+)["']/i),
     ogSiteName: pick(html, /<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i),
@@ -70,9 +73,16 @@ function snapshot(html: string): MetaSnapshot {
 
 function assertNoForbidden(meta: MetaSnapshot, label: string) {
   const blob = [
-    meta.title, meta.description, meta.ogTitle, meta.ogDescription,
-    meta.ogUrl, meta.ogSiteName, meta.canonical,
-  ].filter(Boolean).join(" \n ");
+    meta.title,
+    meta.description,
+    meta.ogTitle,
+    meta.ogDescription,
+    meta.ogUrl,
+    meta.ogSiteName,
+    meta.canonical,
+  ]
+    .filter(Boolean)
+    .join(" \n ");
   for (const pattern of FORBIDDEN) {
     expect(blob, `[${label}] forbidden legacy copy leaked: ${pattern}`).not.toMatch(pattern);
   }
@@ -80,7 +90,8 @@ function assertNoForbidden(meta: MetaSnapshot, label: string) {
 
 function assertDeckAligned(meta: MetaSnapshot, label: string) {
   const blob = [meta.title, meta.description, meta.ogTitle, meta.ogDescription]
-    .filter(Boolean).join(" \n ");
+    .filter(Boolean)
+    .join(" \n ");
   const hits = DECK_TERMS.filter((re) => re.test(blob));
   expect(
     hits.length,
@@ -154,7 +165,8 @@ test.describe("SEO meta — authenticated app + studio routes", () => {
 
       for (const pattern of route.mustContain) {
         const blob = [meta.title, meta.description, meta.ogTitle, meta.ogDescription]
-          .filter(Boolean).join(" \n ");
+          .filter(Boolean)
+          .join(" \n ");
         expect(blob, `[${route.label}] must contain ${pattern}`).toMatch(pattern);
       }
 
@@ -164,7 +176,9 @@ test.describe("SEO meta — authenticated app + studio routes", () => {
     });
   }
 
-  test("no authenticated route reuses another's title (unique per surface)", async ({ request }) => {
+  test("no authenticated route reuses another's title (unique per surface)", async ({
+    request,
+  }) => {
     const titles = new Map<string, string>();
     for (const route of ROUTES) {
       const html = await (await request.get(route.path)).text();
@@ -179,7 +193,9 @@ test.describe("SEO meta — authenticated app + studio routes", () => {
     }
   });
 
-  test("no authenticated route falls back to the root default title/description", async ({ request }) => {
+  test("no authenticated route falls back to the root default title/description", async ({
+    request,
+  }) => {
     // Read the root shell so we know exactly what the fallback string is,
     // then assert every surface overrode both fields.
     const rootHtml = await (await request.get("/")).text();
@@ -189,10 +205,7 @@ test.describe("SEO meta — authenticated app + studio routes", () => {
       const html = await (await request.get(route.path)).text();
       const meta = snapshot(html);
       expect(meta.title, `${route.label} title vs root`).not.toBe(rootMeta.title);
-      expect(
-        meta.description,
-        `${route.label} description vs root`,
-      ).not.toBe(rootMeta.description);
+      expect(meta.description, `${route.label} description vs root`).not.toBe(rootMeta.description);
     }
   });
 });

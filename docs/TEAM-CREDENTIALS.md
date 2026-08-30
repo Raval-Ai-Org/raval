@@ -72,17 +72,17 @@ npm run dev          # predev check should pass, Vite should start
 
 This section explains what each value is for, so you know what you're sharing.
 
-| Key | What it is | Where to find it | Sensitivity |
-|---|---|---|---|
-| `VITE_SUPABASE_URL` | Your Supabase project URL | Supabase Dashboard → Project Settings → API | Public (safe to share) |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase key | Supabase Dashboard → Project Settings → API → "Publishable key" | Public |
-| `SUPABASE_URL` | Same as VITE_SUPABASE_URL (server-side) | Same | Public |
-| `SUPABASE_PUBLISHABLE_KEY` | Same as VITE_ version (server-side) | Same | Public |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Server-only admin key — bypasses RLS** | Supabase Dashboard → Project Settings → API → "Service role key" | **CRITICAL — never expose to browser** |
-| `SDR_BASE_URL` | URL of the deployed SDR service | AWS Lightsail IP or `sdr.raval.ai` | Semi-public |
-| `SDR_ADMIN_TOKEN` | Admin token to mint workspace API keys | Set by you in SDR `.env` | **CRITICAL** |
-| `SDR_SECRET_ENCRYPTION_KEY` | AES key for encrypting tokens at rest | Generated via `Fernet.generate_key()` | **CRITICAL** |
-| `CRON_SECRET` | Secret for cron job auth | Set by you | Semi-sensitive |
+| Key                             | What it is                               | Where to find it                                                 | Sensitivity                            |
+| ------------------------------- | ---------------------------------------- | ---------------------------------------------------------------- | -------------------------------------- |
+| `VITE_SUPABASE_URL`             | Your Supabase project URL                | Supabase Dashboard → Project Settings → API                      | Public (safe to share)                 |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase key                | Supabase Dashboard → Project Settings → API → "Publishable key"  | Public                                 |
+| `SUPABASE_URL`                  | Same as VITE_SUPABASE_URL (server-side)  | Same                                                             | Public                                 |
+| `SUPABASE_PUBLISHABLE_KEY`      | Same as VITE_ version (server-side)      | Same                                                             | Public                                 |
+| `SUPABASE_SERVICE_ROLE_KEY`     | **Server-only admin key — bypasses RLS** | Supabase Dashboard → Project Settings → API → "Service role key" | **CRITICAL — never expose to browser** |
+| `SDR_BASE_URL`                  | URL of the deployed SDR service          | AWS Lightsail IP or `sdr.raval.ai`                               | Semi-public                            |
+| `SDR_ADMIN_TOKEN`               | Admin token to mint workspace API keys   | Set by you in SDR `.env`                                         | **CRITICAL**                           |
+| `SDR_SECRET_ENCRYPTION_KEY`     | AES key for encrypting tokens at rest    | Generated via `Fernet.generate_key()`                            | **CRITICAL**                           |
+| `CRON_SECRET`                   | Secret for cron job auth                 | Set by you                                                       | Semi-sensitive                         |
 
 **Bottom line:** The 4 critical secrets are `SUPABASE_SERVICE_ROLE_KEY`, `SDR_ADMIN_TOKEN`, `SDR_SECRET_ENCRYPTION_KEY`, and `CRON_SECRET`. The others are either public (Supabase URL, publishable key) or semi-sensitive.
 
@@ -93,16 +93,19 @@ This section explains what each value is for, so you know what you're sharing.
 If `.env` is ever accidentally committed to git, pushed to a public repo, or sent to the wrong person:
 
 ### 1. Supabase service role key
+
 - Supabase Dashboard → Project Settings → API → "Service role key" → **Roll / Regenerate**
 - Update `.env` on every team member's machine
 - The old key stops working immediately
 
 ### 2. SDR admin token
+
 - Update `SDE_API_TOKEN` in the SDR's `.env` (on the production server)
 - Restart the SDR API: `sudo systemctl restart raval-sdr-api`
 - Update `.env` on every team member's machine
 
 ### 3. SDR encryption key
+
 - **Critical:** if this leaks, ALL stored OAuth tokens are decryptable
 - You must:
   1. Generate a new Fernet key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
@@ -111,10 +114,12 @@ If `.env` is ever accidentally committed to git, pushed to a public repo, or sen
   4. Re-authorize every client's social accounts (the old encrypted tokens are now unreadable)
 
 ### 4. CRON_SECRET
+
 - Set a new value in SDR `.env` and RavalAI `.env`
 - Restart both
 
 ### 5. Rotate your 1Password item
+
 - After rotating, create a new 1Password Secure Note with the new values
 - Share with the team
 

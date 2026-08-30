@@ -14,11 +14,7 @@
   "hreflang": [],
   "robots": "noindex,nofollow",
   "h1": "Hello.",
-  "jsonLdTypes": [
-    "Organization",
-    "WebPage",
-    "WebSite"
-  ],
+  "jsonLdTypes": ["Organization", "WebPage", "WebSite"],
   "jsonLdNodes": [
     {
       "type": "Organization",
@@ -63,9 +59,5 @@
       "inLanguage": "en"
     }
   ],
-  "approvedPhrasesPresent": [
-    "Marketing Intelligence Layer",
-    "AEO",
-    "Raval AI"
-  ]
+  "approvedPhrasesPresent": ["Marketing Intelligence Layer", "AEO", "Raval AI"]
 }

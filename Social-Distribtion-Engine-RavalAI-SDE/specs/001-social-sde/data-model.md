@@ -42,6 +42,7 @@ CREATE INDEX idx_accounts_expiring ON accounts (token_expires_at) WHERE status =
 ```
 
 **Fields**:
+
 - `workspace_id`: Workspace identifier (scoping key)
 - `brand_id`: Brand/tenant identifier within workspace
 - `platform`: Platform identifier (used for adapter lookup)
@@ -54,6 +55,7 @@ CREATE INDEX idx_accounts_expiring ON accounts (token_expires_at) WHERE status =
 - `status`: Lifecycle state (active → needs_reauth → disconnected)
 
 **State Transitions**:
+
 - `active` → `needs_reauth`: triggered by 401/403 during publish
 - `needs_reauth` → `active`: user completes reauth OAuth flow
 - any → `disconnected`: user explicitly disconnects account
@@ -82,6 +84,7 @@ CREATE INDEX idx_posts_due ON posts (scheduled_at) WHERE status = 'PENDING';
 ```
 
 **Fields**:
+
 - `workspace_id`: Scope to workspace
 - `brand_id`: Scope to brand/tenant
 - `idempotency_key`: RavalAI panel generates this; must be unique per workspace
@@ -89,6 +92,7 @@ CREATE INDEX idx_posts_due ON posts (scheduled_at) WHERE status = 'PENDING';
 - `status`: Derived from post_targets (not manually set)
 
 **Status Derivation Rule** (run in same transaction as post_targets update):
+
 ```
 IF all post_targets are PUBLISHED → post.status = COMPLETED
 ELIF all post_targets are FAILED or CANCELLED → post.status = FAILED
@@ -124,6 +128,7 @@ CREATE INDEX idx_targets_claim ON post_targets (status, next_attempt_at);
 ```
 
 **Fields**:
+
 - `post_id`: Link to logical post
 - `account_id`: Which account to publish to
 - `platform`: Platform identifier (must match account.platform)
@@ -137,6 +142,7 @@ CREATE INDEX idx_targets_claim ON post_targets (status, next_attempt_at);
 - `platform_post_url`: URL for end-user to view (sent to RavalAI UI)
 
 **State Transitions**:
+
 - `PENDING` → `QUEUED`: claim query picks up due target
 - `QUEUED` → `PUBLISHING`: worker begins execution
 - `PUBLISHING` → `PUBLISHED`: success; write platform_post_id, platform_post_url, published_at
@@ -164,12 +170,14 @@ CREATE TABLE webhook_endpoints (
 ```
 
 **Fields**:
+
 - `workspace_id`: One webhook per workspace
 - `url`: HTTPS endpoint for callbacks
 - `secret_enc`: Fernet-encrypted secret for HMAC signing
 - `active`: Can be disabled without deletion
 
 **Lifecycle**:
+
 - Created via `POST /webhooks/config`
 - Secret can be rotated (overwrite via same POST)
 - Can be disabled/deleted via DELETE endpoint
@@ -195,6 +203,7 @@ CREATE TABLE delivery_log (
 ```
 
 **Fields**:
+
 - `target_id`: Which target this attempt relates to
 - `attempt`: Attempt number (1, 2, 3, ...)
 - `outcome`: Classification of result
@@ -204,6 +213,7 @@ CREATE TABLE delivery_log (
 - `latency_ms`: How long the platform call took
 
 **Why append-only**:
+
 - Never update; only insert
 - Enables full audit trail reconstruction
 - Can reconstruct target state by reading all rows for that target
@@ -231,6 +241,7 @@ The `content` column stores platform-specific content structures:
 ```
 
 **Validation rules per platform** (enforced at ingestion):
+
 - **X**: text ≤280 chars (URLs count as 23), ≤4 images or 1 video
 - **LinkedIn**: text ≤3000 chars, ≤9 images or 1 video
 - **Facebook**: text ≤63206 chars, images/video per Graph limits
@@ -286,6 +297,7 @@ RETURNING id;
 ```
 
 **Why it works**:
+
 - `SKIP LOCKED` means other workers skip rows already locked by concurrent transactions
 - Each worker claims different rows
 - Exactly 100 due rows total are claimed across all workers
@@ -294,6 +306,7 @@ RETURNING id;
 ### Idempotency
 
 Unique constraint on `(workspace_id, idempotency_key)` in `posts` table ensures:
+
 - Same idempotency_key submitted twice returns existing post
 - No duplicate posts created
 - Handled at DB level, not application level
@@ -335,4 +348,4 @@ Unique constraint on `(workspace_id, idempotency_key)` in `posts` table ensures:
 
 ---
 
-*Data model finalized: 2026-07-26*
+_Data model finalized: 2026-07-26_

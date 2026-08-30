@@ -2,9 +2,26 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowUp, ArrowRight, ArrowLeft, Sparkles, Globe, Github, Loader2,
-  Check, SkipForward, Search, FileText, Share2, Wand2, X, Plus, RefreshCw,
-  Target, Users, Megaphone, Building2,
+  ArrowUp,
+  ArrowRight,
+  ArrowLeft,
+  Sparkles,
+  Globe,
+  Github,
+  Loader2,
+  Check,
+  SkipForward,
+  Search,
+  FileText,
+  Share2,
+  Wand2,
+  X,
+  Plus,
+  RefreshCw,
+  Target,
+  Users,
+  Megaphone,
+  Building2,
 } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
@@ -28,21 +45,34 @@ export const Route = createFileRoute("/onboarding")({
   head: () => ({
     meta: [
       { title: "Onboard a client · Raval AI" },
-      { name: "description", content: "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content." },
+      {
+        name: "description",
+        content:
+          "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+      },
       { name: "robots", content: "noindex,nofollow" },
       { property: "og:title", content: "Onboard a client · Raval AI" },
-      { property: "og:description", content: "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content." },
+      {
+        property: "og:description",
+        content:
+          "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+      },
       { property: "og:url", content: `${BASE_URL}/onboarding` },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Onboard a client · Raval AI" },
-      { name: "twitter:description", content: "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content." },
+      {
+        name: "twitter:description",
+        content:
+          "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+      },
     ],
     links: [{ rel: "canonical", href: `${BASE_URL}/onboarding` }],
   }),
 });
 
-type Step = "prompt" | "website" | "extract" | "review" | "personalize" | "connect" | "analyze" | "done";
+type Step =
+  "prompt" | "website" | "extract" | "review" | "personalize" | "connect" | "analyze" | "done";
 
 const PROMPT_SUGGESTIONS = [
   { label: "Get cited by ChatGPT & Perplexity", icon: Search },
@@ -50,9 +80,25 @@ const PROMPT_SUGGESTIONS = [
   { label: "Grow on LinkedIn this month", icon: Share2 },
 ];
 
-const KPI_OPTIONS = ["Organic traffic", "Pipeline / Leads", "Signups", "Revenue", "Brand awareness", "Community growth"];
+const KPI_OPTIONS = [
+  "Organic traffic",
+  "Pipeline / Leads",
+  "Signups",
+  "Revenue",
+  "Brand awareness",
+  "Community growth",
+];
 const CADENCE_OPTIONS = ["Daily", "3× / week", "Weekly", "Bi-weekly", "Ad-hoc"];
-const PLATFORM_OPTIONS = ["LinkedIn", "X / Twitter", "Instagram", "TikTok", "YouTube", "Blog", "Newsletter", "Reddit"];
+const PLATFORM_OPTIONS = [
+  "LinkedIn",
+  "X / Twitter",
+  "Instagram",
+  "TikTok",
+  "YouTube",
+  "Blog",
+  "Newsletter",
+  "Reddit",
+];
 
 function normalizeUrl(raw: string) {
   const t = raw.trim();
@@ -74,9 +120,15 @@ function Onboarding() {
 
   // Extracted + editable brand fields (seeded by /api/brand-extract)
   const [brand, setBrand] = useState<Partial<BrandDna>>({});
-  const [extractStatus, setExtractStatus] = useState<"idle" | "loading" | "ok" | "error" | "skipped">("idle");
+  const [extractStatus, setExtractStatus] = useState<
+    "idle" | "loading" | "ok" | "error" | "skipped"
+  >("idle");
   const [extractError, setExtractError] = useState<string | null>(null);
-  const [extractProgress, setExtractProgress] = useState<{ stage: string; message: string; pct: number }>({ stage: "idle", message: "", pct: 0 });
+  const [extractProgress, setExtractProgress] = useState<{
+    stage: string;
+    message: string;
+    pct: number;
+  }>({ stage: "idle", message: "", pct: 0 });
   const extractRanFor = useRef<string | null>(null);
 
   // Personalization
@@ -101,15 +153,25 @@ function Onboarding() {
     let cancelled = false;
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session) { navigate({ to: "/login" }); return; }
-      const selectedId = typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
+      if (!sess.session) {
+        navigate({ to: "/login" });
+        return;
+      }
+      const selectedId =
+        typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
       const query = supabase.from("workspaces").select("id, onboarded_at, website_url");
       const { data: ws } = selectedId
         ? await query.eq("id", selectedId).maybeSingle()
         : await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (cancelled) return;
-      if (!ws?.id) { navigate({ to: "/projects" }); return; }
-      if (ws.onboarded_at) { navigate({ to: "/app" }); return; }
+      if (!ws?.id) {
+        navigate({ to: "/projects" });
+        return;
+      }
+      if (ws.onboarded_at) {
+        navigate({ to: "/app" });
+        return;
+      }
       localStorage.setItem("workspace:selected", ws.id);
       setWorkspaceId(ws.id);
       if (ws.website_url) {
@@ -117,20 +179,23 @@ function Onboarding() {
         setHasPresetWebsite(true);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   const idx = visibleSteps.indexOf(step);
   const progress = ((idx + 1) / visibleSteps.length) * 100;
 
   const canNext = useMemo(() => {
-    if (step === "prompt")  return firstPrompt.trim().length >= 4;
+    if (step === "prompt") return firstPrompt.trim().length >= 4;
     if (step === "website") {
       const v = websiteUrl.trim();
       if (v === "") return true;
       return /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/.*)?$/i.test(v);
     }
-    if (step === "extract") return extractStatus === "ok" || extractStatus === "skipped" || extractStatus === "error";
+    if (step === "extract")
+      return extractStatus === "ok" || extractStatus === "skipped" || extractStatus === "error";
     if (step === "review") return true;
     if (step === "personalize") return true;
     if (step === "connect") return provider !== "";
@@ -150,7 +215,10 @@ function Onboarding() {
   useEffect(() => {
     if (step !== "extract") return;
     const url = normalizeUrl(websiteUrl);
-    if (!url) { setExtractStatus("skipped"); return; }
+    if (!url) {
+      setExtractStatus("skipped");
+      return;
+    }
     if (extractRanFor.current === url && extractStatus === "ok") return;
     extractRanFor.current = url;
     runExtraction(url);
@@ -186,7 +254,11 @@ function Onboarding() {
           const t = line.trim();
           if (!t) continue;
           let evt: any;
-          try { evt = JSON.parse(t); } catch { continue; }
+          try {
+            evt = JSON.parse(t);
+          } catch {
+            continue;
+          }
           if (evt.type === "progress") {
             setExtractProgress({ stage: evt.stage, message: evt.message, pct: evt.pct ?? 0 });
           } else if (evt.type === "result") {
@@ -203,7 +275,13 @@ function Onboarding() {
       setDoRules((v) => v || data.doRules || "");
       setDontRules((v) => v || data.dontRules || "");
       if (Array.isArray(data.competitors) && data.competitors.length && !competitorsText) {
-        setCompetitorsText(data.competitors.slice(0, 5).map((c: any) => c.name).filter(Boolean).join(", "));
+        setCompetitorsText(
+          data.competitors
+            .slice(0, 5)
+            .map((c: any) => c.name)
+            .filter(Boolean)
+            .join(", "),
+        );
       }
       setExtractStatus("ok");
       setExtractProgress({ stage: "done", message: "Done", pct: 100 });
@@ -219,30 +297,78 @@ function Onboarding() {
     const finalUrl = websiteUrl.trim() ? normalizeUrl(websiteUrl) : null;
 
     // 1. Update workspace row
-    const { error } = await supabase.from("workspaces").update({
-      first_prompt: firstPrompt.trim() || null,
-      website_url: finalUrl,
-      connected_provider: provider || null,
-      industry: brand.industry?.trim() || null,
-      audience: brand.audience?.trim() || null,
-      goals: goals.trim() || null,
-      onboarded_at: new Date().toISOString(),
-    }).eq("id", workspaceId);
+    const { error } = await supabase
+      .from("workspaces")
+      .update({
+        first_prompt: firstPrompt.trim() || null,
+        website_url: finalUrl,
+        connected_provider: provider || null,
+        industry: brand.industry?.trim() || null,
+        audience: brand.audience?.trim() || null,
+        goals: goals.trim() || null,
+        onboarded_at: new Date().toISOString(),
+      })
+      .eq("id", workspaceId);
 
-    if (error) { setSaving(false); toast.error("Couldn't save your setup"); setStep("personalize"); return; }
+    if (error) {
+      setSaving(false);
+      toast.error("Couldn't save your setup");
+      setStep("personalize");
+      return;
+    }
 
     // 2. Persist Brand DNA into localStorage so Memory panel is pre-filled
     try {
       const personalNotes: BrandDna["userInsights"] = [];
-      const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-      if (goals.trim()) personalNotes.push({ id: uid(), title: "Top goals (90 days)", body: goals.trim(), createdAt: Date.now(), source: "user" });
-      if (primaryKpis.length) personalNotes.push({ id: uid(), title: "Primary KPIs", body: primaryKpis.join(", "), createdAt: Date.now(), source: "user" });
-      if (cadence) personalNotes.push({ id: uid(), title: "Content cadence", body: cadence, createdAt: Date.now(), source: "user" });
-      if (platforms.length) personalNotes.push({ id: uid(), title: "Focus platforms", body: platforms.join(", "), createdAt: Date.now(), source: "user" });
-      if (voiceTone.length) personalNotes.push({ id: uid(), title: "Voice tone", body: voiceTone.join(", "), createdAt: Date.now(), source: "user" });
+      const uid = () =>
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2);
+      if (goals.trim())
+        personalNotes.push({
+          id: uid(),
+          title: "Top goals (90 days)",
+          body: goals.trim(),
+          createdAt: Date.now(),
+          source: "user",
+        });
+      if (primaryKpis.length)
+        personalNotes.push({
+          id: uid(),
+          title: "Primary KPIs",
+          body: primaryKpis.join(", "),
+          createdAt: Date.now(),
+          source: "user",
+        });
+      if (cadence)
+        personalNotes.push({
+          id: uid(),
+          title: "Content cadence",
+          body: cadence,
+          createdAt: Date.now(),
+          source: "user",
+        });
+      if (platforms.length)
+        personalNotes.push({
+          id: uid(),
+          title: "Focus platforms",
+          body: platforms.join(", "),
+          createdAt: Date.now(),
+          source: "user",
+        });
+      if (voiceTone.length)
+        personalNotes.push({
+          id: uid(),
+          title: "Voice tone",
+          body: voiceTone.join(", "),
+          createdAt: Date.now(),
+          source: "user",
+        });
 
       const extraCompetitors = competitorsText
-        .split(/[,\n]/).map((s) => s.trim()).filter(Boolean)
+        .split(/[,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
         .map((name) => ({ id: uid(), name }));
 
       const merged: BrandDna = {
@@ -252,10 +378,13 @@ function Onboarding() {
         brandName: brand.brandName || "",
         doRules: doRules.trim() || brand.doRules || "",
         dontRules: dontRules.trim() || brand.dontRules || "",
-        voice: voiceTone.length ? voiceTone.join(", ") : (brand.voice || ""),
+        voice: voiceTone.length ? voiceTone.join(", ") : brand.voice || "",
         competitors: [
           ...(brand.competitors ?? []),
-          ...extraCompetitors.filter((c) => !(brand.competitors ?? []).some((b) => b.name.toLowerCase() === c.name.toLowerCase())),
+          ...extraCompetitors.filter(
+            (c) =>
+              !(brand.competitors ?? []).some((b) => b.name.toLowerCase() === c.name.toLowerCase()),
+          ),
         ],
         userInsights: personalNotes,
         status: extractStatus === "ok" ? "ok" : "idle",
@@ -263,7 +392,9 @@ function Onboarding() {
         updatedAt: Date.now(),
       };
       localStorage.setItem(`brand-dna:v3:${workspaceId}`, JSON.stringify(merged));
-      try { saveDesignMd(workspaceId, buildDesignMd(merged)); } catch {}
+      try {
+        saveDesignMd(workspaceId, buildDesignMd(merged));
+      } catch {}
     } catch (e) {
       console.warn("brand dna persist failed", e);
     }
@@ -281,7 +412,9 @@ function Onboarding() {
   // Analyze step triggers save
   useEffect(() => {
     if (step !== "analyze" || !workspaceId) return;
-    const t = setTimeout(() => { finishAndSave(); }, 1800);
+    const t = setTimeout(() => {
+      finishAndSave();
+    }, 1800);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, workspaceId]);
@@ -316,7 +449,12 @@ function Onboarding() {
 
       <section className="flex flex-1 items-center justify-center px-4 py-10 sm:py-16">
         <div className="w-full max-w-2xl">
-          <StarGuide step={step} firstPrompt={firstPrompt} websiteUrl={websiteUrl} provider={provider} />
+          <StarGuide
+            step={step}
+            firstPrompt={firstPrompt}
+            websiteUrl={websiteUrl}
+            provider={provider}
+          />
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
@@ -337,7 +475,9 @@ function Onboarding() {
                       autoFocus
                       value={firstPrompt}
                       onChange={(e) => setFirstPrompt(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) goNext(); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) goNext();
+                      }}
                       placeholder="e.g. Audit our AEO visibility and ship a 3-post launch plan for next week"
                       rows={4}
                       className="w-full resize-none rounded-xl bg-transparent px-4 py-3.5 text-[14px] outline-none placeholder:text-muted-foreground"
@@ -374,12 +514,16 @@ function Onboarding() {
                       autoFocus
                       value={websiteUrl}
                       onChange={(e) => setWebsiteUrl(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && canNext) goNext(); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && canNext) goNext();
+                      }}
                       placeholder="https://yourcompany.com"
                       className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
                     />
                   </div>
-                  <p className="mt-2 text-[12px] text-muted-foreground">Optional — skip to fill it in by hand.</p>
+                  <p className="mt-2 text-[12px] text-muted-foreground">
+                    Optional — skip to fill it in by hand.
+                  </p>
                 </StepShell>
               )}
 
@@ -390,7 +534,10 @@ function Onboarding() {
                   progress={extractProgress}
                   error={extractError}
                   onRetry={() => runExtraction(normalizeUrl(websiteUrl))}
-                  onSkip={() => { setExtractStatus("skipped"); goNext(); }}
+                  onSkip={() => {
+                    setExtractStatus("skipped");
+                    goNext();
+                  }}
                 />
               )}
 
@@ -405,15 +552,25 @@ function Onboarding() {
 
               {step === "personalize" && (
                 <PersonalizeView
-                  goals={goals} setGoals={setGoals}
-                  primaryKpis={primaryKpis} setPrimaryKpis={setPrimaryKpis}
-                  cadence={cadence} setCadence={setCadence}
-                  platforms={platforms} setPlatforms={setPlatforms}
-                  competitorsText={competitorsText} setCompetitorsText={setCompetitorsText}
-                  voiceTone={voiceTone} setVoiceTone={setVoiceTone}
-                  doRules={doRules} setDoRules={setDoRules}
-                  dontRules={dontRules} setDontRules={setDontRules}
-                  extractedCompetitors={(brand.competitors ?? []).map((c) => c.name).filter(Boolean)}
+                  goals={goals}
+                  setGoals={setGoals}
+                  primaryKpis={primaryKpis}
+                  setPrimaryKpis={setPrimaryKpis}
+                  cadence={cadence}
+                  setCadence={setCadence}
+                  platforms={platforms}
+                  setPlatforms={setPlatforms}
+                  competitorsText={competitorsText}
+                  setCompetitorsText={setCompetitorsText}
+                  voiceTone={voiceTone}
+                  setVoiceTone={setVoiceTone}
+                  doRules={doRules}
+                  setDoRules={setDoRules}
+                  dontRules={dontRules}
+                  setDontRules={setDontRules}
+                  extractedCompetitors={(brand.competitors ?? [])
+                    .map((c) => c.name)
+                    .filter(Boolean)}
                   extractedAudience={brand.audience || ""}
                 />
               )}
@@ -427,9 +584,24 @@ function Onboarding() {
                 >
                   <div className="grid gap-2">
                     {[
-                      { id: "github",    label: "GitHub",    desc: "Read repos, ship pull requests (coming soon)",  Icon: Github },
-                      { id: "wordpress", label: "WordPress", desc: "Publish posts and pages directly (coming soon)", Icon: Globe  },
-                      { id: "none",      label: "Skip for now", desc: "Stay in chat — connect a destination later",   Icon: SkipForward },
+                      {
+                        id: "github",
+                        label: "GitHub",
+                        desc: "Read repos, ship pull requests (coming soon)",
+                        Icon: Github,
+                      },
+                      {
+                        id: "wordpress",
+                        label: "WordPress",
+                        desc: "Publish posts and pages directly (coming soon)",
+                        Icon: Globe,
+                      },
+                      {
+                        id: "none",
+                        label: "Skip for now",
+                        desc: "Stay in chat — connect a destination later",
+                        Icon: SkipForward,
+                      },
                     ].map((opt) => {
                       const active = provider === (opt.id as any);
                       return (
@@ -442,7 +614,9 @@ function Onboarding() {
                               : "border-border bg-card hover:border-primary/40 hover:bg-secondary/40"
                           }`}
                         >
-                          <div className={`grid h-9 w-9 place-items-center rounded-lg ${active ? "bg-primary/10 text-primary" : "bg-secondary text-foreground"}`}>
+                          <div
+                            className={`grid h-9 w-9 place-items-center rounded-lg ${active ? "bg-primary/10 text-primary" : "bg-secondary text-foreground"}`}
+                          >
                             <opt.Icon className="h-4 w-4" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -461,9 +635,7 @@ function Onboarding() {
                 <AnalyzeView website={websiteUrl} provider={provider} saving={saving} />
               )}
 
-              {step === "done" && (
-                <DoneView onEnter={() => navigate({ to: "/app" })} />
-              )}
+              {step === "done" && <DoneView onEnter={() => navigate({ to: "/app" })} />}
             </motion.div>
           </AnimatePresence>
 
@@ -495,13 +667,27 @@ function Onboarding() {
 /* ---------------- Sub-components ---------------- */
 
 function StepShell({
-  icon, eyebrow, title, subtitle, children,
-}: { icon: React.ReactNode; eyebrow: string; title: string; subtitle: string; children: React.ReactNode }) {
+  icon,
+  eyebrow,
+  title,
+  subtitle,
+  children,
+}: {
+  icon: React.ReactNode;
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <div className="mb-5 flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg border border-border bg-card text-primary">{icon}</span>
-        <span className="text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{eyebrow}</span>
+        <span className="grid h-7 w-7 place-items-center rounded-lg border border-border bg-card text-primary">
+          {icon}
+        </span>
+        <span className="text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          {eyebrow}
+        </span>
       </div>
       <h1 className="text-[24px] font-semibold leading-tight tracking-tight">{title}</h1>
       <p className="mt-1.5 text-[13.5px] text-muted-foreground">{subtitle}</p>
@@ -510,18 +696,35 @@ function StepShell({
   );
 }
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+function Field({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</span>
-      <div className="focus-glow rounded-xl border border-border bg-card px-3.5 py-2.5">{children}</div>
+      <span className="mb-1 block text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
+      </span>
+      <div className="focus-glow rounded-xl border border-border bg-card px-3.5 py-2.5">
+        {children}
+      </div>
       {hint && <span className="mt-1 block text-[11.5px] text-muted-foreground">{hint}</span>}
     </label>
   );
 }
 
 function ExtractView({
-  url, status, progress, error, onRetry, onSkip,
+  url,
+  status,
+  progress,
+  error,
+  onRetry,
+  onSkip,
 }: {
   url: string;
   status: "idle" | "loading" | "ok" | "error" | "skipped";
@@ -542,9 +745,11 @@ function ExtractView({
         {isOk ? "Memory drafted" : isError ? "Couldn't read the site" : "Reading your site"}
       </h2>
       <p className="mt-1.5 text-[13.5px] text-muted-foreground">
-        {isError ? (error || "Try again — or skip and fill manually.") :
-         isOk ? "Review what we found on the next step — edit anything that's off." :
-         `Crawling ${url.replace(/^https?:\/\//, "")} · sitemap · socials · external mentions`}
+        {isError
+          ? error || "Try again — or skip and fill manually."
+          : isOk
+            ? "Review what we found on the next step — edit anything that's off."
+            : `Crawling ${url.replace(/^https?:\/\//, "")} · sitemap · socials · external mentions`}
       </p>
 
       <div className="mx-auto mt-6 max-w-md">
@@ -586,7 +791,10 @@ function ExtractView({
 }
 
 function ReviewView({
-  brand, onChange, onRetry, loading,
+  brand,
+  onChange,
+  onRetry,
+  loading,
 }: {
   brand: Partial<BrandDna>;
   onChange: (patch: Partial<BrandDna>) => void;
@@ -594,7 +802,12 @@ function ReviewView({
   loading: boolean;
 }) {
   const filled = [
-    brand.brandName, brand.oneLiner, brand.industry, brand.audience, brand.voice, brand.products,
+    brand.brandName,
+    brand.oneLiner,
+    brand.industry,
+    brand.audience,
+    brand.voice,
+    brand.products,
   ].filter((v) => (v as string | undefined)?.trim()).length;
   return (
     <div>
@@ -608,7 +821,9 @@ function ReviewView({
               Review extracted info
             </span>
           </div>
-          <h1 className="text-[24px] font-semibold leading-tight tracking-tight">Here's what we found</h1>
+          <h1 className="text-[24px] font-semibold leading-tight tracking-tight">
+            Here's what we found
+          </h1>
           <p className="mt-1.5 text-[13.5px] text-muted-foreground">
             {filled} of 6 fields auto-filled · edit anything that's off, then continue.
           </p>
@@ -618,42 +833,89 @@ function ReviewView({
           disabled={loading}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-[12px] text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
           Re-scan
         </button>
       </div>
 
       <div className="space-y-2.5">
         <Field label="Brand name">
-          <input value={brand.brandName ?? ""} onChange={(e) => onChange({ brandName: e.target.value })} placeholder="Your company name" className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground" />
+          <input
+            value={brand.brandName ?? ""}
+            onChange={(e) => onChange({ brandName: e.target.value })}
+            placeholder="Your company name"
+            className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
+          />
         </Field>
         <Field label="One-liner" hint="Sharp positioning, one sentence.">
-          <input value={brand.oneLiner ?? ""} onChange={(e) => onChange({ oneLiner: e.target.value })} placeholder="What you do, for whom, why it matters" className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground" />
+          <input
+            value={brand.oneLiner ?? ""}
+            onChange={(e) => onChange({ oneLiner: e.target.value })}
+            placeholder="What you do, for whom, why it matters"
+            className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
+          />
         </Field>
         <div className="grid gap-2.5 sm:grid-cols-2">
           <Field label="Industry">
-            <input value={brand.industry ?? ""} onChange={(e) => onChange({ industry: e.target.value })} placeholder="e.g. B2B SaaS" className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground" />
+            <input
+              value={brand.industry ?? ""}
+              onChange={(e) => onChange({ industry: e.target.value })}
+              placeholder="e.g. B2B SaaS"
+              className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
+            />
           </Field>
           <Field label="Business model">
-            <input value={brand.businessModel ?? ""} onChange={(e) => onChange({ businessModel: e.target.value })} placeholder="e.g. Subscription · Marketplace" className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground" />
+            <input
+              value={brand.businessModel ?? ""}
+              onChange={(e) => onChange({ businessModel: e.target.value })}
+              placeholder="e.g. Subscription · Marketplace"
+              className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
+            />
           </Field>
         </div>
         <Field label="Target audience">
-          <input value={brand.audience ?? ""} onChange={(e) => onChange({ audience: e.target.value })} placeholder="Who you serve" className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground" />
+          <input
+            value={brand.audience ?? ""}
+            onChange={(e) => onChange({ audience: e.target.value })}
+            placeholder="Who you serve"
+            className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
+          />
         </Field>
         <Field label="Brand voice" hint="Tone descriptors, e.g. 'Confident, technical, dry humor'.">
-          <input value={brand.voice ?? ""} onChange={(e) => onChange({ voice: e.target.value })} placeholder="How you sound" className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground" />
+          <input
+            value={brand.voice ?? ""}
+            onChange={(e) => onChange({ voice: e.target.value })}
+            placeholder="How you sound"
+            className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
+          />
         </Field>
         <Field label="Products / services">
-          <input value={brand.products ?? ""} onChange={(e) => onChange({ products: e.target.value })} placeholder="What you sell" className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground" />
+          <input
+            value={brand.products ?? ""}
+            onChange={(e) => onChange({ products: e.target.value })}
+            placeholder="What you sell"
+            className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
+          />
         </Field>
         <Field label="About" hint="A short paragraph — Ravi uses this in every brief.">
-          <textarea rows={3} value={brand.about ?? ""} onChange={(e) => onChange({ about: e.target.value })} placeholder="What the company does, in 2–3 sentences" className="w-full resize-none bg-transparent text-[14px] outline-none placeholder:text-muted-foreground" />
+          <textarea
+            rows={3}
+            value={brand.about ?? ""}
+            onChange={(e) => onChange({ about: e.target.value })}
+            placeholder="What the company does, in 2–3 sentences"
+            className="w-full resize-none bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
+          />
         </Field>
 
         {(brand.colors?.length || brand.fonts?.length || brand.logoUrl) && (
           <div className="mt-4 rounded-xl border border-border bg-card/60 p-3.5">
-            <div className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Brand visuals detected</div>
+            <div className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              Brand visuals detected
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               {brand.logoUrl && (
                 <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5">
@@ -662,13 +924,19 @@ function ReviewView({
                 </div>
               )}
               {(brand.colors ?? []).slice(0, 6).map((c, i) => (
-                <div key={i} className="flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5">
+                <div
+                  key={i}
+                  className="flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5"
+                >
                   <span className="h-4 w-4 rounded" style={{ background: c.hex }} />
                   <span className="text-[12px] font-mono text-muted-foreground">{c.hex}</span>
                 </div>
               ))}
               {(brand.fonts ?? []).slice(0, 2).map((f, i) => (
-                <div key={i} className="rounded-lg border border-border bg-background px-2 py-1.5 text-[12px] text-muted-foreground">
+                <div
+                  key={i}
+                  className="rounded-lg border border-border bg-background px-2 py-1.5 text-[12px] text-muted-foreground"
+                >
                   Aa · {f}
                 </div>
               ))}
@@ -680,20 +948,31 @@ function ReviewView({
           <div className="mt-2 grid gap-2.5 sm:grid-cols-2">
             {!!brand.competitors?.length && (
               <div className="rounded-xl border border-border bg-card/60 p-3.5">
-                <div className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Competitors found</div>
+                <div className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  Competitors found
+                </div>
                 <ul className="space-y-1 text-[12.5px]">
                   {brand.competitors.slice(0, 5).map((c, i) => (
-                    <li key={i} className="truncate">• {c.name}{c.positioning ? <span className="text-muted-foreground"> — {c.positioning}</span> : null}</li>
+                    <li key={i} className="truncate">
+                      • {c.name}
+                      {c.positioning ? (
+                        <span className="text-muted-foreground"> — {c.positioning}</span>
+                      ) : null}
+                    </li>
                   ))}
                 </ul>
               </div>
             )}
             {!!brand.socials?.length && (
               <div className="rounded-xl border border-border bg-card/60 p-3.5">
-                <div className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Socials found</div>
+                <div className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  Socials found
+                </div>
                 <ul className="space-y-1 text-[12.5px]">
                   {brand.socials.slice(0, 6).map((s, i) => (
-                    <li key={i} className="truncate capitalize">• {s.platform}</li>
+                    <li key={i} className="truncate capitalize">
+                      • {s.platform}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -706,8 +985,16 @@ function ReviewView({
 }
 
 function ChipGroup({
-  options, value, onChange, multi = true,
-}: { options: string[]; value: string[]; onChange: (v: string[]) => void; multi?: boolean }) {
+  options,
+  value,
+  onChange,
+  multi = true,
+}: {
+  options: string[];
+  value: string[];
+  onChange: (v: string[]) => void;
+  multi?: boolean;
+}) {
   const toggle = (o: string) => {
     if (value.includes(o)) onChange(value.filter((v) => v !== o));
     else onChange(multi ? [...value, o] : [o]);
@@ -722,7 +1009,9 @@ function ChipGroup({
             type="button"
             onClick={() => toggle(o)}
             className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] transition ${
-              active ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40"
+              active
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40"
             }`}
           >
             {active && <Check className="h-3 w-3" />}
@@ -736,39 +1025,70 @@ function ChipGroup({
 }
 
 function PersonalizeView({
-  goals, setGoals,
-  primaryKpis, setPrimaryKpis,
-  cadence, setCadence,
-  platforms, setPlatforms,
-  competitorsText, setCompetitorsText,
-  voiceTone, setVoiceTone,
-  doRules, setDoRules,
-  dontRules, setDontRules,
-  extractedCompetitors, extractedAudience,
+  goals,
+  setGoals,
+  primaryKpis,
+  setPrimaryKpis,
+  cadence,
+  setCadence,
+  platforms,
+  setPlatforms,
+  competitorsText,
+  setCompetitorsText,
+  voiceTone,
+  setVoiceTone,
+  doRules,
+  setDoRules,
+  dontRules,
+  setDontRules,
+  extractedCompetitors,
+  extractedAudience,
 }: {
-  goals: string; setGoals: (v: string) => void;
-  primaryKpis: string[]; setPrimaryKpis: (v: string[]) => void;
-  cadence: string; setCadence: (v: string) => void;
-  platforms: string[]; setPlatforms: (v: string[]) => void;
-  competitorsText: string; setCompetitorsText: (v: string) => void;
-  voiceTone: string[]; setVoiceTone: (v: string[]) => void;
-  doRules: string; setDoRules: (v: string) => void;
-  dontRules: string; setDontRules: (v: string) => void;
+  goals: string;
+  setGoals: (v: string) => void;
+  primaryKpis: string[];
+  setPrimaryKpis: (v: string[]) => void;
+  cadence: string;
+  setCadence: (v: string) => void;
+  platforms: string[];
+  setPlatforms: (v: string[]) => void;
+  competitorsText: string;
+  setCompetitorsText: (v: string) => void;
+  voiceTone: string[];
+  setVoiceTone: (v: string[]) => void;
+  doRules: string;
+  setDoRules: (v: string) => void;
+  dontRules: string;
+  setDontRules: (v: string) => void;
   extractedCompetitors: string[];
   extractedAudience: string;
 }) {
-  const VOICE_TONES = ["Confident", "Friendly", "Technical", "Playful", "Authoritative", "Warm", "Witty", "Minimal"];
+  const VOICE_TONES = [
+    "Confident",
+    "Friendly",
+    "Technical",
+    "Playful",
+    "Authoritative",
+    "Warm",
+    "Witty",
+    "Minimal",
+  ];
   return (
     <div>
       <div className="mb-5 flex items-center gap-2">
         <span className="grid h-7 w-7 place-items-center rounded-lg border border-border bg-card text-primary">
           <Wand2 className="h-4 w-4" />
         </span>
-        <span className="text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Personalize</span>
+        <span className="text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          Personalize
+        </span>
       </div>
       <h1 className="text-[24px] font-semibold leading-tight tracking-tight">A few more details</h1>
       <p className="mt-1.5 text-[13.5px] text-muted-foreground">
-        These shape every brief Ravi writes. {extractedAudience ? `We already noted your audience is "${extractedAudience}".` : "All optional."}
+        These shape every brief Ravi writes.{" "}
+        {extractedAudience
+          ? `We already noted your audience is "${extractedAudience}".`
+          : "All optional."}
       </p>
 
       <div className="mt-6 space-y-3">
@@ -796,8 +1116,15 @@ function PersonalizeView({
         </div>
 
         <div>
-          <span className="mb-2 block text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Content cadence</span>
-          <ChipGroup options={CADENCE_OPTIONS} value={cadence ? [cadence] : []} onChange={(v) => setCadence(v[0] || "")} multi={false} />
+          <span className="mb-2 block text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Content cadence
+          </span>
+          <ChipGroup
+            options={CADENCE_OPTIONS}
+            value={cadence ? [cadence] : []}
+            onChange={(v) => setCadence(v[0] || "")}
+            multi={false}
+          />
         </div>
 
         <div>
@@ -809,7 +1136,11 @@ function PersonalizeView({
 
         <Field
           label="Competitors"
-          hint={extractedCompetitors.length ? `Found: ${extractedCompetitors.slice(0, 4).join(", ")} — add more, comma separated.` : "Comma separated — names or URLs."}
+          hint={
+            extractedCompetitors.length
+              ? `Found: ${extractedCompetitors.slice(0, 4).join(", ")} — add more, comma separated.`
+              : "Comma separated — names or URLs."
+          }
         >
           <input
             value={competitorsText}
@@ -821,10 +1152,22 @@ function PersonalizeView({
 
         <div className="grid gap-2.5 sm:grid-cols-2">
           <Field label="Brand do's" hint="2–3 rules every agent should follow.">
-            <textarea rows={2} value={doRules} onChange={(e) => setDoRules(e.target.value)} placeholder="e.g. Use specific numbers; mention real customers" className="w-full resize-none bg-transparent text-[13px] outline-none placeholder:text-muted-foreground" />
+            <textarea
+              rows={2}
+              value={doRules}
+              onChange={(e) => setDoRules(e.target.value)}
+              placeholder="e.g. Use specific numbers; mention real customers"
+              className="w-full resize-none bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
+            />
           </Field>
           <Field label="Brand don'ts" hint="Words/topics to avoid.">
-            <textarea rows={2} value={dontRules} onChange={(e) => setDontRules(e.target.value)} placeholder="e.g. No emojis; never say 'revolutionary'" className="w-full resize-none bg-transparent text-[13px] outline-none placeholder:text-muted-foreground" />
+            <textarea
+              rows={2}
+              value={dontRules}
+              onChange={(e) => setDontRules(e.target.value)}
+              placeholder="e.g. No emojis; never say 'revolutionary'"
+              className="w-full resize-none bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
+            />
           </Field>
         </div>
       </div>
@@ -832,7 +1175,15 @@ function PersonalizeView({
   );
 }
 
-function AnalyzeView({ website, provider, saving }: { website: string; provider: string; saving: boolean }) {
+function AnalyzeView({
+  website,
+  provider,
+  saving,
+}: {
+  website: string;
+  provider: string;
+  saving: boolean;
+}) {
   const tasks = [
     website ? `Scanning ${website.replace(/^https?:\/\//, "")}` : "Preparing your workspace",
     provider && provider !== "none" ? `Linking ${provider}` : "Calibrating brand voice",
@@ -862,9 +1213,11 @@ function AnalyzeView({ website, provider, saving }: { website: string; provider:
             transition={{ delay: i * 0.14 }}
             className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-[13px]"
           >
-            {i < done
-              ? <Check className="h-3.5 w-3.5 text-success" />
-              : <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            {i < done ? (
+              <Check className="h-3.5 w-3.5 text-success" />
+            ) : (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            )}
             <span className={i < done ? "text-foreground" : "text-muted-foreground"}>{t}</span>
           </motion.li>
         ))}
@@ -874,14 +1227,19 @@ function AnalyzeView({ website, provider, saving }: { website: string; provider:
 }
 
 function DoneView({ onEnter }: { onEnter: () => void }) {
-  useEffect(() => { const t = setTimeout(onEnter, 1600); return () => clearTimeout(t); }, [onEnter]);
+  useEffect(() => {
+    const t = setTimeout(onEnter, 1600);
+    return () => clearTimeout(t);
+  }, [onEnter]);
   return (
     <div className="text-center">
       <div className="mx-auto flex justify-center">
         <StarAgent mood="superhero" size={110} animate message="Let's ship something great." />
       </div>
       <h2 className="mt-5 text-[22px] font-semibold tracking-tight">You're all set</h2>
-      <p className="mt-1.5 text-[13.5px] text-muted-foreground">Bringing you to your Command Center…</p>
+      <p className="mt-1.5 text-[13.5px] text-muted-foreground">
+        Bringing you to your Command Center…
+      </p>
       <button
         onClick={onEnter}
         className="btn-primary-glow mt-6 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition hover:bg-primary/90"
@@ -893,8 +1251,16 @@ function DoneView({ onEnter }: { onEnter: () => void }) {
 }
 
 function StarGuide({
-  step, firstPrompt, websiteUrl, provider,
-}: { step: Step; firstPrompt: string; websiteUrl: string; provider: string }) {
+  step,
+  firstPrompt,
+  websiteUrl,
+  provider,
+}: {
+  step: Step;
+  firstPrompt: string;
+  websiteUrl: string;
+  provider: string;
+}) {
   if (step === "analyze" || step === "done" || step === "extract") return null;
 
   const guide: Partial<Record<Step, { mood: StarMood; tip: string }>> = {

@@ -1,15 +1,24 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Loader2, Sparkles, Workflow, Brain, Database, Rocket, type LucideIcon } from "@/components/ui/gemini-icons";
+import {
+  Check,
+  Loader2,
+  Sparkles,
+  Workflow,
+  Brain,
+  Database,
+  Rocket,
+  type LucideIcon,
+} from "@/components/ui/gemini-icons";
 
 type Step = { id: string; label: string; icon: LucideIcon };
 
 const DEFAULT_STEPS: Step[] = [
-  { id: "route",   label: "Routing prompt to the right agent", icon: Workflow },
-  { id: "scan",    label: "Scanning your site & signals",      icon: Database },
-  { id: "reason",  label: "Reasoning across models",           icon: Brain },
-  { id: "draft",   label: "Drafting the response",             icon: Sparkles },
-  { id: "ready",   label: "Preparing actions for approval",    icon: Rocket },
+  { id: "route", label: "Routing prompt to the right agent", icon: Workflow },
+  { id: "scan", label: "Scanning your site & signals", icon: Database },
+  { id: "reason", label: "Reasoning across models", icon: Brain },
+  { id: "draft", label: "Drafting the response", icon: Sparkles },
+  { id: "ready", label: "Preparing actions for approval", icon: Rocket },
 ];
 
 /**
@@ -54,7 +63,12 @@ export function ThinkingTrail({
       <div className="max-w-[85%] flex-1 rounded-2xl rounded-bl-sm border border-border bg-card/80 px-3.5 py-2.5 backdrop-blur">
         <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin text-aura" />
-          Working{site ? <span className="normal-case tracking-normal text-foreground/80">· {site.replace(/^https?:\/\//, "")}</span> : null}
+          Working
+          {site ? (
+            <span className="normal-case tracking-normal text-foreground/80">
+              · {site.replace(/^https?:\/\//, "")}
+            </span>
+          ) : null}
         </div>
 
         <ul className="space-y-1">
@@ -111,8 +125,8 @@ export function ThinkingTrail({
                     state === "done"
                       ? "text-muted-foreground line-through decoration-border"
                       : state === "active"
-                      ? "text-foreground"
-                      : "text-muted-foreground"
+                        ? "text-foreground"
+                        : "text-muted-foreground"
                   }
                 >
                   {s.label}

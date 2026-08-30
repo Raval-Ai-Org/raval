@@ -52,7 +52,6 @@ function isPrivatePath(pathname) {
 
 const stripTrailingSlash = (u) => (u.endsWith("/") && u.length > 1 ? u.slice(0, -1) : u);
 
-
 // W3C Datetime subset accepted by sitemaps.org: YYYY, YYYY-MM, YYYY-MM-DD,
 // or full ISO-8601 with time + timezone (Z or ±HH:MM).
 const ISO_DATE_RE =
@@ -85,7 +84,6 @@ function extractLocs(xml) {
   return extractUrlEntries(xml).map((e) => e.loc);
 }
 
-
 function extractRobots(html) {
   const m = html.match(/<meta[^>]+name=["']robots["'][^>]*content=["']([^"']+)["']/i);
   return m ? m[1].toLowerCase() : null;
@@ -115,7 +113,6 @@ async function main() {
 
   const errors = [];
   const lastmodByLoc = new Map(entries.map((e) => [e.loc, e.lastmod]));
-
 
   for (const loc of locs) {
     const problems = [];
@@ -167,7 +164,6 @@ async function main() {
       /* ignore */
     }
 
-
     const html = await pageRes.text();
 
     // 3. Non-indexable check
@@ -179,7 +175,7 @@ async function main() {
     // 4. Self-referential canonical
     const canonical = extractCanonical(html);
     if (!canonical) {
-      problems.push("missing <link rel=\"canonical\">");
+      problems.push('missing <link rel="canonical">');
     } else if (stripTrailingSlash(canonical) !== stripTrailingSlash(loc)) {
       problems.push(`canonical mismatch: page canonical="${canonical}" vs sitemap loc="${loc}"`);
     }
@@ -196,7 +192,9 @@ async function main() {
     if (!isValidLastmod(lastmod)) {
       errors.push({
         loc,
-        problems: [`invalid <lastmod> "${lastmod}" — must be W3C Datetime / ISO-8601 and not in the future`],
+        problems: [
+          `invalid <lastmod> "${lastmod}" — must be W3C Datetime / ISO-8601 and not in the future`,
+        ],
       });
     }
   }
@@ -209,7 +207,10 @@ async function main() {
     const baseline = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
     for (const [loc, expected] of Object.entries(baseline)) {
       if (!lastmodByLoc.has(loc)) {
-        errors.push({ loc, problems: [`URL present in baseline but missing from current sitemap (churn)`] });
+        errors.push({
+          loc,
+          problems: [`URL present in baseline but missing from current sitemap (churn)`],
+        });
         continue;
       }
       const current = currentLastmods[loc];
@@ -239,7 +240,6 @@ async function main() {
 
   console.log("\nSitemap validation passed: canonical, indexable, and lastmod stable.");
 }
-
 
 main().catch((err) => {
   console.error(err);

@@ -12,7 +12,11 @@ export const Route = createFileRoute("/api/generate-image")({
         if (!auth.ok) return auth.response;
 
         const ALLOWED_SIZES = ["1024x1024", "1792x1024", "1024x1792"] as const;
-        const ALLOWED_STYLES = ["realistic_image", "digital_illustration", "vector_illustration"] as const;
+        const ALLOWED_STYLES = [
+          "realistic_image",
+          "digital_illustration",
+          "vector_illustration",
+        ] as const;
         type AllowedSize = (typeof ALLOWED_SIZES)[number];
         type AllowedStyle = (typeof ALLOWED_STYLES)[number];
         let body: { prompt?: unknown; size?: unknown; style?: unknown };
@@ -21,10 +25,7 @@ export const Route = createFileRoute("/api/generate-image")({
         } catch {
           return jsonError(400, "Invalid request body");
         }
-        const prompt =
-          typeof body.prompt === "string"
-            ? body.prompt.slice(0, 4000).trim()
-            : "";
+        const prompt = typeof body.prompt === "string" ? body.prompt.slice(0, 4000).trim() : "";
         if (!prompt) return jsonError(400, "Prompt required");
         let size: AllowedSize = "1024x1024";
         if (body.size !== undefined) {
@@ -35,7 +36,10 @@ export const Route = createFileRoute("/api/generate-image")({
         }
         let style: AllowedStyle | undefined;
         if (body.style !== undefined) {
-          if (typeof body.style !== "string" || !ALLOWED_STYLES.includes(body.style as AllowedStyle)) {
+          if (
+            typeof body.style !== "string" ||
+            !ALLOWED_STYLES.includes(body.style as AllowedStyle)
+          ) {
             return jsonError(400, "Invalid style");
           }
           style = body.style as AllowedStyle;

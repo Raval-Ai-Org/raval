@@ -22,11 +22,73 @@ export const MAX_TOTAL_BYTES = 40 * 1024 * 1024;
 export const MAX_TEXT_CHARS = 60_000; // per file, keeps prompt sane
 
 const TEXT_EXT = new Set([
-  "txt","md","markdown","csv","tsv","json","jsonl","ndjson","log","yml","yaml","toml","ini","env",
-  "html","htm","xml","svg","css","scss","less","js","jsx","ts","tsx","mjs","cjs","py","rb","go",
-  "rs","java","kt","kts","swift","c","h","cc","cpp","hpp","cs","php","sh","bash","zsh","fish",
-  "sql","graphql","gql","proto","dockerfile","gitignore","gitattributes","prettierrc","eslintrc",
-  "vue","svelte","astro","liquid","hbs","handlebars","mdx","rst","tex","srt","vtt","conf",
+  "txt",
+  "md",
+  "markdown",
+  "csv",
+  "tsv",
+  "json",
+  "jsonl",
+  "ndjson",
+  "log",
+  "yml",
+  "yaml",
+  "toml",
+  "ini",
+  "env",
+  "html",
+  "htm",
+  "xml",
+  "svg",
+  "css",
+  "scss",
+  "less",
+  "js",
+  "jsx",
+  "ts",
+  "tsx",
+  "mjs",
+  "cjs",
+  "py",
+  "rb",
+  "go",
+  "rs",
+  "java",
+  "kt",
+  "kts",
+  "swift",
+  "c",
+  "h",
+  "cc",
+  "cpp",
+  "hpp",
+  "cs",
+  "php",
+  "sh",
+  "bash",
+  "zsh",
+  "fish",
+  "sql",
+  "graphql",
+  "gql",
+  "proto",
+  "dockerfile",
+  "gitignore",
+  "gitattributes",
+  "prettierrc",
+  "eslintrc",
+  "vue",
+  "svelte",
+  "astro",
+  "liquid",
+  "hbs",
+  "handlebars",
+  "mdx",
+  "rst",
+  "tex",
+  "srt",
+  "vtt",
+  "conf",
 ]);
 
 export function classify(file: File): AttachmentKind {
@@ -39,8 +101,9 @@ export function classify(file: File): AttachmentKind {
   if (
     mime.includes("spreadsheetml") ||
     mime === "application/vnd.ms-excel" ||
-    ["xlsx","xls","xlsm","xlsb","ods","csv","tsv"].includes(ext)
-  ) return "xlsx";
+    ["xlsx", "xls", "xlsm", "xlsb", "ods", "csv", "tsv"].includes(ext)
+  )
+    return "xlsx";
   if (mime.startsWith("text/") || TEXT_EXT.has(ext)) return "text";
   return "other";
 }
@@ -122,7 +185,9 @@ async function extractImageOnServer(file: File): Promise<string> {
   return (j?.text as string) ?? "";
 }
 
-export async function extractAttachment(file: File): Promise<{ text: string; preview?: string; kind: AttachmentKind }> {
+export async function extractAttachment(
+  file: File,
+): Promise<{ text: string; preview?: string; kind: AttachmentKind }> {
   const kind = classify(file);
   if (file.size > MAX_FILE_BYTES) {
     throw new Error(`File exceeds ${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB limit`);
@@ -130,7 +195,11 @@ export async function extractAttachment(file: File): Promise<{ text: string; pre
   if (kind === "image") {
     const preview = await readAsDataURL(file);
     let text = "";
-    try { text = await extractImageOnServer(file); } catch (e: any) { text = ""; }
+    try {
+      text = await extractImageOnServer(file);
+    } catch (e: any) {
+      text = "";
+    }
     return { text: truncate(text), preview, kind };
   }
   if (kind === "pdf") return { text: truncate(await extractPdf(file)), kind };

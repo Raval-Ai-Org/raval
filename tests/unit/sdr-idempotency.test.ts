@@ -6,14 +6,23 @@ import { deriveIdempotencyKey, targetFingerprint } from "@/lib/sdr.server";
 
 describe("deriveIdempotencyKey", () => {
   const fp = targetFingerprint(["acc-1", "acc-2"]);
-  const base = { contentItemId: "item-123", platform: "twitter", targetFingerprint: fp, revision: 0 };
+  const base = {
+    contentItemId: "item-123",
+    platform: "twitter",
+    targetFingerprint: fp,
+    revision: 0,
+  };
 
   it("produces the expected publish format", () => {
-    expect(deriveIdempotencyKey({ kind: "publish", ...base })).toBe(`publish:item-123:twitter:${fp}:0`);
+    expect(deriveIdempotencyKey({ kind: "publish", ...base })).toBe(
+      `publish:item-123:twitter:${fp}:0`,
+    );
   });
 
   it("same inputs → same key (idempotent submit)", () => {
-    expect(deriveIdempotencyKey({ kind: "publish", ...base })).toBe(deriveIdempotencyKey({ kind: "publish", ...base }));
+    expect(deriveIdempotencyKey({ kind: "publish", ...base })).toBe(
+      deriveIdempotencyKey({ kind: "publish", ...base }),
+    );
   });
 
   it("target-set order does not change the key (canonical fingerprint)", () => {
@@ -34,7 +43,9 @@ describe("deriveIdempotencyKey", () => {
   });
 
   it("schedule kind differs from publish kind", () => {
-    expect(deriveIdempotencyKey({ kind: "schedule", ...base })).not.toBe(deriveIdempotencyKey({ kind: "publish", ...base }));
+    expect(deriveIdempotencyKey({ kind: "schedule", ...base })).not.toBe(
+      deriveIdempotencyKey({ kind: "publish", ...base }),
+    );
   });
 
   it("revision increment → fresh key (republish-after-failure, FR-023)", () => {
@@ -44,7 +55,12 @@ describe("deriveIdempotencyKey", () => {
   });
 
   it("stays under the SDR 128-char idempotency-key limit", () => {
-    const long = { contentItemId: "i".repeat(36), platform: "instagram", targetFingerprint: "f".repeat(16), revision: 999999 };
+    const long = {
+      contentItemId: "i".repeat(36),
+      platform: "instagram",
+      targetFingerprint: "f".repeat(16),
+      revision: 999999,
+    };
     expect(deriveIdempotencyKey({ kind: "schedule", ...long }).length).toBeLessThanOrEqual(128);
   });
 });

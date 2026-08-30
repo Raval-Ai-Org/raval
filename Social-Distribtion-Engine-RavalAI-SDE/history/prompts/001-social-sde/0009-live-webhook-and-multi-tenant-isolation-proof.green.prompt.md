@@ -16,12 +16,12 @@ links:
   adr: history/adr/0001-multi-tenant-auth-model-per-workspace-api-keys.md
   pr: null
 files:
- - app/services/webhook_out.py (fix: delivery_logs FK violation — pass real post_id/post_target_id from payload, NULL for generic events; drop unused webhook_id param; str|None annotations)
- - alembic/versions/003_delivery_logs_post_id_nullable.py (new migration: delivery_logs.post_id nullable)
+  - app/services/webhook_out.py (fix: delivery_logs FK violation — pass real post_id/post_target_id from payload, NULL for generic events; drop unused webhook_id param; str|None annotations)
+  - alembic/versions/003_delivery_logs_post_id_nullable.py (new migration: delivery_logs.post_id nullable)
 tests:
- - Full suite 182 passed (regression-free after the fix)
- - Live webhook: signed post.published delivered to local receiver; signature verified True against webhook secret; delivery_log row written with real post_id, http=200
- - Live isolation: tenant-B key sees no tenant-A webhooks/accounts; cross-workspace DELETE → 404; bogus key → 401; tenant-B lists only its own webhook
+  - Full suite 182 passed (regression-free after the fix)
+  - Live webhook: signed post.published delivered to local receiver; signature verified True against webhook secret; delivery_log row written with real post_id, http=200
+  - Live isolation: tenant-B key sees no tenant-A webhooks/accounts; cross-workspace DELETE → 404; bogus key → 401; tenant-B lists only its own webhook
 ---
 
 ## Prompt

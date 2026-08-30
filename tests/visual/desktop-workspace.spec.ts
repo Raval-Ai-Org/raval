@@ -43,53 +43,76 @@ test.describe("Desktop workspace visual", () => {
 
   test("main /app screen matches baseline", async ({ page, context }) => {
     // --- Stub Supabase auth + REST so the workspace boots without network ---
-    await context.route(new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`), async (route: Route) => {
-      const req = route.request();
-      const url = req.url();
-      const method = req.method();
-      const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
+    await context.route(
+      new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`),
+      async (route: Route) => {
+        const req = route.request();
+        const url = req.url();
+        const method = req.method();
+        const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
 
-      if (url.includes("/auth/v1/user")) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession().user) });
-      }
-      if (url.includes("/auth/v1/token")) {
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(fakeSession()) });
-      }
-      if (url.includes("/auth/v1/logout")) {
-        return route.fulfill({ status: 204, body: "" });
-      }
-
-      if (url.includes("/rest/v1/workspaces")) {
-        if (method === "GET") {
-          const row = {
-            id: WS_ID,
-            name: "Acme Studio",
-            website_url: null,
-            industry: null,
-            onboarded_at: "2024-01-01T00:00:00Z",
-            // NOTE: first_prompt intentionally null — we want the calm empty
-            // chat state, not the mid-stream auto-send experience.
-            first_prompt: null,
-          };
+        if (url.includes("/auth/v1/user")) {
           return route.fulfill({
             status: 200,
             headers: JSON_HEADERS,
-            body: JSON.stringify(wantsSingle ? row : [row]),
+            body: JSON.stringify(fakeSession().user),
           });
         }
-        return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
-      }
+        if (url.includes("/auth/v1/token")) {
+          return route.fulfill({
+            status: 200,
+            headers: JSON_HEADERS,
+            body: JSON.stringify(fakeSession()),
+          });
+        }
+        if (url.includes("/auth/v1/logout")) {
+          return route.fulfill({ status: 204, body: "" });
+        }
 
-      // Empty datasets everywhere else — locks in the empty-state layout.
-      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: wantsSingle ? "null" : "[]" });
-    });
+        if (url.includes("/rest/v1/workspaces")) {
+          if (method === "GET") {
+            const row = {
+              id: WS_ID,
+              name: "Acme Studio",
+              website_url: null,
+              industry: null,
+              onboarded_at: "2024-01-01T00:00:00Z",
+              // NOTE: first_prompt intentionally null — we want the calm empty
+              // chat state, not the mid-stream auto-send experience.
+              first_prompt: null,
+            };
+            return route.fulfill({
+              status: 200,
+              headers: JSON_HEADERS,
+              body: JSON.stringify(wantsSingle ? row : [row]),
+            });
+          }
+          return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
+        }
+
+        // Empty datasets everywhere else — locks in the empty-state layout.
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: wantsSingle ? "null" : "[]",
+        });
+      },
+    );
 
     // App endpoints — respond empty so nothing streams onto the page.
     await context.route("**/api/clarify", (route) =>
-      route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ needs_clarification: false }) }),
+      route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ needs_clarification: false }),
+      }),
     );
     await context.route("**/api/chat", (route) =>
-      route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body: "data: [DONE]\n" }),
+      route.fulfill({
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+        body: "data: [DONE]\n",
+      }),
     );
     await context.route("**/api/geo-audit", (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: "{}" }),
@@ -113,9 +136,17 @@ test.describe("Desktop workspace visual", () => {
           // Silence realtime websockets — irrelevant for a static snapshot.
           // @ts-expect-error test stub
           window.WebSocket = function () {
-            return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 3 };
+            return {
+              addEventListener() {},
+              removeEventListener() {},
+              send() {},
+              close() {},
+              readyState: 3,
+            };
           };
-        } catch { /* noop */ }
+        } catch {
+          /* noop */
+        }
       },
       { storageKey: STORAGE_KEY, sess: fakeSession(), wsId: WS_ID },
     );
@@ -123,8 +154,12 @@ test.describe("Desktop workspace visual", () => {
     await page.goto("/app", { waitUntil: "domcontentloaded" });
 
     // Wait for chrome — top-bar Publish and Studio rail — to render.
-    await expect(page.getByRole("button", { name: /publish project/i })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("button", { name: /create a new canvas/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /publish project/i })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("button", { name: /create a new canvas/i })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByRole("button", { name: /open analytics/i }).first()).toBeVisible();
 
     // Freeze animations, hide caret, neutralize any live "just now" strings.
