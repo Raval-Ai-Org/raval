@@ -1069,3 +1069,49 @@ class DirectAuthorityCitationAnalysisRequest(BaseModel):
     links: list[dict[str, Any]] | None = None
     structured_data: list[dict[str, Any]] | None = None
     page_id: int | None = None
+
+
+# =============================================================================
+# Task 8.6 - 8.8 Scoring, Explanation, Recommendation & Site Summary Schemas
+# =============================================================================
+
+class PrioritizedRecommendationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    recommendation_id: str
+    finding_id: str | None = None
+    rule_id: str
+    category: str
+    priority: str
+    classification: str
+    title: str
+    explanation: str
+    recommended_action: str
+    expected_impact: str | None = None
+    score_impact: float = 0.0
+    evidence: Any | None = None
+    status: str = "open"
+    metadata: dict[str, Any] = {}
+
+
+class PageRecommendationsListResponse(BaseModel):
+    page_id: int
+    url: str | None = None
+    total_recommendations: int
+    quick_wins_count: int
+    deep_fixes_count: int
+    recommendations: list[PrioritizedRecommendationResponse] = []
+
+
+class SiteScoreHistoryPoint(BaseModel):
+    scan_id: int | None = None
+    timestamp: str
+    overall_score: float
+    site_status: str
+    category_scores: dict[str, float] = {}
+
+
+class SiteScoreHistoryResponse(BaseModel):
+    website_id: int
+    total_scans: int
+    history: list[SiteScoreHistoryPoint] = []

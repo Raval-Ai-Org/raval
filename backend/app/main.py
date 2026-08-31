@@ -94,6 +94,16 @@ from .schemas import (
     ValidationRunRequest,
     WebsiteCreate,
     WebsiteResponse,
+    PrioritizedRecommendationResponse,
+    PageRecommendationsListResponse,
+    SiteScoreHistoryResponse,
+)
+from .score_explanation import ScoreExplanationResponse
+from .site_aggregator import SiteScoreSummary
+from .intelligence_service import (
+    evaluate_page_intelligence_score,
+    evaluate_site_intelligence_summary,
+    get_site_score_history,
 )
 from .services import (
     analyze_page_answers,
@@ -2577,4 +2587,227 @@ def analyze_direct_authority_citation_trust_endpoint(
     try:
         return analyze_direct_authority_citation_trust(payload)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# =============================================================================
+# Task 8.6 - 8.8 Scoring, Explanation, Recommendation & Site Summary Endpoints
+# =============================================================================
+
+@app.get(
+    "/api/v1/scores/pages/{page_id}",
+    response_model=ScoreExplanationResponse,
+)
+@app.get(
+    "/api/scores/pages/{page_id}",
+    response_model=ScoreExplanationResponse,
+    include_in_schema=False,
+)
+def get_page_score_and_explanation_endpoint(
+    page_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Returns the deterministic overall score, category breakdown, point deductions,
+    verified passing strengths, N/A rules, and evidence-grounded explanation for a page.
+    """
+    try:
+        _, explanation, _, _ = evaluate_page_intelligence_score(db, page_id=page_id)
+        return explanation
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/scores/pages/{page_id}/recommendations",
+    response_model=PageRecommendationsListResponse,
+)
+@app.get(
+    "/api/scores/pages/{page_id}/recommendations",
+    response_model=PageRecommendationsListResponse,
+    include_in_schema=False,
+)
+def get_page_recommendations_endpoint(
+    page_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Returns evidence-backed, prioritized recommendations for a page classified
+    into Quick Wins (low effort / immediate impact) and Deep Fixes (content / architecture).
+    """
+    try:
+        _, _, recs, analytics = evaluate_page_intelligence_score(db, page_id=page_id)
+        quick_wins = sum(1 for r in recs if r.classification == "quick_win")
+        deep_fixes = sum(1 for r in recs if r.classification == "deep_fix")
+
+        return PageRecommendationsListResponse(
+            page_id=page_id,
+            url=analytics.url,
+            total_recommendations=len(recs),
+            quick_wins_count=quick_wins,
+            deep_fixes_count=deep_fixes,
+            recommendations=recs,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/scores/websites/{website_id}",
+    response_model=SiteScoreSummary,
+)
+@app.get(
+    "/api/scores/websites/{website_id}",
+    response_model=SiteScoreSummary,
+    include_in_schema=False,
+)
+def get_site_score_summary_endpoint(
+    website_id: int,
+    scan_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Returns aggregated site-level intelligence, category summaries, top score-impacting
+    issues, and historical comparison for a website.
+    """
+    try:
+        return evaluate_site_intelligence_summary(
+            db=db,
+            website_id=website_id,
+            scan_id=scan_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/scores/websites/{website_id}/findings",
+)
+@app.get(
+    "/api/scores/websites/{website_id}/findings",
+    include_in_schema=False,
+)
+def get_site_findings_summary_endpoint(
+    website_id: int,
+    scan_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Returns site-level findings grouped by priority, category, and status.
+    """
+    try:
+        summary = evaluate_site_intelligence_summary(
+            db=db,
+            website_id=website_id,
+            scan_id=scan_id,
+        )
+        return {
+            "website_id": website_id,
+            "scan_id": summary.scan_id,
+            "total_pages": summary.total_pages_analyzed,
+            "findings_by_priority": summary.findings_by_priority,
+            "findings_by_status": summary.findings_by_status,
+            "top_issues": summary.top_issues,
+        }
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/scores/websites/{website_id}/recommendations",
+    response_model=list[PrioritizedRecommendationResponse],
+)
+@app.get(
+    "/api/scores/websites/{website_id}/recommendations",
+    response_model=list[PrioritizedRecommendationResponse],
+    include_in_schema=False,
+)
+def get_site_recommendations_endpoint(
+    website_id: int,
+    classification: str | None = None,
+    priority: str | None = None,
+    scan_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Returns deduplicated site-wide recommendations with optional classification and priority filters.
+    """
+    try:
+        summary = evaluate_site_intelligence_summary(
+            db=db,
+            website_id=website_id,
+            scan_id=scan_id,
+        )
+        # Construct recommendations from top issues / aggregated recommendations
+        recs: list[PrioritizedRecommendationResponse] = []
+        for issue in summary.top_issues:
+            if classification and issue.classification.lower() != classification.lower():
+                continue
+            if priority and issue.priority.lower() != priority.lower():
+                continue
+
+            recs.append(
+                PrioritizedRecommendationResponse(
+                    recommendation_id=f"site_rec_{issue.rule_id}",
+                    rule_id=issue.rule_id,
+                    category=issue.category,
+                    priority=issue.priority,
+                    classification=issue.classification,
+                    title=issue.title,
+                    explanation=f"Affects {issue.affected_pages_count} pages with cumulative score impact of {issue.total_score_impact} points.",
+                    recommended_action=issue.recommended_action,
+                    expected_impact=f"Resolves {issue.title} across {issue.affected_pages_count} pages.",
+                    score_impact=issue.total_score_impact,
+                    status="open",
+                    metadata={"affected_pages_count": issue.affected_pages_count},
+                )
+            )
+        return recs
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/scores/websites/{website_id}/history",
+    response_model=SiteScoreHistoryResponse,
+)
+@app.get(
+    "/api/scores/websites/{website_id}/history",
+    response_model=SiteScoreHistoryResponse,
+    include_in_schema=False,
+)
+def get_site_score_history_endpoint(
+    website_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Returns the historical score timeline across all scans for a website.
+    """
+    try:
+        history_points = get_site_score_history(db, website_id=website_id)
+        return SiteScoreHistoryResponse(
+            website_id=website_id,
+            total_scans=len(history_points),
+            history=history_points,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+

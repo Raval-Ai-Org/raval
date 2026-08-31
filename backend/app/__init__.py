@@ -1,0 +1,121 @@
+"""
+Raval AI Search Intelligence Application Package
+"""
+
+from .applicability_engine import (
+    ApplicabilityContext,
+    ApplicabilityDecision,
+    ApplicabilityEngine,
+    ApplicabilityStatus,
+    PageType,
+    evaluate_applicability,
+)
+from .intelligence_service import (
+    collect_signals_for_page,
+    evaluate_page_intelligence_score,
+    evaluate_site_intelligence_summary,
+    get_site_score_history,
+)
+from .priority_engine import (
+    FindingPriority,
+    PrioritizedRecommendation,
+    PriorityConfig,
+    PriorityEngine,
+    RecommendationClassification,
+    determine_finding_priority,
+    generate_prioritized_recommendations,
+)
+from .score_explanation import (
+    CategoryExplanation,
+    DeductionDetail,
+    PageScoreAnalytics,
+    ScoreExplanationEngine,
+    ScoreExplanationResponse,
+    build_page_analytics,
+    explain_score,
+)
+from .scoring_engine import (
+    CategoryScoreResult,
+    DeterministicScoreResult,
+    DeterministicScoringEngine,
+    ScoreContribution,
+    ScoringCategory,
+    ScoringConfig,
+    calculate_deterministic_score,
+)
+from .signal_aggregator import (
+    AggregatedSignalCollection,
+    SignalAggregator,
+    aggregate_signals,
+    deduplicate_signals,
+)
+from .site_aggregator import (
+    SiteAggregator,
+    SiteCategorySummary,
+    SiteScoreSummary,
+    TopSiteIssue,
+    aggregate_site_scores,
+)
+from .unified_signal import (
+    ApplicabilityType,
+    UnifiedSignal,
+    UnifiedSignalBatch,
+    UnifiedSignalNormalizer,
+    UniversalSignalNormalizer,
+    normalize_signal,
+    normalize_signals,
+)
+
+# Canonical Aliases
+UnifiedSignalAggregator = SignalAggregator
+
+__all__ = [
+    "ApplicabilityType",
+    "UnifiedSignal",
+    "UnifiedSignalBatch",
+    "UnifiedSignalNormalizer",
+    "UniversalSignalNormalizer",
+    "normalize_signal",
+    "normalize_signals",
+    "AggregatedSignalCollection",
+    "SignalAggregator",
+    "UnifiedSignalAggregator",
+    "aggregate_signals",
+    "deduplicate_signals",
+    "ApplicabilityContext",
+    "ApplicabilityDecision",
+    "ApplicabilityEngine",
+    "ApplicabilityStatus",
+    "PageType",
+    "evaluate_applicability",
+    "ScoringCategory",
+    "ScoringConfig",
+    "ScoreContribution",
+    "CategoryScoreResult",
+    "DeterministicScoreResult",
+    "DeterministicScoringEngine",
+    "calculate_deterministic_score",
+    "FindingPriority",
+    "RecommendationClassification",
+    "PrioritizedRecommendation",
+    "PriorityConfig",
+    "PriorityEngine",
+    "determine_finding_priority",
+    "generate_prioritized_recommendations",
+    "DeductionDetail",
+    "CategoryExplanation",
+    "ScoreExplanationResponse",
+    "PageScoreAnalytics",
+    "ScoreExplanationEngine",
+    "explain_score",
+    "build_page_analytics",
+    "SiteCategorySummary",
+    "TopSiteIssue",
+    "SiteScoreSummary",
+    "SiteAggregator",
+    "aggregate_site_scores",
+    "collect_signals_for_page",
+    "evaluate_page_intelligence_score",
+    "evaluate_site_intelligence_summary",
+    "get_site_score_history",
+]
