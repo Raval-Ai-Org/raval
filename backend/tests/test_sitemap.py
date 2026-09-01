@@ -139,6 +139,7 @@ def test_crawler_discovers_and_crawls_sitemap_urls():
     }
 
     with patch("crawler.robots.RobotsChecker.get_sitemaps", return_value=["https://example.com/sitemap.xml"]), \
+         patch("crawler.robots.RobotsChecker.can_fetch", return_value=True), \
          patch("crawler.crawler.PageFetcher.fetch", side_effect=lambda url: responses[url]):
         crawler = Crawler(config)
         result = crawler.crawl("https://example.com/")
@@ -178,6 +179,7 @@ def test_crawler_sitemap_duplicate_urls_not_added_twice():
     }
 
     with patch("crawler.robots.RobotsChecker.get_sitemaps", return_value=["https://example.com/sitemap.xml"]), \
+         patch("crawler.robots.RobotsChecker.can_fetch", return_value=True), \
          patch("crawler.crawler.PageFetcher.fetch", side_effect=lambda url: responses[url]) as mock_fetch:
         crawler = Crawler(config)
         result = crawler.crawl("https://example.com/")
@@ -212,6 +214,7 @@ def test_crawler_sitemap_external_urls_filtered_out():
     }
 
     with patch("crawler.robots.RobotsChecker.get_sitemaps", return_value=["https://example.com/sitemap.xml"]), \
+         patch("crawler.robots.RobotsChecker.can_fetch", return_value=True), \
          patch("crawler.crawler.PageFetcher.fetch", side_effect=lambda url: responses[url]):
         crawler = Crawler(config)
         result = crawler.crawl("https://example.com/")
@@ -293,6 +296,7 @@ def test_crawler_sitemap_respects_max_pages_and_max_depth():
     }
 
     with patch("crawler.robots.RobotsChecker.get_sitemaps", return_value=["https://example.com/sitemap.xml"]), \
+         patch("crawler.robots.RobotsChecker.can_fetch", return_value=True), \
          patch("crawler.crawler.PageFetcher.fetch", side_effect=lambda url: responses[url]):
         crawler = Crawler(config)
         result = crawler.crawl("https://example.com/")
@@ -322,6 +326,7 @@ def test_crawler_sitemap_failure_continues_normal_html_crawling():
     }
 
     with patch("crawler.robots.RobotsChecker.get_sitemaps", return_value=["https://example.com/sitemap.xml"]), \
+         patch("crawler.robots.RobotsChecker.can_fetch", return_value=True), \
          patch("crawler.crawler.PageFetcher.fetch", side_effect=lambda url: responses[url]):
         crawler = Crawler(config)
         result = crawler.crawl("https://example.com/")
@@ -366,6 +371,7 @@ def test_crawler_sitemap_recursive_index_discovery():
     }
 
     with patch("crawler.robots.RobotsChecker.get_sitemaps", return_value=["https://example.com/sitemap-index.xml"]), \
+         patch("crawler.robots.RobotsChecker.can_fetch", return_value=True), \
          patch("crawler.crawler.PageFetcher.fetch", side_effect=lambda url: responses[url]):
         crawler = Crawler(config)
         result = crawler.crawl("https://example.com/")
@@ -373,4 +379,4 @@ def test_crawler_sitemap_recursive_index_discovery():
     assert result.pages_crawled == 2
     crawled_urls = [p.url for p in result.pages]
     assert "https://example.com/" in crawled_urls
-    assert "https://example.com/nested-page" in crawled_urls
+    assert "https://example.com/nested-page" in crawled_urls

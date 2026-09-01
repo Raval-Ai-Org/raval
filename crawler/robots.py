@@ -28,7 +28,8 @@ class RobotsChecker:
         except Exception:
             # If robots.txt cannot be retrieved,
             # don't block crawling by default.
-            pass
+            parser.allow_all = True
+
 
         self._parsers[origin] = parser
 

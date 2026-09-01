@@ -1,7 +1,6 @@
 """
 Raval AI Search Intelligence Application Package
 """
-
 from .applicability_engine import (
     ApplicabilityContext,
     ApplicabilityDecision,
@@ -65,10 +64,25 @@ from .unified_signal import (
     normalize_signal,
     normalize_signals,
 )
-
+from .root_cause_analyzer import (
+    FindingEvidenceReference,
+    RootCauseAnalysisResult,
+    RootCauseAnalyzer,
+    RootCauseGroup,
+    RootCauseScope,
+    analyze_root_causes,
+    get_root_causes_for_scan,
+    get_root_causes_for_website,
+    group_findings_by_root_cause,
+)
+from .fix_safety_classifier import (
+    FixSafetyClassification,
+    FixSafetyClassifier,
+    SafetyTier,
+    classify_fix_safety,
+)
 # Canonical Aliases
 UnifiedSignalAggregator = SignalAggregator
-
 __all__ = [
     "ApplicabilityType",
     "UnifiedSignal",
@@ -118,4 +132,17 @@ __all__ = [
     "evaluate_page_intelligence_score",
     "evaluate_site_intelligence_summary",
     "get_site_score_history",
+    "RootCauseScope",
+    "FindingEvidenceReference",
+    "RootCauseGroup",
+    "RootCauseAnalysisResult",
+    "RootCauseAnalyzer",
+    "analyze_root_causes",
+    "group_findings_by_root_cause",
+    "get_root_causes_for_scan",
+    "get_root_causes_for_website",
+    "SafetyTier",
+    "FixSafetyClassification",
+    "FixSafetyClassifier",
+    "classify_fix_safety",
 ]

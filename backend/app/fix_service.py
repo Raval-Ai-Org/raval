@@ -12,6 +12,11 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from .models import Finding, FixPlan, Opportunity, PageResult, Recommendation, Scan, Website
 from .schemas import FixPlanCreate, FixPlanUpdate
+from .fix_safety_classifier import (
+    SafetyTier,
+    FixSafetyClassification,
+    classify_fix_safety,
+)
 
 ALLOWED_FIX_STATUSES = {
     "draft",
@@ -230,17 +235,29 @@ def generate_fix_plan_from_recommendation(
     )
 
     diff_payload = build_diff_payload(fix_type, target_url, finding, rec)
+    classification = classify_fix_safety(
+        finding_type=finding.finding_type if finding else None,
+        category=finding.category if finding else None,
+        fix_type=fix_type,
+        severity=rec.priority,
+        evidence=finding.evidence if finding else None,
+        proposed_action=proposed_action,
+    )
     safety_checks = {
+        "safety_tier": classification.safety_tier.value,
+        "policy_rule_id": classification.policy_rule_id,
+        "classification_reason": classification.reason,
         "requires_manual_approval": True,
+        "requires_human_approval": classification.requires_human_approval,
         "auto_executable": False,
+        "auto_safe_eligible": classification.auto_executable,
         "verified_safe": True,
         "destructive": False,
-        "review_checklist": [
-            "Verify target page/URL is accurate",
-            "Inspect diff payload for semantic correctness",
-            "Ensure no breaking layout or styling regressions",
-        ],
+        "review_checklist": classification.review_checklist,
+        "safe_bounds": classification.safe_bounds,
     }
+
+
 
     # Deduplication check: existing fix plan for same recommendation and fix_type
     existing = (
@@ -333,6 +350,47 @@ def create_fix_plan(
     effort = str(data.get("estimated_effort", "medium")).lower()
     priority = str(data.get("priority", "medium")).lower()
 
+    raw_safety = data.get("safety_checks")
+    if raw_safety and "safety_tier" in raw_safety:
+        safety_checks = raw_safety
+    else:
+        classification = classify_fix_safety(
+            finding_type=data.get("finding_type"),
+            category=data.get("category"),
+            fix_type=fix_type,
+            severity=priority,
+            proposed_action=str(data["proposed_action"]).strip(),
+        )
+        if raw_safety:
+            safety_checks = {
+                "safety_tier": classification.safety_tier.value,
+                "policy_rule_id": classification.policy_rule_id,
+                "classification_reason": classification.reason,
+                "requires_manual_approval": raw_safety.get("requires_manual_approval", classification.requires_human_approval),
+                "requires_human_approval": raw_safety.get("requires_human_approval", classification.requires_human_approval),
+                "auto_executable": raw_safety.get("auto_executable", classification.auto_executable),
+                "verified_safe": raw_safety.get("verified_safe", True),
+                "destructive": raw_safety.get("destructive", False),
+                "review_checklist": raw_safety.get("review_checklist", classification.review_checklist),
+                "safe_bounds": raw_safety.get("safe_bounds", classification.safe_bounds),
+                **{k: v for k, v in raw_safety.items() if k not in ("safety_tier", "policy_rule_id", "classification_reason")},
+            }
+        else:
+            safety_checks = {
+                "safety_tier": classification.safety_tier.value,
+                "policy_rule_id": classification.policy_rule_id,
+                "classification_reason": classification.reason,
+                "requires_manual_approval": True,
+                "requires_human_approval": classification.requires_human_approval,
+                "auto_executable": False,
+                "auto_safe_eligible": classification.auto_executable,
+                "verified_safe": True,
+                "destructive": False,
+                "review_checklist": classification.review_checklist,
+                "safe_bounds": classification.safe_bounds,
+            }
+
+
     fix_plan = FixPlan(
         recommendation_id=data["recommendation_id"],
         finding_id=data.get("finding_id"),
@@ -351,8 +409,9 @@ def create_fix_plan(
         priority=priority,
         status=status,
         diff_payload=data.get("diff_payload"),
-        safety_checks=data.get("safety_checks") or {"requires_manual_approval": True, "auto_executable": False},
+        safety_checks=safety_checks,
     )
+
 
     db.add(fix_plan)
     db.commit()
