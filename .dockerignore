@@ -1,0 +1,15 @@
+.git
+.github
+.next
+node_modules
+coverage
+test-results
+playwright-report
+*.log
+.env
+.env.*
+!.env.example
+Social-Distribtion-Engine-RavalAI-SDE
+docs
+tests
+*.md

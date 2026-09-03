@@ -9,7 +9,7 @@
     "dev": "next dev -p 8080",
     "build": "next build",
     "build:dev": "next build",
-    "start": "next start -p 8080",
+    "start": "node .next/standalone/server.js",
     "preview": "next build && next start -p 8080",
     "lint": "eslint .",
     "format": "prettier --write .",
