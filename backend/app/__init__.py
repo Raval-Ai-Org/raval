@@ -81,6 +81,18 @@ from .fix_safety_classifier import (
     SafetyTier,
     classify_fix_safety,
 )
+from .query_intelligence_service import (
+    CandidateQuery,
+    QueryGenerationSource,
+    QueryIntelligenceService,
+    QueryIntent,
+    QueryPriority,
+    QuerySetStatus,
+    calculate_query_similarity,
+    deduplicate_candidate_queries,
+    normalize_query_text,
+)
+
 # Canonical Aliases
 UnifiedSignalAggregator = SignalAggregator
 __all__ = [
@@ -145,4 +157,14 @@ __all__ = [
     "FixSafetyClassification",
     "FixSafetyClassifier",
     "classify_fix_safety",
+    "QueryIntent",
+    "QueryGenerationSource",
+    "QueryPriority",
+    "QuerySetStatus",
+    "CandidateQuery",
+    "QueryIntelligenceService",
+    "normalize_query_text",
+    "calculate_query_similarity",
+    "deduplicate_candidate_queries",
 ]
+

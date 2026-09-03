@@ -1114,4 +1114,102 @@ class SiteScoreHistoryPoint(BaseModel):
 class SiteScoreHistoryResponse(BaseModel):
     website_id: int
     total_scans: int
-    history: list[SiteScoreHistoryPoint] = []
+    history: list[SiteScoreHistoryPoint] = []
+
+
+# ==========================================
+# Task 10 - Query Intelligence & Query Sets
+# ==========================================
+
+
+class QueryBase(BaseModel):
+    query_text: str = Field(..., min_length=1, max_length=2048)
+    intent: str = Field(default="INFORMATIONAL")
+    topic_id: str | None = None
+    topic: str | None = None
+    entity_id: int | None = None
+    entity_name: str | None = None
+    page_id: int | None = None
+    generation_source: str = Field(default="TOPIC_INTELLIGENCE")
+    priority: str = Field(default="MEDIUM")
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    version: str = Field(default="1.0")
+    active: bool = True
+    metadata_json: dict[str, Any] | list[Any] | None = None
+
+
+class QueryCreate(QueryBase):
+    query_set_id: int | None = None
+    website_id: int | None = None
+
+
+class QueryUpdate(BaseModel):
+    query_text: str | None = Field(default=None, min_length=1, max_length=2048)
+    intent: str | None = None
+    priority: str | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    active: bool | None = None
+    metadata_json: dict[str, Any] | list[Any] | None = None
+
+
+class QueryStatusUpdate(BaseModel):
+    active: bool
+
+
+class QueryResponse(QueryBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    query_set_id: int
+    website_id: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class QuerySetBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
+    version: str = Field(default="1.0", max_length=50)
+    status: str = Field(default="active", max_length=50)
+
+
+class QuerySetCreate(QuerySetBase):
+    website_id: int
+    scan_id: int | None = None
+
+
+class QuerySetUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    version: str | None = Field(default=None, max_length=50)
+    status: str | None = Field(default=None, max_length=50)
+
+
+class QuerySetResponse(QuerySetBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    website_id: int
+    scan_id: int | None = None
+    total_queries: int = 0
+    active_queries: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class QuerySetDetailResponse(QuerySetResponse):
+    queries: list[QueryResponse] = []
+
+
+class QuerySetGenerateRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    version: str = "1.0"
+    max_variants_per_source: int = Field(default=3, ge=1, le=10)
+    max_total_queries: int = Field(default=250, ge=1, le=1000)
+    include_topics: bool = True
+    include_entities: bool = True
+    include_questions: bool = True
+    include_content: bool = True
+    target_intents: list[str] | None = None
+

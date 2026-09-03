@@ -15,7 +15,10 @@ from .models import (
     ValidationResult,
     MonitoringRecord,
     Website,
+    QuerySet,
+    Query,
 )
+from .query_intelligence_service import QueryIntelligenceService
 from .schemas import (
     AIRunCreate,
     AIRunResponse,
@@ -97,6 +100,15 @@ from .schemas import (
     PrioritizedRecommendationResponse,
     PageRecommendationsListResponse,
     SiteScoreHistoryResponse,
+    QueryCreate,
+    QueryUpdate,
+    QueryStatusUpdate,
+    QueryResponse,
+    QuerySetCreate,
+    QuerySetUpdate,
+    QuerySetResponse,
+    QuerySetDetailResponse,
+    QuerySetGenerateRequest,
 )
 from .score_explanation import ScoreExplanationResponse
 from .site_aggregator import SiteScoreSummary
@@ -2810,4 +2822,358 @@ def get_site_score_history_endpoint(
             status_code=404 if "not found" in str(exc).lower() else 400,
             detail=str(exc),
         )
+
+
+# =============================================================================
+# Task 10 — Step 1: Query Intelligence & Reusable Query Set Endpoints
+# =============================================================================
+
+
+def _format_query_set_response(qs: QuerySet) -> dict:
+    total = len(qs.queries) if qs.queries else 0
+    active = sum(1 for q in qs.queries if q.active) if qs.queries else 0
+    return {
+        "id": qs.id,
+        "website_id": qs.website_id,
+        "scan_id": qs.scan_id,
+        "name": qs.name,
+        "description": qs.description,
+        "version": qs.version,
+        "status": qs.status,
+        "total_queries": total,
+        "active_queries": active,
+        "created_at": qs.created_at,
+        "updated_at": qs.updated_at,
+    }
+
+
+def _format_query_set_detail_response(qs: QuerySet) -> dict:
+    res = _format_query_set_response(qs)
+    res["queries"] = qs.queries or []
+    return res
+
+
+@app.post(
+    "/api/v1/websites/{website_id}/query-sets/generate",
+    response_model=QuerySetDetailResponse,
+    status_code=201,
+)
+def generate_website_query_set_endpoint(
+    website_id: int,
+    request: QuerySetGenerateRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        req = request or QuerySetGenerateRequest()
+        qs = QueryIntelligenceService.generate_and_persist_query_set(
+            db=db,
+            website_id=website_id,
+            scan_id=None,
+            name=req.name,
+            description=req.description,
+            version=req.version,
+            max_variants_per_source=req.max_variants_per_source,
+            max_total_queries=req.max_total_queries,
+            include_topics=req.include_topics,
+            include_entities=req.include_entities,
+            include_questions=req.include_questions,
+            include_content=req.include_content,
+            target_intents=req.target_intents,
+        )
+        return _format_query_set_detail_response(qs)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.post(
+    "/api/v1/scans/{scan_id}/query-sets/generate",
+    response_model=QuerySetDetailResponse,
+    status_code=201,
+)
+def generate_scan_query_set_endpoint(
+    scan_id: int,
+    request: QuerySetGenerateRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    scan = db.get(Scan, scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail=f"Scan with id {scan_id} not found")
+    try:
+        req = request or QuerySetGenerateRequest()
+        qs = QueryIntelligenceService.generate_and_persist_query_set(
+            db=db,
+            website_id=scan.website_id,
+            scan_id=scan_id,
+            name=req.name,
+            description=req.description,
+            version=req.version,
+            max_variants_per_source=req.max_variants_per_source,
+            max_total_queries=req.max_total_queries,
+            include_topics=req.include_topics,
+            include_entities=req.include_entities,
+            include_questions=req.include_questions,
+            include_content=req.include_content,
+            target_intents=req.target_intents,
+        )
+        return _format_query_set_detail_response(qs)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post(
+    "/api/v1/query-sets/generate",
+    response_model=QuerySetDetailResponse,
+    status_code=201,
+)
+def generate_query_set_general_endpoint(
+    website_id: int,
+    scan_id: int | None = None,
+    request: QuerySetGenerateRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        req = request or QuerySetGenerateRequest()
+        qs = QueryIntelligenceService.generate_and_persist_query_set(
+            db=db,
+            website_id=website_id,
+            scan_id=scan_id,
+            name=req.name,
+            description=req.description,
+            version=req.version,
+            max_variants_per_source=req.max_variants_per_source,
+            max_total_queries=req.max_total_queries,
+            include_topics=req.include_topics,
+            include_entities=req.include_entities,
+            include_questions=req.include_questions,
+            include_content=req.include_content,
+            target_intents=req.target_intents,
+        )
+        return _format_query_set_detail_response(qs)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 400,
+            detail=str(exc),
+        )
+
+
+@app.post(
+    "/api/v1/websites/{website_id}/query-sets",
+    response_model=QuerySetResponse,
+    status_code=201,
+)
+def create_website_query_set_endpoint(
+    website_id: int,
+    payload: QuerySetCreate,
+    db: Session = Depends(get_db),
+):
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail="Website not found")
+    qs = QuerySet(
+        website_id=website_id,
+        scan_id=payload.scan_id,
+        name=payload.name,
+        description=payload.description,
+        version=payload.version,
+        status=payload.status,
+    )
+    db.add(qs)
+    db.commit()
+    db.refresh(qs)
+    return _format_query_set_response(qs)
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/query-sets",
+    response_model=list[QuerySetResponse],
+)
+def list_website_query_sets_endpoint(
+    website_id: int,
+    status: str | None = None,
+    version: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail="Website not found")
+    qsets = QueryIntelligenceService.list_query_sets(
+        db=db,
+        website_id=website_id,
+        status=status,
+        version=version,
+        limit=limit,
+        offset=offset,
+    )
+    return [_format_query_set_response(qs) for qs in qsets]
+
+
+@app.get(
+    "/api/v1/query-sets",
+    response_model=list[QuerySetResponse],
+)
+def list_all_query_sets_endpoint(
+    website_id: int | None = None,
+    status: str | None = None,
+    version: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    qsets = QueryIntelligenceService.list_query_sets(
+        db=db,
+        website_id=website_id,
+        status=status,
+        version=version,
+        limit=limit,
+        offset=offset,
+    )
+    return [_format_query_set_response(qs) for qs in qsets]
+
+
+@app.get(
+    "/api/v1/query-sets/{query_set_id}",
+    response_model=QuerySetDetailResponse,
+)
+def get_query_set_endpoint(
+    query_set_id: int,
+    db: Session = Depends(get_db),
+):
+    qs = QueryIntelligenceService.get_query_set(db, query_set_id)
+    if not qs:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+    return _format_query_set_detail_response(qs)
+
+
+@app.patch(
+    "/api/v1/query-sets/{query_set_id}",
+    response_model=QuerySetResponse,
+)
+def update_query_set_endpoint(
+    query_set_id: int,
+    payload: QuerySetUpdate,
+    db: Session = Depends(get_db),
+):
+    qs = QueryIntelligenceService.get_query_set(db, query_set_id)
+    if not qs:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+    if payload.name is not None:
+        qs.name = payload.name
+    if payload.description is not None:
+        qs.description = payload.description
+    if payload.version is not None:
+        qs.version = payload.version
+    if payload.status is not None:
+        qs.status = payload.status
+    db.commit()
+    db.refresh(qs)
+    return _format_query_set_response(qs)
+
+
+@app.get(
+    "/api/v1/query-sets/{query_set_id}/queries",
+    response_model=list[QueryResponse],
+)
+def list_query_set_queries_endpoint(
+    query_set_id: int,
+    active_only: bool = False,
+    intent: str | None = None,
+    priority: str | None = None,
+    source: str | None = None,
+    limit: int = 500,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    qs = QueryIntelligenceService.get_query_set(db, query_set_id)
+    if not qs:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+    return QueryIntelligenceService.get_query_set_queries(
+        db=db,
+        query_set_id=query_set_id,
+        active_only=active_only,
+        intent=intent,
+        priority=priority,
+        source=source,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.post(
+    "/api/v1/query-sets/{query_set_id}/queries",
+    response_model=QueryResponse,
+    status_code=201,
+)
+def create_query_in_query_set_endpoint(
+    query_set_id: int,
+    payload: QueryCreate,
+    db: Session = Depends(get_db),
+):
+    try:
+        return QueryIntelligenceService.create_query(db, query_set_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 400, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/queries/{query_id}",
+    response_model=QueryResponse,
+)
+def get_query_endpoint(
+    query_id: int,
+    db: Session = Depends(get_db),
+):
+    query = QueryIntelligenceService.get_query(db, query_id)
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+    return query
+
+
+@app.patch(
+    "/api/v1/queries/{query_id}",
+    response_model=QueryResponse,
+)
+def update_query_endpoint(
+    query_id: int,
+    payload: QueryUpdate,
+    db: Session = Depends(get_db),
+):
+    query = QueryIntelligenceService.update_query(db, query_id, payload)
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+    return query
+
+
+@app.patch(
+    "/api/v1/queries/{query_id}/status",
+    response_model=QueryResponse,
+)
+def update_query_status_endpoint(
+    query_id: int,
+    payload: QueryStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    query = QueryIntelligenceService.update_query_status(db, query_id, active=payload.active)
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+    return query
+
+
+@app.delete(
+    "/api/v1/queries/{query_id}",
+    status_code=200,
+)
+def delete_query_endpoint(
+    query_id: int,
+    db: Session = Depends(get_db),
+):
+    success = QueryIntelligenceService.delete_query(db, query_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Query not found")
+    return {"status": "deleted", "query_id": query_id}
+
 

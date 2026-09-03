@@ -84,6 +84,18 @@ class Website(Base):
         cascade="all, delete-orphan",
     )
 
+    query_sets = relationship(
+        "QuerySet",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    queries = relationship(
+        "Query",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
 
 
 
@@ -205,6 +217,12 @@ class Scan(Base):
         cascade="all, delete-orphan",
     )
 
+    query_sets = relationship(
+        "QuerySet",
+        back_populates="scan",
+        cascade="all, delete-orphan",
+    )
+
 
 
 class PageResult(Base):
@@ -311,6 +329,11 @@ class PageResult(Base):
         "ValidationResult",
         back_populates="page_result",
         cascade="all, delete-orphan",
+    )
+
+    queries = relationship(
+        "Query",
+        back_populates="page_result",
     )
 
 
@@ -1887,6 +1910,11 @@ class Entity(Base):
         back_populates="entities",
     )
 
+    queries = relationship(
+        "Query",
+        back_populates="entity",
+    )
+
 
 class Opportunity(Base):
     __tablename__ = "opportunities"
@@ -2474,3 +2502,214 @@ class MonitoringRecord(Base):
         "AIRun",
         back_populates="monitoring_records",
     )
+
+
+class QuerySet(Base):
+    __tablename__ = "query_sets"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    scan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scans.id"),
+        nullable=True,
+        index=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    version: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="1.0",
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="active",
+        index=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="query_sets",
+    )
+
+    scan = relationship(
+        "Scan",
+        back_populates="query_sets",
+    )
+
+    queries = relationship(
+        "Query",
+        back_populates="query_set",
+        cascade="all, delete-orphan",
+    )
+
+
+class Query(Base):
+    __tablename__ = "queries"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    query_set_id: Mapped[int] = mapped_column(
+        ForeignKey("query_sets.id"),
+        nullable=False,
+        index=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    query_text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    intent: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="INFORMATIONAL",
+        index=True,
+    )
+
+    topic_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    topic: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+
+    entity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("entities.id"),
+        nullable=True,
+        index=True,
+    )
+
+    entity_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    page_id: Mapped[int | None] = mapped_column(
+        ForeignKey("page_results.id"),
+        nullable=True,
+        index=True,
+    )
+
+    generation_source: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="TOPIC_INTELLIGENCE",
+        index=True,
+    )
+
+    priority: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="MEDIUM",
+        index=True,
+    )
+
+    confidence: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=1.0,
+    )
+
+    version: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="1.0",
+        index=True,
+    )
+
+    active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        index=True,
+    )
+
+    metadata_json: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    query_set = relationship(
+        "QuerySet",
+        back_populates="queries",
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="queries",
+    )
+
+    entity = relationship(
+        "Entity",
+        back_populates="queries",
+    )
+
+    page_result = relationship(
+        "PageResult",
+        back_populates="queries",
+    )
+
+    @property
+    def question_text(self) -> str:
+        return self.query_text
