@@ -1,10 +1,8 @@
-# AI Visibility & Answer Monitoring Engine — Query Intelligence Subsystem (Task 10 Step 1)
+# AI Visibility & Answer Monitoring Engine (Task 10)
 
 ## 1. Overview & Architecture
 
-The **Query Intelligence & Reusable Query Set Subsystem** is the foundational Step 1 of the Raval AI Visibility & Answer Monitoring Engine (Task 10). It converts site intelligence (Topics, Entities, Questions, and Content) into deterministic, explainable, and reusable monitoring query collections called **QuerySets**.
-
-These query sets will serve as standard input vectors for subsequent Task 10 monitoring steps (Provider Adapters, Answer Capture, Citation Detection, and Visibility Gap Analysis).
+The **AI Visibility & Answer Monitoring Engine** enables continuous tracking, capture, evaluation, and diagnostic analysis of brand and website presence across major AI search providers and generative answer engines (OpenAI, Perplexity, Google Gemini, Anthropic Claude, Microsoft Copilot, and Deterministic Mock test engines).
 
 ```text
 +--------------------------------------------------------------------------------+
@@ -19,9 +17,9 @@ These query sets will serve as standard input vectors for subsequent Task 10 mon
 +-------------------------------------|------------------------------------------+
                                       v
 +--------------------------------------------------------------------------------+
-|                     QUERY INTELLIGENCE SERVICE                                 |
+|                STEP 1: QUERY INTELLIGENCE & REUSABLE QUERY SETS                |
 |                                                                                |
-|  1. Candidate Generation Across 4 Intents (Informational/Commercial/...)       |
+|  1. Candidate Generation Across 4 Intents (Informational, Commercial, etc.)    |
 |  2. Bounded Natural-Language Wording Variant Expansion (MAX_VARIANTS_PER_SRC) |
 |  3. Multi-Level Normalization (Casing, Whitespace, Contractions, Filler)      |
 |  4. Deterministic Semantic Deduplication (Token-Set Jaccard & Canonical Key)   |
@@ -30,297 +28,209 @@ These query sets will serve as standard input vectors for subsequent Task 10 mon
 +-------------------------------------+------------------------------------------+
                                       v
 +--------------------------------------------------------------------------------+
-|                     PERSISTENT STORAGE & QUERY SETS                            |
+|                STEP 2: PROVIDER ADAPTERS & AI RESPONSE CAPTURE                 |
 |                                                                                |
-|    QuerySet (id, website_id, scan_id, name, version, status, timestamps)       |
-|       |                                                                        |
-|       +--> Query 1 (id, query_text, intent, source, priority, confidence, ...) |
-|       +--> Query 2 (id, query_text, intent, source, priority, confidence, ...) |
-|       +--> Query N ...                                                         |
+|  +---------------------+  +--------------------+  +-------------------------+  |
+|  | OpenAI / GPT-4o     |  | Perplexity / Sonar |  | Google Gemini 1.5/2.0    |  |
+|  +---------------------+  +--------------------+  +-------------------------+  |
+|  | Anthropic Claude    |  | Microsoft Copilot  |  | Deterministic Mock      |  |
+|  +----------+----------+  +---------+----------+  +------------+------------+  |
+|             |                       |                          |               |
+|             +-----------------------+--------------------------+               |
+|                                     v                                          |
+|        - Latency Measurement (ms) & Usage Token Tracking                       |
+|        - Bounded Exponential Retries & Execution Timeouts                      |
+|        - Normalized Response Status (SUCCESS, TIMEOUT, RATE_LIMITED, etc.)     |
+|        - Persistent Auditable AIResponse Storage (`ai_responses`)              |
 +--------------------------------------------------------------------------------+
 ```
 
 ---
 
-## 2. Data Models
+## 2. Step 1: Query Intelligence Subsystem
 
-### 2.1 QuerySet Model (`query_sets` table)
-Represents a reusable, versioned collection of search/monitoring queries associated with a website and optional scan run.
+### 2.1 Query Intent Categories
+1. **`INFORMATIONAL`**: Conceptual questions, definitions, mechanisms (`"What is [topic]?"`, `"How does [topic] work?"`).
+2. **`COMMERCIAL`**: Buying options, recommendations, platform selection (`"What are the best [topic] solutions?"`, `"Which platform should I choose for [use case]?"`).
+3. **`COMPARISON`**: Brand vs competitor, differences (`"[Brand] vs top alternatives"`, `"What is the difference between [A] and [B]?"`).
+4. **`PROBLEM_SOLVING`**: Troubleshooting, fixing issues, addressing content gaps (`"How to address missing [gap] in [topic]?"`, `"How to fix [issue]?"`).
 
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | `Integer` (PK) | Unique primary key identifier |
-| `website_id` | `ForeignKey("websites.id")` | Associated website / workspace |
-| `scan_id` | `ForeignKey("scans.id")` (Nullable) | Associated scan run if generated from a crawl |
-| `name` | `String(255)` | Descriptive name of the QuerySet |
-| `description` | `Text` (Nullable) | Human-readable explanation and context |
-| `version` | `String(50)` | Version identifier (e.g., `"1.0"`, `"2.0"`) |
-| `status` | `String(50)` | QuerySet lifecycle status (`"active"`, `"archived"`, `"draft"`) |
-| `created_at` | `DateTime` | Creation timestamp in UTC |
-| `updated_at` | `DateTime` | Last update timestamp in UTC |
+### 2.2 Generation Sources
+- **`TOPIC_INTELLIGENCE`**: Derived from topic extraction models (`TopicSemanticAnalyzer`).
+- **`ENTITY_INTELLIGENCE`**: Derived from entity identification (`EntityAnalyzer`).
+- **`QUESTION_INTELLIGENCE`**: Derived from heading queries and FAQ schema blocks (`QuestionAnalyzer`).
+- **`CONTENT_INTELLIGENCE`**: Derived from content gap analysis and strengths (`ContentIntelligenceAnalyzer`).
 
-**Relationships:**
-- `website`: Belongs to `Website`
-- `scan`: Optional relationship to `Scan`
-- `queries`: One-to-many relationship with `Query` (`cascade="all, delete-orphan"`)
-
-### 2.2 Query Model (`queries` table)
-Represents a single persistent, traceable search query within a `QuerySet`.
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | `Integer` (PK) | Unique primary key identifier |
-| `query_set_id` | `ForeignKey("query_sets.id")` | Parent QuerySet ID |
-| `website_id` | `ForeignKey("websites.id")` | Website / workspace isolation key |
-| `query_text` | `Text` | The formatted search query / prompt text |
-| `intent` | `String(50)` | Query intent category (`INFORMATIONAL`, `COMMERCIAL`, `COMPARISON`, `PROBLEM_SOLVING`) |
-| `topic_id` | `String(255)` (Nullable) | Canonical slug or ID of the originating topic |
-| `topic` | `String(255)` (Nullable) | Topic text name |
-| `entity_id` | `ForeignKey("entities.id")` (Nullable) | FK to persistent `Entity` record if derived from an entity |
-| `entity_name` | `String(255)` (Nullable) | Name of the associated entity |
-| `page_id` | `ForeignKey("page_results.id")` (Nullable) | FK to originating `PageResult` |
-| `generation_source` | `String(100)` | Generation source (`TOPIC_INTELLIGENCE`, `ENTITY_INTELLIGENCE`, `QUESTION_INTELLIGENCE`, `CONTENT_INTELLIGENCE`) |
-| `priority` | `String(20)` | Deterministic priority (`HIGH`, `MEDIUM`, `LOW`) |
-| `confidence` | `Float` | Deterministic generation confidence ($0.0 \le c \le 1.0$) |
-| `version` | `String(50)` | Query version string matching QuerySet version |
-| `active` | `Boolean` | Active monitoring flag (`True` or `False`) |
-| `metadata_json` | `JSON` (Nullable) | Source type, raw templates, variant history, and evidence details |
-| `created_at` | `DateTime` | Creation timestamp in UTC |
-| `updated_at` | `DateTime` | Last update timestamp in UTC |
+### 2.3 Deduplication & Bounds
+- **Level 1 Normalization**: Whitespace stripping, lowercasing, contraction expansion, filler prefix stripping (`"can you please tell me about"` $\rightarrow$ `""`).
+- **Level 2 Deterministic Clustering**: Token-set Jaccard similarity ($\ge 0.85$ threshold), retaining primary candidate with alternate phrasings preserved in metadata.
+- **Configurable Bounds**: `MAX_VARIANTS_PER_SOURCE` (default 3), `MAX_TOTAL_QUERIES` (default 250).
 
 ---
 
-## 3. Query Intent Categories
+## 3. Step 2: Provider Adapter Architecture & Response Capture
 
-The system classifies every query deterministically into one of four required categories:
+### 3.1 Base Provider Adapter Contract (`BaseProviderAdapter`)
+All AI search provider adapters inherit from `BaseProviderAdapter` and provide:
+- `provider_name`: Unique provider string (`"mock"`, `"openai"`, `"perplexity"`, `"gemini"`, `"claude"`, `"copilot"`).
+- `default_model`: Default model identifier.
+- `model_version`: Optional model version tag.
+- `execute_query(request: ProviderRequest) -> ProviderResponse`: Execution method measuring latency, enforcing timeouts, executing bounded retries for transient errors, and normalizing output.
 
-1. **`INFORMATIONAL`**:
-   - Focus: Foundational understanding, definitions, concepts, and how mechanisms operate.
-   - Patterns: `"What is [topic]?"`, `"How does [topic] work?"`, `"What are the key benefits of [topic]?"`
-2. **`COMMERCIAL`**:
-   - Focus: Buying criteria, product/service discovery, vendor selection, pricing, and reviews.
-   - Patterns: `"What are the best [topic] solutions?"`, `"Which [platform] should I choose for [use case]?"`, `"Pricing and features for [entity]"`
-3. **`COMPARISON`**:
-   - Focus: Contrasting alternatives, competitor positioning, and differential analysis.
-   - Patterns: `"[Brand] vs top alternatives"`, `"What is the difference between [A] and [B]?"`, `"Which is better for [use case]: [Brand] or competitors?"`
-4. **`PROBLEM_SOLVING`**:
-   - Focus: Troubleshooting, fixing errors, addressing gaps, optimization, and remediation.
-   - Patterns: `"How to solve common [topic] challenges?"`, `"What is the best way to optimize [topic]?"`, `"How to address missing [gap] in [topic]?"`
+### 3.2 Normalized Request Structure (`ProviderRequest`)
+```python
+@dataclass
+class ProviderRequest:
+    query_id: int
+    query_text: str
+    query_set_id: int
+    website_id: int
+    provider: str
+    model: str | None = None
+    request_timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timeout_seconds: float = 30.0
+    max_retries: int = 2
+    metadata: dict[str, Any] = field(default_factory=dict)
+```
 
----
+### 3.3 Normalized Response Structure (`ProviderResponse`)
+```python
+@dataclass
+class ProviderResponse:
+    result_id: str  # Unique deterministic ID: resp_{query_id}_{provider}_{timestamp_ms}
+    query_id: int
+    query_set_id: int
+    website_id: int
+    query_text: str
+    provider: str
+    model: str
+    model_version: str | None
+    status: ResponseStatus  # SUCCESS, TIMEOUT, RATE_LIMITED, UNAVAILABLE, ERROR
+    response_text: str
+    latency_ms: int
+    error_type: str | None = None
+    error_message: str | None = None
+    usage: UsageMetadata | None = None  # input_tokens, output_tokens, total_tokens
+    request_timestamp: datetime
+    response_timestamp: datetime
+    metadata_json: dict[str, Any]
+```
 
-## 4. Query Generation Sources & Linkage
-
-Queries preserve complete provenance back to existing Task 5–9 engines:
-
-- **`TOPIC_INTELLIGENCE`**:
-  - Ingests `primary_topic`, `supporting_topics`, and keywords from `TopicSemanticAnalyzer`.
-  - Generates Informational, Commercial, and Problem-Solving queries.
-  - Preserves `topic` and `topic_id`.
-- **`ENTITY_INTELLIGENCE`**:
-  - Ingests Organization, Brand, and Product entities from `EntityAnalyzer` and persistent `Entity` records.
-  - Generates Brand Overview, Commercial, and Comparison queries.
-  - Preserves `entity_id` and `entity_name`.
-- **`QUESTION_INTELLIGENCE`**:
-  - Ingests detected questions from headings, FAQ schemas (`PageStructuredData`), and content sections from `QuestionAnalyzer`.
-  - Preserves `has_answer`, `source_type`, and `original_question`.
-- **`CONTENT_INTELLIGENCE`**:
-  - Ingests content gaps, unanswered questions, and key strengths from `ContentIntelligenceAnalyzer`.
-  - Preserves `finding_type` and links to the relevant `page_id`.
+### 3.4 Bounded Response Statuses
+1. **`SUCCESS`**: AI provider completed query execution and returned valid response text.
+2. **`TIMEOUT`**: Execution exceeded the configured timeout threshold.
+3. **`RATE_LIMITED`**: Provider returned HTTP 429; includes Retry-After metadata when provided.
+4. **`UNAVAILABLE`**: Missing credentials, disabled provider in configuration, or HTTP 502/503/504 errors.
+5. **`ERROR`**: Non-retryable HTTP 4xx, server errors, or unexpected payload anomalies.
 
 > [!IMPORTANT]
-> Missing linkages strictly remain `null`/`None` rather than being fabricated. If a query is derived purely from a topic without an entity, `entity_id` and `entity_name` remain `None`.
+> A provider failure is strictly distinct from a valid empty answer. Failures set `status` to an error code and leave `response_text` empty, preserving diagnostic error details in `error_type` and `error_message`.
+
+### 3.5 Bounded Retries & Exponential Backoff
+- `MAX_RETRIES`: Default 2, maximum capped at 5.
+- `BACKOFF_SECONDS`: Exponential backoff ($t_{\text{backoff}} = \text{base} \times 2^{\text{attempt}}$).
+- Transient errors (`TIMEOUT`, `RATE_LIMITED`, HTTP 502/503/504) are retried up to the limit.
+- Authentication failures (HTTP 401/403) or configuration errors fail immediately without wasteful retries.
+
+### 3.6 Security & SSRF Protection
+- **Allowlist Enforcement**: Only registered providers in `ALLOWED_PROVIDERS` (`"mock"`, `"openai"`, `"perplexity"`, `"gemini"`, `"claude"`, `"copilot"`) are allowed.
+- **SSRF Prevention**: Outbound request URLs are strictly derived from trusted server configuration. Arbitrary client-provided target URLs are rejected.
+- **Zero Credential Leaks**: API keys are retrieved from environment variables and are never logged, stored in responses, or returned via the API.
 
 ---
 
-## 5. Bounded Wording Variants & Multi-Level Deduplication
+## 4. Current Provider Implementation Status
 
-To prevent combinatorial explosion and avoid flooding monitoring runs with duplicate queries, the generator enforces strict bounds and deterministic deduplication.
+| Provider | Default Model | Config Source | Current Status | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **`mock`** | `mock-ai-search-v1` | Local simulation | **`MOCK_ONLY`** | Deterministic simulation adapter supporting custom text, latencies, tokens, and error modes (`timeout`, `rate_limit`, `unavailable`, `error`) |
+| **`openai`** | `gpt-4o` | `OPENAI_API_KEY` | **`CONFIGURED`** / **`NOT_CONFIGURED`** | OpenAI Chat Completions adapter with token usage extraction |
+| **`perplexity`**| `sonar` | `PERPLEXITY_API_KEY` | **`CONFIGURED`** / **`NOT_CONFIGURED`** | Perplexity Sonar search adapter with citation metadata capture |
+| **`gemini`** | `gemini-1.5-pro` | `GEMINI_API_KEY` | **`CONFIGURED`** / **`NOT_CONFIGURED`** | Google Gemini Content Generation API adapter |
+| **`claude`** | `claude-3-5-sonnet-20241022` | `ANTHROPIC_API_KEY` | **`CONFIGURED`** / **`NOT_CONFIGURED`** | Anthropic Messages API adapter |
+| **`copilot`** | `copilot-search-v1` | `COPILOT_API_KEY` / `BING_API_KEY` | **`CONFIGURED`** / **`NOT_CONFIGURED`** | Microsoft Copilot / Bing Web Search adapter |
 
-### 5.1 Bounded Variants
-- `MAX_VARIANTS_PER_SOURCE` (Default: `3`, configurable $1 \le N \le 10$).
-- `MAX_TOTAL_QUERIES` (Default: `250`, configurable $1 \le N \le 1000$).
-- Deterministic template variations without unbounded combinatorial permutation.
-
-### 5.2 Multi-Level Deduplication Algorithm
-1. **Level 1 — Exact Normalization**:
-   - Whitespace stripping and multi-space collapsing.
-   - Lowercasing.
-   - Contraction expansion (`"what's"` $\rightarrow$ `"what is"`, `"can't"` $\rightarrow$ `"cannot"`).
-   - Conversational filler prefix stripping (`"can you please explain"`, `"tell me about"`, `"i want to know"`).
-   - Punctuation removal for signature comparison.
-2. **Level 2 — Deterministic Semantic Deduplication**:
-   - Stop-word filtering (`STOP_WORDS` standard token set).
-   - Token-set Jaccard similarity metric and subset ratio calculation.
-   - Threshold $\ge 0.85$ matches are grouped into a single canonical query.
-   - The query with highest priority and confidence is retained as the primary query; alternate phrasings are preserved in `metadata_json["variants"]`.
-   - 100% deterministic and local (no external LLM/API calls).
+*Note: In test and development environments without active API keys, real adapters report `NOT_CONFIGURED` and safely return `UNAVAILABLE` with `MISSING_CREDENTIALS` error type without making unauthenticated outbound calls.*
 
 ---
 
-## 6. Deterministic Priority & Confidence Scoring
+## 5. Database Schema
 
-### 6.1 Priority Scale (`HIGH`, `MEDIUM`, `LOW`)
-- **`HIGH`**:
-  - Commercial/Comparison queries for primary brand/product entities.
-  - Questions found in page title or H1 tags.
-  - FAQ schema questions with verified answer presence.
-  - Core primary topic with confidence $\ge 0.7$ present in title and H1.
-- **`MEDIUM`**:
-  - Informational queries on primary topics.
-  - Supporting topics and secondary entities.
-  - Standard H2/H3 detected questions.
-  - Content gap remediation queries.
-- **`LOW`**:
-  - Keyword cluster topics with lower confidence ($< 0.5$).
-  - Broad background questions and generic content strengths.
-
-### 6.2 Generation Confidence ($0.0 \le \text{confidence} \le 1.0$)
-Confidence measures **derivation validity from source intelligence**, bounded strictly between 0.0 and 1.0. Grounded signals (presence in structured data, titles, or explicit headings) boost confidence.
-
----
-
-## 7. Versioning & Active/Inactive Lifecycle
-
-- **Versioning**: Each `QuerySet` has an immutable version (e.g., `"1.0"`, `"1.1"`, `"2.0"`). Creating a new generation creates a distinct `QuerySet` record with its own `Query` records without overwriting or deleting historical sets.
-- **Active State Toggle**: Individual queries can be deactivated (`active=False`). Deactivated queries remain persisted in the database for historical auditability and reproducibility of past monitoring runs.
+### 5.1 `ai_responses` Table
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `Integer` (PK) | Unique response record ID |
+| `query_id` | `ForeignKey("queries.id")` | Associated Query |
+| `query_set_id` | `ForeignKey("query_sets.id")` | Associated QuerySet |
+| `website_id` | `ForeignKey("websites.id")` | Associated Website / workspace |
+| `provider` | `String(100)` | Provider name (`mock`, `openai`, etc.) |
+| `model` | `String(100)` | Model used for execution |
+| `model_version` | `String(50)` (Nullable) | Model version tag |
+| `status` | `String(50)` | `SUCCESS`, `TIMEOUT`, `RATE_LIMITED`, `UNAVAILABLE`, `ERROR` |
+| `response_text` | `Text` | Captured raw answer text from AI provider |
+| `latency_ms` | `Integer` | Execution time in milliseconds |
+| `error_type` | `String(100)` (Nullable) | Standardized error type identifier |
+| `error_message` | `Text` (Nullable) | Diagnostic error message |
+| `input_tokens` | `Integer` (Nullable) | Input/prompt tokens consumed |
+| `output_tokens` | `Integer` (Nullable) | Output/completion tokens generated |
+| `total_tokens` | `Integer` (Nullable) | Total tokens consumed |
+| `request_timestamp` | `DateTime` | Execution start timestamp (UTC) |
+| `response_timestamp` | `DateTime` | Execution completion timestamp (UTC) |
+| `metadata_json` | `JSON` (Nullable) | `result_id`, raw provider metadata, citations, finish reasons |
+| `created_at` | `DateTime` | Record insertion timestamp (UTC) |
 
 ---
 
-## 8. REST API Endpoints
+## 6. REST API Endpoints
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/api/v1/websites/{website_id}/query-sets/generate` | Generates a reusable QuerySet from website intelligence |
-| `POST` | `/api/v1/scans/{scan_id}/query-sets/generate` | Generates a reusable QuerySet from a specific scan crawl |
-| `POST` | `/api/v1/query-sets/generate` | General generation endpoint accepting `website_id` and optional `scan_id` |
-| `POST` | `/api/v1/websites/{website_id}/query-sets` | Creates a custom/empty QuerySet |
-| `GET` | `/api/v1/websites/{website_id}/query-sets` | Lists QuerySets for a website |
-| `GET` | `/api/v1/query-sets` | Lists QuerySets with optional status/version filters |
-| `GET` | `/api/v1/query-sets/{query_set_id}` | Retrieves QuerySet detail with summary counts |
-| `PATCH` | `/api/v1/query-sets/{query_set_id}` | Updates QuerySet metadata (name, description, status, version) |
-| `GET` | `/api/v1/query-sets/{query_set_id}/queries` | Lists queries with filters (`active_only`, `intent`, `priority`, `source`) |
-| `POST` | `/api/v1/query-sets/{query_set_id}/queries` | Adds a custom query to a QuerySet |
-| `GET` | `/api/v1/queries/{query_id}` | Retrieves a single query record |
-| `PATCH` | `/api/v1/queries/{query_id}` | Updates query fields (text, intent, priority, confidence) |
-| `PATCH` | `/api/v1/queries/{query_id}/status` | Toggles query active/inactive state |
-| `DELETE` | `/api/v1/queries/{query_id}` | Deletes a query record |
+| `GET` | `/api/v1/providers` | Lists registered providers and configuration readiness |
+| `POST` | `/api/v1/queries/{query_id}/responses` | Executes a single query against a provider and persists response |
+| `POST` | `/api/v1/query-sets/{query_set_id}/responses` | Batch executes active queries in a QuerySet |
+| `GET` | `/api/v1/query-sets/{query_set_id}/responses` | Lists response history for a QuerySet (with `provider`, `status` filters) |
+| `GET` | `/api/v1/queries/{query_id}/responses` | Lists response history for a specific query |
+| `GET` | `/api/v1/responses/{response_id}` | Retrieves a single AI response record |
 
 ---
 
-## 9. Sample Output
+## 7. Sample Normalized Output
 
-Example serialized QuerySet response from `POST /api/v1/websites/1/query-sets/generate`:
-
+Serialized response from `POST /api/v1/queries/1/responses`:
 ```json
 {
   "id": 1,
+  "query_id": 1,
+  "query_set_id": 1,
   "website_id": 1,
-  "scan_id": 1,
-  "name": "Acme AI Monitoring Query Set",
-  "description": "Auto-generated reusable query set derived from site intelligence for https://acme.ai.",
-  "version": "1.0",
-  "status": "active",
-  "total_queries": 14,
-  "active_queries": 14,
-  "created_at": "2026-09-03T14:20:00Z",
-  "updated_at": "2026-09-03T14:20:00Z",
-  "queries": [
-    {
-      "id": 1,
-      "query_set_id": 1,
-      "website_id": 1,
-      "query_text": "What is Generative Engine Optimization?",
-      "intent": "INFORMATIONAL",
-      "topic_id": "generative-engine-optimization",
-      "topic": "Generative Engine Optimization",
-      "entity_id": null,
-      "entity_name": null,
-      "page_id": 1,
-      "generation_source": "TOPIC_INTELLIGENCE",
-      "priority": "HIGH",
-      "confidence": 0.95,
-      "version": "1.0",
-      "active": true,
-      "metadata_json": {
-        "source_type": "primary_topic",
-        "in_title": true,
-        "in_h1": true,
-        "variants": [
-          "How does Generative Engine Optimization work?",
-          "Can you explain what Generative Engine Optimization is?"
-        ]
-      },
-      "created_at": "2026-09-03T14:20:00Z",
-      "updated_at": "2026-09-03T14:20:00Z"
-    },
-    {
-      "id": 2,
-      "query_set_id": 1,
-      "website_id": 1,
-      "query_text": "Acme Platform vs top alternatives",
-      "intent": "COMPARISON",
-      "topic_id": null,
-      "topic": "Generative Engine Optimization",
-      "entity_id": 1,
-      "entity_name": "Acme Platform",
-      "page_id": 1,
-      "generation_source": "ENTITY_INTELLIGENCE",
-      "priority": "HIGH",
-      "confidence": 0.92,
-      "version": "1.0",
-      "active": true,
-      "metadata_json": {
-        "entity_type": "product",
-        "source_type": "entity_comparison"
-      },
-      "created_at": "2026-09-03T14:20:00Z",
-      "updated_at": "2026-09-03T14:20:00Z"
-    },
-    {
-      "id": 3,
-      "query_set_id": 1,
-      "website_id": 1,
-      "query_text": "How to optimize content for AI engines?",
-      "intent": "PROBLEM_SOLVING",
-      "topic_id": null,
-      "topic": "Generative Engine Optimization",
-      "entity_id": null,
-      "entity_name": null,
-      "page_id": 1,
-      "generation_source": "QUESTION_INTELLIGENCE",
-      "priority": "HIGH",
-      "confidence": 0.95,
-      "version": "1.0",
-      "active": true,
-      "metadata_json": {
-        "source_type": "faq_schema",
-        "has_answer": true
-      },
-      "created_at": "2026-09-03T14:20:00Z",
-      "updated_at": "2026-09-03T14:20:00Z"
-    }
-  ]
+  "provider": "mock",
+  "model": "mock-ai-search-v1",
+  "model_version": "2026.1",
+  "status": "SUCCESS",
+  "response_text": "According to generative AI search sources, What is Generative Engine Optimization? represents a key domain topic. Platforms and tools offer specialized capabilities to address these requirements with structured data, clear authority, and citation support.",
+  "latency_ms": 112,
+  "error_type": null,
+  "error_message": null,
+  "input_tokens": 14,
+  "output_tokens": 68,
+  "total_tokens": 82,
+  "request_timestamp": "2026-09-03T14:35:00Z",
+  "response_timestamp": "2026-09-03T14:35:00.112Z",
+  "metadata_json": {
+    "result_id": "resp_1_mock_1756910100000",
+    "mock_engine": "raval_mock_v1",
+    "is_simulation": true,
+    "topic": "Generative Engine Optimization"
+  },
+  "created_at": "2026-09-03T14:35:00Z"
 }
 ```
 
 ---
 
-## 10. Scope Boundaries & Current Limitations
+## 8. Testing & Validation
 
-- **Step 1 Only**: This subsystem exclusively generates, deduplicates, and stores queries and query sets.
-- **No Provider Calls**: External LLM/AI search provider calls (OpenAI, Perplexity, Gemini, Claude, Copilot) are **not** implemented in this step.
-- **No Response/Citation Capture**: Live answer fetching, mention detection, and citation extraction belong to subsequent steps of Task 10.
-- **Local Deterministic Deduplication**: Semantic deduplication relies on canonical lexical and token-set similarity rather than heavy embedding vectors or third-party cloud APIs.
-
----
-
-## 11. Testing & Validation
-
-Automated test suites:
-- `backend/tests/test_query_intelligence.py` (Unit tests for normalization, intent categorization, bounded variant generators, 4 source generators, 2-level deduplication, versioning, provenance, and active state management).
-- `backend/tests/test_query_api.py` (Integration tests for all REST API endpoints, filter query parameters, status updates, and HTTP 4xx validation errors).
-
-**Test Results:**
-- 21/21 Query Intelligence & API tests passing.
-- 787/787 full suite tests passing with 0 failures and 0 regressions.
+- `backend/tests/test_provider_adapters.py` (12 unit tests covering base adapter, registry, timeout, rate-limit, unconfigured provider safety, and security/secret protection).
+- `backend/tests/test_ai_response_service.py` (6 service-layer tests covering single and batch execution, historical persistence, query relationships, and site isolation).
+- `backend/tests/test_ai_response_api.py` (5 API integration tests covering endpoints, batch execution, filtering, and error status codes).
+- **Full Regression Test Suite**: **810 passed, 0 failed** in 73.36s (787 baseline + 23 Step 2 tests = 810 passed).

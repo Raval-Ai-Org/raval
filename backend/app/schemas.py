@@ -1212,4 +1212,68 @@ class QuerySetGenerateRequest(BaseModel):
     include_questions: bool = True
     include_content: bool = True
     target_intents: list[str] | None = None
+
+
+# ==========================================
+# Task 10 Step 2 - AI Response & Providers
+# ==========================================
+
+
+class ProviderInfoResponse(BaseModel):
+    provider_name: str
+    default_model: str
+    model_version: str | None = None
+    enabled: bool = True
+    is_configured: bool = False
+    is_mock: bool = False
+    status: str
+    timeout_seconds: float = 30.0
+    max_retries: int = 2
+
+
+class ExecuteQueryResponseRequest(BaseModel):
+    provider: str = Field(default="mock", max_length=100)
+    model: str | None = None
+    timeout_seconds: float | None = Field(default=None, ge=1.0, le=120.0)
+
+
+class BatchExecuteQuerySetRequest(BaseModel):
+    provider: str = Field(default="mock", max_length=100)
+    model: str | None = None
+    active_only: bool = True
+    timeout_seconds: float | None = Field(default=None, ge=1.0, le=120.0)
+
+
+class AIResponseDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    query_id: int
+    query_set_id: int
+    website_id: int
+    provider: str
+    model: str
+    model_version: str | None = None
+    status: str
+    response_text: str
+    latency_ms: int
+    error_type: str | None = None
+    error_message: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    request_timestamp: datetime
+    response_timestamp: datetime
+    metadata_json: dict[str, Any] | list[Any] | None = None
+    created_at: datetime
+
+
+class BatchAIResponseResult(BaseModel):
+    query_set_id: int
+    provider: str
+    total_executed: int
+    success_count: int
+    failure_count: int
+    responses: list[AIResponseDetail] = []
+
 

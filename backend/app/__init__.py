@@ -92,6 +92,24 @@ from .query_intelligence_service import (
     deduplicate_candidate_queries,
     normalize_query_text,
 )
+from .provider_adapter import (
+    ALLOWED_PROVIDERS,
+    BaseProviderAdapter,
+    MockProviderAdapter,
+    OpenAIAdapter,
+    PerplexityAdapter,
+    GeminiAdapter,
+    ClaudeAdapter,
+    CopilotAdapter,
+    ProviderConfig,
+    ProviderRegistry,
+    ProviderRequest,
+    ProviderResponse,
+    ResponseStatus,
+    UsageMetadata,
+    provider_registry,
+)
+from .ai_response_service import AIResponseService
 
 # Canonical Aliases
 UnifiedSignalAggregator = SignalAggregator
@@ -166,5 +184,22 @@ __all__ = [
     "normalize_query_text",
     "calculate_query_similarity",
     "deduplicate_candidate_queries",
+    "ALLOWED_PROVIDERS",
+    "BaseProviderAdapter",
+    "MockProviderAdapter",
+    "OpenAIAdapter",
+    "PerplexityAdapter",
+    "GeminiAdapter",
+    "ClaudeAdapter",
+    "CopilotAdapter",
+    "ProviderConfig",
+    "ProviderRegistry",
+    "ProviderRequest",
+    "ProviderResponse",
+    "ResponseStatus",
+    "UsageMetadata",
+    "provider_registry",
+    "AIResponseService",
 ]
+
 

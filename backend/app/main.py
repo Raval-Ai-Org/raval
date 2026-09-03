@@ -17,8 +17,11 @@ from .models import (
     Website,
     QuerySet,
     Query,
+    AIResponse,
 )
 from .query_intelligence_service import QueryIntelligenceService
+from .ai_response_service import AIResponseService
+
 from .schemas import (
     AIRunCreate,
     AIRunResponse,
@@ -109,7 +112,13 @@ from .schemas import (
     QuerySetResponse,
     QuerySetDetailResponse,
     QuerySetGenerateRequest,
+    ProviderInfoResponse,
+    ExecuteQueryResponseRequest,
+    BatchExecuteQuerySetRequest,
+    AIResponseDetail,
+    BatchAIResponseResult,
 )
+
 from .score_explanation import ScoreExplanationResponse
 from .site_aggregator import SiteScoreSummary
 from .intelligence_service import (
@@ -3175,5 +3184,163 @@ def delete_query_endpoint(
     if not success:
         raise HTTPException(status_code=404, detail="Query not found")
     return {"status": "deleted", "query_id": query_id}
+
+
+# ==========================================
+# Task 10 Step 2 — AI Providers & Responses
+# ==========================================
+
+
+@app.get(
+    "/api/v1/providers",
+    response_model=list[ProviderInfoResponse],
+)
+def list_providers_endpoint():
+    """Lists registered AI search providers and their configuration readiness status."""
+    return AIResponseService.list_available_providers()
+
+
+@app.post(
+    "/api/v1/queries/{query_id}/responses",
+    response_model=AIResponseDetail,
+    status_code=201,
+)
+def execute_query_response_endpoint(
+    query_id: int,
+    payload: ExecuteQueryResponseRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Executes a single Query against the requested AI provider (default: 'mock')
+    and saves the normalized response evidence in the database.
+    """
+    provider = payload.provider if payload else "mock"
+    model = payload.model if payload else None
+    timeout = payload.timeout_seconds if payload else None
+    try:
+        return AIResponseService.execute_query_response(
+            db=db,
+            query_id=query_id,
+            provider=provider,
+            model=model,
+            timeout_seconds=timeout,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
+
+
+@app.post(
+    "/api/v1/query-sets/{query_set_id}/responses",
+    response_model=BatchAIResponseResult,
+    status_code=201,
+)
+def batch_execute_query_set_responses_endpoint(
+    query_set_id: int,
+    payload: BatchExecuteQuerySetRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Batch executes all queries in a QuerySet against the requested AI provider
+    and returns summary counts and normalized response records.
+    """
+    provider = payload.provider if payload else "mock"
+    model = payload.model if payload else None
+    active_only = payload.active_only if payload else True
+    timeout = payload.timeout_seconds if payload else None
+    try:
+        responses = AIResponseService.batch_execute_query_set_responses(
+            db=db,
+            query_set_id=query_set_id,
+            provider=provider,
+            model=model,
+            active_only=active_only,
+            timeout_seconds=timeout,
+        )
+        success_count = sum(1 for r in responses if r.status == "SUCCESS")
+        failure_count = len(responses) - success_count
+        return {
+            "query_set_id": query_set_id,
+            "provider": provider,
+            "total_executed": len(responses),
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "responses": responses,
+        }
+    except ValueError as exc:
+        msg = str(exc)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
+
+
+@app.get(
+    "/api/v1/query-sets/{query_set_id}/responses",
+    response_model=list[AIResponseDetail],
+)
+def list_query_set_responses_endpoint(
+    query_set_id: int,
+    provider: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists historical AI responses for a QuerySet."""
+    qs = QueryIntelligenceService.get_query_set(db, query_set_id)
+    if not qs:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+    return AIResponseService.list_responses(
+        db=db,
+        query_set_id=query_set_id,
+        provider=provider,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get(
+    "/api/v1/queries/{query_id}/responses",
+    response_model=list[AIResponseDetail],
+)
+def list_query_responses_endpoint(
+    query_id: int,
+    provider: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists historical AI responses for a specific Query."""
+    query = QueryIntelligenceService.get_query(db, query_id)
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+    return AIResponseService.list_responses(
+        db=db,
+        query_id=query_id,
+        provider=provider,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get(
+    "/api/v1/responses/{response_id}",
+    response_model=AIResponseDetail,
+)
+def get_response_endpoint(
+    response_id: int,
+    db: Session = Depends(get_db),
+):
+    """Retrieves a single AI response record by ID."""
+    resp = AIResponseService.get_response(db, response_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="AI response not found")
+    return resp
+
 
 

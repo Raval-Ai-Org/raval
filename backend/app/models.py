@@ -96,6 +96,13 @@ class Website(Base):
         cascade="all, delete-orphan",
     )
 
+    ai_responses = relationship(
+        "AIResponse",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+
 
 
 
@@ -2577,6 +2584,12 @@ class QuerySet(Base):
         cascade="all, delete-orphan",
     )
 
+    responses = relationship(
+        "AIResponse",
+        back_populates="query_set",
+        cascade="all, delete-orphan",
+    )
+
 
 class Query(Base):
     __tablename__ = "queries"
@@ -2710,6 +2723,136 @@ class Query(Base):
         back_populates="queries",
     )
 
+    responses = relationship(
+        "AIResponse",
+        back_populates="query",
+        cascade="all, delete-orphan",
+    )
+
     @property
     def question_text(self) -> str:
         return self.query_text
+
+
+class AIResponse(Base):
+    __tablename__ = "ai_responses"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    query_id: Mapped[int] = mapped_column(
+        ForeignKey("queries.id"),
+        nullable=False,
+        index=True,
+    )
+
+    query_set_id: Mapped[int] = mapped_column(
+        ForeignKey("query_sets.id"),
+        nullable=False,
+        index=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    provider: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    model: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    model_version: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="SUCCESS",
+        index=True,
+    )
+
+    response_text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    latency_ms: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    error_type: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    input_tokens: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    output_tokens: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    total_tokens: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    request_timestamp: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    response_timestamp: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    metadata_json: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    query = relationship(
+        "Query",
+        back_populates="responses",
+    )
+
+    query_set = relationship(
+        "QuerySet",
+        back_populates="responses",
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="ai_responses",
+    )
