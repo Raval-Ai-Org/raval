@@ -1,6 +1,8 @@
+"use client";
+
 import { useEffect, useState, createContext, useContext, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import {
   LineChart,
   Line,

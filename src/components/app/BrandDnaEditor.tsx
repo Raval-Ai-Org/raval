@@ -1,3 +1,5 @@
+"use client";
+
 // Focused editor for the 5 Brand DNA essentials with a live post preview.
 // Data flows through the existing useBrandDna hook (no new storage).
 

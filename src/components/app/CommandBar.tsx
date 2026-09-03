@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@/lib/navigation";
 import { Command } from "cmdk";
 import {
   LayoutGrid,

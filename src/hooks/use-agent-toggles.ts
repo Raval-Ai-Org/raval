@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState, useCallback } from "react";
 import { agentList } from "@/lib/agents";
 import { emit } from "@/lib/activity-bus";

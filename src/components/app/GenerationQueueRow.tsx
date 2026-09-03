@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { TILE_BY_ID } from "@/lib/studio";
 import { TINT_HEX } from "@/components/app/StudioRail";

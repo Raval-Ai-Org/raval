@@ -47,7 +47,7 @@ if (-not (Test-Path ".env")) {
 
 # ── 2. node_modules ──────────────────────────────────────────────────────────
 if (-not (Test-Path "node_modules")) {
-  Fail "node_modules is MISSING - vite will not start"
+  Fail "node_modules is MISSING - the dev server will not start"
   Write-Host "    Fix:  npm install"
 } else {
   Ok "node_modules installed"

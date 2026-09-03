@@ -3,8 +3,8 @@
 // to support both local development and production deployments.
 
 export const BASE_URL =
-  typeof import.meta.env.VITE_APP_URL === "string" && import.meta.env.VITE_APP_URL
-    ? import.meta.env.VITE_APP_URL
+  typeof process.env.NEXT_PUBLIC_APP_URL === "string" && process.env.NEXT_PUBLIC_APP_URL
+    ? process.env.NEXT_PUBLIC_APP_URL
     : typeof window !== "undefined"
       ? window.location.origin
       : "https://raval.ai";
@@ -75,5 +75,36 @@ export function webPageLd(opts: { title: string; description: string; path: stri
     url: `${BASE_URL}${opts.path}`,
     isPartOf: { "@type": "WebSite", name: BRAND_NAME, url: BASE_URL },
     publisher: { "@type": "Organization", name: BRAND_NAME, url: BASE_URL, logo: BRAND_LOGO },
+  };
+}
+
+/**
+ * Next `Metadata` twin of `pageHead` — same title/description/canonical/robots
+ * output, expressed the way the App Router expects it. JSON-LD is rendered as a
+ * script tag by the page itself, since Metadata has no slot for it.
+ */
+export function pageMetadata(opts: {
+  title: string;
+  description: string;
+  path: string;
+  noindex?: boolean;
+}): import("next").Metadata {
+  const url = `${BASE_URL}${opts.path}`;
+  return {
+    title: opts.title,
+    description: opts.description,
+    alternates: { canonical: url },
+    openGraph: {
+      title: opts.title,
+      description: opts.description,
+      url,
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: opts.title,
+      description: opts.description,
+    },
+    ...(opts.noindex ? { robots: "noindex,nofollow" } : {}),
   };
 }

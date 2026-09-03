@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@/lib/navigation";
 import { Check, ChevronsUpDown, Plus, Search, LayoutGrid } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

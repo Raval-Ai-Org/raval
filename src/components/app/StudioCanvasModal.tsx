@@ -1,3 +1,5 @@
+"use client";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -22,7 +24,7 @@ import type { CanvasState } from "@/hooks/use-studio";
 import { tintFor } from "./StudioRail";
 import { authedFetch } from "@/lib/authed-fetch";
 import { createContentItem, updateContentItem } from "@/lib/content.functions";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";

@@ -1,3 +1,5 @@
+"use client";
+
 // StudioDestinationPicker.tsx — US2 publish destination selector. Lets the user
 // pick a specific account, a platform, or all connected accounts (spec FR-005/
 // FR-007/FR-028). Unconnected platforms offer inline Connect; undeliverable

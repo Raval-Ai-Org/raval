@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
@@ -28,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useAgentToggles } from "@/hooks/use-agent-toggles";
 import { agentList } from "@/lib/agents";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import {
   listScheduledJobs,
   createScheduledJob,

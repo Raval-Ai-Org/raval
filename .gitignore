@@ -8,17 +8,12 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.next
+out
 dist
-dist-ssr
-.output
-.vinxi
-.tanstack/**
-.nitro
 *.local
+next-env.d.ts
 
-# Wrangler / Cloudflare
-.wrangler/
-.dev.vars
 
 # Playwright / test output
 test-results

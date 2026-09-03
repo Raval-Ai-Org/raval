@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Sparkles, ArrowRight, ArrowLeft, Plus, X } from "@/components/ui/gemini-icons";

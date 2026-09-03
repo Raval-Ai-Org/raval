@@ -1,5 +1,7 @@
+"use client";
+
 import { useCallback, useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 
 import {
   Bell,

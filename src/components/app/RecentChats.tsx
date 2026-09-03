@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@/lib/navigation";
 import { MessageSquare, ChevronRight } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";

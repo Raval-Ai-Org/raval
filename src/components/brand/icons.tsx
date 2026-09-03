@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Raval brand icon barrel — Gemini phase.
  *

@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Gemini-style icon adapters.
  *

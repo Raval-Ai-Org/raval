@@ -1,8 +1,10 @@
+"use client";
+
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@/lib/navigation";
 import {
   ArrowUp,
   Sparkles,
@@ -918,14 +920,12 @@ export function ChatPanel({
       content: userClarification,
     };
     setMessages((m) => [...m, synthetic]);
-    await supabase
-      .from("chat_messages")
-      .insert({
-        workspace_id: workspaceId,
-        role: "user",
-        kind: "text",
-        content: userClarification,
-      });
+    await supabase.from("chat_messages").insert({
+      workspace_id: workspaceId,
+      role: "user",
+      kind: "text",
+      content: userClarification,
+    });
 
     // Rebuild history from current state + new turn.
     setTimeout(async () => {

@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import {
@@ -31,7 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { authedFetch } from "@/lib/authed-fetch";
 import { useBrandDna } from "@/hooks/use-brand-dna";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import { persistGeoAudit } from "@/lib/insights.functions";
 import { StarAgent as BrandStar, type StarMood } from "@/components/StarAgent";
 

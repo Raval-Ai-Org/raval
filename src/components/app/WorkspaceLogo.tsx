@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +49,7 @@ export function WorkspaceLogo({ name, websiteUrl, size = 28, className, rounded 
 
   // Cascade of real-logo sources — first to load wins. Each has different
   // coverage, so on error we swap to the next before falling back to initials.
-  const logoDevToken = import.meta.env.VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY as
+  const logoDevToken = process.env.NEXT_PUBLIC_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY as
     string | undefined;
   const sources: string[] = domain
     ? [

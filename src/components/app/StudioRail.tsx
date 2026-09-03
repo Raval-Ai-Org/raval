@@ -1,3 +1,5 @@
+"use client";
+
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { useVisibleInterval } from "@/hooks/use-visible-interval";
@@ -27,7 +29,7 @@ import {
   type CanvasType,
 } from "@/lib/studio";
 import { supabase } from "@/integrations/supabase/client";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import { updateContentItem } from "@/lib/content.functions";
 import { genQueue, type GenJob } from "@/lib/generation-queue";
 import { GenerationQueueRow } from "@/components/app/GenerationQueueRow";

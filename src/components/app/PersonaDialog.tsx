@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Building2, Rocket, Loader2, Check, Sparkles } from "@/components/ui/gemini-icons";

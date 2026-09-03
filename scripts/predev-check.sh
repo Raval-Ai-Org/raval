@@ -60,7 +60,7 @@ fi
 
 # ── 2. node_modules ──────────────────────────────────────────────────────────
 if [ ! -d node_modules ]; then
-  fail "node_modules is MISSING — vite will not start"
+  fail "node_modules is MISSING — the dev server will not start"
   echo -e "    ${BOLD}Fix:${RESET}  npm install"
 else
   ok "node_modules installed"
@@ -96,7 +96,7 @@ if [ $ERRORS -gt 0 ]; then
   echo -e "  (placeholder values in .env). The form will submit but the auth"
   echo -e "  request fails silently and the app redirects you in a loop."
   echo ""
-  # Don't exit non-zero — let vite start so the dev can see the 404 themselves
+  # Don't exit non-zero — let the dev server start so the dev can see the 404 themselves
   # and read the warning. Returning 0 is the right call here.
 fi
 

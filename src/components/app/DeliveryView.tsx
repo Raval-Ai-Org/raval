@@ -1,3 +1,5 @@
+"use client";
+
 // DeliveryView.tsx — the per-platform delivery view for a content item (US4,
 // FR-010/FR-011). Renders each destination's delivery state (published /
 // retrying / failed / pending) with the live link when available and the

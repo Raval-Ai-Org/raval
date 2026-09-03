@@ -1,8 +1,26 @@
 # RavalAI
 
 AI-native marketing platform — brand-grounded content, SEO/GEO/AEO, and social
-media distribution from one workspace. TanStack Start (React 19) on Cloudflare
-Workers with a Supabase (PostgreSQL) backend.
+media distribution from one workspace. Next.js App Router (React 19) with a
+Supabase (PostgreSQL) backend.
+
+## Project layout
+
+The app runs on the Next.js App Router.
+
+| Path                          | What lives there                                                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/**/page.tsx`         | Routes. Each is a server component exporting `metadata`, rendering the `"use client"` UI beside it (`LoginPage.tsx`, `AppShell.tsx`, …). |
+| `src/app/**/route.ts`         | HTTP handlers (`/api/*`, `/sitemap.xml`), all authenticated with a Supabase bearer token.                                                |
+| `src/app/api/rpc/[...fn]`     | The single transport every server function is called through.                                                                            |
+| `src/server/fns/*.ts`         | Server-function implementations. Never bundled for the browser.                                                                          |
+| `src/lib/*.functions.ts`      | Their browser-side stubs: `await listContentItems({ data })` posts to `/api/rpc/<module>/<name>`.                                         |
+| `src/lib/navigation.tsx`      | `Link` / `useNavigate` / `useRouterState` / `redirect` on top of `next/navigation`.                                                       |
+| `src/components`, `src/hooks` | Shared UI and hooks (all client components).                                                                                             |
+
+Auth is a Supabase session in `localStorage`, so the signed-in routes gate in the
+browser via `SessionGate` and every server call carries an `Authorization: Bearer`
+header rather than a cookie.
 
 ## Social Distribution Engine (SDR) integration
 
@@ -16,7 +34,7 @@ status via HMAC-verified webhooks.
 Full design: [`specs/001-sdr-integration/`](../specs/001-sdr-integration/)
 (spec, plan, data model, contracts, tasks).
 
-### Server-only env keys (never `VITE_*`)
+### Server-only env keys (never `NEXT_PUBLIC_*`)
 
 Set these in the server environment / `.env` (they are read via `process.env`
 in server modules only):
@@ -89,7 +107,7 @@ cd raval
 npm run setup                    # creates .env from .env.example if missing
 # Edit .env — replace the YOUR_* placeholders with real credentials.
 # Get the values from a teammate (Junaid) or from 1Password.
-# Required keys: VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY,
+# Required keys: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
 # SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SERVICE_ROLE_KEY,
 # SDR_BASE_URL, SDR_ADMIN_TOKEN, SDR_SECRET_ENCRYPTION_KEY, CRON_SECRET
 npm install                       # if node_modules wasn't installed by setup
@@ -120,7 +138,7 @@ npm run dev                       # http://localhost:8080
 
 It's idempotent — safe to run multiple times.
 
-### What `npm run dev` does before starting Vite
+### What `npm run dev` does before starting the dev server
 
 A `predev` hook automatically runs `scripts/predev-check.sh`, which:
 
@@ -146,9 +164,9 @@ If login doesn't work after entering these credentials, the issue is almost alwa
 | ----------------------------------------- | ----------------------------- | --------------------------------------------------------------------------- |
 | Page loads, form submits, nothing happens | `.env` has placeholder values | Replace `YOUR_*` with real values in `.env`, restart `npm run dev`          |
 | Hard-refresh (Ctrl+Shift+R) fixes it      | Browser cached the old page   | Always do a hard refresh after pulling new code                             |
-| Page loads but text is unstyled           | Vite build cache stale        | `rm -rf node_modules/.vite && npm run dev`                                  |
+| Page loads but text is unstyled           | Next build cache stale        | `rm -rf .next && npm run dev`                                               |
 | `Cannot find module '@/...'`              | TS path aliases not resolving | `rm -rf node_modules && npm install && npm run dev`                         |
-| Port 8080 already in use                  | Another service on 8080       | `lsof -i :8080` to find the process, or change the port in `vite.config.ts` |
+| Port 8080 already in use                  | Another service on 8080       | `lsof -i :8080` to find the process, or change `-p 8080` in `package.json`  |
 
 ### Development
 

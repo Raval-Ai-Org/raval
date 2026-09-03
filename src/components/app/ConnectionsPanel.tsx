@@ -1,3 +1,5 @@
+"use client";
+
 // ConnectionsPanel.tsx — US1: the Connections view in the Studio rail.
 // Shows the workspace's connected social accounts (status chip, disconnect /
 // reconnect) + Connect buttons for platforms not yet connected. Refreshes on

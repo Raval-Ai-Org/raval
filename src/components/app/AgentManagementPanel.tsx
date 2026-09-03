@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { Search, PenLine, MessageCircle, type LucideIcon } from "@/components/ui/gemini-icons";
 import { Switch } from "@/components/ui/switch";

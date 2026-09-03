@@ -1,3 +1,5 @@
+"use client";
+
 import { lazy, Suspense, useEffect, useState } from "react";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Sparkles } from "@/components/ui/gemini-icons";

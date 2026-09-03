@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

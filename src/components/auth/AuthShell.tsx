@@ -1,3 +1,5 @@
+"use client";
+
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";

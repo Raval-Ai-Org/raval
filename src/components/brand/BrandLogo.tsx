@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Real platform & LLM logos as inline SVGs.
  * Single component, monochrome by default (uses currentColor) or true brand color when `brand` is set.

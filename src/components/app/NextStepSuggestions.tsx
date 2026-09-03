@@ -1,8 +1,10 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { ArrowUpRight, Lightbulb } from "@/components/ui/gemini-icons";
 import { BrandLogo, type BrandKey } from "@/components/brand/BrandLogo";
 import { useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import { suggestNextSteps } from "@/lib/content.functions";
 
 export interface NextStep {

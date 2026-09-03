@@ -1,3 +1,5 @@
+"use client";
+
 import { memo } from "react";
 import logoAsset from "@/assets/raval-brand-logo.svg.asset.json";
 

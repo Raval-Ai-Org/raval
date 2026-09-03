@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Accessible loading indicator.
  *
