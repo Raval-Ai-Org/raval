@@ -993,7 +993,7 @@ export function ChatPanel({
       ]);
     }
 
-    // Lovable-style planner: ask clarifying questions first.
+    // Ask clarifying questions before generating a complex result.
     setClarifying(true);
     let payload: ClarifyPayload | null = null;
     try {
@@ -1214,7 +1214,7 @@ export function ChatPanel({
                   : "Kicking off your first request…"}
               </h2>
               <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-muted-foreground">
-                Raval AI is reading your brand context and preparing an answer. This takes a few
+                Mellox AI is reading your brand context and preparing an answer. This takes a few
                 seconds.
               </p>
               <div className="mt-5 flex items-center gap-1.5" aria-hidden>
@@ -1430,7 +1430,7 @@ export function ChatPanel({
                           <div className="flex h-6 w-6 items-center justify-center rounded-lg border border-border/60 bg-card">
                             <Sparkles className="h-3 w-3 text-muted-foreground" />
                           </div>
-                          <span>Raval Ai</span>
+                          <span>Mellox AI</span>
                         </div>
                       ) : null}
                       <div
@@ -1480,7 +1480,7 @@ export function ChatPanel({
         </div>
       </div>
 
-      {/* Composer — Lovable-style pill */}
+      {/* Composer */}
       <div
         className={
           centered
@@ -1622,7 +1622,7 @@ export function ChatPanel({
                     ? "Sending your onboarding prompt…"
                     : attachments.length
                       ? "Add a question about the file(s)…"
-                      : "Ask Raval AI"
+                      : "Ask Mellox AI"
                 }
                 rows={1}
                 disabled={autoSending}
@@ -1666,7 +1666,7 @@ export function ChatPanel({
               >
                 <span className="composer-pulse-dot" aria-hidden />
                 <span className="composer-shimmer-text text-[11.5px] font-medium">
-                  Sending your first prompt to Raval AI…
+                  Sending your first prompt to Mellox AI…
                 </span>
                 <span className="composer-skel ml-auto h-1.5 w-24" aria-hidden />
               </div>

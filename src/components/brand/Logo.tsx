@@ -12,7 +12,7 @@ type LogoProps = {
 };
 
 /**
- * Raval AI brand lockup — new brand mark + refined wordmark.
+ * Mellox AI brand lockup — existing brand mark + refined wordmark.
  * The mark is used as-is (it already carries its own shape / color),
  * paired with a tight, professional wordmark that sits on the baseline.
  */
@@ -32,7 +32,7 @@ function LogoBase({ className = "", height: heightProp = 18, markOnly = false }:
     <div
       className={`inline-flex items-center select-none ${className}`}
       style={{ height: heightCss, gap: gapCss }}
-      aria-label="Raval AI"
+      aria-label="Mellox AI"
       role="img"
     >
       <img
@@ -54,7 +54,7 @@ function LogoBase({ className = "", height: heightProp = 18, markOnly = false }:
             fontFeatureSettings: '"ss01", "cv11"',
           }}
         >
-          Raval
+          Mellox
           <span
             style={{
               marginLeft: "0.28em",

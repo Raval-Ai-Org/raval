@@ -324,7 +324,7 @@ function fixRecipe(
       title: "Add FAQPage JSON-LD",
       lang: "html",
       placement: "On pages with Q&A content",
-      code: `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "FAQPage",\n  "mainEntity": [{\n    "@type": "Question",\n    "name": "What is Raval Ai?",\n    "acceptedAnswer": { "@type": "Answer", "text": "..." }\n  }]\n}\n<\/script>`,
+      code: `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "FAQPage",\n  "mainEntity": [{\n    "@type": "Question",\n    "name": "What is Mellox AI?",\n    "acceptedAnswer": { "@type": "Answer", "text": "..." }\n  }]\n}\n<\/script>`,
     };
   }
   if (t.includes("sitemap")) {
@@ -433,7 +433,7 @@ function FixDrawer({ action, onClose }: { action: ActionItem; onClose: () => voi
           <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
             <Info className="mt-0.5 h-3 w-3" />
             <div>
-              No prebuilt snippet for this one — apply the recommendation as described. The Raval
+              No prebuilt snippet for this one — apply the recommendation as described. The Mellox AI
               agent can draft a fix on request.
               <button
                 onClick={onClose}
@@ -472,7 +472,7 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
   }, [workspaceId]);
 
   // Listen for chat-driven "run audit" requests so the panel responds when
-  // the user asks Raval Ai to scan their site from chat.
+  // the user asks Mellox AI to scan their site from chat.
   useEffect(() => {
     const onRun = () => {
       void run();
@@ -1064,7 +1064,7 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                   Deploy this fix automatically
                 </div>
                 <div className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground sm:text-[11.5px]">
-                  Connect your codebase or CMS and Raval will open PRs / post drafts with the
+                  Connect your codebase or CMS and Mellox AI will open PRs / post drafts with the
                   recommended schema, llms.txt and meta fixes.
                 </div>
               </div>

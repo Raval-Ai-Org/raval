@@ -124,7 +124,7 @@ export function RecentChats({ onNavigate }: { onNavigate?: () => void }) {
       })}
       {items.length > 4 && (
         <Link
-          to="/projects"
+          to="/workspaces"
           onClick={onNavigate}
           className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11.5px] font-medium text-muted-foreground/80 transition hover:bg-surface hover:text-foreground"
         >

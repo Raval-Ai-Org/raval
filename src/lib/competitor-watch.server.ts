@@ -79,7 +79,7 @@ export async function snapshot(url: string): Promise<Snapshot> {
   const res = await fetch(target, {
     redirect: "follow",
     headers: {
-      "User-Agent": `RavalAI-CompetitorWatch/1.0 (+${process.env.APP_URL || "https://raval.ai"})`,
+      "User-Agent": `MelloxAI-CompetitorWatch/1.0 (+${process.env.APP_URL || "https://raval.ai"})`,
       Accept: "text/html,application/xhtml+xml",
     },
     signal: AbortSignal.timeout(15_000),

@@ -8,15 +8,15 @@
  */
 import { test, expect, type APIRequestContext } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval6.lovable.app";
+const CANONICAL_HOST = "https://raval.ai";
 
 const FORBIDDEN = [
   /AI marketing OS/i,
   /marketing operator/i,
   /threereachaisaas/i,
-  /raval3\.lovable\.app/i,
-  /Lovable App/i,
-  /Lovable Generated Project/i,
+  /legacy-preview\.example/i,
+  /Legacy App/i,
+  /Legacy Generated Project/i,
 ];
 
 const DECK_TERMS = [
@@ -101,23 +101,23 @@ const ROUTES: Array<{ label: string; path: string; requireOgImage?: boolean }> =
   { label: "Landing (/)", path: "/", requireOgImage: false },
   { label: "Login (/login)", path: "/login" },
   { label: "Signup (/signup)", path: "/signup" },
-  { label: "Studio (/app)", path: "/app" },
+  { label: "Workspace (/workspace)", path: "/workspace" },
   { label: "Onboarding (/onboarding)", path: "/onboarding" },
   { label: "Agency HQ (/agency)", path: "/agency" },
-  { label: "Clients (/projects)", path: "/projects" },
+  { label: "Workspaces (/workspaces)", path: "/workspaces" },
 ];
 
-test.describe("OpenGraph + Twitter Card — pitch-deck messaging", () => {
+test.describe("OpenGraph + Twitter Card � pitch-deck messaging", () => {
   for (const route of ROUTES) {
     test(`${route.label} ships aligned OG + Twitter tags`, async ({ request }) => {
       const html = await fetchHtml(request, route.path);
       const og = readOgTwitter(html);
 
-      // Structural completeness — both crawlers need these.
+      // Structural completeness � both crawlers need these.
       expect(og.ogTitle, "og:title").toBeTruthy();
       expect(og.ogDescription, "og:description").toBeTruthy();
       expect(og.ogType, "og:type").toBe("website");
-      expect(og.ogUrl, "og:url").toBe(`${CANONICAL_HOST}${route.path}`);
+      expect(og.ogUrl, "og:url").toBe(`${CANONICAL_HOST}${route.path === "/" ? "" : route.path}`);
       expect(og.twitterCard, "twitter:card").toBe("summary_large_image");
       expect(og.twitterTitle, "twitter:title").toBeTruthy();
       expect(og.twitterDescription, "twitter:description").toBeTruthy();
@@ -126,7 +126,7 @@ test.describe("OpenGraph + Twitter Card — pitch-deck messaging", () => {
       expect(og.twitterTitle).toBe(og.ogTitle);
       expect(og.twitterDescription).toBe(og.ogDescription);
 
-      // Deck alignment — every OG/Twitter surface must carry at least one deck term.
+      // Deck alignment � every OG/Twitter surface must carry at least one deck term.
       const blob = [og.ogTitle, og.ogDescription, og.twitterTitle, og.twitterDescription]
         .filter(Boolean)
         .join(" \n ");
@@ -146,7 +146,7 @@ test.describe("OpenGraph + Twitter Card — pitch-deck messaging", () => {
   }
 });
 
-test.describe("JSON-LD structured data — pitch-deck messaging", () => {
+test.describe("JSON-LD structured data � pitch-deck messaging", () => {
   test("root shell ships Organization + WebSite graph aligned with deck", async ({ request }) => {
     const html = await fetchHtml(request, "/");
     const nodes = extractJsonLd(html);
@@ -154,7 +154,7 @@ test.describe("JSON-LD structured data — pitch-deck messaging", () => {
     const org = findByType(nodes, "Organization");
     expect(org, "Organization node").toBeTruthy();
     expect(org!["@id"]).toBe(`${CANONICAL_HOST}/#organization`);
-    expect(org!.name).toBe("Raval AI");
+    expect(org!.name).toBe("Mellox AI");
     expect(org!.url).toBe(CANONICAL_HOST);
     expect(String(org!.description)).toMatch(/Marketing Intelligence Layer/i);
     expect(String(org!.description)).toMatch(/brands and agencies/i);
@@ -164,7 +164,7 @@ test.describe("JSON-LD structured data — pitch-deck messaging", () => {
     expect(site, "WebSite node").toBeTruthy();
     expect(site!["@id"]).toBe(`${CANONICAL_HOST}/#website`);
     expect(site!.url).toBe(CANONICAL_HOST);
-    expect(site!.name).toBe("Raval AI");
+    expect(site!.name).toBe("Mellox AI");
     expect(String(site!.description)).toMatch(/visible inside LLMs/i);
     expect((site!.publisher as any)?.["@id"]).toBe(`${CANONICAL_HOST}/#organization`);
     assertNoForbidden(String(site!.description), "WebSite.description");
@@ -178,7 +178,7 @@ test.describe("JSON-LD structured data — pitch-deck messaging", () => {
 
     const app = findByType(nodes, "SoftwareApplication");
     expect(app, "SoftwareApplication node").toBeTruthy();
-    expect(app!.name).toBe("Raval AI");
+    expect(app!.name).toBe("Mellox AI");
     expect(app!.url).toBe(`${CANONICAL_HOST}/`);
     expect(String(app!.description)).toMatch(/Brand DNA/i);
     expect(String(app!.description)).toMatch(/AEO|GEO/i);
@@ -238,23 +238,23 @@ test.describe("JSON-LD structured data — pitch-deck messaging", () => {
   test("agency + projects ship WebPage schema tied to Organization/WebSite", async ({
     request,
   }) => {
-    for (const path of ["/agency", "/projects"]) {
+    for (const path of ["/agency", "/workspaces"]) {
       const html = await fetchHtml(request, path);
       const nodes = extractJsonLd(html);
       const page = findByType(nodes, "WebPage");
       expect(page, `${path} WebPage node`).toBeTruthy();
       expect(page!.url).toBe(`${CANONICAL_HOST}${path}`);
-      expect(String(page!.name)).toMatch(/Raval AI/);
+      expect(String(page!.name)).toMatch(/Mellox AI/);
       expect(String(page!.description)).toMatch(/Marketing Intelligence Layer/i);
 
       const publisher = page!.publisher as Record<string, unknown> | undefined;
       expect(publisher?.["@type"]).toBe("Organization");
-      expect(publisher?.name).toBe("Raval AI");
+      expect(publisher?.name).toBe("Mellox AI");
       expect(publisher?.url).toBe(CANONICAL_HOST);
 
       const partOf = page!.isPartOf as Record<string, unknown> | undefined;
       expect(partOf?.["@type"]).toBe("WebSite");
-      expect(partOf?.name).toBe("Raval AI");
+      expect(partOf?.name).toBe("Mellox AI");
 
       assertNoForbidden(JSON.stringify(page), `${path} WebPage`);
     }
@@ -270,10 +270,10 @@ test.describe("JSON-LD structured data — pitch-deck messaging", () => {
         /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i,
       );
       // Public + agency/projects intentionally ship JSON-LD via root + route.
-      // Login/signup/app/onboarding may only carry the root graph — still must parse.
+      // Login/signup/app/onboarding may only carry the root graph � still must parse.
       expect(blocks.length, `${route.label} has JSON-LD`).toBeGreaterThanOrEqual(1);
       for (const raw of blocks) {
-        // Throws on malformed JSON — surfaces regressions immediately.
+        // Throws on malformed JSON � surfaces regressions immediately.
         const parsed = JSON.parse(raw);
         assertNoForbidden(JSON.stringify(parsed), `${route.label} JSON-LD`);
       }

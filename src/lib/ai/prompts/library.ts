@@ -158,7 +158,7 @@ export function contentBatchPrompt(args: {
 }) {
   return {
     system: system(
-      `You are ${AGENT_ROLE[args.agent] ?? AGENT_ROLE.spark} for Raval AI.`,
+      `You are ${AGENT_ROLE[args.agent] ?? AGENT_ROLE.spark} for Mellox AI.`,
       "Match the brand: voice, audience, products, do/don't. Never invent unrelated products.",
       `Generate ${args.count} pieces. Channels available: ${args.channels.join(", ")}.`,
       "Tailor tone + length per channel. Hooks first. One clear CTA. Body ≤ 600 chars. ≤ 8 hashtags.",
@@ -203,7 +203,7 @@ export function nextPostPrompt(args: {
 }) {
   return {
     system: system(
-      "You are Spark, a senior content strategist for Raval AI.",
+      "You are Spark, a senior content strategist for Mellox AI.",
       "Generate ONE next post — the highest-leverage follow-up given brand + recent history.",
       "Do NOT repeat angles, hooks, or topics from recent posts.",
       RULE_POST_LIMITS,
@@ -277,7 +277,7 @@ export const TASK_SYSTEMS: Record<string, string> = {
     "You are an analytics insights generator.",
     "Return 3 key trends, 2 anomalies, and 3 next experiments as tight markdown bullets.",
   ),
-  freeform: system("You are Raval AI. Concise, decisive, actionable."),
+  freeform: system("You are Mellox AI. Concise, decisive, actionable."),
 };
 
 /* ============================== Coach briefing ===================== */
@@ -322,7 +322,7 @@ export function agentTasksSystem(agentName: string, agentRole: string) {
 
 export const SCHEDULE_SYSTEMS: Record<string, string> = {
   "social-post": system(
-    "You are Echo, a senior social media manager for Raval AI.",
+    "You are Echo, a senior social media manager for Mellox AI.",
     "Write ONE ready-to-publish post for the requested channel.",
     RULE_POST_LIMITS,
     FMT_JSON_STRICT,
@@ -330,7 +330,7 @@ export const SCHEDULE_SYSTEMS: Record<string, string> = {
     `Schema: ${SCHEMA_POST}`,
   ),
   "content-gen": system(
-    "You are Spark, a senior content strategist for Raval AI.",
+    "You are Spark, a senior content strategist for Mellox AI.",
     "Write ONE short publish-ready piece — scannable, with H2-style lines.",
     "Body 200-450 words.",
     FMT_JSON_STRICT,
@@ -338,7 +338,7 @@ export const SCHEDULE_SYSTEMS: Record<string, string> = {
     `Schema: ${SCHEMA_POST}`,
   ),
   "seo-audit": system(
-    "You are Scout, an SEO strategist for Raval AI.",
+    "You are Scout, an SEO strategist for Mellox AI.",
     "Produce a concise on-page brief.",
     "Body sections: Target query, Intent, Answer snippet, Suggested H2s, 5 quick wins.",
     FMT_JSON_STRICT,
@@ -353,7 +353,7 @@ export const SCHEDULE_SYSTEMS: Record<string, string> = {
     `Schema: ${SCHEMA_POST}`,
   ),
   custom: system(
-    "You are Raval AI. Follow the user's prompt exactly.",
+    "You are Mellox AI. Follow the user's prompt exactly.",
     FMT_JSON_STRICT,
     FMT_NO_FENCES,
     `Schema: ${SCHEMA_POST}`,

@@ -1,0 +1,58 @@
+{
+  "path": "/onboarding",
+  "title": "Set Up Your Workspace · Mellox AI",
+  "description": "Set up your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+  "ogTitle": "Set Up Your Workspace · Mellox AI",
+  "ogDescription": "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+  "ogType": "website",
+  "ogSiteName": "Mellox AI",
+  "ogUrl": "https://raval.ai/onboarding",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Set Up Your Workspace · Mellox AI",
+  "twitterDescription": "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+  "canonical": "https://raval.ai/onboarding",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": null,
+  "jsonLdTypes": [
+    "Organization",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval.ai/#organization",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval.ai/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval.ai/#website",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval.ai/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Brand DNA",
+    "AEO",
+    "GEO",
+    "Ravi",
+    "Mellox AI"
+  ]
+}

@@ -30,7 +30,7 @@ export default function NotFound() {
       // Remove any pre-existing canonical so we don't self-attribute this 404
       // to another route's URL.
       document.head.querySelectorAll('link[rel="canonical"]').forEach((n) => n.remove());
-      document.title = "Page not found · Raval AI";
+      document.title = "Page not found · Mellox AI";
     };
     apply();
     const t1 = setTimeout(apply, 100);
@@ -47,14 +47,14 @@ export default function NotFound() {
       <div className="max-w-md text-center">
         <img
           src={logoAsset.url}
-          alt="Raval Ai"
+          alt="Mellox AI"
           className="mx-auto h-16 w-16 rounded-[26%] ring-1 ring-border/60 shadow-[0_4px_14px_-6px_rgba(0,0,0,0.18)]"
           draggable={false}
         />
         <h1 className="mt-6 text-7xl font-bold gradient-text">404</h1>
         <h2 className="mt-4 text-xl font-semibold">Page not found</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          This route isn&apos;t part of the Raval AI workspace.
+          This route isn&apos;t part of the Mellox AI workspace.
         </p>
         <Link
           href="/"

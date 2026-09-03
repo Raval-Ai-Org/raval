@@ -115,7 +115,7 @@ export function StudioDestinationPicker({
               Connect {pendingLabel}
             </h4>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              RavalAI wants permission to access your {pendingLabel} account so it can post and
+              Mellox AI wants permission to access your {pendingLabel} account so it can post and
               schedule content on your behalf.
             </p>
             <div className="mt-4 flex justify-end gap-2">

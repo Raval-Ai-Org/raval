@@ -17,7 +17,7 @@ import { test, expect, request as pwRequest } from "@playwright/test";
 const BASE = "http://localhost:8080";
 const SUPA_URL = process.env.SUPABASE_URL!;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const USER_TOKEN = process.env.LOVABLE_BROWSER_SUPABASE_ACCESS_TOKEN!;
+const USER_TOKEN = process.env.SUPABASE_TEST_ACCESS_TOKEN!;
 const PUBLISHABLE =
   process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
 

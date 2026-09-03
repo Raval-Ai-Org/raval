@@ -84,7 +84,7 @@ function stripHtml(html: string, max = 6000) {
 async function fetchHtml(url: string, timeoutMs = 7000): Promise<string> {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 RavalCoachBot" },
+      headers: { "User-Agent": "Mozilla/5.0 MelloxCoachBot" },
       signal: AbortSignal.timeout(timeoutMs),
       redirect: "follow",
     });
@@ -104,7 +104,7 @@ async function ddgSearch(
 ): Promise<{ title: string; url: string; snippet: string }[]> {
   try {
     const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
-      headers: { "User-Agent": "Mozilla/5.0 RavalCoachBot" },
+      headers: { "User-Agent": "Mozilla/5.0 MelloxCoachBot" },
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return [];

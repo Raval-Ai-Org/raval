@@ -205,7 +205,7 @@ function ProjectsPage() {
 
       {/* Top bar */}
       <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-5">
-        <Link to="/projects" aria-label="Raval AI home" className="flex h-9 shrink-0 items-center">
+        <Link to="/workspaces" aria-label="Mellox AI home" className="flex h-9 shrink-0 items-center">
           <Logo height={30} />
         </Link>
         <div className="flex items-center gap-2 sm:gap-3">
@@ -516,9 +516,11 @@ function AccountMenu({
           </DropdownMenuItem>
           <DropdownMenuItem
             className="gap-2.5 rounded-lg py-2 text-[13px]"
-            onSelect={() => window.open("https://docs.lovable.dev", "_blank", "noopener")}
+            onSelect={() => {
+              window.location.href = "mailto:support@mellox.ai?subject=Mellox%20AI%20support";
+            }}
           >
-            <HelpCircle className="h-4 w-4 text-muted-foreground" /> Help
+            <HelpCircle className="h-4 w-4 text-muted-foreground" /> Help & support
           </DropdownMenuItem>
         </div>
         <DropdownMenuSeparator className="m-0" />
@@ -758,7 +760,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       </div>
       <h3 className="mt-3 text-[15px] font-semibold tracking-tight">No projects yet</h3>
       <p className="mt-1 max-w-sm text-[12.5px] text-muted-foreground">
-        Add your first website and Raval Ai will set up a workspace for it in seconds.
+        Add your first website and Mellox AI will set up a workspace for it in seconds.
       </p>
       <Button onClick={onAdd} className="btn-aura mt-5 h-9 gap-1.5 rounded-full px-4">
         <Plus className="h-3.5 w-3.5" /> Add a project

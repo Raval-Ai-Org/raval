@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({ url: z.string().min(1).max(2000) });
 
-const UA = "Mozilla/5.0 (compatible; RavalAI-Audit/1.0; +https://raval.ai/bot)";
+const UA = "Mozilla/5.0 (compatible; MelloxAI-Audit/1.0; +https://raval.ai/bot)";
 
 type CheckStatus = "pass" | "warn" | "fail" | "info";
 type Check = {

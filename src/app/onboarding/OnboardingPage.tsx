@@ -543,7 +543,7 @@ function Onboarding() {
                   icon={<Github className="h-4 w-4" />}
                   eyebrow={`Step ${stepNumber} of ${totalSteps}`}
                   title="Where should agents publish?"
-                  subtitle="Pick a destination Raval AI can post to. You can connect more from Settings anytime."
+                  subtitle="Pick a destination Mellox AI can post to. You can connect more from Settings anytime."
                 >
                   <div className="grid gap-2">
                     {[

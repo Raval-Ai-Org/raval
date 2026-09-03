@@ -1,0 +1,63 @@
+{
+  "path": "/projects",
+  "title": "Clients · Mellox AI",
+  "description": "Every client brand in one Marketing Intelligence Layer — onboard, orchestrate and grow with Brand DNA, AEO/GEO and shared operations.",
+  "ogTitle": "Clients · Mellox AI",
+  "ogDescription": "Every client brand in one Marketing Intelligence Layer — onboard, orchestrate and grow with Brand DNA, AEO/GEO and shared operations.",
+  "ogType": "website",
+  "ogSiteName": "Mellox AI",
+  "ogUrl": "https://raval.ai/projects",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Clients · Mellox AI",
+  "twitterDescription": "Every client brand in one Marketing Intelligence Layer — onboard, orchestrate and grow with Brand DNA, AEO/GEO and shared operations.",
+  "canonical": "https://raval.ai/projects",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": null,
+  "jsonLdTypes": ["Organization", "WebPage", "WebSite"],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval.ai/#organization",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval.ai/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebPage",
+      "id": null,
+      "url": "https://raval.ai/projects",
+      "name": "Clients · Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "Mellox AI",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval.ai/#website",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval.ai/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": ["Marketing Intelligence Layer", "Brand DNA", "AEO", "GEO", "Mellox AI"]
+}

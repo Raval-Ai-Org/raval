@@ -96,7 +96,7 @@ export function friendlyAuthError(error: unknown) {
 export async function signInWithGoogle(nextPath = "/app") {
   // Native Supabase Google OAuth. The browser is redirected to Google, then
   // Supabase returns the user to /auth/callback, which exchanges the PKCE
-  // code for a session (see authCallbackUrl). No Lovable broker involved.
+  // code for a session (see authCallbackUrl).
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {

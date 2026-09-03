@@ -47,15 +47,9 @@ export function WorkspaceLogo({ name, websiteUrl, size = 28, className, rounded 
   const fontSize = Math.max(9, Math.round(size * 0.36));
   const pxSize = Math.max(64, size * 4);
 
-  // Cascade of real-logo sources — first to load wins. Each has different
-  // coverage, so on error we swap to the next before falling back to initials.
-  const logoDevToken = process.env.NEXT_PUBLIC_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY as
-    string | undefined;
+  // Cascade of real-logo sources; fall back to initials when none load.
   const sources: string[] = domain
     ? [
-        logoDevToken
-          ? `https://img.logo.dev/${domain}?token=${logoDevToken}&size=${pxSize}&format=png`
-          : "",
         `https://logo.clearbit.com/${domain}?size=${pxSize}`,
         `https://icons.duckduckgo.com/ip3/${domain}.ico`,
         `https://www.google.com/s2/favicons?domain=${domain}&sz=${pxSize >= 128 ? 128 : 64}`,

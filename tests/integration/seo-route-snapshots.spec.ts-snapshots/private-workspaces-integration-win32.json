@@ -1,0 +1,70 @@
+{
+  "path": "/workspaces",
+  "title": "Workspaces · Mellox AI",
+  "description": "Manage every client workspace in one Mellox AI Marketing Intelligence Layer.",
+  "ogTitle": "Workspaces · Mellox AI",
+  "ogDescription": "Manage every client workspace in one Mellox AI Marketing Intelligence Layer.",
+  "ogType": "website",
+  "ogSiteName": "Mellox AI",
+  "ogUrl": "https://raval.ai/workspaces",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Workspaces · Mellox AI",
+  "twitterDescription": "Manage every client workspace in one Mellox AI Marketing Intelligence Layer.",
+  "canonical": "https://raval.ai/workspaces",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": null,
+  "jsonLdTypes": [
+    "Organization",
+    "WebPage",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval.ai/#organization",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval.ai/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebPage",
+      "id": null,
+      "url": "https://raval.ai/workspaces",
+      "name": "Workspaces · Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "Mellox AI",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval.ai/#website",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval.ai/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "Mellox AI"
+  ]
+}

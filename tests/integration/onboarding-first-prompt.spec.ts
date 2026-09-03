@@ -5,8 +5,8 @@ import { test, expect, type Route } from "@playwright/test";
  *
  * Verifies that when a workspace has `first_prompt` set (as onboarding does):
  *   1. ChatPanel picks it up on mount,
- *   2. Shows the "Kicking off your first request…" loading state,
- *   3. Sends the prompt through the real chat pipeline (clarify → /api/chat),
+ *   2. Shows the "Kicking off your first request�" loading state,
+ *   3. Sends the prompt through the real chat pipeline (clarify ? /api/chat),
  *   4. Renders the user bubble AND a streamed assistant reply,
  *   5. Re-enables the composer once the reply completes.
  *
@@ -99,7 +99,7 @@ test.describe("Onboarding first-prompt flow", () => {
               body: JSON.stringify(wantsSingle ? row : [row]),
             });
           }
-          // PATCH/POST/DELETE — succeed silently.
+          // PATCH/POST/DELETE � succeed silently.
           return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
         }
 
@@ -114,7 +114,7 @@ test.describe("Onboarding first-prompt flow", () => {
           return route.fulfill({ status: 200, headers: JSON_HEADERS, body: "[]" });
         }
 
-        // Any other table read/write — empty success.
+        // Any other table read/write � empty success.
         return route.fulfill({
           status: 200,
           headers: JSON_HEADERS,
@@ -141,7 +141,7 @@ test.describe("Onboarding first-prompt flow", () => {
       });
     });
 
-    // TanStack server functions — respond empty so nothing throws.
+    // TanStack server functions � respond empty so nothing throws.
     await context.route("**/_serverFn/**", (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
     );
@@ -154,7 +154,7 @@ test.describe("Onboarding first-prompt flow", () => {
           window.localStorage.setItem("workspace:selected", wsId);
           // Belt-and-braces: neutralize any stale first-prompt lock so the guard doesn't skip.
           window.localStorage.removeItem(`raval:first-prompt-fired:${wsId}`);
-          // Silence realtime websocket noise — not needed for this test.
+          // Silence realtime websocket noise � not needed for this test.
           const origWS = window.WebSocket;
           // @ts-expect-error test-only stub
           window.WebSocket = function () {
@@ -181,7 +181,7 @@ test.describe("Onboarding first-prompt flow", () => {
 
     // 1. The auto-send pipeline should render BOTH the user bubble (the
     //    onboarding prompt) and the streamed assistant reply. The transient
-    //    "Kicking off…" indicator is intentionally not asserted here because
+    //    "Kicking off�" indicator is intentionally not asserted here because
     //    with mocked instant responses it may render for < a frame.
     await expect(page.getByText(FIRST_PROMPT, { exact: false }).first()).toBeVisible({
       timeout: 15_000,
@@ -195,7 +195,7 @@ test.describe("Onboarding first-prompt flow", () => {
     expect(chatCalls[0].body).toContain(FIRST_PROMPT);
 
     // 3. Composer re-enables once streaming completes and the busy placeholder is gone.
-    await expect(page.getByPlaceholder(/Ask Raval Ai/i).first()).toBeEnabled({ timeout: 15_000 });
+    await expect(page.getByPlaceholder(/Ask Mellox AI/i).first()).toBeEnabled({ timeout: 15_000 });
     await expect(page.getByPlaceholder(/Sending your onboarding prompt/i)).toHaveCount(0);
     await expect(page.getByText(/Kicking off your first request/i)).toHaveCount(0);
 

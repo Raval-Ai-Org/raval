@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Raval brand icon barrel — Gemini phase.
+ * Mellox brand icon barrel — Gemini phase.
  *
- * Previously custom Raval SVGs. Now every icon here re-exports the equivalent
+ * Previously custom brand SVGs. Now every icon here re-exports the equivalent
  * Google Material Symbols Rounded glyph — the icon family used across Google
  * Gemini — via the `<Mi>`-powered adapters in `./gemini-icons.tsx`.
  *

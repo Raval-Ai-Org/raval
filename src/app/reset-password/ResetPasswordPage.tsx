@@ -88,7 +88,7 @@ function ResetPasswordPage() {
             <h1 className="mt-4 text-3xl font-semibold">Set new password</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               {ready
-                ? "Choose a new password for your Raval AI account."
+                ? "Choose a new password for your Mellox AI account."
                 : "Open the reset link from your email to continue."}
             </p>
           </div>

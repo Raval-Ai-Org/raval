@@ -7,8 +7,8 @@
 
 ## Why it is deferred
 
-1. **Stale target.** The SQL points at `https://raval6.lovable.app/api/public/hooks/competitor-watch`,
-   the old Lovable app, which will not exist for the new Raval deployment.
+1. **Stale target.** The SQL points at an old preview deployment,
+   which will not exist for the new Mellox deployment.
 2. **No production URL yet.** Raval is not deployed (no Vercel URL). We must not invent a
    URL, and must not put a placeholder into production SQL that could accidentally fire.
 3. **Incompatible auth contract.** The job sends an `apikey` header. The current app hook

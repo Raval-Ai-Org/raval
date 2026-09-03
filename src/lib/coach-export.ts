@@ -68,7 +68,7 @@ export function exportBriefingPDF(b: CoachBriefing, workspaceLabel?: string) {
   };
 
   // Header
-  text("Raval AI · Weekly Marketing Coach", 9, "bold", [130, 130, 130]);
+  text("Mellox AI · Weekly Marketing Coach", 9, "bold", [130, 130, 130]);
   y += 4;
   text(b.headline || "Weekly Briefing", 20, "bold", [15, 15, 15]);
   text(
@@ -132,11 +132,11 @@ export function exportBriefingPDF(b: CoachBriefing, workspaceLabel?: string) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(150);
-    doc.text(`Raval AI · Marketing Intelligence Layer`, margin, pageH - 24);
+    doc.text(`Mellox AI · Marketing Intelligence Layer`, margin, pageH - 24);
     doc.text(`${p} / ${pageCount}`, pageW - margin, pageH - 24, { align: "right" });
   }
 
-  doc.save(`${safeFilename((workspaceLabel || "raval") + "-weekly-briefing")}.pdf`);
+  doc.save(`${safeFilename((workspaceLabel || "mellox") + "-weekly-briefing")}.pdf`);
 }
 
 export function exportBriefingDoc(b: CoachBriefing, workspaceLabel?: string) {
@@ -170,7 +170,7 @@ export function exportBriefingDoc(b: CoachBriefing, workspaceLabel?: string) {
   .focus { background:#f7f8fb; padding:12pt; border-left:3pt solid #333; margin: 8pt 0 12pt; }
 </style></head>
 <body>
-  <div style="color:#888;font-size:9pt;letter-spacing:.1em;text-transform:uppercase;">Raval AI · Weekly Marketing Coach</div>
+  <div style="color:#888;font-size:9pt;letter-spacing:.1em;text-transform:uppercase;">Mellox AI · Weekly Marketing Coach</div>
   <h1>${esc(b.headline || "Weekly Briefing")}</h1>
   <div class="meta">${esc(workspaceLabel ? workspaceLabel + " · " : "")}${esc(fmtDate(b.generatedAt))}</div>
   ${
@@ -202,14 +202,14 @@ export function exportBriefingDoc(b: CoachBriefing, workspaceLabel?: string) {
           .join("")}</ol>`
       : ""
   }
-  <p style="margin-top:24pt;color:#999;font-size:9pt;">Raval AI · Marketing Intelligence Layer</p>
+  <p style="margin-top:24pt;color:#999;font-size:9pt;">Mellox AI · Marketing Intelligence Layer</p>
 </body></html>`;
 
   const blob = new Blob(["\ufeff", html], { type: "application/msword" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${safeFilename((workspaceLabel || "raval") + "-weekly-briefing")}.doc`;
+  a.download = `${safeFilename((workspaceLabel || "mellox") + "-weekly-briefing")}.doc`;
   document.body.appendChild(a);
   a.click();
   a.remove();

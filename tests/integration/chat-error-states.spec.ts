@@ -110,7 +110,7 @@ async function seed(page: import("@playwright/test").Page) {
 }
 
 async function typeAndSend(page: import("@playwright/test").Page, text: string) {
-  const composer = page.getByPlaceholder(/Ask Raval Ai/i).first();
+  const composer = page.getByPlaceholder(/Ask Mellox AI/i).first();
   await expect(composer).toBeVisible({ timeout: 15_000 });
   await composer.click();
   await composer.fill(text);
@@ -142,7 +142,7 @@ test.describe("Chat error handling", () => {
 
     await seed(page);
     await page.goto("/app", { waitUntil: "domcontentloaded" });
-    await typeAndSend(page, "First try — should hit rate limit");
+    await typeAndSend(page, "First try � should hit rate limit");
 
     // 1. The rate-limit toast is shown to the user.
     await expect(page.getByText(/Rate limit hit\. Wait a moment and try again\./i)).toBeVisible({
@@ -152,10 +152,10 @@ test.describe("Chat error handling", () => {
     // 2. Composer & Send button recover (not stuck streaming).
     const sendBtn = page.getByRole("button", { name: /Send message/i });
     await expect(sendBtn).toBeVisible({ timeout: 10_000 });
-    const composer = page.getByPlaceholder(/Ask Raval Ai/i).first();
+    const composer = page.getByPlaceholder(/Ask Mellox AI/i).first();
     await expect(composer).toBeEnabled();
 
-    // 3. User can retry — the next send now succeeds.
+    // 3. User can retry � the next send now succeeds.
     await composer.fill("Retry after backoff");
     await sendBtn.click();
     await expect(page.getByText(/Recovered reply\./i)).toBeVisible({ timeout: 10_000 });
@@ -173,7 +173,7 @@ test.describe("Chat error handling", () => {
           status: 402,
           headers: JSON_HEADERS,
           body: JSON.stringify({
-            error: "AI credits exhausted. Add credits in Settings → Plans & credits.",
+            error: "AI credits exhausted. Add credits in Settings ? Plans & credits.",
           }),
         });
       }
@@ -188,7 +188,7 @@ test.describe("Chat error handling", () => {
 
     await seed(page);
     await page.goto("/app", { waitUntil: "domcontentloaded" });
-    await typeAndSend(page, "First try — should hit credits");
+    await typeAndSend(page, "First try � should hit credits");
 
     // 1. The credits-exhausted toast is shown to the user.
     await expect(page.getByText(/AI credits exhausted\./i)).toBeVisible({ timeout: 10_000 });
@@ -196,7 +196,7 @@ test.describe("Chat error handling", () => {
     // 2. Composer & Send button recover.
     const sendBtn = page.getByRole("button", { name: /Send message/i });
     await expect(sendBtn).toBeVisible({ timeout: 10_000 });
-    const composer = page.getByPlaceholder(/Ask Raval Ai/i).first();
+    const composer = page.getByPlaceholder(/Ask Mellox AI/i).first();
     await expect(composer).toBeEnabled();
 
     // 3. User can retry after topping up credits.

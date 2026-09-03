@@ -20,9 +20,9 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval6.lovable.app";
+const CANONICAL_HOST = "https://raval.ai";
 
-// Phrases from the approved Raval AI pitch deck. Every public route snapshot
+// Phrases from the approved Mellox AI pitch deck. Every public route snapshot
 // must contain at least one; app/private route snapshots are exempt because
 // they are noindex shells.
 const APPROVED_PHRASES = [
@@ -32,7 +32,7 @@ const APPROVED_PHRASES = [
   "AEO",
   "GEO",
   "Ravi",
-  "Raval AI",
+  "Mellox AI",
 ];
 
 // Legacy phrasing that must never appear anywhere.
@@ -40,9 +40,9 @@ const FORBIDDEN_PHRASES = [
   /AI marketing OS/i,
   /marketing operator/i,
   /threereachaisaas/i,
-  /raval3\.lovable\.app/i,
-  /Lovable App/i,
-  /Lovable Generated Project/i,
+  /legacy-preview\.example/i,
+  /Legacy App/i,
+  /Legacy Generated Project/i,
 ];
 
 type JsonLdNode = {
@@ -82,7 +82,7 @@ type RouteSnapshot = {
 };
 
 // Required fields per JSON-LD @type. Every route that ships a node of
-// this type must expose all listed fields — missing any is a hard
+// this type must expose all listed fields � missing any is a hard
 // failure so structured-data regressions can't sneak through.
 const JSONLD_REQUIRED_FIELDS: Record<string, Array<keyof JsonLdNode>> = {
   Organization: ["name", "url", "logoUrl"],
@@ -100,17 +100,17 @@ const JSONLD_REQUIRED_FIELDS: Record<string, Array<keyof JsonLdNode>> = {
  *   - UUIDs and long hex/base64 IDs (build hashes, request IDs, nonces)
  *   - Long digit runs (epoch millis, counters)
  *   - Cache-busting query params (?v=..., ?t=..., &_=...)
- *   - Non-canonical hosts (localhost, lovable preview subdomains) → CANONICAL_HOST
- *   - Whitespace runs → single space, trimmed
+ *   - Non-canonical hosts (localhost and preview subdomains) ? CANONICAL_HOST
+ *   - Whitespace runs ? single space, trimmed
  * Keeps every messaging-relevant token intact.
  */
 function normalize(input: string | null | undefined): string | null {
   if (input == null) return input ?? null;
   let out = String(input);
-  // Absolute non-canonical hosts → canonical host, so preview URLs don't leak
+  // Absolute non-canonical hosts ? canonical host, so preview URLs don't leak
   // into snapshots but the *path* is still asserted.
   out = out.replace(
-    /https?:\/\/(?:localhost(?::\d+)?|127\.0\.0\.1(?::\d+)?|[\w.-]*lovable(?:project)?\.app)/gi,
+    /https?:\/\/(?:localhost(?::\d+)?|127\.0\.0\.1(?::\d+)?|[\w.-]*preview\.example)/gi,
     CANONICAL_HOST,
   );
   // ISO 8601 timestamps (with or without fractional seconds / TZ).
@@ -122,7 +122,7 @@ function normalize(input: string | null | undefined): string | null {
   out = out.replace(/\b\d{4}-\d{2}-\d{2}\b/g, "<DATE>");
   // UUIDs.
   out = out.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<UUID>");
-  // Long hex/base64 IDs (build hashes, cache keys, tokens) — 24+ chars.
+  // Long hex/base64 IDs (build hashes, cache keys, tokens) � 24+ chars.
   out = out.replace(/\b[0-9a-f]{24,}\b/gi, "<HASH>");
   out = out.replace(/\b[A-Za-z0-9_-]{32,}\b/g, (m) =>
     /[A-Z]/.test(m) && /[a-z]/.test(m) && /\d/.test(m) ? "<TOKEN>" : m,
@@ -342,7 +342,7 @@ function assertNoForbidden(snapshot: RouteSnapshot | string, label: string) {
 function assertJsonLdStructure(snap: RouteSnapshot, label: string) {
   for (const node of snap.jsonLdNodes) {
     expect(node.type, `${label}: JSON-LD node missing @type`).toBeTruthy();
-    // FAQPage / BreadcrumbList are structural containers — they don't
+    // FAQPage / BreadcrumbList are structural containers � they don't
     // need their own @id or url, they're validated via faqQuestionCount /
     // breadcrumbDepth instead.
     if (!["FAQPage", "BreadcrumbList"].includes(node.type)) {
@@ -377,27 +377,27 @@ const PUBLIC_ROUTES = ["/", "/login", "/signup", "/reset-password"];
 // shell and agency/projects hubs. They must all stay noindex +
 // self-canonical so future refactors can't leak private tooling into
 // search.
-const PRIVATE_ROUTES = ["/onboarding", "/app", "/agency", "/projects"];
+const PRIVATE_ROUTES = ["/onboarding", "/workspace", "/agency", "/workspaces"];
 // Studio-adjacent routes that redirect into /app. We don't snapshot their
 // resolved head (that's covered by /app), but we DO assert the redirect
 // still lands on a noindex private shell so a broken redirect can't leak
 // a public studio surface into search.
 const STUDIO_REDIRECT_ROUTES = ["/app/content", "/app/social", "/app/seo", "/app/analytics"];
-// Unmatched paths — pins the root NotFoundComponent's SEO surface so a
+// Unmatched paths � pins the root NotFoundComponent's SEO surface so a
 // missing/renamed route can never silently ship an indexable 404.
 const NOT_FOUND_ROUTES = ["/this-route-should-never-exist-404"];
 
-test.describe("SEO route snapshots — approved pitch-deck text", () => {
+test.describe("SEO route snapshots � approved pitch-deck text", () => {
   for (const path of PUBLIC_ROUTES) {
     test(`snapshot: public ${path}`, async ({ page }) => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       const snap = await collectSnapshot(page, path);
 
       // Structural invariants.
-      expect(snap.ogSiteName).toBe("Raval AI");
+      expect(snap.ogSiteName).toBe("Mellox AI");
       expect(snap.twitterCard).toBe("summary_large_image");
-      expect(snap.canonical).toBe(`${CANONICAL_HOST}${path === "/" ? "/" : path}`);
-      expect(snap.ogUrl).toBe(`${CANONICAL_HOST}${path === "/" ? "/" : path}`);
+      expect(snap.canonical).toBe(`${CANONICAL_HOST}${path === "/" ? "" : path}`);
+      expect(snap.ogUrl).toBe(`${CANONICAL_HOST}${path === "/" ? "" : path}`);
       expect(snap.approvedPhrasesPresent.length).toBeGreaterThan(0);
 
       assertNoForbidden(snap, `public ${path}`);
@@ -422,7 +422,7 @@ test.describe("SEO route snapshots — approved pitch-deck text", () => {
       // Private shells must be noindex and self-canonical.
       expect(snap.robots ?? "").toMatch(/noindex/i);
       expect(snap.canonical).toBe(`${CANONICAL_HOST}${path}`);
-      expect(snap.ogSiteName).toBe("Raval AI");
+      expect(snap.ogSiteName).toBe("Mellox AI");
 
       assertNoForbidden(snap, `private ${path}`);
       assertJsonLdStructure(snap, `private ${path}`);
@@ -434,14 +434,14 @@ test.describe("SEO route snapshots — approved pitch-deck text", () => {
   }
 
   for (const path of STUDIO_REDIRECT_ROUTES) {
-    test(`snapshot: studio redirect ${path} → /app`, async ({ page }) => {
+    test(`snapshot: studio redirect ${path} ? /app`, async ({ page }) => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       const snap = await collectSnapshot(page, path);
 
-      // Whatever it lands on must be noindex + branded — never public search.
+      // Whatever it lands on must be noindex + branded � never public search.
       expect(snap.robots ?? "").toMatch(/noindex/i);
-      expect(snap.ogSiteName).toBe("Raval AI");
-      expect(snap.canonical ?? "").toMatch(new RegExp(`^${CANONICAL_HOST}/app`));
+      expect(snap.ogSiteName).toBe("Mellox AI");
+      expect(snap.canonical ?? "").toMatch(new RegExp(`^${CANONICAL_HOST}/workspace`));
 
       assertNoForbidden(snap, `studio redirect ${path}`);
     });
@@ -453,7 +453,7 @@ test.describe("SEO route snapshots — approved pitch-deck text", () => {
       expect(res, "navigation response for not-found route").not.toBeNull();
       // Give the client-side NotFoundComponent effect a tick to inject
       // the runtime noindex meta, strip stale canonicals, and set the 404
-      // title — wait for the full deterministic end state so the snapshot
+      // title � wait for the full deterministic end state so the snapshot
       // never races the hydration effect.
       await page
         .waitForFunction(
@@ -470,7 +470,7 @@ test.describe("SEO route snapshots — approved pitch-deck text", () => {
 
       // A 404 must never be indexable and must not claim to be another URL.
       expect(snap.robots ?? "").toMatch(/noindex/i);
-      expect(snap.ogSiteName).toBe("Raval AI");
+      expect(snap.ogSiteName).toBe("Mellox AI");
       if (snap.canonical) {
         expect(snap.canonical).not.toBe(`${CANONICAL_HOST}/`);
         expect(snap.canonical).not.toContain("this-route-should-never-exist");
@@ -505,7 +505,7 @@ test.describe("SEO route snapshots — approved pitch-deck text", () => {
     expect(raw).toContain(`<loc>${CANONICAL_HOST}/</loc>`);
     assertNoForbidden(raw, "sitemap.xml");
 
-    // Strip <lastmod>…</lastmod> entirely — timestamps drift every build.
+    // Strip <lastmod>�</lastmod> entirely � timestamps drift every build.
     const stripped = raw.replace(/<lastmod>[^<]*<\/lastmod>\s*/g, "");
     expect(normalizeBody(stripped)).toMatchSnapshot("sitemap.xml");
   });

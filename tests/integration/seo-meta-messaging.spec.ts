@@ -8,13 +8,13 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval6.lovable.app";
+const CANONICAL_HOST = "https://raval.ai";
 // Legacy phrasing that must never come back on public routes.
 const FORBIDDEN = [
   /AI marketing OS/i,
   /marketing operator/i,
   /threereachaisaas/i,
-  /raval3\.lovable\.app/i,
+  /legacy-preview\.example/i,
 ];
 
 async function readMeta(page: Page) {
@@ -48,17 +48,17 @@ test.describe("SEO meta — pitch-deck messaging", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const meta = await readMeta(page);
 
-    expect(meta.title).toMatch(/Raval AI/);
+    expect(meta.title).toMatch(/Mellox AI/);
     expect(meta.title).toMatch(/Marketing Intelligence Layer/i);
     expect(meta.description).toMatch(/visible inside LLMs/i);
     expect(meta.description).toMatch(/brands and agencies/i);
     expect(meta.ogTitle).toMatch(/Marketing Intelligence Layer/i);
     expect(meta.ogDescription ?? "").not.toEqual("");
     expect(meta.ogType).toBe("website");
-    expect(meta.ogSiteName).toBe("Raval AI");
+    expect(meta.ogSiteName).toBe("Mellox AI");
     expect(meta.twitterCard).toBe("summary_large_image");
-    expect(meta.ogUrl).toBe(`${CANONICAL_HOST}/`);
-    expect(meta.canonical).toBe(`${CANONICAL_HOST}/`);
+    expect(meta.ogUrl).toBe(CANONICAL_HOST);
+    expect(meta.canonical).toBe(CANONICAL_HOST);
     // Landing must be indexable.
     expect(meta.robots ?? "").not.toMatch(/noindex/i);
 
@@ -69,8 +69,8 @@ test.describe("SEO meta — pitch-deck messaging", () => {
     await page.goto("/login", { waitUntil: "domcontentloaded" });
     const meta = await readMeta(page);
 
-    expect(meta.title).toMatch(/Sign in.*Raval AI/i);
-    expect(meta.description).toMatch(/Raval AI/);
+    expect(meta.title).toMatch(/Sign in.*Mellox AI/i);
+    expect(meta.description).toMatch(/Mellox AI/);
     expect(meta.ogUrl).toBe(`${CANONICAL_HOST}/login`);
     expect(meta.canonical).toBe(`${CANONICAL_HOST}/login`);
     expect(meta.robots).toMatch(/noindex/i);
@@ -82,8 +82,8 @@ test.describe("SEO meta — pitch-deck messaging", () => {
     await page.goto("/signup", { waitUntil: "domcontentloaded" });
     const meta = await readMeta(page);
 
-    expect(meta.title).toMatch(/Create account.*Raval AI/i);
-    expect(meta.description).toMatch(/Raval AI/);
+    expect(meta.title).toMatch(/Create account.*Mellox AI/i);
+    expect(meta.description).toMatch(/Mellox AI/);
     expect(meta.ogDescription).toMatch(/visible inside LLMs|Brand DNA|AEO|GEO/i);
     expect(meta.ogUrl).toBe(`${CANONICAL_HOST}/signup`);
     expect(meta.canonical).toBe(`${CANONICAL_HOST}/signup`);
@@ -98,7 +98,7 @@ test.describe("SEO meta — pitch-deck messaging", () => {
     const xml = await res.text();
     expect(xml).toContain(`<loc>${CANONICAL_HOST}/</loc>`);
     expect(xml).not.toMatch(/threereachaisaas/i);
-    expect(xml).not.toMatch(/raval3\.lovable\.app/i);
+    expect(xml).not.toMatch(/legacy-preview\.example/i);
   });
 
   test("llms.txt reflects Marketing Intelligence Layer positioning", async ({ request }) => {

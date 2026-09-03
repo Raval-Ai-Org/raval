@@ -12,7 +12,7 @@ export const EXTRACTION_MODEL = "google/gemini-2.5-pro";
 const IMAGE_MODEL = "openai/gpt-5.4-image-2";
 
 const REFERER = process.env.APP_URL || "https://raval.ai";
-const APP_TITLE = "Raval AI";
+const APP_TITLE = "Mellox AI";
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant";

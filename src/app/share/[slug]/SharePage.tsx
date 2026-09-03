@@ -341,7 +341,7 @@ function SharePage() {
         </div>
 
         <footer className="pt-8 pb-6 text-center text-[11px] text-muted-foreground">
-          Powered by Raval AI · This is a read-only review link. All decisions need marketer
+          Powered by Mellox AI · This is a read-only review link. All decisions need marketer
           confirmation.
         </footer>
       </section>

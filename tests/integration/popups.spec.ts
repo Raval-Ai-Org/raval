@@ -193,7 +193,7 @@ const DIALOG_POPUPS: {
 
 async function waitForAppReady(page: Page) {
   await page.goto("/app", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("h1", { hasText: /Raval AI Workspace/i }).first()).toBeAttached({
+  await expect(page.locator("h1", { hasText: /Mellox AI Workspace/i }).first()).toBeAttached({
     timeout: 20_000,
   });
   // Wait for workspaceId to hydrate from localStorage and the lazily-mounted
@@ -213,14 +213,14 @@ async function assertNoLeaks(page: Page) {
   expect(locked).toBe(false);
 }
 
-test.describe("Popup smoke — every global open:* event mounts, renders and cleans up", () => {
+test.describe("Popup smoke � every global open:* event mounts, renders and cleans up", () => {
   test.beforeEach(async ({ page }) => {
     await stubBackend(page);
     await seedSession(page);
   });
 
   for (const popup of DIALOG_POPUPS) {
-    test(`${popup.name} — opens on ${popup.event}, escape closes cleanly`, async ({ page }) => {
+    test(`${popup.name} � opens on ${popup.event}, escape closes cleanly`, async ({ page }) => {
       const pageErrors: string[] = [];
       page.on("pageerror", (e) => {
         pageErrors.push(e.message);
@@ -236,7 +236,7 @@ test.describe("Popup smoke — every global open:* event mounts, renders and cle
         await page.evaluate((evt) => {
           window.dispatchEvent(new CustomEvent(evt));
         }, popup.event);
-        // Radix dialogs mount into a portal — check by counting, not by
+        // Radix dialogs mount into a portal � check by counting, not by
         // holding a stale locator reference.
         await expect
           .poll(async () => await page.locator('[role="dialog"]:visible').count(), {
@@ -248,7 +248,7 @@ test.describe("Popup smoke — every global open:* event mounts, renders and cle
       await dispatchAndAssertOpen();
 
       if (popup.expect) {
-        // Best-effort text match — dialog title should be present in DOM
+        // Best-effort text match � dialog title should be present in DOM
         // whether or not the visible portal has stabilized.
         await expect(
           page.locator('[role="dialog"]').filter({ hasText: popup.expect }).first(),
@@ -268,7 +268,7 @@ test.describe("Popup smoke — every global open:* event mounts, renders and cle
     });
   }
 
-  test("orphan events — no popup dispatches a CustomEvent without a listener", async ({ page }) => {
+  test("orphan events � no popup dispatches a CustomEvent without a listener", async ({ page }) => {
     // Statically curated allowlist of events that intentionally have no
     // in-app listener (they trigger navigations or external side effects).
     const ALLOWED_ORPHANS = new Set<string>(["content:changed", "credits:changed"]);
@@ -299,7 +299,7 @@ test.describe("Popup smoke — every global open:* event mounts, renders and cle
           const dialogOpen = document.querySelectorAll('[role="dialog"]').length > 0;
           seen[evt] = hadPrior && dialogOpen;
 
-          // Cleanup — press Escape to close any opened dialog.
+          // Cleanup � press Escape to close any opened dialog.
           window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
           await new Promise((r) => setTimeout(r, 120));
         }

@@ -10,7 +10,7 @@ import {
 const SIZES: ImgSize[] = ["1024x1024", "1792x1024", "1024x1792"];
 
 const brand: BrandDnaLite = {
-  brandName: "Raval AI",
+  brandName: "Mellox AI",
   oneLiner: "The marketing intelligence layer.",
   voice: "Confident, concise, editorial.",
   audience: "Marketing leads at growth-stage SaaS.",
@@ -31,7 +31,7 @@ function build(size: ImgSize) {
     postBody: "How AI-native brands earn LLM visibility in 2026.\n\nA teardown of what works.",
     postTitle: "LLM visibility teardown",
     brand,
-    workspaceName: "Raval AI",
+    workspaceName: "Mellox AI",
     platform: "linkedin",
     size,
     seedKey: "post-abc-123",
@@ -44,7 +44,7 @@ describe("post image consistency across aspect ratios", () => {
   const [sq, land, port] = results;
 
   it("uses the same stable style seed for every size", () => {
-    const seed = getStyleSeed(brand, "post-abc-123", "Raval AI");
+    const seed = getStyleSeed(brand, "post-abc-123", "Mellox AI");
     for (const r of results) expect(r.styleSeed).toBe(seed);
     expect(new Set(results.map((r) => r.styleSeed)).size).toBe(1);
   });
@@ -90,7 +90,7 @@ describe("post image consistency across aspect ratios", () => {
     }
   });
 
-  it("is deterministic — regenerating the same post yields the same visual system", () => {
+  it("is deterministic � regenerating the same post yields the same visual system", () => {
     const again = build("1024x1024");
     expect(again.styleSeed).toBe(sq.styleSeed);
     expect(again.visual.palette).toEqual(sq.visual.palette);

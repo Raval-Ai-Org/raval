@@ -9,7 +9,7 @@ export const BASE_URL =
       ? window.location.origin
       : "https://raval.ai";
 
-export const BRAND_NAME = "Raval AI";
+export const BRAND_NAME = "Mellox AI";
 // Logo is served from the same domain as the application
 export const BRAND_LOGO = `${BASE_URL}/favicon.svg`;
 export const BRAND_SOCIAL_IMAGE =
@@ -97,6 +97,7 @@ export function pageMetadata(opts: {
     openGraph: {
       title: opts.title,
       description: opts.description,
+      siteName: BRAND_NAME,
       url,
       type: "website",
     },

@@ -135,7 +135,7 @@
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 }
 
-/* Raval Ai — light theme.
+/* Mellox AI — light theme.
    Cool editorial neutrals (Linear/Vercel/Notion register): softly tinted
    canvas (not pure white) so elevated surfaces read cleanly without glare.
    Stronger hairline borders + AA-safe ink for crisp separation everywhere. */
@@ -198,7 +198,7 @@
     0 22px 40px -14px hsl(220 28% 9% / 0.2), 0 8px 18px -6px hsl(var(--brand-green) / 0.16);
   --shadow-glow: 0 0 24px -4px hsl(var(--brand-green) / 0.35);
 
-  /* Brand aura — Raval Ai: deep slate → electric blue → forest green */
+  /* Brand aura — Mellox AI: deep slate → electric blue → forest green */
   --brand-green: 151 84% 36%; /* legible green on white surfaces */
   --brand-blue: 217 92% 50%; /* electric blue */
   --aura-pink: 220 28% 12%; /* deep slate (token kept for compat) */
@@ -1061,7 +1061,7 @@ h6 {
       radial-gradient(at 18% 88%, hsl(var(--brand-blue) / 0.08) 0px, transparent 55%);
   }
 
-  /* === Lovable-style aura: soft pink→purple→indigo glow around a surface === */
+  /* === Soft aura: pink-to-purple-to-indigo glow around a surface === */
   .aura-frame {
     position: relative;
     isolation: isolate;
@@ -1125,7 +1125,7 @@ h6 {
       hsl(var(--background));
   }
 
-  /* Gradient text + CTA in the Lovable palette */
+  /* Gradient text + CTA palette */
   .text-aura {
     background: var(--gradient-aura);
     -webkit-background-clip: text;
@@ -1192,7 +1192,7 @@ h6 {
     opacity: 0.45;
   }
 
-  /* === Lovable grain — fine noise overlay used on auras/orbs === */
+  /* === Fine grain overlay used on auras and orbs === */
   .grain::after {
     content: "";
     position: absolute;
@@ -1204,7 +1204,7 @@ h6 {
     border-radius: inherit;
   }
 
-  /* === Animated orb cluster (the heart of the Lovable promo) === */
+  /* === Animated orb cluster === */
   .orb-cluster {
     position: relative;
     isolation: isolate;
@@ -1282,7 +1282,7 @@ h6 {
     }
   }
 
-  /* Animated gradient text (hue-shifting like the Lovable "what" frame) */
+  /* Animated gradient text */
   .text-aura-anim {
     background: linear-gradient(
       110deg,
@@ -1951,7 +1951,7 @@ h6 {
   /* 0.9 opacity keeps the visual hierarchy but preserves WCAG AA (≥4.5:1) at small caption sizes in both themes */
   --chat-ink-faint: hsl(var(--muted-foreground) / 0.9);
 
-  /* User bubble — dark Lovable-style chip in both themes */
+  /* User bubble chip in both themes */
   --chat-user-bg: linear-gradient(180deg, #242424 0%, #1a1a1a 100%);
   --chat-user-ink: hsl(0 0% 96%);
   --chat-user-ink-soft: hsl(0 0% 70%);
@@ -2519,7 +2519,7 @@ h6 {
 }
 
 /* ============================================================
- * Global Motion & Effects Layer — Raval AI
+ * Global Motion & Effects Layer — Mellox AI
  * ------------------------------------------------------------
  * Professional, restrained micro-interactions applied globally
  * without touching component source. Honors reduced-motion.

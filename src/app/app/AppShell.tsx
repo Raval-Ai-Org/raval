@@ -445,6 +445,18 @@ function AppShell() {
     setChatOpen(false);
   }, [path]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URL(window.location.href).searchParams.get("calendar") !== "1") return;
+    const timer = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("open:content-calendar"));
+      const url = new URL(window.location.href);
+      url.searchParams.delete("calendar");
+      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   // Active state for the top tabs
   const isActive = (m: ModuleDef) => {
     if (m.slug === "growth") return GROWTH_PATHS.some((p) => path.startsWith(p));
@@ -534,7 +546,7 @@ function AppShell() {
       {/* Brand row — sticky; height matches main header (h-14) for aligned baseline */}
       <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between bg-sidebar/95 px-2 backdrop-blur-xl">
         <Link
-          to="/projects"
+          to="/workspaces"
           aria-label="Back to all workspaces"
           title="Back to all workspaces"
           className="group flex h-9 items-center gap-1 rounded-md pl-1 pr-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -546,7 +558,7 @@ function AppShell() {
             draggable={false}
           />
           <span className="text-sm font-semibold tracking-tight text-foreground leading-none">
-            Raval AI
+            Mellox AI
           </span>
           <ArrowLeft
             aria-hidden
@@ -626,13 +638,13 @@ function AppShell() {
           })}
           {sidebarAction({
             icon: Bot,
-            label: "24/7 Autopilot",
+            label: "Automations",
             accent: "rgb(16 185 129)",
             onClick: () => window.dispatchEvent(new CustomEvent("open:autopilot")),
           })}
           {sidebarAction({
             icon: Radio,
-            label: "Competitor watch",
+            label: "Competitors",
             hint: "Alerts",
             accent: "hsl(var(--brand-green))",
             onClick: () => {
@@ -648,12 +660,12 @@ function AppShell() {
         <SidebarSection label="Collaborate">
           {sidebarAction({
             icon: Rocket,
-            label: "Client portal",
+            label: "Client Portal",
             onClick: () => window.dispatchEvent(new CustomEvent("open:client-portal")),
           })}
           {sidebarAction({
             icon: Share2,
-            label: "Share workspace",
+            label: "Share",
             accent: "hsl(var(--brand-green))",
             onClick: () => window.dispatchEvent(new CustomEvent("open:share")),
           })}
@@ -671,7 +683,7 @@ function AppShell() {
 
   return (
     <div className="flex h-[100dvh] w-full bg-sidebar text-foreground">
-      <h1 className="sr-only">Raval AI Workspace</h1>
+      <h1 className="sr-only">Mellox AI Workspace</h1>
 
       {/* Full-height left rail: sidebar OR collapsed icon rail. Sits alongside header + main, Qwen/ChatGPT style. */}
       {!navOpen && (
@@ -681,14 +693,14 @@ function AppShell() {
         >
           {/* Brand mark — always visible; links back to workspaces */}
           <Link
-            to="/projects"
-            aria-label="Raval AI — back to workspaces"
+            to="/workspaces"
+            aria-label="Mellox AI — back to workspaces"
             title="Back to all workspaces"
             className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <img
               src={ravalBrandMark.url}
-              alt="Raval AI"
+              alt="Mellox AI"
               className="h-[20px] w-[20px] select-none"
               draggable={false}
             />
@@ -732,7 +744,7 @@ function AppShell() {
                 },
                 {
                   icon: CalendarIcon,
-                  label: "Content calendar",
+                  label: "Calendar",
                   onClick: () => window.dispatchEvent(new CustomEvent("open:content-calendar")),
                 },
                 {
@@ -742,7 +754,7 @@ function AppShell() {
                 },
                 {
                   icon: Radio,
-                  label: "Competitor watch",
+                  label: "Competitors",
                   onClick: () => window.dispatchEvent(new CustomEvent("open:competitor-watch")),
                 },
               ].map(({ icon: Icon, label, onClick }) => (
@@ -888,8 +900,8 @@ function AppShell() {
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent("open:content-calendar"))}
-                aria-label="Open content calendar"
-                title="Content calendar"
+                aria-label="Open calendar"
+                title="Calendar"
                 className="group flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
               >
                 <CalendarIcon className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-blue))]" />
@@ -902,7 +914,7 @@ function AppShell() {
 
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent("open:share"))}
-                aria-label="Share project"
+                aria-label="Share workspace"
                 title="Share with workspace members"
                 className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
               >
@@ -938,7 +950,7 @@ function AppShell() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    aria-label="Share workspace"
+                    aria-label="Share"
                     title="Share"
                     className="group relative inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-md bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] px-2.5 sm:px-3 text-[12px] font-semibold tracking-tight text-background shadow-[0_1px_0_hsl(0_0%_100%/0.25)_inset,0_4px_14px_-4px_hsl(var(--brand-blue)/0.55)] transition-all hover:shadow-[0_1px_0_hsl(0_0%_100%/0.3)_inset,0_6px_20px_-4px_hsl(var(--brand-blue)/0.7)] active:scale-[0.97] data-[state=open]:shadow-[0_1px_0_hsl(0_0%_100%/0.3)_inset,0_6px_20px_-4px_hsl(var(--brand-blue)/0.7)]"
                   >
@@ -956,7 +968,7 @@ function AppShell() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" sideOffset={8} className="w-64 p-1.5">
                   <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Share workspace
+                    Share
                   </DropdownMenuLabel>
                   <DropdownMenuItem
                     onSelect={(e) => {

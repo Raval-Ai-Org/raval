@@ -13,7 +13,7 @@ SDR work that we are treating as **on hold** until discussed:
 1. **Live Vercel deployment is missing** — `https://raval-mu.vercel.app` returns
    `DEPLOYMENT_NOT_FOUND` on every route. This is a dashboard-side issue (deployment
    removed/re-created), separate from code. Needs a Vercel dashboard check (or ask Zian).
-2. **Zian's `ad052bc` on `raval` master** ("Replace Lovable OAuth with native Supabase
+2. **Zian's `ad052bc` on `raval` master** ("Replace the external OAuth broker with native Supabase
    Google OAuth") ALSO re-pointed Supabase to a **brand-new empty project**
    `slcmqbbjzyztqyucauol` (config.toml + .temp/project-ref + apply_migrations_cli.py),
    and his final-state migration set **excludes the 3 SDR migrations**

@@ -1,20 +1,20 @@
 # Platform Credentials Status
 
-> **Live status of which developer apps are configured for the RavalAI SDR.**
+> **Live status of which developer apps are configured for the Mellox AI SDR.**
 > Last updated: 2026-08-28
 
 ## Current Status
 
 | Platform        | App Status                                         | Credentials in `.env`?                  | App Review                                    | Can publish?                      |
 | --------------- | -------------------------------------------------- | --------------------------------------- | --------------------------------------------- | --------------------------------- |
-| **LinkedIn**    | ✅ Verified (RavalAI Marketing Developer Platform) | ✅ Yes                                  | ✅ Approved (2026-08-28)                      | ✅ Yes (after SDR is up)          |
+| **LinkedIn**    | ✅ Verified (Mellox AI Marketing Developer Platform) | ✅ Yes                                  | ✅ Approved (2026-08-28)                      | ✅ Yes (after SDR is up)          |
 | **X / Twitter** | ⏳ Pending setup                                   | ❌ No                                   | ⏳ Not submitted                              | ❌ No                             |
 | **Facebook**    | 🆕 Just configured (2026-08-28)                    | ✅ Yes                                  | ⏳ Not yet submitted (use test users for now) | ⚠️ Test users only until approved |
 | **Instagram**   | 🆕 Just configured (2026-08-28)                    | ✅ Yes (same App ID/Secret as Facebook) | ⏳ Not yet submitted                          | ⚠️ Test users only until approved |
 
 ## LinkedIn — fully ready ✅
 
-- **App:** RavalAI Marketing Developer Platform
+- **App:** Mellox AI Marketing Developer Platform
 - **Client ID:** `77nxccyta71mmk`
 - **Verification URL:** https://www.linkedin.com/developers/apps/verification/781663ed-edea-4d71-adbf-b9c4e4ecaff3
 - **Verification status:** ✅ APPROVED (use this URL to check status anytime)
@@ -28,7 +28,7 @@
 
 ## Meta (Facebook + Instagram) — credentials stored, App Review pending ⏳
 
-- **App:** RavalAI (Meta for Developers)
+- **App:** Mellox AI (Meta for Developers)
 - **App ID:** `1766289191040965`
 - **App Secret:** stored in `raval/.env` as `FACEBOOK_CLIENT_SECRET`
 - **App Review status:** Not yet submitted
@@ -69,7 +69,7 @@
 # 4. Click "Connect LinkedIn" (or Facebook/Instagram if those are approved)
 # 5. You'll be redirected to the platform's consent screen
 # 6. Click "Authorize"
-# 7. You'll land back in RavalAI with the account marked "Connected"
+# 7. You'll land back in Mellox AI with the account marked "Connected"
 # 8. Verify the encrypted token in the SDR DB:
 #    ssh ubuntu@sdr.raval.ai
 #    sudo -u postgres psql raval_sde -c "SELECT id, platform, display_name FROM accounts;"

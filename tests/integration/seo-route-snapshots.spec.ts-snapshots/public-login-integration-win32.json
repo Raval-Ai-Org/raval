@@ -1,0 +1,55 @@
+{
+  "path": "/login",
+  "title": "Sign In · Mellox AI",
+  "description": "Sign in to Mellox AI — the Marketing Intelligence Layer for brands and agencies.",
+  "ogTitle": "Sign In · Mellox AI",
+  "ogDescription": "Access your Mellox AI workspace to plan, create and optimize marketing that gets you visible inside LLMs.",
+  "ogType": "website",
+  "ogSiteName": "Mellox AI",
+  "ogUrl": "https://raval.ai/login",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Sign In · Mellox AI",
+  "twitterDescription": "Access your Mellox AI workspace to plan, create and optimize marketing that gets you visible inside LLMs.",
+  "canonical": "https://raval.ai/login",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": "Your AI marketing team.",
+  "jsonLdTypes": [
+    "Organization",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval.ai/#organization",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval.ai/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval.ai/#website",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval.ai/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "Mellox AI"
+  ]
+}

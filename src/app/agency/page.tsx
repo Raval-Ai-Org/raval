@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { pageMetadata, webPageLd } from "@/lib/seo";
 import AgencyHQ from "./AgencyPage";
 
-const TITLE = "Agency HQ · Raval AI";
+const TITLE = "Agency · Mellox AI";
 const DESCRIPTION =
   "Manage all clients at once. Approvals, schedules, activity and combined analytics — one Marketing Intelligence Layer across every brand.";
 

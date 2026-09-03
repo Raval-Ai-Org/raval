@@ -24,7 +24,7 @@ const DEFAULT_STEPS: Step[] = [
 ];
 
 /**
- * Lovable-style "what's happening right now" trail.
+ * Live "what's happening right now" trail.
  * Walks through the platform's pipeline steps while the assistant is working,
  * so the user sees concrete progress instead of a blank pause.
  */

@@ -1,0 +1,59 @@
+{
+  "path": "/signup",
+  "title": "Create Account · Mellox AI",
+  "description": "Create your Mellox AI workspace — the Marketing Intelligence Layer for brands and agencies.",
+  "ogTitle": "Create Account · Mellox AI",
+  "ogDescription": "Start your Mellox AI workspace and get visible inside LLMs with AEO/GEO, Brand DNA and multi-client operations.",
+  "ogType": "website",
+  "ogSiteName": "Mellox AI",
+  "ogUrl": "https://raval.ai/signup",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Create Account · Mellox AI",
+  "twitterDescription": "Start your Mellox AI workspace and get visible inside LLMs with AEO/GEO, Brand DNA and multi-client operations.",
+  "canonical": "https://raval.ai/signup",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": "Your AI marketing team.",
+  "jsonLdTypes": [
+    "Organization",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval.ai/#organization",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval.ai/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval.ai/#website",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval.ai/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "Get visible inside LLMs",
+    "Brand DNA",
+    "AEO",
+    "GEO",
+    "Mellox AI"
+  ]
+}

@@ -1,16 +1,16 @@
 {
   "path": "/onboarding",
-  "title": "Onboard a client · Raval AI",
-  "description": "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
-  "ogTitle": "Onboard a client · Raval AI",
-  "ogDescription": "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+  "title": "Onboard a client � Mellox AI",
+  "description": "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+  "ogTitle": "Onboard a client � Mellox AI",
+  "ogDescription": "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
   "ogType": "website",
-  "ogSiteName": "Raval AI",
-  "ogUrl": "https://raval6.lovable.app/onboarding",
+  "ogSiteName": "Mellox AI",
+  "ogUrl": "https://raval.ai/onboarding",
   "twitterCard": "summary_large_image",
-  "twitterTitle": "Onboard a client · Raval AI",
-  "twitterDescription": "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
-  "canonical": "https://raval6.lovable.app/onboarding",
+  "twitterTitle": "Onboard a client � Mellox AI",
+  "twitterDescription": "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+  "canonical": "https://raval.ai/onboarding",
   "hreflang": [],
   "robots": "noindex,nofollow",
   "h1": null,
@@ -18,12 +18,12 @@
   "jsonLdNodes": [
     {
       "type": "Organization",
-      "id": "https://raval6.lovable.app/#organization",
-      "url": "https://raval6.lovable.app",
-      "name": "Raval AI",
+      "id": "https://raval.ai/#organization",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
       "hasDescription": true,
       "publisherRef": null,
-      "logoUrl": "https://raval6.lovable.app/favicon.svg",
+      "logoUrl": "https://raval.ai/favicon.svg",
       "offersCount": null,
       "offerPrices": null,
       "faqQuestionCount": null,
@@ -32,11 +32,11 @@
     },
     {
       "type": "WebSite",
-      "id": "https://raval6.lovable.app/#website",
-      "url": "https://raval6.lovable.app",
-      "name": "Raval AI",
+      "id": "https://raval.ai/#website",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
       "hasDescription": true,
-      "publisherRef": "https://raval6.lovable.app/#organization",
+      "publisherRef": "https://raval.ai/#organization",
       "logoUrl": null,
       "offersCount": null,
       "offerPrices": null,
@@ -45,5 +45,5 @@
       "inLanguage": "en"
     }
   ],
-  "approvedPhrasesPresent": ["Brand DNA", "AEO", "GEO", "Ravi", "Raval AI"]
+  "approvedPhrasesPresent": ["Brand DNA", "AEO", "GEO", "Ravi", "Mellox AI"]
 }

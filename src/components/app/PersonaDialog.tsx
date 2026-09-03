@@ -64,7 +64,7 @@ export function PersonaDialog({
       Icon={Sparkles}
       eyebrow="Welcome"
       title="Which best describes you?"
-      description="Pick one — we'll tune Raval AI to how you work."
+      description="Pick one — we'll tune Mellox AI to how you work."
       srDescription="Choose your persona"
       hideClose
       disableClose

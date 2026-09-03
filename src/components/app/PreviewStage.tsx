@@ -28,7 +28,7 @@ import {
 import type { PreviewStageEvent } from "@/lib/preview-stages";
 
 /**
- * Lovable/Manus-style process view. Each stage renders a tailored visual
+ * Process view for long-running work. Each stage renders a tailored visual
  * (search results, scan lines, draft typewriter, shimmer image, calendar,
  * metric deltas, success). Sits inside SitePreview's stage card.
  */

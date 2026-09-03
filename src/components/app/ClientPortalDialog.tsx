@@ -140,6 +140,7 @@ export function ClientPortalButton({ workspaceId }: { workspaceId: string | null
       hint: "Decide on client feedback",
     },
     { id: "share" as const, label: "New share", icon: Plus, badge: 0, hint: "Build a review link" },
+      { id: "share" as const, label: "New Review", icon: Plus, badge: 0, hint: "Build a review link" },
     {
       id: "manage" as const,
       label: "Manage",

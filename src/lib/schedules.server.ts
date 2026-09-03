@@ -1,4 +1,4 @@
-// Server-only scheduler executor. Generates content via Lovable AI for each
+// Server-only scheduler executor. Generates content via the configured AI provider for each
 // due scheduled_jobs row and inserts a pending content_items entry.
 // Imported only inside server handlers (cron route + run-now server fn).
 

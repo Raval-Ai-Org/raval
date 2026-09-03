@@ -1,4 +1,4 @@
-# Raval AI Authentication Audit Report
+# Mellox AI Authentication Audit Report
 
 **Date**: 2026-08-30  
 **Status**: READ-ONLY AUDIT COMPLETE  
@@ -434,14 +434,14 @@ VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_[your-key]"
 ```bash
 SUPABASE_URL="https://slcmqbbjzyztqyucauol.supabase.co"
 SUPABASE_PUBLISHABLE_KEY="sb_publishable_[your-key]"
-SUPABASE_SERVICE_ROLE_KEY="sb_secret_[your-key]"  # Server-only, admin ops
+SUPABASE_SERVICE_ROLE_KEY=<REDACTED>
 ```
 
 ### Other Features
 
 ```bash
-CRON_SECRET="[long-random-string-32+chars]"  # For /api/public/hooks/*
-OPENROUTER_API_KEY="sk-or-v1-..."            # AI gateway
+CRON_SECRET=<REDACTED>
+OPENROUTER_API_KEY=<REDACTED>
 ```
 
 ### Optional

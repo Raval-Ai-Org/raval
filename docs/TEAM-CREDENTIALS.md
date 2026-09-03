@@ -1,4 +1,4 @@
-# Team Credentials — RavalAI Local Dev Setup
+# Team Credentials — Mellox AI Local Dev Setup
 
 > **This document is a TEMPLATE. The real values live in 1Password (or Bitwarden).**
 > **Do NOT commit the real values to this file. It exists so you know which values to share.**

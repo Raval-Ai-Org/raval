@@ -1,6 +1,6 @@
-# RavalAI Documentation
+# Mellox AI Documentation
 
-> Index of architectural and operational docs for the RavalAI platform.
+> Index of architectural and operational docs for the Mellox AI platform.
 
 This folder lives next to the code so the team can find context without digging
 through external planning tools.

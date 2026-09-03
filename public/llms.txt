@@ -1,8 +1,8 @@
-# Raval AI
+# Mellox AI
 
 > The Marketing Intelligence Layer — an AI-native platform that helps brands and agencies plan, create, optimize and grow their marketing from one workspace, and get visible inside LLMs.
 
-Raval AI is powered by Ravi, a Marketing Reasoning Core built on four brains — Brand, Customer, Competitor and Market. Teams chat with Ravi to run AEO/GEO audits, generate on-brand content, plan calendars, coordinate approvals and manage many client brands at once. Strategy and execution live in the same product, grounded in each brand's DNA.
+Mellox AI is powered by Ravi, a Marketing Reasoning Core built on four brains — Brand, Customer, Competitor and Market. Teams chat with Ravi to run AEO/GEO audits, generate on-brand content, plan calendars, coordinate approvals and manage many client brands at once. Strategy and execution live in the same product, grounded in each brand's DNA.
 
 ## Pages
 

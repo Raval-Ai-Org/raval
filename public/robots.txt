@@ -2,6 +2,8 @@ User-agent: *
 Allow: /
 Disallow: /app
 Disallow: /app/
+Disallow: /workspace
+Disallow: /workspaces
 Disallow: /login
 Disallow: /signup
 Disallow: /onboarding

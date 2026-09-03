@@ -22,7 +22,7 @@ interface Props {
 }
 
 /**
- * Lovable-style "what to do next" chips that appear after each AI reply.
+ * Contextual "what to do next" chips that appear after each AI reply.
  * Suggestions are derived from the user's most recent prompt so they feel
  * contextual rather than canned.
  */

@@ -1,0 +1,71 @@
+{
+  "path": "/agency",
+  "title": "Agency · Mellox AI",
+  "description": "Manage all clients at once. Approvals, schedules, activity and combined analytics — one Marketing Intelligence Layer across every brand.",
+  "ogTitle": "Agency · Mellox AI",
+  "ogDescription": "Manage all clients at once. Approvals, schedules, activity and combined analytics — one Marketing Intelligence Layer across every brand.",
+  "ogType": "website",
+  "ogSiteName": "Mellox AI",
+  "ogUrl": "https://raval.ai/agency",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Agency · Mellox AI",
+  "twitterDescription": "Manage all clients at once. Approvals, schedules, activity and combined analytics — one Marketing Intelligence Layer across every brand.",
+  "canonical": "https://raval.ai/agency",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": "Hello.",
+  "jsonLdTypes": [
+    "Organization",
+    "WebPage",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval.ai/#organization",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval.ai/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebPage",
+      "id": null,
+      "url": "https://raval.ai/agency",
+      "name": "Agency · Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "Mellox AI",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval.ai/#website",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval.ai/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "AEO",
+    "Mellox AI"
+  ]
+}

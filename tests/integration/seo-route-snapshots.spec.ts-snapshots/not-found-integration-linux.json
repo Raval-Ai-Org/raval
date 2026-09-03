@@ -1,15 +1,15 @@
 {
   "path": "/__not_found__",
-  "title": "Page not found · Raval AI",
-  "description": "Raval AI is the AI-native platform that helps brands and agencies plan, create, optimize and grow their marketing from one workspace — powered by Brand DNA, AEO/GEO intelligence and multi-client operations to get you visible inside LLMs.",
-  "ogTitle": "Raval AI — The Marketing Intelligence Layer",
-  "ogDescription": "Get visible inside LLMs. Raval AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+  "title": "Page not found � Mellox AI",
+  "description": "Mellox AI is the AI-native platform that helps brands and agencies plan, create, optimize and grow their marketing from one workspace � powered by Brand DNA, AEO/GEO intelligence and multi-client operations to get you visible inside LLMs.",
+  "ogTitle": "Mellox AI � The Marketing Intelligence Layer",
+  "ogDescription": "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies � plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
   "ogType": "website",
-  "ogSiteName": "Raval AI",
+  "ogSiteName": "Mellox AI",
   "ogUrl": null,
   "twitterCard": "summary_large_image",
-  "twitterTitle": "Raval AI — The Marketing Intelligence Layer",
-  "twitterDescription": "Get visible inside LLMs. Raval AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+  "twitterTitle": "Mellox AI � The Marketing Intelligence Layer",
+  "twitterDescription": "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies � plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
   "canonical": null,
   "hreflang": [],
   "robots": "noindex,nofollow",
@@ -18,12 +18,12 @@
   "jsonLdNodes": [
     {
       "type": "Organization",
-      "id": "https://raval6.lovable.app/#organization",
-      "url": "https://raval6.lovable.app",
-      "name": "Raval AI",
+      "id": "https://raval.ai/#organization",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
       "hasDescription": true,
       "publisherRef": null,
-      "logoUrl": "https://raval6.lovable.app/favicon.svg",
+      "logoUrl": "https://raval.ai/favicon.svg",
       "offersCount": null,
       "offerPrices": null,
       "faqQuestionCount": null,
@@ -32,11 +32,11 @@
     },
     {
       "type": "WebSite",
-      "id": "https://raval6.lovable.app/#website",
-      "url": "https://raval6.lovable.app",
-      "name": "Raval AI",
+      "id": "https://raval.ai/#website",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
       "hasDescription": true,
-      "publisherRef": "https://raval6.lovable.app/#organization",
+      "publisherRef": "https://raval.ai/#organization",
       "logoUrl": null,
       "offersCount": null,
       "offerPrices": null,
@@ -51,6 +51,6 @@
     "Brand DNA",
     "AEO",
     "GEO",
-    "Raval AI"
+    "Mellox AI"
   ]
 }

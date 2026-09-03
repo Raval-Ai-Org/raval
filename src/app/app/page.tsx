@@ -4,7 +4,7 @@ import { SessionGate } from "@/components/auth/SessionGate";
 import AppShell from "./AppShell";
 
 export const metadata: Metadata = pageMetadata({
-  title: "Studio · Raval AI",
+  title: "Workspace · Mellox AI",
   description:
     "Your Marketing Intelligence Layer — chat with Ravi to plan, create, optimize and grow content, SEO/AEO/GEO and social for the active brand.",
   path: "/app",

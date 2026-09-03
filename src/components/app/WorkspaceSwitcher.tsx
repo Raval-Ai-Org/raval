@@ -180,7 +180,7 @@ export function WorkspaceSwitcher({
             onClick={() => {
               setOpen(false);
               onSwitch?.();
-              navigate({ to: "/projects" });
+              navigate({ to: "/workspaces" });
             }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-foreground/85 transition-colors hover:bg-secondary/70 hover:text-foreground"
           >
@@ -193,7 +193,7 @@ export function WorkspaceSwitcher({
             onClick={() => {
               setOpen(false);
               onSwitch?.();
-              navigate({ to: "/projects" });
+              navigate({ to: "/workspaces" });
             }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
           >

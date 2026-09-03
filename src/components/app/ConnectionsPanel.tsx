@@ -148,7 +148,7 @@ export function ConnectionsPanel() {
         <div className="rounded-md border border-border/60 bg-card/50 p-2">
           <p className="text-[11px] font-medium text-foreground">Connect a social account</p>
           <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
-            Authorize RavalAI to post and schedule on your behalf.
+              Authorize Mellox AI to post and schedule on your behalf.
           </p>
         </div>
       )}
@@ -168,7 +168,7 @@ export function ConnectionsPanel() {
               Connect {pendingLabel}
             </h4>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              RavalAI wants permission to access your {pendingLabel} account so it can post and
+              Mellox AI wants permission to access your {pendingLabel} account so it can post and
               schedule content on your behalf.
             </p>
             <div className="mt-4 flex justify-end gap-2">

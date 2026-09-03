@@ -42,7 +42,7 @@ const ROUTES = [
   },
   {
     to: "/app",
-    label: "Analytics · Organic",
+    label: "Analytics · Search",
     icon: Search,
     search: undefined,
     analyticsTab: "organic",
@@ -79,7 +79,7 @@ const QUICK_PROMPTS = [
 const WORKSPACE_ACTIONS = [
   { id: "brand-dna", label: "Open Brand DNA memory", icon: Brain, event: "open:brand-dna" },
   { id: "tasks", label: "Open Tasks & alerts", icon: CheckSquare, event: "open:tasks" },
-  { id: "autopilot", label: "Open 24/7 Autopilot", icon: Bot, event: "open:autopilot" },
+  { id: "autopilot", label: "Open Automations", icon: Bot, event: "open:autopilot" },
 ] as const;
 
 export function CommandBar() {
@@ -113,7 +113,7 @@ export function CommandBar() {
     setOpen(false);
     window.dispatchEvent(new CustomEvent("chat:prefill", { detail: prompt }));
     window.dispatchEvent(new CustomEvent("chat:focus"));
-    emit({ kind: "nav", title: "Asked Raval Ai" });
+    emit({ kind: "nav", title: "Asked Mellox AI" });
   };
 
   const go = (to: string, label: string, search?: any) => {
@@ -154,7 +154,7 @@ export function CommandBar() {
               autoFocus
               value={value}
               onValueChange={setValue}
-              placeholder="Ask Raval Ai, jump to a module, toggle an agent…"
+              placeholder="Ask Mellox AI, jump to a module, toggle an agent…"
               className="flex h-12 w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
             />
             <kbd className="hidden sm:inline rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
@@ -162,7 +162,7 @@ export function CommandBar() {
             </kbd>
           </div>
           <Command.List className="max-h-[60vh] overflow-y-auto p-1.5 scrollbar-thin">
-            {/* Always-on "Ask Raval Ai" — appears at top whenever user has typed */}
+            {/* Always-on "Ask Mellox AI" — appears at top whenever user has typed */}
             {trimmed.length > 0 && (
               <Command.Item
                 value={`ask ${trimmed}`}
@@ -175,7 +175,7 @@ export function CommandBar() {
                 </span>
                 <span className="flex-1 min-w-0">
                   <span className="block text-[10.5px] font-semibold uppercase tracking-wider text-primary">
-                    Ask Raval Ai
+                    Ask Mellox AI
                   </span>
                   <span className="block truncate text-[13px] font-medium text-foreground">
                     {trimmed}
@@ -334,7 +334,7 @@ export function CommandBar() {
           </Command.List>
           <div className="flex items-center justify-between border-t border-border bg-card/50 px-3 py-2 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1.5">
-              <Sparkles className="h-3 w-3 text-aura" /> Raval Ai · Universal command
+              <Sparkles className="h-3 w-3 text-aura" /> Mellox AI · Universal command
             </span>
             <span className="flex items-center gap-1">
               <kbd className="rounded border border-border bg-background px-1 py-0.5">↑↓</kbd> nav

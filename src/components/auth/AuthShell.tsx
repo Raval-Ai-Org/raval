@@ -61,7 +61,7 @@ export function AuthShell({
               transition={{ delay: 0.6, duration: 0.8 }}
               className="text-[11px] uppercase tracking-[0.22em] text-white/40"
             >
-              © Raval Ai
+              © Mellox AI
             </motion.div>
           </div>
         </aside>

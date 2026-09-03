@@ -4,23 +4,23 @@ import { SessionGate } from "@/components/auth/SessionGate";
 import Onboarding from "./OnboardingPage";
 
 export const metadata: Metadata = {
-  title: "Onboard a client · Raval AI",
+  title: "Set Up Your Workspace · Mellox AI",
   description:
-    "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+    "Set up your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
   alternates: { canonical: `${BASE_URL}/onboarding` },
   robots: "noindex,nofollow",
   openGraph: {
-    title: "Onboard a client · Raval AI",
+    title: "Set Up Your Workspace · Mellox AI",
     description:
-      "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+      "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
     url: `${BASE_URL}/onboarding`,
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Onboard a client · Raval AI",
+    title: "Set Up Your Workspace · Mellox AI",
     description:
-      "Add a new brand to your Raval AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+      "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
   },
 };
 

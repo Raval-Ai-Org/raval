@@ -201,8 +201,7 @@ export const rescheduleContentItem = createServerFn({ method: "POST" })
 /* ------------------------------------------------------------ */
 /* AI generation helper                                          */
 /* ------------------------------------------------------------ */
-// Legacy `callLovableAi` + `safeParse` helpers removed; all calls now
-// route through `runJsonPrompt` (shared cache + safe parsing).
+// Content generation routes through `runJsonPrompt` (shared cache + safe parsing).
 
 function extractBrandFact(context?: string | null, label = "Brand") {
   if (!context) return "";

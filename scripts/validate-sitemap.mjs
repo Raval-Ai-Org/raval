@@ -5,7 +5,7 @@
  * Fetches /sitemap.xml from a running server (SITEMAP_BASE_URL, defaults to
  * http://localhost:8080), then for every <loc> URL asserts:
  *
- *   1. The URL is on the canonical host (https://raval6.lovable.app).
+ *   1. The URL is on the configured canonical host.
  *   2. The URL is reachable (HTTP 2xx after following redirects).
  *   3. The rendered page does NOT contain a `noindex` robots directive.
  *   4. The rendered page's <link rel="canonical"> self-references the same URL

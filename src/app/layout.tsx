@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { BASE_URL } from "@/lib/seo";
+import { BASE_URL, BRAND_NAME } from "@/lib/seo";
 import { Providers } from "@/app/providers";
 
 import "@/styles.css";
@@ -8,10 +8,10 @@ import faviconAsset from "@/assets/favicon.svg.asset.json";
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
-  title: "Raval AI — The Marketing Intelligence Layer",
+  title: "Mellox AI | Marketing Intelligence Layer",
   description:
-    "Raval AI is the AI-native platform that helps brands and agencies plan, create, optimize and grow their marketing from one workspace — powered by Brand DNA, AEO/GEO intelligence and multi-client operations to get you visible inside LLMs.",
-  applicationName: "Raval AI",
+    "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+  applicationName: "Mellox AI",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     apple: [{ url: faviconAsset.url }],
   },
   openGraph: {
-    title: "Raval AI — The Marketing Intelligence Layer",
+    title: "Mellox AI | Marketing Intelligence Layer",
     description:
-      "Get visible inside LLMs. Raval AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
-    siteName: "Raval AI",
+      "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+    siteName: "Mellox AI",
     type: "website",
     images: [
       "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp",
@@ -32,9 +32,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Raval AI — The Marketing Intelligence Layer",
+    title: "Mellox AI | Marketing Intelligence Layer",
     description:
-      "Get visible inside LLMs. Raval AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+      "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
     images: [
       "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp",
     ],
@@ -56,21 +56,21 @@ const ORGANIZATION_LD = {
     {
       "@type": "Organization",
       "@id": `${BASE_URL}/#organization`,
-      name: "Raval AI",
+      name: "Mellox AI",
       url: BASE_URL,
       logo: {
         "@type": "ImageObject",
         url: `${BASE_URL}/favicon.svg`,
       },
       description:
-        "Raval AI is the Marketing Intelligence Layer — an AI-native platform that helps brands and agencies get visible inside LLMs.",
+        "Mellox AI is the Marketing Intelligence Layer — an AI-native platform that helps brands and agencies get visible inside LLMs.",
       sameAs: [],
     },
     {
       "@type": "WebSite",
       "@id": `${BASE_URL}/#website`,
       url: BASE_URL,
-      name: "Raval AI",
+      name: "Mellox AI",
       description:
         "Get visible inside LLMs. The AI-native marketing platform for brands and agencies.",
       publisher: { "@id": `${BASE_URL}/#organization` },
@@ -96,6 +96,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
+        <meta property="og:site_name" content={BRAND_NAME} />
+        <meta property="og:type" content="website" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

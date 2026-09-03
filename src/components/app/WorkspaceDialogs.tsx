@@ -110,7 +110,7 @@ function RenameDialog({
       Icon={Pencil}
       eyebrow="Workspace"
       title="Rename workspace"
-      description="This is how the workspace shows up across Raval AI."
+      description="This is how the workspace shows up across Mellox AI."
       bodyClassName="px-5 py-5 sm:px-6"
     >
       <form onSubmit={submit} className="space-y-4">
@@ -271,7 +271,7 @@ function SettingsDialog({
       Icon={Settings2}
       eyebrow="Preferences"
       title="Settings"
-      description="Tune how Raval AI behaves on this device."
+      description="Tune how Mellox AI behaves on this device."
       bodyClassName="px-5 py-5 sm:px-6"
     >
       <ul className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card/40">
@@ -367,7 +367,7 @@ function ConnectorsDialog({
       Icon={Plug}
       eyebrow="Integrations"
       title="Connectors"
-      description="Plug Raval AI into the tools your team already uses."
+      description="Plug Mellox AI into the tools your team already uses."
       bodyClassName="px-5 py-5 sm:px-6"
     >
       <ul className="space-y-2">

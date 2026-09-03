@@ -28,7 +28,7 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval6.lovable.app";
+const CANONICAL_HOST = "https://raval.ai";
 
 /** Entry-point variants we walk for every indexable route. */
 type EntryVariant = {

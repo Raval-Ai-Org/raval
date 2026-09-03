@@ -26,7 +26,7 @@ export const TABS: {
     icon: LayoutDashboard,
     blurb: "The 30-second snapshot of everything.",
   },
-  { id: "organic", label: "Organic", icon: Search, blurb: "How people find you on Google & AI." },
+  { id: "organic", label: "Search", icon: Search, blurb: "How people find you on Google & AI." },
   { id: "social", label: "Social", icon: Share2, blurb: "Posts, reach, and what's scheduled." },
   { id: "content", label: "Content", icon: FileText, blurb: "Drafts moving toward publish." },
   { id: "audience", label: "Audience", icon: PieIcon, blurb: "Who's visiting and where from." },

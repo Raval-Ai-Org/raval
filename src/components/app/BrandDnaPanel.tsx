@@ -486,7 +486,7 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
       <DialogTrigger asChild>
         <button
           className={SEG}
-          title="Brand DNA — everything Raval Ai knows about your brand"
+          title="Brand DNA — everything Mellox AI knows about your brand"
           aria-label={`Open Brand DNA (${filledCount} of ${total} fields filled)`}
           aria-haspopup="dialog"
           aria-expanded={open}
@@ -537,7 +537,7 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
           <DialogHeader className="sr-only">
             <DialogTitle id="brand-dna-title">Brand DNA</DialogTitle>
             <DialogDescription id="brand-dna-desc">
-              Everything Raval Ai knows about your brand. Use Tab to move between tiles, Enter or
+              Everything Mellox AI knows about your brand. Use Tab to move between tiles, Enter or
               Space to open one, and Escape to return to the overview.
             </DialogDescription>
           </DialogHeader>
@@ -2122,7 +2122,7 @@ const NAV_META: {
     icon: ImageIcon,
     desc: "Logos & saved files",
     headline: "Assets",
-    subhead: "Reusable images and files Raval Ai can reach for.",
+    subhead: "Reusable images and files Mellox AI can reach for.",
   },
   {
     key: "notes",

@@ -18,6 +18,7 @@ const VALID = new Set<string>([
 // /app (noindex), so pin the same noindex + canonical here in case a crawler
 // or the redirect chain reads this route's shell directly.
 export const metadata: Metadata = {
+  title: "Analytics · Mellox AI",
   robots: "noindex,nofollow",
   alternates: { canonical: `${BASE_URL}/app` },
 };
@@ -34,5 +35,5 @@ export default async function AnalyticsRedirect({
   const params = await searchParams;
   const raw = typeof params.tab === "string" ? params.tab : undefined;
   const tab: AnalyticsTab = raw && VALID.has(raw) ? (raw as AnalyticsTab) : "overview";
-  redirect(`/app?tab=${tab}`);
+  redirect(`/workspace?tab=${tab}`);
 }

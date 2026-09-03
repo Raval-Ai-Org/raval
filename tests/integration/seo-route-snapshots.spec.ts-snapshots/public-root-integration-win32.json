@@ -1,0 +1,91 @@
+{
+  "path": "/",
+  "title": "Mellox AI | Marketing Intelligence Layer",
+  "description": "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+  "ogTitle": "Mellox AI | Marketing Intelligence Layer",
+  "ogDescription": "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+  "ogType": "website",
+  "ogSiteName": "Mellox AI",
+  "ogUrl": "https://raval.ai",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Mellox AI | Marketing Intelligence Layer",
+  "twitterDescription": "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+  "canonical": "https://raval.ai",
+  "hreflang": [],
+  "robots": null,
+  "h1": null,
+  "jsonLdTypes": [
+    "FAQPage",
+    "Organization",
+    "SoftwareApplication",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "FAQPage",
+      "id": null,
+      "url": null,
+      "name": null,
+      "hasDescription": false,
+      "publisherRef": null,
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": 3,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "Organization",
+      "id": "https://raval.ai/#organization",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval.ai/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "SoftwareApplication",
+      "id": null,
+      "url": "https://raval.ai/",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": null,
+      "offersCount": 3,
+      "offerPrices": [
+        "USD29",
+        "USD79",
+        "USD9"
+      ],
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval.ai/#website",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval.ai/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "Get visible inside LLMs",
+    "Brand DNA",
+    "Mellox AI"
+  ]
+}

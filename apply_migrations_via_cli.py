@@ -17,7 +17,7 @@ print()
 
 # Final-state migration set for a completely fresh Supabase project.
 # The cron migration 20260709194553 (competitor-watch-scan pg_cron job) is
-# deliberately EXCLUDED: stale Lovable URL + incompatible auth contract, and
+# deliberately EXCLUDED: stale deployment URL + incompatible auth contract, and
 # no production deployment URL exists yet. It will be applied separately
 # after the app is deployed.
 FINAL_STATE_MIGRATIONS = [

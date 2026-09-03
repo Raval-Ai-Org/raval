@@ -1,8 +1,8 @@
 /**
  * Guards the pitch-deck-aligned SEO/meta on authenticated app + studio
- * routes (Studio, Onboarding, Agency HQ, Clients). These routes gate their
+ * routes (Workspace, Onboarding, Agency, Workspaces). These routes gate their
  * UI behind auth in the component, but head() still runs at route match on
- * SSR — so the tags shipped in the initial HTML are what social crawlers
+ * SSR � so the tags shipped in the initial HTML are what social crawlers
  * and search engines actually see. We assert them by reading the raw HTML
  * response instead of driving the browser, which sidesteps the /login
  * redirect while still validating the exact tags the framework emitted.
@@ -11,16 +11,16 @@
  */
 import { test, expect } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval6.lovable.app";
+const CANONICAL_HOST = "https://raval.ai";
 
 // Legacy phrasing / stale domains that must never come back.
 const FORBIDDEN: RegExp[] = [
   /AI marketing OS/i,
   /marketing operator/i,
   /threereachaisaas/i,
-  /raval3\.lovable\.app/i,
-  /Lovable App/i,
-  /Lovable Generated Project/i,
+  /legacy-preview\.example/i,
+  /Legacy App/i,
+  /Legacy Generated Project/i,
 ];
 
 // Terms from the pitch deck that at least one meta signal per route must carry.
@@ -101,7 +101,7 @@ function assertDeckAligned(meta: MetaSnapshot, label: string) {
 
 function assertCommonShape(meta: MetaSnapshot, path: string, label: string) {
   expect(meta.title, `[${label}] <title>`).toBeTruthy();
-  expect(meta.title!).toMatch(/Raval AI/);
+  expect(meta.title!).toMatch(/Mellox AI/);
   expect(meta.description, `[${label}] description`).toBeTruthy();
   expect(meta.ogTitle, `[${label}] og:title`).toBeTruthy();
   expect(meta.ogDescription, `[${label}] og:description`).toBeTruthy();
@@ -112,7 +112,7 @@ function assertCommonShape(meta: MetaSnapshot, path: string, label: string) {
 }
 
 /**
- * Authenticated + studio surfaces. Each entry pins path → required brand
+ * Authenticated + studio surfaces. Each entry pins path ? required brand
  * terms (in addition to the shared deck-term assertion) so a rename or
  * accidental copy-paste from another route surfaces immediately.
  */
@@ -124,9 +124,9 @@ const ROUTES: Array<{
   noindex: boolean;
 }> = [
   {
-    label: "Studio (/app)",
-    path: "/app",
-    mustContain: [/Studio/i, /Ravi/i],
+    label: "Workspace (/workspace)",
+    path: "/workspace",
+    mustContain: [/Workspace/i, /Ravi/i],
     noindex: true,
   },
   {
@@ -136,24 +136,24 @@ const ROUTES: Array<{
     noindex: true,
   },
   {
-    label: "Agency HQ (/agency)",
+    label: "Agency (/agency)",
     path: "/agency",
     mustContain: [/Agency/i, /Marketing Intelligence Layer/i],
     noindex: true,
   },
   {
-    label: "Clients (/projects)",
-    path: "/projects",
-    mustContain: [/Clients|client brand/i, /Marketing Intelligence Layer/i],
+    label: "Workspaces (/workspaces)",
+    path: "/workspaces",
+    mustContain: [/Clients|Workspaces|client brand/i, /Marketing Intelligence Layer/i],
     noindex: true,
   },
 ];
 
-test.describe("SEO meta — authenticated app + studio routes", () => {
+test.describe("SEO meta � authenticated app + studio routes", () => {
   for (const route of ROUTES) {
     test(`${route.label} ships pitch-deck-aligned head metadata`, async ({ request }) => {
       const res = await request.get(route.path);
-      // These routes never 404 — even when auth redirects fire client-side,
+      // These routes never 404 � even when auth redirects fire client-side,
       // the SSR HTML (with head tags) is served with a 200.
       expect(res.status(), `${route.label} status`).toBeLessThan(400);
       const html = await res.text();

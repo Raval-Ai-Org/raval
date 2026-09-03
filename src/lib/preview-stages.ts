@@ -1,5 +1,5 @@
 // Preview stage system — drives the "what's happening" view in SitePreview.
-// Inspired by Lovable's in-chat process view and Manus's live task surface.
+// In-chat process view for long-running work and live task updates.
 //
 // A "plan" is an ordered list of stages. Each stage has a kind that maps to a
 // dedicated visual in <PreviewStage/>. We tick through them on a timer while

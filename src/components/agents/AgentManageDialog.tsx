@@ -194,11 +194,11 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
         {/* Tabs */}
         <Tabs defaultValue="tasks" className="flex flex-col overflow-hidden">
           <TabsList className="mx-6 mt-4 grid w-[calc(100%-3rem)] grid-cols-4 bg-muted/40 p-1">
-            <TabsTrigger value="tasks" className="gap-1.5 text-xs data-[state=active]:shadow-sm">
-              <Bell className="h-3.5 w-3.5" /> To-do
+              <TabsTrigger value="tasks" className="gap-1.5 text-xs data-[state=active]:shadow-sm">
+                <Bell className="h-3.5 w-3.5" /> Tasks
             </TabsTrigger>
-            <TabsTrigger value="missions" className="gap-1.5 text-xs">
-              <Rocket className="h-3.5 w-3.5" /> Run now
+              <TabsTrigger value="missions" className="gap-1.5 text-xs">
+                <Rocket className="h-3.5 w-3.5" /> Run
             </TabsTrigger>
             <TabsTrigger value="activity" className="gap-1.5 text-xs">
               <Activity className="h-3.5 w-3.5" /> Activity

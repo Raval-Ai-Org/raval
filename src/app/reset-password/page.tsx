@@ -3,9 +3,9 @@ import { pageMetadata } from "@/lib/seo";
 import ResetPasswordPage from "./ResetPasswordPage";
 
 export const metadata: Metadata = pageMetadata({
-  title: "Reset password · Raval AI",
+  title: "Reset password · Mellox AI",
   description:
-    "Reset your Raval AI password to get back into the Marketing Intelligence Layer for your brand or agency.",
+    "Reset your Mellox AI password to get back into the Marketing Intelligence Layer for your brand or agency.",
   path: "/reset-password",
   noindex: true,
 });

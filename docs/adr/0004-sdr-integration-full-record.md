@@ -42,7 +42,7 @@ RavalAI: /api/public/hooks/sdr → verify → upsert content_publications → ag
 - **Queue-first immediate publish (T067):** `publish()` enqueues targets to `process_target` and returns fast with `status: publishing` — no blocking platform calls in the HTTP handler. Live-verified.
 - **Human-readable error surfacing:** clients see plain-language messages ("The Social Distribution Engine is not responding…") with the technical detail as a secondary line; terminal success/failure toasts (green-tick "Successfully posted to LinkedIn" + live link).
 - **brand_id mapping:** RavalAI is one workspace per client brand → `brand_id = workspace_id` when minting the per-workspace SDR key (SDR requires both).
-- **OAuth (app-login) hold:** Zian's `ad052bc` switched app login from Lovable OAuth broker to native Supabase Google OAuth (PKCE). **Parked** — not a prerequisite for the SDR integration; password login (test credentials) is unaffected. Revisit after integration is live.
+- **OAuth (app-login) hold:** Zian's `ad052bc` switched app login from an external OAuth broker to native Supabase Google OAuth (PKCE). **Parked** — not a prerequisite for the SDR integration; password login (test credentials) is unaffected. Revisit after integration is live.
 
 ---
 

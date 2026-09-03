@@ -5,7 +5,7 @@
 The pg_cron scheduler in the database migration `supabase/migrations/20260709194553_bb8d43fe-2f5e-48cb-9c77-8042cb96e8be.sql` contains a hardcoded webhook URL pointing to the development/staging domain:
 
 ```sql
-url := 'https://raval6.lovable.app/api/public/hooks/competitor-watch'
+url := '<DEPLOYMENT_URL>/api/public/hooks/competitor-watch'
 ```
 
 ### Action Required Before Production Deployment

@@ -1,4 +1,4 @@
-# RavalAI
+# Mellox AI
 
 AI-native marketing platform — brand-grounded content, SEO/GEO/AEO, and social
 media distribution from one workspace. Next.js App Router (React 19) with a
@@ -24,10 +24,10 @@ header rather than a cookie.
 
 ## Social Distribution Engine (SDR) integration
 
-RavalAI publishes approved content to clients' LinkedIn, X, Facebook, and
+Mellox AI publishes approved content to clients' LinkedIn, X, Facebook, and
 Instagram accounts through the **Social Distribution Engine (SDR)** — a separate
 FastAPI + Celery service that owns platform OAuth, token storage, and delivery
-execution. RavalAI is the editorial front-end; it proxies to the SDR
+execution. Mellox AI is the editorial front-end; it proxies to the SDR
 server-side, never exposing credentials to the browser, and receives delivery
 status via HMAC-verified webhooks.
 
@@ -71,7 +71,7 @@ in server modules only):
 
 - SDR signs each delivery: `X-Signature-256: sha256=<hex>` where the payload is
   `HMAC-SHA256(secret, "POST|/webhook|" + rawBody)`.
-- RavalAI computes the same over the raw body and compares with
+- Mellox AI computes the same over the raw body and compares with
   `timingSafeEqual`. Mismatch or missing header → `401`, **zero state change**.
 - Apply is idempotent (upsert on the `(content_item_id, sdr_target_id)`
   uniqueness constraint) and terminal-wins: a stale `retrying` never downgrades
@@ -91,7 +91,7 @@ The repo's `.env` file is **gitignored** (it holds secrets like the Supabase ser
 
 **Safe procedure:**
 
-1. Ask Junaid to share the "RavalAI local dev .env" item in 1Password
+1. Ask Junaid to share the "Mellox AI local dev .env" item in 1Password
 2. Copy each line from 1Password into your local `.env`
 3. Run `npm run setup` to verify
 

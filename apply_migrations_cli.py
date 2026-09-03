@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Apply the approved final-state migrations to the new Raval AI Supabase project
+Apply the approved final-state migrations to the new Mellox AI Supabase project
 (slcmqbbjzyztqyucauol). Runs each file via `supabase db execute --linked`.
 """
 
@@ -14,7 +14,7 @@ PROJECT_REF = os.environ.get("SUPABASE_PROJECT_REF", "slcmqbbjzyztqyucauol")
 PROJECT_URL = f"https://{PROJECT_REF}.supabase.co"
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
-print("🔧 Applying Migrations to New Project")
+print("?? Applying Migrations to New Project")
 print("=" * 50)
 print(f"Project: {PROJECT_REF}")
 print(f"URL: {PROJECT_URL}")
@@ -23,7 +23,7 @@ print()
 # Final-state migration set for a completely fresh Supabase project.
 # This is the minimal, ordered list that recreates the current Raval schema.
 # The cron migration 20260709194553 (competitor-watch-scan pg_cron job) is
-# deliberately EXCLUDED: it embeds a stale Lovable URL and an auth contract
+# deliberately EXCLUDED: it embeds a stale deployment URL and incompatible auth contract
 # (apikey header) that no longer matches the app's hook (x-cron-secret), and
 # Raval has no production deployment URL yet. It will be applied separately
 # after the app is deployed (see apply-migrations-cron-DEFERRED section below).
@@ -45,12 +45,12 @@ migration_files = []
 for name in FINAL_STATE_MIGRATIONS:
     path = f"supabase/migrations/{name}"
     if not os.path.isfile(path):
-        print(f"❌ Expected migration not found: {path}")
+        print(f"? Expected migration not found: {path}")
         sys.exit(1)
     migration_files.append(path)
 
 if not migration_files:
-    print("❌ No migration files selected")
+    print("? No migration files selected")
     sys.exit(1)
 
 print(f"Found {len(migration_files)} migration files (final-state set)")
@@ -75,7 +75,7 @@ for i, filepath in enumerate(migration_files, 1):
         with open(filepath, 'r') as f:
             sql_content = f.read()
     except Exception as e:
-        print(f"  ❌ Failed to read file: {e}")
+        print(f"  ? Failed to read file: {e}")
         sys.exit(1)
 
     # Execute via supabase CLI using db execute
@@ -91,7 +91,7 @@ for i, filepath in enumerate(migration_files, 1):
     result = os.system(f'supabase db query --linked --file {temp_file} 2>&1')
 
     if result == 0:
-        print(f"  ✓ Success")
+        print(f"  ? Success")
         successful += 1
         # Clean up temp file
         if os.path.exists(temp_file):
@@ -99,20 +99,20 @@ for i, filepath in enumerate(migration_files, 1):
     else:
         # Hard safety rule: STOP immediately on the first failed migration.
         # Do NOT continue to later migrations.
-        print(f"  ❌ FAILED (exit code {result})")
-        print(f"  ✋ STOPPING: do not proceed to later migrations until resolved.")
+        print(f"  ? FAILED (exit code {result})")
+        print(f"  ? STOPPING: do not proceed to later migrations until resolved.")
         sys.exit(1)
 
 print()
 print("=" * 50)
 print(f"Migration Summary:")
-print(f"  ✓ Successful: {successful}")
-print(f"  ❌ Failed: {failed}")
-print(f"  ⏭️  Skipped: {skipped}")
+print(f"  ? Successful: {successful}")
+print(f"  ? Failed: {failed}")
+print(f"  ??  Skipped: {skipped}")
 print()
 
 if successful > 0:
-    print("✅ Migrations applied! Testing if persona function exists...")
+    print("? Migrations applied! Testing if persona function exists...")
 
     # Test if the persona function now exists
     test_result = os.system(
@@ -120,8 +120,8 @@ if successful > 0:
     )
 
     if test_result == 0:
-        print("✓ Persona function exists!")
+        print("? Persona function exists!")
     else:
-        print("⚠️  Persona function may not exist yet")
+        print("??  Persona function may not exist yet")
 
 sys.exit(0 if failed == 0 else 1)

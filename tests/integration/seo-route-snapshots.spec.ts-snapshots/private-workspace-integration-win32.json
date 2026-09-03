@@ -1,0 +1,56 @@
+{
+  "path": "/workspace",
+  "title": "Workspace · Mellox AI",
+  "description": "Your Marketing Intelligence Layer with Ravi for planning, creating, optimizing and growing marketing for the active brand.",
+  "ogTitle": "Workspace · Mellox AI",
+  "ogDescription": "Your Marketing Intelligence Layer with Ravi for planning, creating, optimizing and growing marketing for the active brand.",
+  "ogType": "website",
+  "ogSiteName": "Mellox AI",
+  "ogUrl": "https://raval.ai/workspace",
+  "twitterCard": "summary_large_image",
+  "twitterTitle": "Workspace · Mellox AI",
+  "twitterDescription": "Your Marketing Intelligence Layer with Ravi for planning, creating, optimizing and growing marketing for the active brand.",
+  "canonical": "https://raval.ai/workspace",
+  "hreflang": [],
+  "robots": "noindex,nofollow",
+  "h1": null,
+  "jsonLdTypes": [
+    "Organization",
+    "WebSite"
+  ],
+  "jsonLdNodes": [
+    {
+      "type": "Organization",
+      "id": "https://raval.ai/#organization",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": null,
+      "logoUrl": "https://raval.ai/favicon.svg",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "WebSite",
+      "id": "https://raval.ai/#website",
+      "url": "https://raval.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "https://raval.ai/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": "en"
+    }
+  ],
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "Ravi",
+    "Mellox AI"
+  ]
+}
