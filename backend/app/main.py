@@ -18,9 +18,26 @@ from .models import (
     QuerySet,
     Query,
     AIResponse,
+    AIMention,
+    AICitation,
+    AIVisibilityObservation,
+    AIVisibilityGap,
+    AIGapFindingLink,
+    AIVisibilitySnapshot,
+    AIMonitoringRun,
 )
 from .query_intelligence_service import QueryIntelligenceService
 from .ai_response_service import AIResponseService
+from .mention_citation_service import MentionCitationService
+from .visibility_signal_service import VisibilitySignalService
+from .visibility_gap_service import VisibilityGapService
+from .visibility_metrics_service import VisibilityMetricsService
+from .monitoring_pipeline_service import MonitoringPipelineService
+
+
+
+
+
 
 from .schemas import (
     AIRunCreate,
@@ -117,7 +134,38 @@ from .schemas import (
     BatchExecuteQuerySetRequest,
     AIResponseDetail,
     BatchAIResponseResult,
+    MentionDetail,
+    CitationDetail,
+    DetectionResultResponse,
+    BatchDetectionResultResponse,
+    DetectionRequest,
+    CompetitorSignalDetail,
+    VisibilityObservationDetail,
+    BatchVisibilityObservationResponse,
+    VisibilityEvaluationRequest,
+    GapFindingLinkDetail,
+    VisibilityGapDetail,
+    BatchVisibilityGapResponse,
+    MetricRateDetail,
+    TargetVsCompetitorDetail,
+    OperationalHealthDetail,
+    CompetitorMetricDetail,
+    VisibilityMetricsResponse,
+    ProviderMetricsBreakdownResponse,
+    PeriodComparisonResponse,
+    TimelinePointDetail,
+    VisibilityTimelineResponse,
+    VisibilitySnapshotDetail,
+    StartMonitoringRunRequest,
+    MonitoringRunResponse,
+    MonitoringRunResultItem,
+    MonitoringRunDetailResponse,
 )
+
+
+
+
+
 
 from .score_explanation import ScoreExplanationResponse
 from .site_aggregator import SiteScoreSummary
@@ -3341,6 +3389,950 @@ def get_response_endpoint(
     if not resp:
         raise HTTPException(status_code=404, detail="AI response not found")
     return resp
+
+
+# ==========================================
+# Task 10 Step 3 — Mention & Citation Detection
+# ==========================================
+
+
+@app.post(
+    "/api/v1/responses/{response_id}/detect",
+    response_model=DetectionResultResponse,
+    status_code=200,
+)
+def detect_response_mentions_and_citations_endpoint(
+    response_id: int,
+    payload: DetectionRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Analyzes an existing AIResponse and extracts brand mentions, aliases,
+    domain mentions, product entities, and citation URLs with evidence.
+    """
+    custom_aliases = payload.custom_aliases if payload else None
+    try:
+        return MentionCitationService.process_and_persist_detection(
+            db=db,
+            response_id=response_id,
+            custom_aliases=custom_aliases,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
+
+
+@app.get(
+    "/api/v1/responses/{response_id}/detection",
+    response_model=DetectionResultResponse,
+)
+def get_response_detection_endpoint(
+    response_id: int,
+    db: Session = Depends(get_db),
+):
+    """Retrieves existing mention and citation detection results for an AIResponse."""
+    res = MentionCitationService.get_response_detection(db, response_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="AI response not found")
+    return res
+
+
+@app.post(
+    "/api/v1/query-sets/{query_set_id}/detect",
+    response_model=BatchDetectionResultResponse,
+    status_code=200,
+)
+def batch_detect_query_set_endpoint(
+    query_set_id: int,
+    provider: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Batch executes mention and citation detection across all responses
+    associated with a QuerySet.
+    """
+    qs = QueryIntelligenceService.get_query_set(db, query_set_id)
+    if not qs:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+
+    results = MentionCitationService.batch_process_query_set_detections(
+        db=db,
+        query_set_id=query_set_id,
+        provider=provider,
+    )
+    mentioned_count = sum(1 for r in results if r.target_mentioned)
+    cited_count = sum(1 for r in results if r.target_cited)
+    return {
+        "query_set_id": query_set_id,
+        "total_processed": len(results),
+        "target_mentioned_count": mentioned_count,
+        "target_cited_count": cited_count,
+        "results": results,
+    }
+
+
+@app.get(
+    "/api/v1/responses/{response_id}/mentions",
+    response_model=list[MentionDetail],
+)
+def list_response_mentions_endpoint(
+    response_id: int,
+    match_type: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists detected mentions for a specific AIResponse."""
+    resp = AIResponseService.get_response(db, response_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="AI response not found")
+    return MentionCitationService.list_mentions(
+        db=db,
+        response_id=response_id,
+        match_type=match_type,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get(
+    "/api/v1/responses/{response_id}/citations",
+    response_model=list[CitationDetail],
+)
+def list_response_citations_endpoint(
+    response_id: int,
+    target_only: bool | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists detected citations for a specific AIResponse."""
+    resp = AIResponseService.get_response(db, response_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="AI response not found")
+    return MentionCitationService.list_citations(
+        db=db,
+        response_id=response_id,
+        target_only=target_only,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/mentions",
+    response_model=list[MentionDetail],
+)
+def list_website_mentions_endpoint(
+    website_id: int,
+    match_type: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists detected mentions across all AI responses for a website."""
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail="Website not found")
+    return MentionCitationService.list_mentions(
+        db=db,
+        website_id=website_id,
+        match_type=match_type,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/citations",
+    response_model=list[CitationDetail],
+)
+def list_website_citations_endpoint(
+    website_id: int,
+    target_only: bool | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists detected citations across all AI responses for a website."""
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail="Website not found")
+    return MentionCitationService.list_citations(
+        db=db,
+        website_id=website_id,
+        target_only=target_only,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# ==========================================
+# Task 10 Step 4 — Visibility & Competitor Signals
+# ==========================================
+
+
+@app.post(
+    "/api/v1/responses/{response_id}/visibility",
+    response_model=VisibilityObservationDetail,
+    status_code=200,
+)
+def evaluate_response_visibility_endpoint(
+    response_id: int,
+    payload: VisibilityEvaluationRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Evaluates and persists provider-independent visibility observations
+    and competitor presence signals for an AIResponse.
+    """
+    custom_competitors = payload.custom_competitors if payload else None
+    try:
+        obs = VisibilitySignalService.process_and_persist_observation(
+            db=db,
+            response_id=response_id,
+            custom_competitors=custom_competitors,  # type: ignore[arg-type]
+        )
+        return obs.to_dict()
+    except ValueError as exc:
+        msg = str(exc)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
+
+
+@app.get(
+    "/api/v1/responses/{response_id}/visibility",
+    response_model=VisibilityObservationDetail,
+)
+def get_response_visibility_endpoint(
+    response_id: int,
+    db: Session = Depends(get_db),
+):
+    """Retrieves existing visibility observation for an AIResponse."""
+    obs = VisibilitySignalService.get_visibility_observation(db, response_id)
+    if not obs:
+        raise HTTPException(status_code=404, detail="Visibility observation not found for this response")
+    return obs.to_dict()
+
+
+@app.post(
+    "/api/v1/query-sets/{query_set_id}/visibility",
+    response_model=BatchVisibilityObservationResponse,
+    status_code=200,
+)
+def batch_evaluate_query_set_visibility_endpoint(
+    query_set_id: int,
+    provider: str | None = None,
+    payload: VisibilityEvaluationRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Batch evaluates visibility observations across all responses in a QuerySet.
+    """
+    qs = QueryIntelligenceService.get_query_set(db, query_set_id)
+    if not qs:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+
+    custom_competitors = payload.custom_competitors if payload else None
+    results = VisibilitySignalService.batch_process_query_set_visibility(
+        db=db,
+        query_set_id=query_set_id,
+        provider=provider,
+        custom_competitors=custom_competitors,  # type: ignore[arg-type]
+    )
+
+    mentioned_count = sum(1 for r in results if r.target_mentioned)
+    cited_count = sum(1 for r in results if r.target_cited)
+    competitors_count = sum(1 for r in results if r.competitors_present)
+
+    return {
+        "query_set_id": query_set_id,
+        "total_evaluated": len(results),
+        "target_mentioned_count": mentioned_count,
+        "target_cited_count": cited_count,
+        "competitors_present_count": competitors_count,
+        "observations": [r.to_dict() for r in results],
+    }
+
+
+@app.get(
+    "/api/v1/query-sets/{query_set_id}/visibility",
+    response_model=list[VisibilityObservationDetail],
+)
+def list_query_set_visibility_endpoint(
+    query_set_id: int,
+    provider: str | None = None,
+    target_mentioned: bool | None = None,
+    target_cited: bool | None = None,
+    competitors_present: bool | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists visibility observations for a QuerySet with optional filters."""
+    qs = QueryIntelligenceService.get_query_set(db, query_set_id)
+    if not qs:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+
+    records = VisibilitySignalService.list_visibility_observations(
+        db=db,
+        query_set_id=query_set_id,
+        provider=provider,
+        target_mentioned=target_mentioned,
+        target_cited=target_cited,
+        competitors_present=competitors_present,
+        limit=limit,
+        offset=offset,
+    )
+    # Convert ORM records to dict format
+    results = []
+    for rec in records:
+        obs = VisibilitySignalService.get_visibility_observation(db, rec.response_id)
+        if obs:
+            results.append(obs.to_dict())
+    return results
+
+
+@app.get(
+    "/api/v1/queries/{query_id}/visibility",
+    response_model=list[VisibilityObservationDetail],
+)
+def list_query_visibility_endpoint(
+    query_id: int,
+    provider: str | None = None,
+    target_mentioned: bool | None = None,
+    target_cited: bool | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists visibility observations for a specific Query."""
+    query = QueryIntelligenceService.get_query(db, query_id)
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+
+    records = VisibilitySignalService.list_visibility_observations(
+        db=db,
+        query_id=query_id,
+        provider=provider,
+        target_mentioned=target_mentioned,
+        target_cited=target_cited,
+        limit=limit,
+        offset=offset,
+    )
+    results = []
+    for rec in records:
+        obs = VisibilitySignalService.get_visibility_observation(db, rec.response_id)
+        if obs:
+            results.append(obs.to_dict())
+    return results
+
+
+@app.get(
+    "/api/v1/responses/{response_id}/competitors",
+    response_model=list[CompetitorSignalDetail],
+)
+def get_response_competitors_endpoint(
+    response_id: int,
+    db: Session = Depends(get_db),
+):
+    """Lists detected competitor signals for an AIResponse."""
+    resp = AIResponseService.get_response(db, response_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="AI response not found")
+    signals = VisibilitySignalService.get_competitor_signals(db, response_id)
+    return [s.to_dict() for s in signals]
+
+
+# ==========================================
+# Task 10 Step 5 — Visibility Gap Analysis & Finding Linkage
+# ==========================================
+
+
+def _serialize_gap_record(gap: AIVisibilityGap) -> dict[str, Any]:
+    return {
+        "id": gap.id,
+        "response_id": gap.response_id,
+        "observation_id": gap.observation_id,
+        "query_id": gap.query_id,
+        "query_set_id": gap.query_set_id,
+        "website_id": gap.website_id,
+        "gap_type": gap.gap_type,
+        "severity": gap.severity,
+        "reason": gap.reason,
+        "evidence": gap.evidence_json or {},
+        "linked_findings": [
+            {
+                "finding_id": link.finding_id,
+                "match_type": link.match_type,
+                "confidence": link.confidence,
+                "reasons": link.reasons_json or [],
+                "finding_title": link.finding.title if link.finding else None,
+                "finding_category": link.finding.category if link.finding else None,
+            }
+            for link in gap.finding_links
+        ],
+        "created_at": gap.created_at,
+    }
+
+
+@app.post(
+    "/api/v1/responses/{response_id}/gaps",
+    response_model=list[VisibilityGapDetail],
+    status_code=200,
+)
+def evaluate_response_gaps_endpoint(
+    response_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Evaluates, matches to findings, and persists visibility gaps for an AIResponse.
+    """
+    try:
+        gaps = VisibilityGapService.process_and_persist_gaps(db, response_id)
+        return [_serialize_gap_record(g) for g in gaps]
+    except ValueError as exc:
+        msg = str(exc)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
+
+
+@app.get(
+    "/api/v1/responses/{response_id}/gaps",
+    response_model=list[VisibilityGapDetail],
+)
+def get_response_gaps_endpoint(
+    response_id: int,
+    db: Session = Depends(get_db),
+):
+    """Retrieves persisted visibility gaps and linked findings for an AIResponse."""
+    resp = AIResponseService.get_response(db, response_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="AI response not found")
+    gaps = VisibilityGapService.get_response_gaps(db, response_id)
+    return [_serialize_gap_record(g) for g in gaps]
+
+
+@app.post(
+    "/api/v1/query-sets/{query_set_id}/gaps",
+    response_model=BatchVisibilityGapResponse,
+    status_code=200,
+)
+def batch_evaluate_query_set_gaps_endpoint(
+    query_set_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Batch evaluates visibility gaps and links across all responses in a QuerySet.
+    """
+    qs = QueryIntelligenceService.get_query_set(db, query_set_id)
+    if not qs:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+
+    gaps = VisibilityGapService.batch_process_query_set_gaps(db, query_set_id)
+    counts: dict[str, int] = {}
+    for g in gaps:
+        counts[g.gap_type] = counts.get(g.gap_type, 0) + 1
+
+    return {
+        "query_set_id": query_set_id,
+        "total_evaluated": len(qs.responses),
+        "total_gaps_found": len(gaps),
+        "gap_type_counts": counts,
+        "gaps": [_serialize_gap_record(g) for g in gaps],
+    }
+
+
+@app.get(
+    "/api/v1/query-sets/{query_set_id}/gaps",
+    response_model=list[VisibilityGapDetail],
+)
+def list_query_set_gaps_endpoint(
+    query_set_id: int,
+    gap_type: str | None = None,
+    severity: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists visibility gaps for a QuerySet with optional filtering."""
+    qs = QueryIntelligenceService.get_query_set(db, query_set_id)
+    if not qs:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+
+    gaps = VisibilityGapService.list_gaps(
+        db=db,
+        query_set_id=query_set_id,
+        gap_type=gap_type,
+        severity=severity,
+        limit=limit,
+        offset=offset,
+    )
+    return [_serialize_gap_record(g) for g in gaps]
+
+
+@app.get(
+    "/api/v1/queries/{query_id}/gaps",
+    response_model=list[VisibilityGapDetail],
+)
+def list_query_gaps_endpoint(
+    query_id: int,
+    gap_type: str | None = None,
+    severity: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists visibility gaps for a specific Query."""
+    query = QueryIntelligenceService.get_query(db, query_id)
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+
+    gaps = VisibilityGapService.list_gaps(
+        db=db,
+        query_id=query_id,
+        gap_type=gap_type,
+        severity=severity,
+        limit=limit,
+        offset=offset,
+    )
+    return [_serialize_gap_record(g) for g in gaps]
+
+
+@app.get(
+    "/api/v1/gaps/{gap_id}",
+    response_model=VisibilityGapDetail,
+)
+def get_gap_detail_endpoint(
+    gap_id: int,
+    db: Session = Depends(get_db),
+):
+    """Retrieves a single gap detail with its linked findings."""
+    gap = VisibilityGapService.get_gap_details(db, gap_id)
+    if not gap:
+        raise HTTPException(status_code=404, detail="Visibility gap not found")
+    return _serialize_gap_record(gap)
+
+
+@app.get(
+    "/api/v1/findings/{finding_id}/gaps",
+    response_model=list[VisibilityGapDetail],
+)
+def get_finding_linked_gaps_endpoint(
+    finding_id: int,
+    db: Session = Depends(get_db),
+):
+    """Retrieves all AI visibility gaps linked to an existing Finding."""
+    finding = db.get(Finding, finding_id)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    gaps = VisibilityGapService.get_finding_linked_gaps(db, finding_id)
+    return [_serialize_gap_record(g) for g in gaps]
+
+
+# ==========================================
+# Task 10 Step 6: AI Visibility Metrics & Historical Analytics Endpoints
+# ==========================================
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/visibility-metrics",
+    response_model=VisibilityMetricsResponse,
+)
+def get_website_visibility_metrics_endpoint(
+    website_id: int,
+    query_set_id: int | None = None,
+    query_id: int | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    intent: str | None = None,
+    topic: str | None = None,
+    entity_id: int | None = None,
+    page_id: int | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    """Retrieves comprehensive observational AI visibility metrics for a website with multi-dimensional filters."""
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail="Website not found")
+
+    metrics = VisibilityMetricsService.calculate_visibility_metrics(
+        db=db,
+        website_id=website_id,
+        query_set_id=query_set_id,
+        query_id=query_id,
+        provider=provider,
+        model=model,
+        intent=intent,
+        topic=topic,
+        entity_id=entity_id,
+        page_id=page_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return metrics.to_dict()
+
+
+@app.get(
+    "/api/v1/query-sets/{query_set_id}/visibility-metrics",
+    response_model=VisibilityMetricsResponse,
+)
+def get_query_set_visibility_metrics_endpoint(
+    query_set_id: int,
+    provider: str | None = None,
+    model: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    """Retrieves aggregated observational AI visibility metrics for a specific QuerySet."""
+    query_set = db.get(QuerySet, query_set_id)
+    if not query_set:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+
+    metrics = VisibilityMetricsService.calculate_visibility_metrics(
+        db=db,
+        website_id=query_set.website_id,
+        query_set_id=query_set_id,
+        provider=provider,
+        model=model,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return metrics.to_dict()
+
+
+@app.get(
+    "/api/v1/queries/{query_id}/visibility-metrics",
+    response_model=VisibilityMetricsResponse,
+)
+def get_query_visibility_metrics_endpoint(
+    query_id: int,
+    provider: str | None = None,
+    model: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    """Retrieves observational AI visibility metrics for a single monitored query."""
+    query = db.get(Query, query_id)
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+
+    metrics = VisibilityMetricsService.calculate_visibility_metrics(
+        db=db,
+        website_id=query.website_id,
+        query_set_id=query.query_set_id,
+        query_id=query_id,
+        provider=provider,
+        model=model,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return metrics.to_dict()
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/provider-metrics",
+    response_model=ProviderMetricsBreakdownResponse,
+)
+def get_provider_visibility_metrics_endpoint(
+    website_id: int,
+    query_set_id: int | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    """Retrieves separate visibility metrics broken down by AI provider."""
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail="Website not found")
+
+    breakdown = VisibilityMetricsService.calculate_provider_metrics_breakdown(
+        db=db,
+        website_id=website_id,
+        query_set_id=query_set_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return {
+        "website_id": website_id,
+        "query_set_id": query_set_id,
+        "providers": {k: v.to_dict() for k, v in breakdown.items()},
+    }
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/operational-health",
+    response_model=OperationalHealthDetail,
+)
+def get_website_operational_health_endpoint(
+    website_id: int,
+    query_set_id: int | None = None,
+    provider: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    """Retrieves operational provider health metrics (success rate, timeouts, rate limits, latency, tokens)."""
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail="Website not found")
+
+    metrics = VisibilityMetricsService.calculate_visibility_metrics(
+        db=db,
+        website_id=website_id,
+        query_set_id=query_set_id,
+        provider=provider,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return metrics.operational_health.to_dict()
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/visibility-history",
+    response_model=PeriodComparisonResponse,
+)
+def get_website_visibility_history_endpoint(
+    website_id: int,
+    query_set_id: int | None = None,
+    provider: str | None = None,
+    current_start: datetime | None = None,
+    current_end: datetime | None = None,
+    previous_start: datetime | None = None,
+    previous_end: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    """Compares visibility metrics between current and previous periods, with absolute and relative changes."""
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail="Website not found")
+
+    comparison = VisibilityMetricsService.compare_visibility_periods(
+        db=db,
+        website_id=website_id,
+        query_set_id=query_set_id,
+        provider=provider,
+        current_start=current_start,
+        current_end=current_end,
+        previous_start=previous_start,
+        previous_end=previous_end,
+    )
+    return comparison.to_dict()
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/visibility-timeline",
+    response_model=VisibilityTimelineResponse,
+)
+def get_website_visibility_timeline_endpoint(
+    website_id: int,
+    query_set_id: int | None = None,
+    provider: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    """Retrieves day-by-day timeline points of observational visibility metrics."""
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail="Website not found")
+
+    timeline = VisibilityMetricsService.generate_visibility_timeline(
+        db=db,
+        website_id=website_id,
+        query_set_id=query_set_id,
+        provider=provider,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return {
+        "website_id": website_id,
+        "query_set_id": query_set_id,
+        "timeline": [t.to_dict() for t in timeline],
+    }
+
+
+@app.post(
+    "/api/v1/query-sets/{query_set_id}/snapshots",
+    response_model=VisibilitySnapshotDetail,
+)
+def create_visibility_snapshot_endpoint(
+    query_set_id: int,
+    provider: str | None = None,
+    period_start: datetime | None = None,
+    period_end: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    """Computes current visibility metrics and creates a persisted historical snapshot record."""
+    query_set = db.get(QuerySet, query_set_id)
+    if not query_set:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+
+    snapshot = VisibilityMetricsService.create_and_persist_snapshot(
+        db=db,
+        website_id=query_set.website_id,
+        query_set_id=query_set_id,
+        provider=provider,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    return snapshot
+
+
+@app.get(
+    "/api/v1/query-sets/{query_set_id}/snapshots",
+    response_model=list[VisibilitySnapshotDetail],
+)
+def list_visibility_snapshots_endpoint(
+    query_set_id: int,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists historical visibility snapshot records for a QuerySet."""
+    query_set = db.get(QuerySet, query_set_id)
+    if not query_set:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+
+    snapshots = VisibilityMetricsService.list_snapshots(
+        db=db,
+        website_id=query_set.website_id,
+        query_set_id=query_set_id,
+        limit=limit,
+        offset=offset,
+    )
+    return snapshots
+
+
+# ==========================================
+# Task 10 Step 7: Monitoring Pipeline Endpoints
+# ==========================================
+
+
+@app.post(
+    "/api/v1/query-sets/{query_set_id}/monitor",
+    response_model=MonitoringRunResponse,
+)
+def start_monitoring_run_endpoint(
+    query_set_id: int,
+    request: StartMonitoringRunRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """Starts an end-to-end monitoring run over active queries in a QuerySet."""
+    query_set = db.get(QuerySet, query_set_id)
+    if not query_set:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+
+    req = request or StartMonitoringRunRequest()
+    try:
+        run = MonitoringPipelineService.start_monitoring_run(
+            db=db,
+            query_set_id=query_set_id,
+            provider=req.provider,
+            model=req.model,
+            query_ids=req.query_ids,
+            mock_responses=req.mock_responses,
+        )
+        return run
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get(
+    "/api/v1/monitoring-runs/{run_id}",
+    response_model=MonitoringRunResponse,
+)
+def get_monitoring_run_endpoint(
+    run_id: int,
+    db: Session = Depends(get_db),
+):
+    """Retrieves status and summary for a specific monitoring run."""
+    run = MonitoringPipelineService.get_monitoring_run(db, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Monitoring run not found")
+    return run
+
+
+@app.get(
+    "/api/v1/monitoring-runs/{run_id}/results",
+    response_model=MonitoringRunDetailResponse,
+)
+def get_monitoring_run_results_endpoint(
+    run_id: int,
+    db: Session = Depends(get_db),
+):
+    """Retrieves comprehensive itemized results, detections, observations, gaps, and metrics for a monitoring run."""
+    try:
+        results = MonitoringPipelineService.get_monitoring_run_results(db, run_id)
+        return results
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Monitoring run not found")
+
+
+@app.get(
+    "/api/v1/websites/{website_id}/monitoring-runs",
+    response_model=list[MonitoringRunResponse],
+)
+def list_website_monitoring_runs_endpoint(
+    website_id: int,
+    status: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists historical monitoring runs for a website with optional status filter."""
+    website = db.get(Website, website_id)
+    if not website:
+        raise HTTPException(status_code=404, detail="Website not found")
+
+    runs = MonitoringPipelineService.list_monitoring_runs(
+        db=db,
+        website_id=website_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    return runs
+
+
+@app.get(
+    "/api/v1/query-sets/{query_set_id}/monitoring-runs",
+    response_model=list[MonitoringRunResponse],
+)
+def list_query_set_monitoring_runs_endpoint(
+    query_set_id: int,
+    status: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lists historical monitoring runs for a QuerySet with optional status filter."""
+    query_set = db.get(QuerySet, query_set_id)
+    if not query_set:
+        raise HTTPException(status_code=404, detail="QuerySet not found")
+
+    runs = MonitoringPipelineService.list_monitoring_runs(
+        db=db,
+        website_id=query_set.website_id,
+        query_set_id=query_set_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    return runs
+
+
+
+
+
 
 
 

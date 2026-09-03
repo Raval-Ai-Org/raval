@@ -110,11 +110,64 @@ from .provider_adapter import (
     provider_registry,
 )
 from .ai_response_service import AIResponseService
+from .mention_citation_service import (
+    MentionType,
+    TargetIdentity,
+    DetectedMention,
+    DetectedCitation,
+    DetectionResult,
+    MentionCitationService,
+    extract_domain_from_url,
+    normalize_citation_url,
+    extract_urls_from_text,
+    detect_mentions,
+    detect_citations,
+)
+from .visibility_signal_service import (
+    CompetitorConfig,
+    CompetitorSignal,
+    VisibilityObservation,
+    VisibilitySignalService,
+    calculate_observable_positions,
+    classify_answer_relevance,
+    detect_competitor_signals,
+)
+from .visibility_gap_service import (
+    DetectedGap,
+    GapFindingLinkInfo,
+    GapSeverity,
+    GapType,
+    LinkMatchType,
+    VisibilityGapService,
+    calculate_gap_severity,
+    evaluate_response_gaps,
+    is_evaluable_response,
+    match_gaps_to_existing_findings,
+)
+from .visibility_metrics_service import (
+    MetricRate,
+    TargetVsCompetitorStats,
+    OperationalHealthMetrics,
+    CompetitorMetricItem,
+    VisibilityMetricsSummary,
+    PeriodComparison,
+    TimelinePoint,
+    VisibilityMetricsService,
+    compute_metric_rate,
+    calculate_change,
+)
+from .monitoring_pipeline_service import (
+    MonitoringPipelineService,
+    MonitoringRunStatus,
+)
+from .models import AIVisibilitySnapshot, AIMonitoringRun
+
 
 # Canonical Aliases
 UnifiedSignalAggregator = SignalAggregator
 __all__ = [
     "ApplicabilityType",
+
     "UnifiedSignal",
     "UnifiedSignalBatch",
     "UnifiedSignalNormalizer",
@@ -200,6 +253,49 @@ __all__ = [
     "UsageMetadata",
     "provider_registry",
     "AIResponseService",
-]
+    "MentionType",
+    "TargetIdentity",
+    "DetectedMention",
+    "DetectedCitation",
+    "DetectionResult",
+    "MentionCitationService",
+    "extract_domain_from_url",
+    "normalize_citation_url",
+    "extract_urls_from_text",
+    "detect_mentions",
+    "detect_citations",
+    "CompetitorConfig",
+    "CompetitorSignal",
+    "VisibilityObservation",
+    "VisibilitySignalService",
+    "calculate_observable_positions",
+    "classify_answer_relevance",
+    "AIVisibilityGap",
+    "AIGapFindingLink",
+    "GapType",
+    "GapSeverity",
+    "LinkMatchType",
 
+    "GapFindingLinkInfo",
+    "DetectedGap",
+    "VisibilityGapService",
+    "is_evaluable_response",
+    "calculate_gap_severity",
+    "evaluate_response_gaps",
+    "match_gaps_to_existing_findings",
+    "AIVisibilitySnapshot",
+    "MetricRate",
+    "TargetVsCompetitorStats",
+    "OperationalHealthMetrics",
+    "CompetitorMetricItem",
+    "VisibilityMetricsSummary",
+    "PeriodComparison",
+    "TimelinePoint",
+    "VisibilityMetricsService",
+    "compute_metric_rate",
+    "calculate_change",
+    "AIMonitoringRun",
+    "MonitoringPipelineService",
+    "MonitoringRunStatus",
+]
 

@@ -102,6 +102,47 @@ class Website(Base):
         cascade="all, delete-orphan",
     )
 
+    mentions = relationship(
+        "AIMention",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    citations = relationship(
+        "AICitation",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    visibility_observations = relationship(
+        "AIVisibilityObservation",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    visibility_gaps = relationship(
+        "AIVisibilityGap",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    visibility_snapshots = relationship(
+        "AIVisibilitySnapshot",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    monitoring_runs = relationship(
+        "AIMonitoringRun",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+
+
+
+
+
 
 
 
@@ -342,6 +383,12 @@ class PageResult(Base):
         "Query",
         back_populates="page_result",
     )
+
+    citations = relationship(
+        "AICitation",
+        back_populates="page_result",
+    )
+
 
 
 
@@ -1412,6 +1459,13 @@ class Finding(Base):
         cascade="all, delete-orphan",
     )
 
+    ai_gap_links = relationship(
+        "AIGapFindingLink",
+        back_populates="finding",
+        cascade="all, delete-orphan",
+    )
+
+
     opportunities = relationship(
         "Opportunity",
         back_populates="finding",
@@ -1921,6 +1975,12 @@ class Entity(Base):
         "Query",
         back_populates="entity",
     )
+
+    mentions = relationship(
+        "AIMention",
+        back_populates="entity",
+    )
+
 
 
 class Opportunity(Base):
@@ -2590,6 +2650,34 @@ class QuerySet(Base):
         cascade="all, delete-orphan",
     )
 
+    visibility_observations = relationship(
+        "AIVisibilityObservation",
+        back_populates="query_set",
+        cascade="all, delete-orphan",
+    )
+
+    visibility_gaps = relationship(
+        "AIVisibilityGap",
+        back_populates="query_set",
+        cascade="all, delete-orphan",
+    )
+
+    visibility_snapshots = relationship(
+        "AIVisibilitySnapshot",
+        back_populates="query_set",
+        cascade="all, delete-orphan",
+    )
+
+    monitoring_runs = relationship(
+        "AIMonitoringRun",
+        back_populates="query_set",
+        cascade="all, delete-orphan",
+    )
+
+
+
+
+
 
 class Query(Base):
     __tablename__ = "queries"
@@ -2729,6 +2817,32 @@ class Query(Base):
         cascade="all, delete-orphan",
     )
 
+    mentions = relationship(
+        "AIMention",
+        back_populates="query",
+        cascade="all, delete-orphan",
+    )
+
+    citations = relationship(
+        "AICitation",
+        back_populates="query",
+        cascade="all, delete-orphan",
+    )
+
+    visibility_observations = relationship(
+        "AIVisibilityObservation",
+        back_populates="query",
+        cascade="all, delete-orphan",
+    )
+
+    visibility_gaps = relationship(
+        "AIVisibilityGap",
+        back_populates="query",
+        cascade="all, delete-orphan",
+    )
+
+
+
     @property
     def question_text(self) -> str:
         return self.query_text
@@ -2855,4 +2969,780 @@ class AIResponse(Base):
     website = relationship(
         "Website",
         back_populates="ai_responses",
-    )
+    )
+
+    mentions = relationship(
+        "AIMention",
+        back_populates="response",
+        cascade="all, delete-orphan",
+    )
+
+    citations = relationship(
+        "AICitation",
+        back_populates="response",
+        cascade="all, delete-orphan",
+    )
+
+    visibility_observation = relationship(
+        "AIVisibilityObservation",
+        back_populates="response",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    visibility_gaps = relationship(
+        "AIVisibilityGap",
+        back_populates="response",
+        cascade="all, delete-orphan",
+    )
+
+
+
+
+class AIMention(Base):
+    __tablename__ = "ai_mentions"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    response_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_responses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    query_id: Mapped[int] = mapped_column(
+        ForeignKey("queries.id"),
+        nullable=False,
+        index=True,
+    )
+
+    entity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("entities.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    matched_text: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    match_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True,
+    )
+
+    normalized_text: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    start_pos: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    end_pos: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    context_snippet: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    confidence: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=1.0,
+    )
+
+    metadata_json: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    response = relationship(
+        "AIResponse",
+        back_populates="mentions",
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="mentions",
+    )
+
+    query = relationship(
+        "Query",
+        back_populates="mentions",
+    )
+
+    entity = relationship(
+        "Entity",
+        back_populates="mentions",
+    )
+
+
+class AICitation(Base):
+    __tablename__ = "ai_citations"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    response_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_responses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    query_id: Mapped[int] = mapped_column(
+        ForeignKey("queries.id"),
+        nullable=False,
+        index=True,
+    )
+
+    page_id: Mapped[int | None] = mapped_column(
+        ForeignKey("page_results.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    url: Mapped[str] = mapped_column(
+        String(2048),
+        nullable=False,
+    )
+
+    normalized_url: Mapped[str] = mapped_column(
+        String(2048),
+        nullable=False,
+        index=True,
+    )
+
+    domain: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    is_target_domain: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+    )
+
+    position: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
+
+    context_snippet: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    confidence: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=1.0,
+    )
+
+    metadata_json: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    response = relationship(
+        "AIResponse",
+        back_populates="citations",
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="citations",
+    )
+
+    query = relationship(
+        "Query",
+        back_populates="citations",
+    )
+
+    page_result = relationship(
+        "PageResult",
+        back_populates="citations",
+    )
+
+
+class AIVisibilityObservation(Base):
+    __tablename__ = "ai_visibility_observations"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    response_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_responses.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    query_id: Mapped[int] = mapped_column(
+        ForeignKey("queries.id"),
+        nullable=False,
+        index=True,
+    )
+
+    query_set_id: Mapped[int] = mapped_column(
+        ForeignKey("query_sets.id"),
+        nullable=False,
+        index=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    provider: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    model: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    target_mentioned: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+    )
+
+    target_cited: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+    )
+
+    first_party_cited: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+    )
+
+    relevant_answer: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        default="UNKNOWN",
+        index=True,
+    )
+
+    observable_mention_position: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    observable_citation_position: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    confidence: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=1.0,
+    )
+
+    competitor_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    competitors_present: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+    )
+
+    competitor_signals_json: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    evidence_summary_json: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    response = relationship(
+        "AIResponse",
+        back_populates="visibility_observation",
+    )
+
+    query = relationship(
+        "Query",
+        back_populates="visibility_observations",
+    )
+
+    query_set = relationship(
+        "QuerySet",
+        back_populates="visibility_observations",
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="visibility_observations",
+    )
+
+    gaps = relationship(
+        "AIVisibilityGap",
+        back_populates="observation",
+        cascade="all, delete-orphan",
+    )
+
+
+class AIVisibilityGap(Base):
+    __tablename__ = "ai_visibility_gaps"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    response_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_responses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    observation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ai_visibility_observations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    query_id: Mapped[int] = mapped_column(
+        ForeignKey("queries.id"),
+        nullable=False,
+        index=True,
+    )
+
+    query_set_id: Mapped[int] = mapped_column(
+        ForeignKey("query_sets.id"),
+        nullable=False,
+        index=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    gap_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    severity: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="MEDIUM",
+        index=True,
+    )
+
+    reason: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    evidence_json: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    response = relationship(
+        "AIResponse",
+        back_populates="visibility_gaps",
+    )
+
+    observation = relationship(
+        "AIVisibilityObservation",
+        back_populates="gaps",
+    )
+
+    query = relationship(
+        "Query",
+        back_populates="visibility_gaps",
+    )
+
+    query_set = relationship(
+        "QuerySet",
+        back_populates="visibility_gaps",
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="visibility_gaps",
+    )
+
+    finding_links = relationship(
+        "AIGapFindingLink",
+        back_populates="gap",
+        cascade="all, delete-orphan",
+    )
+
+
+class AIGapFindingLink(Base):
+    __tablename__ = "ai_gap_finding_links"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    gap_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_visibility_gaps.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    finding_id: Mapped[int] = mapped_column(
+        ForeignKey("findings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    match_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    confidence: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=1.0,
+    )
+
+    reasons_json: Mapped[list | dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    gap = relationship(
+        "AIVisibilityGap",
+        back_populates="finding_links",
+    )
+
+    finding = relationship(
+        "Finding",
+        back_populates="ai_gap_links",
+    )
+
+
+class AIVisibilitySnapshot(Base):
+    __tablename__ = "ai_visibility_snapshots"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    query_set_id: Mapped[int | None] = mapped_column(
+        ForeignKey("query_sets.id"),
+        nullable=True,
+        index=True,
+    )
+
+    provider: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+    )
+
+    period_start: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+    )
+
+    period_end: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+    )
+
+    evaluable_responses: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    total_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    mention_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    citation_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    first_party_citation_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    competitor_appearance_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    mention_rate: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    citation_rate: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    first_party_citation_rate: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    competitor_appearance_rate: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    metrics_json: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="visibility_snapshots",
+    )
+
+    query_set = relationship(
+        "QuerySet",
+        back_populates="visibility_snapshots",
+    )
+
+
+class AIMonitoringRun(Base):
+    __tablename__ = "ai_monitoring_runs"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    website_id: Mapped[int] = mapped_column(
+        ForeignKey("websites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    query_set_id: Mapped[int] = mapped_column(
+        ForeignKey("query_sets.id"),
+        nullable=False,
+        index=True,
+    )
+
+    provider: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="mock",
+    )
+
+    model: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="CREATED",
+        index=True,
+    )
+
+    total_queries: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    attempted_queries: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    successful_responses: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    failed_responses: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    detected_mentions: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    detected_citations: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    detected_gaps: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    mention_rate: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    citation_rate: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    execution_metadata_json: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    website = relationship(
+        "Website",
+        back_populates="monitoring_runs",
+    )
+
+    query_set = relationship(
+        "QuerySet",
+        back_populates="monitoring_runs",
+    )
+
+
+
+
+

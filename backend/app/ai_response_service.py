@@ -21,6 +21,7 @@ from .provider_adapter import (
     ALLOWED_PROVIDERS,
     BaseProviderAdapter,
     DEFAULT_TIMEOUT_SECONDS,
+    MockProviderAdapter,
     ProviderRequest,
     ProviderResponse,
     ResponseStatus,
@@ -45,6 +46,7 @@ class AIResponseService:
         provider: str = "mock",
         model: str | None = None,
         timeout_seconds: float | None = None,
+        mock_custom_text: str | None = None,
     ) -> AIResponse:
         """
         Executes a single Query against the specified AI provider and saves
@@ -60,7 +62,23 @@ class AIResponseService:
         if not query:
             raise ValueError(f"Query with id {query_id} not found.")
 
-        adapter: BaseProviderAdapter = provider_registry.get(provider_clean)
+        if provider_clean == "mock" and mock_custom_text is not None:
+            if mock_custom_text == "__FAIL_TIMEOUT__":
+                adapter: BaseProviderAdapter = MockProviderAdapter(failure_mode="timeout")
+            elif mock_custom_text == "__FAIL_ERROR__":
+                adapter = MockProviderAdapter(failure_mode="error")
+            elif mock_custom_text == "__FAIL_RATE_LIMIT__":
+                adapter = MockProviderAdapter(failure_mode="rate_limit")
+            elif mock_custom_text == "__FAIL_UNAVAILABLE__":
+                adapter = MockProviderAdapter(failure_mode="unavailable")
+            elif mock_custom_text == "":
+                adapter = MockProviderAdapter(failure_mode="error")
+            else:
+                adapter = MockProviderAdapter(custom_response_text=mock_custom_text)
+        else:
+            adapter = provider_registry.get(provider_clean)
+
+
 
         req = ProviderRequest(
             query_id=query.id,

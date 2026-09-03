@@ -1276,4 +1276,370 @@ class BatchAIResponseResult(BaseModel):
     failure_count: int
     responses: list[AIResponseDetail] = []
 
+
+# ==========================================
+# Task 10 Step 3 - Mention & Citation Detection
+# ==========================================
+
+
+class MentionDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int | None = None
+    response_id: int | None = None
+    matched_text: str
+    match_type: str
+    normalized_text: str
+    start_pos: int | None = None
+    end_pos: int | None = None
+    context_snippet: str | None = None
+    confidence: float = 1.0
+    entity_id: int | None = None
+    created_at: datetime | None = None
+
+
+class CitationDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int | None = None
+    response_id: int | None = None
+    url: str
+    normalized_url: str
+    domain: str
+    is_target_domain: bool
+    page_id: int | None = None
+    position: int = 1
+    context_snippet: str | None = None
+    confidence: float = 1.0
+    created_at: datetime | None = None
+
+
+class DetectionResultResponse(BaseModel):
+    response_id: int
+    query_id: int
+    website_id: int
+    provider: str
+    target_mentioned: bool
+    target_cited: bool
+    mentions_count: int
+    citations_count: int
+    target_citations_count: int
+    mentions: list[MentionDetail] = []
+    citations: list[CitationDetail] = []
+
+
+class BatchDetectionResultResponse(BaseModel):
+    query_set_id: int
+    total_processed: int
+    target_mentioned_count: int
+    target_cited_count: int
+    results: list[DetectionResultResponse] = []
+
+
+class DetectionRequest(BaseModel):
+    custom_aliases: list[str] | None = None
+
+
+# ==========================================
+# Task 10 Step 4 - Visibility & Competitor Signals
+# ==========================================
+
+
+class CompetitorSignalDetail(BaseModel):
+    competitor_name: str
+    domain: str | None = None
+    entity_id: int | None = None
+    mentioned: bool = False
+    cited: bool = False
+    mention_count: int = 0
+    citation_count: int = 0
+    first_mention_position: int | None = None
+    first_citation_position: int | None = None
+    evidence_snippets: list[str] = []
+    confidence: float = 1.0
+
+
+class VisibilityObservationDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int | None = None
+    response_id: int
+    query_id: int
+    query_set_id: int
+    website_id: int
+    provider: str
+    model: str
+    target_mentioned: bool
+    target_cited: bool
+    first_party_cited: bool
+    relevant_answer: str = "UNKNOWN"
+    observable_mention_position: int | None = None
+    observable_citation_position: int | None = None
+    confidence: float = 1.0
+    competitor_count: int = 0
+    competitors_present: bool = False
+    competitors: list[CompetitorSignalDetail] = []
+    evidence_summary: dict[str, Any] = {}
+    created_at: datetime | None = None
+
+
+class BatchVisibilityObservationResponse(BaseModel):
+    query_set_id: int
+    total_evaluated: int
+    target_mentioned_count: int
+    target_cited_count: int
+    competitors_present_count: int
+    observations: list[VisibilityObservationDetail] = []
+
+
+class VisibilityEvaluationRequest(BaseModel):
+    custom_competitors: list[dict[str, Any]] | list[str] | None = None
+
+
+# ==========================================
+# Task 10 Step 5 - Visibility Gap Analysis & Finding Linkage
+# ==========================================
+
+
+class GapFindingLinkDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    finding_id: int
+    match_type: str
+    confidence: float = 1.0
+    reasons: list[str] = []
+    finding_title: str | None = None
+    finding_category: str | None = None
+
+
+class VisibilityGapDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int | None = None
+    response_id: int
+    observation_id: int | None = None
+    query_id: int
+    query_set_id: int
+    website_id: int
+    gap_type: str
+    severity: str
+    reason: str
+    evidence: dict[str, Any] = {}
+    linked_findings: list[GapFindingLinkDetail] = []
+    created_at: datetime | None = None
+
+
+class BatchVisibilityGapResponse(BaseModel):
+    query_set_id: int
+    total_evaluated: int
+    total_gaps_found: int
+    gap_type_counts: dict[str, int] = {}
+    gaps: list[VisibilityGapDetail] = []
+
+
+# ==========================================
+# Task 10 Step 6: AI Visibility Metrics & Historical Analytics Schemas
+# ==========================================
+
+
+class MetricRateDetail(BaseModel):
+    numerator: int
+    denominator: int
+    rate: float | None = None
+
+
+class TargetVsCompetitorDetail(BaseModel):
+    target_mentioned_count: int = 0
+    target_cited_count: int = 0
+    competitor_present_count: int = 0
+    target_absent_competitor_present_count: int = 0
+    target_present_competitor_absent_count: int = 0
+    both_present_count: int = 0
+    neither_present_count: int = 0
+
+
+class OperationalHealthDetail(BaseModel):
+    total_attempts: int = 0
+    successful_responses: int = 0
+    timeout_count: int = 0
+    rate_limit_count: int = 0
+    unavailable_count: int = 0
+    error_count: int = 0
+    success_rate: float | None = None
+    avg_latency_ms: float | None = None
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_tokens: int = 0
+
+
+class CompetitorMetricDetail(BaseModel):
+    competitor_name: str
+    domain: str | None = None
+    mention_count: int = 0
+    citation_count: int = 0
+    appearance_count: int = 0
+    appearance_rate: float | None = None
+    first_mention_position_avg: float | None = None
+
+
+class VisibilityMetricsResponse(BaseModel):
+    website_id: int
+    query_set_id: int | None = None
+    query_id: int | None = None
+    provider: str | None = None
+    model: str | None = None
+    total_attempts: int = 0
+    evaluable_responses: int = 0
+    failed_responses: int = 0
+    mention_metrics: MetricRateDetail
+    citation_metrics: MetricRateDetail
+    first_party_citation_metrics: MetricRateDetail
+    relevant_answer_metrics: MetricRateDetail
+    competitor_appearance_metrics: MetricRateDetail
+    target_vs_competitor: TargetVsCompetitorDetail
+    operational_health: OperationalHealthDetail
+    top_competitors: list[CompetitorMetricDetail] = []
+    gap_summary: dict[str, Any] = {}
+    response_ids: list[int] = []
+    period_start: str | None = None
+    period_end: str | None = None
+    calculated_at: str
+
+
+class ProviderMetricsBreakdownResponse(BaseModel):
+    website_id: int
+    query_set_id: int | None = None
+    providers: dict[str, VisibilityMetricsResponse] = {}
+
+
+class PeriodComparisonResponse(BaseModel):
+    current: VisibilityMetricsResponse
+    previous: VisibilityMetricsResponse
+    absolute_change: dict[str, float | None] = {}
+    relative_change_pct: dict[str, float | None] = {}
+
+
+class TimelinePointDetail(BaseModel):
+    date: str
+    total_attempts: int
+    evaluable_responses: int
+    mention_rate: float | None = None
+    citation_rate: float | None = None
+    first_party_citation_rate: float | None = None
+    competitor_appearance_rate: float | None = None
+
+
+class VisibilityTimelineResponse(BaseModel):
+    website_id: int
+    query_set_id: int | None = None
+    timeline: list[TimelinePointDetail] = []
+
+
+class VisibilitySnapshotDetail(BaseModel):
+    id: int
+    website_id: int
+    query_set_id: int | None = None
+    provider: str | None = None
+    period_start: datetime
+    period_end: datetime
+    evaluable_responses: int
+    total_attempts: int
+    mention_count: int
+    citation_count: int
+    first_party_citation_count: int
+    competitor_appearance_count: int
+    mention_rate: float | None = None
+    citation_rate: float | None = None
+    first_party_citation_rate: float | None = None
+    competitor_appearance_rate: float | None = None
+    metrics_json: dict[str, Any] | None = None
+    created_at: datetime
+
+
+# ==========================================
+# Task 10 Step 7: Monitoring Pipeline Schemas
+# ==========================================
+
+
+class StartMonitoringRunRequest(BaseModel):
+    provider: str = "mock"
+    model: str | None = None
+    query_ids: list[int] | None = None
+    mock_responses: list[str] | None = None
+
+
+class MonitoringRunResponse(BaseModel):
+    id: int
+    website_id: int
+    query_set_id: int
+    provider: str
+    model: str | None = None
+    status: str
+    total_queries: int
+    attempted_queries: int
+    successful_responses: int
+    failed_responses: int
+    detected_mentions: int
+    detected_citations: int
+    detected_gaps: int
+    mention_rate: float | None = None
+    citation_rate: float | None = None
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime
+
+
+class MonitoringRunResultItem(BaseModel):
+    response_id: int
+    query_id: int
+    query_text: str | None = None
+    intent: str | None = None
+    topic: str | None = None
+    priority: str | None = None
+    provider: str
+    model: str | None = None
+    status: str
+    latency_ms: int | None = None
+    total_tokens: int | None = None
+    target_mentioned: bool = False
+    target_cited: bool = False
+    first_party_cited: bool = False
+    relevant_answer: str = "UNKNOWN"
+    competitors_present: bool = False
+    competitor_signals: list[dict[str, Any]] = []
+    mentions_count: int = 0
+    citations_count: int = 0
+    gaps: list[dict[str, Any]] = []
+
+
+class MonitoringRunDetailResponse(BaseModel):
+    run_id: int
+    website_id: int
+    query_set_id: int
+    provider: str
+    model: str | None = None
+    status: str
+    total_queries: int
+    attempted_queries: int
+    successful_responses: int
+    failed_responses: int
+    detected_mentions: int
+    detected_citations: int
+    detected_gaps: int
+    mention_rate: float | None = None
+    citation_rate: float | None = None
+    error_message: str | None = None
+    metrics: dict[str, Any] = {}
+    errors: list[dict[str, Any]] = []
+    items: list[MonitoringRunResultItem] = []
+    started_at: str | None = None
+    completed_at: str | None = None
+    created_at: str
+
+
+
+
+
+
 
