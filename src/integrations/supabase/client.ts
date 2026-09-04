@@ -29,16 +29,19 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 }
 
 function createSupabaseClient() {
-  // NEXT_PUBLIC_* is inlined into the browser bundle at build time; the
-  // unprefixed vars are the server-side fallback during SSR.
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  // Explicit NEXT_PUBLIC checks first for client-side build-time inlining
+  const SUPABASE_URL =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    (typeof window === "undefined" ? process.env.SUPABASE_URL : undefined);
+
   const SUPABASE_PUBLISHABLE_KEY =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    (typeof window === "undefined" ? process.env.SUPABASE_PUBLISHABLE_KEY : undefined);
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [
-      ...(!SUPABASE_URL ? ["SUPABASE_URL"] : []),
-      ...(!SUPABASE_PUBLISHABLE_KEY ? ["SUPABASE_PUBLISHABLE_KEY"] : []),
+      ...(!SUPABASE_URL ? ["NEXT_PUBLIC_SUPABASE_URL / SUPABASE_URL"] : []),
+      ...(!SUPABASE_PUBLISHABLE_KEY ? ["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY / SUPABASE_PUBLISHABLE_KEY"] : []),
     ];
     const message = `Missing Supabase environment variable(s): ${missing.join(", ")}. Configure the variables for the Mellox AI deployment.`;
     console.error(`[Supabase] ${message}`);
