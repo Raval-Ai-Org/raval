@@ -71,7 +71,7 @@ function SignupPage() {
         password,
         options: {
           data: { name: name.trim(), full_name: name.trim() },
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+          emailRedirectTo: authCallbackUrl(nextPath),
         },
       });
       if (error) {
