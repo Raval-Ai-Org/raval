@@ -29,14 +29,15 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 }
 
 function createSupabaseClient() {
-  // Explicit NEXT_PUBLIC checks first for client-side build-time inlining
+  // Direct process.env access allows Next.js static analysis (SWC/Webpack) to 
+  // safely inline NEXT_PUBLIC_* variables into client bundles during `next build`.
   const SUPABASE_URL =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    (typeof window === "undefined" ? process.env.SUPABASE_URL : undefined);
+    process.env.SUPABASE_URL;
 
   const SUPABASE_PUBLISHABLE_KEY =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    (typeof window === "undefined" ? process.env.SUPABASE_PUBLISHABLE_KEY : undefined);
+    process.env.SUPABASE_PUBLISHABLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [
@@ -48,10 +49,7 @@ function createSupabaseClient() {
     throw new Error(message);
   }
 
-  // Detect placeholder values from .env.example. These pass the truthiness
-  // check above but point at a non-existent project, which causes silent
-  // auth failures (the form "loads" but submission fails — appears as 404
-  // to the user). Fail loud and early instead.
+  // Detect placeholder values from .env.example.
   const PLACEHOLDER_PATTERNS = [
     "YOUR_PROJECT_REF",
     "YOUR_PUBLISHABLE",
@@ -79,9 +77,6 @@ function createSupabaseClient() {
       storage: typeof window !== "undefined" ? localStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
-      // PKCE so Google OAuth and email-confirmation links return `?code=` and
-      // are exchanged via exchangeCodeForSession in /auth/callback (implicit
-      // hash flow is not used). signInWithPassword is unaffected by this.
       flowType: "pkce",
     },
   });
