@@ -1,3 +1,4 @@
+from typing import Any
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 
@@ -4328,6 +4329,275 @@ def list_query_set_monitoring_runs_endpoint(
         offset=offset,
     )
     return runs
+
+
+# =============================================================================
+# Task 12 Step 4: Targeted Rescan & Change-Impact API Endpoints
+# =============================================================================
+
+@app.post(
+    "/api/lab/rescan/analyze-impact",
+    response_model=dict[str, Any],
+)
+def analyze_rescan_impact_endpoint(
+    site_url: str,
+    changed_resource: str,
+    change_type: str = "PAGE_METADATA",
+    workspace_id: str | None = None,
+):
+    """
+    Analyzes dependency relationships and returns impacted resources.
+    """
+    from app.lab.impact_model import ChangeImpactGraph, ChangeType, RescanScope
+    from app.lab.rescan_policy import RescanPolicyEngine, TargetedRescanRequest
+
+    try:
+        ctype = ChangeType(change_type)
+    except ValueError:
+        ctype = ChangeType.UNKNOWN
+
+    req = TargetedRescanRequest(
+        execution_id="api_analysis",
+        workspace_id=workspace_id,
+        site_url=site_url,
+        changed_resources=[changed_resource],
+        change_type=ctype,
+    )
+
+    graph = ChangeImpactGraph(site_url=site_url, workspace_id=workspace_id)
+    graph.add_node(changed_resource)
+
+    decision = RescanPolicyEngine.decide_scope(request=req, graph=graph)
+    return decision.model_dump()
+
+
+@app.post(
+    "/api/lab/rescan/decide-scope",
+    response_model=dict[str, Any],
+)
+def decide_rescan_scope_endpoint(
+    payload: dict[str, Any],
+):
+    """
+    Evaluates TargetedRescanRequest against RescanPolicyEngine to determine smallest safe scope.
+    """
+    from app.lab.impact_model import ChangeImpactGraph
+    from app.lab.rescan_policy import RescanPolicyEngine, TargetedRescanRequest
+
+    try:
+        req = TargetedRescanRequest(**payload)
+        graph = ChangeImpactGraph(site_url=req.site_url, workspace_id=req.workspace_id)
+        for res in req.changed_resources:
+            graph.add_node(res)
+
+        decision = RescanPolicyEngine.decide_scope(request=req, graph=graph)
+        return decision.model_dump()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post(
+    "/api/lab/rescan/execute",
+    response_model=dict[str, Any],
+)
+def execute_targeted_rescan_endpoint(
+    payload: dict[str, Any],
+):
+    """
+    Executes a targeted, related, or full rescan based on policy evaluation.
+    """
+    from app.lab.impact_model import ChangeImpactGraph
+    from app.lab.rescan_policy import TargetedRescanRequest
+    from app.lab.rescan_service import TargetedRescanService
+
+    try:
+        req = TargetedRescanRequest(**payload)
+        graph = ChangeImpactGraph(site_url=req.site_url, workspace_id=req.workspace_id)
+        for res in req.changed_resources:
+            graph.add_node(res)
+
+        result = TargetedRescanService.execute_targeted_rescan(request=req, graph=graph)
+        return result.model_dump()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# =============================================================================
+# Task 12 Step 5: Experiment Framework & Production Readiness API Endpoints
+# =============================================================================
+
+@app.post(
+    "/api/lab/experiments/create",
+    response_model=dict[str, Any],
+)
+def create_experiment_endpoint(
+    payload: dict[str, Any],
+):
+    """
+    Creates a new controlled optimization experiment contract with hypothesis.
+    """
+    from app.lab.experiment import ExperimentType, Hypothesis
+    from app.lab.experiment_service import ExperimentService
+
+    try:
+        workspace_id = payload.get("workspace_id", "default_ws")
+        site_id = payload.get("site_id", "default_site")
+        name = payload.get("name", "Unnamed Experiment")
+        description = payload.get("description", "")
+        exp_type_str = payload.get("experiment_type", "CONTROLLED_LAB")
+        exp_type = ExperimentType(exp_type_str)
+        target_resource = payload.get("target_resource", "/")
+        hyp_data = payload.get("hypothesis", {})
+
+        hypothesis = Hypothesis(
+            expected_outcome=hyp_data.get("expected_outcome", "Fix defects without regression"),
+            target_finding_ids=hyp_data.get("target_finding_ids", []),
+            target_rule_ids=hyp_data.get("target_rule_ids", []),
+            expected_score_min_delta=float(hyp_data.get("expected_score_min_delta", 0.0)),
+            max_allowed_regression_delta=float(hyp_data.get("max_allowed_regression_delta", 0.0)),
+            expected_rescan_scope=hyp_data.get("expected_rescan_scope", "TARGETED_RESOURCE"),
+        )
+
+        experiment = ExperimentService.create_experiment(
+            workspace_id=workspace_id,
+            site_id=site_id,
+            name=name,
+            description=description,
+            experiment_type=exp_type,
+            target_resource=target_resource,
+            hypothesis=hypothesis,
+            tags=payload.get("tags", []),
+        )
+        return experiment.model_dump()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post(
+    "/api/lab/experiments/run",
+    response_model=dict[str, Any],
+)
+def run_experiment_endpoint(
+    payload: dict[str, Any],
+):
+    """
+    Executes a complete closed-loop experiment:
+    Pre-flight Checks -> Baseline -> Plan -> Apply -> Validate -> Rescan -> Compare -> Metrics -> Decision.
+    """
+    from app.lab.experiment import ExperimentType, Hypothesis
+    from app.lab.experiment_service import ExperimentService
+    from app.lab.harness import PipelineRunConfig
+
+    try:
+        experiment_id = payload.get("experiment_id")
+        run_config_dict = payload.get("run_config")
+
+        run_config = None
+        if run_config_dict:
+            run_config = PipelineRunConfig(**run_config_dict)
+
+        if not experiment_id:
+            # Create on-the-fly experiment if not provided
+            workspace_id = payload.get("workspace_id", "default_ws")
+            site_id = payload.get("site_id", "default_site")
+            name = payload.get("name", "Automated Closed-Loop Experiment")
+            exp_type_str = payload.get("experiment_type", "CONTROLLED_LAB")
+            exp_type = ExperimentType(exp_type_str)
+            target_resource = payload.get("target_resource", "/")
+            hyp_data = payload.get("hypothesis", {})
+
+            hypothesis = Hypothesis(
+                expected_outcome=hyp_data.get("expected_outcome", "Fix defects safely"),
+                target_finding_ids=hyp_data.get("target_finding_ids", []),
+                target_rule_ids=hyp_data.get("target_rule_ids", []),
+                expected_score_min_delta=float(hyp_data.get("expected_score_min_delta", 0.0)),
+                max_allowed_regression_delta=float(hyp_data.get("max_allowed_regression_delta", 0.0)),
+            )
+
+            exp = ExperimentService.create_experiment(
+                workspace_id=workspace_id,
+                site_id=site_id,
+                name=name,
+                experiment_type=exp_type,
+                target_resource=target_resource,
+                hypothesis=hypothesis,
+            )
+            experiment_id = exp.experiment_id
+
+        result = ExperimentService.run_experiment(
+            experiment_id=experiment_id,
+            run_config=run_config,
+            dry_run=payload.get("dry_run", False),
+        )
+        return result.model_dump()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Experiment execution failed: {str(exc)}")
+
+
+@app.get(
+    "/api/lab/experiments/{experiment_id}",
+    response_model=dict[str, Any],
+)
+def get_experiment_endpoint(
+    experiment_id: str,
+):
+    """
+    Retrieves the experiment contract and status by ID.
+    """
+    from app.lab.experiment_service import ExperimentService
+
+    exp = ExperimentService.get_experiment(experiment_id)
+    if not exp:
+        raise HTTPException(status_code=404, detail=f"Experiment '{experiment_id}' not found")
+    return exp.model_dump()
+
+
+@app.get(
+    "/api/lab/experiments/{experiment_id}/metrics",
+    response_model=dict[str, Any],
+)
+def get_experiment_metrics_endpoint(
+    experiment_id: str,
+):
+    """
+    Retrieves the deterministic 5-dimension metrics and decision result for an experiment.
+    """
+    from app.lab.experiment_service import ExperimentService
+
+    res = ExperimentService.get_experiment_result(experiment_id)
+    if not res:
+        raise HTTPException(status_code=404, detail=f"Results for experiment '{experiment_id}' not found")
+    return res.model_dump()
+
+
+@app.post(
+    "/api/lab/production-readiness/check",
+    response_model=dict[str, Any],
+)
+def check_production_readiness_endpoint(
+    payload: dict[str, Any],
+):
+    """
+    Evaluates pre-flight production readiness across 5 security, reliability, and authorization pillars.
+    """
+    from app.lab.production_readiness import ProductionReadinessGuard
+
+    try:
+        report = ProductionReadinessGuard.evaluate(
+            workspace_id=payload.get("workspace_id", "default_ws"),
+            target_url=payload.get("target_url", "http://localhost:8000"),
+            connector_type=payload.get("connector_type"),
+            change_type=payload.get("change_type"),
+            is_dry_run=payload.get("is_dry_run", False),
+            resource_id=payload.get("resource_id"),
+        )
+        return report.model_dump()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 
 
 
