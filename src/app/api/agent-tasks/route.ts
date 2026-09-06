@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex */
 import { z } from "zod";
 import { jsonError, requireUserId } from "@/server/api-auth";
 import { buildAgentTasks } from "@/lib/ai/deterministic-suggestions";

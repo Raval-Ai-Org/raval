@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 
-import logoAsset from "@/assets/raval-mark.png.asset.json";
+import logoAsset from "@/assets/mellox-logo.svg.asset.json";
 
 export default function NotFound() {
   // Inject noindex + a safe canonical at runtime so unmatched URLs never
@@ -48,7 +48,7 @@ export default function NotFound() {
         <img
           src={logoAsset.url}
           alt="Mellox AI"
-          className="mx-auto h-16 w-16 rounded-[26%] ring-1 ring-border/60 shadow-[0_4px_14px_-6px_rgba(0,0,0,0.18)]"
+          className="mx-auto h-[88px] w-[88px] rounded-[26%] ring-1 ring-border/60 shadow-[0_4px_14px_-6px_rgba(0,0,0,0.18)]"
           draggable={false}
         />
         <h1 className="mt-6 text-7xl font-bold gradient-text">404</h1>

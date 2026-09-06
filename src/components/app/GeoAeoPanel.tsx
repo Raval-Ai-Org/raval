@@ -316,7 +316,7 @@ function fixRecipe(
       title: "Add Organization JSON-LD",
       lang: "html",
       placement: "Drop in your <head> (root layout)",
-      code: `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "Organization",\n  "name": "Your Brand",\n  "url": "https://example.com",\n  "logo": "https://example.com/logo.png",\n  "sameAs": [\n    "https://x.com/yourbrand",\n    "https://www.linkedin.com/company/yourbrand"\n  ]\n}\n<\/script>`,
+      code: `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "Organization",\n  "name": "Your Brand",\n  "url": "https://example.com",\n  "logo": "https://example.com/logo.png",\n  "sameAs": [\n    "https://x.com/yourbrand",\n    "https://www.linkedin.com/company/yourbrand"\n  ]\n}\n</script>`,
     };
   }
   if (t.includes("faq")) {
@@ -324,7 +324,7 @@ function fixRecipe(
       title: "Add FAQPage JSON-LD",
       lang: "html",
       placement: "On pages with Q&A content",
-      code: `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "FAQPage",\n  "mainEntity": [{\n    "@type": "Question",\n    "name": "What is Mellox AI?",\n    "acceptedAnswer": { "@type": "Answer", "text": "..." }\n  }]\n}\n<\/script>`,
+      code: `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "FAQPage",\n  "mainEntity": [{\n    "@type": "Question",\n    "name": "What is Mellox AI?",\n    "acceptedAnswer": { "@type": "Answer", "text": "..." }\n  }]\n}\n</script>`,
     };
   }
   if (t.includes("sitemap")) {
@@ -433,8 +433,8 @@ function FixDrawer({ action, onClose }: { action: ActionItem; onClose: () => voi
           <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
             <Info className="mt-0.5 h-3 w-3" />
             <div>
-              No prebuilt snippet for this one — apply the recommendation as described. The Mellox AI
-              agent can draft a fix on request.
+              No prebuilt snippet for this one — apply the recommendation as described. The Mellox
+              AI agent can draft a fix on request.
               <button
                 onClick={onClose}
                 className="ml-1 text-foreground/70 underline-offset-2 hover:underline"

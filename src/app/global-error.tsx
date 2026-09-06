@@ -26,7 +26,7 @@ export default function GlobalError({
           justifyContent: "center",
           background: "#0f1411",
           color: "#f7f8fa",
-          fontFamily: "'Inter Tight', ui-sans-serif, system-ui, sans-serif",
+          fontFamily: '"Google Sans Flex", "Segoe UI", sans-serif',
         }}
       >
         <div style={{ maxWidth: 420, textAlign: "center", padding: "0 16px" }}>

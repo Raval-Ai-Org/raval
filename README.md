@@ -14,8 +14,8 @@ The app runs on the Next.js App Router.
 | `src/app/**/route.ts`         | HTTP handlers (`/api/*`, `/sitemap.xml`), all authenticated with a Supabase bearer token.                                                |
 | `src/app/api/rpc/[...fn]`     | The single transport every server function is called through.                                                                            |
 | `src/server/fns/*.ts`         | Server-function implementations. Never bundled for the browser.                                                                          |
-| `src/lib/*.functions.ts`      | Their browser-side stubs: `await listContentItems({ data })` posts to `/api/rpc/<module>/<name>`.                                         |
-| `src/lib/navigation.tsx`      | `Link` / `useNavigate` / `useRouterState` / `redirect` on top of `next/navigation`.                                                       |
+| `src/lib/*.functions.ts`      | Their browser-side stubs: `await listContentItems({ data })` posts to `/api/rpc/<module>/<name>`.                                        |
+| `src/lib/navigation.tsx`      | `Link` / `useNavigate` / `useRouterState` / `redirect` on top of `next/navigation`.                                                      |
 | `src/components`, `src/hooks` | Shared UI and hooks (all client components).                                                                                             |
 
 Auth is a Supabase session in `localStorage`, so the signed-in routes gate in the
@@ -160,13 +160,13 @@ If login doesn't work after entering these credentials, the issue is almost alwa
 
 ### Common "404 on /login" causes (and fixes)
 
-| Symptom                                   | Cause                         | Fix                                                                         |
-| ----------------------------------------- | ----------------------------- | --------------------------------------------------------------------------- |
-| Page loads, form submits, nothing happens | `.env` has placeholder values | Replace `YOUR_*` with real values in `.env`, restart `npm run dev`          |
-| Hard-refresh (Ctrl+Shift+R) fixes it      | Browser cached the old page   | Always do a hard refresh after pulling new code                             |
-| Page loads but text is unstyled           | Next build cache stale        | `rm -rf .next && npm run dev`                                               |
-| `Cannot find module '@/...'`              | TS path aliases not resolving | `rm -rf node_modules && npm install && npm run dev`                         |
-| Port 8080 already in use                  | Another service on 8080       | `lsof -i :8080` to find the process, or change `-p 8080` in `package.json`  |
+| Symptom                                   | Cause                         | Fix                                                                        |
+| ----------------------------------------- | ----------------------------- | -------------------------------------------------------------------------- |
+| Page loads, form submits, nothing happens | `.env` has placeholder values | Replace `YOUR_*` with real values in `.env`, restart `npm run dev`         |
+| Hard-refresh (Ctrl+Shift+R) fixes it      | Browser cached the old page   | Always do a hard refresh after pulling new code                            |
+| Page loads but text is unstyled           | Next build cache stale        | `rm -rf .next && npm run dev`                                              |
+| `Cannot find module '@/...'`              | TS path aliases not resolving | `rm -rf node_modules && npm install && npm run dev`                        |
+| Port 8080 already in use                  | Another service on 8080       | `lsof -i :8080` to find the process, or change `-p 8080` in `package.json` |
 
 ### Development
 

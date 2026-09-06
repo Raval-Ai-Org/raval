@@ -4,7 +4,7 @@ import { Providers } from "@/app/providers";
 
 import "@/styles.css";
 
-import faviconAsset from "@/assets/favicon.svg.asset.json";
+import faviconAsset from "@/assets/mellox-logo.svg.asset.json";
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
@@ -17,8 +17,8 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
   },
   icons: {
-    icon: [{ url: faviconAsset.url, type: "image/svg+xml" }],
-    apple: [{ url: faviconAsset.url }],
+    icon: [{ url: faviconAsset.url, type: "image/svg+xml", sizes: "any" }],
+    apple: [{ url: faviconAsset.url, type: "image/svg+xml" }],
   },
   openGraph: {
     title: "Mellox AI | Marketing Intelligence Layer",
@@ -26,18 +26,14 @@ export const metadata: Metadata = {
       "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
     siteName: "Mellox AI",
     type: "website",
-    images: [
-      "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp",
-    ],
+    images: [{ url: `${BASE_URL}${faviconAsset.url}`, type: "image/svg+xml" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Mellox AI | Marketing Intelligence Layer",
     description:
       "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
-    images: [
-      "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp",
-    ],
+    images: [{ url: `${BASE_URL}${faviconAsset.url}`, type: "image/svg+xml" }],
   },
 };
 
@@ -60,7 +56,7 @@ const ORGANIZATION_LD = {
       url: BASE_URL,
       logo: {
         "@type": "ImageObject",
-        url: `${BASE_URL}/favicon.svg`,
+        url: `${BASE_URL}${faviconAsset.url}`,
       },
       description:
         "Mellox AI is the Marketing Intelligence Layer — an AI-native platform that helps brands and agencies get visible inside LLMs.",
@@ -102,7 +98,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700;800&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@8..144,100..1000&family=Michroma:wght@400&display=swap"
         />
         <link
           rel="stylesheet"

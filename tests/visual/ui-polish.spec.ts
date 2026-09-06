@@ -29,7 +29,9 @@ for (const theme of themes) {
         try {
           localStorage.setItem("theme", t);
           localStorage.setItem("vite-ui-theme", t);
-        } catch {}
+        } catch {
+          // Browsers can block localStorage in restricted contexts; the test only needs the fallback theme.
+        }
       }, theme);
     });
 

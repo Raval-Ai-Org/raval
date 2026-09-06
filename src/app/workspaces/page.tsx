@@ -4,8 +4,7 @@ import { SessionGate } from "@/components/auth/SessionGate";
 import ProjectsPage from "../projects/ProjectsPage";
 
 const TITLE = "Workspaces · Mellox AI";
-const DESCRIPTION =
-  "Manage every client workspace in one Mellox AI Marketing Intelligence Layer.";
+const DESCRIPTION = "Manage every client workspace in one Mellox AI Marketing Intelligence Layer.";
 
 export const metadata: Metadata = pageMetadata({
   title: TITLE,

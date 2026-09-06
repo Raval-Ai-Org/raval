@@ -113,7 +113,7 @@ function ActionChips({ actions }: { actions: ChatAction[] }) {
               const r = runChatAction(a);
               if (r.toast) toast.success(r.toast);
             }}
-            className="group inline-flex max-w-full items-center gap-1.5 rounded-full border border-foreground/15 bg-gradient-to-r from-[hsl(var(--brand-blue)/0.08)] to-[hsl(var(--brand-green)/0.08)] px-2.5 py-1 text-left text-[11.5px] font-medium text-foreground transition hover:-translate-y-0.5 hover:border-foreground/30 hover:from-[hsl(var(--brand-blue)/0.16)] hover:to-[hsl(var(--brand-green)/0.16)]"
+            className="group inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-secondary/45 px-2.5 py-1 text-left text-[11.5px] font-medium text-foreground transition hover:border-foreground/30 hover:bg-secondary"
             title={a.hint}
           >
             <Icon className="h-3 w-3 text-[hsl(var(--brand-blue))]" />
@@ -1180,7 +1180,7 @@ export function ChatPanel({
     >
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-auto scrollbar-thin">
-        <div className={centered ? "mx-auto w-full max-w-2xl" : ""}>
+        <div className={centered ? "mx-auto w-full max-w-3xl" : ""}>
           {autoSending && empty ? (
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <motion.div
@@ -1286,7 +1286,7 @@ export function ChatPanel({
                 right.
               </p>
               <div
-                className="mt-6 grid w-full max-w-sm gap-1.5"
+                className="mt-6 grid w-full max-w-lg gap-1.5"
                 role="listbox"
                 aria-label="Prompt suggestions — use arrow keys to browse, Enter to send"
                 data-suggestion-list
@@ -1361,7 +1361,7 @@ export function ChatPanel({
               </div>
             </div>
           ) : (
-            <div className="space-y-5 px-4 py-5 md:space-y-6 md:px-5 md:py-6">
+            <div className="space-y-5 px-4 py-5 md:space-y-6 md:px-8 md:py-6">
               <AnimatePresence initial={false}>
                 {messages.map((m, i) => {
                   if (m.kind === "clarify" && m.payload) {
@@ -1430,7 +1430,13 @@ export function ChatPanel({
                           <div className="flex h-6 w-6 items-center justify-center rounded-lg border border-border/60 bg-card">
                             <Sparkles className="h-3 w-3 text-muted-foreground" />
                           </div>
-                          <span>Mellox AI</span>
+                          <span
+                            style={{
+                              fontFamily: '"Michroma", ui-sans-serif, system-ui, sans-serif',
+                            }}
+                          >
+                            Mellox AI
+                          </span>
                         </div>
                       ) : null}
                       <div
@@ -1490,7 +1496,7 @@ export function ChatPanel({
       >
         {mobileAccessory && <div className="mx-auto mb-2 w-full max-w-2xl">{mobileAccessory}</div>}
         <div
-          className={`${centered ? "mx-auto w-full max-w-2xl" : ""} relative`}
+          className={`${centered ? "mx-auto w-full max-w-3xl" : ""} relative`}
           onDragEnter={onDragEnter}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}

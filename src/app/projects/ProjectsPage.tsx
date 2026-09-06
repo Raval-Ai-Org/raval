@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { signOutAndRedirect } from "@/lib/auth";
 import { createWorkspace, ensureAuthWorkspace } from "@/lib/workspaces.functions";
 import { Logo } from "@/components/brand/Logo";
+import { SecondaryBrandSymbols } from "@/components/brand/SecondaryBrandSymbols";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,7 +62,6 @@ import { toast } from "sonner";
 import { pageHead, webPageLd } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 import { usePersona, type PersonaCopy } from "@/hooks/use-persona";
-import { PersonaDialog } from "@/components/app/PersonaDialog";
 
 type Workspace = {
   id: string;
@@ -94,7 +94,7 @@ const SELECTED_KEY = "workspace:selected";
 function ProjectsPage() {
   const navigate = useNavigate();
   const ensureWorkspace = useServerFn(ensureAuthWorkspace);
-  const { persona, copy, loading: personaLoading, setPersona } = usePersona();
+  const { copy } = usePersona();
   const [loading, setLoading] = useState(true);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [userEmail, setUserEmail] = useState<string>("");
@@ -145,8 +145,7 @@ function ProjectsPage() {
 
   const openProject = (w: Workspace) => {
     localStorage.setItem(SELECTED_KEY, w.id);
-    if (!w.onboarded_at) navigate({ to: "/onboarding" });
-    else navigate({ to: "/app" });
+    navigate({ to: "/app" });
   };
 
   const signOut = async () => {
@@ -205,7 +204,11 @@ function ProjectsPage() {
 
       {/* Top bar */}
       <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-5">
-        <Link to="/workspaces" aria-label="Mellox AI home" className="flex h-9 shrink-0 items-center">
+        <Link
+          to="/workspaces"
+          aria-label="Mellox AI home"
+          className="flex h-9 shrink-0 items-center"
+        >
           <Logo height={30} />
         </Link>
         <div className="flex items-center gap-2 sm:gap-3">
@@ -221,6 +224,7 @@ function ProjectsPage() {
 
       {/* Hero */}
       <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pt-14 pb-8 text-center">
+        <SecondaryBrandSymbols size="lg" className="mx-auto mb-8 justify-center gap-3 sm:gap-5" />
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -268,10 +272,9 @@ function ProjectsPage() {
             open={dialogOpen}
             onOpenChange={setDialogOpen}
             copy={copy}
-            mandatory={!loading && !personaLoading && !!persona && workspaces.length === 0}
             onCreated={(id) => {
               localStorage.setItem(SELECTED_KEY, id);
-              navigate({ to: "/onboarding" });
+              navigate({ to: "/app" });
             }}
           />
         </motion.div>
@@ -385,14 +388,6 @@ function ProjectsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* One-time persona picker — blocks everything until answered */}
-      <PersonaDialog
-        open={!loading && !personaLoading && !persona}
-        onConfirm={async (p) => {
-          await setPersona(p);
-        }}
-      />
     </div>
   );
 }
@@ -815,7 +810,6 @@ function PasteLinkBar({
       toast.error(error?.message ?? "Couldn't create project");
     } finally {
       setSaving(false);
-      return;
     }
   };
 
@@ -896,14 +890,12 @@ function NewProjectDialog({
   open,
   onOpenChange,
   onCreated,
-  mandatory = false,
   copy,
 }: {
   children?: React.ReactNode;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onCreated: (id: string) => void;
-  mandatory?: boolean;
   copy: PersonaCopy;
 }) {
   const [name, setName] = useState("");
@@ -915,9 +907,6 @@ function NewProjectDialog({
     setName("");
     setUrl("");
   };
-
-  // Force the dialog open when it's the user's first workspace — no dismissing.
-  const effectiveOpen = mandatory ? true : open;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -945,39 +934,22 @@ function NewProjectDialog({
       toast.error(error?.message ?? `Couldn't create ${copy.noun}`);
     } finally {
       setSaving(false);
-      return;
     }
   };
 
   return (
     <Dialog
-      open={effectiveOpen}
+      open={open}
       onOpenChange={(v) => {
-        if (mandatory && !v) return;
         onOpenChange(v);
         if (!v) reset();
       }}
     >
       {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
-      <DialogContent
-        className="sm:max-w-md"
-        onEscapeKeyDown={(e) => {
-          if (mandatory) e.preventDefault();
-        }}
-        onPointerDownOutside={(e) => {
-          if (mandatory) e.preventDefault();
-        }}
-        onInteractOutside={(e) => {
-          if (mandatory) e.preventDefault();
-        }}
-      >
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="tracking-tight">
-            {mandatory ? copy.mandatoryTitle : copy.normalTitle}
-          </DialogTitle>
-          <DialogDescription>
-            {mandatory ? copy.mandatoryDescription : copy.normalDescription}
-          </DialogDescription>
+          <DialogTitle className="tracking-tight">{copy.normalTitle}</DialogTitle>
+          <DialogDescription>{copy.normalDescription}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} className="space-y-4 pt-1">
@@ -1007,18 +979,16 @@ function NewProjectDialog({
             </div>
           </div>
           <DialogFooter className="pt-2">
-            {!mandatory && (
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-            )}
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={saving} className="btn-aura gap-1.5">
               {saving ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Plus className="h-3.5 w-3.5" />
               )}
-              {mandatory ? copy.createFirstCta : copy.createCta}
+              {copy.createCta}
             </Button>
           </DialogFooter>
         </form>

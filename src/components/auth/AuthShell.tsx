@@ -61,7 +61,7 @@ export function AuthShell({
               transition={{ delay: 0.6, duration: 0.8 }}
               className="text-[11px] uppercase tracking-[0.22em] text-white/40"
             >
-              © Mellox AI
+              <span style={{ fontFamily: "var(--font-brand)" }}>© Mellox AI</span>
             </motion.div>
           </div>
         </aside>

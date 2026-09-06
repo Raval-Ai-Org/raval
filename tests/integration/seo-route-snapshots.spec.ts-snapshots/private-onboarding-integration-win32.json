@@ -14,10 +14,7 @@
   "hreflang": [],
   "robots": "noindex,nofollow",
   "h1": null,
-  "jsonLdTypes": [
-    "Organization",
-    "WebSite"
-  ],
+  "jsonLdTypes": ["Organization", "WebSite"],
   "jsonLdNodes": [
     {
       "type": "Organization",
@@ -48,11 +45,5 @@
       "inLanguage": "en"
     }
   ],
-  "approvedPhrasesPresent": [
-    "Brand DNA",
-    "AEO",
-    "GEO",
-    "Ravi",
-    "Mellox AI"
-  ]
+  "approvedPhrasesPresent": ["Brand DNA", "AEO", "GEO", "Ravi", "Mellox AI"]
 }

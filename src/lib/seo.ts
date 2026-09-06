@@ -11,7 +11,7 @@ export const BASE_URL =
 
 export const BRAND_NAME = "Mellox AI";
 // Logo is served from the same domain as the application
-export const BRAND_LOGO = `${BASE_URL}/favicon.svg`;
+export const BRAND_LOGO = `${BASE_URL}/assets/mellox-logo.svg`;
 export const BRAND_SOCIAL_IMAGE =
   "https://storage.googleapis.com/gpt-engineer-file-uploads/XZzWHMlbweRejWDVyKWThlteKfK2/social-images/social-1780771486300-Untitled_design_(12).webp";
 

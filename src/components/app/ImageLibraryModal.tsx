@@ -110,7 +110,6 @@ export function ImageLibraryModal({
   async function copyOne(e: CachedImageEntry) {
     try {
       const blob = await (await fetch(e.dataUrl)).blob();
-      // @ts-ignore
       await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
       toast.success("Copied to clipboard");
     } catch {

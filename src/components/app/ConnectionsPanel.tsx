@@ -148,7 +148,7 @@ export function ConnectionsPanel() {
         <div className="rounded-md border border-border/60 bg-card/50 p-2">
           <p className="text-[11px] font-medium text-foreground">Connect a social account</p>
           <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
-              Authorize Mellox AI to post and schedule on your behalf.
+            Authorize Mellox AI to post and schedule on your behalf.
           </p>
         </div>
       )}

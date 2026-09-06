@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
 import {
@@ -82,12 +83,13 @@ export function AccountMenu({
         >
           <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[11px] font-semibold text-white ring-1 ring-border/60">
             {user?.avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={user.avatar}
                 alt=""
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
+                fill
+                sizes="32px"
               />
             ) : (
               <span>{initials}</span>
@@ -109,11 +111,13 @@ export function AccountMenu({
         <DropdownMenuLabel className="flex items-center gap-2.5 px-2 py-2">
           <span className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[12px] font-semibold text-white">
             {user?.avatar ? (
-              <img
+              <Image
                 src={user.avatar}
                 alt=""
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
+                fill
+                sizes="36px"
               />
             ) : (
               <span>{initials}</span>
@@ -200,14 +204,16 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           type="button"
           aria-label={`Account — ${name}`}
           title={name}
-          className="grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[10px] font-semibold text-white ring-1 ring-border/60 transition hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="relative grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[10px] font-semibold text-white ring-1 ring-border/60 transition hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           {user?.avatar ? (
-            <img
+            <Image
               src={user.avatar}
               alt=""
               className="h-full w-full object-cover"
               referrerPolicy="no-referrer"
+              fill
+              sizes="28px"
             />
           ) : (
             <span>{initials}</span>

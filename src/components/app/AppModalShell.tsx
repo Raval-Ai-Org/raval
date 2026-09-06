@@ -92,7 +92,7 @@ export function AppModalShell({
                 exit={{ opacity: 0, scale: 0.97, y: 8 }}
                 transition={{ type: "spring", stiffness: 280, damping: 28, mass: 0.9 }}
                 className={cn(
-                  "fixed left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background shadow-[0_30px_120px_-20px_rgba(0,0,0,0.45),0_1px_0_0_hsl(var(--border)),inset_0_1px_0_hsl(0_0%_100%/0.06)]",
+                  "fixed left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border/70 bg-background shadow-[0_24px_80px_-24px_rgba(0,0,0,0.48),0_1px_0_0_hsl(var(--border))]",
                   SIZE_MAP[size],
                   contentClassName,
                 )}
@@ -113,21 +113,11 @@ export function AppModalShell({
                   </VisuallyHidden>
                 )}
 
-                {/* Brand halo */}
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 -z-0 opacity-70"
-                  style={{
-                    background:
-                      "radial-gradient(60% 50% at 18% 0%, hsl(var(--brand-blue) / 0.10), transparent 60%), radial-gradient(50% 45% at 100% 100%, hsl(var(--brand-green) / 0.12), transparent 65%)",
-                  }}
-                />
-
                 {/* Header */}
-                <header className="relative z-10 flex shrink-0 items-start justify-between gap-3 border-b border-border/70 bg-background/70 px-4 py-3 backdrop-blur-xl sm:px-6">
+                <header className="relative z-10 flex shrink-0 items-start justify-between gap-3 border-b border-border/70 bg-background px-4 py-3 sm:px-6">
                   <div className="flex min-w-0 flex-1 items-center gap-2.5">
                     {Icon && (
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[hsl(var(--brand-blue)/0.25)] to-[hsl(var(--brand-green)/0.25)] ring-1 ring-border/60">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-secondary text-primary ring-1 ring-border/60">
                         <Icon className="h-4 w-4 text-foreground/80" strokeWidth={2.2} />
                       </span>
                     )}

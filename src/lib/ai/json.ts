@@ -12,7 +12,7 @@ export function stripJsonFences(raw: string): string {
 export function extractFirstJsonObject(raw: string): string | null {
   const cleaned = stripJsonFences(raw);
   if (cleaned.startsWith("{") || cleaned.startsWith("[")) return cleaned;
-  const m = cleaned.match(/[\{\[][\s\S]*[\}\]]/);
+  const m = cleaned.match(/(\{|\[)[\s\S]*(\}|\])/);
   return m ? m[0] : null;
 }
 

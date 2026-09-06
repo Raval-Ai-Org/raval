@@ -58,7 +58,10 @@ describe("workspace_sdr RLS posture (FR-014)", () => {
     // provisioning module uses the WS_SDR_TABLE constant; assert every file
     // that touches it is a server-only module.
     const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-    const hits = filesContaining(root + "/src", /WS_SDR_TABLE|from\("workspace_sdr"\)|from\(WS_SDR_TABLE\)/);
+    const hits = filesContaining(
+      root + "/src",
+      /WS_SDR_TABLE|from\("workspace_sdr"\)|from\(WS_SDR_TABLE\)/,
+    );
     expect(hits.length).toBeGreaterThan(0);
     for (const f of hits) {
       // workspace_sdr access must live in server-only modules: it must never be

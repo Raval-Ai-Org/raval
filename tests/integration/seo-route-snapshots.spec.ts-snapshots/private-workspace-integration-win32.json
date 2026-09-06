@@ -14,10 +14,7 @@
   "hreflang": [],
   "robots": "noindex,nofollow",
   "h1": null,
-  "jsonLdTypes": [
-    "Organization",
-    "WebSite"
-  ],
+  "jsonLdTypes": ["Organization", "WebSite"],
   "jsonLdNodes": [
     {
       "type": "Organization",
@@ -48,9 +45,5 @@
       "inLanguage": "en"
     }
   ],
-  "approvedPhrasesPresent": [
-    "Marketing Intelligence Layer",
-    "Ravi",
-    "Mellox AI"
-  ]
+  "approvedPhrasesPresent": ["Marketing Intelligence Layer", "Ravi", "Mellox AI"]
 }

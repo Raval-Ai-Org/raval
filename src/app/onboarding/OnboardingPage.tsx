@@ -30,7 +30,7 @@ import { authedFetch } from "@/lib/authed-fetch";
 import { BASE_URL } from "@/lib/seo";
 import { toast } from "sonner";
 import { Logo } from "@/components/brand/Logo";
-import { StarAgent, type StarMood } from "@/components/StarAgent";
+import { SecondaryBrandSymbols } from "@/components/brand/SecondaryBrandSymbols";
 import { emptyDna, type BrandDna } from "@/hooks/use-brand-dna";
 import { buildDesignMd, saveDesignMd } from "@/lib/design-md";
 
@@ -412,12 +412,7 @@ function Onboarding() {
 
       <section className="flex flex-1 items-center justify-center px-4 py-10 sm:py-16">
         <div className="w-full max-w-2xl">
-          <StarGuide
-            step={step}
-            firstPrompt={firstPrompt}
-            websiteUrl={websiteUrl}
-            provider={provider}
-          />
+          <StarGuide step={step} />
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
@@ -702,7 +697,7 @@ function ExtractView({
   return (
     <div className="text-center">
       <div className="mx-auto flex justify-center">
-        <StarAgent mood={isError ? "thinking" : isOk ? "excited" : "scanning"} size={96} animate />
+        <SecondaryBrandSymbols size="lg" className="justify-center gap-3 sm:gap-4" />
       </div>
       <h2 className="mt-5 text-[22px] font-semibold tracking-tight">
         {isOk ? "Memory drafted" : isError ? "Couldn't read the site" : "Reading your site"}
@@ -1161,11 +1156,11 @@ function AnalyzeView({
   return (
     <div className="text-center">
       <div className="mx-auto flex justify-center">
-        <StarAgent mood="scanning" size={96} animate />
+        <SecondaryBrandSymbols size="md" className="justify-center gap-2" />
       </div>
       <h2 className="mt-5 text-[22px] font-semibold tracking-tight">Finalizing your workspace</h2>
       <p className="mt-1.5 text-[13.5px] text-muted-foreground">
-        {saving ? "Saving your setup…" : "Star is wiring everything together — one moment."}
+        {saving ? "Saving your setup…" : "Your agents are wiring everything together — one moment."}
       </p>
       <ul className="mx-auto mt-7 max-w-sm space-y-1.5 text-left">
         {tasks.map((t, i) => (
@@ -1197,7 +1192,7 @@ function DoneView({ onEnter }: { onEnter: () => void }) {
   return (
     <div className="text-center">
       <div className="mx-auto flex justify-center">
-        <StarAgent mood="superhero" size={110} animate message="Let's ship something great." />
+        <SecondaryBrandSymbols size="lg" className="justify-center gap-3 sm:gap-4" />
       </div>
       <h2 className="mt-5 text-[22px] font-semibold tracking-tight">You're all set</h2>
       <p className="mt-1.5 text-[13.5px] text-muted-foreground">
@@ -1213,38 +1208,23 @@ function DoneView({ onEnter }: { onEnter: () => void }) {
   );
 }
 
-function StarGuide({
-  step,
-  firstPrompt,
-  websiteUrl,
-  provider,
-}: {
-  step: Step;
-  firstPrompt: string;
-  websiteUrl: string;
-  provider: string;
-}) {
+function StarGuide({ step }: { step: Step }) {
   if (step === "analyze" || step === "done" || step === "extract") return null;
 
-  const guide: Partial<Record<Step, { mood: StarMood; tip: string }>> = {
+  const guide: Partial<Record<Step, { tip: string }>> = {
     prompt: {
-      mood: firstPrompt.trim().length >= 4 ? "excited" : "happy",
-      tip: "Hi, I'm Star ✦ Tell me one outcome you want — I'll route it to the right agent.",
+      tip: "Start with one outcome you want — we'll route it to the right agent.",
     },
     website: {
-      mood: /^https?:\/\/.+\..+/.test(websiteUrl.trim()) ? "scanning" : "thinking",
       tip: "Drop your site and I'll auto-fill your Memory from it. Optional — but worth it.",
     },
     review: {
-      mood: "excited",
       tip: "I drafted your Brand DNA from your site. Tweak anything that's off — it powers every agent.",
     },
     personalize: {
-      mood: "thinking",
       tip: "A bit more about your goals, tone and competitors — so every reply sounds like you.",
     },
     connect: {
-      mood: provider ? "excited" : "waving",
       tip: "Pick a place to publish (or skip — you can link it later).",
     },
   };
@@ -1255,17 +1235,16 @@ function StarGuide({
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        key={step + g.mood}
+        key={step}
         initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -6 }}
         transition={{ duration: 0.3 }}
-        className="mb-6 flex items-start gap-3"
+        className="mb-8 flex flex-col items-center text-center"
       >
-        <StarAgent mood={g.mood} size={64} animate />
-        <div className="relative mt-2 flex-1">
-          <div className="absolute -left-2 top-3 h-3 w-3 rotate-45 border-l border-t border-border bg-card" />
-          <div className="rounded-xl border border-border bg-card px-3.5 py-2.5 text-[12.5px] leading-relaxed text-muted-foreground">
+        <SecondaryBrandSymbols size="md" className="justify-center gap-2" />
+        <div className="mt-4 w-full max-w-lg">
+          <div className="rounded-2xl border border-border/70 bg-card/75 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground shadow-[0_14px_40px_-30px_hsl(var(--foreground)/0.55)]">
             {g.tip}
           </div>
         </div>

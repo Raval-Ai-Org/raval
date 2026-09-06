@@ -725,7 +725,7 @@ function AgencyHQ() {
   const buildDigest = () => {
     const now = new Date();
     const dateLabel = now.toLocaleDateString(undefined, {
-          month: "long",
+      month: "long",
       day: "numeric",
       year: "numeric",
     });
@@ -748,7 +748,7 @@ function AgencyHQ() {
   const digestToText = () => {
     const { dateLabel, summary, approvals, recent } = buildDigest();
     const lines: string[] = [];
-        lines.push(`Mellox AI · Weekly digest — ${dateLabel}`);
+    lines.push(`Mellox AI · Weekly digest — ${dateLabel}`);
     lines.push("");
     lines.push(
       `Clients: ${summary.clients} · Active ${summary.active} · Onboarding ${summary.onboarding}`,
@@ -841,7 +841,7 @@ function AgencyHQ() {
             >
           )[c] ?? c,
       );
-        const html = `<!doctype html><html><head><meta charset="utf-8"><title>Mellox AI · Weekly digest — ${esc(dateLabel)}</title>
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Mellox AI · Weekly digest — ${esc(dateLabel)}</title>
 <style>
   *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;color:#0b0f0d;margin:40px;line-height:1.5}
   h1{font-size:22px;margin:0 0 4px;letter-spacing:-0.01em}
@@ -1182,7 +1182,7 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
           variants={itemUp}
           className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-[11.5px] font-medium text-muted-foreground backdrop-blur"
         >
-            <Sparkles className="h-3 w-3 text-aura" /> Agency
+          <Sparkles className="h-3 w-3 text-aura" /> Agency
         </motion.div>
         <motion.h1
           variants={itemUp}

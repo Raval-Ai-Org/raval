@@ -7,12 +7,12 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  /* Display/UI: Styrene B substitute (Inter Tight — geometric humanist sans) */
-  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
-  /* Display: Instrument Serif — premium editorial display face for headlines */
-  --font-display: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
-  /* Body: Tiempos substitute (Source Serif 4 — warm editorial serif) */
-  --font-serif: "Source Serif 4", ui-serif, Georgia, "Times New Roman", serif;
+  /* Primary product/UI font: Google Sans Flex — readable, flexible, premium. */
+  --font-sans: "Google Sans Flex", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  /* Brand identity moments only: Michroma for the Mellox AI wordmark. */
+  --font-brand: "Michroma", "Segoe UI", sans-serif;
+  --font-display: "Google Sans Flex", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-serif: ui-serif, Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 
   /* ---------- Standardized Type Scale ----------
@@ -154,7 +154,7 @@
   --popover: 210 30% 99.2%;
   --popover-foreground: 0 0% 0%;
 
-  --primary: 151 78% 22%; /* deeper forest-green primary for stronger contrast */
+  --primary: 70 72% 30%; /* darker Ultra Moss variant for readable light-theme text */
   --primary-foreground: 0 0% 100%;
 
   --secondary: 220 18% 90%; /* deeper cool putty surface for chips/rails */
@@ -169,24 +169,24 @@
   --destructive: 0 74% 40%;
   --destructive-foreground: 0 0% 100%;
 
-  --success: 151 78% 24%;
-  --success-light: 151 60% 90%;
+  --success: 70 72% 32%;
+  --success-light: 70 60% 90%;
   --warning: 32 96% 38%;
 
-  --border: 220 14% 42%; /* darker, unmistakable surface boundaries */
-  --input: 220 16% 36%; /* strong form-control outlines */
-  --ring: 151 78% 24%;
+  --border: 220 14% 78%; /* quiet boundaries; hierarchy comes from spacing and contrast */
+  --input: 220 16% 64%; /* clear control outline without visual noise */
+  --ring: 70 72% 34%;
 
-  --radius: 0.875rem;
+  --radius: 0.75rem;
 
   --sidebar-background: 220 24% 93%;
   --sidebar-foreground: 0 0% 8%;
-  --sidebar-primary: 151 78% 22%;
+  --sidebar-primary: 70 72% 30%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 220 18% 88%;
   --sidebar-accent-foreground: 0 0% 0%;
-  --sidebar-border: 220 14% 42%;
-  --sidebar-ring: 151 78% 28%;
+  --sidebar-border: 220 14% 78%;
+  --sidebar-ring: 70 72% 40%;
 
   /* Layered shadows — deep slate, multi-stop for realism. Slightly stronger
      alpha values so cards read as elevated on the tinted canvas. */
@@ -198,13 +198,13 @@
     0 22px 40px -14px hsl(220 28% 9% / 0.2), 0 8px 18px -6px hsl(var(--brand-green) / 0.16);
   --shadow-glow: 0 0 24px -4px hsl(var(--brand-green) / 0.35);
 
-  /* Brand aura — Mellox AI: deep slate → electric blue → forest green */
-  --brand-green: 151 84% 36%; /* legible green on white surfaces */
+  /* Brand aura — Mellox AI: deep slate → electric blue → Ultra Moss */
+  --brand-green: 70 75% 64.5%; /* #CBE960 */
   --brand-blue: 217 92% 50%; /* electric blue */
   --aura-pink: 220 28% 12%; /* deep slate (token kept for compat) */
   --aura-magenta: 217 92% 44%;
   --aura-purple: 217 92% 56%;
-  --aura-indigo: 151 84% 38%;
+  --aura-indigo: 70 75% 64.5%;
   --gradient-aura: linear-gradient(
     115deg,
     hsl(var(--aura-pink)) 0%,
@@ -287,9 +287,9 @@
   --popover: 0 0% 4%; /* #0a0a0a */
   --popover-foreground: 0 0% 98%;
 
-  /* Deeper, less glaring green so white CTA text stays crisp on dark surfaces. */
-  --primary: 151 70% 38%;
-  --primary-foreground: 0 0% 100%;
+  /* Full Ultra Moss on dark surfaces, paired with dark CTA text for contrast. */
+  --primary: 70 75% 64.5%;
+  --primary-foreground: 0 0% 7%;
 
   --secondary: 0 0% 7%; /* #121212 surface-2 */
   --secondary-foreground: 0 0% 98%;
@@ -297,24 +297,27 @@
   --muted: 0 0% 7%;
   --muted-foreground: 0 0% 68%; /* AA on pure black */
 
-  --accent: 151 70% 42%;
-  --accent-foreground: 0 0% 100%;
+  --accent: 70 75% 64.5%;
+  --accent-foreground: 0 0% 7%;
 
   --destructive: 0 62% 50%;
   --destructive-foreground: 0 0% 100%;
 
-  --success: 151 84% 46%;
-  --success-light: 151 40% 12%;
+  --success: 70 75% 64.5%;
+  --success-light: 70 40% 12%;
   --warning: 38 92% 55%;
 
-  --border: 0 0% 12%; /* #1f1f1f hairline */
-  --input: 0 0% 14%;
-  --ring: 151 90% 50%;
+  --border: 0 0% 14%; /* #242424 hairline */
+  --input: 0 0% 22%;
+  --ring: 70 75% 64.5%;
 
   --sidebar-background: 0 0% 0%; /* pure black rail — matches canvas */
   --sidebar-foreground: 0 0% 72%;
+  --sidebar-primary: 70 75% 64.5%;
+  --sidebar-primary-foreground: 0 0% 7%;
   --sidebar-accent: 0 0% 6%;
-  --sidebar-border: 0 0% 10%;
+  --sidebar-border: 0 0% 12%;
+  --sidebar-ring: 70 75% 64.5%;
 
   --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.6), 0 1px 2px -1px hsl(0 0% 0% / 0.5);
   --shadow-card-hover:
@@ -324,13 +327,13 @@
   --motion-shadow-press: 0 0 0 1px hsl(0 0% 100% / 0.06), 0 1px 2px hsl(0 0% 0% / 0.5);
   --motion-shadow-focus: 0 0 0 3px hsl(var(--ring) / 0.45);
 
-  /* Restore vivid brand values for dark mode (light mode uses deeper green for legibility) */
-  --brand-green: 151 96% 47%;
+  /* Keep the canonical Ultra Moss swatch consistent across themes. */
+  --brand-green: 70 75% 64.5%;
   --brand-blue: 217 91% 55%;
   --aura-pink: 0 0% 0%;
   --aura-magenta: 217 91% 45%;
   --aura-purple: 217 91% 60%;
-  --aura-indigo: 151 96% 47%;
+  --aura-indigo: 70 75% 64.5%;
 }
 
 /* ═══ Animation performance safeguards ═══
@@ -886,7 +889,7 @@ h6 {
       hsl(var(--background));
   }
 
-  /* Vivid green glow utilities */
+  /* Ultra Moss glow utilities */
   .glow-green {
     box-shadow:
       0 0 0 1px hsl(var(--brand-green) / 0.25),
@@ -1052,7 +1055,7 @@ h6 {
     }
   }
 
-  /* Mesh background — blue + vivid green */
+  /* Mesh background — blue + Ultra Moss */
   .mesh-bg {
     background-image:
       radial-gradient(at 12% 18%, hsl(var(--brand-blue) / 0.12) 0px, transparent 50%),

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import logoAsset from "@/assets/raval-brand-logo.svg.asset.json";
+import logoAsset from "@/assets/mellox-logo.svg.asset.json";
 
 type LogoProps = {
   className?: string;
@@ -12,20 +12,18 @@ type LogoProps = {
 };
 
 /**
- * Mellox AI brand lockup — existing brand mark + refined wordmark.
- * The mark is used as-is (it already carries its own shape / color),
- * paired with a tight, professional wordmark that sits on the baseline.
+ * Mellox AI brand lockup using the canonical mark and brand typeface.
  */
 function LogoBase({ className = "", height: heightProp = 18, markOnly = false }: LogoProps) {
   // Responsive scaling: base size fluidly interpolates between a mobile floor
   // and a desktop ceiling using clamp(), so the lockup stays proportional on
   // any viewport. `heightProp` sets the desktop target; the floor is 78% of it.
-  const desktop = heightProp * 0.75; // keep global downscale in tune with prior sizing
+  const desktop = heightProp;
   const mobile = desktop * 0.78;
   // Fluid interpolation between 360px and 1280px viewport widths.
   const heightCss = `clamp(${mobile}px, ${mobile}px + (100vw - 360px) * ${(desktop - mobile) / (1280 - 360)}, ${desktop}px)`;
-  const markCss = `calc(${heightCss} * 0.7)`;
-  const textCss = `calc(${heightCss} * 0.62)`;
+  const markCss = `calc(${heightCss} * 0.84)`;
+  const textCss = `calc(${heightCss} * 0.7)`;
   const gapCss = `calc(${heightCss} * 0.32)`;
 
   return (
@@ -47,21 +45,20 @@ function LogoBase({ className = "", height: heightProp = 18, markOnly = false }:
         <span
           className="text-foreground leading-none"
           style={{
-            fontFamily: '"Inter Tight", ui-sans-serif, system-ui, -apple-system, sans-serif',
+            fontFamily: "var(--font-brand)",
             fontSize: textCss,
-            fontWeight: 600,
-            letterSpacing: "-0.022em",
-            fontFeatureSettings: '"ss01", "cv11"',
+            fontWeight: 400,
+            letterSpacing: "0",
           }}
         >
           Mellox
           <span
             style={{
               marginLeft: "0.28em",
-              fontWeight: 500,
+              fontWeight: 400,
               // Tie to --primary so both themes stay WCAG-AA against their surface.
               color: "hsl(var(--primary))",
-              letterSpacing: "-0.01em",
+              letterSpacing: "0",
             }}
           >
             AI

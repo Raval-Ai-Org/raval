@@ -49,7 +49,7 @@ import { StudioBottomDock } from "@/components/app/StudioBottomDock";
 import { WorkspaceSwitcher } from "@/components/app/WorkspaceSwitcher";
 import { Wand2 } from "@/components/ui/gemini-icons";
 import { AccountMenu, AccountMenuCompact } from "@/components/app/AccountMenu";
-import ravalBrandMark from "@/assets/raval-brand-mark.svg.asset.json";
+import melloxLogo from "@/assets/mellox-logo.svg.asset.json";
 
 // Heavy modules — loaded on demand to shrink the initial workspace bundle.
 const AnalyticsModal = lazy(() =>
@@ -397,7 +397,7 @@ function AppShell() {
 
       const selectedId =
         typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
-      let query = supabase
+      const query = supabase
         .from("workspaces")
         .select("id, name, website_url, industry, onboarded_at");
       const { data } = selectedId
@@ -405,10 +405,6 @@ function AppShell() {
         : await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (cancelled) return;
       if (data?.id) {
-        if (!data.onboarded_at) {
-          navigate({ to: "/onboarding" });
-          return;
-        }
         localStorage.setItem("workspace:selected", data.id);
         setWorkspaceId(data.id);
         const domain = data.website_url
@@ -426,9 +422,11 @@ function AppShell() {
           else localStorage.removeItem("workspace:website");
         } catch {}
       } else {
-        // No workspace (or stale selection) — send user to project picker
+        // No workspace (or stale selection) — keep the app usable without setup.
         localStorage.removeItem("workspace:selected");
-        navigate({ to: "/projects" });
+        setWorkspaceId(null);
+        setWorkspaceName("Workspace");
+        setWorkspaceWebsite(null);
       }
     };
     load();
@@ -552,12 +550,15 @@ function AppShell() {
           className="group flex h-9 items-center gap-1 rounded-md pl-1 pr-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <img
-            src={ravalBrandMark.url}
+            src={melloxLogo.url}
             alt=""
-            className="h-[22px] w-[22px] shrink-0 select-none"
+            className="h-[28px] w-[28px] shrink-0 select-none"
             draggable={false}
           />
-          <span className="text-sm font-semibold tracking-tight text-foreground leading-none">
+          <span
+            className="text-sm leading-none text-foreground"
+            style={{ fontFamily: "var(--font-brand)" }}
+          >
             Mellox AI
           </span>
           <ArrowLeft
@@ -699,9 +700,9 @@ function AppShell() {
             className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <img
-              src={ravalBrandMark.url}
+              src={melloxLogo.url}
               alt="Mellox AI"
-              className="h-[20px] w-[20px] select-none"
+              className="h-[26px] w-[26px] select-none"
               draggable={false}
             />
           </Link>
@@ -858,7 +859,7 @@ function AppShell() {
                       }}
                     />
                   ) : (
-                    <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[9px] font-bold uppercase text-background shadow-sm">
+                    <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-primary text-[9px] font-bold uppercase text-primary-foreground shadow-sm">
                       {(workspaceName?.[0] ?? "W").toUpperCase()}
                     </span>
                   )}
@@ -952,7 +953,7 @@ function AppShell() {
                   <button
                     aria-label="Share"
                     title="Share"
-                    className="group relative inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-md bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] px-2.5 sm:px-3 text-[12px] font-semibold tracking-tight text-background shadow-[0_1px_0_hsl(0_0%_100%/0.25)_inset,0_4px_14px_-4px_hsl(var(--brand-blue)/0.55)] transition-all hover:shadow-[0_1px_0_hsl(0_0%_100%/0.3)_inset,0_6px_20px_-4px_hsl(var(--brand-blue)/0.7)] active:scale-[0.97] data-[state=open]:shadow-[0_1px_0_hsl(0_0%_100%/0.3)_inset,0_6px_20px_-4px_hsl(var(--brand-blue)/0.7)]"
+                    className="group relative inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-md bg-primary px-2.5 text-[12px] font-semibold tracking-tight text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md active:scale-[0.97] data-[state=open]:bg-primary/90 sm:px-3"
                   >
                     <span
                       aria-hidden
