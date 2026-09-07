@@ -96,7 +96,7 @@ export function BrandDnaEditor({
       }
       return next;
     });
-  }, [dna.audience, dna.voice, dna.values, dna.doRules, dna.dontRules]);
+  }, [dna, dna.audience, dna.voice, dna.values, dna.doRules, dna.dontRules]);
 
   const filled = FIELDS.filter((f) => buffer[f.key].trim().length > 0).length;
   const pct = Math.round((filled / FIELDS.length) * 100);

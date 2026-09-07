@@ -84,13 +84,43 @@ export function friendlyAuthError(error: unknown) {
   ) {
     return "Google sign-in is not enabled correctly. Enable Google in Supabase → Authentication → Sign In / Providers and save it, then try again.";
   }
+  if (
+    lower.includes("redirect_uri") ||
+    lower.includes("redirect uri") ||
+    lower.includes("redirect url")
+  ) {
+    return "Google sign-in could not start because its callback URL is not configured. Check the Google Cloud and Supabase redirect settings, then try again.";
+  }
+  if (
+    lower.includes("invalid client") ||
+    lower.includes("unauthorized_client") ||
+    lower.includes("client_id") ||
+    lower.includes("client secret")
+  ) {
+    return "Google sign-in is not configured correctly. Check the Google credentials in Supabase, then try again.";
+  }
   if (lower.includes("popup") && lower.includes("blocked")) {
     return "Your browser blocked the Google sign-in window. Allow popups for this app and try again.";
   }
-  if (lower.includes("cancelled")) {
+  if (
+    lower.includes("cancelled") ||
+    lower.includes("canceled") ||
+    lower.includes("access_denied") ||
+    lower.includes("user denied")
+  ) {
     return "Google sign-in was cancelled before it finished.";
   }
-  return message;
+  if (
+    lower.includes("code verifier") ||
+    lower.includes("expired") ||
+    lower.includes("invalid code")
+  ) {
+    return "That Google sign-in attempt expired. Please try again.";
+  }
+  if (lower.includes("network") || lower.includes("fetch")) {
+    return "Google sign-in could not reach the authentication service. Check your connection and try again.";
+  }
+  return "Authentication could not be completed. Please try again.";
 }
 
 export async function signInWithGoogle(nextPath = "/app") {

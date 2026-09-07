@@ -638,7 +638,7 @@ export function StudioCanvasModal({
     // Only re-run when the canvas identity itself changes. brand/workspaceName
     // memoized refs can flip mid-session and would otherwise wipe an in-flight
     // draft the moment the user toggles a platform or edits the prompt.
-  }, [canvas?.type, canvas?.id, canvas?.mode]);
+  }, [canvas]);
 
   useEffect(() => {
     return () => {
@@ -873,7 +873,9 @@ export function StudioCanvasModal({
 
   const saveManualDraft = async () => {
     if (!canvas || !workspaceId || !prompt.trim()) {
-      toast.error("Add some content first", { description: "Write something before saving the draft." });
+      toast.error("Add some content first", {
+        description: "Write something before saving the draft.",
+      });
       return;
     }
     setSaving(true);
@@ -1206,244 +1208,292 @@ export function StudioCanvasModal({
           if (!v) onClose();
         }}
       >
-      <AnimatePresence>
-        {open && tile && canvas && (
-          <DialogPrimitive.Portal forceMount>
-            <DialogPrimitive.Overlay asChild>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25, ease: EASE }}
-                className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-xl"
-              />
-            </DialogPrimitive.Overlay>
-            <DialogPrimitive.Content asChild>
-              <motion.div
-                initial={{ opacity: 0, scale: 0.96, y: 16 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 6 }}
-                transition={{ type: "spring", stiffness: 280, damping: 28, mass: 0.9 }}
-                className="fixed left-1/2 top-1/2 z-50 flex h-[86vh] w-[94vw] max-w-[880px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-border/70 bg-background shadow-[0_30px_120px_-20px_rgba(0,0,0,0.55)]"
-                style={{ boxShadow: `0 30px 120px -20px ${color}33, 0 0 0 1px ${color}1a inset` }}
-              >
-                {/* Top accent line — brand gradient */}
+        <AnimatePresence>
+          {open && tile && canvas && (
+            <DialogPrimitive.Portal forceMount>
+              <DialogPrimitive.Overlay asChild>
                 <motion.div
-                  aria-hidden
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ duration: 0.7, ease: EASE }}
-                  className="absolute inset-x-0 top-0 h-[2px] origin-left"
-                  style={{
-                    background: `linear-gradient(90deg, hsl(var(--brand-blue)), ${color}, hsl(var(--brand-green)))`,
-                  }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: EASE }}
+                  className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-xl"
                 />
-                {/* Generation progress bar */}
-                <AnimatePresence>
-                  {(generating || justFinished) && (
-                    <motion.div
-                      key="progress"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, transition: { delay: 0.3 } }}
-                      className="absolute inset-x-0 top-0 z-10 h-[2px] overflow-hidden"
-                    >
+              </DialogPrimitive.Overlay>
+              <DialogPrimitive.Content asChild>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96, y: 16 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98, y: 6 }}
+                  transition={{ type: "spring", stiffness: 280, damping: 28, mass: 0.9 }}
+                  className="fixed left-1/2 top-1/2 z-50 flex h-[86vh] w-[94vw] max-w-[880px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-border/70 bg-background shadow-[0_30px_120px_-20px_rgba(0,0,0,0.55)]"
+                  style={{ boxShadow: `0 30px 120px -20px ${color}33, 0 0 0 1px ${color}1a inset` }}
+                >
+                  {/* Top accent line — brand gradient */}
+                  <motion.div
+                    aria-hidden
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ duration: 0.7, ease: EASE }}
+                    className="absolute inset-x-0 top-0 h-[2px] origin-left"
+                    style={{
+                      background: `linear-gradient(90deg, hsl(var(--brand-blue)), ${color}, hsl(var(--brand-green)))`,
+                    }}
+                  />
+                  {/* Generation progress bar */}
+                  <AnimatePresence>
+                    {(generating || justFinished) && (
                       <motion.div
-                        className="h-full"
-                        style={{
-                          background: `linear-gradient(90deg, hsl(var(--brand-blue)), ${color}, hsl(var(--brand-green)))`,
-                          boxShadow: `0 0 14px ${color}`,
-                        }}
-                        animate={{ width: `${progress}%` }}
-                        transition={{ duration: 0.25, ease: EASE }}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                {/* Ambient glow */}
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[120%] -translate-x-1/2 rounded-full opacity-20 blur-3xl"
-                  style={{ background: `radial-gradient(closest-side, ${color}, transparent 70%)` }}
-                />
-
-                <VisuallyHidden>
-                  <DialogPrimitive.Title>{tile.label}</DialogPrimitive.Title>
-                  <DialogPrimitive.Description>
-                    Studio canvas for {tile.label}.
-                  </DialogPrimitive.Description>
-                </VisuallyHidden>
-
-                {/* Header */}
-                <header className="relative flex shrink-0 items-center justify-between border-b border-border/60 px-5 py-3">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span
-                      className="grid h-7 w-7 place-items-center rounded-full"
-                      style={{
-                        background: `linear-gradient(135deg, ${color}26, ${color}0a)`,
-                        boxShadow: `inset 0 0 0 1px ${color}33`,
-                      }}
-                    >
-                      <tile.icon className="h-3.5 w-3.5" strokeWidth={2} style={{ color }} />
-                    </span>
-                    <h2 className="truncate text-[13px] font-semibold tracking-tight">
-                      {tile.label}
-                    </h2>
-                    {workspaceName && (
-                      <span className="hidden truncate text-[11.5px] text-muted-foreground sm:inline">
-                        · {workspaceName}
-                      </span>
-                    )}
-                  </div>
-                  <DialogPrimitive.Close
-                    aria-label="Close"
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </DialogPrimitive.Close>
-                </header>
-
-                {/* Body */}
-                <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-                  <AnimatePresence mode="wait">
-                    {generating ? (
-                      <motion.div
-                        key="gen"
+                        key="progress"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="flex h-full flex-col items-center justify-center gap-4 py-20 text-center"
-                      >
-                        <div className="relative grid h-20 w-20 place-items-center">
-                          <motion.span
-                            aria-hidden
-                            className="absolute inset-0 rounded-full"
-                            style={{
-                              border: `2px solid ${color}`,
-                              borderRightColor: "transparent",
-                              borderBottomColor: "transparent",
-                            }}
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
-                          />
-                          <motion.span
-                            aria-hidden
-                            className="absolute inset-2 rounded-full opacity-40"
-                            style={{
-                              border: `2px solid ${color}`,
-                              borderLeftColor: "transparent",
-                              borderTopColor: "transparent",
-                            }}
-                            animate={{ rotate: -360 }}
-                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                          />
-                          <motion.span
-                            aria-hidden
-                            className="absolute inset-0 rounded-full"
-                            animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0, 0.5] }}
-                            transition={{ duration: 1.6, repeat: Infinity, ease: EASE }}
-                            style={{ boxShadow: `0 0 40px ${color}` }}
-                          />
-                          <span
-                            className="tabular-nums text-[13px] font-semibold"
-                            style={{ color }}
-                          >
-                            {Math.floor(progress)}%
-                          </span>
-                        </div>
-                        <div className="text-[13px] font-medium">
-                          Drafting with your brand memory…
-                        </div>
-                        <div className="flex gap-1.5">
-                          {[0, 1, 2].map((i) => (
-                            <motion.span
-                              key={i}
-                              className="h-1.5 w-1.5 rounded-full"
-                              style={{ background: color }}
-                              animate={{ opacity: [0.2, 1, 0.2], y: [0, -3, 0] }}
-                              transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }}
-                            />
-                          ))}
-                        </div>
-                      </motion.div>
-                    ) : justFinished ? (
-                      <motion.div
-                        key="done"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex h-full flex-col items-center justify-center gap-3 py-20 text-center"
+                        exit={{ opacity: 0, transition: { delay: 0.3 } }}
+                        className="absolute inset-x-0 top-0 z-10 h-[2px] overflow-hidden"
                       >
                         <motion.div
-                          initial={{ scale: 0, rotate: -90 }}
-                          animate={{ scale: 1, rotate: 0 }}
-                          transition={{ type: "spring", stiffness: 360, damping: 18 }}
-                          className="grid h-14 w-14 place-items-center rounded-full text-white"
+                          className="h-full"
                           style={{
-                            background: `linear-gradient(135deg, ${color}, hsl(var(--brand-green)))`,
-                            boxShadow: `0 12px 40px -8px ${color}`,
+                            background: `linear-gradient(90deg, hsl(var(--brand-blue)), ${color}, hsl(var(--brand-green)))`,
+                            boxShadow: `0 0 14px ${color}`,
                           }}
-                        >
-                          <Check className="h-6 w-6" strokeWidth={3} />
-                        </motion.div>
-                        <motion.div
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.12 }}
-                          className="text-[13px] font-medium"
-                        >
-                          Draft ready
-                        </motion.div>
+                          animate={{ width: `${progress}%` }}
+                          transition={{ duration: 0.25, ease: EASE }}
+                        />
                       </motion.div>
-                    ) : generated ? (
-                      <motion.div
-                        key="prev"
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.35, ease: EASE }}
-                        className="px-6 py-6"
+                    )}
+                  </AnimatePresence>
+                  {/* Ambient glow */}
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[120%] -translate-x-1/2 rounded-full opacity-20 blur-3xl"
+                    style={{
+                      background: `radial-gradient(closest-side, ${color}, transparent 70%)`,
+                    }}
+                  />
+
+                  <VisuallyHidden>
+                    <DialogPrimitive.Title>{tile.label}</DialogPrimitive.Title>
+                    <DialogPrimitive.Description>
+                      Studio canvas for {tile.label}.
+                    </DialogPrimitive.Description>
+                  </VisuallyHidden>
+
+                  {/* Header */}
+                  <header className="relative flex shrink-0 items-center justify-between border-b border-border/60 px-5 py-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="grid h-7 w-7 place-items-center rounded-full"
+                        style={{
+                          background: `linear-gradient(135deg, ${color}26, ${color}0a)`,
+                          boxShadow: `inset 0 0 0 1px ${color}33`,
+                        }}
                       >
-                        {isSocial && variants.length > 0 ? (
-                          <>
-                            {canvas.type === "design-asset" && (
-                              <StageProgress
+                        <tile.icon className="h-3.5 w-3.5" strokeWidth={2} style={{ color }} />
+                      </span>
+                      <h2 className="truncate text-[13px] font-semibold tracking-tight">
+                        {tile.label}
+                      </h2>
+                      {workspaceName && (
+                        <span className="hidden truncate text-[11.5px] text-muted-foreground sm:inline">
+                          · {workspaceName}
+                        </span>
+                      )}
+                    </div>
+                    <DialogPrimitive.Close
+                      aria-label="Close"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </DialogPrimitive.Close>
+                  </header>
+
+                  {/* Body */}
+                  <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+                    <AnimatePresence mode="wait">
+                      {generating ? (
+                        <motion.div
+                          key="gen"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="flex h-full flex-col items-center justify-center gap-4 py-20 text-center"
+                        >
+                          <div className="relative grid h-20 w-20 place-items-center">
+                            <motion.span
+                              aria-hidden
+                              className="absolute inset-0 rounded-full"
+                              style={{
+                                border: `2px solid ${color}`,
+                                borderRightColor: "transparent",
+                                borderBottomColor: "transparent",
+                              }}
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
+                            />
+                            <motion.span
+                              aria-hidden
+                              className="absolute inset-2 rounded-full opacity-40"
+                              style={{
+                                border: `2px solid ${color}`,
+                                borderLeftColor: "transparent",
+                                borderTopColor: "transparent",
+                              }}
+                              animate={{ rotate: -360 }}
+                              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                            />
+                            <motion.span
+                              aria-hidden
+                              className="absolute inset-0 rounded-full"
+                              animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0, 0.5] }}
+                              transition={{ duration: 1.6, repeat: Infinity, ease: EASE }}
+                              style={{ boxShadow: `0 0 40px ${color}` }}
+                            />
+                            <span
+                              className="tabular-nums text-[13px] font-semibold"
+                              style={{ color }}
+                            >
+                              {Math.floor(progress)}%
+                            </span>
+                          </div>
+                          <div className="text-[13px] font-medium">
+                            Drafting with your brand memory…
+                          </div>
+                          <div className="flex gap-1.5">
+                            {[0, 1, 2].map((i) => (
+                              <motion.span
+                                key={i}
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ background: color }}
+                                animate={{ opacity: [0.2, 1, 0.2], y: [0, -3, 0] }}
+                                transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }}
+                              />
+                            ))}
+                          </div>
+                        </motion.div>
+                      ) : justFinished ? (
+                        <motion.div
+                          key="done"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="flex h-full flex-col items-center justify-center gap-3 py-20 text-center"
+                        >
+                          <motion.div
+                            initial={{ scale: 0, rotate: -90 }}
+                            animate={{ scale: 1, rotate: 0 }}
+                            transition={{ type: "spring", stiffness: 360, damping: 18 }}
+                            className="grid h-14 w-14 place-items-center rounded-full text-white"
+                            style={{
+                              background: `linear-gradient(135deg, ${color}, hsl(var(--brand-green)))`,
+                              boxShadow: `0 12px 40px -8px ${color}`,
+                            }}
+                          >
+                            <Check className="h-6 w-6" strokeWidth={3} />
+                          </motion.div>
+                          <motion.div
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.12 }}
+                            className="text-[13px] font-medium"
+                          >
+                            Draft ready
+                          </motion.div>
+                        </motion.div>
+                      ) : generated ? (
+                        <motion.div
+                          key="prev"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.35, ease: EASE }}
+                          className="px-6 py-6"
+                        >
+                          {isSocial && variants.length > 0 ? (
+                            <>
+                              {canvas.type === "design-asset" && (
+                                <StageProgress
+                                  color={color}
+                                  platforms={platforms}
+                                  imageStatus={imageStatus}
+                                  imageError={imageError}
+                                  imageProgress={imageProgress}
+                                  captionStatus={captionStatus}
+                                  captionErrors={captionErrors}
+                                  onRetryImage={() => generatePostImage(prompt)}
+                                  onRetryCaption={(p) => runCaptions([p], prompt)}
+                                  onRetryAllCaptions={() => {
+                                    const failed = platforms.filter(
+                                      (p) => captionStatus[p] === "error",
+                                    );
+                                    if (failed.length) void runCaptions(failed, prompt);
+                                  }}
+                                />
+                              )}
+                              <SocialMultiPreview
+                                variants={variants}
+                                active={activePlatform}
+                                onActive={(p) => {
+                                  setActivePlatform(p);
+                                  const v = variants.find((x) => x.platform === p);
+                                  if (v) setResult(v.body);
+                                }}
+                                onChange={(p, body) => {
+                                  setVariants((prev) =>
+                                    prev.map((v) =>
+                                      v.platform === p ? { ...v, body, chars: body.length } : v,
+                                    ),
+                                  );
+                                  if (p === activePlatform) setResult(body);
+                                  setEditedPlatforms((prev) => ({ ...prev, [p]: true }));
+                                  setCaptionsConfirmed(false);
+                                }}
+                                brandName={brand?.brandName || workspaceName}
                                 color={color}
-                                platforms={platforms}
+                                image={postImage}
+                                imageLoading={imageLoading}
                                 imageStatus={imageStatus}
                                 imageError={imageError}
                                 imageProgress={imageProgress}
-                                captionStatus={captionStatus}
-                                captionErrors={captionErrors}
-                                onRetryImage={() => generatePostImage(prompt)}
-                                onRetryCaption={(p) => runCaptions([p], prompt)}
-                                onRetryAllCaptions={() => {
-                                  const failed = platforms.filter(
-                                    (p) => captionStatus[p] === "error",
-                                  );
-                                  if (failed.length) void runCaptions(failed, prompt);
+                                imageAttempt={imageAttempt}
+                                onCancelImage={cancelImageGeneration}
+                                imageSize={imageSize}
+                                onSizeChange={(s) => {
+                                  setAutoSize(false);
+                                  setImageSize(s);
                                 }}
+                                autoSize={autoSize}
+                                onAutoSizeChange={(v) => {
+                                  setAutoSize(v);
+                                  if (v) setImageSize(sizeForPlatform(activePlatform));
+                                }}
+                                onGenerateImage={generatePostImage}
+                                postBody={result}
+                                postTitle={(canvas as any).title ?? null}
+                                brand={brand}
+                                workspaceName={workspaceName}
+                                seedKey={canvas.id || "draft"}
                               />
-                            )}
-                            <SocialMultiPreview
-                              variants={variants}
-                              active={activePlatform}
-                              onActive={(p) => {
-                                setActivePlatform(p);
-                                const v = variants.find((x) => x.platform === p);
-                                if (v) setResult(v.body);
-                              }}
-                              onChange={(p, body) => {
-                                setVariants((prev) =>
-                                  prev.map((v) =>
-                                    v.platform === p ? { ...v, body, chars: body.length } : v,
-                                  ),
-                                );
-                                if (p === activePlatform) setResult(body);
-                                setEditedPlatforms((prev) => ({ ...prev, [p]: true }));
-                                setCaptionsConfirmed(false);
-                              }}
+                            </>
+                          ) : editingContent ? (
+                            <div className="mx-auto max-w-[680px]">
+                              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                Edit {tile.label}
+                              </label>
+                              <textarea
+                                value={result}
+                                onChange={(event) => setResult(event.target.value)}
+                                className="min-h-[360px] w-full resize-y rounded-2xl border border-border/70 bg-card p-4 text-[13px] leading-relaxed text-foreground outline-none transition focus:border-foreground/30 focus:ring-2 focus:ring-foreground/10"
+                                aria-label={`Edit ${tile.label}`}
+                              />
+                            </div>
+                          ) : (
+                            <Preview
+                              type={canvas.type}
+                              text={
+                                result ||
+                                brandFallbackCopy(canvas.type, brand, workspaceName, prompt)
+                              }
                               brandName={brand?.brandName || workspaceName}
                               color={color}
                               image={postImage}
@@ -1453,346 +1503,307 @@ export function StudioCanvasModal({
                               imageProgress={imageProgress}
                               imageAttempt={imageAttempt}
                               onCancelImage={cancelImageGeneration}
-                              imageSize={imageSize}
-                              onSizeChange={(s) => {
-                                setAutoSize(false);
-                                setImageSize(s);
-                              }}
-                              autoSize={autoSize}
-                              onAutoSizeChange={(v) => {
-                                setAutoSize(v);
-                                if (v) setImageSize(sizeForPlatform(activePlatform));
-                              }}
                               onGenerateImage={generatePostImage}
-                              postBody={result}
-                              postTitle={(canvas as any).title ?? null}
-                              brand={brand}
-                              workspaceName={workspaceName}
-                              seedKey={canvas.id || "draft"}
                             />
-                          </>
-                        ) : editingContent ? (
-                          <div className="mx-auto max-w-[680px]">
-                            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                              Edit {tile.label}
-                            </label>
-                            <textarea
-                              value={result}
-                              onChange={(event) => setResult(event.target.value)}
-                              className="min-h-[360px] w-full resize-y rounded-2xl border border-border/70 bg-card p-4 text-[13px] leading-relaxed text-foreground outline-none transition focus:border-foreground/30 focus:ring-2 focus:ring-foreground/10"
-                              aria-label={`Edit ${tile.label}`}
-                            />
-                          </div>
-                        ) : (
-                          <Preview
-                            type={canvas.type}
-                            text={
-                              result || brandFallbackCopy(canvas.type, brand, workspaceName, prompt)
-                            }
-                            brandName={brand?.brandName || workspaceName}
-                            color={color}
-                            image={postImage}
-                            imageLoading={imageLoading}
-                            imageStatus={imageStatus}
-                            imageError={imageError}
-                            imageProgress={imageProgress}
-                            imageAttempt={imageAttempt}
-                            onCancelImage={cancelImageGeneration}
-                            onGenerateImage={generatePostImage}
-                          />
-                        )}
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="brief"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.22, ease: EASE }}
-                        className="mx-auto max-w-[640px] px-6 py-6"
-                      >
-                        <div className="mb-4 grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setCreationMode("ravi")}
-                            className={cn(
-                              "rounded-xl border p-3 text-left transition",
-                              creationMode === "ravi"
-                                ? "border-foreground/30 bg-card shadow-sm"
-                                : "border-border/60 bg-card/40 text-muted-foreground hover:bg-card",
-                            )}
-                          >
-                            <span className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
-                              <Sparkles className="h-3.5 w-3.5" style={{ color }} /> Start with Ravi
-                            </span>
-                            <span className="mt-1 block text-[10.5px] leading-relaxed text-muted-foreground">
-                              Turn an idea into a ready-to-review draft.
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCreationMode("manual")}
-                            className={cn(
-                              "rounded-xl border p-3 text-left transition",
-                              creationMode === "manual"
-                                ? "border-foreground/30 bg-card shadow-sm"
-                                : "border-border/60 bg-card/40 text-muted-foreground hover:bg-card",
-                            )}
-                          >
-                            <span className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
-                              <FileText className="h-3.5 w-3.5" style={{ color }} /> Write manually
-                            </span>
-                            <span className="mt-1 block text-[10.5px] leading-relaxed text-muted-foreground">
-                              Start with your own copy and keep full control.
-                            </span>
-                          </button>
-                        </div>
-                        <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                          {creationMode === "ravi" ? (
-                            <>
-                              <Sparkles className="h-3 w-3" style={{ color }} /> Brand voice and
-                              audience are already wired in. Describe what you want.
-                            </>
-                          ) : (
-                            <>
-                              <FileText className="h-3 w-3" style={{ color }} /> Your content stays
-                              yours. Save it as a draft when you are ready.
-                            </>
                           )}
-                        </p>
-                        <div className="relative mt-3 group">
-                          <div
-                            aria-hidden
-                            className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"
-                            style={{
-                              background: `linear-gradient(135deg, ${color}55, transparent 60%)`,
-                              filter: "blur(8px)",
-                            }}
-                          />
-                          <textarea
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                            rows={6}
-                            placeholder={
-                              creationMode === "manual"
-                                ? "Write your post, article, brief, or campaign note here..."
-                                : "Tell Ravi what you want to create..."
-                            }
-                            className="relative w-full resize-none rounded-2xl border border-border/60 bg-card p-3 text-[13px] leading-relaxed outline-none transition-colors"
-                            style={{ caretColor: color }}
-                            onFocus={(e) => (e.currentTarget.style.borderColor = `${color}80`)}
-                            onBlur={(e) => (e.currentTarget.style.borderColor = "")}
-                          />
-                        </div>
-                        {isSocial && (
-                          <div className="mt-4">
-                            <div className="mb-2 flex items-center justify-between">
-                              <div className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Publish to · {platforms.length} platform
-                                {platforms.length === 1 ? "" : "s"}
-                              </div>
-                              <div className="text-[11px] text-muted-foreground">
-                                One native variant per platform
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {PLATFORM_ORDER.map((id) => {
-                                const spec = PLATFORMS[id];
-                                const selected = platforms.includes(id);
-                                const Icon = spec.icon;
-                                return (
-                                  <button
-                                    key={id}
-                                    onClick={() =>
-                                      setPlatforms((prev) =>
-                                        prev.includes(id)
-                                          ? prev.filter((x) => x !== id)
-                                          : [...prev, id],
-                                      )
-                                    }
-                                    className={cn(
-                                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] transition",
-                                      selected
-                                        ? "border-transparent text-white shadow-sm"
-                                        : "border-border/60 bg-card text-muted-foreground hover:text-foreground",
-                                    )}
-                                    style={selected ? { background: spec.color } : undefined}
-                                  >
-                                    <Icon className="h-3 w-3" />
-                                    {spec.label}
-                                    {selected && <Check className="h-3 w-3" />}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {["Shorter", "Punchier hook", "More data", "Add CTA"].map((chip) => (
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="brief"
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.22, ease: EASE }}
+                          className="mx-auto max-w-[640px] px-6 py-6"
+                        >
+                          <div className="mb-4 grid grid-cols-2 gap-2">
                             <button
-                              key={chip}
-                              onClick={() => setPrompt((p) => `${p}\n— ${chip.toLowerCase()}`)}
-                              className="rounded-full border border-border/60 bg-card px-2.5 py-1 text-[11px] text-muted-foreground transition hover:text-foreground"
-                              style={{ borderColor: `${color}33` }}
+                              type="button"
+                              onClick={() => setCreationMode("ravi")}
+                              className={cn(
+                                "rounded-xl border p-3 text-left transition",
+                                creationMode === "ravi"
+                                  ? "border-foreground/30 bg-card shadow-sm"
+                                  : "border-border/60 bg-card/40 text-muted-foreground hover:bg-card",
+                              )}
                             >
-                              {chip}
+                              <span className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
+                                <Sparkles className="h-3.5 w-3.5" style={{ color }} /> Start with
+                                Ravi
+                              </span>
+                              <span className="mt-1 block text-[10.5px] leading-relaxed text-muted-foreground">
+                                Turn an idea into a ready-to-review draft.
+                              </span>
                             </button>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {isSocial && generated && captionsConfirmed && variants.length > 0 && (
-                  <div className="px-5 pb-1">
-                    <StudioDestinationPicker
-                      workspaceId={workspaceId}
-                      value={publishSelection}
-                      onChange={setPublishSelection}
-                    />
+                            <button
+                              type="button"
+                              onClick={() => setCreationMode("manual")}
+                              className={cn(
+                                "rounded-xl border p-3 text-left transition",
+                                creationMode === "manual"
+                                  ? "border-foreground/30 bg-card shadow-sm"
+                                  : "border-border/60 bg-card/40 text-muted-foreground hover:bg-card",
+                              )}
+                            >
+                              <span className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
+                                <FileText className="h-3.5 w-3.5" style={{ color }} /> Write
+                                manually
+                              </span>
+                              <span className="mt-1 block text-[10.5px] leading-relaxed text-muted-foreground">
+                                Start with your own copy and keep full control.
+                              </span>
+                            </button>
+                          </div>
+                          <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                            {creationMode === "ravi" ? (
+                              <>
+                                <Sparkles className="h-3 w-3" style={{ color }} /> Brand voice and
+                                audience are already wired in. Describe what you want.
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="h-3 w-3" style={{ color }} /> Your content
+                                stays yours. Save it as a draft when you are ready.
+                              </>
+                            )}
+                          </p>
+                          <div className="relative mt-3 group">
+                            <div
+                              aria-hidden
+                              className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"
+                              style={{
+                                background: `linear-gradient(135deg, ${color}55, transparent 60%)`,
+                                filter: "blur(8px)",
+                              }}
+                            />
+                            <textarea
+                              value={prompt}
+                              onChange={(e) => setPrompt(e.target.value)}
+                              rows={6}
+                              placeholder={
+                                creationMode === "manual"
+                                  ? "Write your post, article, brief, or campaign note here..."
+                                  : "Tell Ravi what you want to create..."
+                              }
+                              className="relative w-full resize-none rounded-2xl border border-border/60 bg-card p-3 text-[13px] leading-relaxed outline-none transition-colors"
+                              style={{ caretColor: color }}
+                              onFocus={(e) => (e.currentTarget.style.borderColor = `${color}80`)}
+                              onBlur={(e) => (e.currentTarget.style.borderColor = "")}
+                            />
+                          </div>
+                          {isSocial && (
+                            <div className="mt-4">
+                              <div className="mb-2 flex items-center justify-between">
+                                <div className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Publish to · {platforms.length} platform
+                                  {platforms.length === 1 ? "" : "s"}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground">
+                                  One native variant per platform
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {PLATFORM_ORDER.map((id) => {
+                                  const spec = PLATFORMS[id];
+                                  const selected = platforms.includes(id);
+                                  const Icon = spec.icon;
+                                  return (
+                                    <button
+                                      key={id}
+                                      onClick={() =>
+                                        setPlatforms((prev) =>
+                                          prev.includes(id)
+                                            ? prev.filter((x) => x !== id)
+                                            : [...prev, id],
+                                        )
+                                      }
+                                      className={cn(
+                                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] transition",
+                                        selected
+                                          ? "border-transparent text-white shadow-sm"
+                                          : "border-border/60 bg-card text-muted-foreground hover:text-foreground",
+                                      )}
+                                      style={selected ? { background: spec.color } : undefined}
+                                    >
+                                      <Icon className="h-3 w-3" />
+                                      {spec.label}
+                                      {selected && <Check className="h-3 w-3" />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {["Shorter", "Punchier hook", "More data", "Add CTA"].map((chip) => (
+                              <button
+                                key={chip}
+                                onClick={() => setPrompt((p) => `${p}\n— ${chip.toLowerCase()}`)}
+                                className="rounded-full border border-border/60 bg-card px-2.5 py-1 text-[11px] text-muted-foreground transition hover:text-foreground"
+                                style={{ borderColor: `${color}33` }}
+                              >
+                                {chip}
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                )}
 
-                {/* US4 delivery view — per-platform status + live links for an
+                  {isSocial && generated && captionsConfirmed && variants.length > 0 && (
+                    <div className="px-5 pb-1">
+                      <StudioDestinationPicker
+                        workspaceId={workspaceId}
+                        value={publishSelection}
+                        onChange={setPublishSelection}
+                      />
+                    </div>
+                  )}
+
+                  {/* US4 delivery view — per-platform status + live links for an
                     existing content item. Renders nothing until the item has
                     content_publications rows (webhook-driven); re-fetches on
                     content:changed so updates appear without a refresh (R2d). */}
-                {isSocial && workspaceId && deliveryContentItemId ? (
-                  <div className="px-5 pb-3">
-                    <DeliveryView workspaceId={workspaceId} contentItemId={deliveryContentItemId} />
-                  </div>
-                ) : null}
+                  {isSocial && workspaceId && deliveryContentItemId ? (
+                    <div className="px-5 pb-3">
+                      <DeliveryView
+                        workspaceId={workspaceId}
+                        contentItemId={deliveryContentItemId}
+                      />
+                    </div>
+                  ) : null}
 
-                {/* Footer */}
-                <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
-                  {generated ? (
-                    <>
-                      <button
-                        onClick={() => setGenerated(false)}
-                        className="text-[12px] text-muted-foreground hover:text-foreground"
-                      >
-                        Edit brief
-                      </button>
-                      {!isSocial && (
+                  {/* Footer */}
+                  <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
+                    {generated ? (
+                      <>
                         <button
-                          onClick={() => setEditingContent((value) => !value)}
+                          onClick={() => setGenerated(false)}
                           className="text-[12px] text-muted-foreground hover:text-foreground"
                         >
-                          {editingContent ? "Preview" : "Edit content"}
+                          Edit brief
                         </button>
-                      )}
-                      {editingContent && !isSocial ? (
-                        <motion.button
-                          whileHover={{ scale: 1.03 }}
-                          whileTap={{ scale: 0.97 }}
-                          onClick={saveContentEdits}
-                          disabled={saving || !result.trim()}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg disabled:opacity-50"
-                          style={{
-                            background: `linear-gradient(135deg, ${color}, ${color}cc)`,
-                            boxShadow: `0 8px 24px -8px ${color}`,
-                          }}
-                        >
-                          <Check className="h-3.5 w-3.5" /> {saving ? "Saving…" : "Save changes"}
-                        </motion.button>
-                      ) : (
-                        <>
-                      {isSocial && variants.length > 0 && !captionsConfirmed ? (
-                        <>
-                          <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                            {Object.values(editedPlatforms).filter(Boolean).length > 0
-                              ? `Edited ${Object.values(editedPlatforms).filter(Boolean).length}/${variants.length} · review the rest`
-                              : "Review captions across each platform before publishing"}
-                          </span>
-                          <motion.button
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => setCaptionsConfirmed(true)}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg"
-                            style={{
-                              background: `linear-gradient(135deg, ${color}, ${color}cc)`,
-                              boxShadow: `0 8px 24px -8px ${color}`,
-                            }}
+                        {!isSocial && (
+                          <button
+                            onClick={() => setEditingContent((value) => !value)}
+                            className="text-[12px] text-muted-foreground hover:text-foreground"
                           >
-                            <Check className="h-3.5 w-3.5" /> Looks good — continue
-                          </motion.button>
-                        </>
-                      ) : (
-                        <>
-                          <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-600 ring-1 ring-emerald-500/30 dark:text-emerald-300">
-                            <motion.span
-                              animate={{ opacity: [0.5, 1, 0.5] }}
-                              transition={{ duration: 1.4, repeat: Infinity }}
-                              className="h-1 w-1 rounded-full bg-emerald-500"
-                            />
-                            {isSocial ? "Captions confirmed" : "Saved to inbox"}
-                          </span>
-                          {isSocial && variants.length > 0 && (
-                            <button
-                              onClick={() => setCaptionsConfirmed(false)}
-                              className="text-[12px] text-muted-foreground hover:text-foreground"
-                            >
-                              Edit captions
-                            </button>
-                          )}
+                            {editingContent ? "Preview" : "Edit content"}
+                          </button>
+                        )}
+                        {editingContent && !isSocial ? (
                           <motion.button
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.97 }}
-                            onClick={onApprove}
-                            disabled={saving || publishing}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 text-[12px] font-semibold text-foreground transition hover:bg-secondary disabled:opacity-50"
-                          >
-                            <Send className="h-3.5 w-3.5" /> {saving ? "Scheduling…" : "Schedule"}
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={onPublishNow}
-                            disabled={saving || publishing}
+                            onClick={saveContentEdits}
+                            disabled={saving || !result.trim()}
                             className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg disabled:opacity-50"
                             style={{
                               background: `linear-gradient(135deg, ${color}, ${color}cc)`,
                               boxShadow: `0 8px 24px -8px ${color}`,
                             }}
                           >
-                            <Zap className="h-3.5 w-3.5" />{" "}
-                            {publishing ? "Publishing…" : "Publish now"}
+                            <Check className="h-3.5 w-3.5" /> {saving ? "Saving…" : "Save changes"}
                           </motion.button>
-                        </>
-                      )}
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <motion.button
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={creationMode === "manual" ? saveManualDraft : onGenerate}
-                      disabled={generating || !prompt.trim()}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg disabled:opacity-50"
-                      style={{
-                        background: `linear-gradient(135deg, ${color}, ${color}cc)`,
-                        boxShadow: `0 8px 24px -8px ${color}`,
-                      }}
-                    >
-                      {creationMode === "manual" ? (
-                        <>
-                          <Send className="h-3.5 w-3.5" /> {saving ? "Saving…" : "Save draft"}
-                        </>
-                      ) : (
-                        <>
-                          <Wand2 className="h-3.5 w-3.5" /> Generate
-                        </>
-                      )}
-                    </motion.button>
-                  )}
-                </footer>
-              </motion.div>
-            </DialogPrimitive.Content>
-          </DialogPrimitive.Portal>
-        )}
-      </AnimatePresence>
+                        ) : (
+                          <>
+                            {isSocial && variants.length > 0 && !captionsConfirmed ? (
+                              <>
+                                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  {Object.values(editedPlatforms).filter(Boolean).length > 0
+                                    ? `Edited ${Object.values(editedPlatforms).filter(Boolean).length}/${variants.length} · review the rest`
+                                    : "Review captions across each platform before publishing"}
+                                </span>
+                                <motion.button
+                                  whileHover={{ scale: 1.03 }}
+                                  whileTap={{ scale: 0.97 }}
+                                  onClick={() => setCaptionsConfirmed(true)}
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg"
+                                  style={{
+                                    background: `linear-gradient(135deg, ${color}, ${color}cc)`,
+                                    boxShadow: `0 8px 24px -8px ${color}`,
+                                  }}
+                                >
+                                  <Check className="h-3.5 w-3.5" /> Looks good — continue
+                                </motion.button>
+                              </>
+                            ) : (
+                              <>
+                                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-600 ring-1 ring-emerald-500/30 dark:text-emerald-300">
+                                  <motion.span
+                                    animate={{ opacity: [0.5, 1, 0.5] }}
+                                    transition={{ duration: 1.4, repeat: Infinity }}
+                                    className="h-1 w-1 rounded-full bg-emerald-500"
+                                  />
+                                  {isSocial ? "Captions confirmed" : "Saved to inbox"}
+                                </span>
+                                {isSocial && variants.length > 0 && (
+                                  <button
+                                    onClick={() => setCaptionsConfirmed(false)}
+                                    className="text-[12px] text-muted-foreground hover:text-foreground"
+                                  >
+                                    Edit captions
+                                  </button>
+                                )}
+                                <motion.button
+                                  whileHover={{ scale: 1.03 }}
+                                  whileTap={{ scale: 0.97 }}
+                                  onClick={onApprove}
+                                  disabled={saving || publishing}
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 text-[12px] font-semibold text-foreground transition hover:bg-secondary disabled:opacity-50"
+                                >
+                                  <Send className="h-3.5 w-3.5" />{" "}
+                                  {saving ? "Scheduling…" : "Schedule"}
+                                </motion.button>
+                                <motion.button
+                                  whileHover={{ scale: 1.03 }}
+                                  whileTap={{ scale: 0.97 }}
+                                  onClick={onPublishNow}
+                                  disabled={saving || publishing}
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg disabled:opacity-50"
+                                  style={{
+                                    background: `linear-gradient(135deg, ${color}, ${color}cc)`,
+                                    boxShadow: `0 8px 24px -8px ${color}`,
+                                  }}
+                                >
+                                  <Zap className="h-3.5 w-3.5" />{" "}
+                                  {publishing ? "Publishing…" : "Publish now"}
+                                </motion.button>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={creationMode === "manual" ? saveManualDraft : onGenerate}
+                        disabled={generating || !prompt.trim()}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg disabled:opacity-50"
+                        style={{
+                          background: `linear-gradient(135deg, ${color}, ${color}cc)`,
+                          boxShadow: `0 8px 24px -8px ${color}`,
+                        }}
+                      >
+                        {creationMode === "manual" ? (
+                          <>
+                            <Send className="h-3.5 w-3.5" /> {saving ? "Saving…" : "Save draft"}
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="h-3.5 w-3.5" /> Generate
+                          </>
+                        )}
+                      </motion.button>
+                    )}
+                  </footer>
+                </motion.div>
+              </DialogPrimitive.Content>
+            </DialogPrimitive.Portal>
+          )}
+        </AnimatePresence>
       </DialogPrimitive.Root>
 
       <ConnectionRequiredDialog

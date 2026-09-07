@@ -27,7 +27,11 @@ export function SecondaryBrandSymbols({ className = "", size = "sm" }: Secondary
           alt=""
           aria-label={symbol.label}
           draggable={false}
-          className={`${dimension} shrink-0 object-contain transition-transform duration-200 ${size === "lg" && index % 2 ? "-translate-y-1" : ""} hover:-translate-y-0.5 ${index % 2 ? "hover:rotate-3" : "hover:-rotate-3"}`}
+          style={{
+            animationDelay: `${index * 110}ms`,
+            animationDuration: `${4.8 + index * 0.35}s`,
+          }}
+          className={`${dimension} symbol-float shrink-0 object-contain transition-transform duration-300 ${size === "lg" && index % 2 ? "-translate-y-1" : ""} hover:-translate-y-1 ${index % 2 ? "hover:rotate-3" : "hover:-rotate-3"}`}
         />
       ))}
     </div>

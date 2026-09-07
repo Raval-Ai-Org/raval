@@ -38,7 +38,15 @@ function LogoBase({ className = "", height: heightProp = 18, markOnly = false }:
         alt=""
         aria-hidden="true"
         draggable={false}
-        className="shrink-0"
+        className="logo-mark-dark hidden shrink-0"
+        style={{ width: markCss, height: markCss, objectFit: "contain" }}
+      />
+      <img
+        src="/assets/Dark-Logo.svg"
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        className="logo-mark-light shrink-0"
         style={{ width: markCss, height: markCss, objectFit: "contain" }}
       />
       {!markOnly && (

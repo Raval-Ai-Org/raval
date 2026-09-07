@@ -126,12 +126,18 @@ export class AiGatewayError extends Error {
 }
 
 function getKey(): string {
-  const k = process.env.OPENROUTER_API_KEY;
-  if (!k || k === "sk-or-v1-replace-me-later") {
-    throw new AiGatewayError(503, "OPENROUTER_API_KEY is not configured with a real key");
+  const k = process.env.OPENROUTER_API_KEY?.trim();
+  if (!k || k === "sk-or-v1-replace-me-later" || k === "YOUR_KEY_HERE") {
+    throw new AiGatewayError(
+      503,
+      "AI service is not configured. Please check the server API configuration.",
+    );
   }
   if (!k.startsWith("sk-or-")) {
-    throw new AiGatewayError(503, "OPENROUTER_API_KEY has an invalid format");
+    throw new AiGatewayError(
+      503,
+      "AI service is not configured. Please check the server API configuration.",
+    );
   }
   return k;
 }

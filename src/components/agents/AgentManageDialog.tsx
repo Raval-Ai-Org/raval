@@ -92,7 +92,7 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
         recentlyCompleted: false,
         justDeployed: false,
       }),
-    [agent, runtime.active, runtime.current],
+    [agent, runtime],
   );
 
   const aiSuggest = async () => {

@@ -154,7 +154,7 @@
   --popover: 210 30% 99.2%;
   --popover-foreground: 0 0% 0%;
 
-  --primary: 70 72% 30%; /* darker Ultra Moss variant for readable light-theme text */
+  --primary: 201 13% 26%; /* #39444A — readable text and white CTA labels */
   --primary-foreground: 0 0% 100%;
 
   --secondary: 220 18% 90%; /* deeper cool putty surface for chips/rails */
@@ -173,20 +173,25 @@
   --success-light: 70 60% 90%;
   --warning: 32 96% 38%;
 
-  --border: 220 14% 78%; /* quiet boundaries; hierarchy comes from spacing and contrast */
+  --border: 220 14% 60%; /* visible neutral boundaries on translucent light surfaces */
   --input: 220 16% 64%; /* clear control outline without visual noise */
-  --ring: 70 72% 34%;
+  --ring: 201 13% 26%;
+  --focus-ring: 201 13% 26%;
+  --focus-border: 70 72% 24%;
+  --focus-ring-alpha: 0.7;
+  --focus-border-alpha: 0.8;
+  --focus-input-alpha: 0.2;
 
   --radius: 0.75rem;
 
   --sidebar-background: 220 24% 93%;
   --sidebar-foreground: 0 0% 8%;
-  --sidebar-primary: 70 72% 30%;
+  --sidebar-primary: 201 13% 26%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 220 18% 88%;
   --sidebar-accent-foreground: 0 0% 0%;
   --sidebar-border: 220 14% 78%;
-  --sidebar-ring: 70 72% 40%;
+  --sidebar-ring: 201 13% 26%;
 
   /* Layered shadows — deep slate, multi-stop for realism. Slightly stronger
      alpha values so cards read as elevated on the tinted canvas. */
@@ -199,12 +204,12 @@
   --shadow-glow: 0 0 24px -4px hsl(var(--brand-green) / 0.35);
 
   /* Brand aura — Mellox AI: deep slate → electric blue → Ultra Moss */
-  --brand-green: 70 75% 64.5%; /* #CBE960 */
+  --brand-green: 201 13% 26%; /* #39444A */
   --brand-blue: 217 92% 50%; /* electric blue */
   --aura-pink: 220 28% 12%; /* deep slate (token kept for compat) */
   --aura-magenta: 217 92% 44%;
   --aura-purple: 217 92% 56%;
-  --aura-indigo: 70 75% 64.5%;
+  --aura-indigo: 201 13% 26%;
   --gradient-aura: linear-gradient(
     115deg,
     hsl(var(--aura-pink)) 0%,
@@ -310,6 +315,11 @@
   --border: 0 0% 14%; /* #242424 hairline */
   --input: 0 0% 22%;
   --ring: 70 75% 64.5%;
+  --focus-ring: 70 75% 64.5%;
+  --focus-border: 0 0% 100%;
+  --focus-ring-alpha: 0.18;
+  --focus-border-alpha: 0.25;
+  --focus-input-alpha: 0;
 
   --sidebar-background: 0 0% 0%; /* pure black rail — matches canvas */
   --sidebar-foreground: 0 0% 72%;
@@ -334,6 +344,14 @@
   --aura-magenta: 217 91% 45%;
   --aura-purple: 217 91% 60%;
   --aura-indigo: 70 75% 64.5%;
+}
+
+.dark .logo-mark-dark {
+  display: block;
+}
+
+.dark .logo-mark-light {
+  display: none;
 }
 
 /* ═══ Animation performance safeguards ═══
@@ -566,8 +584,8 @@ body {
   outline: none;
   box-shadow:
     0 0 0 2px hsl(var(--background)),
-    0 0 0 4px hsl(var(--foreground) / 0.18);
-  border-color: hsl(var(--foreground) / 0.25);
+    0 0 0 4px hsl(var(--focus-ring) / var(--focus-ring-alpha));
+  border-color: hsl(var(--focus-border) / var(--focus-border-alpha));
 }
 
 /* Text inputs manage their own focus (border + optional ring on the wrapping
@@ -576,8 +594,8 @@ body {
 :where(input, textarea, select):not(.prompt-pill *):focus,
 :where(input, textarea, select):not(.prompt-pill *):focus-visible {
   outline: none;
-  box-shadow: none;
-  border-color: hsl(var(--border) / 0.6);
+  box-shadow: 0 0 0 3px hsl(var(--focus-ring) / var(--focus-input-alpha));
+  border-color: hsl(var(--focus-border) / var(--focus-border-alpha));
   background-color: hsl(var(--muted) / 0.5);
 }
 /* Prompt-pill textarea: no inner ring — the pill wrapper owns the focus glow. */
@@ -1871,6 +1889,22 @@ h6 {
       transform: translateY(0);
     }
   }
+
+  @keyframes symbol-rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .symbol-float {
+    animation: symbol-rise 0.7s var(--motion-ease-emphasized) both;
+  }
+
   @keyframes tilt {
     0%,
     100% {

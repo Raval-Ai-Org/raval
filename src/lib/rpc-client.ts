@@ -55,7 +55,7 @@ async function call(path: string, data: unknown, signal?: AbortSignal): Promise<
  */
 // The `any` type arguments are the wildcard the `infer` below matches against;
 // narrowing them would stop the stub from picking up each function's own types.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 export function serverFn<F extends ServerFn<any, any>>(
   path: string,
 ): F extends ServerFn<infer TData, infer TResult>

@@ -56,6 +56,10 @@ function AuthCallbackPage() {
           queryParams.get("error"),
       );
 
+      // Remove codes, tokens, and provider error details from the address bar
+      // before any asynchronous work or user-visible error state.
+      window.history.replaceState({}, document.title, "/auth/callback");
+
       if (error) {
         setState({
           status: "error",
@@ -113,7 +117,6 @@ function AuthCallbackPage() {
       }
 
       if (cancelled) return;
-      window.history.replaceState({}, document.title, "/auth/callback");
       setState({ status: "success", message: "Sign-in complete. Redirecting…" });
       setTimeout(() => navigate({ to: nextPath as any, replace: true }), 350);
     }
@@ -122,7 +125,7 @@ function AuthCallbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, nextPath]);
+  }, [ensureWorkspace, navigate, nextPath]);
 
   return (
     <div className="grid min-h-dvh place-items-center bg-background px-6 text-foreground">

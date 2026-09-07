@@ -570,7 +570,9 @@ function AgencyHQ() {
     try {
       if (contentIds.length > 0) {
         await Promise.all(
-          contentIds.map((id) => updateContentItemFn({ data: { id, patch: { status: "pending" } } })),
+          contentIds.map((id) =>
+            updateContentItemFn({ data: { id, patch: { status: "pending" } } }),
+          ),
         );
       }
       if (approvalIds.length > 0) {
@@ -613,7 +615,9 @@ function AgencyHQ() {
     try {
       if (contentIds.length > 0) {
         await Promise.all(
-          contentIds.map((id) => updateContentItemFn({ data: { id, patch: { status: "approved" } } })),
+          contentIds.map((id) =>
+            updateContentItemFn({ data: { id, patch: { status: "approved" } } }),
+          ),
         );
       }
       if (approvalIds.length > 0) {
@@ -664,7 +668,9 @@ function AgencyHQ() {
     try {
       if (contentIds.length > 0) {
         await Promise.all(
-          contentIds.map((id) => updateContentItemFn({ data: { id, patch: { status: "rejected" } } })),
+          contentIds.map((id) =>
+            updateContentItemFn({ data: { id, patch: { status: "rejected" } } }),
+          ),
         );
       }
       if (approvalIds.length > 0) {
@@ -2140,7 +2146,7 @@ function SnapshotTile({
       />
       <Comp
         onClick={onClick}
-        className="relative block w-full overflow-hidden rounded-2xl border border-white/5 bg-[#0d0d0d]/90 p-5 text-left transition hover:border-white/10"
+        className="relative block w-full overflow-hidden rounded-2xl border border-border/70 bg-card/90 p-5 text-left transition hover:border-border"
       >
         <div className="flex items-center gap-2">
           <span
@@ -2222,7 +2228,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#0d0d0d]/90 p-5 backdrop-blur-xl sm:p-6">
+    <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/90 p-5 backdrop-blur-xl sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {icon}

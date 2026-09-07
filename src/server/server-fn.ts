@@ -44,7 +44,6 @@ class ServerFnBuilder<TData> {
     return this;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- validators are written as `(data) => schema.parse(data)`
   inputValidator<TNext>(validator: (input: any) => TNext): ServerFnBuilder<TNext> {
     const next = this as unknown as ServerFnBuilder<TNext>;
     next.validator = validator as (input: unknown) => TNext;
@@ -72,5 +71,4 @@ export function createServerFn(options: { method?: "GET" | "POST" } = {}) {
   return new ServerFnBuilder<unknown>(options.method ?? "GET");
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- registry entry, types recovered per call site
 export type AnyServerFn = ServerFn<any, any>;

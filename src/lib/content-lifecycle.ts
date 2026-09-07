@@ -28,17 +28,11 @@ export function isContentStatus(value: string): value is ContentStatus {
   return (CONTENT_STATUSES as readonly string[]).includes(value);
 }
 
-export function canTransitionContent(
-  from: ContentStatus,
-  to: ContentStatus,
-): boolean {
+export function canTransitionContent(from: ContentStatus, to: ContentStatus): boolean {
   return TRANSITIONS[from].includes(to);
 }
 
-export function assertContentTransition(
-  from: string,
-  to: string,
-): asserts to is ContentStatus {
+export function assertContentTransition(from: string, to: string): asserts to is ContentStatus {
   if (!isContentStatus(from) || !isContentStatus(to) || !canTransitionContent(from, to)) {
     throw new Error(`Invalid content status transition: ${from} -> ${to}`);
   }

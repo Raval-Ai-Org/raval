@@ -49,7 +49,6 @@ import { StudioBottomDock } from "@/components/app/StudioBottomDock";
 import { WorkspaceSwitcher } from "@/components/app/WorkspaceSwitcher";
 import { Wand2 } from "@/components/ui/gemini-icons";
 import { AccountMenu, AccountMenuCompact } from "@/components/app/AccountMenu";
-import melloxLogo from "@/assets/mellox-logo.svg.asset.json";
 
 // Heavy modules — loaded on demand to shrink the initial workspace bundle.
 const AnalyticsModal = lazy(() =>
@@ -550,12 +549,7 @@ function AppShell() {
           title="Back to all workspaces"
           className="group flex h-9 items-center gap-1 rounded-md pl-1 pr-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <img
-            src={melloxLogo.url}
-            alt=""
-            className="h-[28px] w-[28px] shrink-0 select-none"
-            draggable={false}
-          />
+          <Logo height={28} markOnly />
           <span
             className="text-sm leading-none text-foreground"
             style={{ fontFamily: "var(--font-brand)" }}
@@ -705,12 +699,7 @@ function AppShell() {
               title="Back to all workspaces"
               className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <img
-                src={melloxLogo.url}
-                alt="Mellox AI"
-                className="h-[26px] w-[26px] select-none"
-                draggable={false}
-              />
+              <Logo height={26} markOnly />
             </Link>
             <TooltipProvider delayDuration={200}>
               <Tooltip>

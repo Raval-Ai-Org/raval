@@ -4,7 +4,9 @@ import { Providers } from "@/app/providers";
 
 import "@/styles.css";
 
-import faviconAsset from "@/assets/mellox-logo.svg.asset.json";
+import faviconAsset from "@/assets/Favicon-updated.png";
+
+const faviconUrl = faviconAsset.src;
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
@@ -17,8 +19,9 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
   },
   icons: {
-    icon: [{ url: faviconAsset.url, type: "image/svg+xml", sizes: "any" }],
-    apple: [{ url: faviconAsset.url, type: "image/svg+xml" }],
+    icon: [{ url: faviconUrl, type: "image/png", sizes: "any" }],
+    shortcut: [{ url: faviconUrl, type: "image/png" }],
+    apple: [{ url: faviconUrl, type: "image/png" }],
   },
   openGraph: {
     title: "Mellox AI | Marketing Intelligence Layer",
@@ -26,14 +29,14 @@ export const metadata: Metadata = {
       "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
     siteName: "Mellox AI",
     type: "website",
-    images: [{ url: `${BASE_URL}${faviconAsset.url}`, type: "image/svg+xml" }],
+    images: [{ url: `${BASE_URL}${faviconUrl}`, type: "image/png" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Mellox AI | Marketing Intelligence Layer",
     description:
       "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
-    images: [{ url: `${BASE_URL}${faviconAsset.url}`, type: "image/svg+xml" }],
+    images: [{ url: `${BASE_URL}${faviconUrl}`, type: "image/png" }],
   },
 };
 
@@ -56,7 +59,7 @@ const ORGANIZATION_LD = {
       url: BASE_URL,
       logo: {
         "@type": "ImageObject",
-        url: `${BASE_URL}${faviconAsset.url}`,
+        url: `${BASE_URL}${faviconUrl}`,
       },
       description:
         "Mellox AI is the Marketing Intelligence Layer — an AI-native platform that helps brands and agencies get visible inside LLMs.",

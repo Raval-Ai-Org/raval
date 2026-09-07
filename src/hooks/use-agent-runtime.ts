@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Agent, AgentMission } from "@/lib/agents";
 
 export interface RunningMission {
@@ -26,21 +26,27 @@ export function useAgentRuntime(agent: Agent) {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const tickRef = useRef<number | null>(null);
 
-  const log = (e: Omit<ActivityEvent, "id" | "timestamp">) =>
-    setEvents((prev) =>
-      [{ ...e, id: crypto.randomUUID(), timestamp: Date.now() }, ...prev].slice(0, 60),
-    );
+  const log = useCallback(
+    (e: Omit<ActivityEvent, "id" | "timestamp">) =>
+      setEvents((prev) =>
+        [{ ...e, id: crypto.randomUUID(), timestamp: Date.now() }, ...prev].slice(0, 60),
+      ),
+    [],
+  );
 
-  const deploy = (mission: AgentMission) => {
-    if (!current) {
-      setCurrent({ mission, startedAt: Date.now(), progress: 0 });
-      log({ agentId: agent.id, type: "deploy", message: `Deployed: ${mission.label}` });
-    } else {
-      setQueue((q) => [...q, mission]);
-      log({ agentId: agent.id, type: "deploy", message: `Queued: ${mission.label}` });
-    }
-    setActive(true);
-  };
+  const deploy = useCallback(
+    (mission: AgentMission) => {
+      if (!current) {
+        setCurrent({ mission, startedAt: Date.now(), progress: 0 });
+        log({ agentId: agent.id, type: "deploy", message: `Deployed: ${mission.label}` });
+      } else {
+        setQueue((q) => [...q, mission]);
+        log({ agentId: agent.id, type: "deploy", message: `Queued: ${mission.label}` });
+      }
+      setActive(true);
+    },
+    [agent.id, current, log],
+  );
 
   // Auto-tick progress
   useEffect(() => {
@@ -73,7 +79,7 @@ export function useAgentRuntime(agent: Agent) {
     return () => {
       if (tickRef.current) window.clearInterval(tickRef.current);
     };
-  }, [active, current?.mission.id]);
+  }, [active, agent.id, current, log]);
 
   return { active, setActive, current, queue, tasksToday, lastRun, events, deploy };
 }

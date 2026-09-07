@@ -141,7 +141,7 @@ function ProjectsPage() {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [ensureWorkspace, navigate]);
 
   const openProject = (w: Workspace) => {
     localStorage.setItem(SELECTED_KEY, w.id);
@@ -225,15 +225,6 @@ function ProjectsPage() {
       {/* Hero */}
       <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pt-14 pb-8 text-center">
         <SecondaryBrandSymbols size="lg" className="mx-auto mb-8 justify-center gap-3 sm:gap-5" />
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-[11.5px] font-medium text-muted-foreground backdrop-blur"
-        >
-          <Sparkles className="h-3 w-3 text-aura" />
-          Agency dashboard
-        </motion.div>
         <motion.h1
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -838,16 +829,15 @@ function PasteLinkBar({
         data-no-rhythm
         onSubmit={submit}
         className={cn(
-          "group relative flex h-14 items-center gap-1.5 rounded-full border border-border/70 bg-[hsl(0_0%_8%/0.85)] pl-1.5 pr-1.5 backdrop-blur-xl",
-          "shadow-[0_1px_0_hsl(0_0%_100%/0.04)_inset,0_20px_60px_-30px_hsl(0_0%_0%/0.9)]",
-          "transition focus-within:border-foreground/30",
+          "group relative flex h-14 items-center gap-1.5 rounded-full border border-border/70 bg-card/95 pl-1.5 pr-1.5 shadow-[0_10px_28px_-18px_hsl(var(--foreground)/0.32),0_1px_0_hsl(var(--foreground)/0.04)_inset] backdrop-blur-xl",
+          "transition focus-within:border-brand-green/70 focus-within:shadow-[0_12px_32px_-18px_hsl(var(--brand-green)/0.38),0_1px_0_hsl(var(--foreground)/0.05)_inset]",
         )}
       >
         <button
           type="button"
           onClick={onPasteShortcut}
           aria-label="Paste from clipboard"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-white/5 hover:text-foreground"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
         >
           <Plus className="h-5 w-5" strokeWidth={2} />
         </button>
@@ -871,7 +861,7 @@ function PasteLinkBar({
             "!mt-0 grid h-11 w-11 shrink-0 place-items-center rounded-full transition",
             isValid && !saving
               ? "bg-gradient-to-br from-aura via-aura-purple to-aura-pink text-white shadow-[0_8px_24px_-10px_hsl(var(--aura)/0.7)] hover:-translate-y-0.5"
-              : "bg-white/5 text-muted-foreground",
+              : "bg-secondary text-muted-foreground",
           )}
         >
           {saving ? (

@@ -95,6 +95,16 @@ test.describe("Light theme — tokens & contrast", () => {
 
     // Sample the first bordered card on the landing page.
     const probe = await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d")!;
+      const toRgb = (color: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+        return `rgb(${red}, ${green}, ${blue})`;
+      };
       const el = document.querySelector<HTMLElement>(
         "div.rounded-2xl.border, div.rounded-xl.border, [class*='border-border']",
       );
@@ -102,9 +112,9 @@ test.describe("Light theme — tokens & contrast", () => {
       const s = getComputedStyle(el);
       const body = getComputedStyle(document.body);
       return {
-        borderColor: s.borderTopColor,
+        borderColor: toRgb(s.borderTopColor),
         borderWidth: s.borderTopWidth,
-        bodyBg: body.backgroundColor,
+        bodyBg: toRgb(body.backgroundColor),
       };
     });
     expect(probe, "found at least one bordered card").not.toBeNull();
