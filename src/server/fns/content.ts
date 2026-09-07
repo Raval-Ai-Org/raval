@@ -4,6 +4,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { runJsonPrompt } from "@/lib/ai";
 import { contentBatchPrompt, nextPostPrompt, regeneratePrompt } from "@/lib/ai/prompts";
 import { buildNextSteps } from "@/lib/ai/deterministic-suggestions";
+import {
+  assertContentTransition,
+  CONTENT_STATUSES,
+  hasMeaningfulContentChange,
+  type ContentStatus,
+} from "@/lib/content-lifecycle";
 
 const uuid = z.string().uuid();
 
@@ -22,15 +28,7 @@ const ChannelEnum = z.enum([
 ]);
 const KindEnum = z.enum(["post", "brief", "email", "landing", "blog"]);
 const AgentEnum = z.enum(["scout", "spark", "echo"]);
-const StatusEnum = z.enum([
-  "draft",
-  "pending",
-  "approved",
-  "rejected",
-  "scheduled",
-  "publishing",
-  "published",
-]);
+const StatusEnum = z.enum(CONTENT_STATUSES);
 
 const CONTENT_COLS =
   "id, workspace_id, agent, kind, channel, title, body, hashtags, media_url, status, scheduled_at, metrics, meta, created_by, created_at, updated_at";
@@ -148,9 +146,27 @@ export const updateContentItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => UpdateSchema.parse(data))
   .handler(async ({ data, context }) => {
+    const { data: current, error: readError } = await context.supabase
+      .from("content_items")
+      .select("status")
+      .eq("id", data.id)
+      .single();
+    if (readError || !current) throw new Error(readError?.message ?? "Content item not found");
+
+    const patch = { ...data.patch } as Record<string, unknown>;
+    const currentStatus = current.status as ContentStatus;
+    const requestedStatus = patch.status as string | undefined;
+
+    if (currentStatus === "approved" && hasMeaningfulContentChange(patch)) {
+      // Editing approved work invalidates its approval and requires review again.
+      patch.status = "draft";
+    } else if (requestedStatus) {
+      assertContentTransition(currentStatus, requestedStatus);
+    }
+
     const { data: row, error } = await context.supabase
       .from("content_items")
-      .update(data.patch as never)
+      .update(patch as never)
       .eq("id", data.id)
       .select(CONTENT_COLS)
       .single();
@@ -187,7 +203,18 @@ export const rescheduleContentItem = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const patch: Record<string, unknown> = { scheduled_at: data.scheduled_at };
     if (data.channel !== undefined) patch.channel = data.channel;
-    if (data.scheduled_at) patch.status = "scheduled";
+    const { data: current, error: readError } = await context.supabase
+      .from("content_items")
+      .select("status")
+      .eq("id", data.id)
+      .single();
+    if (readError || !current) throw new Error(readError?.message ?? "Content item not found");
+    if (data.scheduled_at) {
+      assertContentTransition(current.status, "scheduled");
+      patch.status = "scheduled";
+    } else if (current.status === "scheduled") {
+      patch.status = "approved";
+    }
     const { data: row, error } = await context.supabase
       .from("content_items")
       .update(patch as never)
@@ -393,6 +420,13 @@ export const setContentItemStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ id: uuid, status: StatusEnum }).parse(data))
   .handler(async ({ data, context }) => {
+    const { data: current, error: readError } = await context.supabase
+      .from("content_items")
+      .select("status")
+      .eq("id", data.id)
+      .single();
+    if (readError || !current) throw new Error(readError?.message ?? "Content item not found");
+    assertContentTransition(current.status, data.status);
     const { data: row, error } = await context.supabase
       .from("content_items")
       .update({ status: data.status })

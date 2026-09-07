@@ -8,7 +8,7 @@ import sys
 import glob
 import subprocess
 
-PROJECT_REF = "smdravaoaeqdajmnrlpr"
+PROJECT_REF = os.environ.get("SUPABASE_PROJECT_REF", "slcmqbbjzyztqyucauol")
 
 print("🔧 Applying Migrations via Supabase CLI")
 print("=" * 60)

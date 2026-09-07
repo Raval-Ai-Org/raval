@@ -15,6 +15,7 @@ import {
   Zap,
   AlertTriangle,
   Repeat,
+  FileText,
 } from "@/components/brand/icons";
 import { PromptInspector } from "@/components/app/PromptInspector";
 
@@ -36,10 +37,11 @@ import {
   DEFAULT_PLATFORMS,
   type PlatformId,
 } from "@/lib/social-platforms";
-import { publishContentItems, scheduleContentItems } from "@/lib/sdr.functions";
+import { getConnections, publishContentItems, scheduleContentItems } from "@/lib/sdr.functions";
 import { StudioDestinationPicker } from "@/components/app/StudioDestinationPicker";
 import { DeliveryView } from "@/components/app/DeliveryView";
 import type { PublishSelection } from "@/lib/sdr.handlers";
+import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 
 type SocialVariant = {
   platform: PlatformId;
@@ -48,6 +50,8 @@ type SocialVariant = {
   hashtags: string[];
   chars: number;
 };
+
+type CreationMode = "ravi" | "manual";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -227,6 +231,8 @@ export function StudioCanvasModal({
   const [progress, setProgress] = useState(0);
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<string>("");
+  const [creationMode, setCreationMode] = useState<CreationMode>("ravi");
+  const [editingContent, setEditingContent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const progressRef = useRef<number | null>(null);
@@ -251,7 +257,7 @@ export function StudioCanvasModal({
   const generatePostImageRef = useRef<((brief?: string) => Promise<void>) | null>(null);
   const autoRunKeyRef = useRef<string | null>(null);
 
-  const brand = useMemo(() => loadBrandDna(workspaceId), [workspaceId, canvas?.id]);
+  const brand = useMemo(() => loadBrandDna(workspaceId), [workspaceId]);
 
   const isSocial = canvas?.type === "social-post" || canvas?.type === "design-asset";
   // US4: the persisted content item id to show delivery for (per-platform status
@@ -286,6 +292,7 @@ export function StudioCanvasModal({
     Partial<Record<PlatformId, "idle" | "loading" | "success" | "error">>
   >({});
   const [captionErrors, setCaptionErrors] = useState<Partial<Record<PlatformId, string>>>({});
+  const [connectionPromptOpen, setConnectionPromptOpen] = useState(false);
 
   // Cache: { [canvasId]: { [size]: dataUrl } }. Session-scoped so returning
   // to the same topic in the same tab restores previews without re-billing.
@@ -509,6 +516,8 @@ export function StudioCanvasModal({
       imageSize,
       autoSize,
       activePlatform,
+      imageAttempt,
+      persistCache,
       canvas?.id,
       canvas?.type,
       platforms,
@@ -813,9 +822,8 @@ export function StudioCanvasModal({
         genQueue.advance(jobId, "drafting");
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json?.error || `Generation failed (${res.status})`);
-        const text =
-          String(json?.text || "").trim() ||
-          brandFallbackCopy(activeCanvas.type, brand, workspaceName, sourceTitle);
+        const text = String(json?.text || "").trim();
+        if (!text) throw new Error("The generator returned no content. Your brief is still here.");
         if (progressRef.current) window.clearInterval(progressRef.current);
         genQueue.advance(jobId, "polishing");
         setProgress(100);
@@ -832,25 +840,17 @@ export function StudioCanvasModal({
         return text;
       } catch (e: unknown) {
         if (progressRef.current) window.clearInterval(progressRef.current);
-        const fallback = brandFallbackCopy(
-          activeCanvas.type,
-          brand,
-          workspaceName,
-          sourceTitle || requestPrompt,
-        );
-        genQueue.advance(jobId, "polishing");
-        setProgress(100);
-        setResult(fallback);
         setGenerating(false);
-        setGenerated(true);
+        setProgress(0);
+        setResult("");
+        setGenerated(false);
         setJustFinished(false);
-        genQueue.advance(jobId, "ready");
         genQueue.complete(jobId);
-        void persistDrafts({ canvasType: activeCanvas.type, text: fallback, sourceTitle });
         toast.error("Generation failed", {
-          description: e instanceof Error ? e.message : "Used fallback copy.",
+          description:
+            e instanceof Error ? e.message : "Your brief is still here. Please try again.",
         });
-        return fallback;
+        return "";
       }
     },
     [brand, workspaceName, platforms, persistDrafts],
@@ -869,6 +869,49 @@ export function StudioCanvasModal({
     }
     const text = await generateDraft(canvas, prompt);
     if (!text.trim()) toast.error("Couldn't generate", { description: "Please try again." });
+  };
+
+  const saveManualDraft = async () => {
+    if (!canvas || !workspaceId || !prompt.trim()) {
+      toast.error("Add some content first", { description: "Write something before saving the draft." });
+      return;
+    }
+    setSaving(true);
+    try {
+      await persistDrafts({ canvasType: canvas.type, text: prompt.trim() });
+      setResult(prompt.trim());
+      setGenerated(true);
+      toast.success("Draft saved", { description: "You can continue editing it from Studio." });
+    } catch (error) {
+      toast.error("Couldn't save draft", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveContentEdits = async () => {
+    if (!canvas || !workspaceId || !result.trim()) return;
+    setSaving(true);
+    try {
+      if (draftIdsRef.current.length === 1 && UUID_RE.test(draftIdsRef.current[0])) {
+        await runUpdate({
+          data: { id: draftIdsRef.current[0], patch: { body: result.trim() } },
+        });
+      } else {
+        await persistDrafts({ canvasType: canvas.type, text: result.trim() });
+      }
+      setEditingContent(false);
+      window.dispatchEvent(new CustomEvent("content:changed"));
+      toast.success("Changes saved", { description: "Your draft is up to date." });
+    } catch (error) {
+      toast.error("Couldn't save changes", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   useEffect(() => {
@@ -903,6 +946,7 @@ export function StudioCanvasModal({
 
     const nextPrompt = chatBrief || seedPrompt(canvas.type, brand, workspaceName);
     setPrompt(nextPrompt);
+    setCreationMode(chatBrief ? "ravi" : "ravi");
     setGenerated(false);
     setGenerating(false);
     setJustFinished(false);
@@ -1003,11 +1047,27 @@ export function StudioCanvasModal({
     persistDrafts,
   ]);
 
+  const ensureSocialConnection = useCallback(async () => {
+    if (!workspaceId || !isSocial) return true;
+    try {
+      const accounts = await getConnections(workspaceId);
+      const connected = accounts.some((account) => account.status === "active");
+      if (!connected) setConnectionPromptOpen(true);
+      return connected;
+    } catch (error) {
+      toast.error("Couldn't check connected accounts", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+      return false;
+    }
+  }, [isSocial, workspaceId]);
+
   const onApprove = async () => {
     if (!canvas || !workspaceId) {
       onClose();
       return;
     }
+    if (isSocial && !(await ensureSocialConnection())) return;
     setSaving(true);
     try {
       const scheduledAt = new Date();
@@ -1078,6 +1138,7 @@ export function StudioCanvasModal({
       onClose();
       return;
     }
+    if (isSocial && !(await ensureSocialConnection())) return;
     setPublishing(true);
     try {
       const ids = await ensureDraftIds();
@@ -1138,12 +1199,13 @@ export function StudioCanvasModal({
   };
 
   return (
-    <DialogPrimitive.Root
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) onClose();
-      }}
-    >
+    <>
+      <DialogPrimitive.Root
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) onClose();
+        }}
+      >
       <AnimatePresence>
         {open && tile && canvas && (
           <DialogPrimitive.Portal forceMount>
@@ -1409,6 +1471,18 @@ export function StudioCanvasModal({
                               seedKey={canvas.id || "draft"}
                             />
                           </>
+                        ) : editingContent ? (
+                          <div className="mx-auto max-w-[680px]">
+                            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                              Edit {tile.label}
+                            </label>
+                            <textarea
+                              value={result}
+                              onChange={(event) => setResult(event.target.value)}
+                              className="min-h-[360px] w-full resize-y rounded-2xl border border-border/70 bg-card p-4 text-[13px] leading-relaxed text-foreground outline-none transition focus:border-foreground/30 focus:ring-2 focus:ring-foreground/10"
+                              aria-label={`Edit ${tile.label}`}
+                            />
+                          </div>
                         ) : (
                           <Preview
                             type={canvas.type}
@@ -1437,10 +1511,54 @@ export function StudioCanvasModal({
                         transition={{ duration: 0.22, ease: EASE }}
                         className="mx-auto max-w-[640px] px-6 py-6"
                       >
+                        <div className="mb-4 grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCreationMode("ravi")}
+                            className={cn(
+                              "rounded-xl border p-3 text-left transition",
+                              creationMode === "ravi"
+                                ? "border-foreground/30 bg-card shadow-sm"
+                                : "border-border/60 bg-card/40 text-muted-foreground hover:bg-card",
+                            )}
+                          >
+                            <span className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
+                              <Sparkles className="h-3.5 w-3.5" style={{ color }} /> Start with Ravi
+                            </span>
+                            <span className="mt-1 block text-[10.5px] leading-relaxed text-muted-foreground">
+                              Turn an idea into a ready-to-review draft.
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCreationMode("manual")}
+                            className={cn(
+                              "rounded-xl border p-3 text-left transition",
+                              creationMode === "manual"
+                                ? "border-foreground/30 bg-card shadow-sm"
+                                : "border-border/60 bg-card/40 text-muted-foreground hover:bg-card",
+                            )}
+                          >
+                            <span className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
+                              <FileText className="h-3.5 w-3.5" style={{ color }} /> Write manually
+                            </span>
+                            <span className="mt-1 block text-[10.5px] leading-relaxed text-muted-foreground">
+                              Start with your own copy and keep full control.
+                            </span>
+                          </button>
+                        </div>
                         <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                          <Sparkles className="h-3 w-3" style={{ color }} />
-                          Brand voice and audience are already wired in. Just describe what you
-                          want.
+                          {creationMode === "ravi" ? (
+                            <>
+                              <Sparkles className="h-3 w-3" style={{ color }} /> Brand voice and
+                              audience are already wired in. Describe what you want.
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="h-3 w-3" style={{ color }} /> Your content stays
+                              yours. Save it as a draft when you are ready.
+                            </>
+                          )}
                         </p>
                         <div className="relative mt-3 group">
                           <div
@@ -1455,6 +1573,11 @@ export function StudioCanvasModal({
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                             rows={6}
+                            placeholder={
+                              creationMode === "manual"
+                                ? "Write your post, article, brief, or campaign note here..."
+                                : "Tell Ravi what you want to create..."
+                            }
                             className="relative w-full resize-none rounded-2xl border border-border/60 bg-card p-3 text-[13px] leading-relaxed outline-none transition-colors"
                             style={{ caretColor: color }}
                             onFocus={(e) => (e.currentTarget.style.borderColor = `${color}80`)}
@@ -1551,6 +1674,30 @@ export function StudioCanvasModal({
                       >
                         Edit brief
                       </button>
+                      {!isSocial && (
+                        <button
+                          onClick={() => setEditingContent((value) => !value)}
+                          className="text-[12px] text-muted-foreground hover:text-foreground"
+                        >
+                          {editingContent ? "Preview" : "Edit content"}
+                        </button>
+                      )}
+                      {editingContent && !isSocial ? (
+                        <motion.button
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          onClick={saveContentEdits}
+                          disabled={saving || !result.trim()}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg disabled:opacity-50"
+                          style={{
+                            background: `linear-gradient(135deg, ${color}, ${color}cc)`,
+                            boxShadow: `0 8px 24px -8px ${color}`,
+                          }}
+                        >
+                          <Check className="h-3.5 w-3.5" /> {saving ? "Saving…" : "Save changes"}
+                        </motion.button>
+                      ) : (
+                        <>
                       {isSocial && variants.length > 0 && !captionsConfirmed ? (
                         <>
                           <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -1614,12 +1761,14 @@ export function StudioCanvasModal({
                           </motion.button>
                         </>
                       )}
+                        </>
+                      )}
                     </>
                   ) : (
                     <motion.button
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
-                      onClick={onGenerate}
+                      onClick={creationMode === "manual" ? saveManualDraft : onGenerate}
                       disabled={generating || !prompt.trim()}
                       className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg disabled:opacity-50"
                       style={{
@@ -1627,7 +1776,15 @@ export function StudioCanvasModal({
                         boxShadow: `0 8px 24px -8px ${color}`,
                       }}
                     >
-                      <Wand2 className="h-3.5 w-3.5" /> Generate
+                      {creationMode === "manual" ? (
+                        <>
+                          <Send className="h-3.5 w-3.5" /> {saving ? "Saving…" : "Save draft"}
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="h-3.5 w-3.5" /> Generate
+                        </>
+                      )}
                     </motion.button>
                   )}
                 </footer>
@@ -1636,6 +1793,45 @@ export function StudioCanvasModal({
           </DialogPrimitive.Portal>
         )}
       </AnimatePresence>
+      </DialogPrimitive.Root>
+
+      <ConnectionRequiredDialog
+        open={connectionPromptOpen}
+        onOpenChange={setConnectionPromptOpen}
+      />
+    </>
+  );
+}
+
+function ConnectionRequiredDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-foreground/30 backdrop-blur-sm" />
+        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-[60] max-h-[calc(100dvh-2rem)] w-[min(94vw,28rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-border/70 bg-background p-5 shadow-2xl outline-none sm:p-6">
+          <DialogPrimitive.Title className="text-base font-semibold text-foreground">
+            Connect an account to publish
+          </DialogPrimitive.Title>
+          <DialogPrimitive.Description className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+            Your work is ready. Connect a social account once, then return here to publish or
+            schedule it.
+          </DialogPrimitive.Description>
+          <div className="mt-5 border-t border-border/60 pt-4">
+            <SocialAccountsSection variant="settings" />
+          </div>
+          <div className="mt-5 flex justify-end">
+            <DialogPrimitive.Close className="rounded-lg border border-border/70 px-3 py-2 text-[12px] font-medium text-foreground transition hover:bg-secondary">
+              Done
+            </DialogPrimitive.Close>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
 }

@@ -36,12 +36,17 @@ if (-not (Test-Path ".env")) {
   Write-Host "    Or run: npm run setup"
 } else {
   Ok ".env exists"
-  $placeholderPattern = "YOUR_PROJECT_REF|YOUR_PUBLISHABLE|YOUR_SERVICE_ROLE|your-openrouter"
-  $placeholderMatches = Select-String -Path ".env" -Pattern $placeholderPattern -ErrorAction SilentlyContinue
-  if ($placeholderMatches -and $placeholderMatches.Count -gt 0) {
-    Fail ".env contains $($placeholderMatches.Count) placeholder value(s) - auth will fail"
+  $authPlaceholderPattern = "YOUR_PROJECT_REF|YOUR_PUBLISHABLE|YOUR_SERVICE_ROLE"
+  $authPlaceholderMatches = Select-String -Path ".env" -Pattern $authPlaceholderPattern -ErrorAction SilentlyContinue
+  if ($authPlaceholderMatches -and $authPlaceholderMatches.Count -gt 0) {
+    Fail ".env contains $($authPlaceholderMatches.Count) Supabase placeholder value(s) - auth will fail"
     Write-Host "    Fix:  Edit .env and replace YOUR_* with real credentials"
     Write-Host "    Get real values from a teammate or 1Password"
+  }
+  $aiPlaceholderMatches = Select-String -Path ".env" -Pattern "your-openrouter|sk-or-v1-replace-me-later" -ErrorAction SilentlyContinue
+  if ($aiPlaceholderMatches -and $aiPlaceholderMatches.Count -gt 0) {
+    Warn ".env contains an OpenRouter placeholder - AI generation will be unavailable"
+    Write-Host "    Fix:  Set OPENROUTER_API_KEY to a valid server-only OpenRouter key"
   }
 }
 
@@ -60,7 +65,7 @@ if (Test-Path ".env") {
     $sdrUrl = ($sdrLine.Line -split "=", 2)[1].Trim().Trim('"').Trim("'")
     if ($sdrUrl -and $sdrUrl -ne "https://YOUR_PROJECT_REF.supabase.co") {
       try {
-        $response = Invoke-WebRequest -Uri "$sdrUrl/health" -Method Head -TimeoutSec 5 -ErrorAction Stop
+        $response = Invoke-WebRequest -Uri "$sdrUrl/healthz" -Method Get -TimeoutSec 5 -ErrorAction Stop
         $code = $response.StatusCode
         if ($code -eq 200) {
           Ok "SDR reachable at $sdrUrl"

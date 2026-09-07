@@ -50,6 +50,8 @@ function SignupPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [confirmationSent, setConfirmationSent] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
@@ -83,11 +85,40 @@ function SignupPage() {
         navigate({ to: nextPath as any, replace: true });
         return;
       }
+      setConfirmationSent(true);
       toast.success("Check your email to confirm");
     } catch (error) {
       toast.error("Could not create account", { description: friendlyAuthError(error) });
     } finally {
       setEmailLoading(false);
+    }
+  };
+
+  const onResendConfirmation = async () => {
+    const address = email.trim();
+    if (!address) {
+      toast.error("Enter your email first");
+      return;
+    }
+    setResendLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: address,
+        options: { emailRedirectTo: authCallbackUrl(nextPath) },
+      });
+      if (error) {
+        toast.error("Could not resend confirmation", { description: friendlyAuthError(error) });
+        return;
+      }
+      setConfirmationSent(true);
+      toast.success("Confirmation email sent again", {
+        description: "Check your inbox and spam folder.",
+      });
+    } catch (error) {
+      toast.error("Could not resend confirmation", { description: friendlyAuthError(error) });
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -213,6 +244,30 @@ function SignupPage() {
           </Button>
         </motion.div>
       </form>
+
+      {confirmationSent && (
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-primary/25 bg-primary/5 p-4 text-center"
+        >
+          <p className="text-sm font-medium text-foreground">
+            Check your email to finish signing up.
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Open the confirmation link in the same browser. Check spam or promotions if it does not
+            arrive shortly.
+          </p>
+          <button
+            type="button"
+            onClick={onResendConfirmation}
+            disabled={resendLoading || emailLoading}
+            className="mt-3 text-xs font-semibold text-primary underline-offset-4 hover:underline disabled:opacity-50"
+          >
+            {resendLoading ? "Sending…" : "Resend confirmation email"}
+          </button>
+        </motion.div>
+      )}
     </AuthShell>
   );
 }

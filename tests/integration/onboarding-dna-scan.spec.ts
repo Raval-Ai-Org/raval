@@ -1,7 +1,7 @@
 import { test, expect, type Route } from "@playwright/test";
 
-const SUPABASE_HOST = "smdravaoaeqdajmnrlpr.supabase.co";
-const STORAGE_KEY = "sb-smdravaoaeqdajmnrlpr-auth-token";
+const SUPABASE_HOST = "slcmqbbjzyztqyucauol.supabase.co";
+const STORAGE_KEY = "sb-slcmqbbjzyztqyucauol-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const JSON_HEADERS = { "content-type": "application/json" };
 const URL = "https://example.com";

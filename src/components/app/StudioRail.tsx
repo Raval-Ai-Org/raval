@@ -20,14 +20,7 @@ import {
 } from "@/components/brand/icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import {
-  STUDIO_TILES,
-  TILE_BY_ID,
-  MOCK_SCHEDULED,
-  MOCK_RECENT,
-  type QueueItem,
-  type CanvasType,
-} from "@/lib/studio";
+import { STUDIO_TILES, TILE_BY_ID, type QueueItem, type CanvasType } from "@/lib/studio";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@/lib/use-server-fn";
 import { updateContentItem } from "@/lib/content.functions";
@@ -40,7 +33,6 @@ import {
 } from "@/hooks/use-studio-suggestions";
 import { GeneratePostImageButton } from "@/components/app/GeneratePostImageButton";
 import { getAnyCachedImage } from "@/lib/post-image";
-import { ConnectionsPanel } from "@/components/app/ConnectionsPanel";
 import { publishContentItems } from "@/lib/sdr.functions";
 import { toast } from "sonner";
 
@@ -108,12 +100,29 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
   // Start with the SSR default; hydrate from localStorage after mount to avoid
   // server/client markup mismatch.
   const [open, setOpen] = useState<boolean>(true);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [approvals, setApprovals] = useState<Row[]>([]);
   const [scheduledRows, setScheduledRows] = useState<Row[] | null>(null);
   const [recentRows, setRecentRows] = useState<Row[] | null>(null);
   const [genJobs, setGenJobs] = useState<GenJob[]>(() => genQueue.list());
   const runUpdate = useServerFn(updateContentItem);
+  useEffect(() => {
+    const syncWorkspace = () => {
+      try {
+        setWorkspaceId(localStorage.getItem("workspace:selected"));
+      } catch {
+        setWorkspaceId(null);
+      }
+    };
+    syncWorkspace();
+    window.addEventListener("workspace:changed", syncWorkspace);
+    window.addEventListener("storage", syncWorkspace);
+    return () => {
+      window.removeEventListener("workspace:changed", syncWorkspace);
+      window.removeEventListener("storage", syncWorkspace);
+    };
+  }, []);
   useEffect(() => {
     const sync = () => setGenJobs(genQueue.list());
     sync();
@@ -135,58 +144,61 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
     } catch {}
   }, [embedded, open]);
 
-  const loadApprovals = useCallback(async (cancelledRef?: { readonly current: boolean }) => {
-    const wsId = typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
-    if (!wsId) {
-      if (!cancelledRef?.current) setApprovals([]);
-      return;
-    }
+  const loadApprovals = useCallback(
+    async (cancelledRef?: { readonly current: boolean }) => {
+      const wsId = workspaceId;
+      if (!wsId) {
+        if (!cancelledRef?.current) setApprovals([]);
+        return;
+      }
 
-    const [content, legacy] = await Promise.all([
-      supabase
-        .from("content_items")
-        .select("id, title, body, kind, channel, status, created_at")
-        .eq("workspace_id", wsId)
-        .in("status", ["pending", "draft"])
-        .order("created_at", { ascending: false })
-        .limit(12),
-      supabase
-        .from("approvals")
-        .select("id, action, status, payload, created_at")
-        .eq("workspace_id", wsId)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false })
-        .limit(12),
-    ]);
+      const [content, legacy] = await Promise.all([
+        supabase
+          .from("content_items")
+          .select("id, title, body, kind, channel, status, created_at")
+          .eq("workspace_id", wsId)
+          .in("status", ["pending", "draft"])
+          .order("created_at", { ascending: false })
+          .limit(12),
+        supabase
+          .from("approvals")
+          .select("id, action, status, payload, created_at")
+          .eq("workspace_id", wsId)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(12),
+      ]);
 
-    if (cancelledRef?.current) return;
+      if (cancelledRef?.current) return;
 
-    const realRows: Row[] = ((content.data ?? []) as any[]).map((r): Row => ({
-      id: r.id,
-      title: r.title || (r.body ? String(r.body).slice(0, 72) : "Untitled draft"),
-      canvas: kindToCanvas(r.kind, r.channel),
-      channel: r.channel ?? undefined,
-      mode: "review",
-      meta: r.status === "draft" ? "draft ready" : "needs approval",
-    }));
-
-    const legacyRows: Row[] = ((legacy.data ?? []) as any[]).map((row): Row => {
-      const payload = (row.payload ?? {}) as Record<string, unknown>;
-      const canvas = (
-        typeof payload.canvas === "string" ? payload.canvas : "social-post"
-      ) as CanvasType;
-      return {
-        id: row.id,
-        title: row.action || "Pending approval",
-        canvas,
-        channel: typeof payload.channel === "string" ? payload.channel : undefined,
+      const realRows: Row[] = ((content.data ?? []) as any[]).map((r): Row => ({
+        id: r.id,
+        title: r.title || (r.body ? String(r.body).slice(0, 72) : "Untitled draft"),
+        canvas: kindToCanvas(r.kind, r.channel),
+        channel: r.channel ?? undefined,
         mode: "review",
-        meta: "needs approval",
-      };
-    });
+        meta: r.status === "draft" ? "draft ready" : "needs approval",
+      }));
 
-    setApprovals([...realRows, ...legacyRows]);
-  }, []);
+      const legacyRows: Row[] = ((legacy.data ?? []) as any[]).map((row): Row => {
+        const payload = (row.payload ?? {}) as Record<string, unknown>;
+        const canvas = (
+          typeof payload.canvas === "string" ? payload.canvas : "social-post"
+        ) as CanvasType;
+        return {
+          id: row.id,
+          title: row.action || "Pending approval",
+          canvas,
+          channel: typeof payload.channel === "string" ? payload.channel : undefined,
+          mode: "review",
+          meta: "needs approval",
+        };
+      });
+
+      setApprovals([...realRows, ...legacyRows]);
+    },
+    [workspaceId],
+  );
 
   // Refresh approvals on mount, when content changes elsewhere (Studio save,
   // chat actions, approvals from the client portal), and on a slow interval.
@@ -237,8 +249,7 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
       return `${Math.round(h / 24)}d ago`;
     };
     const load = async () => {
-      const wsId =
-        typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
+      const wsId = workspaceId;
       if (!wsId) {
         if (!cancelled) {
           setScheduledRows([]);
@@ -291,7 +302,7 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
       cancelled = true;
       window.removeEventListener("content:changed", onChange);
     };
-  }, []);
+  }, [workspaceId]);
 
   // Poll approvals + scheduled/recent only while tab is visible (60s cadence,
   // was 30s and ran forever on background tabs).
@@ -360,18 +371,8 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
     );
   }
 
-  const scheduled: Row[] =
-    scheduledRows && scheduledRows.length > 0
-      ? scheduledRows
-      : scheduledRows === null
-        ? MOCK_SCHEDULED.map((it) => ({ ...it, mode: "view", meta: it.when ?? "scheduled" }))
-        : [];
-  const recent: Row[] =
-    recentRows && recentRows.length > 0
-      ? recentRows
-      : recentRows === null
-        ? MOCK_RECENT.map((it) => ({ ...it, mode: "view", meta: it.when ?? "" }))
-        : [];
+  const scheduled: Row[] = scheduledRows ?? [];
+  const recent: Row[] = recentRows ?? [];
 
   return (
     <motion.aside
@@ -412,8 +413,8 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
         )}
 
         {!embedded && (
-          <header className="relative flex h-11 shrink-0 items-center justify-between px-3.5">
-            <h2 className="ui-eyebrow text-foreground/85">
+          <header className="relative flex shrink-0 items-center justify-between border-b border-border/40 px-3.5 py-3">
+            <div className="flex items-center gap-2.5">
               <motion.span
                 aria-hidden
                 animate={{ rotate: [0, 8, -6, 0], scale: [1, 1.08, 1] }}
@@ -427,8 +428,11 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
               >
                 <Sparkles className="h-2.5 w-2.5 text-white" strokeWidth={2.5} />
               </motion.span>
-              Studio
-            </h2>
+              <div>
+                <h2 className="text-[14px] font-semibold tracking-tight text-foreground">Studio</h2>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">Create, review, ship</p>
+              </div>
+            </div>
             <button
               onClick={() => setOpen(false)}
               title="Collapse Studio"
@@ -440,14 +444,14 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
           </header>
         )}
 
-        <div className="relative min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-4 scrollbar-thin">
+        <div className="relative min-h-0 flex-1 space-y-5 overflow-y-auto px-3.5 pt-4 pb-5 scrollbar-thin">
           <motion.button
             onClick={() => setCreateOpen((o) => !o)}
             whileTap={{ scale: 0.985 }}
             aria-expanded={createOpen}
             aria-controls="studio-create-canvases"
             aria-label={createOpen ? "Close canvas picker" : "Create a new canvas"}
-            className="group relative flex h-11 w-full items-center justify-between gap-3 overflow-hidden rounded-xl border border-border/70 bg-card/80 pl-2 pr-3 text-[12.5px] font-medium tracking-tight text-foreground shadow-[0_4px_16px_-12px_rgba(0,0,0,0.28)] transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-foreground/25 hover:bg-card hover:shadow-[0_8px_20px_-14px_rgba(0,0,0,0.32)]"
+            className="group relative flex min-h-[58px] w-full items-center justify-between gap-3 overflow-hidden rounded-2xl border border-border/70 bg-card/80 px-2.5 text-left text-foreground shadow-[0_10px_26px_-18px_rgba(0,0,0,0.38)] transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-foreground/25 hover:bg-card hover:shadow-[0_14px_30px_-18px_rgba(0,0,0,0.42)]"
           >
             <span className="flex min-w-0 items-center gap-2.5">
               <motion.span
@@ -462,7 +466,14 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2.75} />
               </motion.span>
-              <span className="truncate">{createOpen ? "Choose a canvas" : "Create"}</span>
+              <span className="min-w-0">
+                <span className="block truncate text-[12.5px] font-semibold">
+                  {createOpen ? "Choose what to create" : "Create something new"}
+                </span>
+                <span className="mt-0.5 block truncate text-[10.5px] font-normal text-muted-foreground">
+                  Posts, articles, visuals, and more
+                </span>
+              </span>
             </span>
             <span
               className="pointer-events-none hidden shrink-0 items-center rounded-md bg-secondary/70 px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground sm:inline-flex"
@@ -480,7 +491,7 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.28, ease: EASE }}
-                className="mt-2 flex flex-col gap-1 overflow-hidden"
+                className="grid grid-cols-2 gap-1.5 overflow-hidden"
               >
                 {STUDIO_TILES.map((t, idx) => (
                   <motion.li
@@ -494,10 +505,10 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
                         openCanvas(t.id);
                         setCreateOpen(false);
                       }}
-                      className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[12px] text-foreground/80 transition-all duration-200 hover:bg-secondary/75 hover:text-foreground"
+                      className="group flex min-h-[54px] w-full items-center gap-2 rounded-xl border border-border/45 bg-card/35 px-2 text-left text-[11px] text-foreground/80 transition-all duration-200 hover:-translate-y-px hover:border-foreground/20 hover:bg-secondary/75 hover:text-foreground"
                     >
                       <span
-                        className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-border/40 transition-all duration-200 group-hover:scale-110"
+                        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-border/40 transition-all duration-200 group-hover:scale-110"
                         style={{
                           background: `linear-gradient(135deg, ${TINT_HEX[t.tint]}22, ${TINT_HEX[t.tint]}08)`,
                           boxShadow: `inset 0 0 0 1px ${TINT_HEX[t.tint]}1a`,
@@ -509,9 +520,11 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
                           style={{ color: TINT_HEX[t.tint] }}
                         />
                       </span>
-                      <span className="flex-1 truncate">{t.label}</span>
-                      <span className="rounded-full bg-secondary/60 px-1.5 py-0.5 text-[10px] text-muted-foreground/70 transition-opacity group-hover:opacity-100 opacity-0">
-                        {t.sub.split(" · ")[0]}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{t.label}</span>
+                        <span className="mt-0.5 block truncate text-[9.5px] text-muted-foreground">
+                          {t.sub.split(" · ")[0]}
+                        </span>
                       </span>
                     </button>
                   </motion.li>
@@ -521,8 +534,6 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
           </AnimatePresence>
 
           <BrandDnaCta />
-
-          <ConnectionsPanel />
 
           <ApprovalsSection
             items={approvals}
@@ -638,16 +649,28 @@ function ApprovalsSection({
   if (items.length === 0 && jobs.length === 0) {
     return (
       <section className="ui-section-gap">
-        <div className="mb-2 flex items-center gap-2 px-0.5">
-          <h3 className="ui-eyebrow text-foreground/80">Needs approval</h3>
+        <div className="mb-2.5 flex items-center gap-2 px-0.5">
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Needs your attention
+          </h3>
           <span className="rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
             0
           </span>
         </div>
-        <div className="relative overflow-hidden rounded-2xl border border-dashed border-border/50 bg-card/30 p-4">
-          <p className="text-[13px] font-medium text-foreground">You're all caught up</p>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
-            New drafts from Studio and chat will appear here for review.
+        <motion.div
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: EASE }}
+          className="relative overflow-hidden rounded-2xl border border-dashed border-border/60 bg-card/35 p-4"
+        >
+          <div className="mb-3 flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <Sparkles className="h-3.5 w-3.5" />
+            </span>
+            <p className="text-[13px] font-semibold text-foreground">You're all caught up</p>
+          </div>
+          <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+            New drafts from Studio and chat will appear here when they need your review.
           </p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             <button
@@ -675,7 +698,7 @@ function ApprovalsSection({
               Ask in chat
             </button>
           </div>
-        </div>
+        </motion.div>
       </section>
     );
   }
@@ -684,7 +707,9 @@ function ApprovalsSection({
     <section className="relative ui-section-gap">
       <div className="relative mb-2 flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2 min-w-0">
-          <h3 className="ui-eyebrow text-foreground/80">Needs approval</h3>
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Needs your attention
+          </h3>
           <motion.span
             key={totalCount}
             initial={{ scale: 0.7, opacity: 0 }}

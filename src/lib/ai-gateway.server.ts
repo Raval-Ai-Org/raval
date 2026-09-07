@@ -127,7 +127,12 @@ export class AiGatewayError extends Error {
 
 function getKey(): string {
   const k = process.env.OPENROUTER_API_KEY;
-  if (!k) throw new AiGatewayError(503, "OPENROUTER_API_KEY not configured");
+  if (!k || k === "sk-or-v1-replace-me-later") {
+    throw new AiGatewayError(503, "OPENROUTER_API_KEY is not configured with a real key");
+  }
+  if (!k.startsWith("sk-or-")) {
+    throw new AiGatewayError(503, "OPENROUTER_API_KEY has an invalid format");
+  }
   return k;
 }
 
@@ -144,7 +149,7 @@ function mapStatus(status: number, body: string): AiGatewayError {
   if (status === 401)
     return new AiGatewayError(
       401,
-      "Image provider rejected the API key. Please update OPENROUTER_API_KEY.",
+      "OpenRouter rejected the API key. Please update OPENROUTER_API_KEY.",
     );
   if (status === 402)
     return new AiGatewayError(

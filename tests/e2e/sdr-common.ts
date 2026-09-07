@@ -4,11 +4,11 @@
 // deterministic MockSDR-shaped responses, so the specs run WITHOUT a live SDR.
 import { test, expect, type Page, type Route, type BrowserContext } from "@playwright/test";
 
-export const SUPABASE_HOST = "smdravaoaeqdajmnrlpr.supabase.co";
+export const SUPABASE_HOST = "slcmqbbjzyztqyucauol.supabase.co";
 // Supabase stores the session under sb-<project-ref>-auth-token (the ref, not
 // the full host). Must match the project the dev server loads from .env
 // (SUPABASE_URL / VITE_SUPABASE_URL → smdravaoaeqdajmnrlpr).
-export const STORAGE_KEY = "sb-smdravaoaeqdajmnrlpr-auth-token";
+export const STORAGE_KEY = "sb-slcmqbbjzyztqyucauol-auth-token";
 export const WS_ID = "00000000-0000-0000-0000-000000000001";
 
 function fakeSession() {

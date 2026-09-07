@@ -50,7 +50,7 @@ import {
 } from "@/components/ui/gemini-icons";
 import { ImageLibraryModal, type ImageLibraryItemMeta } from "@/components/app/ImageLibraryModal";
 import { supabase } from "@/integrations/supabase/client";
-import { generateContentBatch } from "@/lib/content.functions";
+import { generateContentBatch, updateContentItem } from "@/lib/content.functions";
 import { logAudit, logAuditMany } from "@/lib/audit";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,7 @@ import { pageHead, webPageLd } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 import { BrandLogo, type BrandKey } from "@/components/brand/BrandLogo";
 import { toast } from "sonner";
+import { publishContentItems } from "@/lib/sdr.functions";
 import {
   Sheet,
   SheetContent,
@@ -154,6 +155,7 @@ function AgencyHQ() {
   // Compute greeting on the client only to avoid SSR/CSR hydration mismatch.
   const [greeting, setGreeting] = useState<string>("Hello");
   const generateBatchFn = useServerFn(generateContentBatch);
+  const updateContentItemFn = useServerFn(updateContentItem);
   const [autoGenBusy, setAutoGenBusy] = useState(false);
   const [approvalsFilter, setApprovalsFilter] = useState<string>("all"); // client id or "all"
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -453,11 +455,9 @@ function AgencyHQ() {
         // Route to content_items when this id belongs to a live content row.
         const isContent = contentRows.some((c) => c.id === id);
         if (isContent) {
-          const { error } = await supabase
-            .from("content_items")
-            .update({ status: decision === "approved" ? "approved" : "rejected" })
-            .eq("id", id);
-          if (error) throw error;
+          await updateContentItemFn({
+            data: { id, patch: { status: decision === "approved" ? "approved" : "rejected" } },
+          });
         } else {
           const { error } = await supabase
             .from("approvals")
@@ -499,19 +499,23 @@ function AgencyHQ() {
       return;
     }
     setBusyId(id);
-    setResolved((r) => ({ ...r, [id]: "approved" }));
     try {
       if (UUID_RE.test(id) && contentRows.some((c) => c.id === id)) {
-        const { error } = await supabase
-          .from("content_items")
-          .update({ status: "published", scheduled_at: new Date().toISOString() })
-          .eq("id", id);
-        if (error) throw error;
+        const wsId = combinedApprovals.find((a) => a.id === id)?.clientId;
+        if (!wsId) throw new Error("Workspace context is missing");
+        const result = await publishContentItems(wsId, [id], { type: "all" });
+        const outcome = result.results[0];
+        if (!outcome || outcome.status !== "publishing") {
+          throw new Error(outcome?.reason ?? "The post was not submitted");
+        }
+        setResolved((r) => ({ ...r, [id]: "approved" }));
       }
       window.dispatchEvent(new CustomEvent("content:changed"));
       const wsId = combinedApprovals.find((a) => a.id === id)?.clientId;
       if (wsId) void logAudit(wsId, "publish", id);
-      toast.success("Published", { description: "Marked live and added to recent activity." });
+      toast.success("Post submitted", {
+        description: "Publishing has started. Studio will show the live link after confirmation.",
+      });
     } catch (e: unknown) {
       setResolved((r) => {
         const n = { ...r };
@@ -565,7 +569,9 @@ function AgencyHQ() {
     const approvalIds = realIds.filter((id) => !contentIds.includes(id));
     try {
       if (contentIds.length > 0) {
-        await supabase.from("content_items").update({ status: "pending" }).in("id", contentIds);
+        await Promise.all(
+          contentIds.map((id) => updateContentItemFn({ data: { id, patch: { status: "pending" } } })),
+        );
       }
       if (approvalIds.length > 0) {
         await supabase
@@ -606,7 +612,9 @@ function AgencyHQ() {
     const approvalIds = realIds.filter((id) => !contentIds.includes(id));
     try {
       if (contentIds.length > 0) {
-        await supabase.from("content_items").update({ status: "approved" }).in("id", contentIds);
+        await Promise.all(
+          contentIds.map((id) => updateContentItemFn({ data: { id, patch: { status: "approved" } } })),
+        );
       }
       if (approvalIds.length > 0) {
         const { error } = await supabase
@@ -655,7 +663,9 @@ function AgencyHQ() {
     const approvalIds = realIds.filter((id) => !contentIds.includes(id));
     try {
       if (contentIds.length > 0) {
-        await supabase.from("content_items").update({ status: "rejected" }).in("id", contentIds);
+        await Promise.all(
+          contentIds.map((id) => updateContentItemFn({ data: { id, patch: { status: "rejected" } } })),
+        );
       }
       if (approvalIds.length > 0) {
         await supabase

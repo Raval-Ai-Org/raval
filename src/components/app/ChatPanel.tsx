@@ -822,9 +822,18 @@ export function ChatPanel({
       });
 
       if (!res.ok || !res.body) {
-        if (res.status === 429) toast.error("Rate limit hit. Wait a moment and try again.");
-        else if (res.status === 402) toast.error("AI credits exhausted.");
-        else toast.error("AI request failed");
+        const errorPayload = await res.json().catch(() => null);
+        const detail =
+          typeof errorPayload?.error === "string" ? errorPayload.error : "Please try again.";
+        if (res.status === 429) {
+          toast.error("Rate limit hit", { description: detail });
+        } else if (res.status === 402) {
+          toast.error("AI credits exhausted", { description: detail });
+        } else if (res.status === 401 || res.status === 503) {
+          toast.error("AI provider is not configured", { description: detail });
+        } else {
+          toast.error("AI request failed", { description: detail });
+        }
         setStreaming(false);
         window.dispatchEvent(new CustomEvent("chat:idle"));
         stopPreviewPlan();

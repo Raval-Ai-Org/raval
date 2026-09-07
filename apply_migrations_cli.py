@@ -10,7 +10,7 @@ import glob
 import requests
 import re
 
-PROJECT_REF = os.environ.get("SUPABASE_PROJECT_REF", "smdravaoaeqdajmnrlpr")
+PROJECT_REF = os.environ.get("SUPABASE_PROJECT_REF", "slcmqbbjzyztqyucauol")
 PROJECT_URL = f"https://{PROJECT_REF}.supabase.co"
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 

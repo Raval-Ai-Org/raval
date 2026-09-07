@@ -6,8 +6,8 @@ import { test, expect, type Route } from "@playwright/test";
  * and that the composer recovers gracefully so the user can retry.
  */
 
-const SUPABASE_HOST = "smdravaoaeqdajmnrlpr.supabase.co";
-const STORAGE_KEY = "sb-smdravaoaeqdajmnrlpr-auth-token";
+const SUPABASE_HOST = "slcmqbbjzyztqyucauol.supabase.co";
+const STORAGE_KEY = "sb-slcmqbbjzyztqyucauol-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -177,7 +177,7 @@ test.describe("Chat error handling", () => {
 
     await seed(page);
     await page.goto("/app", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Mellox AI Workspace" })).toBeVisible({
+    await expect(page.getByPlaceholder(/Ask Mellox AI/i).first()).toBeVisible({
       timeout: 15_000,
     });
     await typeAndSend(page, "First try � should hit rate limit");
@@ -226,7 +226,7 @@ test.describe("Chat error handling", () => {
 
     await seed(page);
     await page.goto("/app", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Mellox AI Workspace" })).toBeVisible({
+    await expect(page.getByPlaceholder(/Ask Mellox AI/i).first()).toBeVisible({
       timeout: 15_000,
     });
     await typeAndSend(page, "First try � should hit credits");
