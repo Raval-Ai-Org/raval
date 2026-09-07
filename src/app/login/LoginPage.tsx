@@ -160,6 +160,7 @@ function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              aria-label="Email address"
               placeholder="Email"
               className="h-12 border-0 bg-transparent px-4 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             />
@@ -175,6 +176,7 @@ function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              aria-label="Password"
               placeholder="Password"
               className="h-12 border-0 bg-transparent px-4 pr-11 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             />

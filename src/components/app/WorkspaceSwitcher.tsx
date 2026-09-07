@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
-import { Check, ChevronsUpDown, Plus, Search, LayoutGrid } from "@/components/ui/gemini-icons";
+import {
+  Check,
+  ChevronsUpDown,
+  Plus,
+  Search,
+  LayoutGrid,
+  Loader2,
+} from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -40,6 +47,7 @@ export function WorkspaceSwitcher({
   const [open, setOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(false);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
   useEffect(() => {
@@ -68,10 +76,11 @@ export function WorkspaceSwitcher({
   }, [q, workspaces]);
 
   const pick = (w: Workspace) => {
-    if (w.id === workspaceId) {
+    if (w.id === workspaceId || switchingId) {
       setOpen(false);
       return;
     }
+    setSwitchingId(w.id);
     const name = displayName(w);
     try {
       localStorage.setItem("workspace:selected", w.id);
@@ -157,8 +166,10 @@ export function WorkspaceSwitcher({
                 <button
                   key={w.id}
                   onClick={() => pick(w)}
+                  disabled={switchingId !== null}
+                  aria-busy={switchingId === w.id || undefined}
                   className={cn(
-                    "group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors",
+                    "group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors disabled:pointer-events-none disabled:opacity-60",
                     active
                       ? "bg-secondary text-foreground"
                       : "text-foreground/85 hover:bg-secondary/70",
@@ -167,9 +178,14 @@ export function WorkspaceSwitcher({
                   <WorkspaceLogo name={name} websiteUrl={w.website_url} size={28} />
 
                   <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{name}</span>
-                  {active && (
+                  {switchingId === w.id ? (
+                    <Loader2
+                      className="h-3.5 w-3.5 animate-spin text-[hsl(var(--brand-green))]"
+                      aria-hidden
+                    />
+                  ) : active ? (
                     <Check className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]" aria-hidden />
-                  )}
+                  ) : null}
                 </button>
               );
             })}

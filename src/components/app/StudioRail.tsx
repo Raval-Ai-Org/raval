@@ -440,20 +440,20 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
           </header>
         )}
 
-        <div className="relative min-h-0 flex-1 overflow-y-auto px-3.5 pt-4 pb-6 scrollbar-thin">
+        <div className="relative min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-4 scrollbar-thin">
           <motion.button
             onClick={() => setCreateOpen((o) => !o)}
             whileTap={{ scale: 0.985 }}
             aria-expanded={createOpen}
             aria-controls="studio-create-canvases"
             aria-label={createOpen ? "Close canvas picker" : "Create a new canvas"}
-            className="group relative flex h-10 w-full items-center justify-between gap-3 overflow-hidden rounded-xl border border-border/60 bg-card/60 pl-2 pr-3 text-[12.5px] font-medium tracking-tight text-foreground transition-all duration-200 hover:border-foreground/20 hover:bg-card"
+            className="group relative flex h-11 w-full items-center justify-between gap-3 overflow-hidden rounded-xl border border-border/70 bg-card/80 pl-2 pr-3 text-[12.5px] font-medium tracking-tight text-foreground shadow-[0_4px_16px_-12px_rgba(0,0,0,0.28)] transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-foreground/25 hover:bg-card hover:shadow-[0_8px_20px_-14px_rgba(0,0,0,0.32)]"
           >
             <span className="flex min-w-0 items-center gap-2.5">
               <motion.span
                 animate={{ rotate: createOpen ? 135 : 0 }}
                 transition={{ duration: 0.3, ease: EASE }}
-                className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-white shadow-[0_2px_8px_-2px_hsl(var(--brand-blue)/0.6)]"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-white shadow-[0_2px_8px_-2px_hsl(var(--brand-blue)/0.6)]"
                 style={{
                   background:
                     "linear-gradient(135deg, hsl(var(--brand-blue)), hsl(var(--brand-green)))",
@@ -494,7 +494,7 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
                         openCanvas(t.id);
                         setCreateOpen(false);
                       }}
-                      className="group flex w-full items-center gap-2.5 rounded-full px-2.5 py-1.5 text-left text-[12.5px] text-foreground/85 transition-all duration-200 hover:bg-secondary hover:text-foreground"
+                      className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[12px] text-foreground/80 transition-all duration-200 hover:bg-secondary/75 hover:text-foreground"
                     >
                       <span
                         className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-border/40 transition-all duration-200 group-hover:scale-110"
@@ -580,7 +580,7 @@ function BrandDnaCta() {
   useEffect(() => {
     const read = () => {
       try {
-        const wsId = localStorage.getItem("workspace:active") || "";
+        const wsId = localStorage.getItem("workspace:selected") || "";
         const keys = wsId
           ? [`brand-dna:v3:${wsId}`, `brand-dna:v2:${wsId}`, `brand-dna:${wsId}`]
           : [];
@@ -611,7 +611,7 @@ function BrandDnaCta() {
       onClick={() =>
         window.dispatchEvent(new CustomEvent("open:brand-dna", { detail: { tab: "essentials" } }))
       }
-      className="mt-2 flex w-full items-center gap-2 rounded-xl border border-dashed border-brand-green/40 bg-brand-green/5 px-2.5 py-2 text-left text-[11.5px] font-medium text-foreground/80 transition hover:border-brand-green/70 hover:bg-brand-green/10"
+      className="mt-2 flex min-h-10 w-full items-center gap-2 rounded-xl border border-dashed border-brand-green/40 bg-brand-green/5 px-2.5 py-2 text-left text-[11.5px] font-medium text-foreground/80 transition hover:border-brand-green/70 hover:bg-brand-green/10"
     >
       <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-brand-green/15 text-brand-green">
         <Sparkles className="h-3 w-3" strokeWidth={2.5} />
@@ -718,10 +718,10 @@ function ApprovalsSection({
               >
                 <div
                   onClick={() => openCanvas(it.canvas, it.id, it.mode)}
-                  className="group @container/card relative flex w-full cursor-pointer flex-col gap-2.5 overflow-hidden rounded-2xl border border-border/60 bg-card p-3 text-left transition-all duration-200 hover:border-border hover:bg-card hover:shadow-[0_4px_16px_-6px_rgba(0,0,0,0.08)]"
+                  className="group @container/card relative flex w-full cursor-pointer flex-col gap-2 overflow-hidden rounded-xl border border-border/60 bg-card/75 p-2.5 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-foreground/20 hover:bg-card hover:shadow-[0_6px_18px_-10px_rgba(0,0,0,0.16)]"
                 >
                   {/* Top: thumbnail + meta */}
-                  <div className="flex min-w-0 items-start gap-2.5">
+                  <div className="flex min-w-0 items-start gap-2">
                     <Thumbnail type={it.canvas} color={color} postId={it.id} />
                     <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
                       <div className="flex min-w-0 items-center gap-1.5">
@@ -748,7 +748,7 @@ function ApprovalsSection({
                   </div>
 
                   {/* Actions row — full width, responsive, wraps on narrow rails */}
-                  <div className="flex flex-wrap items-center gap-1 border-t border-border/50 pt-2">
+                  <div className="flex flex-wrap items-center gap-1 border-t border-border/50 pt-1.5">
                     <motion.button
                       whileTap={{ scale: 0.95 }}
                       onClick={(e) => {
@@ -986,7 +986,9 @@ function Section({
         )}
       </div>
       {items.length === 0 ? (
-        <p className="ui-empty-body px-1">{empty}</p>
+        <div className="rounded-xl border border-dashed border-border/50 bg-card/20 px-3 py-3">
+          <p className="ui-empty-body px-0">{empty}</p>
+        </div>
       ) : (
         <ul className="flex flex-col gap-0.5">
           {items.map((it, idx) => {
@@ -1165,7 +1167,7 @@ function SuggestionsSection() {
               >
                 <div
                   className={cn(
-                    "group relative grid min-h-[72px] grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-2.5 overflow-hidden rounded-2xl border border-border/50 bg-card/60 px-3 py-2.5 transition-all duration-200 hover:border-border hover:bg-card",
+                    "group relative grid min-h-[64px] grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-2 overflow-hidden rounded-xl border border-border/50 bg-card/60 px-2.5 py-2 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-px hover:border-border hover:bg-card",
                   )}
                 >
                   <span

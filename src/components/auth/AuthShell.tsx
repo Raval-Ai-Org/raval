@@ -67,9 +67,9 @@ export function AuthShell({
         </aside>
 
         {/* Form pane */}
-        <section className="relative flex items-center justify-center px-2 py-8 sm:px-6">
-          <div className="w-full max-w-[400px]">
-            <div className="mb-8 flex justify-center lg:hidden">
+        <section className="relative flex items-center justify-center px-3 py-7 sm:px-6 sm:py-10">
+          <div className="w-full max-w-[360px]">
+            <div className="mb-7 flex justify-center lg:hidden">
               <Logo height={30} />
             </div>
 
@@ -82,7 +82,7 @@ export function AuthShell({
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1, duration: 0.6, ease }}
-                className="font-display mb-8 text-center text-[28px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground"
+                className="font-display mb-7 text-center text-[28px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground"
               >
                 {title}
               </motion.h2>
@@ -104,7 +104,7 @@ export function AuthShell({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5, duration: 0.6 }}
-              className="mt-8"
+              className="mt-7"
             >
               {footer}
             </motion.div>

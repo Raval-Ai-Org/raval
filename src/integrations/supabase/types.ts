@@ -148,34 +148,92 @@ export type Database = {
       chat_messages: {
         Row: {
           content: string;
+          conversation_id: string | null;
           created_at: string;
           id: string;
           kind: string;
+          metadata: Json;
           payload: Json;
           role: string;
+          status: string;
+          user_id: string | null;
           workspace_id: string;
         };
         Insert: {
           content?: string;
+          conversation_id?: string | null;
           created_at?: string;
           id?: string;
           kind?: string;
+          metadata?: Json;
           payload?: Json;
           role: string;
+          status?: string;
+          user_id?: string | null;
           workspace_id: string;
         };
         Update: {
           content?: string;
+          conversation_id?: string | null;
           created_at?: string;
           id?: string;
           kind?: string;
+          metadata?: Json;
           payload?: Json;
           role?: string;
+          status?: string;
+          user_id?: string | null;
           workspace_id?: string;
         };
         Relationships: [
           {
             foreignKeyName: "chat_messages_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      conversations: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          created_by: string | null;
+          title: string;
+          preview: string | null;
+          summary: string;
+          metadata: Json;
+          is_pinned: boolean;
+          archived_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          created_by?: string | null;
+          title?: string;
+          preview?: string | null;
+          summary?: string;
+          metadata?: Json;
+          is_pinned?: boolean;
+          archived_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          preview?: string | null;
+          summary?: string;
+          metadata?: Json;
+          is_pinned?: boolean;
+          archived_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversations_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";

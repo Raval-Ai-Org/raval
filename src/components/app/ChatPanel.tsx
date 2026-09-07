@@ -83,6 +83,7 @@ type Msg = {
   role: "user" | "assistant" | "system";
   kind: "text" | "approval" | "progress" | "reminder" | "clarify" | "actions";
   content: string;
+  status?: "sending" | "streaming" | "completed" | "failed" | "cancelled";
   payload?: any;
 };
 
@@ -177,14 +178,17 @@ const MODELS: { id: string; label: string; hint: string }[] = [
 
 export function ChatPanel({
   workspaceId,
+  conversationId = null,
   variant = "rail",
   mobileAccessory,
 }: {
   workspaceId: string;
+  conversationId?: string | null;
   variant?: "rail" | "centered";
   mobileAccessory?: ReactNode;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [clarifying, setClarifying] = useState(false);
@@ -287,6 +291,9 @@ export function ChatPanel({
   };
 
   const navigate = useNavigate();
+  const conversationRef = useRef<string | null>(conversationId);
+  const preserveMessagesOnRouteRef = useRef(false);
+  const skipNextHistoryLoadRef = useRef(false);
   const { isOn } = useAgentToggles();
   const { dna, save: saveDna } = useBrandDna(workspaceId);
   const dnaRef = useRef(dna);
@@ -305,7 +312,7 @@ export function ChatPanel({
     syncingMemoryRef.current = true;
     try {
       const { syncMemoryFromChat } = await import("@/lib/memory-sync");
-      const res = await syncMemoryFromChat(workspaceId, current, saveDna);
+      const res = await syncMemoryFromChat(workspaceId, current, saveDna, conversationRef.current);
       if (res.added > 0) {
         toast.success(`Memory updated · ${res.added} new insight${res.added > 1 ? "s" : ""}`);
       }
@@ -337,68 +344,84 @@ export function ChatPanel({
     [reducedMotion],
   );
 
-  // Pending onboarding prompt: filled from workspaces.first_prompt on mount,
-  // then consumed exactly once by the auto-send effect further below.
-  const [pendingFirstPrompt, setPendingFirstPrompt] = useState<string | null>(null);
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
-  // True from the moment we consume the onboarding prompt until the resulting
-  // send() promise settles. Drives the auto-send banner + composer lock so the
-  // user sees a clear "kicking things off" state instead of an idle empty chat.
-  const [autoSending, setAutoSending] = useState(false);
-  // When the onboarding pipeline fails/times out even after auto-retries, we
-  // surface a "Send again" button in the empty state and store the reason.
-  const [autoSendError, setAutoSendError] = useState<string | null>(null);
-  const [autoSendAttempt, setAutoSendAttempt] = useState(0);
-  const autoSendPromptRef = useRef<string | null>(null);
-  const AUTO_SEND_TIMEOUT_MS = 60_000;
-  const AUTO_SEND_MAX_RETRIES = 2;
-  const firstPromptFiredRef = useRef(false);
-  // Per-workspace persistent lock so a remount / hot-reload / route bounce
-  // can never re-fire the same onboarding prompt.
-  const firstPromptLockKey = `raval:first-prompt-fired:${workspaceId}`;
+  useEffect(() => {
+    conversationRef.current = conversationId;
+    if (preserveMessagesOnRouteRef.current) preserveMessagesOnRouteRef.current = false;
+    else setMessages([]);
+    setInput("");
+  }, [conversationId]);
 
   useEffect(() => {
-    // Reset guards when the workspace changes so a new workspace can fire once.
-    firstPromptFiredRef.current = false;
-    setMessagesLoaded(false);
-    setPendingFirstPrompt(null);
-    setAutoSending(false);
-    setAutoSendError(null);
-    setAutoSendAttempt(0);
-    autoSendPromptRef.current = null;
+    void supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
 
-    supabase
-      .from("chat_messages")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .order("created_at", { ascending: true })
-      .limit(50)
-      .then(({ data }) => {
-        if (data) setMessages(data as any);
-        setMessagesLoaded(true);
+  const titleFromPrompt = (prompt: string) => {
+    const clean = prompt
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/[.!?]+$/, "");
+    if (!clean) return "New chat";
+    const words = clean.split(" ").slice(0, 8);
+    const title = words.join(" ");
+    return title.length > 58 ? `${title.slice(0, 55).trimEnd()}...` : title;
+  };
+
+  const ensureConversation = async (firstPrompt?: string) => {
+    if (conversationRef.current) return conversationRef.current;
+    const { data, error } = await supabase
+      .from("conversations")
+      .insert({
+        workspace_id: workspaceId,
+        title: firstPrompt ? titleFromPrompt(firstPrompt) : "New chat",
+      })
+      .select("id")
+      .single();
+    if (error || !data?.id) {
+      console.error("conversation creation failed", {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
       });
+      if (error?.code === "PGRST205" || error?.code === "42P01") {
+        throw new Error("Chat storage is not initialized. Apply the latest Supabase migration.");
+      }
+      throw new Error(error?.message || "Could not start a conversation");
+    }
+    conversationRef.current = data.id;
+    preserveMessagesOnRouteRef.current = true;
+    skipNextHistoryLoadRef.current = true;
+    navigate({ to: `/app/chat/${data.id}`, replace: true });
+    window.dispatchEvent(new CustomEvent("chat:conversation-changed"));
+    return data.id;
+  };
+
+  useEffect(() => {
+    if (conversationId) {
+      if (skipNextHistoryLoadRef.current) {
+        skipNextHistoryLoadRef.current = false;
+        return;
+      }
+      supabase
+        .from("chat_messages")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true })
+        .limit(100)
+        .then(({ data }) => {
+          if (data) {
+            setMessages((current) => (current.length === 0 ? (data as any) : current));
+          }
+        });
+    }
     supabase
       .from("workspaces")
-      .select("website_url, first_prompt")
+      .select("website_url")
       .eq("id", workspaceId)
       .maybeSingle()
       .then(({ data }) => {
         setSiteUrl(data?.website_url ?? null);
-        const fp = (data as any)?.first_prompt?.trim?.() ?? "";
-        // Only surface it if the persistent lock hasn't already been set.
-        let locked = false;
-        try {
-          locked =
-            typeof window !== "undefined" &&
-            window.localStorage.getItem(firstPromptLockKey) === "1";
-        } catch {
-          /* noop */
-        }
-        if (fp && !locked) setPendingFirstPrompt(fp);
-        else if (fp && locked) {
-          // Stale flag left on the row — clear it so it won't be re-read later.
-          void supabase.from("workspaces").update({ first_prompt: null }).eq("id", workspaceId);
-        }
       });
     // Pull workspace activity so the chat can answer "what's pending / what did we publish" with real data.
     supabase
@@ -457,12 +480,21 @@ export function ChatPanel({
         const lines = data.map((a: any) => `- [${a.kind}] ${a.title}: ${a.detail ?? ""}`);
         setCompetitorSummary(lines.join("\n"));
       });
-  }, [workspaceId, firstPromptLockKey]);
+  }, [workspaceId, conversationId]);
 
   useEffect(() => {
     messagesRef.current = messages;
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+    const container = scrollRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom < 160) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: streaming ? "auto" : "smooth",
+      });
+    }
+  }, [messages, streaming]);
 
   // Hero-suggested prompts prefill the composer; ⌘K dispatches chat:focus.
   useEffect(() => {
@@ -874,9 +906,20 @@ export function ChatPanel({
         console.warn("tool parse failed", e);
       }
 
-      await supabase
-        .from("chat_messages")
-        .insert({ workspace_id: workspaceId, role: "assistant", kind: "text", content: acc });
+      const activeConversationId = conversationRef.current;
+      if (activeConversationId) {
+        await supabase.from("chat_messages").insert({
+          id: aId,
+          workspace_id: workspaceId,
+          conversation_id: activeConversationId,
+          user_id: userId,
+          role: "assistant",
+          kind: "text",
+          content: acc,
+          status: "completed",
+        });
+        window.dispatchEvent(new CustomEvent("chat:conversation-changed"));
+      }
     } catch {
       toast.error("Connection lost");
       stopPreviewPlan();
@@ -920,11 +963,16 @@ export function ChatPanel({
       content: userClarification,
     };
     setMessages((m) => [...m, synthetic]);
+    const activeConversationId = await ensureConversation();
     await supabase.from("chat_messages").insert({
+      id: synthetic.id,
       workspace_id: workspaceId,
+      conversation_id: activeConversationId,
+      user_id: userId,
       role: "user",
       kind: "text",
       content: userClarification,
+      status: "completed",
     });
 
     // Rebuild history from current state + new turn.
@@ -959,6 +1007,26 @@ export function ChatPanel({
     const displayContent = [attachSummary, visibleText].filter(Boolean).join("\n\n");
     const wireContent = [ctx, visibleText].filter(Boolean).join("\n\n");
 
+    let activeConversationId: string;
+    try {
+      activeConversationId = await ensureConversation(text || visibleText);
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message.includes("not initialized")
+          ? "Chat storage is not initialized"
+          : "Could not start this conversation",
+        {
+          description:
+            error instanceof Error && error.message.includes("not initialized")
+              ? "Apply the latest Supabase migration, then refresh Mellox."
+              : error instanceof Error
+                ? error.message
+                : "Please refresh and try again.",
+        },
+      );
+      return;
+    }
+
     const userMsg: Msg = {
       id: crypto.randomUUID(),
       role: "user",
@@ -971,9 +1039,23 @@ export function ChatPanel({
 
     recordTokens(Math.ceil(wireContent.length / 4));
 
-    await supabase
-      .from("chat_messages")
-      .insert({ workspace_id: workspaceId, role: "user", kind: "text", content: displayContent });
+    await supabase.from("chat_messages").insert({
+      id: userMsg.id,
+      workspace_id: workspaceId,
+      conversation_id: activeConversationId,
+      user_id: userId,
+      role: "user",
+      kind: "text",
+      content: displayContent,
+      status: "completed",
+    });
+    if (messages.length === 0) {
+      void supabase
+        .from("conversations")
+        .update({ title: titleFromPrompt(text || visibleText) })
+        .eq("id", activeConversationId);
+    }
+    window.dispatchEvent(new CustomEvent("chat:conversation-changed"));
 
     // Stash the wire content on the msg for history construction below.
     (userMsg as any)._wire = wireContent;
@@ -1035,137 +1117,6 @@ export function ChatPanel({
     await runChatStream(history);
   };
 
-  // Run the onboarding prompt through send() with a timeout and detect whether
-  // an assistant reply (or clarify card) actually landed. Returns true on
-  // success so the caller can decide whether to retry.
-  const runAutoSendOnce = async (prompt: string): Promise<boolean> => {
-    const beforeAssistant = messagesRef.current.filter(
-      (m) => m.role === "assistant" && (m.kind === "text" || m.kind === "clarify"),
-    ).length;
-
-    let timedOut = false;
-    const timeoutP = new Promise<void>((resolve) => {
-      window.setTimeout(() => {
-        timedOut = true;
-        resolve();
-      }, AUTO_SEND_TIMEOUT_MS);
-    });
-
-    try {
-      await Promise.race([send(prompt), timeoutP]);
-    } catch {
-      return false;
-    }
-    if (timedOut) return false;
-
-    const afterAssistant = messagesRef.current.filter(
-      (m) => m.role === "assistant" && (m.kind === "text" || m.kind === "clarify"),
-    );
-    if (afterAssistant.length <= beforeAssistant) return false;
-    const last = afterAssistant[afterAssistant.length - 1];
-    // Clarify card is a valid outcome (waiting on user). A text reply must be non-empty.
-    if (last.kind === "clarify") return true;
-    return typeof last.content === "string" && last.content.trim().length > 0;
-  };
-
-  // Drive the onboarding prompt with automatic retries + a manual fallback.
-  const runAutoSendWithRetries = async (prompt: string) => {
-    autoSendPromptRef.current = prompt;
-    setAutoSendError(null);
-    setAutoSending(true);
-    let lastError: string | null = null;
-    for (let attempt = 1; attempt <= AUTO_SEND_MAX_RETRIES + 1; attempt++) {
-      setAutoSendAttempt(attempt);
-      try {
-        const ok = await runAutoSendOnce(prompt);
-        if (ok) {
-          setAutoSending(false);
-          setAutoSendError(null);
-          return;
-        }
-        lastError = "The request didn't complete in time.";
-      } catch (e: any) {
-        lastError = e?.message ?? "Something went wrong sending your first prompt.";
-      }
-      if (attempt <= AUTO_SEND_MAX_RETRIES) {
-        // Exponential backoff: 1.2s, 2.4s
-        const delay = 1200 * attempt;
-        toast.message(`Retrying your first prompt… (attempt ${attempt + 1})`);
-        await new Promise((r) => window.setTimeout(r, delay));
-        // Remove any half-written empty assistant bubble from the failed attempt
-        // so the retry starts from a clean tail.
-        setMessages((m) => {
-          const idx = [...m]
-            .reverse()
-            .findIndex((x) => x.role === "assistant" && x.kind === "text" && !x.content?.trim());
-          if (idx === -1) return m;
-          const realIdx = m.length - 1 - idx;
-          return m.slice(0, realIdx).concat(m.slice(realIdx + 1));
-        });
-      }
-    }
-    setAutoSending(false);
-    setAutoSendError(lastError ?? "Send failed. You can try again below.");
-    toast.error("Couldn't send onboarding prompt", { description: "Tap Send again to retry." });
-  };
-
-  const resendOnboardingPrompt = () => {
-    const prompt = autoSendPromptRef.current;
-    if (!prompt || autoSending || streaming || clarifying) return;
-    void runAutoSendWithRetries(prompt);
-  };
-
-  // Auto-run the onboarding first prompt through the real chat pipeline
-  // (clarify → stream → assistant reply). Guarded so it only fires when:
-  //   1. initial messages have loaded,
-  //   2. the chat is truly empty (no prior messages of any kind),
-  //   3. we haven't already fired this workspace's prompt in this tab, and
-  //   4. the persistent per-workspace lock in localStorage is not set.
-  useEffect(() => {
-    if (!pendingFirstPrompt || firstPromptFiredRef.current) return;
-    if (!messagesLoaded) return;
-    if (messages.length > 0) {
-      // Chat already has content — treat the flag as consumed and clear it so
-      // it can never re-fire on a later remount.
-      firstPromptFiredRef.current = true;
-      try {
-        window.localStorage.setItem(firstPromptLockKey, "1");
-      } catch {
-        /* noop */
-      }
-      void supabase.from("workspaces").update({ first_prompt: null }).eq("id", workspaceId);
-      setPendingFirstPrompt(null);
-      return;
-    }
-    if (streaming || clarifying) return;
-
-    firstPromptFiredRef.current = true;
-    try {
-      window.localStorage.setItem(firstPromptLockKey, "1");
-    } catch {
-      /* noop */
-    }
-
-    // Clear the flag on the workspace so a refresh from another tab doesn't re-fire it.
-    void supabase.from("workspaces").update({ first_prompt: null }).eq("id", workspaceId);
-
-    const prompt = pendingFirstPrompt;
-    setPendingFirstPrompt(null);
-    // Fire on a microtask so the state updates above commit first.
-    void Promise.resolve().then(() => {
-      void runAutoSendWithRetries(prompt);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    pendingFirstPrompt,
-    messagesLoaded,
-    messages.length,
-    workspaceId,
-    streaming,
-    clarifying,
-    firstPromptLockKey,
-  ]);
-
   const empty = messages.length === 0;
 
   const centered = variant === "centered";
@@ -1181,82 +1132,7 @@ export function ChatPanel({
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-auto scrollbar-thin">
         <div className={centered ? "mx-auto w-full max-w-3xl" : ""}>
-          {autoSending && empty ? (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-              <motion.div
-                initial={reducedMotion ? false : { scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={
-                  reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 200, damping: 20 }
-                }
-                className="relative mb-5"
-                aria-live="polite"
-                aria-busy="true"
-              >
-                <span
-                  className="absolute -inset-8 -z-10 rounded-full blur-3xl opacity-60 animate-pulse"
-                  style={{
-                    background:
-                      "radial-gradient(50% 50% at 50% 50%, hsl(var(--brand-green) / 0.35), transparent 70%)",
-                  }}
-                  aria-hidden
-                />
-                <div className="relative grid h-14 w-14 place-items-center rounded-2xl border border-border/70 bg-card/70 backdrop-blur">
-                  <Loader2
-                    className="h-6 w-6 animate-spin text-[hsl(var(--brand-green))]"
-                    aria-hidden
-                  />
-                </div>
-              </motion.div>
-              <h2 className="text-[18px] font-semibold tracking-tight text-foreground">
-                {autoSendAttempt > 1
-                  ? `Retrying your first request… (attempt ${autoSendAttempt})`
-                  : "Kicking off your first request…"}
-              </h2>
-              <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-muted-foreground">
-                Mellox AI is reading your brand context and preparing an answer. This takes a few
-                seconds.
-              </p>
-              <div className="mt-5 flex items-center gap-1.5" aria-hidden>
-                <span
-                  className="h-1.5 w-1.5 animate-bounce rounded-full bg-[hsl(var(--brand-green))]"
-                  style={{ animationDelay: "0ms" }}
-                />
-                <span
-                  className="h-1.5 w-1.5 animate-bounce rounded-full bg-[hsl(var(--brand-green))]"
-                  style={{ animationDelay: "150ms" }}
-                />
-                <span
-                  className="h-1.5 w-1.5 animate-bounce rounded-full bg-[hsl(var(--brand-green))]"
-                  style={{ animationDelay: "300ms" }}
-                />
-              </div>
-            </div>
-          ) : autoSendError && empty && autoSendPromptRef.current ? (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-              <div className="relative mb-5 grid h-14 w-14 place-items-center rounded-2xl border border-amber-500/40 bg-amber-500/10">
-                <AlertTriangle className="h-6 w-6 text-amber-500" aria-hidden />
-              </div>
-              <h2 className="text-[18px] font-semibold tracking-tight text-foreground">
-                We couldn't send your first prompt
-              </h2>
-              <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-muted-foreground">
-                {autoSendError} We already retried automatically a couple of times.
-              </p>
-              <div className="mt-2 max-w-xs rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-left text-[12px] text-muted-foreground">
-                <span className="font-medium text-foreground">Your prompt:</span>{" "}
-                {autoSendPromptRef.current}
-              </div>
-              <button
-                onClick={resendOnboardingPrompt}
-                disabled={autoSending || streaming || clarifying}
-                className="mt-5 inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[13px] font-medium text-background transition hover:opacity-90 active:scale-95 disabled:opacity-50"
-              >
-                <ArrowUp className="h-3.5 w-3.5 rotate-45" aria-hidden />
-                Send again
-              </button>
-            </div>
-          ) : empty ? (
+          {empty ? (
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <motion.div
                 initial={reducedMotion ? false : { scale: 0.9, opacity: 0 }}
@@ -1590,7 +1466,6 @@ export function ChatPanel({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={autoSending}
                 className="prompt-chip chat-focus shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                 data-icon-only="true"
                 aria-label="Attach file"
@@ -1619,20 +1494,14 @@ export function ChatPanel({
                     !composing
                   ) {
                     e.preventDefault();
-                    if (!autoSending) send();
+                    send();
                   }
                 }}
                 onPaste={onPaste}
                 placeholder={
-                  autoSending
-                    ? "Sending your onboarding prompt…"
-                    : attachments.length
-                      ? "Add a question about the file(s)…"
-                      : "Ask Mellox AI"
+                  attachments.length ? "Add a question about the file(s)…" : "Ask Mellox AI"
                 }
                 rows={1}
-                disabled={autoSending}
-                aria-busy={autoSending}
                 aria-keyshortcuts="Enter Shift+Enter"
                 title="Enter to send · Shift+Enter for new line"
                 className="flex-1 resize-none bg-transparent px-2 py-2 text-[16px] leading-6 outline-none placeholder:text-muted-foreground placeholder:font-normal disabled:cursor-not-allowed disabled:opacity-60 min-h-[40px] self-center"
@@ -1640,43 +1509,19 @@ export function ChatPanel({
 
               <button
                 onClick={() => {
-                  if (!autoSending) send();
+                  send();
                 }}
-                disabled={autoSending || (!input.trim() && !attachments.length && !streaming)}
-                aria-label={
-                  autoSending
-                    ? "Sending onboarding prompt"
-                    : streaming
-                      ? "Stop generating"
-                      : "Send message"
-                }
-                aria-busy={autoSending}
-                data-loading={autoSending ? "true" : undefined}
+                disabled={!input.trim() && !attachments.length && !streaming}
+                aria-label={streaming ? "Stop generating" : "Send message"}
                 className="prompt-send chat-focus shrink-0"
               >
-                {autoSending ? (
-                  <Mi name="progress_activity" size={20} weight="bold" aria-hidden />
-                ) : streaming ? (
+                {streaming ? (
                   <Mi name="stop" size={20} weight="bold" filled />
                 ) : (
                   <Mi name="arrow_upward" size={22} weight="bold" />
                 )}
               </button>
             </div>
-
-            {autoSending && (
-              <div
-                className="mx-2 mt-2 flex items-center gap-2.5 rounded-full border border-border/50 bg-card/50 px-3 py-1.5"
-                role="status"
-                aria-live="polite"
-              >
-                <span className="composer-pulse-dot" aria-hidden />
-                <span className="composer-shimmer-text text-[11.5px] font-medium">
-                  Sending your first prompt to Mellox AI…
-                </span>
-                <span className="composer-skel ml-auto h-1.5 w-24" aria-hidden />
-              </div>
-            )}
           </div>
           {dragging && (
             <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/60 bg-primary/10 backdrop-blur-sm">

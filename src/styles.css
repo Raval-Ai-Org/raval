@@ -402,6 +402,26 @@
     scroll-behavior: auto !important;
     will-change: auto !important;
   }
+  /* Utility hover transforms (for example buttons and tabs) must also
+     respect reduced motion, even when they do not use a named hover class. */
+  :where(
+    button,
+    a,
+    [role="button"],
+    [role="tab"],
+    [role="menuitem"],
+    summary
+  ):hover,
+  :where(
+    button,
+    a,
+    [role="button"],
+    [role="tab"],
+    [role="menuitem"],
+    summary
+  ):active {
+    transform: none !important;
+  }
   /* Suppress ambient / decorative loops entirely. */
   .animate-marquee,
   .animate-pulse,
@@ -524,12 +544,12 @@ body {
   [tabindex]:not([tabindex="-1"])
 ) {
   transition:
-    background-color 0.18s cubic-bezier(0.2, 0.7, 0.2, 1),
-    color 0.18s cubic-bezier(0.2, 0.7, 0.2, 1),
-    border-color 0.18s cubic-bezier(0.2, 0.7, 0.2, 1),
-    box-shadow 0.2s cubic-bezier(0.2, 0.7, 0.2, 1),
-    opacity 0.18s ease,
-    transform 0.18s cubic-bezier(0.2, 0.7, 0.2, 1);
+    background-color var(--motion-duration-base) var(--motion-ease-standard),
+    color var(--motion-duration-base) var(--motion-ease-standard),
+    border-color var(--motion-duration-base) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-medium) var(--motion-ease-standard),
+    opacity var(--motion-duration-base) var(--motion-ease-standard),
+    transform var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 /* Canonical focus ring — neutral, low-contrast halo. No brand-green tint. */

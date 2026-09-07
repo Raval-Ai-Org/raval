@@ -31,7 +31,7 @@ export function GenerationQueueRow({ job }: { job: GenJob }) {
       transition={{ type: "spring", stiffness: 320, damping: 24 }}
     >
       <div
-        className="group relative flex w-full items-stretch gap-3 overflow-hidden rounded-3xl border border-border/60 bg-card p-2.5 text-left"
+        className="group relative flex w-full items-stretch gap-2.5 overflow-hidden rounded-xl border border-border/60 bg-card/80 p-2.5 text-left shadow-[0_4px_18px_-12px_rgba(0,0,0,0.22)]"
         style={{ boxShadow: `0 2px 14px -6px ${color}33` }}
       >
         {/* Soft breathing aura behind the row */}
@@ -57,7 +57,7 @@ export function GenerationQueueRow({ job }: { job: GenJob }) {
 
         {/* Animated thumbnail — NotebookLM-style breathing orb + wave bars */}
         <div
-          className="relative h-[60px] w-[60px] shrink-0 overflow-hidden rounded-2xl"
+          className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-xl"
           style={{
             background: `linear-gradient(135deg, ${color}30, ${color}08)`,
             boxShadow: `inset 0 0 0 1px ${color}26`,

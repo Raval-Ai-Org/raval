@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { renameWorkspace, getWorkspaceDetails } from "@/lib/workspaces.functions";
 import { Github, Globe, Plug, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 
 type Props = {
   workspaceId: string | null;
@@ -267,36 +268,43 @@ function SettingsDialog({
     <AppModalShell
       open={open}
       onOpenChange={onOpenChange}
-      size="sm"
+      size="md"
       Icon={Settings2}
       eyebrow="Preferences"
       title="Settings"
-      description="Tune how Mellox AI behaves on this device."
-      bodyClassName="px-5 py-5 sm:px-6"
+      description="Manage workspace connections and tune how Mellox AI behaves on this device."
+      bodyClassName="space-y-6 px-5 py-5 sm:px-6"
     >
-      <ul className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card/40">
-        <ToggleRow
-          label="Approval notifications"
-          description="Toast me when an agent needs a sign-off."
-          checked={notifications}
-          onChange={(v) => {
-            setNotifications(v);
-            save("settings:notifications", v);
-          }}
-        />
-        <ToggleRow
-          label="Interface sounds"
-          description="Subtle chimes when actions complete."
-          checked={sounds}
-          onChange={(v) => {
-            setSounds(v);
-            save("settings:sounds", v);
-          }}
-        />
-      </ul>
-      <p className="mt-3 text-[11.5px] text-muted-foreground">
-        Need theme controls? Open the workspace menu → Appearance.
-      </p>
+      <SocialAccountsSection variant="settings" />
+
+      <div className="border-t border-border/70 pt-5">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Workspace preferences
+        </p>
+        <ul className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card/40">
+          <ToggleRow
+            label="Approval notifications"
+            description="Toast me when an agent needs a sign-off."
+            checked={notifications}
+            onChange={(v) => {
+              setNotifications(v);
+              save("settings:notifications", v);
+            }}
+          />
+          <ToggleRow
+            label="Interface sounds"
+            description="Subtle chimes when actions complete."
+            checked={sounds}
+            onChange={(v) => {
+              setSounds(v);
+              save("settings:sounds", v);
+            }}
+          />
+        </ul>
+        <p className="mt-3 text-[11.5px] text-muted-foreground">
+          Need theme controls? Open the workspace menu → Appearance.
+        </p>
+      </div>
       <div className="mt-4 flex justify-end">
         <Button onClick={() => onOpenChange(false)}>Done</Button>
       </div>

@@ -35,14 +35,17 @@ export async function syncMemoryFromChat(
   workspaceId: string,
   dna: BrandDna,
   save: (next: Partial<BrandDna>) => void,
+  conversationId?: string | null,
 ): Promise<{ added: number; skipped?: string }> {
   // Pull recent chat history from Supabase (RLS-scoped).
-  const { data, error } = await supabase
+  let historyQuery = supabase
     .from("chat_messages")
     .select("role,content,created_at")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: true })
     .limit(60);
+  if (conversationId) historyQuery = historyQuery.eq("conversation_id", conversationId);
+  const { data, error } = await historyQuery;
 
   if (error || !data || data.length === 0) {
     return { added: 0, skipped: "no chat history" };

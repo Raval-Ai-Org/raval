@@ -282,6 +282,8 @@ async function ddgSearch(
 
 export const dynamic = "force-dynamic";
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function POST(request: Request) {
   const auth = await requireUserId(request);
   if (!auth.ok) return auth.response;
@@ -540,29 +542,45 @@ ${schemaHint}`;
         }, 800);
 
         let extracted: Partial<Brand> = {};
+        let lastAiError: unknown = null;
         try {
-          const json: any = await extractionCompletion({
-            messages: [
-              { role: "system", content: sys },
-              { role: "user", content: userMsg },
-            ],
-            response_format: { type: "json_object" },
-          });
-          clearInterval(heartbeat);
-          const text = json?.choices?.[0]?.message?.content ?? "{}";
-          try {
-            extracted = JSON.parse(text);
-          } catch {
-            const m = text.match(/\{[\s\S]*\}/);
-            if (m) extracted = JSON.parse(m[0]);
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              const json: any = await extractionCompletion({
+                messages: [
+                  { role: "system", content: sys },
+                  { role: "user", content: userMsg },
+                ],
+                response_format: { type: "json_object" },
+              });
+              const text = json?.choices?.[0]?.message?.content ?? "{}";
+              try {
+                extracted = JSON.parse(text);
+              } catch {
+                const m = text.match(/\{[\s\S]*\}/);
+                if (m) extracted = JSON.parse(m[0]);
+              }
+              if (Object.keys(extracted).length > 0) break;
+              throw new Error("The AI returned an empty brand profile.");
+            } catch (error) {
+              lastAiError = error;
+              if (attempt === 0) {
+                progress("analyze", "AI synthesis was interrupted — retrying securely", 84);
+                await wait(900);
+              }
+            }
           }
+          if (Object.keys(extracted).length === 0)
+            throw lastAiError ?? new Error("Extraction failed");
         } catch (e) {
           clearInterval(heartbeat);
           console.error("brand-extract ai error", e);
-          const msg = e instanceof AiGatewayError ? e.message : "Extraction failed";
+          const msg = e instanceof AiGatewayError ? e.message : "Extraction failed after a retry";
           send({ type: "error", error: msg });
           controller.close();
           return;
+        } finally {
+          clearInterval(heartbeat);
         }
 
         progress("finalize", "Merging signals & writing memory", 95);

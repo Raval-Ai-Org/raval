@@ -843,7 +843,7 @@ function AgencyHQ() {
       );
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Mellox AI · Weekly digest — ${esc(dateLabel)}</title>
 <style>
-  *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;color:#0b0f0d;margin:40px;line-height:1.5}
+  *{box-sizing:border-box}body{font-family:"Google Sans Flex","Segoe UI","Helvetica Neue",Arial,sans-serif;color:#0b0f0d;margin:40px;line-height:1.5}
   h1{font-size:22px;margin:0 0 4px;letter-spacing:-0.01em}
   .sub{color:#5b6660;font-size:13px;margin-bottom:24px}
   .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:28px}

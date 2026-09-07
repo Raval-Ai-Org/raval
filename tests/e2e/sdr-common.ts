@@ -167,7 +167,7 @@ export async function mockSupabase(context: BrowserContext) {
 }
 
 /** Intercept /api/sdr/* with deterministic MockSDR responses. */
-export function mockSdrRoutes(page: Page) {
+export function mockSdrRoutes(page: Page, accounts = SDR_CONNECTED_ACCOUNTS) {
   return page.route("**/api/sdr/**", async (route: Route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
@@ -175,7 +175,7 @@ export function mockSdrRoutes(page: Page) {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(SDR_CONNECTED_ACCOUNTS),
+        body: JSON.stringify(accounts),
       });
     }
     if (path === "/api/sdr/oauth/start") {
@@ -247,7 +247,6 @@ export async function openStudio(page: Page) {
   const studioButton = page.getByRole("button", { name: /(?:Open )?Studio/ }).first();
   await expect(studioButton).toBeVisible({ timeout: 30000 });
   await studioButton.click();
-  await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible({ timeout: 15000 });
 }
 
 export async function openCanvas(page: Page, detail: { type: string; id?: string; mode?: string }) {

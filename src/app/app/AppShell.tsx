@@ -19,7 +19,6 @@ import {
   X,
   MessageSquare,
   Share2,
-  PanelRightClose,
   PanelRightOpen,
   type LucideIcon,
 } from "@/components/brand/icons";
@@ -31,6 +30,7 @@ import {
   Users,
   Sparkles,
   Radio,
+  Plus,
 } from "@/components/ui/gemini-icons";
 import {
   DropdownMenu,
@@ -199,6 +199,7 @@ function AppShell() {
   // analytics refresh instantly when chat/agents create or modify rows.
   useRealtimeContent(workspaceId);
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const activeConversationId = path.match(/^\/app\/chat\/([^/]+)/)?.[1] ?? null;
   const isMobile = useIsMobile();
   const isCompact = useIsCompact();
   const [navOpen, setNavOpen] = useState(false);
@@ -590,7 +591,11 @@ function AppShell() {
 
         {/* Recent chats */}
         <SidebarSection label="Recent">
-          <RecentChats onNavigate={() => setNavOpen(false)} />
+          <RecentChats
+            workspaceId={workspaceId}
+            activeConversationId={activeConversationId}
+            onNavigate={() => setNavOpen(false)}
+          />
         </SidebarSection>
 
         <div className="h-px bg-border/50" />
@@ -693,39 +698,57 @@ function AppShell() {
           className="flex h-full w-[48px] flex-none flex-col items-center border-r border-border/60 bg-sidebar py-3"
         >
           {/* Brand mark — always visible; links back to workspaces */}
-          <Link
-            to="/workspaces"
-            aria-label="Mellox AI — back to workspaces"
-            title="Back to all workspaces"
-            className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <img
-              src={melloxLogo.url}
-              alt="Mellox AI"
-              className="h-[26px] w-[26px] select-none"
-              draggable={false}
-            />
-          </Link>
-
-          {/* Divider between brand and actions */}
-          <div aria-hidden className="mb-2 h-px w-6 bg-border/60" />
-
-          <TooltipProvider delayDuration={200}>
-            <div className="flex flex-1 flex-col items-center gap-1.5">
-              {/* Open sidebar — visually distinct primary action */}
+          <div className="group relative mb-3 h-9 w-9">
+            <Link
+              to="/workspaces"
+              aria-label="Mellox AI — back to workspaces"
+              title="Back to all workspaces"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <img
+                src={melloxLogo.url}
+                alt="Mellox AI"
+                className="h-[26px] w-[26px] select-none"
+                draggable={false}
+              />
+            </Link>
+            <TooltipProvider delayDuration={200}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     type="button"
                     onClick={() => setNavOpen(true)}
                     aria-label="Open sidebar"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary/70 text-foreground shadow-sm ring-1 ring-border/60 transition-all hover:bg-secondary hover:text-[hsl(var(--brand-blue))] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className="absolute inset-0 grid place-items-center rounded-xl bg-secondary text-foreground opacity-0 shadow-sm ring-1 ring-border/70 transition-all duration-200 group-hover:opacity-100 hover:bg-secondary hover:text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
-                    <PanelRightClose className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                    <PanelRightOpen className="h-[18px] w-[18px]" strokeWidth={1.9} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
                   Open sidebar
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* Divider between brand and actions */}
+          <div aria-hidden className="mb-2 h-px w-6 bg-border/60" />
+
+          <TooltipProvider delayDuration={200}>
+            <div className="flex flex-1 flex-col items-center gap-1.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setNavOpen(true)}
+                    aria-label="New Chat"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <Plus className="h-[18px] w-[18px]" aria-hidden />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  New Chat
                 </TooltipContent>
               </Tooltip>
 
@@ -937,6 +960,12 @@ function AppShell() {
               <Suspense fallback={null}>
                 <CompetitorWatchButton workspaceId={workspaceId} />
               </Suspense>
+              <Suspense fallback={null}>
+                <MarketingCoachPanel
+                  workspaceId={workspaceId}
+                  brandContext={brandContextForCoach}
+                />
+              </Suspense>
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent("toggle:studio"))}
@@ -1040,7 +1069,11 @@ function AppShell() {
             data-workspace-main="true"
             className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background"
           >
-            <MobileManusLayout workspaceId={workspaceId} brandContext={brandContextForCoach} />
+            <MobileManusLayout
+              workspaceId={workspaceId}
+              activeConversationId={activeConversationId}
+              brandContext={brandContextForCoach}
+            />
           </main>
         </div>
       </div>
@@ -1087,9 +1120,11 @@ function AppShell() {
 
 function MobileManusLayout({
   workspaceId,
+  activeConversationId,
   brandContext,
 }: {
   workspaceId: string | null;
+  activeConversationId: string | null;
   brandContext?: string;
 }) {
   const isMobile = useIsMobile();
@@ -1149,19 +1184,13 @@ function MobileManusLayout({
     <div className="flex min-h-0 min-w-0 flex-1 flex-row bg-background">
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {workspaceId ? (
-          <ChatPanel
-            workspaceId={workspaceId}
-            variant="centered"
-            mobileAccessory={
-              <Suspense fallback={null}>
-                <MarketingCoachPanel
-                  workspaceId={workspaceId}
-                  brandContext={brandContext}
-                  leading={<MiniSiteThumb workspaceId={workspaceId} />}
-                />
-              </Suspense>
-            }
-          />
+          <>
+            <ChatPanel
+              workspaceId={workspaceId}
+              conversationId={activeConversationId}
+              variant="centered"
+            />
+          </>
         ) : (
           <div className="p-6 text-sm text-muted-foreground">Loading workspace…</div>
         )}

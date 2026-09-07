@@ -162,6 +162,9 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
   const [briefing, setBriefing] = useState<CoachBriefing | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestRef = useRef(0);
+  const [clock, setClock] = useState(() => Date.now());
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<
     "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes"
   >("today");
@@ -170,6 +173,7 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
   const load = useCallback(
     async (opts?: { force?: boolean }) => {
       if (!workspaceId) return;
+      const requestId = ++requestRef.current;
       if (!opts?.force) {
         const cached = readCache(workspaceId);
         if (cached) {
@@ -183,9 +187,12 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
         const b = await fetchBriefing({
           data: { workspaceId, brandContext, force: opts?.force },
         });
+        if (requestId !== requestRef.current) return;
         setBriefing(b);
+        setError(null);
         writeCache(workspaceId, b);
       } catch (e) {
+        if (requestId !== requestRef.current) return;
         setError(e instanceof Error ? e.message : "Couldn't load briefing");
       } finally {
         setLoading(false);
@@ -206,44 +213,67 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
   }, [open, briefing, loading, load]);
 
   useEffect(() => {
+    if (!briefing?.generatedAt) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [briefing?.generatedAt]);
+
+  useEffect(() => {
     const h = () => setOpen(true);
     window.addEventListener("open:marketing-coach", h);
     return () => window.removeEventListener("open:marketing-coach", h);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open]);
+
   const generatedLabel = useMemo(() => {
     if (!briefing?.generatedAt) return null;
-    const diff = Date.now() - new Date(briefing.generatedAt).getTime();
+    const diff = clock - new Date(briefing.generatedAt).getTime();
     const mins = Math.round(diff / 60000);
     if (mins < 1) return "just now";
     if (mins < 60) return `${mins}m ago`;
     const hrs = Math.round(mins / 60);
     if (hrs < 24) return `${hrs}h ago`;
     return `${Math.round(hrs / 24)}d ago`;
-  }, [briefing?.generatedAt]);
+  }, [briefing?.generatedAt, clock]);
 
   const focusLabel = briefing?.focus?.title;
 
   return (
     <motion.div
+      ref={panelRef}
       layout
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 280, damping: 30 }}
-      className={cn(
-        "w-full overflow-hidden rounded-2xl border border-border/70 bg-card/95 backdrop-blur-xl",
-        "shadow-[0_1px_2px_rgba(0,0,0,0.05),0_20px_48px_-24px_rgba(0,0,0,0.45)]",
-      )}
+      className={cn("relative w-auto", open && "z-50")}
     >
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
             key="expanded"
+            id="marketing-coach-content"
+            role="dialog"
+            aria-label="Marketing Coach briefing"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden"
+            className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(30rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_24px_60px_-24px_rgba(0,0,0,0.55)] backdrop-blur-xl"
           >
             <div className="max-h-[58vh] overflow-auto scrollbar-thin px-3 pb-3 pt-3">
               {loading && !briefing && <SkeletonBrief />}
@@ -300,7 +330,6 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
                     onRefresh={() => void load({ force: true })}
                     generatedLabel={generatedLabel}
                   />
-                  <CoachWalkthrough onJumpTab={setTab} />
                 </>
               )}
             </div>
@@ -309,23 +338,48 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
         )}
       </AnimatePresence>
 
-      <div className="flex items-center gap-1.5 px-2 py-1">
+      <div
+        className={cn(
+          "flex items-center gap-1.5 rounded-full border border-border/70 bg-card/95 shadow-[0_8px_24px_-14px_rgba(0,0,0,0.55)] backdrop-blur-xl",
+          open ? "px-2 py-1" : "px-2.5 py-1.5",
+        )}
+      >
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-secondary/60"
+          aria-controls="marketing-coach-content"
+          aria-label={open ? "Collapse Marketing Coach" : "Expand Marketing Coach"}
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-2 text-left transition-colors",
+            open
+              ? "rounded-lg px-1.5 py-1 hover:bg-secondary/60"
+              : "rounded-full px-1 py-0.5 hover:bg-secondary/70",
+          )}
         >
           {leading ?? (
             <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-gradient-to-br from-emerald-500/20 via-sky-500/15 to-indigo-500/20 text-emerald-500">
               <Sparkles className="h-3.5 w-3.5" />
             </span>
           )}
-          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span className="flex min-w-0 max-w-[10rem] flex-1 items-center gap-1.5 sm:max-w-[18rem]">
             <span className="shrink-0 text-[12px] font-semibold tracking-tight text-foreground">
               Marketing Coach
             </span>
-            <span className="truncate text-[11px] text-muted-foreground">
+            <span
+              className={cn(
+                "h-1.5 w-1.5 shrink-0 rounded-full",
+                loading
+                  ? "animate-pulse bg-amber-500"
+                  : error
+                    ? "bg-destructive"
+                    : briefing
+                      ? "bg-emerald-500"
+                      : "bg-muted-foreground/50",
+              )}
+              aria-hidden="true"
+            />
+            <span className="hidden truncate text-[11px] text-muted-foreground sm:inline">
               {open
                 ? "· Tap to hide"
                 : focusLabel
@@ -591,6 +645,36 @@ function CoachBody({
         </div>
       </div>
 
+      <div className="grid grid-cols-3 gap-1.5" aria-label="Briefing summary">
+        <SummaryMetric label="Open tasks" value={openCount} tone="emerald" />
+        <SummaryMetric
+          label="Fresh signals"
+          value={briefing.competitors.length + briefing.market.length}
+          tone="sky"
+        />
+        <SummaryMetric label="Sources" value={briefing.sources.length} tone="violet" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-secondary/25 px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[11.5px] font-medium text-foreground">Need a decision?</div>
+          <div className="truncate text-[10.5px] text-muted-foreground">
+            Ask Ravi to turn this brief into your next move.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            fireChat(
+              `Based on today's Marketing Coach briefing, what should I do first and why? Brief headline: ${briefing.headline}`,
+            )
+          }
+          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground px-2.5 py-1.5 text-[10.5px] font-semibold text-background transition hover:opacity-90"
+        >
+          Ask Ravi <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+        </button>
+      </div>
+
       {/* Tabs — segmented control with roving-tabindex keyboard nav */}
       <CoachTabs tabs={tabs} value={tab} onChange={onTab} />
 
@@ -756,6 +840,27 @@ function CoachBody({
           Updated {generatedLabel} · Grounded in your site + live web research
         </div>
       )}
+    </div>
+  );
+}
+
+function SummaryMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "emerald" | "sky" | "violet";
+}) {
+  const toneClass =
+    tone === "emerald" ? "text-emerald-500" : tone === "sky" ? "text-sky-500" : "text-violet-500";
+  return (
+    <div className="rounded-xl border border-border/70 bg-card/60 px-2.5 py-2">
+      <div className={cn("text-base font-semibold leading-none tabular-nums", toneClass)}>
+        {value}
+      </div>
+      <div className="mt-1 truncate text-[10px] font-medium text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -1472,7 +1577,7 @@ function ChecklistGroup({
                 <button
                   type="button"
                   onClick={() => fireChat(t.action!.prompt)}
-                  className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-border/70 px-1.5 py-0.5 text-[10.5px] font-medium text-foreground/80 opacity-0 transition group-hover:opacity-100 hover:border-foreground/30 hover:text-foreground"
+                  className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-border/70 px-1.5 py-0.5 text-[10.5px] font-medium text-foreground/80 transition hover:border-foreground/30 hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
                   title={t.action.label}
                 >
                   {t.action.label} <ArrowUpRight className="h-2.5 w-2.5" />

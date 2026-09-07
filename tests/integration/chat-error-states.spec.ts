@@ -6,8 +6,8 @@ import { test, expect, type Route } from "@playwright/test";
  * and that the composer recovers gracefully so the user can retry.
  */
 
-const SUPABASE_HOST = "nfgbofcxoqapaileqhon.supabase.co";
-const STORAGE_KEY = "sb-nfgbofcxoqapaileqhon-auth-token";
+const SUPABASE_HOST = "smdravaoaeqdajmnrlpr.supabase.co";
+const STORAGE_KEY = "sb-smdravaoaeqdajmnrlpr-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -31,46 +31,81 @@ function fakeSession() {
 }
 
 async function stubSupabase(context: import("@playwright/test").BrowserContext) {
-  await context.route(
-    new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`),
-    async (route: Route) => {
-      const req = route.request();
-      const url = req.url();
-      const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
-      if (url.includes("/auth/v1/user"))
-        return route.fulfill({
-          status: 200,
-          headers: JSON_HEADERS,
-          body: JSON.stringify(fakeSession().user),
-        });
-      if (url.includes("/auth/v1/token"))
-        return route.fulfill({
-          status: 200,
-          headers: JSON_HEADERS,
-          body: JSON.stringify(fakeSession()),
-        });
-      if (url.includes("/rest/v1/workspaces")) {
+  const conversations = new Map<
+    string,
+    { id: string; title: string; preview: string | null; updated_at: string; is_pinned: boolean }
+  >();
+  await context.route(/https?:\/\/[^/]+\/(auth|rest|realtime)\/.*$/, async (route: Route) => {
+    const req = route.request();
+    const url = req.url();
+    const wantsSingle = (req.headers()["accept"] || "").includes("pgrst.object");
+    if (url.includes("/auth/v1/user"))
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: JSON.stringify(fakeSession().user),
+      });
+    if (url.includes("/auth/v1/token"))
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: JSON.stringify(fakeSession()),
+      });
+    if (url.includes("/auth/v1/session"))
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: JSON.stringify(fakeSession()),
+      });
+    if (url.includes("/rest/v1/workspaces")) {
+      const row = {
+        id: WS_ID,
+        name: "Test",
+        website_url: null,
+        industry: null,
+        onboarded_at: "2024-01-01T00:00:00Z",
+        first_prompt: null,
+      };
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: JSON.stringify(wantsSingle ? row : [row]),
+      });
+    }
+    if (url.includes("/rest/v1/conversations")) {
+      if (req.method() === "POST") {
+        const id = "10000000-0000-0000-0000-000000000001";
         const row = {
-          id: WS_ID,
-          name: "Test",
-          website_url: null,
-          industry: null,
-          onboarded_at: "2024-01-01T00:00:00Z",
-          first_prompt: null,
+          id,
+          title: "New chat",
+          preview: null,
+          updated_at: new Date().toISOString(),
+          is_pinned: false,
         };
+        conversations.set(id, row);
         return route.fulfill({
-          status: 200,
+          status: 201,
           headers: JSON_HEADERS,
           body: JSON.stringify(wantsSingle ? row : [row]),
         });
       }
-      return route.fulfill({
-        status: 200,
-        headers: JSON_HEADERS,
-        body: wantsSingle ? "null" : "[]",
-      });
-    },
-  );
+      if (req.method() === "GET") {
+        return route.fulfill({
+          status: 200,
+          headers: JSON_HEADERS,
+          body: JSON.stringify(
+            wantsSingle ? ([...conversations.values()][0] ?? null) : [...conversations.values()],
+          ),
+        });
+      }
+      return route.fulfill({ status: 204, headers: JSON_HEADERS, body: "" });
+    }
+    return route.fulfill({
+      status: 200,
+      headers: JSON_HEADERS,
+      body: wantsSingle ? "null" : "[]",
+    });
+  });
   await context.route("**/_serverFn/**", (route) =>
     route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ data: null }) }),
   );
@@ -142,6 +177,9 @@ test.describe("Chat error handling", () => {
 
     await seed(page);
     await page.goto("/app", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Mellox AI Workspace" })).toBeVisible({
+      timeout: 15_000,
+    });
     await typeAndSend(page, "First try � should hit rate limit");
 
     // 1. The rate-limit toast is shown to the user.
@@ -188,6 +226,9 @@ test.describe("Chat error handling", () => {
 
     await seed(page);
     await page.goto("/app", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Mellox AI Workspace" })).toBeVisible({
+      timeout: 15_000,
+    });
     await typeAndSend(page, "First try � should hit credits");
 
     // 1. The credits-exhausted toast is shown to the user.
