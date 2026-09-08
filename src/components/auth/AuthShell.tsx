@@ -43,17 +43,39 @@ export function AuthShell({
               <Logo height={30} />
             </motion.div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.9, ease }}
-              className="font-display max-w-md text-[clamp(2.4rem,3.6vw,3.4rem)] font-medium leading-[1.05] tracking-[-0.02em] text-white"
-            >
-              Your AI{" "}
-              <span className="text-emerald-300/95 [text-shadow:0_0_36px_rgba(52,211,153,0.35)]">
-                marketing team.
-              </span>
-            </motion.h1>
+            <div className="max-w-lg">
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.08, duration: 0.7, ease }}
+                className="mb-5 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.24em] text-sky-200/70"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)]" />
+                Marketing intelligence layer
+              </motion.div>
+
+              <motion.h1
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.9, ease }}
+                className="font-display max-w-md text-[clamp(2.4rem,3.6vw,3.4rem)] font-medium leading-[1.05] tracking-[-0.02em] text-white"
+              >
+                Your AI{" "}
+                <span className="text-sky-200 [text-shadow:0_0_36px_rgba(125,211,252,0.28)]">
+                  marketing team.
+                </span>
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.75, ease }}
+                className="mt-5 max-w-sm text-sm leading-6 text-white/55"
+              >
+                Turn your brand signal into sharper strategy, stronger content, and measurable
+                visibility across the AI discovery layer.
+              </motion.p>
+            </div>
 
             <motion.div
               initial={{ opacity: 0 }}
@@ -128,7 +150,7 @@ function BrandCanvas({ reduce }: { reduce: boolean }) {
         aria-hidden
         className="absolute inset-0"
         style={{
-          background: "radial-gradient(120% 90% at 0% 0%, #0b2a22 0%, #06120f 48%, #04070a 100%)",
+          background: "radial-gradient(120% 90% at 0% 0%, #162536 0%, #0b111b 48%, #05070b 100%)",
         }}
       />
       {!reduce && (
@@ -137,8 +159,7 @@ function BrandCanvas({ reduce }: { reduce: boolean }) {
             aria-hidden
             className="absolute -left-32 top-1/4 h-[560px] w-[560px] rounded-full"
             style={{
-              background:
-                "radial-gradient(circle, rgba(16,185,129,0.42) 0%, rgba(16,185,129,0) 65%)",
+              background: "radial-gradient(circle, rgba(37,99,235,0.34) 0%, rgba(37,99,235,0) 65%)",
               filter: "blur(48px)",
             }}
             animate={{ x: [0, 60, -10, 0], y: [0, -30, 20, 0], scale: [1, 1.06, 0.97, 1] }}

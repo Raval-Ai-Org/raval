@@ -8,6 +8,7 @@ Use one Google Web application client for the Supabase Google provider. Add thes
 
 - `http://localhost:8080`
 - `https://raval.ai`
+- `https://raval-production-c901.up.railway.app`
 
 Add this authorized redirect URI exactly:
 
@@ -22,17 +23,23 @@ In Supabase Dashboard for project `slcmqbbjzyztqyucauol`:
 1. Open **Authentication > Sign In / Providers > Google**.
 2. Enable Google.
 3. Paste the Google Client ID and Client Secret into the provider fields.
-4. Set **Authentication > URL Configuration > Site URL** to `https://raval.ai`.
+4. Set **Authentication > URL Configuration > Site URL** to the public production domain users will open. Until a custom domain is attached, use `https://raval-production-c901.up.railway.app`.
 5. Add these **Additional Redirect URLs**:
    - `http://localhost:8080/auth/callback`
    - `https://raval.ai/auth/callback`
+   - `https://raval-production-c901.up.railway.app/auth/callback`
 6. Save the provider and URL configuration.
+
+The Google Cloud **authorized redirect URI** remains the Supabase callback
+(`https://slcmqbbjzyztqyucauol.supabase.co/auth/v1/callback`). Do not replace it
+with the Railway URL. Supabase redirects from Google to the app callback after
+it validates the provider response.
 
 The Google Client Secret belongs in Supabase's provider configuration. It must not be placed in `NEXT_PUBLIC_*` variables or source code. `.env.example` lists `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` only for secure deployment automation that provisions Supabase; this Next.js application does not read them in the browser.
 
 ## Environment separation
 
-Local development uses the local redirect above and the connected Supabase project. Production uses `https://raval.ai/auth/callback`. The callback is generated from the current browser origin, so a deployment must use the same origin registered in Supabase.
+Local development uses the local redirect above and the connected Supabase project. Production uses the origin currently visible in the browser. The callback is generated from `window.location.origin`, so every URL users can use to open the app must be registered in Supabase under **Additional Redirect URLs**. `NEXT_PUBLIC_APP_URL` does not control this browser callback.
 
 Required application variables remain:
 

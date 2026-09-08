@@ -44,12 +44,12 @@ test.describe("Logo � size regression", () => {
     // �2px tolerance covers subpixel rounding + browser layout differences.
     expect(Math.abs(box!.height - expected)).toBeLessThanOrEqual(2);
 
-    // Mark : lockup ratio (mark should be ~82% of overall height).
+    // Mark : lockup ratio (mark should be ~96% of overall height).
     const markBox = await logo.locator("img").first().boundingBox();
     expect(markBox).not.toBeNull();
     const ratio = markBox!.height / box!.height;
     expect(ratio).toBeGreaterThan(0.6);
-    expect(ratio).toBeLessThan(0.9);
+    expect(ratio).toBeLessThan(1);
   });
 
   test("landing header logo matches visual baseline", async ({ page }) => {

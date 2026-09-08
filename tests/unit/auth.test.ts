@@ -19,6 +19,12 @@ describe("auth helpers", () => {
     expect(message).not.toContain("invalid_client");
   });
 
+  it("maps Supabase production redirect allowlist failures", () => {
+    expect(friendlyAuthError(new Error("redirect_to_not_allowed"))).toContain(
+      "callback URL is not configured",
+    );
+  });
+
   it("handles cancellation as a retryable user action", () => {
     expect(friendlyAuthError(new Error("access_denied"))).toBe(
       "Google sign-in was cancelled before it finished.",

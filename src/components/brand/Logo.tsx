@@ -22,7 +22,7 @@ function LogoBase({ className = "", height: heightProp = 18, markOnly = false }:
   const mobile = desktop * 0.78;
   // Fluid interpolation between 360px and 1280px viewport widths.
   const heightCss = `clamp(${mobile}px, ${mobile}px + (100vw - 360px) * ${(desktop - mobile) / (1280 - 360)}, ${desktop}px)`;
-  const markCss = `calc(${heightCss} * 0.84)`;
+  const markCss = `calc(${heightCss} * 0.96)`;
   const textCss = `calc(${heightCss} * 0.7)`;
   const gapCss = `calc(${heightCss} * 0.32)`;
 

@@ -87,7 +87,9 @@ export function friendlyAuthError(error: unknown) {
   if (
     lower.includes("redirect_uri") ||
     lower.includes("redirect uri") ||
-    lower.includes("redirect url")
+    lower.includes("redirect url") ||
+    lower.includes("redirect_to_not_allowed") ||
+    lower.includes("redirect to is not allowed")
   ) {
     return "Google sign-in could not start because its callback URL is not configured. Check the Google Cloud and Supabase redirect settings, then try again.";
   }
