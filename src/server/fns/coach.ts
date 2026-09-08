@@ -1,9 +1,9 @@
 import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { runJsonPrompt } from "@/lib/ai";
 import { coachSystem } from "@/lib/ai/prompts";
 import { assemble } from "@/lib/ai/prompts/assemble";
+import { claudeJsonPrompt, selectClaudeModel } from "@/lib/anthropic-gateway.server";
 
 const uuid = z.string().uuid();
 
@@ -321,14 +321,21 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
       },
     ]);
 
-    const parsed = await runJsonPrompt<Partial<CoachBriefing>>({
+    const shouldUseOpus =
+      (data.brandContext?.length ?? 0) > 7000 ||
+      (signals.recentInsights?.length ?? 0) > 10 ||
+      siteText.length > 5000;
+    const model = selectClaudeModel("marketing-coach", {
+      isComplexStrategy: shouldUseOpus,
+    });
+
+    const parsed = await claudeJsonPrompt<Partial<CoachBriefing>>({
       route: "coach.briefing",
-      extraction: true,
       system,
       user,
       fallback: {},
-      maxTokens: 1600,
-      temperature: 0.4,
+      model,
+      maxTokens: 1800,
     });
 
     /* 5. Build final briefing (with resilient fallbacks) */

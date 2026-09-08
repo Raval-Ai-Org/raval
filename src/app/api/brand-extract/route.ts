@@ -295,7 +295,8 @@ export async function POST(request: Request) {
     return jsonError(400, "Invalid request");
   }
 
-  const { extractionCompletion, AiGatewayError } = await import("@/lib/ai-gateway.server");
+  const { AnthropicGatewayError, claudeJsonPrompt, selectClaudeModel } =
+    await import("@/lib/anthropic-gateway.server");
 
   let safeUrl: URL;
   try {
@@ -359,6 +360,16 @@ export async function POST(request: Request) {
 
         // 4. Aggregate signals from all pages
         const allHtml = [homeHtml, ...subHtmls].filter(Boolean);
+        if (allHtml.length === 0) {
+          send({
+            type: "error",
+            stage: "website_extraction",
+            code: "website_unreadable",
+            error: "Website could not be read. Check the URL and try again.",
+          });
+          controller.close();
+          return;
+        }
         const meta = extractMeta(homeHtml);
         const jsonLd = allHtml.flatMap(extractJsonLd);
         const colors = extractColors(allHtml.join("\n"));
@@ -455,6 +466,7 @@ export async function POST(request: Request) {
 Return STRICT JSON only matching the schema. Do NOT invent facts not supported by the provided text.
 If a field is unknown after careful reading, set to "" (or []) and add the field name to "missing".
 Be specific and concrete — use brand's own language where possible.
+      Remain evidence-based: distinguish observed information from inference, prioritize the website evidence, avoid hallucination, and preserve unknowns as empty values rather than inventing claims.
 - oneLiner ≤ 100 chars (sharp positioning, not a tagline)
 - about ≤ 320 chars (what they do, for whom, why it matters)
 - mission / vision / positioning / uniqueValueProp: ≤ 200 chars each; only if clearly stated or strongly implied
@@ -546,20 +558,16 @@ ${schemaHint}`;
         try {
           for (let attempt = 0; attempt < 2; attempt++) {
             try {
-              const json: any = await extractionCompletion({
-                messages: [
-                  { role: "system", content: sys },
-                  { role: "user", content: userMsg },
-                ],
-                response_format: { type: "json_object" },
+              const model = selectClaudeModel("brand-dna");
+              const parsed = await claudeJsonPrompt<Partial<Brand>>({
+                route: "brand-extract",
+                system: sys,
+                user: userMsg,
+                model,
+                maxTokens: 2800,
+                fallback: {},
               });
-              const text = json?.choices?.[0]?.message?.content ?? "{}";
-              try {
-                extracted = JSON.parse(text);
-              } catch {
-                const m = text.match(/\{[\s\S]*\}/);
-                if (m) extracted = JSON.parse(m[0]);
-              }
+              extracted = parsed ?? {};
               if (Object.keys(extracted).length > 0) break;
               throw new Error("The AI returned an empty brand profile.");
             } catch (error) {
@@ -575,8 +583,14 @@ ${schemaHint}`;
         } catch (e) {
           clearInterval(heartbeat);
           console.error("brand-extract ai error", e);
-          const msg = e instanceof AiGatewayError ? e.message : "Extraction failed after a retry";
-          send({ type: "error", error: msg });
+          const msg =
+            e instanceof AnthropicGatewayError ? e.message : "Extraction failed after a retry";
+          send({
+            type: "error",
+            stage: "brand_analysis",
+            code: e instanceof AnthropicGatewayError ? e.code : "analysis_failed",
+            error: msg,
+          });
           controller.close();
           return;
         } finally {
@@ -826,7 +840,12 @@ ${schemaHint}`;
       } catch (err) {
         console.error("brand-extract stream error", err);
         try {
-          send({ type: "error", error: "Extraction failed" });
+          send({
+            type: "error",
+            stage: "website_extraction",
+            code: "pipeline_failed",
+            error: "Website extraction could not be completed.",
+          });
         } catch {}
         controller.close();
       }

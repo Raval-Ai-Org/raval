@@ -61,6 +61,12 @@ else
     warn ".env contains an OpenRouter placeholder — AI generation will be unavailable"
     echo -e "    ${BOLD}Fix:${RESET}  Set OPENROUTER_API_KEY to a valid server-only OpenRouter key"
   fi
+  KIE_KEY_LINE=$(grep -E "^KIE_API_KEY=" .env 2>/dev/null | head -n 1 || echo "")
+  KIE_KEY_VALUE=${KIE_KEY_LINE#*=}
+  if [ -z "${KIE_KEY_VALUE//[[:space:]]/}" ]; then
+    warn ".env is missing KIE_API_KEY — Kie image generation will be unavailable"
+    echo -e "    ${BOLD}Fix:${RESET}  Set KIE_API_KEY to a valid server-only Kie key"
+  fi
 fi
 
 # ── 2. node_modules ──────────────────────────────────────────────────────────

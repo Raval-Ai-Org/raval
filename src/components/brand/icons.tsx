@@ -47,6 +47,8 @@ export const Check = G.Check;
 export const Square = G.Square;
 export const Play = G.Play;
 export const Pause = G.Pause;
+export const Video = G.Video;
+export const Download = G.Download;
 export const Power = G.LogOut;
 export const LogOut = G.LogOut;
 
@@ -59,6 +61,7 @@ export const Rocket = G.Rocket;
 export const BarChart3 = G.BarChart3;
 export const Calendar = G.CalendarIcon;
 export const MessageSquare = G.MessageSquare;
+export const BookOpen = G.BookOpen;
 export const Share2 = G.Share2;
 export const Target = G.Target;
 export const Globe = G.Globe;

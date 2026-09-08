@@ -40,11 +40,11 @@ export async function POST(request: Request) {
     style = body.style as AllowedStyle;
   }
 
-  const { imageGenerationStream, AiGatewayError } = await import("@/lib/ai-gateway.server");
+  const { imageGenerationStream, KieGatewayError } = await import("@/lib/kie-gateway.server");
   try {
-    return await imageGenerationStream({ prompt, size, style });
+    return await imageGenerationStream({ prompt, size });
   } catch (e) {
-    if (e instanceof AiGatewayError) return jsonError(e.status, e.message);
+    if (e instanceof KieGatewayError) return jsonError(e.status, e.message);
     throw e;
   }
 }
