@@ -336,6 +336,7 @@ export const LayoutTemplate = make("dashboard_customize");
 export const Lightbulb = make("lightbulb", { filled: false });
 export const Link2 = make("link");
 export const Linkedin = make("group");
+export const List = make("view_list");
 export const ListChecks = make("checklist");
 export const ListTodo = make("checklist_rtl");
 export const ListTree = make("account_tree");

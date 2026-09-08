@@ -58,7 +58,12 @@ function openCanvas(type: CanvasType, id?: string, mode?: "draft" | "review" | "
 }
 
 type Mode = "draft" | "review" | "view";
-type Row = QueueItem & { mode: Mode; meta: string };
+type Row = QueueItem & {
+  mode: Mode;
+  meta: string;
+  body?: string;
+  mediaUrl?: string | null;
+};
 
 function kindToCanvas(kind: string | null, channel: string | null): CanvasType {
   if (kind === "brief") return "seo-brief";
@@ -67,6 +72,15 @@ function kindToCanvas(kind: string | null, channel: string | null): CanvasType {
   if (kind === "blog") return "article";
   if (channel === "instagram" || channel === "tiktok") return "design-asset";
   return "social-post";
+}
+
+function cleanPreviewText(value: string | null | undefined): string {
+  return (value ?? "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_`#]/g, "")
+    .replace(/^\s*[-•]\s+/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function loadSelectedBrandContext(wsId: string) {
@@ -103,6 +117,7 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [approvals, setApprovals] = useState<Row[]>([]);
+  const [approvalsLoading, setApprovalsLoading] = useState(true);
   const [scheduledRows, setScheduledRows] = useState<Row[] | null>(null);
   const [recentRows, setRecentRows] = useState<Row[] | null>(null);
   const [genJobs, setGenJobs] = useState<GenJob[]>(() => genQueue.list());
@@ -147,15 +162,19 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
   const loadApprovals = useCallback(
     async (cancelledRef?: { readonly current: boolean }) => {
       const wsId = workspaceId;
+      setApprovalsLoading(true);
       if (!wsId) {
-        if (!cancelledRef?.current) setApprovals([]);
+        if (!cancelledRef?.current) {
+          setApprovals([]);
+          setApprovalsLoading(false);
+        }
         return;
       }
 
       const [content, legacy] = await Promise.all([
         supabase
           .from("content_items")
-          .select("id, title, body, kind, channel, status, created_at")
+          .select("id, title, body, kind, channel, status, media_url, created_at")
           .eq("workspace_id", wsId)
           .in("status", ["pending", "draft"])
           .order("created_at", { ascending: false })
@@ -173,11 +192,15 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
 
       const realRows: Row[] = ((content.data ?? []) as any[]).map((r): Row => ({
         id: r.id,
-        title: r.title || (r.body ? String(r.body).slice(0, 72) : "Untitled draft"),
+        title:
+          cleanPreviewText(r.title) ||
+          (r.body ? cleanPreviewText(String(r.body)).slice(0, 72) : "Untitled draft"),
         canvas: kindToCanvas(r.kind, r.channel),
         channel: r.channel ?? undefined,
         mode: "review",
         meta: r.status === "draft" ? "draft ready" : "needs approval",
+        body: r.body ?? undefined,
+        mediaUrl: r.media_url ?? null,
       }));
 
       const legacyRows: Row[] = ((legacy.data ?? []) as any[]).map((row): Row => {
@@ -187,15 +210,18 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
         ) as CanvasType;
         return {
           id: row.id,
-          title: row.action || "Pending approval",
+          title: cleanPreviewText(row.action) || "Pending approval",
           canvas,
           channel: typeof payload.channel === "string" ? payload.channel : undefined,
           mode: "review",
           meta: "needs approval",
+          body: typeof payload.body === "string" ? payload.body : undefined,
+          mediaUrl: typeof payload.media_url === "string" ? payload.media_url : null,
         };
       });
 
       setApprovals([...realRows, ...legacyRows]);
+      setApprovalsLoading(false);
     },
     [workspaceId],
   );
@@ -444,7 +470,7 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
           </header>
         )}
 
-        <div className="relative min-h-0 flex-1 space-y-5 overflow-y-auto px-3.5 pt-4 pb-5 scrollbar-thin">
+        <div className="relative min-h-0 flex-1 space-y-0 overflow-y-auto px-3.5 pt-4 pb-5 scrollbar-thin">
           <motion.button
             onClick={() => setCreateOpen((o) => !o)}
             whileTap={{ scale: 0.985 }}
@@ -538,6 +564,7 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
           <ApprovalsSection
             items={approvals}
             jobs={genJobs}
+            loading={approvalsLoading}
             onDecide={async (id, status) => {
               // Optimistic remove
               setApprovals((prev) => prev.filter((r) => r.id !== id));
@@ -640,22 +667,45 @@ type ApprovalStatus = "approved" | "rejected" | "published";
 function ApprovalsSection({
   items,
   jobs,
+  loading,
   onDecide,
 }: {
   items: Row[];
   jobs: GenJob[];
+  loading: boolean;
   onDecide: (id: string, status: ApprovalStatus) => void;
 }) {
+  if (loading && items.length === 0 && jobs.length === 0) {
+    return (
+      <section className="ui-section-gap" aria-busy="true" aria-label="Loading review queue">
+        <div className="mb-2 flex items-center gap-2 px-1">
+          <h3 className="ui-eyebrow">Needs your attention</h3>
+          <span className="h-4 w-7 animate-pulse rounded-full bg-muted/60" />
+        </div>
+        <div className="space-y-2">
+          {[0, 1].map((key) => (
+            <div
+              key={key}
+              className="flex gap-2.5 rounded-xl border border-border/50 bg-card/45 p-2.5"
+            >
+              <div className="h-[72px] w-[72px] shrink-0 animate-pulse rounded-xl bg-muted/60" />
+              <div className="min-w-0 flex-1 space-y-2 py-1">
+                <div className="h-2.5 w-2/5 animate-pulse rounded bg-muted/60" />
+                <div className="h-3 w-4/5 animate-pulse rounded bg-muted/60" />
+                <div className="h-2 w-3/5 animate-pulse rounded bg-muted/60" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
   if (items.length === 0 && jobs.length === 0) {
     return (
       <section className="ui-section-gap">
-        <div className="mb-2.5 flex items-center gap-2 px-0.5">
-          <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Needs your attention
-          </h3>
-          <span className="rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-            0
-          </span>
+        <div className="mb-2 flex items-center gap-2 px-1">
+          <h3 className="ui-eyebrow">Needs your attention</h3>
+          <span className="ui-count-pill">0</span>
         </div>
         <motion.div
           initial={{ opacity: 0, y: 5 }}
@@ -705,17 +755,15 @@ function ApprovalsSection({
   const totalCount = items.length + jobs.length;
   return (
     <section className="relative ui-section-gap">
-      <div className="relative mb-2 flex items-center justify-between px-0.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Needs your attention
-          </h3>
+      <div className="relative mb-2 flex items-center justify-between gap-3 px-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="ui-eyebrow">Needs your attention</h3>
           <motion.span
             key={totalCount}
             initial={{ scale: 0.7, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: "spring", stiffness: 420, damping: 20 }}
-            className="rounded-full bg-amber-500/12 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20"
+            className="ui-count-pill !bg-amber-500/12 !font-semibold !text-amber-600 ring-1 ring-amber-500/20 dark:!text-amber-400"
           >
             {totalCount}
           </motion.span>
@@ -743,11 +791,16 @@ function ApprovalsSection({
               >
                 <div
                   onClick={() => openCanvas(it.canvas, it.id, it.mode)}
-                  className="group @container/card relative flex w-full cursor-pointer flex-col gap-2 overflow-hidden rounded-xl border border-border/60 bg-card/75 p-2.5 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-foreground/20 hover:bg-card hover:shadow-[0_6px_18px_-10px_rgba(0,0,0,0.16)]"
+                  className="group @container/card relative flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/80 text-left shadow-[0_8px_24px_-18px_rgba(0,0,0,0.26)] transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-foreground/20 hover:bg-card hover:shadow-[0_12px_28px_-16px_rgba(0,0,0,0.28)]"
                 >
-                  {/* Top: thumbnail + meta */}
-                  <div className="flex min-w-0 items-start gap-2">
-                    <Thumbnail type={it.canvas} color={color} postId={it.id} />
+                  {/* Preview first: the queue should feel like a creative review surface. */}
+                  <div className="flex min-w-0 items-start gap-2.5 p-2.5 pb-2">
+                    <Thumbnail
+                      type={it.canvas}
+                      color={color}
+                      postId={it.id}
+                      imageUrl={it.mediaUrl}
+                    />
                     <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
                       <div className="flex min-w-0 items-center gap-1.5">
                         <span
@@ -759,28 +812,33 @@ function ApprovalsSection({
                         </span>
                         {it.channel && (
                           <span className="truncate text-[10.5px] font-medium text-muted-foreground/80">
-                            · {it.channel}
+                            {it.channel}
                           </span>
                         )}
-                        <span className="ml-auto shrink-0 truncate text-[10px] font-medium text-muted-foreground/60">
-                          {it.meta}
+                        <span className="ml-auto shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-amber-600 dark:text-amber-400">
+                          {it.meta === "draft ready" ? "Draft" : "Review"}
                         </span>
                       </div>
-                      <p className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground">
+                      <p className="line-clamp-2 text-[12.5px] font-medium leading-tight text-foreground">
                         {it.title}
                       </p>
+                      {it.body && it.body !== it.title && (
+                        <p className="line-clamp-1 text-[10px] leading-snug text-muted-foreground">
+                          {cleanPreviewText(it.body)}
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Actions row — full width, responsive, wraps on narrow rails */}
-                  <div className="flex flex-wrap items-center gap-1 border-t border-border/50 pt-1.5">
+                  {/* Quiet action row: opening the card remains the review action. */}
+                  <div className="flex flex-wrap items-center gap-1 border-t border-border/50 bg-muted/20 px-2.5 py-1.5">
                     <motion.button
                       whileTap={{ scale: 0.95 }}
                       onClick={(e) => {
                         e.stopPropagation();
                         onDecide(it.id, "rejected");
                       }}
-                      className="shrink-0 rounded-lg px-2 py-1 text-[11.5px] font-medium text-muted-foreground transition hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400"
+                      className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium text-muted-foreground transition hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400"
                       aria-label="Reject draft"
                     >
                       Skip
@@ -805,7 +863,7 @@ function ApprovalsSection({
                           e.stopPropagation();
                           onDecide(it.id, "approved");
                         }}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] font-medium text-foreground/80 transition hover:bg-muted"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-foreground/80 transition hover:bg-muted"
                         aria-label="Approve draft"
                         title="Approve draft"
                       >
@@ -817,7 +875,7 @@ function ApprovalsSection({
                           e.stopPropagation();
                           onDecide(it.id, "published");
                         }}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-foreground px-2 py-1 text-[11.5px] font-medium text-background transition hover:bg-foreground/90"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-foreground px-2.5 py-1 text-[11px] font-semibold text-background shadow-sm transition hover:bg-foreground/90"
                         aria-label="Publish now"
                         title="Publish immediately"
                       >
@@ -890,31 +948,43 @@ function RowLeadingVisual({
   );
 }
 
-function Thumbnail({ type, color, postId }: { type: CanvasType; color: string; postId?: string }) {
-  const base = "relative h-[60px] w-[60px] shrink-0 overflow-hidden rounded-2xl";
+function Thumbnail({
+  type,
+  color,
+  postId,
+  imageUrl,
+}: {
+  type: CanvasType;
+  color: string;
+  postId?: string;
+  imageUrl?: string | null;
+}) {
+  const base = "relative h-[60px] w-[60px] shrink-0 overflow-hidden rounded-xl";
   const bg = {
     background: `linear-gradient(135deg, ${color}30, ${color}08)`,
     boxShadow: `inset 0 0 0 1px ${color}1f`,
   };
 
-  const [cachedImg, setCachedImg] = useState<string | null>(() => getAnyCachedImage(postId));
+  const [cachedImg, setCachedImg] = useState<string | null>(
+    () => imageUrl || getAnyCachedImage(postId),
+  );
   useEffect(() => {
     if (!postId) return;
     const on = (e: Event) => {
       const d = (e as CustomEvent).detail as { postId?: string } | undefined;
       if (!d?.postId || d.postId === postId) setCachedImg(getAnyCachedImage(postId));
     };
-    setCachedImg(getAnyCachedImage(postId));
+    setCachedImg(imageUrl || getAnyCachedImage(postId));
     window.addEventListener("post-image:cached", on as EventListener);
     return () => window.removeEventListener("post-image:cached", on as EventListener);
-  }, [postId]);
+  }, [imageUrl, postId]);
 
   if (cachedImg) {
     return (
       <div className={base} style={bg}>
         <img src={cachedImg} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <span
-          className="absolute bottom-1 right-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-emerald-500 text-[8px] text-white ring-2 ring-card"
+          className="absolute bottom-1.5 right-1.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-emerald-500 text-[8px] text-white ring-2 ring-card"
           title="Image ready"
         >
           ✓

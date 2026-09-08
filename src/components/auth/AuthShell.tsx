@@ -4,6 +4,89 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
 
+type PexelsVideo = {
+  id: number;
+  videoUrl: string;
+  creatorName: string;
+  creatorUrl: string;
+  pexelsUrl: string;
+  provider?: "Pexels" | "Raval AI";
+  category?: string;
+  query?: string;
+  cachedAt?: string;
+};
+
+type UnsplashPhoto = {
+  id: string;
+  imageUrl: string;
+  photographerName: string;
+  photographerUrl: string;
+  unsplashUrl: string;
+};
+
+const FLOWER_FALLBACK_VIDEO =
+  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+
+const MELLOX_ROTATION = [
+  "AI",
+  "Marketing",
+  "Analytics",
+  "Growth",
+  "Automation",
+  "Content",
+  "Future",
+];
+
+function rotationDelay() {
+  return 45_000 + Math.floor(Math.random() * 45_000);
+}
+
+async function fetchMelloxVideo(category: string): Promise<PexelsVideo | null> {
+  const fallbackVideo: PexelsVideo = {
+    id: 1,
+    videoUrl: FLOWER_FALLBACK_VIDEO,
+    creatorName: "MDN",
+    creatorUrl: "https://developer.mozilla.org",
+    pexelsUrl: "https://developer.mozilla.org/",
+    provider: "Raval AI",
+    category,
+    query: category,
+    cachedAt: new Date().toISOString(),
+  };
+
+  try {
+    const response = await fetch(`/api/pexels/video?category=${encodeURIComponent(category)}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return fallbackVideo;
+    const result = (await response.json()) as Partial<PexelsVideo>;
+    const hasPlayableVideo =
+      Number.isFinite(result?.id) &&
+      typeof result?.videoUrl === "string" &&
+      /^https?:\/\//i.test(result.videoUrl);
+    return hasPlayableVideo ? (result as PexelsVideo) : fallbackVideo;
+  } catch {
+    return fallbackVideo;
+  }
+}
+
+function preloadVideo(videoUrl: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const element = document.createElement("video");
+    const finish = (ready: boolean) => {
+      element.onloadedmetadata = null;
+      element.onerror = null;
+      resolve(ready);
+    };
+    element.preload = "metadata";
+    element.muted = true;
+    element.onloadedmetadata = () => finish(true);
+    element.onerror = () => finish(false);
+    element.src = videoUrl;
+    element.load();
+  });
+}
+
 /**
  * Minimal, animated auth shell.
  * Left: quiet brand canvas with a single drifting aurora.
@@ -34,58 +117,6 @@ export function AuthShell({
         {/* Brand pane */}
         <aside className="relative hidden overflow-hidden rounded-[32px] lg:block">
           <BrandCanvas reduce={!!reduce} />
-          <div className="relative z-10 flex h-full flex-col justify-between p-12">
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease }}
-            >
-              <Logo height={30} />
-            </motion.div>
-
-            <div className="max-w-lg">
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.08, duration: 0.7, ease }}
-                className="mb-5 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.24em] text-sky-200/70"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)]" />
-                Marketing intelligence layer
-              </motion.div>
-
-              <motion.h1
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15, duration: 0.9, ease }}
-                className="font-display max-w-md text-[clamp(2.4rem,3.6vw,3.4rem)] font-medium leading-[1.05] tracking-[-0.02em] text-white"
-              >
-                Your AI{" "}
-                <span className="text-sky-200 [text-shadow:0_0_36px_rgba(125,211,252,0.28)]">
-                  marketing team.
-                </span>
-              </motion.h1>
-
-              <motion.p
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 0.75, ease }}
-                className="mt-5 max-w-sm text-sm leading-6 text-white/55"
-              >
-                Turn your brand signal into sharper strategy, stronger content, and measurable
-                visibility across the AI discovery layer.
-              </motion.p>
-            </div>
-
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6, duration: 0.8 }}
-              className="text-[11px] uppercase tracking-[0.22em] text-white/40"
-            >
-              <span style={{ fontFamily: "var(--font-brand)" }}>© Mellox AI</span>
-            </motion.div>
-          </div>
         </aside>
 
         {/* Form pane */}
@@ -144,6 +175,61 @@ export const authRow = {
 };
 
 function BrandCanvas({ reduce }: { reduce: boolean }) {
+  const [video, setVideo] = useState<PexelsVideo | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [fallbackPhoto, setFallbackPhoto] = useState<UnsplashPhoto | null>(null);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [categoryIndex, setCategoryIndex] = useState(0);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const updateDesktop = () => setIsDesktop(mediaQuery.matches);
+    updateDesktop();
+    mediaQuery.addEventListener("change", updateDesktop);
+    return () => mediaQuery.removeEventListener("change", updateDesktop);
+  }, []);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    let cancelled = false;
+
+    async function loadVideo() {
+      const result = await fetchMelloxVideo(MELLOX_ROTATION[0]);
+      if (!cancelled && result) {
+        setVideo(result);
+        setFallbackPhoto(null);
+      }
+    }
+
+    void loadVideo();
+    return () => {
+      cancelled = true;
+    };
+  }, [isDesktop]);
+
+  useEffect(() => {
+    if (!isDesktop || !video || video.provider !== "Pexels") return;
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      const nextIndex = (categoryIndex + 1) % MELLOX_ROTATION.length;
+      const nextVideo = await fetchMelloxVideo(MELLOX_ROTATION[nextIndex]);
+      if (!nextVideo || cancelled || !(await preloadVideo(nextVideo.videoUrl))) return;
+      setCategoryIndex(nextIndex);
+      setVideo(nextVideo);
+    }, rotationDelay());
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [categoryIndex, isDesktop, video]);
+
+  useEffect(() => {
+    setVideoReady(false);
+    setVideoFailed(false);
+  }, [video?.id]);
+
   return (
     <div className="absolute inset-0 overflow-hidden rounded-[32px] bg-black">
       <div
@@ -157,27 +243,84 @@ function BrandCanvas({ reduce }: { reduce: boolean }) {
         <>
           <motion.div
             aria-hidden
-            className="absolute -left-32 top-1/4 h-[560px] w-[560px] rounded-full"
+            className="absolute -left-24 top-12 h-[500px] w-[500px] rounded-full"
             style={{
-              background: "radial-gradient(circle, rgba(37,99,235,0.34) 0%, rgba(37,99,235,0) 65%)",
-              filter: "blur(48px)",
+              background:
+                "radial-gradient(circle, rgba(147,197,253,0.48) 0%, rgba(59,130,246,0.24) 28%, rgba(37,99,235,0) 72%)",
+              filter: "blur(64px)",
             }}
-            animate={{ x: [0, 60, -10, 0], y: [0, -30, 20, 0], scale: [1, 1.06, 0.97, 1] }}
-            transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
+            animate={{ x: [0, 55, -12, 0], y: [0, -26, 18, 0], scale: [1, 1.08, 0.96, 1] }}
+            transition={{ duration: 30, repeat: Infinity, ease: "easeInOut" }}
           />
           <motion.div
             aria-hidden
-            className="absolute -right-24 bottom-0 h-[580px] w-[580px] rounded-full"
+            className="absolute -right-20 bottom-0 h-[580px] w-[580px] rounded-full"
             style={{
               background:
-                "radial-gradient(circle, rgba(56,189,248,0.32) 0%, rgba(56,189,248,0) 65%)",
-              filter: "blur(56px)",
+                "radial-gradient(circle, rgba(125,211,252,0.36) 0%, rgba(14,116,144,0.2) 24%, rgba(14,116,144,0) 72%)",
+              filter: "blur(72px)",
             }}
-            animate={{ x: [0, -40, 20, 0], y: [0, 30, -15, 0], scale: [1, 0.95, 1.05, 1] }}
-            transition={{ duration: 32, repeat: Infinity, ease: "easeInOut" }}
+            animate={{ x: [0, -45, 20, 0], y: [0, 24, -18, 0], scale: [1, 0.94, 1.06, 1] }}
+            transition={{ duration: 34, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 25%, rgba(147,197,253,0.08) 60%, rgba(255,255,255,0.04) 100%)",
+            }}
+            animate={{ opacity: [0.35, 0.7, 0.35] }}
+            transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
           />
         </>
       )}
+      {video && !videoFailed && (
+        <motion.video
+          key={video.id}
+          src={video.videoUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full scale-[1.06] object-cover"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: videoReady ? 1 : 0 }}
+          transition={{ duration: reduce ? 0 : 0.9, ease: "easeInOut" }}
+          onCanPlay={() => setVideoReady(true)}
+          onLoadedData={() => setVideoReady(true)}
+          onError={() => setVideoFailed(true)}
+          style={{
+            width: "100%",
+            height: "100%",
+            maxWidth: "none",
+            objectFit: "cover",
+            filter: "saturate(1.18) contrast(1.08) brightness(0.78)",
+          }}
+        />
+      )}
+      {fallbackPhoto && !video && (
+        <motion.img
+          src={fallbackPhoto.imageUrl}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: reduce ? 0 : 0.9, ease: "easeInOut" }}
+        />
+      )}
+      <div aria-hidden className="absolute inset-0 bg-[hsl(var(--primary)/0.20)]" />
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(4,10,18,0.18) 0%, rgba(4,10,18,0.12) 25%, rgba(4,10,18,0.5) 100%)",
+        }}
+      />
       <div
         aria-hidden
         className="absolute inset-0 opacity-[0.18]"
@@ -191,8 +334,17 @@ function BrandCanvas({ reduce }: { reduce: boolean }) {
         aria-hidden
         className="absolute inset-0"
         style={{
-          background:
-            "radial-gradient(120% 80% at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%)",
+          background: "radial-gradient(120% 80% at 50% 50%, transparent 52%, rgba(0,0,0,0.6) 100%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 opacity-40"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
+          backgroundSize: "26px 26px",
+          maskImage: "radial-gradient(circle at center, black 28%, transparent 100%)",
         }}
       />
     </div>

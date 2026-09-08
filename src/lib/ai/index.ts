@@ -13,9 +13,15 @@ export {
   chatCompletion,
   chatCompletionStream,
   extractionCompletion,
-  imageGenerationStream,
   EXTRACTION_MODEL,
 } from "@/lib/ai-gateway.server";
+
+export {
+  imageGenerationStream,
+  KieGatewayError,
+  type GeneratedMedia,
+  type GeneratedVideo,
+} from "@/lib/kie-gateway.server";
 
 export {
   serializeBrandContext,

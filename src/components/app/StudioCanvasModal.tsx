@@ -42,6 +42,7 @@ import { StudioDestinationPicker } from "@/components/app/StudioDestinationPicke
 import { DeliveryView } from "@/components/app/DeliveryView";
 import type { PublishSelection } from "@/lib/sdr.handlers";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
+import { VideoPostComposer, type GeneratedVideoState } from "@/components/app/VideoPostComposer";
 
 type SocialVariant = {
   platform: PlatformId;
@@ -87,6 +88,42 @@ const KIND_BY_CANVAS: Record<CanvasType, "post" | "brief" | "email" | "landing" 
 };
 
 type ImgSize = "1024x1024" | "1792x1024" | "1024x1792";
+
+function MediaFormatSwitcher({
+  value,
+  onChange,
+}: {
+  value: "image" | "video";
+  onChange: (value: "image" | "video") => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-full border border-border/60 bg-card p-1">
+      <button
+        type="button"
+        onClick={() => onChange("image")}
+        className={cn(
+          "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors",
+          value === "image" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <ImageIcon className="h-3 w-3" />
+        Image
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("video")}
+        className={cn(
+          "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors",
+          value === "video" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <Play className="h-3 w-3" />
+        Video
+      </button>
+    </div>
+  );
+}
+
 const OPTIMAL_SIZE_BY_PLATFORM: Record<PlatformId, ImgSize> = {
   linkedin: "1792x1024", // landscape performs best in-feed
   twitter: "1792x1024", // 16:9 card
@@ -283,6 +320,7 @@ export function StudioCanvasModal({
   const [imageError, setImageError] = useState<string | null>(null);
   const [imageProgress, setImageProgress] = useState(0);
   const [imageAttempt, setImageAttempt] = useState(0);
+  const [mediaType, setMediaType] = useState<"image" | "video">("image");
   const imageAbortRef = useRef<AbortController | null>(null);
   const imageProgressTimerRef = useRef<number | null>(null);
 
@@ -349,10 +387,13 @@ export function StudioCanvasModal({
   }, [autoSize, activePlatform]);
 
   const generatePostImage = useCallback(
-    async (overrideBrief?: string) => {
+    async (overrideBrief?: unknown) => {
       if (imageLoading) return;
       const anyVariant = variants[0];
-      const bodyForPrompt = (overrideBrief || anyVariant?.body || result || prompt).trim();
+      const bodyForPrompt =
+        [overrideBrief, anyVariant?.body, result, prompt]
+          .find((value): value is string => typeof value === "string" && value.trim().length > 0)
+          ?.trim() ?? "";
       if (!bodyForPrompt) {
         toast.error("Describe the visual first");
         return;
@@ -467,9 +508,8 @@ export function StudioCanvasModal({
               setImageProgress(100);
               setImageLoading(false);
               setImageStatus("success");
-              if (imageProgressTimerRef.current)
-                window.clearInterval(imageProgressTimerRef.current);
-              // Cache under (canvas.id, size) so switching platforms/aspects rehydrates for free.
+              if (imageProgressTimerRef.current) window.clearInterval(imageProgressTimerRef.current);
+
               const id = canvas?.id;
               if (id) {
                 imageCacheRef.current[id] = {
@@ -478,15 +518,15 @@ export function StudioCanvasModal({
                 };
                 persistCache();
               }
+
               toast.success("Image ready", {
                 description: "1 credit used · cached for this topic.",
               });
+
               window.setTimeout(() => setImageStatus((s) => (s === "success" ? "idle" : s)), 1800);
 
-              // Design canvas — inverted flow: once the image lands, auto-write
-              // matching captions per selected platform so the user gets both.
               if (canvas?.type === "design-asset" && !variants.length) {
-                void runCaptionsRef.current?.(platforms, overrideBrief || prompt);
+                void runCaptionsRef.current?.(platforms, bodyForPrompt);
               }
             }
           },
@@ -630,6 +670,7 @@ export function StudioCanvasModal({
       setProgress(0);
       draftIdsRef.current = canvas.id && UUID_RE.test(canvas.id) ? [canvas.id] : [];
       setResult("");
+      setMediaType("image");
     } else {
       // Modal closed — clear the auto-run guard so reopening the same canvas
       // fires the initial generation again instead of being deduped.
@@ -1226,7 +1267,7 @@ export function StudioCanvasModal({
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.98, y: 6 }}
                   transition={{ type: "spring", stiffness: 280, damping: 28, mass: 0.9 }}
-                  className="fixed left-1/2 top-1/2 z-50 flex h-[86vh] w-[94vw] max-w-[880px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-border/70 bg-background shadow-[0_30px_120px_-20px_rgba(0,0,0,0.55)]"
+                  className="fixed left-1/2 top-1/2 z-50 flex h-[90vh] w-[94vw] max-w-[1040px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-border/70 bg-background shadow-[0_30px_120px_-20px_rgba(0,0,0,0.55)]"
                   style={{ boxShadow: `0 30px 120px -20px ${color}33, 0 0 0 1px ${color}1a inset` }}
                 >
                   {/* Top accent line — brand gradient */}
@@ -1293,6 +1334,12 @@ export function StudioCanvasModal({
                       <h2 className="truncate text-[13px] font-semibold tracking-tight">
                         {tile.label}
                       </h2>
+                      {generated && (
+                        <span className="hidden items-center gap-1 text-[10.5px] text-muted-foreground sm:inline-flex">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                          Ready for review
+                        </span>
+                      )}
                       {workspaceName && (
                         <span className="hidden truncate text-[11.5px] text-muted-foreground sm:inline">
                           · {workspaceName}
@@ -1430,50 +1477,84 @@ export function StudioCanvasModal({
                                   }}
                                 />
                               )}
-                              <SocialMultiPreview
-                                variants={variants}
-                                active={activePlatform}
-                                onActive={(p) => {
-                                  setActivePlatform(p);
-                                  const v = variants.find((x) => x.platform === p);
-                                  if (v) setResult(v.body);
-                                }}
-                                onChange={(p, body) => {
-                                  setVariants((prev) =>
-                                    prev.map((v) =>
-                                      v.platform === p ? { ...v, body, chars: body.length } : v,
-                                    ),
-                                  );
-                                  if (p === activePlatform) setResult(body);
-                                  setEditedPlatforms((prev) => ({ ...prev, [p]: true }));
-                                  setCaptionsConfirmed(false);
-                                }}
-                                brandName={brand?.brandName || workspaceName}
-                                color={color}
-                                image={postImage}
-                                imageLoading={imageLoading}
-                                imageStatus={imageStatus}
-                                imageError={imageError}
-                                imageProgress={imageProgress}
-                                imageAttempt={imageAttempt}
-                                onCancelImage={cancelImageGeneration}
-                                imageSize={imageSize}
-                                onSizeChange={(s) => {
-                                  setAutoSize(false);
-                                  setImageSize(s);
-                                }}
-                                autoSize={autoSize}
-                                onAutoSizeChange={(v) => {
-                                  setAutoSize(v);
-                                  if (v) setImageSize(sizeForPlatform(activePlatform));
-                                }}
-                                onGenerateImage={generatePostImage}
-                                postBody={result}
-                                postTitle={(canvas as any).title ?? null}
-                                brand={brand}
-                                workspaceName={workspaceName}
-                                seedKey={canvas.id || "draft"}
-                              />
+                              <div className="mb-3 flex items-center justify-between">
+                                <div className="text-sm font-semibold">Creative format</div>
+                                <MediaFormatSwitcher value={mediaType} onChange={setMediaType} />
+                              </div>
+                              {mediaType === "video" ? (
+                                <VideoPostComposer
+                                  prompt={result || prompt}
+                                  platform={activePlatform}
+                                  brandName={brand?.brandName || workspaceName}
+                                  brandContext={brandContextString(brand, workspaceName)}
+                                  onMediaTypeChange={setMediaType}
+                                  onComplete={(video: GeneratedVideoState) => {
+                                    if (draftIdsRef.current[0]) {
+                                      void runUpdate({
+                                        data: {
+                                          id: draftIdsRef.current[0],
+                                          patch: {
+                                            media_url: video.url,
+                                            meta: {
+                                              mediaType: "video",
+                                              provider: "kie",
+                                              model: video.model,
+                                              generationId: video.generationId,
+                                              duration: video.duration,
+                                              aspectRatio: video.aspectRatio,
+                                            },
+                                          },
+                                        },
+                                      });
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <SocialMultiPreview
+                                  variants={variants}
+                                  active={activePlatform}
+                                  onActive={(p) => {
+                                    setActivePlatform(p);
+                                    const v = variants.find((x) => x.platform === p);
+                                    if (v) setResult(v.body);
+                                  }}
+                                  onChange={(p, body) => {
+                                    setVariants((prev) =>
+                                      prev.map((v) =>
+                                        v.platform === p ? { ...v, body, chars: body.length } : v,
+                                      ),
+                                    );
+                                    if (p === activePlatform) setResult(body);
+                                    setEditedPlatforms((prev) => ({ ...prev, [p]: true }));
+                                    setCaptionsConfirmed(false);
+                                  }}
+                                  brandName={brand?.brandName || workspaceName}
+                                  color={color}
+                                  image={postImage}
+                                  imageLoading={imageLoading}
+                                  imageStatus={imageStatus}
+                                  imageError={imageError}
+                                  imageProgress={imageProgress}
+                                  imageAttempt={imageAttempt}
+                                  onCancelImage={cancelImageGeneration}
+                                  imageSize={imageSize}
+                                  onSizeChange={(s) => {
+                                    setAutoSize(false);
+                                    setImageSize(s);
+                                  }}
+                                  autoSize={autoSize}
+                                  onAutoSizeChange={(v) => {
+                                    setAutoSize(v);
+                                    if (v) setImageSize(sizeForPlatform(activePlatform));
+                                  }}
+                                  onGenerateImage={() => void generatePostImage()}
+                                  postBody={result}
+                                  postTitle={(canvas as any).title ?? null}
+                                  brand={brand}
+                                  workspaceName={workspaceName}
+                                  seedKey={canvas?.id || "draft"}
+                                />
+                              )}
                             </>
                           ) : editingContent ? (
                             <div className="mx-auto max-w-[680px]">
@@ -1503,7 +1584,7 @@ export function StudioCanvasModal({
                               imageProgress={imageProgress}
                               imageAttempt={imageAttempt}
                               onCancelImage={cancelImageGeneration}
-                              onGenerateImage={generatePostImage}
+                              onGenerateImage={() => void generatePostImage()}
                             />
                           )}
                         </motion.div>
@@ -2077,6 +2158,7 @@ function SocialMultiPreview({
   const current = variants.find((v) => v.platform === active) ?? variants[0];
   const spec = PLATFORMS[current.platform];
   const initial = (brandName || "B").trim().charAt(0).toUpperCase();
+  const [editingCaption, setEditingCaption] = useState(false);
   const over = current.chars > spec.maxChars;
   const pct = Math.min(100, Math.round((current.chars / spec.maxChars) * 100));
 
@@ -2094,7 +2176,7 @@ function SocialMultiPreview({
   ];
 
   return (
-    <div className="mx-auto max-w-[520px]">
+    <div className="mx-auto max-w-[680px]">
       {/* Tabs */}
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         {variants.map((v) => {
@@ -2382,13 +2464,34 @@ function SocialMultiPreview({
           </div>
         </div>
 
-        <textarea
-          value={current.body}
-          onChange={(e) => onChange(current.platform, e.target.value)}
-          rows={Math.min(14, Math.max(6, Math.ceil(current.body.length / 70)))}
-          className="w-full resize-none bg-transparent p-4 text-[13px] leading-relaxed outline-none"
-          style={{ caretColor: spec.color }}
-        />
+        <div className="border-t border-border/60 bg-background/35">
+          <div className="flex items-center justify-between gap-3 px-4 pt-3">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Caption preview
+            </span>
+            <button
+              type="button"
+              onClick={() => setEditingCaption((value) => !value)}
+              className="rounded-full border border-border/60 px-2.5 py-1 text-[10.5px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              {editingCaption ? "Done editing" : "Edit caption"}
+            </button>
+          </div>
+          {editingCaption ? (
+            <textarea
+              value={current.body}
+              onChange={(e) => onChange(current.platform, e.target.value)}
+              rows={Math.min(14, Math.max(6, Math.ceil(current.body.length / 70)))}
+              className="w-full resize-y bg-transparent px-4 pb-4 pt-3 text-[13px] leading-relaxed outline-none"
+              style={{ caretColor: spec.color }}
+              aria-label={`${spec.label} caption`}
+            />
+          ) : (
+            <div className="prose prose-sm dark:prose-invert max-w-none px-4 pb-4 pt-3 text-[13px] leading-relaxed text-foreground/90 [&>*]:my-2">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{current.body}</ReactMarkdown>
+            </div>
+          )}
+        </div>
 
         <div className="h-1 w-full bg-border/40">
           <div

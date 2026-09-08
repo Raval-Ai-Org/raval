@@ -44,6 +44,7 @@ export function chatSystem(): string {
     IDENTITY_CHAT,
     RULE_SCOPE,
     RULE_GROUNDING,
+    "Reason from the provided brand context, workspace signals, site content, and research snippets. Distinguish facts from assumptions, prioritize actionable recommendations, explain strategic reasoning clearly, and avoid generic advice.",
     "When the user asks you to DO something: briefly explain AND emit action tags — the app parses and executes them.",
     FMT_CHAT,
     PRODUCT_SURFACE,

@@ -1,7 +1,6 @@
 // Central AI gateway — OpenRouter.
 // Chat/generation:   Qwen 3 Max
 // Extraction/research: Gemini 2.5 Pro
-// Image:             Recraft V4.1
 //
 // All server routes/functions in this project call ONLY the helpers below.
 // Swap providers by editing this one file.
@@ -9,7 +8,6 @@
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const CHAT_MODEL = "qwen/qwen3-max";
 export const EXTRACTION_MODEL = "google/gemini-2.5-pro";
-const IMAGE_MODEL = "openai/gpt-5.4-image-2";
 
 const REFERER = process.env.APP_URL || "https://raval.ai";
 const APP_TITLE = "Mellox AI";
@@ -47,25 +45,19 @@ const EXTRACTION_MAX_TOKENS = 4096;
 const EXTRACTION_DEFAULT_MAX_TOKENS = 2400;
 // Longer cache = more dedupe = fewer billed calls.
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
-const IMAGE_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 400;
 // Hard input cap prevents a runaway context ballooning input tokens.
 const MAX_INPUT_CHARS = 16_000;
 // Extraction can safely consume a larger crawl — Gemini 2.5 Pro has ~1M ctx.
 const EXTRACTION_MAX_INPUT_CHARS = 60_000;
-const IMAGE_TIMEOUT_MS = 180_000;
 const CHAT_TIMEOUT_MS = 60_000;
 const STREAM_TIMEOUT_MS = 90_000; // time to first byte
-const IMAGE_URL_TIMEOUT_MS = 30_000;
 // Retry policy for transient upstream failures (429 / 5xx / network).
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 500;
 
 type CacheEntry = { value: any; expires: number };
 const responseCache = new Map<string, CacheEntry>();
-const imageCache = new Map<string, CacheEntry>();
-
-type GeneratedImagePayload = { b64: string; mimeType: string };
 
 async function sha256(s: string): Promise<string> {
   const buf = new TextEncoder().encode(s);
@@ -165,14 +157,6 @@ function mapStatus(status: number, body: string): AiGatewayError {
   if (status === 429)
     return new AiGatewayError(429, "AI rate limit reached. Please try again in a moment.");
   return new AiGatewayError(status || 502, body?.slice(0, 300) || "AI provider error");
-}
-
-function detectImageMimeType(b64: string): string {
-  const head = b64.slice(0, 16);
-  if (head.startsWith("iVBOR")) return "image/png";
-  if (head.startsWith("/9j/")) return "image/jpeg";
-  if (head.startsWith("UklGR")) return "image/webp";
-  return "image/webp";
 }
 
 async function fetchWithTimeout(
@@ -369,133 +353,6 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
     throw mapStatus(upstream.status, text);
   }
   return new Response(upstream.body, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
-}
-
-/**
- * Image generation via Recraft V4.1 on OpenRouter.
- * Returns a single JSON payload;
- * we wrap it into an SSE stream shaped like `image_generation.completed`
- * so the existing `src/lib/streamImage.ts` client works unchanged.
- */
-export async function imageGenerationStream(opts: {
-  prompt: string;
-  size?: "1024x1024" | "1792x1024" | "1024x1792";
-  style?: "realistic_image" | "digital_illustration" | "vector_illustration";
-}): Promise<Response> {
-  const requested = opts.size ?? "1024x1024";
-  const style = opts.style ?? "digital_illustration";
-  void style;
-  const cacheKey = await sha256(`openrouter-recraft-v4.1|${requested}|${opts.prompt}`);
-  let image: GeneratedImagePayload | null = cacheGet(imageCache, cacheKey);
-
-  if (!image) {
-    // Dedupe concurrent identical image generations.
-    image = await dedupe(`img:${cacheKey}`, async () => {
-      // Re-check cache inside the dedupe (an earlier caller may have populated it).
-      const hit = cacheGet(imageCache, cacheKey) as GeneratedImagePayload | null;
-      if (hit) return hit;
-
-      const key = getKey();
-      const res = await fetchWithRetry(
-        `${OPENROUTER_BASE}/images/generations`,
-        {
-          method: "POST",
-          headers: headers(key),
-          body: JSON.stringify({
-            model: IMAGE_MODEL,
-            prompt: opts.prompt.slice(0, 10000),
-            size: requested,
-            n: 1,
-            response_format: "b64_json",
-          }),
-        },
-        {
-          timeoutMs: IMAGE_TIMEOUT_MS,
-          timeoutMessage: "Image provider timed out. Please retry — no image was returned.",
-        },
-      );
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw mapStatus(res.status, text);
-      }
-
-      let json: any;
-      try {
-        json = await res.json();
-      } catch {
-        throw new AiGatewayError(502, "Image provider returned malformed JSON");
-      }
-
-      const first = json?.data?.[0] ?? {};
-      let b64: string | null =
-        (typeof first.b64_json === "string" && first.b64_json) ||
-        (typeof first.b64 === "string" && first.b64) ||
-        null;
-      // OpenRouter/Recraft returns `media_type`; other providers use `mime_type`.
-      let mimeType =
-        (typeof first.mime_type === "string" && first.mime_type) ||
-        (typeof first.media_type === "string" && first.media_type) ||
-        "";
-
-      // Some providers return a URL even when b64 is requested. Fetch and inline it.
-      if (!b64) {
-        const url = first.url;
-        if (typeof url === "string" && /^https:\/\//i.test(url)) {
-          const imgRes = await fetchWithTimeout(
-            url,
-            {},
-            IMAGE_URL_TIMEOUT_MS,
-            "Image download timed out.",
-          );
-          if (imgRes.ok) {
-            mimeType = imgRes.headers.get("content-type")?.split(";")[0] ?? mimeType;
-            const buf = new Uint8Array(await imgRes.arrayBuffer());
-            const CHUNK = 0x8000;
-            let bin = "";
-            for (let i = 0; i < buf.length; i += CHUNK) {
-              bin += String.fromCharCode.apply(
-                null,
-                Array.from(buf.subarray(i, i + CHUNK)) as unknown as number[],
-              );
-            }
-            b64 = btoa(bin);
-          }
-        }
-      }
-
-      if (!b64) {
-        const providerMsg = typeof json?.error?.message === "string" ? json.error.message : "";
-        throw new AiGatewayError(
-          502,
-          providerMsg ? `Image provider: ${providerMsg}` : "Image provider returned no image data",
-        );
-      }
-      const payload: GeneratedImagePayload = {
-        b64,
-        mimeType: mimeType || detectImageMimeType(b64),
-      };
-      cacheSet(imageCache, cacheKey, payload, IMAGE_CACHE_TTL_MS);
-      return payload;
-    });
-  }
-
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      const enc = new TextEncoder();
-      const payload = JSON.stringify({ b64_json: image.b64, mime_type: image.mimeType });
-      controller.enqueue(enc.encode(`event: image_generation.completed\ndata: ${payload}\n\n`));
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",

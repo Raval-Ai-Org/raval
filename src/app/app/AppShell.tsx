@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { acceptWorkspaceInvite } from "@/lib/workspaces.functions";
+import { workspaceModules } from "@/lib/app-nav";
 import { Button } from "@/components/ui/button";
 import {
   BarChart3,
@@ -31,6 +32,7 @@ import {
   Sparkles,
   Radio,
   Plus,
+  BookOpen,
 } from "@/components/ui/gemini-icons";
 import {
   DropdownMenu,
@@ -134,17 +136,9 @@ function ChevronRightSep() {
   );
 }
 
-type ModuleDef = {
-  to: "/app";
-  label: string;
-  icon: LucideIcon;
-  slug: string;
-  exact?: boolean;
-};
+type ModuleDef = (typeof workspaceModules)[number];
 
-const modules: ModuleDef[] = [
-  { to: "/app", label: "Chat", icon: MessageSquare, slug: "home", exact: true },
-];
+const modules: ModuleDef[] = workspaceModules;
 
 const GROWTH_PATHS: string[] = [];
 
@@ -591,6 +585,19 @@ function AppShell() {
             onNavigate={() => setNavOpen(false)}
           />
         </SidebarSection>
+
+        <div className="pt-1">
+          <Link
+            to="/app/library"
+            onClick={() => setNavOpen(false)}
+            className="group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-secondary/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-secondary/40 text-muted-foreground transition-colors group-hover:bg-secondary group-hover:text-foreground">
+              <BookOpen className="h-4 w-4" aria-hidden />
+            </span>
+            <span className="flex-1 truncate leading-none">Library</span>
+          </Link>
+        </div>
 
         <div className="h-px bg-border/50" />
 

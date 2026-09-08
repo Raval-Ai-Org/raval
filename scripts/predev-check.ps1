@@ -48,6 +48,11 @@ if (-not (Test-Path ".env")) {
     Warn ".env contains an OpenRouter placeholder - AI generation will be unavailable"
     Write-Host "    Fix:  Set OPENROUTER_API_KEY to a valid server-only OpenRouter key"
   }
+  $kieLine = Select-String -Path ".env" -Pattern "^KIE_API_KEY=" -ErrorAction SilentlyContinue
+  if (-not $kieLine -or [string]::IsNullOrWhiteSpace(($kieLine.Line -split "=", 2)[1])) {
+    Warn ".env is missing KIE_API_KEY - Kie image generation will be unavailable"
+    Write-Host "    Fix:  Set KIE_API_KEY to a valid server-only Kie key"
+  }
 }
 
 # ── 2. node_modules ──────────────────────────────────────────────────────────
