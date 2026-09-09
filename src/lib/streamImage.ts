@@ -32,12 +32,38 @@ export async function streamImage(
     signal?: AbortSignal;
     size?: "1024x1024" | "1792x1024" | "1024x1792";
     style?: "realistic_image" | "digital_illustration" | "vector_illustration";
+    routing?: {
+      taskType?: "generation" | "editing" | "variation" | "reference";
+      hasReference?: boolean;
+      referenceAssets?: string[];
+      editing?: boolean;
+      brandPrecision?: "normal" | "strict";
+      requiredQuality?: "standard" | "high" | "maximum";
+      iteration?: "first" | "refinement" | "variation";
+      latency?: "normal" | "fast";
+    };
+    metadata?: {
+      creativeBriefVersion?: string;
+      brandDnaVersion?: string;
+      promptVersion?: string;
+      attempt?: number;
+      seed?: string;
+      referenceAssets?: string[];
+    };
+    maxAttempts?: number;
   } = {},
 ): Promise<void> {
   const res = await authedFetch("/api/generate-image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, size: opts.size ?? "1024x1024", style: opts.style }),
+    body: JSON.stringify({
+      prompt,
+      size: opts.size ?? "1024x1024",
+      style: opts.style,
+      ...opts.routing,
+      metadata: opts.metadata,
+      maxAttempts: opts.maxAttempts,
+    }),
     signal: opts.signal,
   });
 

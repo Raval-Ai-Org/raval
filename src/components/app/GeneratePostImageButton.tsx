@@ -91,6 +91,7 @@ export function GeneratePostImageButton({
 
   const { image, status, error, progress, generate, cancel } = usePostImage({
     postId,
+    workspaceId,
     postBody: body,
     postTitle,
     brand,

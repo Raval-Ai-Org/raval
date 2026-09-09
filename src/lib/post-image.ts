@@ -13,6 +13,8 @@
 
 import type { PlatformId } from "@/lib/social-platforms";
 import { PLATFORMS } from "@/lib/social-platforms";
+import { deriveCreativeBrief, validateCreativeBrief } from "./creative-brief";
+import { deriveCreativeStrategy, strategyPromptLines } from "./creative-strategy";
 
 export type ImgSize = "1024x1024" | "1792x1024" | "1024x1792";
 
@@ -354,7 +356,7 @@ export function getBrandVisualSystem(
 
 /* ---------------- Voice → visual mood mapping ---------------- */
 
-/** Derive an explicit visual mood + Recraft-style hint from brand voice keywords.
+/** Derive an explicit visual mood + image-style hint from brand voice keywords.
  *  This turns fuzzy "brand voice" text into concrete art direction the model
  *  can actually execute on. */
 export function deriveMoodFromVoice(
@@ -384,9 +386,9 @@ export function deriveMoodFromVoice(
   return moods.slice(0, 2).join("; ");
 }
 
-/** Map brand character to a Recraft style hint (best-effort, string only —
+/** Map brand character to an image style hint (best-effort, string only —
  *  server passes it through verbatim; unrecognized values fall back cleanly). */
-export function deriveRecraftStyle(
+export function deriveImageStyle(
   voice?: string | null,
   industry?: string | null,
 ): "realistic_image" | "digital_illustration" | "vector_illustration" {
@@ -508,6 +510,19 @@ export function buildImagePromptDetailed(args: {
   const vis = getBrandVisualSystem(brand, seedKey, workspaceName);
   const styleSeed = getStyleSeed(brand, seedKey, workspaceName);
   const moodLine = deriveMoodFromVoice(voice, values, industry);
+  const creativeBrief = deriveCreativeBrief({
+    body,
+    audience,
+    platform,
+    size,
+  });
+  const creativeStrategy = deriveCreativeStrategy({
+    body,
+    brief: creativeBrief,
+    brand,
+    platform,
+    size,
+  });
 
   // Instagram-aware crop-safe zones. Instagram re-crops the same asset
   // across surfaces: feed shows 1:1 (or 4:5 portrait), Explore/Profile grid
@@ -588,6 +603,8 @@ export function buildImagePromptDetailed(args: {
     hook && `• Hook: "${hook}"`,
     `• Draft copy: ${snippet}`,
     "",
+    ...strategyPromptLines(creativeStrategy),
+    "",
     `VISUAL SYSTEM (style anchor: ${styleSeed}) — LOCK these across every size and every regeneration of this post:`,
     brandColors.length > 0
       ? `• EXACT brand palette (use ONLY these hex values, do NOT invent new colors): ${brandColors.join(", ")}. Canvas defaults — bg ${vis.palette.bg}, surface ${vis.palette.surface}, text ${vis.palette.fg}, accent ${vis.palette.accent}.`
@@ -617,6 +634,8 @@ export function buildImagePromptDetailed(args: {
     dontRules && `• Brand don'ts: ${dontRules}`,
     "",
     cropSafeRule,
+    "QA CHECKLIST — reject or refine the concept if any rule fails:",
+    ...validateCreativeBrief(creativeBrief).map((rule) => `• ${rule}`),
     aspectLine,
     platformLine,
   ]

@@ -43,6 +43,7 @@ import { DeliveryView } from "@/components/app/DeliveryView";
 import type { PublishSelection } from "@/lib/sdr.handlers";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { VideoPostComposer, type GeneratedVideoState } from "@/components/app/VideoPostComposer";
+import { persistGeneratedAsset } from "@/lib/persistent-assets";
 
 type SocialVariant = {
   platform: PlatformId;
@@ -103,7 +104,9 @@ function MediaFormatSwitcher({
         onClick={() => onChange("image")}
         className={cn(
           "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors",
-          value === "image" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+          value === "image"
+            ? "bg-foreground text-background"
+            : "text-muted-foreground hover:text-foreground",
         )}
       >
         <ImageIcon className="h-3 w-3" />
@@ -114,7 +117,9 @@ function MediaFormatSwitcher({
         onClick={() => onChange("video")}
         className={cn(
           "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors",
-          value === "video" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+          value === "video"
+            ? "bg-foreground text-background"
+            : "text-muted-foreground hover:text-foreground",
         )}
       >
         <Play className="h-3 w-3" />
@@ -323,6 +328,8 @@ export function StudioCanvasModal({
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
   const imageAbortRef = useRef<AbortController | null>(null);
   const imageProgressTimerRef = useRef<number | null>(null);
+  const generatedAssetRef = useRef<{ id: string; publicUrl: string } | null>(null);
+  const imageGenerationKeyRef = useRef<string | null>(null);
 
   // Per-platform caption stage — powers the multi-stage progress strip and
   // per-platform retry buttons. Populated by runCaptions() below.
@@ -486,6 +493,7 @@ export function StudioCanvasModal({
       imageAbortRef.current?.abort();
       const ctrl = new AbortController();
       imageAbortRef.current = ctrl;
+      imageGenerationKeyRef.current = crypto.randomUUID();
       setImageLoading(true);
       setImageStatus("loading");
       setImageError(null);
@@ -505,29 +513,68 @@ export function StudioCanvasModal({
           (dataUrl, isFinal) => {
             setPostImage(dataUrl);
             if (isFinal) {
-              setImageProgress(100);
-              setImageLoading(false);
-              setImageStatus("success");
-              if (imageProgressTimerRef.current) window.clearInterval(imageProgressTimerRef.current);
-
-              const id = canvas?.id;
-              if (id) {
-                imageCacheRef.current[id] = {
-                  ...(imageCacheRef.current[id] || {}),
-                  [imageSize]: dataUrl,
-                };
-                persistCache();
-              }
-
-              toast.success("Image ready", {
-                description: "1 credit used · cached for this topic.",
-              });
-
-              window.setTimeout(() => setImageStatus((s) => (s === "success" ? "idle" : s)), 1800);
-
-              if (canvas?.type === "design-asset" && !variants.length) {
-                void runCaptionsRef.current?.(platforms, bodyForPrompt);
-              }
+              void (async () => {
+                try {
+                  if (!workspaceId) throw new Error("Workspace is required to persist this image");
+                  const persisted = (await persistGeneratedAsset({
+                    workspaceId,
+                    contentItemId: UUID_RE.test(canvas?.id ?? "") ? canvas?.id : null,
+                    dataUrl,
+                    idempotencyKey:
+                      imageGenerationKeyRef.current ?? `${canvas?.id ?? "studio"}:${imageSize}`,
+                    filename: `mellox-${(canvas?.id || "post").slice(0, 24)}-${imageSize}.png`,
+                    platform: activePlatform,
+                    attempt: imageAttempt + 1,
+                    seed: canvas?.id ?? null,
+                    promptVersion: "studio-1",
+                    creativeBriefVersion: "1",
+                    brandDnaVersion: brand ? "present" : "missing",
+                    metadata: { source: "studio", visualPrompt },
+                  })) as { id?: string; public_url?: string };
+                  if (persisted.id && persisted.public_url) {
+                    generatedAssetRef.current = {
+                      id: persisted.id,
+                      publicUrl: persisted.public_url,
+                    };
+                  }
+                  const permanentUrl = persisted.public_url || dataUrl;
+                  setPostImage(permanentUrl);
+                  setImageProgress(100);
+                  setImageLoading(false);
+                  setImageStatus("success");
+                  if (imageProgressTimerRef.current)
+                    window.clearInterval(imageProgressTimerRef.current);
+                  const id = canvas?.id;
+                  if (id) {
+                    imageCacheRef.current[id] = {
+                      ...(imageCacheRef.current[id] || {}),
+                      [imageSize]: permanentUrl,
+                    };
+                    persistCache();
+                  }
+                  toast.success("Image ready", {
+                    description: "Persisted to your Mellox Library.",
+                  });
+                  window.setTimeout(
+                    () => setImageStatus((s) => (s === "success" ? "idle" : s)),
+                    1800,
+                  );
+                  if (canvas?.type === "design-asset" && !variants.length) {
+                    void runCaptionsRef.current?.(platforms, bodyForPrompt);
+                  }
+                } catch (persistError) {
+                  setImageLoading(false);
+                  setImageStatus("error");
+                  setImageError(
+                    persistError instanceof Error
+                      ? persistError.message
+                      : "Asset persistence failed",
+                  );
+                  if (imageProgressTimerRef.current)
+                    window.clearInterval(imageProgressTimerRef.current);
+                  toast.error("Image generated but could not be saved");
+                }
+              })();
             }
           },
           { signal: ctrl.signal, size: imageSize },
@@ -561,6 +608,7 @@ export function StudioCanvasModal({
       canvas?.id,
       canvas?.type,
       platforms,
+      workspaceId,
     ],
   );
 
@@ -774,6 +822,22 @@ export function StudioCanvasModal({
         }
 
         draftIdsRef.current = ids;
+        if (generatedAssetRef.current && ids[0]) {
+          const linked = generatedAssetRef.current;
+          await (supabase as any)
+            .from("assets")
+            .update({ content_item_id: ids[0] })
+            .eq("id", linked.id)
+            .eq("workspace_id", workspaceId);
+          await supabase
+            .from("content_items")
+            .update({
+              media_url: linked.publicUrl,
+              meta: { asset_id: linked.id, source: "studio" },
+            })
+            .eq("id", ids[0])
+            .eq("workspace_id", workspaceId);
+        }
         try {
           window.dispatchEvent(new CustomEvent("content:changed"));
         } catch {}
@@ -1484,6 +1548,8 @@ export function StudioCanvasModal({
                               {mediaType === "video" ? (
                                 <VideoPostComposer
                                   prompt={result || prompt}
+                                  workspaceId={workspaceId ?? null}
+                                  contentItemId={draftIdsRef.current[0] ?? null}
                                   platform={activePlatform}
                                   brandName={brand?.brandName || workspaceName}
                                   brandContext={brandContextString(brand, workspaceName)}

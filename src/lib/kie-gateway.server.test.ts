@@ -55,7 +55,7 @@ describe("KIE image gateway", () => {
       "Content-Type": "application/json",
     });
     expect(JSON.parse(String(calls[0].init?.body))).toMatchObject({
-      model: "gpt-image-2-text-to-image",
+      model: "gpt-image-2-5-flare-text-to-image",
       input: {
         prompt: "A launch visual",
         aspect_ratio: "16:9",
@@ -64,6 +64,8 @@ describe("KIE image gateway", () => {
       },
     });
     expect(await first.text()).toContain("image_generation.completed");
+    expect(first.headers.get("X-Creative-Model")).toBe("gpt-image-2-5-flare-text-to-image");
+    expect(first.headers.get("X-Creative-Route")).toBe("flare");
     expect(await second.text()).toContain("iVB");
   });
 
@@ -95,6 +97,55 @@ describe("KIE image gateway", () => {
     expect(await response.text()).toContain("image_generation.completed");
   });
 
+  it("routes references to Sunburst image-to-image and sends image_urls", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        if (url.endsWith("/jobs/createTask"))
+          return Response.json({ code: 200, data: { taskId: "task-edit" } });
+        if (url.includes("/jobs/recordInfo"))
+          return Response.json({
+            code: 200,
+            data: {
+              state: "success",
+              resultJson: JSON.stringify({ resultUrls: ["https://cdn.kie.ai/edit.png"] }),
+            },
+          });
+        return new Response(new Uint8Array([137, 80, 78, 71]), {
+          headers: { "content-type": "image/png" },
+        });
+      }),
+    );
+
+    const { imageGenerationStream } = await import("./kie-gateway.server");
+    const response = await imageGenerationStream({
+      prompt: "Preserve the product subject",
+      size: "1024x1024",
+      routing: {
+        taskType: "editing",
+        hasReference: true,
+        referenceAssets: ["https://cdn.example.com/reference.png"],
+        requiredQuality: "maximum",
+      },
+    });
+    const payload = JSON.parse(String(calls[0].init?.body));
+    expect(payload.model).toBe("gpt-image-2-5-sunburst-image-to-image");
+    expect(payload.input.image_urls).toEqual(["https://cdn.example.com/reference.png"]);
+    expect(response.headers.get("X-Creative-Route")).toBe("sunburst-edit");
+  });
+
+  it("rejects an image-to-image request without a reference", async () => {
+    const { imageGenerationStream } = await import("./kie-gateway.server");
+    await expect(
+      imageGenerationStream({
+        prompt: "Edit the subject",
+        routing: { taskType: "editing", hasReference: true },
+      }),
+    ).rejects.toMatchObject({ status: 422, category: "request" });
+  });
+
   it("uses the live Kie Veo 3.1 contract and blocks unsupported durations", async () => {
     const calls: { url: string; init?: RequestInit }[] = [];
     vi.stubGlobal(
@@ -103,7 +154,13 @@ describe("KIE image gateway", () => {
         calls.push({ url, init });
         if (url.endsWith("/jobs/createTask"))
           return Response.json({ code: 200, data: { taskId: "task-video" } });
-        return Response.json({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: ["https://cdn.kie.ai/video.mp4"] }) } });
+        return Response.json({
+          code: 200,
+          data: {
+            state: "success",
+            resultJson: JSON.stringify({ resultUrls: ["https://cdn.kie.ai/video.mp4"] }),
+          },
+        });
       }),
     );
 

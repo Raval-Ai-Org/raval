@@ -48,7 +48,6 @@ import {
   Zap,
   ImageIcon,
 } from "@/components/ui/gemini-icons";
-import { ImageLibraryModal, type ImageLibraryItemMeta } from "@/components/app/ImageLibraryModal";
 import { supabase } from "@/integrations/supabase/client";
 import { generateContentBatch, updateContentItem } from "@/lib/content.functions";
 import { logAudit, logAuditMany } from "@/lib/audit";
@@ -160,7 +159,6 @@ function AgencyHQ() {
   const [approvalsFilter, setApprovalsFilter] = useState<string>("all"); // client id or "all"
   const [cmdOpen, setCmdOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [imageLibOpen, setImageLibOpen] = useState(false);
 
   useEffect(() => {
     const h = new Date().getHours();
@@ -981,37 +979,6 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
     });
   }, [contentRows, clients, clientById]);
 
-  // Metadata map for the Image library (title, client, channel per post id).
-  const imageLibMeta = useMemo(() => {
-    const map: Record<string, ImageLibraryItemMeta> = {};
-    const push = (it: {
-      id: string;
-      title: string;
-      clientName: string;
-      channel?: string | null;
-    }) => {
-      if (!it.id) return;
-      map[it.id] = {
-        postId: it.id,
-        title: it.title,
-        clientName: it.clientName,
-        channel: it.channel ?? null,
-      };
-    };
-    combinedApprovals.forEach(push);
-    combinedScheduled.forEach(push);
-    combinedRecent.forEach(push);
-    contentRows.forEach((c) =>
-      push({
-        id: c.id,
-        title: c.title || "Untitled post",
-        clientName: clientById.get(c.workspace_id)?.name || "Client",
-        channel: c.channel,
-      }),
-    );
-    return map;
-  }, [combinedApprovals, combinedScheduled, combinedRecent, contentRows, clientById]);
-
   // Real-data-grounded suggestions — mirror the deterministic half of
   // useStudioSuggestions so Command Center reads the same signals.
   const dynamicSuggestions = useMemo(() => {
@@ -1307,13 +1274,6 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
             hint="Print or save"
             onClick={exportDigestPdf}
             tint="#ef4444"
-          />
-          <QuickAction
-            icon={<ImageIcon className="h-3.5 w-3.5" />}
-            label="Image library"
-            hint="All generated visuals"
-            onClick={() => setImageLibOpen(true)}
-            tint="#14b8a6"
           />
           <QuickAction
             icon={<CommandIcon className="h-3.5 w-3.5" />}
@@ -1792,12 +1752,6 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
           if (kind === "approve") await approveAll();
           else if (kind === "reject") await rejectAll();
         }}
-      />
-
-      <ImageLibraryModal
-        open={imageLibOpen}
-        onClose={() => setImageLibOpen(false)}
-        metaByPostId={imageLibMeta}
       />
 
       {loading && (

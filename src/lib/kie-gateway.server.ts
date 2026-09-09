@@ -1,5 +1,10 @@
+import {
+  getImageModelConfigStatus,
+  routeImageModel,
+  type ImageRoutingInput,
+} from "./model-router.server";
+
 const KIE_BASE = "https://api.kie.ai/api/v1";
-const KIE_IMAGE_MODEL = process.env.KIE_IMAGE_MODEL?.trim() || "gpt-image-2-text-to-image";
 const KIE_VIDEO_MODEL = process.env.KIE_VIDEO_MODEL?.trim() || "veo-3-1";
 const SUPPORTED_VIDEO_DURATIONS = [4, 6, 8] as const;
 const TASK_TIMEOUT_MS = 180_000;
@@ -19,10 +24,21 @@ export type GeneratedMedia = {
   mimeType: string;
 };
 
+export type ImageGenerationMetadata = {
+  creativeBriefVersion?: string;
+  brandDnaVersion?: string;
+  promptVersion?: string;
+  attempt?: number;
+  seed?: string;
+  referenceAssets?: string[];
+};
+
 export type VideoAspectRatio = "adaptive" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
 export type VideoResolution = "480P" | "720P" | "1080P";
 
-function normalizeKieAspectRatio(value?: VideoAspectRatio): "16:9" | "9:16" | "1:1" | "4:3" | "3:4" {
+function normalizeKieAspectRatio(
+  value?: VideoAspectRatio,
+): "16:9" | "9:16" | "1:1" | "4:3" | "3:4" {
   switch (value ?? "16:9") {
     case "9:16":
       return "9:16";
@@ -53,10 +69,15 @@ export type GeneratedVideo = {
 };
 
 export function getKieConfigStatus() {
+  const image = getImageModelConfigStatus();
   return {
     configured: Boolean(process.env.KIE_API_KEY?.trim()),
-    modelConfigured: Boolean(process.env.KIE_IMAGE_MODEL?.trim()),
-    model: KIE_IMAGE_MODEL,
+    image: {
+      ...image,
+      defaultRouteConfigured: image.defaultConfigured && image.premiumConfigured,
+      imageToImageRouteConfigured: image.editConfigured && image.premiumEditConfigured,
+      availability: "not-probed" as const,
+    },
     videoModelConfigured: Boolean(process.env.KIE_VIDEO_MODEL?.trim()),
     videoModel: KIE_VIDEO_MODEL,
     runtime: "node",
@@ -93,13 +114,19 @@ function headers(key: string): HeadersInit {
 function mapStatus(status: number, detail?: string): KieGatewayError {
   const message = detail || "The request was not accepted by the Kie provider.";
   if (status === 401 || status === 403)
-    return new KieGatewayError(503, "Kie authentication failed. Check the server-side API key.", "authentication");
+    return new KieGatewayError(
+      503,
+      "Kie authentication failed. Check the server-side API key.",
+      "authentication",
+    );
   if (status === 429)
-    return new KieGatewayError(429, "Kie is rate limiting generation requests. Please try again shortly.", "rate_limit");
-  if (status === 422)
-    return new KieGatewayError(422, message, "request");
-  if (status >= 400 && status < 500)
-    return new KieGatewayError(400, message, "request");
+    return new KieGatewayError(
+      429,
+      "Kie is rate limiting generation requests. Please try again shortly.",
+      "rate_limit",
+    );
+  if (status === 422) return new KieGatewayError(422, message, "request");
+  if (status >= 400 && status < 500) return new KieGatewayError(400, message, "request");
   return new KieGatewayError(502, "The image provider is temporarily unavailable.", "provider");
 }
 
@@ -112,7 +139,8 @@ async function fetchJson(url: string, init: RequestInit, timeoutMs: number): Pro
     try {
       payload = await response.json();
     } catch {
-      if (!response.ok) throw mapStatus(response.status, "The Kie provider returned malformed data.");
+      if (!response.ok)
+        throw mapStatus(response.status, "The Kie provider returned malformed data.");
       throw new KieGatewayError(502, "The Kie provider returned malformed data.", "response");
     }
 
@@ -124,7 +152,8 @@ async function fetchJson(url: string, init: RequestInit, timeoutMs: number): Pro
       }
     }
 
-    if (!response.ok) throw mapStatus(response.status, payload?.msg || "The Kie provider rejected the request.");
+    if (!response.ok)
+      throw mapStatus(response.status, payload?.msg || "The Kie provider rejected the request.");
     return payload;
   } catch (error) {
     if (error instanceof KieGatewayError) throw error;
@@ -142,8 +171,8 @@ function aspectRatio(size: "1024x1024" | "1792x1024" | "1024x1792"): string {
   return "1:1";
 }
 
-async function cacheKey(prompt: string, size: string): Promise<string> {
-  const bytes = new TextEncoder().encode(`kie|${KIE_IMAGE_MODEL}|${size}|${prompt}`);
+async function cacheKey(prompt: string, size: string, model: string): Promise<string> {
+  const bytes = new TextEncoder().encode(`kie|${model}|${size}|${prompt}`);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
@@ -184,20 +213,27 @@ function resultUrls(record: any): string[] {
   return visit(record, 0);
 }
 
-async function createTask(prompt: string, size: "1024x1024" | "1792x1024" | "1024x1792") {
+async function createTask(
+  prompt: string,
+  size: "1024x1024" | "1792x1024" | "1024x1792",
+  model: string,
+  referenceAssets: string[],
+) {
+  const input: Record<string, unknown> = {
+    prompt: prompt.slice(0, 10_000),
+    aspect_ratio: aspectRatio(size),
+    resolution: "1K",
+    background: "opaque",
+  };
+  if (referenceAssets.length) input.image_urls = referenceAssets;
   const json = await fetchJson(
     `${KIE_BASE}/jobs/createTask`,
     {
       method: "POST",
       headers: headers(getApiKey()),
       body: JSON.stringify({
-        model: KIE_IMAGE_MODEL,
-        input: {
-          prompt: prompt.slice(0, 10_000),
-          aspect_ratio: aspectRatio(size),
-          resolution: "1K",
-          background: "opaque",
-        },
+        model,
+        input,
       }),
     },
     30_000,
@@ -262,30 +298,75 @@ async function downloadImage(url: string): Promise<{ b64: string; mimeType: stri
 export async function imageGenerationStream(opts: {
   prompt: string;
   size?: "1024x1024" | "1792x1024" | "1024x1792";
+  routing?: Omit<ImageRoutingInput, "prompt">;
+  metadata?: ImageGenerationMetadata;
+  maxAttempts?: number;
 }): Promise<Response> {
   const size = opts.size ?? "1024x1024";
-  const key = await cacheKey(opts.prompt, size);
-  const cached = imageCache.get(key);
-  let image = cached && cached.expires > Date.now() ? cached.image : undefined;
-  if (!image) {
-    imageCache.delete(key);
-    let pending = inflight.get(key);
-    if (!pending) {
-      pending = (async () => {
-        const taskId = await createTask(opts.prompt, size);
-        const [url] = await waitForTask(taskId);
-        const downloaded = await downloadImage(url);
-        imageCache.set(key, { image: downloaded, expires: Date.now() + IMAGE_CACHE_TTL_MS });
-        return downloaded;
-      })();
-      inflight.set(key, pending);
-      void pending.then(
-        () => inflight.delete(key),
-        () => inflight.delete(key),
-      );
-    }
-    image = await pending;
+  const referenceAssets = (opts.routing?.referenceAssets ?? [])
+    .filter((value): value is string => typeof value === "string" && /^https:\/\//i.test(value))
+    .slice(0, 4);
+  const requiresReference = Boolean(
+    opts.routing?.hasReference ||
+    opts.routing?.editing ||
+    opts.routing?.taskType === "reference" ||
+    opts.routing?.taskType === "editing" ||
+    referenceAssets.length,
+  );
+  if (requiresReference && referenceAssets.length === 0) {
+    throw new KieGatewayError(
+      422,
+      "Image-to-image generation requires at least one HTTPS reference image.",
+      "request",
+    );
   }
+  const plan = routeImageModel({ prompt: opts.prompt, ...opts.routing });
+  let image: { b64: string; mimeType: string } | undefined;
+  let lastError: unknown;
+  const candidates = [plan.model, ...plan.fallbacks].slice(
+    0,
+    Math.max(1, Math.min(3, opts.maxAttempts ?? 3)),
+  );
+  let attempt = 0;
+  for (const model of candidates) {
+    attempt += 1;
+    const key = await cacheKey(opts.prompt, size, model);
+    try {
+      const cached = imageCache.get(key);
+      image = cached && cached.expires > Date.now() ? cached.image : undefined;
+      if (!image) {
+        imageCache.delete(key);
+        let pending = inflight.get(key);
+        if (!pending) {
+          pending = (async () => {
+            const taskId = await createTask(opts.prompt, size, model, referenceAssets);
+            const [url] = await waitForTask(taskId);
+            const downloaded = await downloadImage(url);
+            imageCache.set(key, { image: downloaded, expires: Date.now() + IMAGE_CACHE_TTL_MS });
+            return downloaded;
+          })();
+          inflight.set(key, pending);
+          void pending.then(
+            () => inflight.delete(key),
+            () => inflight.delete(key),
+          );
+        }
+        image = await pending;
+      }
+      if (image) break;
+    } catch (error) {
+      lastError = error;
+      if (
+        error instanceof KieGatewayError &&
+        ["configuration", "authentication", "request"].includes(error.category)
+      )
+        throw error;
+    }
+  }
+  if (!image)
+    throw lastError instanceof Error
+      ? lastError
+      : new KieGatewayError(502, "No image model completed the request.", "provider");
   const payload = JSON.stringify({ b64_json: image.b64, mime_type: image.mimeType });
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -300,6 +381,11 @@ export async function imageGenerationStream(opts: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      "X-Creative-Model": plan.model,
+      "X-Creative-Route": plan.route,
+      "X-Creative-Attempt": String(attempt),
+      "X-Creative-Prompt-Version": opts.metadata?.promptVersion ?? "1",
+      "X-Creative-Brief-Version": opts.metadata?.creativeBriefVersion ?? "1",
     },
   });
 }
@@ -315,7 +401,10 @@ export async function videoGeneration(opts: {
   const aspectRatio = normalizeKieAspectRatio(opts.aspectRatio);
   const duration = opts.duration ?? 6;
   const resolution = opts.resolution ?? "720P";
-  if (!Number.isInteger(duration) || !SUPPORTED_VIDEO_DURATIONS.includes(duration as (typeof SUPPORTED_VIDEO_DURATIONS)[number])) {
+  if (
+    !Number.isInteger(duration) ||
+    !SUPPORTED_VIDEO_DURATIONS.includes(duration as (typeof SUPPORTED_VIDEO_DURATIONS)[number])
+  ) {
     throw new KieGatewayError(400, "Video duration must be 4, 6, or 8 seconds.", "request");
   }
   if (!opts.prompt.trim()) {
@@ -324,7 +413,11 @@ export async function videoGeneration(opts: {
 
   const model = KIE_VIDEO_MODEL?.trim() || "veo-3-1";
   if (!model) {
-    throw new KieGatewayError(503, "Kie video generation is not configured. Set KIE_VIDEO_MODEL on the server.", "configuration");
+    throw new KieGatewayError(
+      503,
+      "Kie video generation is not configured. Set KIE_VIDEO_MODEL on the server.",
+      "configuration",
+    );
   }
 
   const json = await fetchJson(

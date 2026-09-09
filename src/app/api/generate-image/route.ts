@@ -17,7 +17,19 @@ export async function POST(request: Request) {
   ] as const;
   type AllowedSize = (typeof ALLOWED_SIZES)[number];
   type AllowedStyle = (typeof ALLOWED_STYLES)[number];
-  let body: { prompt?: unknown; size?: unknown; style?: unknown };
+  let body: {
+    prompt?: unknown;
+    size?: unknown;
+    style?: unknown;
+    hasReference?: unknown;
+    editing?: unknown;
+    requiredQuality?: unknown;
+    iteration?: unknown;
+    latency?: unknown;
+    referenceAssets?: unknown;
+    metadata?: unknown;
+    maxAttempts?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -40,9 +52,30 @@ export async function POST(request: Request) {
     style = body.style as AllowedStyle;
   }
 
+  const routing = {
+    hasReference: body.hasReference === true,
+    referenceAssets: Array.isArray(body.referenceAssets)
+      ? body.referenceAssets
+          .filter(
+            (value): value is string => typeof value === "string" && /^https:\/\//i.test(value),
+          )
+          .slice(0, 4)
+      : [],
+    editing: body.editing === true,
+    requiredQuality:
+      body.requiredQuality === "high" || body.requiredQuality === "maximum"
+        ? body.requiredQuality
+        : "standard",
+    iteration:
+      body.iteration === "refinement" || body.iteration === "variation" ? body.iteration : "first",
+    latency: body.latency === "fast" ? "fast" : "normal",
+  } as const;
+  const metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : undefined;
+  const maxAttempts = typeof body.maxAttempts === "number" ? body.maxAttempts : undefined;
+
   const { imageGenerationStream, KieGatewayError } = await import("@/lib/kie-gateway.server");
   try {
-    return await imageGenerationStream({ prompt, size });
+    return await imageGenerationStream({ prompt, size, routing, metadata, maxAttempts });
   } catch (e) {
     if (e instanceof KieGatewayError) return jsonError(e.status, e.message);
     throw e;

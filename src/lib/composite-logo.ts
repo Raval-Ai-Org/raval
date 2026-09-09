@@ -20,6 +20,17 @@ export type CompositeOptions = {
   chip?: string | null;
 };
 
+export type ExactTextOverlay = {
+  text: string;
+  x: number;
+  y: number;
+  maxWidth: number;
+  font: string;
+  color: string;
+  align?: CanvasTextAlign;
+  lineHeight?: number;
+};
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -91,6 +102,61 @@ export async function compositeLogoOnImage(
   } catch {
     return baseDataUrl;
   }
+}
+
+/**
+ * Render exact user-controlled copy after generation. Critical text must use
+ * this deterministic path rather than asking the image model to spell it.
+ * Coordinates are pixels in the requested output canvas and callers own the
+ * safe-area decision for the target platform.
+ */
+export async function compositeExactTextOnImage(
+  baseDataUrl: string,
+  size: ImgSize,
+  overlays: ExactTextOverlay[],
+): Promise<string> {
+  if (typeof document === "undefined" || overlays.length === 0) return baseDataUrl;
+  try {
+    const base = await loadImage(baseDataUrl);
+    const { w, h } = dimensions(size);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return baseDataUrl;
+    ctx.drawImage(base, 0, 0, w, h);
+    for (const overlay of overlays) {
+      if (!overlay.text.trim() || overlay.maxWidth <= 0) continue;
+      ctx.font = overlay.font;
+      ctx.fillStyle = overlay.color;
+      ctx.textAlign = overlay.align ?? "left";
+      ctx.textBaseline = "top";
+      const lineHeight =
+        overlay.lineHeight ?? Math.max(18, Math.round(parseFontSize(overlay.font) * 1.2));
+      const words = overlay.text.trim().split(/\s+/);
+      let line = "";
+      let row = 0;
+      for (const word of words) {
+        const candidate = line ? `${line} ${word}` : word;
+        if (line && ctx.measureText(candidate).width > overlay.maxWidth) {
+          ctx.fillText(line, overlay.x, overlay.y + row * lineHeight, overlay.maxWidth);
+          row += 1;
+          line = word;
+        } else {
+          line = candidate;
+        }
+      }
+      if (line) ctx.fillText(line, overlay.x, overlay.y + row * lineHeight, overlay.maxWidth);
+    }
+    return canvas.toDataURL("image/png");
+  } catch {
+    return baseDataUrl;
+  }
+}
+
+function parseFontSize(font: string): number {
+  const match = font.match(/(\d+(?:\.\d+)?)px/);
+  return match ? Number(match[1]) : 24;
 }
 
 function roundRect(

@@ -7,18 +7,23 @@ import {
   getCachedImage,
   setCachedImage,
   sizeForPlatform,
-  deriveRecraftStyle,
+  deriveImageStyle,
   logoCorner,
   type BrandDnaLite,
   type ImgSize,
 } from "@/lib/post-image";
 import { compositeLogoOnImage } from "@/lib/composite-logo";
 import type { PlatformId } from "@/lib/social-platforms";
+import { deriveCreativeBrief } from "@/lib/creative-brief";
+import { evaluateCreativePreflight, refinementInstructions } from "@/lib/creative-qa";
+import { deriveCreativeStrategy } from "@/lib/creative-strategy";
+import { persistGeneratedAsset } from "@/lib/persistent-assets";
 
 export type ImageStatus = "idle" | "loading" | "success" | "error";
 
 export function usePostImage(args: {
   postId?: string | null;
+  workspaceId?: string | null;
   postBody: string;
   postTitle?: string | null;
   brand: BrandDnaLite | null;
@@ -32,6 +37,7 @@ export function usePostImage(args: {
 }) {
   const {
     postId,
+    workspaceId,
     postBody,
     postTitle,
     brand,
@@ -49,6 +55,7 @@ export function usePostImage(args: {
   const [progress, setProgress] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<number | null>(null);
+  const generationKeyRef = useRef<string | null>(null);
 
   // Rehydrate on postId/size change; also react to cache events fired by
   // other components (so a modal-generated image appears on the approval card).
@@ -81,10 +88,12 @@ export function usePostImage(args: {
       toast.error("No post text yet — write or generate the post first");
       return;
     }
-    if (!postId) {
-      toast.error("Save the draft first, then generate an image");
+    if (!workspaceId) {
+      toast.error("Select a workspace before generating an image");
       return;
     }
+
+    const generationSeed = postId ?? `${workspaceId}:${activeSize}`;
 
     const prompt = buildImagePrompt({
       postBody: body,
@@ -93,13 +102,29 @@ export function usePostImage(args: {
       workspaceName,
       platform,
       size: activeSize,
-      seedKey: postId,
+      seedKey: generationSeed,
       autoSize,
     });
+    const brief = deriveCreativeBrief({
+      body,
+      audience: brand?.audience,
+      platform,
+      size: activeSize,
+    });
+    const strategy = deriveCreativeStrategy({ body, brief, brand, platform, size: activeSize });
+    const preflight = evaluateCreativePreflight({
+      strategy,
+      prompt,
+      size: activeSize,
+      brandPresent: Boolean(brand),
+      attempt: 1,
+    });
+    const refinedPrompt = [prompt, ...refinementInstructions(preflight)].join("\n\n");
 
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
+    generationKeyRef.current = crypto.randomUUID();
     setStatus("loading");
     setError(null);
     setProgress(6);
@@ -112,39 +137,83 @@ export function usePostImage(args: {
 
     try {
       const { streamImage } = await import("@/lib/streamImage");
-      const style = deriveRecraftStyle(brand?.voice, brand?.industry);
+      const style = deriveImageStyle(brand?.voice, brand?.industry);
       await streamImage(
-        prompt,
+        refinedPrompt,
         (dataUrl, isFinal) => {
           setImage(dataUrl);
           if (isFinal) {
             void (async () => {
-              let finalUrl = dataUrl;
-              if (brand?.logoUrl) {
-                const corner = logoCorner(activeSize) === "top-left" ? "tl" : "br";
-                finalUrl = await compositeLogoOnImage(dataUrl, {
-                  logoUrl: brand.logoUrl,
-                  size: activeSize,
-                  corner,
-                  widthPct: 0.12,
-                  insetPct: 0.04,
+              try {
+                if (!workspaceId) throw new Error("Workspace is required to persist this image");
+                let finalUrl = dataUrl;
+                if (brand?.logoUrl) {
+                  const corner = logoCorner(activeSize) === "top-left" ? "tl" : "br";
+                  finalUrl = await compositeLogoOnImage(dataUrl, {
+                    logoUrl: brand.logoUrl,
+                    size: activeSize,
+                    corner,
+                    widthPct: 0.12,
+                    insetPct: 0.04,
+                  });
+                  setImage(finalUrl);
+                }
+                const persisted = (await persistGeneratedAsset({
+                  workspaceId,
+                  contentItemId: postId,
+                  dataUrl: finalUrl,
+                  idempotencyKey: generationKeyRef.current ?? `${generationSeed}:image`,
+                  filename: `${postTitle || "mellox-post"}-${activeSize}.png`,
+                  platform,
+                  attempt: 1,
+                  seed: generationSeed,
+                  promptVersion: "2",
+                  creativeBriefVersion: "1",
+                  brandDnaVersion: brand ? "present" : "missing",
+                  metadata: { source: "post-image", status: "ready" },
+                })) as { public_url?: string };
+                const permanentUrl = persisted.public_url || finalUrl;
+                setImage(permanentUrl);
+                setProgress(100);
+                setStatus("success");
+                if (timerRef.current) window.clearInterval(timerRef.current);
+                if (postId) setCachedImage(postId, activeSize, permanentUrl);
+                toast.success("Image ready", {
+                  description: "Persisted to your Mellox Library.",
                 });
-                setImage(finalUrl);
+                window.setTimeout(() => setStatus((s) => (s === "success" ? "idle" : s)), 1800);
+              } catch (persistError) {
+                if (timerRef.current) window.clearInterval(timerRef.current);
+                const message =
+                  persistError instanceof Error ? persistError.message : "Asset persistence failed";
+                setError(message);
+                setStatus("error");
+                toast.error("Image generated but could not be saved", {
+                  description: message,
+                  duration: 8000,
+                });
               }
-              setProgress(100);
-              setStatus("success");
-              if (timerRef.current) window.clearInterval(timerRef.current);
-              setCachedImage(postId, activeSize, finalUrl);
-              toast.success("Image ready", {
-                description: brand?.logoUrl
-                  ? "Brand logo composited · cached for this post."
-                  : "1 credit used · cached for this post.",
-              });
-              window.setTimeout(() => setStatus((s) => (s === "success" ? "idle" : s)), 1800);
             })();
           }
         },
-        { signal: ctrl.signal, size: activeSize, style },
+        {
+          signal: ctrl.signal,
+          size: activeSize,
+          style,
+          routing: {
+            taskType: "generation",
+            brandPrecision: brand ? "strict" : "normal",
+            requiredQuality: strategy.objective === "product-launch" ? "high" : "standard",
+          },
+          metadata: {
+            creativeBriefVersion: "1",
+            brandDnaVersion: brand ? "present" : "missing",
+            promptVersion: "2",
+            attempt: 1,
+            seed: generationSeed,
+          },
+          maxAttempts: 3,
+        },
       );
     } catch (e: any) {
       if (timerRef.current) window.clearInterval(timerRef.current);
@@ -158,7 +227,18 @@ export function usePostImage(args: {
       setStatus("error");
       toast.error("Image generation failed", { description: msg });
     }
-  }, [status, postBody, postTitle, brand, workspaceName, platform, activeSize, postId, autoSize]);
+  }, [
+    status,
+    postBody,
+    postTitle,
+    brand,
+    workspaceName,
+    platform,
+    activeSize,
+    postId,
+    workspaceId,
+    autoSize,
+  ]);
 
   return { image, status, error, progress, size: activeSize, generate, cancel };
 }

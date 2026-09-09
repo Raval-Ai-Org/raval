@@ -4,5 +4,14 @@ import { getKieConfigStatus } from "@/lib/kie-gateway.server";
 export const dynamic = "force-dynamic";
 
 export function GET() {
-  return NextResponse.json({ status: "ok", kie: getKieConfigStatus() });
+  const kie = getKieConfigStatus();
+  const imageReady = kie.configured && kie.image.defaultRouteConfigured;
+  return NextResponse.json({
+    status: imageReady ? "ok" : "degraded",
+    kie,
+    services: {
+      imageGeneration: imageReady,
+      imageToImage: kie.configured && kie.image.imageToImageRouteConfigured,
+    },
+  });
 }
