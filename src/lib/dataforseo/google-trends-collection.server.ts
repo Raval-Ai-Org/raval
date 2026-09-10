@@ -8,6 +8,7 @@ import {
   type GoogleTrendsData,
   type GoogleTrendsInput,
 } from "@/lib/dataforseo/google-trends.server";
+import { marketLog, withMarketTimeout } from "@/lib/market-reliability.server";
 
 export type TrendCollectionState = "cached" | "pending" | "completed" | "failed" | "no_data";
 
@@ -80,28 +81,43 @@ function providerError(error: unknown): TrendCollectionResult["error"] {
   return { message: "Google Trends collection failed", status: 502 };
 }
 
-async function getRow(requestKey: string, workspaceId: string): Promise<CollectionRow | null> {
+async function getRow(
+  requestKey: string,
+  workspaceId: string,
+  operation = "unknown",
+): Promise<CollectionRow | null> {
   const query = supabaseAdmin
     .from("market_trend_collections")
     .select("*")
     .eq("workspace_id", workspaceId)
     .eq("request_key", requestKey);
-  const { data, error } = await query.maybeSingle();
+  const { data, error } = await withMarketTimeout(
+    query.maybeSingle(),
+    undefined,
+    "Market collection lookup timed out",
+  );
   if (error) throw new Error("Failed to read Google Trends cache");
+  marketLog("collection lookup", { operation, found: Boolean(data) });
   return data as CollectionRow | null;
 }
 
 async function updateRow(
   id: string,
   values: TablesUpdate<"market_trend_collections">,
+  operation = "unknown",
 ): Promise<CollectionRow> {
-  const { data, error } = await supabaseAdmin
+  const query = supabaseAdmin
     .from("market_trend_collections")
     .update(values)
     .eq("id", id)
     .select("*")
-    .single();
+  const { data, error } = await withMarketTimeout(
+    query.single(),
+    undefined,
+    "Market collection update timed out",
+  );
   if (error || !data) throw new Error("Failed to update Google Trends collection");
+  marketLog("collection updated", { operation, collectionId: id, status: values.status });
   return data as CollectionRow;
 }
 
@@ -109,8 +125,9 @@ async function createPendingRow(
   input: GoogleTrendsInput,
   requestKey: string,
   workspaceId: string,
+  operation = "unknown",
 ): Promise<{ row: CollectionRow; created: boolean }> {
-  const { data, error } = await supabaseAdmin
+  const query = supabaseAdmin
     .from("market_trend_collections")
     .insert({
       workspace_id: workspaceId,
@@ -123,28 +140,45 @@ async function createPendingRow(
       time_range: input.timeRange ?? null,
       status: "pending",
     })
-    .select("*")
-    .single();
-  if (!error && data) return { row: data as CollectionRow, created: true };
-  const existing = await getRow(requestKey, workspaceId);
+    .select("*");
+  const { data, error } = await withMarketTimeout(
+    query.single(),
+    undefined,
+    "Market collection creation timed out",
+  );
+  if (!error && data) {
+    marketLog("collection created", { operation, collectionId: data.id });
+    return { row: data as CollectionRow, created: true };
+  }
+  const existing = await getRow(requestKey, workspaceId, operation);
   if (existing) return { row: existing, created: false };
   throw new Error("Failed to create Google Trends collection");
 }
 
-async function startCollection(input: GoogleTrendsInput, workspaceId: string): Promise<TrendCollectionResult> {
+async function startCollection(
+  input: GoogleTrendsInput,
+  workspaceId: string,
+  operation: string,
+): Promise<TrendCollectionResult> {
   const requestKey = trendRequestKey(input);
-  let row = await getRow(requestKey, workspaceId);
+  marketLog("collection start", { operation, requestKey });
+  let row = await getRow(requestKey, workspaceId, operation);
   const now = Date.now();
 
   if (row?.status === "completed" && row.completed_at) {
     const age = now - new Date(row.completed_at).getTime();
     if (age >= 0 && age < CACHE_TTL_MS) return resultFromRow(row, "cached");
   }
-  if (row?.status === "pending" && row.dataforseo_task_id) {
-    return resultFromRow(row, "pending");
-  }
-  if (row?.status === "pending" && now - new Date(row.updated_at).getTime() < STALE_PENDING_MS) {
-    return resultFromRow(row, "pending");
+  if (row?.status === "pending") {
+    if (now - new Date(row.updated_at).getTime() < STALE_PENDING_MS) {
+      marketLog("pending collection reused", {
+        operation,
+        collectionId: row.id,
+        hasTask: Boolean(row.dataforseo_task_id),
+      });
+      return resultFromRow(row, "pending");
+    }
+    marketLog("stale pending collection reclaimed", { operation, collectionId: row.id });
   }
   if (row?.status === "failed" && now - new Date(row.updated_at).getTime() < RETRY_AFTER_MS) {
     return resultFromRow(row, "failed");
@@ -160,9 +194,10 @@ async function startCollection(input: GoogleTrendsInput, workspaceId: string): P
       requested_at: new Date().toISOString(),
       completed_at: null,
       last_polled_at: null,
-    });
+    }, operation);
+    created = true;
   } else {
-    const inserted = await createPendingRow(input, requestKey, workspaceId);
+    const inserted = await createPendingRow(input, requestKey, workspaceId, operation);
     row = inserted.row;
     created = inserted.created;
   }
@@ -176,10 +211,12 @@ async function startCollection(input: GoogleTrendsInput, workspaceId: string): P
       dataforseo_task_id: task.taskId,
       status: "pending",
       provider_error: null,
-    });
+    }, operation);
+    marketLog("DataForSEO task created", { operation, collectionId: row.id, taskId: task.taskId });
     return resultFromRow(row, "pending");
   } catch (error) {
-    row = await updateRow(row.id, { status: "failed", provider_error: providerError(error) });
+    row = await updateRow(row.id, { status: "failed", provider_error: providerError(error) }, operation);
+    marketLog("DataForSEO task creation failed", { operation, collectionId: row.id });
     return { ...resultFromRow(row, "failed"), error: providerError(error) };
   }
 }
@@ -187,33 +224,48 @@ async function startCollection(input: GoogleTrendsInput, workspaceId: string): P
 export async function requestGoogleTrendsCollection(
   input: GoogleTrendsInput,
   workspaceId: string,
+  operation = "unknown",
 ): Promise<TrendCollectionResult> {
   const key = `${workspaceId}:${trendRequestKey(input)}`;
   const active = inflight.get(key);
   if (active) return active;
-  const work = startCollection(input, workspaceId).finally(() => inflight.delete(key));
+  const work = startCollection(input, workspaceId, operation).finally(() => inflight.delete(key));
   inflight.set(key, work);
   return work;
 }
 
 export async function pollGoogleTrendsCollection(
   collectionId: string,
+  operation = "unknown",
 ): Promise<TrendCollectionResult> {
-  const row = (await supabaseAdmin
+  const query = supabaseAdmin
     .from("market_trend_collections")
     .select("*")
     .eq("id", collectionId)
-    .maybeSingle()) as { data: CollectionRow | null; error: unknown };
+  const row = (await withMarketTimeout(
+    query.maybeSingle(),
+    undefined,
+    "Market collection read timed out",
+  )) as { data: CollectionRow | null; error: unknown };
   if (row.error || !row.data) return { state: "no_data", collectionId, taskId: null };
   const current = row.data;
+  marketLog("DataForSEO polling started", { operation, collectionId, taskId: current.dataforseo_task_id });
   if (current.status === "completed") return resultFromRow(current, "completed");
+  if (current.status === "no_data") return resultFromRow(current, "no_data");
   if (current.status === "failed") return resultFromRow(current, "failed");
   if (!current.dataforseo_task_id) return resultFromRow(current, "pending");
 
   try {
     const task = await getGoogleTrendsTask(current.dataforseo_task_id, current.keywords);
+    marketLog("DataForSEO polling result", {
+      operation,
+      collectionId,
+      taskId: current.dataforseo_task_id,
+      status: task.status,
+      statusCode: task.statusCode,
+    });
     if (task.status === "pending") {
-      const updated = await updateRow(current.id, { last_polled_at: new Date().toISOString() });
+      const updated = await updateRow(current.id, { last_polled_at: new Date().toISOString() }, operation);
       return resultFromRow(updated, "pending");
     }
     if (task.status === "failed") {
@@ -224,16 +276,18 @@ export async function pollGoogleTrendsCollection(
           message: task.statusMessage ?? "DataForSEO task failed",
           providerCode: task.statusCode,
         },
-      });
+      }, operation);
       return resultFromRow(updated, "failed");
     }
     const updated = await updateRow(current.id, {
-      status: "completed",
+      status: task.data ? "completed" : "no_data",
       last_polled_at: new Date().toISOString(),
       completed_at: new Date().toISOString(),
       normalized_result: task.data ?? null,
       provider_error: null,
-    });
+    }, operation);
+    marketLog(task.data ? "DataForSEO completed" : "DataForSEO no-data", { operation, collectionId });
+    if (task.data) marketLog("normalized trend data produced", { operation, collectionId });
     return resultFromRow(updated, task.data ? "completed" : "no_data");
   } catch (error) {
     const details = providerError(error);
@@ -241,7 +295,8 @@ export async function pollGoogleTrendsCollection(
       status: "failed",
       last_polled_at: new Date().toISOString(),
       provider_error: details,
-    });
+    }, operation);
+    marketLog("DataForSEO polling failed", { operation, collectionId });
     return { ...resultFromRow(updated, "failed"), error: details };
   }
 }

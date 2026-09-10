@@ -175,4 +175,44 @@ describe("Google Trends collection cache", () => {
     expect(result.state).toBe("failed");
     expect(result.error?.message).toBe("Google Trends collection failed");
   });
+
+  it("reclaims stale pending collections instead of reusing them forever", async () => {
+    const stale = new Date(Date.now() - 21 * 60 * 1000).toISOString();
+    state.rows.push({
+      id: "stale-1",
+      workspace_id: workspaceId,
+      request_key: (await import("./google-trends-collection.server")).trendRequestKey(input),
+      keywords: input.keywords,
+      location: input.location,
+      language: input.language,
+      status: "pending",
+      dataforseo_task_id: "old-task",
+      normalized_result: null,
+      provider_error: null,
+      requested_at: stale,
+      last_polled_at: stale,
+      completed_at: null,
+      updated_at: stale,
+    });
+
+    const result = await requestGoogleTrendsCollection(input, workspaceId);
+
+    expect(result.state).toBe("pending");
+    expect(createGoogleTrendsTask).toHaveBeenCalledOnce();
+    expect(state.rows[0]?.dataforseo_task_id).toBe("task-1");
+  });
+
+  it("persists no_data when the provider completes without usable data", async () => {
+    const started = await requestGoogleTrendsCollection(input, workspaceId);
+    vi.mocked(getGoogleTrendsTask).mockResolvedValueOnce({
+      id: "task-1",
+      status: "completed",
+      statusCode: 20000,
+    });
+
+    const result = await pollGoogleTrendsCollection(started.collectionId!);
+
+    expect(result.state).toBe("no_data");
+    expect(state.rows[0]?.status).toBe("no_data");
+  });
 });

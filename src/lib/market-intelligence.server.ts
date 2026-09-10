@@ -9,6 +9,7 @@ import {
   selectClaudeModel,
 } from "@/lib/anthropic-gateway.server";
 import type { GoogleTrendsData } from "@/lib/dataforseo/google-trends.server";
+import { marketLog, withMarketTimeout } from "@/lib/market-reliability.server";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -16,47 +17,39 @@ const Direction = z.enum(["rising", "declining", "stable", "mixed", "unclear"]);
 const Priority = z.enum(["high", "medium", "low"]);
 const Confidence = z.enum(["high", "medium", "low"]);
 
-const TrendSignalSchema = z
-  .object({
-    title: z.string().min(1).max(160),
-    direction: Direction,
-    evidence: z.array(z.string().min(1).max(400)).min(1).max(5),
-    significance: z.string().min(1).max(500),
-    opportunities: z.array(z.string().min(1).max(300)).max(4),
-  })
-  .strict();
+const TrendSignalSchema = z.object({
+  title: z.string().min(1).max(160),
+  direction: Direction,
+  evidence: z.array(z.string().min(1).max(400)).min(1).max(5),
+  significance: z.string().min(1).max(500),
+  opportunities: z.array(z.string().min(1).max(300)).max(4),
+});
 
-const OpportunitySchema = z
-  .object({
-    title: z.string().min(1).max(160),
-    explanation: z.string().min(1).max(500),
-    targetAudience: z.string().min(1).max(240),
-    recommendedAction: z.string().min(1).max(400),
-    priority: Priority,
-  })
-  .strict();
+const OpportunitySchema = z.object({
+  title: z.string().min(1).max(160),
+  explanation: z.string().min(1).max(500),
+  targetAudience: z.string().min(1).max(240),
+  recommendedAction: z.string().min(1).max(400),
+  priority: Priority,
+});
 
-const RecommendationSchema = z
-  .object({
-    action: z.string().min(1).max(300),
-    reason: z.string().min(1).max(400),
-    expectedMarketingImpact: z.string().min(1).max(300),
-    priority: Priority,
-  })
-  .strict();
+const RecommendationSchema = z.object({
+  action: z.string().min(1).max(300),
+  reason: z.string().min(1).max(400),
+  expectedMarketingImpact: z.string().min(1).max(300),
+  priority: Priority,
+});
 
-export const MarketIntelligenceSchema = z
-  .object({
-    summary: z.string().min(1).max(800),
-    trendSignals: z.array(TrendSignalSchema).max(8),
-    opportunities: z.array(OpportunitySchema).max(8),
-    recommendations: z.array(RecommendationSchema).max(8),
-    relatedQueries: z.array(z.string().min(1).max(200)).max(20),
-    relatedTopics: z.array(z.string().min(1).max(200)).max(20),
-    confidence: Confidence,
-    generatedAt: z.string().min(1).max(80),
-  })
-  .strict();
+export const MarketIntelligenceSchema = z.object({
+  summary: z.string().min(1).max(800),
+  trendSignals: z.array(TrendSignalSchema).max(8),
+  opportunities: z.array(OpportunitySchema).max(8),
+  recommendations: z.array(RecommendationSchema).max(8),
+  relatedQueries: z.array(z.string().min(1).max(200)).max(20),
+  relatedTopics: z.array(z.string().min(1).max(200)).max(20),
+  confidence: Confidence,
+  generatedAt: z.string().min(1).max(80),
+});
 
 export type MarketIntelligence = z.infer<typeof MarketIntelligenceSchema>;
 export type IntelligenceState = "completed" | "cached" | "pending" | "failed" | "no_data";
@@ -195,26 +188,35 @@ function providerError(error: unknown): MarketIntelligenceResult["error"] {
 async function loadCollection(
   collectionId: string,
   workspaceId: string,
+  operation = "unknown",
 ): Promise<TrendCollectionRow | null> {
-  const { data, error } = await supabaseAdmin
+  const query = supabaseAdmin
     .from("market_trend_collections")
     .select(
       "id, workspace_id, status, keywords, location, language, completed_at, normalized_result, provider_error",
     )
     .eq("workspace_id", workspaceId)
     .eq("id", collectionId)
-    .maybeSingle();
+  const { data, error } = await withMarketTimeout(
+    query.maybeSingle(),
+    undefined,
+    "Market collection lookup timed out",
+  );
   if (error)
     throw new MarketIntelligenceError("Unable to read trend collection", 500, "storage_error");
   return data as TrendCollectionRow | null;
 }
 
-async function loadWorkspace(workspaceId: string): Promise<WorkspaceRow | null> {
-  const { data, error } = await supabaseAdmin
+async function loadWorkspace(workspaceId: string, operation = "unknown"): Promise<WorkspaceRow | null> {
+  const query = supabaseAdmin
     .from("workspaces")
     .select("name, industry, audience, goals, website_url, brand_voice")
     .eq("id", workspaceId)
-    .maybeSingle();
+  const { data, error } = await withMarketTimeout(
+    query.maybeSingle(),
+    undefined,
+    "Business context lookup timed out",
+  );
   if (error)
     throw new MarketIntelligenceError("Unable to read business context", 500, "storage_error");
   return data as WorkspaceRow | null;
@@ -224,10 +226,16 @@ export async function analyzeMarketCollection(args: {
   collectionId: string;
   workspaceId: string;
   analysisType?: string;
+  operation?: string;
 }): Promise<MarketIntelligenceResult> {
-  const collection = await loadCollection(args.collectionId, args.workspaceId);
+  const operation = args.operation ?? "unknown";
+  marketLog("intelligence request started", { operation, collectionId: args.collectionId });
+  const collection = await loadCollection(args.collectionId, args.workspaceId, operation);
   if (!collection) return { state: "no_data", collectionId: args.collectionId };
-  if (collection.status === "pending") return { state: "pending", collectionId: args.collectionId };
+  if (collection.status === "pending") {
+    marketLog("intelligence collection pending", { operation, collectionId: args.collectionId });
+    return { state: "pending", collectionId: args.collectionId };
+  }
   if (collection.status === "failed") {
     return {
       state: "failed",
@@ -241,21 +249,26 @@ export async function analyzeMarketCollection(args: {
     return { state: "no_data", collectionId: args.collectionId };
   }
 
-  const workspace = await loadWorkspace(args.workspaceId);
+  const workspace = await loadWorkspace(args.workspaceId, operation);
   if (!workspace) return { state: "no_data", collectionId: args.collectionId };
   const type = args.analysisType ?? ANALYSIS_TYPE;
   const fingerprint = contextFingerprint(workspace);
   const key = analysisKey(args.collectionId, fingerprint, type);
-  const { data: cached, error: cacheError } = await supabaseAdmin
+  const cacheQuery = supabaseAdmin
     .from("market_intelligence_cache")
     .select("result")
     .eq("analysis_key", key)
-    .maybeSingle();
+  const { data: cached, error: cacheError } = await withMarketTimeout(
+    cacheQuery.maybeSingle(),
+    undefined,
+    "Market intelligence cache lookup timed out",
+  );
   if (cacheError)
     throw new MarketIntelligenceError("Unable to read intelligence cache", 500, "storage_error");
   if (cached?.result) {
     const validated = MarketIntelligenceSchema.safeParse(cached.result);
     if (validated.success)
+      marketLog("intelligence cache hit", { operation, collectionId: args.collectionId });
       return { state: "cached", collectionId: args.collectionId, data: validated.data };
   }
 
@@ -266,6 +279,7 @@ export async function analyzeMarketCollection(args: {
   const prompt = buildPrompt({ collection, workspace, brandContext });
   let intelligence: MarketIntelligence;
   try {
+    marketLog("Claude intelligence request started", { operation, collectionId: args.collectionId });
     const raw = await claudeTextPrompt({
       route: "market-intelligence",
       system: prompt.system,
@@ -274,11 +288,13 @@ export async function analyzeMarketCollection(args: {
       maxTokens: 3000,
     });
     intelligence = parseIntelligence(raw);
+    marketLog("Claude response received", { operation, collectionId: args.collectionId });
   } catch (error) {
+    marketLog("Claude intelligence request failed", { operation, collectionId: args.collectionId });
     return { state: "failed", collectionId: args.collectionId, error: providerError(error) };
   }
 
-  const { error: insertError } = await supabaseAdmin.from("market_intelligence_cache").upsert(
+  const cacheWrite = supabaseAdmin.from("market_intelligence_cache").upsert(
     {
       workspace_id: args.workspaceId,
       collection_id: args.collectionId,
@@ -289,6 +305,11 @@ export async function analyzeMarketCollection(args: {
     },
     { onConflict: "analysis_key" },
   );
+  const { error: insertError } = await withMarketTimeout(
+    cacheWrite,
+    undefined,
+    "Market intelligence cache write timed out",
+  );
   if (insertError) {
     return {
       state: "failed",
@@ -296,5 +317,6 @@ export async function analyzeMarketCollection(args: {
       error: { message: "Unable to store market intelligence", status: 500, code: "storage_error" },
     };
   }
+  marketLog("intelligence cache written", { operation, collectionId: args.collectionId });
   return { state: "completed", collectionId: args.collectionId, data: intelligence };
 }

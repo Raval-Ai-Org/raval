@@ -73,7 +73,10 @@ describe("POST /api/market/trends", () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).state).toBe("completed");
-    expect(pollGoogleTrendsCollection).toHaveBeenCalledWith("11111111-1111-1111-1111-111111111111");
+    expect(pollGoogleTrendsCollection).toHaveBeenCalledWith(
+      "11111111-1111-1111-1111-111111111111",
+      expect.stringMatching(/^market-poll-/),
+    );
   });
 
   it("registers the workspace as a daily Market Brain schedule when provided", async () => {

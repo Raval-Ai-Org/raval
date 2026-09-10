@@ -6,6 +6,7 @@ import {
   requestGoogleTrendsCollection,
 } from "@/lib/dataforseo/google-trends-collection.server";
 import { ensureMarketBrainSchedule } from "@/lib/market-brain-scheduler.server";
+import { marketLog, operationId, withMarketTimeout } from "@/lib/market-reliability.server";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,8 @@ const BodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const operation = operationId("market-scan");
+  marketLog("scan request received", { operation });
   const auth = await requireUserId(request);
   if (!auth.ok) return auth.response;
 
@@ -61,6 +64,7 @@ export async function POST(request: Request) {
 
   const access = await requireWorkspaceAccess(request, body.workspaceId);
   if (!access.ok) return access.response;
+  marketLog("workspace resolved", { operation, workspaceId: body.workspaceId });
 
   try {
     const result = await requestGoogleTrendsCollection(
@@ -73,7 +77,9 @@ export async function POST(request: Request) {
         timeRange: body.timeRange,
       },
       body.workspaceId,
+      operation,
     );
+    marketLog("keywords generated", { operation, count: body.keywords.length });
     const schedulePayload: {
         workspaceId: string;
         keywords: string[];
@@ -93,15 +99,27 @@ export async function POST(request: Request) {
       if (body.dateTo) schedulePayload.dateTo = body.dateTo;
       if (body.timeRange) schedulePayload.timeRange = body.timeRange;
 
-    await ensureMarketBrainSchedule(schedulePayload);
+    await withMarketTimeout(
+      ensureMarketBrainSchedule(schedulePayload),
+      5_000,
+      "Market schedule registration timed out",
+    ).catch((error) => {
+      marketLog("schedule registration failed", { operation, reason: error instanceof Error ? error.message : "unknown" });
+    });
+    marketLog("scan response returned", { operation, state: result.state, collectionId: result.collectionId });
     return Response.json({ success: true, source: "google_trends", ...result });
   } catch (error) {
-    console.error("[market/trends] unexpected error", error);
-    return jsonError(502, "Google Trends service unavailable");
+    marketLog("scan request failed", { operation, reason: error instanceof Error ? error.message : "unknown" });
+    return Response.json(
+      { status: "failed", data: null, error: { message: "Market scan could not be started" } },
+      { status: 502 },
+    );
   }
 }
 
 export async function GET(request: Request) {
+  const operation = operationId("market-poll");
+  marketLog("poll request received", { operation });
   const auth = await requireUserId(request);
   if (!auth.ok) return auth.response;
 
@@ -117,10 +135,14 @@ export async function GET(request: Request) {
   if (!access.ok) return access.response;
 
   try {
-    const result = await pollGoogleTrendsCollection(collectionId);
+    const result = await pollGoogleTrendsCollection(collectionId, operation);
+    marketLog("poll response returned", { operation, state: result.state, collectionId });
     return Response.json({ success: true, source: "google_trends", ...result });
   } catch (error) {
-    console.error("[market/trends] polling error", error);
-    return jsonError(502, "Google Trends polling failed");
+    marketLog("poll request failed", { operation, reason: error instanceof Error ? error.message : "unknown" });
+    return Response.json(
+      { status: "failed", data: null, error: { message: "Market scan could not be polled" } },
+      { status: 502 },
+    );
   }
 }

@@ -148,6 +148,34 @@ describe("DataForSEO Google Trends client", () => {
       status: "pending",
     });
 
+    const handed = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status_code: 20000,
+          tasks: [{ status_code: 40601, status_message: "Task Handed." }],
+        }),
+        { status: 200 },
+      ),
+    );
+    await expect(getGoogleTrendsTask("handed", ["AI marketing"], handed)).resolves.toMatchObject({
+      status: "pending",
+      statusCode: 40601,
+    });
+
+    const queued = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status_code: 20000,
+          tasks: [{ status_code: 40602, status_message: "Task In Queue." }],
+        }),
+        { status: 200 },
+      ),
+    );
+    await expect(getGoogleTrendsTask("queued", ["AI marketing"], queued)).resolves.toMatchObject({
+      status: "pending",
+      statusCode: 40602,
+    });
+
     const failed = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -187,4 +215,21 @@ describe("DataForSEO Google Trends client", () => {
       status: 503,
     } satisfies Partial<DataForSeoError>);
   });
+
+  it("times out when DataForSEO never responds", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn<typeof fetch>((_input, init) =>
+      new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      }),
+    );
+    const request = createGoogleTrendsTask({ keywords: ["AI marketing"] }, fetchMock).catch(
+      (error) => error,
+    );
+
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(15_001);
+    await expect(request).resolves.toMatchObject({ name: "DataForSeoError", status: 504 });
+    vi.useRealTimers();
+  }, 20_000);
 });

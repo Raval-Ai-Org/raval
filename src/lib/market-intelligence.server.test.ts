@@ -173,6 +173,19 @@ describe("Market Intelligence engine", () => {
     });
   });
 
+  it("accepts Claude output with harmless extra metadata keys", async () => {
+    claudeTextPrompt.mockResolvedValue(
+      JSON.stringify({
+        ...validIntelligence,
+        metadata: { model: "claude-opus-5", promptVersion: 3 },
+        notes: "extra commentary",
+      }),
+    );
+    const result = await analyzeMarketCollection({ collectionId, workspaceId });
+    expect(result.state).toBe("completed");
+    expect(result.data).toMatchObject({ summary: validIntelligence.summary });
+  });
+
   it("rejects malformed AI output safely", async () => {
     claudeTextPrompt.mockResolvedValue("not json");
     const result = await analyzeMarketCollection({ collectionId, workspaceId });

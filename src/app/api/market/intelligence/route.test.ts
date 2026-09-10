@@ -39,6 +39,7 @@ describe("POST /api/market/intelligence", () => {
       workspaceId,
       collectionId,
       analysisType: undefined,
+      operation: expect.stringMatching(/^market-intelligence-/),
     });
   });
 

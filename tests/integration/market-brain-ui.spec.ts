@@ -216,7 +216,7 @@ test.describe("Market Brain UI", () => {
 
     await page.getByLabel("Market keywords").fill("AI marketing");
     await page.getByRole("button", { name: /scan/i }).click();
-    await expect(page.getByText(/analyzing current market signals/i)).toBeVisible();
+    await expect(page.getByText(/market data is still being collected/i)).toBeVisible();
     await expect(page.getByText("Market pulse")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Interest around AI marketing is strong/i)).toBeVisible();
     await expect(page.getByText("What’s changing")).toBeVisible();

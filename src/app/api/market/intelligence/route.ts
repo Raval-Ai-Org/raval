@@ -2,6 +2,7 @@ import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { requireWorkspaceAccess } from "@/lib/sdr.helpers.server";
 import { analyzeMarketCollection, MarketIntelligenceError } from "@/lib/market-intelligence.server";
+import { marketLog, operationId, withMarketTimeout } from "@/lib/market-reliability.server";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,8 @@ const BodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const operation = operationId("market-intelligence");
+  marketLog("intelligence API request received", { operation });
   let body: z.infer<typeof BodySchema>;
   try {
     body = BodySchema.parse(await request.json());
@@ -23,17 +26,30 @@ export async function POST(request: Request) {
   if (!access.ok) return access.response;
 
   try {
-    const result = await analyzeMarketCollection({
-      collectionId: body.collectionId,
-      workspaceId: body.workspaceId,
-      analysisType: body.analysisType,
-    });
+    const result = await withMarketTimeout(
+      analyzeMarketCollection({
+        collectionId: body.collectionId,
+        workspaceId: body.workspaceId,
+        analysisType: body.analysisType,
+        operation,
+      }),
+      75_000,
+      "Market intelligence request timed out",
+    );
+    marketLog("intelligence API response returned", { operation, state: result.state });
     return Response.json({ success: true, source: "market_intelligence", ...result });
   } catch (error) {
     if (error instanceof MarketIntelligenceError) {
-      return jsonError(error.status, error.message);
+      marketLog("intelligence API failed", { operation, code: error.code });
+      return Response.json(
+        { status: "failed", data: null, error: { message: error.message, code: error.code } },
+        { status: error.status },
+      );
     }
-    console.error("[market/intelligence] unexpected error", error);
-    return jsonError(502, "Market intelligence service unavailable");
+    marketLog("intelligence API failed", { operation, reason: error instanceof Error ? error.message : "unknown" });
+    return Response.json(
+      { status: "failed", data: null, error: { message: "Market intelligence service unavailable" } },
+      { status: 502 },
+    );
   }
 }

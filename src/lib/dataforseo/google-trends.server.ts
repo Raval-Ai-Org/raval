@@ -298,7 +298,12 @@ export async function getGoogleTrendsTask(
       data: parseResultPayload({ status_code: 20000, tasks: [task] }, keywords),
     };
   }
-  if (statusCode === 20100 || (statusCode >= 10000 && statusCode < 20000)) {
+  if (
+    statusCode === 20100 ||
+    statusCode === 40601 ||
+    statusCode === 40602 ||
+    (statusCode >= 10000 && statusCode < 20000)
+  ) {
     return { id: taskId, status: "pending", statusCode, statusMessage };
   }
   return { id: taskId, status: "failed", statusCode, statusMessage };
