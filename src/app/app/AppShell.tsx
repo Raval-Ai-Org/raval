@@ -960,6 +960,7 @@ function AppShell() {
                 <MarketingCoachPanel
                   workspaceId={workspaceId}
                   brandContext={brandContextForCoach}
+                  brandKeywords={brandDna.keywords}
                 />
               </Suspense>
               <button

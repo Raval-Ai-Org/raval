@@ -77,7 +77,44 @@ export const listContentItems = createServerFn({ method: "POST" })
     if (data.status) q = q.eq("status", data.status);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return (rows ?? []) as ContentItem[];
+    const items = (rows ?? []) as ContentItem[];
+    const contentIds = items.map((item) => item.id);
+    if (!contentIds.length) return items;
+
+    type AssetRow = { content_item_id: string | null; storage_path: string | null };
+    type SignedAsset = { path: string | null; signedUrl: string | null };
+    const assetDb = context.supabase as any;
+    const { data: assetRows } = await assetDb
+      .from("assets")
+      .select("content_item_id, storage_path")
+      .in("content_item_id", contentIds)
+      .is("deleted_at", null)
+      .not("storage_path", "is", null);
+    const assets = (assetRows ?? []) as AssetRow[];
+    const paths = assets
+      .map((asset) => asset.storage_path)
+      .filter((path): path is string => typeof path === "string");
+    if (!paths.length) return items;
+
+    const { data: signedRows } = await assetDb.storage
+      .from("generated-assets")
+      .createSignedUrls(paths, 3600);
+    const signed = (signedRows ?? []) as SignedAsset[];
+    const signedByPath = new Map(
+      (signed ?? [])
+        .filter((asset) => asset.path && asset.signedUrl)
+        .map((asset) => [asset.path, asset.signedUrl] as const),
+    );
+    const pathByContentId = new Map(
+      (assets ?? [])
+        .filter((asset) => asset.content_item_id && asset.storage_path)
+        .map((asset) => [asset.content_item_id, asset.storage_path] as const),
+    );
+    return items.map((item) => {
+      const path = pathByContentId.get(item.id);
+      const url = path ? signedByPath.get(path) : undefined;
+      return url ? { ...item, media_url: url } : item;
+    }) as ContentItem[];
   });
 
 /* ------------------------------------------------------------ */

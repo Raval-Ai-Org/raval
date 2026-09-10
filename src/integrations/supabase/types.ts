@@ -597,6 +597,196 @@ export type Database = {
           },
         ];
       };
+      market_intelligence_cache: {
+        Row: {
+          analysis_key: string;
+          analysis_type: string;
+          collection_id: string;
+          context_fingerprint: string;
+          created_at: string;
+          id: string;
+          result: Json;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          analysis_key: string;
+          analysis_type?: string;
+          collection_id: string;
+          context_fingerprint: string;
+          created_at?: string;
+          id?: string;
+          result: Json;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          analysis_key?: string;
+          analysis_type?: string;
+          collection_id?: string;
+          context_fingerprint?: string;
+          created_at?: string;
+          id?: string;
+          result?: Json;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "market_intelligence_cache_collection_id_fkey";
+            columns: ["collection_id"];
+            isOneToOne: false;
+            referencedRelation: "market_trend_collections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "market_intelligence_cache_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      market_brain_schedules: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          date_from: string | null;
+          date_to: string | null;
+          id: string;
+          keywords: string[];
+          language: string | null;
+          last_run_at: string | null;
+          last_run_error: string | null;
+          last_run_status: string | null;
+          lock_token: string | null;
+          location: string | null;
+          next_run_at: string;
+          schedule_key: string;
+          time_range: string | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          date_from?: string | null;
+          date_to?: string | null;
+          id?: string;
+          keywords: string[];
+          language?: string | null;
+          last_run_at?: string | null;
+          last_run_error?: string | null;
+          last_run_status?: string | null;
+          lock_token?: string | null;
+          location?: string | null;
+          next_run_at?: string;
+          schedule_key: string;
+          time_range?: string | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          date_from?: string | null;
+          date_to?: string | null;
+          id?: string;
+          keywords?: string[];
+          language?: string | null;
+          last_run_at?: string | null;
+          last_run_error?: string | null;
+          last_run_status?: string | null;
+          lock_token?: string | null;
+          location?: string | null;
+          next_run_at?: string;
+          schedule_key?: string;
+          time_range?: string | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "market_brain_schedules_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      market_trend_collections: {
+        Row: {
+          completed_at: string | null;
+          dataforseo_task_id: string | null;
+          date_from: string | null;
+          date_to: string | null;
+          id: string;
+          keywords: string[];
+          language: string | null;
+          last_polled_at: string | null;
+          location: string | null;
+          normalized_result: Json | null;
+          provider: string;
+          provider_error: Json | null;
+          requested_at: string;
+          request_key: string;
+          status: string;
+          time_range: string | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          dataforseo_task_id?: string | null;
+          date_from?: string | null;
+          date_to?: string | null;
+          id?: string;
+          keywords: string[];
+          language?: string | null;
+          last_polled_at?: string | null;
+          location?: string | null;
+          normalized_result?: Json | null;
+          provider?: string;
+          provider_error?: Json | null;
+          requested_at?: string;
+          request_key: string;
+          status?: string;
+          time_range?: string | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          dataforseo_task_id?: string | null;
+          date_from?: string | null;
+          date_to?: string | null;
+          id?: string;
+          keywords?: string[];
+          language?: string | null;
+          last_polled_at?: string | null;
+          location?: string | null;
+          normalized_result?: Json | null;
+          provider?: string;
+          provider_error?: Json | null;
+          requested_at?: string;
+          request_key?: string;
+          status?: string;
+          time_range?: string | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "market_trend_collections_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       geo_audit_runs: {
         Row: {
           created_at: string;

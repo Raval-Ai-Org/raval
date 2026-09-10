@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,15 @@ import {
   ArrowRight,
 } from "@/components/ui/gemini-icons";
 import { BrandLogo, type BrandKey } from "@/components/brand/BrandLogo";
+import { useServerFn } from "@/lib/use-server-fn";
+import {
+  createContentItem,
+  deleteContentItem,
+  listContentItems,
+  rescheduleContentItem,
+  updateContentItem,
+} from "@/lib/content.functions";
+import type { ContentItem } from "@/lib/content.functions";
 
 /* ---------------------------------------------------------- */
 /* Types & storage                                            */
@@ -113,6 +122,39 @@ const STATUS_COLORS: Record<Status, string> = {
 };
 
 const STORAGE_KEY = (wsId: string | null) => `content-calendar:${wsId ?? "default"}`;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function calendarChannel(channel: string | null): Channel {
+  return channel === "x" ? "twitter" : (channel as Channel) || "instagram";
+}
+
+function contentStatus(status: Status): "draft" | "approved" | "scheduled" | "published" {
+  if (status === "approved" || status === "scheduled" || status === "published") return status;
+  return "draft";
+}
+
+function contentToCalendarEntry(item: ContentItem): CalendarEntry {
+  const scheduled = item.scheduled_at ? new Date(item.scheduled_at) : null;
+  return {
+    id: item.id,
+    date: scheduled ? fmtYMD(scheduled) : fmtYMD(new Date(item.updated_at || item.created_at)),
+    time: scheduled
+      ? `${String(scheduled.getHours()).padStart(2, "0")}:${String(scheduled.getMinutes()).padStart(2, "0")}`
+      : "09:00",
+    channel: calendarChannel(item.channel),
+    type: item.kind === "blog" ? "article" : item.kind === "email" ? "newsletter" : "post",
+    title: item.title || "Untitled post",
+    hook: undefined,
+    caption: item.body || undefined,
+    hashtags: item.hashtags ?? [],
+    status:
+      item.status === "approved" || item.status === "scheduled" || item.status === "published"
+        ? item.status
+        : "draft",
+    imageUrl: item.media_url || undefined,
+    images: item.media_url ? [item.media_url] : [],
+  };
+}
 
 function loadEntries(wsId: string | null): CalendarEntry[] {
   if (typeof window === "undefined") return [];
@@ -264,6 +306,11 @@ Make it noticeably different from any previous version. Be specific and useful.`
 /* ---------------------------------------------------------- */
 
 export function ContentCalendar({ workspaceId }: { workspaceId: string | null }) {
+  const listItems = useServerFn(listContentItems);
+  const createItem = useServerFn(createContentItem);
+  const updateItem = useServerFn(updateContentItem);
+  const deleteItem = useServerFn(deleteContentItem);
+  const rescheduleItem = useServerFn(rescheduleContentItem);
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [anchor, setAnchor] = useState<Date>(() => startOfMonth(new Date()));
@@ -275,6 +322,42 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
   const [regenIds, setRegenIds] = useState<Set<string>>(new Set());
   const [showGenerator, setShowGenerator] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
+  const syncTimersRef = useRef<Record<string, number>>({});
+
+  const syncCanonicalEntry = async (previous: CalendarEntry, next: CalendarEntry) => {
+    if (!UUID_RE.test(next.id)) return;
+    const channel = next.channel === "twitter" ? "x" : next.channel;
+    if (next.status === "scheduled" && previous.status !== "scheduled") {
+      await updateItem({ data: { id: next.id, patch: { status: "approved" } } });
+      await rescheduleItem({
+        data: {
+          id: next.id,
+          scheduled_at: new Date(`${next.date}T${next.time || "09:00"}:00`).toISOString(),
+          channel,
+        },
+      });
+      return;
+    }
+    await updateItem({
+      data: {
+        id: next.id,
+        patch: {
+          title: next.title,
+          body: [next.hook, next.caption].filter(Boolean).join("\n\n") || null,
+          hashtags: next.hashtags ?? [],
+          channel,
+          media_url: next.images?.[0] ?? next.imageUrl ?? null,
+          status: next.status !== previous.status ? contentStatus(next.status) : undefined,
+          scheduled_at:
+            next.status === "scheduled"
+              ? new Date(`${next.date}T${next.time || "09:00"}:00`).toISOString()
+              : next.status === "draft" || next.status === "approved"
+                ? null
+                : undefined,
+        },
+      },
+    });
+  };
 
   const createBlankPost = (date?: string) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -289,7 +372,75 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
     };
     setEntries((arr) => [...arr, item]);
     setSelectedEntry(item);
+    if (workspaceId) {
+      void createItem({
+        data: {
+          workspaceId,
+          agent: "spark",
+          kind: "post",
+          channel: "instagram",
+          title: item.title,
+          body: null,
+          status: "draft",
+        },
+      })
+        .then((created) => {
+          const canonical = {
+            ...contentToCalendarEntry(created),
+            date: item.date,
+            time: item.time,
+          };
+          setEntries((arr) => arr.map((entry) => (entry.id === id ? canonical : entry)));
+          setSelectedEntry((entry) => (entry?.id === id ? canonical : entry));
+        })
+        .catch(() => toast.error("Post created locally, but could not be saved to the workspace"));
+    }
     toast.success("Blank post created — fill it in");
+  };
+
+  const addGeneratedEntries = async (items: CalendarEntry[]) => {
+    if (!workspaceId) {
+      setEntries((arr) => [...arr, ...items]);
+      return;
+    }
+
+    try {
+      const created = await Promise.all(
+        items.map((item) =>
+          createItem({
+            data: {
+              workspaceId,
+              agent: "spark",
+              kind:
+                item.type === "article" ? "blog" : item.type === "newsletter" ? "email" : "post",
+              channel: item.channel === "twitter" ? "x" : item.channel,
+              title: item.title,
+              body: [item.hook, item.caption].filter(Boolean).join("\n\n") || null,
+              hashtags: item.hashtags ?? [],
+              status: "draft",
+              scheduled_at: null,
+              meta: {
+                source: "calendar-generator",
+                calendar_date: item.date,
+                calendar_time: item.time,
+              },
+            },
+          }),
+        ),
+      );
+      setEntries((arr) =>
+        arr.concat(
+          created.map((item, index) => ({
+            ...contentToCalendarEntry(item),
+            date: items[index]?.date ?? contentToCalendarEntry(item).date,
+            time: items[index]?.time ?? contentToCalendarEntry(item).time,
+          })),
+        ),
+      );
+    } catch {
+      setEntries((arr) => [...arr, ...items]);
+      toast.error("Ideas added locally, but could not be saved to the workspace");
+    }
   };
 
   // Track viewport to auto-switch to list view + collapse right rail on small screens
@@ -315,12 +466,39 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
 
   // Load on workspace change / open
   useEffect(() => {
-    setEntries(loadEntries(workspaceId));
-  }, [workspaceId, open]);
+    let cancelled = false;
+    const load = async () => {
+      const legacy = loadEntries(workspaceId).filter((entry) => !UUID_RE.test(entry.id));
+      if (!workspaceId) {
+        setEntries(legacy);
+        return;
+      }
+      try {
+        const items = await listItems({ data: { workspaceId, limit: 200 } });
+        if (!cancelled) setEntries([...legacy, ...items.map(contentToCalendarEntry)]);
+      } catch {
+        if (!cancelled) {
+          setEntries(legacy);
+          toast.error("Could not load workspace content", {
+            description: "Your older local calendar drafts are still available.",
+          });
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, open, listItems]);
 
   // Persist
   useEffect(() => {
-    if (open) saveEntries(workspaceId, entries);
+    if (open) {
+      saveEntries(
+        workspaceId,
+        entries.filter((entry) => !UUID_RE.test(entry.id)),
+      );
+    }
   }, [entries, workspaceId, open]);
 
   const filtered = useMemo(
@@ -341,17 +519,75 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
   const grid = useMemo(() => buildMonthGrid(anchor), [anchor]);
   const todayYMD = fmtYMD(new Date());
 
-  const updateEntry = (id: string, patch: Partial<CalendarEntry>) =>
-    setEntries((arr) => arr.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  const updateEntry = (id: string, patch: Partial<CalendarEntry>) => {
+    const current = entries.find((entry) => entry.id === id);
+    if (current) {
+      const editsContent = [
+        "title",
+        "hook",
+        "caption",
+        "hashtags",
+        "images",
+        "imageUrl",
+        "channel",
+        "type",
+      ].some((key) => key in patch);
+      const nextStatus = current.status === "approved" && editsContent ? "draft" : current.status;
+      const next = { ...current, ...patch, status: nextStatus };
+      const existingTimer = syncTimersRef.current[id];
+      if (existingTimer) window.clearTimeout(existingTimer);
+      syncTimersRef.current[id] = window.setTimeout(() => {
+        void syncCanonicalEntry(current, next).catch(() => {
+          toast.error("Change saved locally, but workspace sync failed");
+        });
+        delete syncTimersRef.current[id];
+      }, 450);
+    }
+    setEntries((arr) =>
+      arr.map((entry) => {
+        if (entry.id !== id) return entry;
+        const editsContent = [
+          "title",
+          "hook",
+          "caption",
+          "hashtags",
+          "images",
+          "imageUrl",
+          "channel",
+          "type",
+        ].some((key) => key in patch);
+        const nextStatus = entry.status === "approved" && editsContent ? "draft" : entry.status;
+        return { ...entry, ...patch, status: nextStatus };
+      }),
+    );
+  };
 
   const removeEntry = (id: string) => {
     setEntries((arr) => arr.filter((e) => e.id !== id));
     setSelectedEntry(null);
+    if (UUID_RE.test(id)) {
+      void deleteItem({ data: { id } }).catch(() => {
+        toast.error("Removed from this view, but workspace deletion failed");
+      });
+    }
   };
 
+  useEffect(() => {
+    const timers = syncTimersRef.current;
+    return () => {
+      for (const timer of Object.values(timers)) window.clearTimeout(timer);
+    };
+  }, []);
+
   const moveEntry = (id: string, patch: { date?: string; channel?: Channel }) => {
+    const current = entries.find((entry) => entry.id === id);
     setEntries((arr) => arr.map((e) => (e.id === id ? { ...e, ...patch } : e)));
     setSelectedEntry((cur) => (cur && cur.id === id ? { ...cur, ...patch } : cur));
+    if (current && UUID_RE.test(id)) {
+      void syncCanonicalEntry(current, { ...current, ...patch, status: "scheduled" }).catch(() => {
+        toast.error("Calendar move saved locally, but workspace sync failed");
+      });
+    }
     if (patch.date && patch.channel) toast.success("Moved to new day & channel");
     else if (patch.date) toast.success("Rescheduled");
     else if (patch.channel) toast.success(`Switched to ${CH_BY_ID[patch.channel].label}`);
@@ -487,7 +723,7 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
                   workspaceId={workspaceId}
                   anchor={anchor}
                   onGenerated={(items) => {
-                    setEntries((arr) => [...arr, ...items]);
+                    void addGeneratedEntries(items);
                     setShowGenerator(false);
                     toast.success(`Added ${items.length} ideas to the calendar`);
                   }}
@@ -503,7 +739,7 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
             workspaceId={workspaceId}
             anchor={anchor}
             onGenerated={(items) => {
-              setEntries((arr) => [...arr, ...items]);
+              void addGeneratedEntries(items);
               toast.success(`Added ${items.length} ideas to the calendar`);
             }}
           />

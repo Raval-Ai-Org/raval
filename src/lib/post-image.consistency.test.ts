@@ -3,6 +3,9 @@ import {
   buildImagePromptDetailed,
   getBrandVisualSystem,
   getStyleSeed,
+  IMAGE_FORMATS,
+  imageFormatForSize,
+  sizeForPlatform,
   type BrandDnaLite,
   type ImgSize,
 } from "./post-image";
@@ -106,5 +109,18 @@ describe("post image consistency across aspect ratios", () => {
     expect(empty2.palette).toEqual(empty.palette);
     expect(empty2.typography.fontFamily).toBe(empty.typography.fontFamily);
     expect(empty2.composition).toBe(empty.composition);
+  });
+});
+
+describe("supported image formats", () => {
+  it("keeps the product formats aligned with the generation sizes", () => {
+    expect(IMAGE_FORMATS.map((format) => format.size)).toEqual(SIZES);
+    expect(imageFormatForSize("1024x1792")).toMatchObject({ label: "Vertical", ratio: "9:16" });
+  });
+
+  it("recommends supported formats without hiding user override choices", () => {
+    expect(sizeForPlatform("instagram")).toBe("1024x1024");
+    expect(sizeForPlatform("linkedin")).toBe("1792x1024");
+    expect(IMAGE_FORMATS).toHaveLength(3);
   });
 });

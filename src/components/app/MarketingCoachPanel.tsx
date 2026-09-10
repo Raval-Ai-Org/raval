@@ -26,6 +26,7 @@ import {
   X,
 } from "@/components/ui/gemini-icons";
 import { NotesTabBody } from "./NotesPanel";
+import { MarketBrainPanel } from "./MarketBrainPanel";
 import { cn } from "@/lib/utils";
 import {
   getCoachBriefing,
@@ -123,6 +124,7 @@ function buildChecklist(b: CoachBriefing): ChecklistTask[] {
 interface Props {
   workspaceId: string | null | undefined;
   brandContext?: string;
+  brandKeywords?: string[];
   leading?: React.ReactNode;
 }
 
@@ -157,7 +159,7 @@ function fireChat(prompt: string) {
   window.dispatchEvent(new CustomEvent("chat:focus"));
 }
 
-export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Props) {
+export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, leading }: Props) {
   const [open, setOpen] = useState(false);
   const [briefing, setBriefing] = useState<CoachBriefing | null>(null);
   const [loading, setLoading] = useState(false);
@@ -323,6 +325,7 @@ export function MarketingCoachPanel({ workspaceId, brandContext, leading }: Prop
                 <>
                   <CoachBody
                     workspaceId={workspaceId ?? null}
+                    brandKeywords={brandKeywords}
                     briefing={briefing}
                     tab={tab}
                     onTab={setTab}
@@ -550,6 +553,7 @@ function TabPanel({
 
 function CoachBody({
   workspaceId,
+  brandKeywords,
   briefing,
   tab,
   onTab,
@@ -558,6 +562,7 @@ function CoachBody({
   generatedLabel,
 }: {
   workspaceId: string | null;
+  brandKeywords?: string[];
   briefing: CoachBriefing;
   tab: "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes";
   onTab: (t: "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes") => void;
@@ -749,20 +754,7 @@ function CoachBody({
       </TabPanel>
 
       <TabPanel id="market" active={tab === "market"}>
-        <SectionOrEmpty
-          items={briefing.market}
-          sources={briefing.sources}
-          icon={TrendingUp}
-          tint="sky"
-          emptyTitle="No market signals yet"
-          empty="Tell me your category and audience once — I'll monitor trends, search demand and cultural shifts every week."
-          emptyAction={{
-            label: "Scan my market",
-            prompt: "What are the biggest marketing trends in my category this week?",
-            intent: "market",
-          }}
-          emptyHint="Trends refresh automatically after your first scan."
-        />
+        <MarketBrainPanel workspaceId={workspaceId} brandKeywords={brandKeywords} />
       </TabPanel>
 
       <TabPanel id="plays" active={tab === "plays"}>

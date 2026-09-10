@@ -22,9 +22,9 @@ import { PromptInspector } from "@/components/app/PromptInspector";
 import { cn } from "@/lib/utils";
 import { MOCK_APPROVALS, TILE_BY_ID, type CanvasType } from "@/lib/studio";
 import type { CanvasState } from "@/hooks/use-studio";
+import { createContentItem, updateContentItem } from "@/lib/content.functions";
 import { tintFor } from "./StudioRail";
 import { authedFetch } from "@/lib/authed-fetch";
-import { createContentItem, updateContentItem } from "@/lib/content.functions";
 import { useServerFn } from "@/lib/use-server-fn";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -44,6 +44,12 @@ import type { PublishSelection } from "@/lib/sdr.handlers";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { VideoPostComposer, type GeneratedVideoState } from "@/components/app/VideoPostComposer";
 import { persistGeneratedAsset } from "@/lib/persistent-assets";
+import {
+  IMAGE_FORMATS,
+  imageFormatForSize,
+  sizeForPlatform as sharedSizeForPlatform,
+  type ImgSize,
+} from "@/lib/post-image";
 
 type SocialVariant = {
   platform: PlatformId;
@@ -88,8 +94,6 @@ const KIND_BY_CANVAS: Record<CanvasType, "post" | "brief" | "email" | "landing" 
   "design-asset": "post",
 };
 
-type ImgSize = "1024x1024" | "1792x1024" | "1024x1792";
-
 function MediaFormatSwitcher({
   value,
   onChange,
@@ -129,16 +133,7 @@ function MediaFormatSwitcher({
   );
 }
 
-const OPTIMAL_SIZE_BY_PLATFORM: Record<PlatformId, ImgSize> = {
-  linkedin: "1792x1024", // landscape performs best in-feed
-  twitter: "1792x1024", // 16:9 card
-  facebook: "1792x1024", // landscape
-  instagram: "1024x1024", // square feed default
-  threads: "1024x1024",
-  tiktok: "1024x1792", // 9:16 vertical
-  youtube: "1792x1024", // thumbnail 16:9
-};
-const sizeForPlatform = (p: PlatformId): ImgSize => OPTIMAL_SIZE_BY_PLATFORM[p] ?? "1024x1024";
+const sizeForPlatform = (p: PlatformId): ImgSize => sharedSizeForPlatform(p);
 
 type BrandDnaLite = {
   brandName?: string;
@@ -318,8 +313,8 @@ export function StudioCanvasModal({
   // platforms or aspect never triggers a new generation for an already-rendered
   // combination. Only an explicit Generate/Regenerate click spends a credit.
   const [postImage, setPostImage] = useState<string | null>(null);
-  const [imageSize, setImageSize] = useState<"1024x1024" | "1792x1024" | "1024x1792">("1024x1024");
-  const [autoSize, setAutoSize] = useState(true);
+  const [imageSize, setImageSize] = useState<ImgSize>("1024x1024");
+  const [autoSize, setAutoSize] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageStatus, setImageStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [imageError, setImageError] = useState<string | null>(null);
@@ -459,9 +454,14 @@ export function StudioCanvasModal({
             ? "Landscape 16:9 composition, subject weighted toward the left third, right third reserved as breathing room."
             : "Portrait 9:16 composition, vertical stack, subject in the upper two-thirds.";
 
-      const platformLine = autoSize
-        ? `Optimized for ${PLATFORMS[activePlatform]?.label ?? activePlatform} feed context.`
-        : "";
+      const selectedFormat = imageFormatForSize(imageSize);
+      const platformLine = [
+        `Intended for ${PLATFORMS[activePlatform]?.label ?? activePlatform}.`,
+        `Format: ${selectedFormat.label} (${selectedFormat.ratio}).`,
+        autoSize ? "Optimized for the selected platform's feed context." : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
 
       const visualPrompt = [
         `Design one premium, on-brand social image for ${brandName}${industry ? ` (${industry})` : ""}.`,
@@ -529,7 +529,13 @@ export function StudioCanvasModal({
                     promptVersion: "studio-1",
                     creativeBriefVersion: "1",
                     brandDnaVersion: brand ? "present" : "missing",
-                    metadata: { source: "studio", visualPrompt },
+                    metadata: {
+                      source: "studio",
+                      visualPrompt,
+                      format: selectedFormat.label,
+                      aspectRatio: selectedFormat.ratio,
+                      size: imageSize,
+                    },
                   })) as { id?: string; public_url?: string };
                   if (persisted.id && persisted.public_url) {
                     generatedAssetRef.current = {
@@ -539,6 +545,26 @@ export function StudioCanvasModal({
                   }
                   const permanentUrl = persisted.public_url || dataUrl;
                   setPostImage(permanentUrl);
+                  if (canvas?.id && UUID_RE.test(canvas.id)) {
+                    await runUpdate({
+                      data: {
+                        id: canvas.id,
+                        patch: {
+                          status: "draft",
+                          media_url: permanentUrl,
+                          meta: {
+                            source: "studio",
+                            image_size: imageSize,
+                            aspect_ratio: selectedFormat.ratio,
+                            image_platform: activePlatform,
+                          },
+                        },
+                      },
+                    });
+                    try {
+                      window.dispatchEvent(new CustomEvent("content:changed"));
+                    } catch {}
+                  }
                   setImageProgress(100);
                   setImageLoading(false);
                   setImageStatus("success");
@@ -609,6 +635,7 @@ export function StudioCanvasModal({
       canvas?.type,
       platforms,
       workspaceId,
+      runUpdate,
     ],
   );
 
@@ -732,6 +759,8 @@ export function StudioCanvasModal({
   useEffect(() => {
     return () => {
       if (progressRef.current) window.clearInterval(progressRef.current);
+      imageAbortRef.current?.abort();
+      if (imageProgressTimerRef.current) window.clearInterval(imageProgressTimerRef.current);
     };
   }, []);
 
@@ -833,7 +862,13 @@ export function StudioCanvasModal({
             .from("content_items")
             .update({
               media_url: linked.publicUrl,
-              meta: { asset_id: linked.id, source: "studio" },
+              meta: {
+                asset_id: linked.id,
+                source: "studio",
+                image_size: imageSize,
+                aspect_ratio: imageFormatForSize(imageSize).ratio,
+                image_platform: activePlatform,
+              },
             })
             .eq("id", ids[0])
             .eq("workspace_id", workspaceId);
@@ -845,7 +880,7 @@ export function StudioCanvasModal({
         console.warn("[studio] persistDrafts failed", e);
       }
     },
-    [workspaceId, createItem, runUpdate, prompt],
+    [workspaceId, createItem, runUpdate, prompt, imageSize, activePlatform],
   );
 
   useEffect(() => {
@@ -1304,6 +1339,9 @@ export function StudioCanvasModal({
       setPublishing(false);
     }
   };
+
+  const recommendedImageSize = sizeForPlatform(platforms[0] ?? activePlatform);
+  const selectedImageFormat = imageFormatForSize(imageSize);
 
   return (
     <>
@@ -1781,6 +1819,83 @@ export function StudioCanvasModal({
                               </div>
                             </div>
                           )}
+                          {isSocial && (
+                            <div className="mt-4 rounded-2xl border border-border/60 bg-card/50 p-3">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <div className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Image format
+                                  </div>
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    Choose the output shape before generation. The recommendation
+                                    can be overridden.
+                                  </p>
+                                </div>
+                                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                                  Recommended: {imageFormatForSize(recommendedImageSize).label}
+                                </span>
+                              </div>
+                              <div className="mt-3 grid grid-cols-3 gap-2">
+                                {IMAGE_FORMATS.map((format) => {
+                                  const selected = format.size === imageSize;
+                                  const recommended = format.size === recommendedImageSize;
+                                  return (
+                                    <button
+                                      key={format.size}
+                                      type="button"
+                                      onClick={() => {
+                                        setAutoSize(false);
+                                        setImageSize(format.size);
+                                      }}
+                                      className={cn(
+                                        "min-w-0 rounded-xl border px-2 py-2 text-left transition",
+                                        selected
+                                          ? "border-foreground/40 bg-foreground text-background shadow-sm"
+                                          : "border-border/60 bg-background/60 text-foreground hover:bg-background",
+                                      )}
+                                      aria-pressed={selected}
+                                    >
+                                      <span className="block truncate text-[11.5px] font-semibold">
+                                        {format.label}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          "mt-0.5 block text-[10px]",
+                                          selected ? "text-background/70" : "text-muted-foreground",
+                                        )}
+                                      >
+                                        {format.ratio} · {format.use}
+                                      </span>
+                                      {recommended && (
+                                        <span
+                                          className={cn(
+                                            "mt-1 block text-[9px] font-semibold uppercase tracking-wide",
+                                            selected
+                                              ? "text-background/70"
+                                              : "text-emerald-600 dark:text-emerald-400",
+                                          )}
+                                        >
+                                          Recommended
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/50 pt-2 text-[10.5px] text-muted-foreground">
+                                <span>
+                                  {selectedImageFormat.label} · {selectedImageFormat.ratio} selected
+                                </span>
+                                {brand ? (
+                                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                    <Check className="h-3 w-3" /> Brand DNA applied
+                                  </span>
+                                ) : (
+                                  <span>Brand context will be inferred from this workspace</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                           <div className="mt-3 flex flex-wrap gap-1.5">
                             {["Shorter", "Punchier hook", "More data", "Add CTA"].map((chip) => (
                               <button
@@ -2235,11 +2350,11 @@ function SocialMultiPreview({
         ? "aspect-[16/9]"
         : "aspect-[9/16] max-h-[420px]";
 
-  const SIZES: Array<{ id: typeof imageSize; label: string; sub: string }> = [
-    { id: "1024x1024", label: "Square", sub: "1:1" },
-    { id: "1792x1024", label: "Landscape", sub: "16:9" },
-    { id: "1024x1792", label: "Portrait", sub: "9:16" },
-  ];
+  const SIZES = IMAGE_FORMATS.map((format) => ({
+    id: format.size,
+    label: format.label,
+    sub: format.ratio,
+  }));
 
   return (
     <div className="mx-auto max-w-[680px]">

@@ -16,9 +16,15 @@ export async function POST(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
   try {
-    const { runDueScheduledJobs } = await import("@/lib/schedules.server");
-    const out = await runDueScheduledJobs({ max: 25 });
-    return Response.json({ ok: true, ran: out.ran });
+    const [{ runDueScheduledJobs }, { runDueMarketBrainCollections }] = await Promise.all([
+      import("@/lib/schedules.server"),
+      import("@/lib/market-brain-scheduler.server"),
+    ]);
+    const [scheduled, marketBrain] = await Promise.all([
+      runDueScheduledJobs({ max: 25 }),
+      runDueMarketBrainCollections({ max: 25 }),
+    ]);
+    return Response.json({ ok: true, ran: scheduled.ran + marketBrain.ran });
   } catch (e) {
     console.error("run-schedules error", e);
     const msg = e instanceof Error ? e.message : String(e);

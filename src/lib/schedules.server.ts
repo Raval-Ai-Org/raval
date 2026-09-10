@@ -118,9 +118,10 @@ export async function runDueScheduledJobs(opts: { onlyJobId?: string; max?: numb
   let q = supabaseAdmin
     .from("scheduled_jobs")
     .select(
-      "id, workspace_id, title, task_type, channel, agent, cadence, prompt, next_run_at, created_by",
+      "id, workspace_id, title, task_type, channel, agent, cadence, prompt, next_run_at, created_by, run_count",
     )
     .eq("active", true)
+    .neq("task_type", "market-brain")
     .lte("next_run_at", nowIso)
     .order("next_run_at", { ascending: true })
     .limit(opts.max ?? 25);
@@ -170,26 +171,11 @@ export async function runDueScheduledJobs(opts: { onlyJobId?: string; max?: numb
           last_run_status: "ok",
           last_run_error: null,
           last_content_item_id: inserted?.id ?? null,
-          run_count: undefined as never, // ignored; we increment via RPC-less update below
+          run_count: ((job as { run_count?: number }).run_count ?? 0) + 1,
           next_run_at: next ? next.toISOString() : job.next_run_at,
           active: next ? true : false,
         } as never)
         .eq("id", job.id);
-
-      // Increment run_count in a second statement (avoid raw SQL dependency).
-      (await supabaseAdmin.rpc) as unknown; // no-op placeholder; counts updated via fetch+update below
-      // Best-effort increment:
-      try {
-        const { data: cur } = await supabaseAdmin
-          .from("scheduled_jobs")
-          .select("run_count")
-          .eq("id", job.id)
-          .single();
-        await supabaseAdmin
-          .from("scheduled_jobs")
-          .update({ run_count: ((cur?.run_count as number | undefined) ?? 0) + 1 } as never)
-          .eq("id", job.id);
-      } catch {}
       ran++;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

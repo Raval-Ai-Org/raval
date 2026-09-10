@@ -18,14 +18,30 @@ import { deriveCreativeStrategy, strategyPromptLines } from "./creative-strategy
 
 export type ImgSize = "1024x1024" | "1792x1024" | "1024x1792";
 
+export type ImageFormat = {
+  size: ImgSize;
+  label: string;
+  ratio: string;
+  use: string;
+};
+
+export const IMAGE_FORMATS: ImageFormat[] = [
+  { size: "1024x1024", label: "Square", ratio: "1:1", use: "General social posts" },
+  { size: "1792x1024", label: "Landscape", ratio: "16:9", use: "LinkedIn and wide layouts" },
+  { size: "1024x1792", label: "Vertical", ratio: "9:16", use: "Stories and vertical content" },
+];
+
+export const imageFormatForSize = (size: ImgSize): ImageFormat =>
+  IMAGE_FORMATS.find((format) => format.size === size) ?? IMAGE_FORMATS[0];
+
 /** Instagram-first default. Every post image starts at 1:1 unless the user
  *  explicitly opts into a platform-optimal size via autoSize=true. */
 export const DEFAULT_IMG_SIZE: ImgSize = "1024x1024";
 
 export const SIZE_LABEL: Record<ImgSize, string> = {
-  "1024x1024": "Instagram · Square 1:1",
-  "1792x1024": "Landscape 16:9",
-  "1024x1792": "Story / Reel 9:16",
+  "1024x1024": "Square · 1:1",
+  "1792x1024": "Landscape · 16:9",
+  "1024x1792": "Vertical · 9:16",
 };
 
 export const OPTIMAL_SIZE_BY_PLATFORM: Record<PlatformId, ImgSize> = {

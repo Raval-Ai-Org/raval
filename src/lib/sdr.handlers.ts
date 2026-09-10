@@ -141,6 +141,18 @@ export type PublishSelection =
 
 export type PublishDeps = SdrHandlerDeps & { db: any };
 
+async function resolveMediaUrl(db: any, item: any): Promise<string | null> {
+  const storagePath =
+    item.meta && typeof item.meta === "object" && typeof item.meta.asset_storage_path === "string"
+      ? item.meta.asset_storage_path
+      : null;
+  if (!storagePath) return typeof item.media_url === "string" ? item.media_url : null;
+  const { data, error } = await db.storage
+    .from("generated-assets")
+    .createSignedUrl(storagePath, 3600);
+  return error ? null : (data?.signedUrl ?? null);
+}
+
 export type PublishOutcome = {
   contentItemId: string;
   status: "publishing" | "already" | "skipped";
@@ -219,7 +231,8 @@ export async function publishContentItemsHandler(
     }
 
     // 6. Pre-validate content against the platform's authoritative limits (FR-027/FR-012).
-    const mediaUrls = item.media_url ? [item.media_url] : [];
+    const resolvedMediaUrl = await resolveMediaUrl(deps.db, item);
+    const mediaUrls = resolvedMediaUrl ? [resolvedMediaUrl] : [];
     const validationErrors = validateContentForPlatform(platform, { text: item.body, mediaUrls });
     if (validationErrors.length) {
       return {
@@ -417,7 +430,8 @@ export async function scheduleContentItemsHandler(
       continue;
     }
 
-    const mediaUrls = item.media_url ? [item.media_url] : [];
+    const resolvedMediaUrl = await resolveMediaUrl(deps.db, item);
+    const mediaUrls = resolvedMediaUrl ? [resolvedMediaUrl] : [];
     const validationErrors = validateContentForPlatform(platform, { text: item.body, mediaUrls });
     if (validationErrors.length) {
       return {

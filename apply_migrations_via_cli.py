@@ -7,6 +7,7 @@ import os
 import sys
 import glob
 import subprocess
+import re
 
 PROJECT_REF = os.environ.get("SUPABASE_PROJECT_REF", "slcmqbbjzyztqyucauol")
 
@@ -32,7 +33,42 @@ FINAL_STATE_MIGRATIONS = [
     "20260718184546_e27386a1-4495-4b68-b399-0a94f1d7702d.sql",
     "20260718184836_4ff53c1f-ade2-4fe4-88c2-518841d56158.sql",
     "20260720095116_ad729590-6b24-416b-8a9f-bf7cd05b7214.sql",
+    "20260809000001_add_workspace_sdr.sql",
+    "20260809000002_add_content_publications.sql",
+    "20260809000003_publishing_status_doc.sql",
+    "20260810000001_add_publications_perf_indexes.sql",
+    "20260903000000_disable_legacy_competitor_watch_cron.sql",
+    "20260907120000_create_conversations.sql",
+    "20260907150000_enforce_content_lifecycle.sql",
+    "20260910010000_create_persistent_assets.sql",
+    "20260910020000_harden_generated_asset_storage.sql",
+    "20260910030000_harden_client_share_secrets.sql",
+    "20260910040000_protect_workspace_owner_membership.sql",
+    "20260910050000_add_schedule_claim_leases.sql",
+    "20260910060000_lock_workspace_resource_ownership.sql",
 ]
+
+# Keep the approved historical baseline above, but automatically include newer
+# migrations so a future file cannot be silently omitted from deployment.
+EXCLUDED_MIGRATIONS = {"20260709194553_bb8d43fe-2f5e-48cb-9c77-8042cb96e8be.sql"}
+all_migration_names = [
+    os.path.basename(path) for path in glob.glob(os.path.join("supabase", "migrations", "*.sql"))
+]
+filename_pattern = re.compile(r"^\d{14}_[A-Za-z0-9-]+\.sql$")
+malformed = sorted(name for name in all_migration_names if not filename_pattern.fullmatch(name))
+if malformed:
+    print(f"Malformed migration filename(s): {', '.join(malformed)}")
+    sys.exit(1)
+versions = [name[:14] for name in all_migration_names]
+duplicates = sorted({version for version in versions if versions.count(version) > 1})
+if duplicates:
+    print(f"Duplicate migration version(s): {', '.join(duplicates)}")
+    sys.exit(1)
+baseline = FINAL_STATE_MIGRATIONS[-1]
+for path in sorted(glob.glob(os.path.join("supabase", "migrations", "*.sql"))):
+    name = os.path.basename(path)
+    if name > baseline and name not in EXCLUDED_MIGRATIONS and name not in FINAL_STATE_MIGRATIONS:
+        FINAL_STATE_MIGRATIONS.append(name)
 
 migration_files = []
 for name in FINAL_STATE_MIGRATIONS:
@@ -67,13 +103,14 @@ for i, filepath in enumerate(migration_files, 1):
         text=True
     )
 
-    if result.returncode == 0 or 'already exists' in result.stderr.lower():
+    if result.returncode == 0:
         print(f"  ✓ Applied")
         successful += 1
     else:
         error_msg = result.stderr[:100] if result.stderr else "Unknown error"
-        print(f"  ⚠️  {error_msg}")
-        errors.append(f"{filename}: {error_msg}")
+        print(f"  ❌ FAILED: {error_msg}")
+        print("  ❌ STOPPING: resolve this migration before applying later migrations.")
+        sys.exit(1)
 
 print()
 print("=" * 60)

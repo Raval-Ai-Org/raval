@@ -3,19 +3,20 @@ import { jsonError, requireUserId } from "@/server/api-auth";
 
 export const dynamic = "force-dynamic";
 
-function adminClient() {
+function userClient(request: Request) {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Server asset storage is not configured");
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+  const authorization = request.headers.get("authorization");
+  if (!url || !key || !authorization) throw new Error("Server asset storage is not configured");
+  return createClient(url, key, {
+    global: { headers: { Authorization: authorization } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
-function normalizeAsset(row: Record<string, unknown>, supabase: ReturnType<typeof adminClient>) {
+function normalizeAsset(row: Record<string, unknown>, signedUrls: Map<string, string>) {
   const storagePath = typeof row.storage_path === "string" ? row.storage_path : null;
-  let url = typeof row.public_url === "string" ? row.public_url : null;
-  if (!url && storagePath) {
-    url = supabase.storage.from("generated-assets").getPublicUrl(storagePath).data.publicUrl;
-  }
+  const url = (storagePath && signedUrls.get(storagePath)) ?? null;
   return {
     id: String(row.id),
     type: String(row.asset_type ?? "file"),
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
 
   let supabase;
   try {
-    supabase = adminClient();
+    supabase = userClient(request);
   } catch (error) {
     return jsonError(
       500,
@@ -71,8 +72,18 @@ export async function GET(request: Request) {
     .limit(500);
   if (assetsError) return jsonError(500, assetsError.message);
 
+  const storagePaths = (rows ?? [])
+    .map((row) => row.storage_path)
+    .filter((path): path is string => typeof path === "string");
+  const { data: signedRows } = storagePaths.length
+    ? await supabase.storage.from("generated-assets").createSignedUrls(storagePaths, 3600)
+    : { data: [] };
+  const signedUrls = new Map<string, string>();
+  for (const row of signedRows ?? []) {
+    if (row.path && row.signedUrl) signedUrls.set(row.path, row.signedUrl);
+  }
   const assets = (rows ?? []).map((row) =>
-    normalizeAsset(row as Record<string, unknown>, supabase),
+    normalizeAsset(row as Record<string, unknown>, signedUrls),
   );
   const visible = assets.filter((asset) => Boolean(asset.url));
 

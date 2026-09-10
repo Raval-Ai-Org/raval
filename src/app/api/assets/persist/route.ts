@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { assertPublicUrl, jsonError, requireUserId } from "@/server/api-auth";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,14 @@ function isAssetsTableUnavailable(error: { code?: string; message?: string } | n
 
 function errorMessage(error: { message?: string; code?: string } | null) {
   return [error?.message, error?.code].filter(Boolean).join(" ") || "Unknown database error";
+}
+
+async function signedAssetUrl(supabase: SupabaseClient, storagePath: string | null) {
+  if (!storagePath) return null;
+  const { data, error } = await supabase.storage
+    .from("generated-assets")
+    .createSignedUrl(storagePath, 3600);
+  return error ? null : data.signedUrl;
 }
 
 function userSupabase(request: Request) {
@@ -134,8 +142,11 @@ export async function POST(request: Request) {
       "Persistent asset storage is not configured. Apply the latest Supabase migration and retry.",
     );
   }
-  if (existing?.status === "ready" && existing.public_url)
-    return Response.json({ asset: existing, deduplicated: true });
+  if (existing?.status === "ready") {
+    const url =
+      (await signedAssetUrl(supabase, existing.storage_path)) ?? existing.public_url ?? null;
+    if (url) return Response.json({ asset: { ...existing, public_url: url }, deduplicated: true });
+  }
 
   let assetId = existing?.id as string | undefined;
   if (!assetId) {
@@ -178,8 +189,11 @@ export async function POST(request: Request) {
         .eq("idempotency_key", idempotencyKey)
         .single();
       assetId = raced?.id;
-      if (raced?.status === "ready" && raced.public_url)
-        return Response.json({ asset: raced, deduplicated: true });
+      if (raced?.status === "ready") {
+        const url =
+          (await signedAssetUrl(supabase, raced.storage_path)) ?? raced.public_url ?? null;
+        if (url) return Response.json({ asset: { ...raced, public_url: url }, deduplicated: true });
+      }
     }
   } else {
     await supabase.from("assets").update({ status: "persisting" }).eq("id", assetId);
@@ -216,13 +230,26 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: publicFile } = supabase.storage.from("generated-assets").getPublicUrl(path);
+  const { data: signedFile, error: signedUrlError } = await supabase.storage
+    .from("generated-assets")
+    .createSignedUrl(path, 3600);
+  if (signedUrlError || !signedFile?.signedUrl) {
+    await supabase.storage.from("generated-assets").remove([path]);
+    await supabase
+      .from("assets")
+      .update({
+        status: "persistence_failed",
+        metadata: { persistence_error: signedUrlError?.message },
+      })
+      .eq("id", assetId);
+    return jsonError(502, "Generated asset could not receive a signed URL");
+  }
   const { data: ready, error: readyError } = await supabase
     .from("assets")
     .update({
       status: "ready",
       storage_path: path,
-      public_url: publicFile.publicUrl,
+      public_url: null,
       content_item_id: linkedContentItemId,
     })
     .eq("id", assetId)
@@ -246,11 +273,26 @@ export async function POST(request: Request) {
   }
 
   if (linkedContentItemId) {
+    const { data: currentContent } = await supabase
+      .from("content_items")
+      .select("meta")
+      .eq("id", linkedContentItemId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
     const { error: contentUpdateError } = await supabase
       .from("content_items")
       .update({
-        media_url: publicFile.publicUrl,
-        meta: { asset_id: assetId, asset_storage_path: path, asset_status: "ready" },
+        // Keep the durable Storage path in metadata. The signed URL is only a
+        // response presentation value and must not become persistent identity.
+        media_url: null,
+        meta: {
+          ...(currentContent?.meta && typeof currentContent.meta === "object"
+            ? currentContent.meta
+            : {}),
+          asset_id: assetId,
+          asset_storage_path: path,
+          asset_status: "ready",
+        },
       })
       .eq("id", linkedContentItemId)
       .eq("workspace_id", workspaceId);
@@ -258,5 +300,8 @@ export async function POST(request: Request) {
       console.warn("Asset persisted but post link update failed", errorMessage(contentUpdateError));
     }
   }
-  return Response.json({ asset: ready, deduplicated: false });
+  return Response.json({
+    asset: { ...ready, public_url: signedFile.signedUrl },
+    deduplicated: false,
+  });
 }
