@@ -26,6 +26,14 @@ from .models import (
     AIGapFindingLink,
     AIVisibilitySnapshot,
     AIMonitoringRun,
+    OrchestrationRun,
+    OrchestrationStage,
+    OrchestrationEvent,
+    Schedule,
+    ExecutionReceipt,
+    OrchestrationCheckpoint,
+    OrchestrationControlRequest,
+    OrchestrationMonitoringObservation,
 )
 from .query_intelligence_service import QueryIntelligenceService
 from .ai_response_service import AIResponseService
@@ -4596,6 +4604,1158 @@ def check_production_readiness_endpoint(
         return report.model_dump()
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# --- Orchestration Step 5: Freshness & Continuous Monitoring Endpoints ---
+from .orchestration.freshness_service import FreshnessService
+from .orchestration.continuous_monitoring import ContinuousMonitoringService
+from .orchestration.freshness_evaluator import FreshnessEvaluator
+from .orchestration.freshness_policy import FreshnessPolicyRegistry
+from .orchestration.exceptions import (
+    TenantMismatchError,
+    SiteMismatchError,
+    InvalidEvidenceTimestampError,
+    UnsupportedEvidenceTypeError,
+    RefreshConflictError,
+)
+from .orchestration.schemas import (
+    FreshnessEvaluationRequest,
+    FreshnessEvaluationResponse,
+    StaleEvidenceOverviewResponse,
+    RefreshDecisionRequest,
+    RefreshDecisionResponse,
+    RefreshTriggerRequest,
+    RefreshTriggerResponse,
+    MonitoringStatusResponse,
+    MonitoringHistoryResponse,
+)
+
+
+@app.post(
+    "/api/orchestration/freshness/evaluate",
+    response_model=FreshnessEvaluationResponse,
+)
+def evaluate_evidence_freshness(
+    request: FreshnessEvaluationRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        ws = request.tenant_id or request.workspace_id or "default"
+        policy = FreshnessPolicyRegistry.get_policy(
+            request.evidence_type, site_id=request.site_id, tenant_id=ws
+        )
+        evaluation = FreshnessEvaluator.evaluate(
+            evidence_type=request.evidence_type,
+            observed_at=request.observed_at,
+            policy=policy,
+            as_of=request.as_of,
+            is_currently_refreshing=request.is_currently_refreshing,
+            is_provider_available=request.provider_available and request.is_provider_available,
+        )
+        obs_str = evaluation.observed_at.isoformat() if evaluation.observed_at else None
+        eval_str = evaluation.evaluated_at.isoformat() if hasattr(evaluation.evaluated_at, "isoformat") else str(evaluation.evaluated_at)
+        return FreshnessEvaluationResponse(
+            evidence_type=request.evidence_type,
+            freshness_state=evaluation.state.value,
+            state=evaluation.state.value.lower(),
+            observed_at=obs_str,
+            age_seconds=evaluation.age_seconds,
+            ttl_seconds=evaluation.ttl_seconds,
+            warning_threshold_seconds=evaluation.warning_threshold_seconds,
+            expiration_threshold_seconds=evaluation.expiration_threshold_seconds,
+            refresh_recommendation=evaluation.refresh_recommendation.value,
+            refresh_recommended=evaluation.refresh_recommended,
+            refresh_required=evaluation.refresh_required,
+            stale_reason=evaluation.stale_reason,
+            evaluated_at=eval_str,
+            details=evaluation.details,
+            metadata=evaluation.metadata,
+        )
+    except (InvalidEvidenceTimestampError, UnsupportedEvidenceTypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/freshness/sites/{site_id}",
+    response_model=StaleEvidenceOverviewResponse,
+)
+def get_site_freshness_overview(
+    site_id: int,
+    tenant_id: str = "default",
+    db: Session = Depends(get_db),
+):
+    freshness_service = FreshnessService()
+    try:
+        overview = freshness_service.get_site_freshness_overview(
+            db, tenant_id=tenant_id, site_id=site_id
+        )
+        return overview
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/api/orchestration/freshness/refresh-decisions",
+    response_model=RefreshDecisionResponse,
+)
+def evaluate_refresh_decisions(
+    request: RefreshDecisionRequest,
+    db: Session = Depends(get_db),
+):
+    freshness_service = FreshnessService()
+    try:
+        return freshness_service.evaluate_refresh_decisions(
+            db,
+            tenant_id=request.tenant_id,
+            site_id=request.site_id,
+            evidence_types=request.evidence_types,
+            force=request.force,
+        )
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/api/orchestration/freshness/refresh-triggers",
+    response_model=RefreshTriggerResponse,
+)
+def trigger_refresh_runs(
+    request: RefreshTriggerRequest,
+    db: Session = Depends(get_db),
+):
+    freshness_service = FreshnessService()
+    try:
+        return freshness_service.trigger_refresh_runs(
+            db,
+            tenant_id=request.tenant_id,
+            site_id=request.site_id,
+            evidence_types=request.evidence_types,
+            force=request.force,
+            actor=request.actor,
+        )
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except RefreshConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/monitoring/sites/{site_id}/status",
+    response_model=MonitoringStatusResponse,
+)
+def get_site_monitoring_status(
+    site_id: int,
+    tenant_id: str = "default",
+    db: Session = Depends(get_db),
+):
+    monitoring_service = ContinuousMonitoringService()
+    try:
+        return monitoring_service.get_site_monitoring_status(
+            db, tenant_id=tenant_id, site_id=site_id
+        )
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/monitoring/sites/{site_id}/history",
+    response_model=MonitoringHistoryResponse,
+)
+def get_site_monitoring_history(
+    site_id: int,
+    tenant_id: str = "default",
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    monitoring_service = ContinuousMonitoringService()
+    try:
+        return monitoring_service.get_monitoring_history(
+            db,
+            tenant_id=tenant_id,
+            site_id=site_id,
+            limit=limit,
+            offset=offset,
+        )
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/api/orchestration/monitoring/sites/{site_id}/evaluate",
+    response_model=MonitoringStatusResponse,
+)
+def evaluate_site_monitoring(
+    site_id: int,
+    tenant_id: str = "default",
+    db: Session = Depends(get_db),
+):
+    monitoring_service = ContinuousMonitoringService()
+    try:
+        return monitoring_service.evaluate_site_monitoring(
+            db, tenant_id=tenant_id, site_id=site_id
+        )
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# --- Orchestration Step 6: Observability, Health, Alerting & Tenant Policies Endpoints ---
+from .orchestration.observability import ObservabilityService, OperationalMetricsService
+from .orchestration.health import SystemHealthService, DependencyHealthTracker
+from .orchestration.alerting import AlertService, AlertRulesEngine
+from .orchestration.policies import TenantPolicyRegistry, PolicyEvaluator
+from .orchestration.exceptions import (
+    AlertNotFoundError,
+    InvalidAlertTransitionError,
+    PolicyViolationError,
+    GlobalCeilingExceededError,
+)
+from .orchestration.schemas import (
+    ObservabilityEventCreateRequest,
+    ObservabilityEventResponse,
+    ObservabilityEventsListResponse,
+    OperationalMetricsResponse,
+    SystemHealthResponse,
+    QueueHealthResponse,
+    WorkerHealthResponse,
+    ProviderHealthResponse,
+    AlertResponse,
+    AlertListResponse,
+    AlertAcknowledgeRequest,
+    AlertResolveRequest,
+    TenantPolicyUpsertRequest,
+    TenantPolicyResponse,
+    PolicyEvaluationRequest,
+    PolicyEvaluationResponse,
+)
+
+
+@app.get(
+    "/api/orchestration/observability/events",
+    response_model=ObservabilityEventsListResponse,
+)
+def list_observability_events(
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    run_id: str | None = None,
+    stage_id: str | None = None,
+    job_id: str | None = None,
+    worker_id: str | None = None,
+    correlation_id: str | None = None,
+    event_type: str | None = None,
+    severity: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    obs_svc = ObservabilityService()
+    try:
+        events, total = obs_svc.list_events(
+            db,
+            workspace_id=workspace_id,
+            site_id=site_id,
+            run_id=run_id,
+            stage_id=stage_id,
+            job_id=job_id,
+            worker_id=worker_id,
+            correlation_id=correlation_id,
+            event_type=event_type,
+            severity=severity,
+            limit=limit,
+            offset=offset,
+        )
+        return ObservabilityEventsListResponse(
+            workspace_id=workspace_id,
+            total_count=total,
+            events=[ObservabilityEventResponse.model_validate(e) for e in events],
+        )
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/api/orchestration/observability/events",
+    response_model=ObservabilityEventResponse,
+)
+def record_observability_event(
+    request: ObservabilityEventCreateRequest,
+    db: Session = Depends(get_db),
+):
+    obs_svc = ObservabilityService()
+    try:
+        event = obs_svc.record_event(
+            db,
+            workspace_id=request.workspace_id,
+            event_type=request.event_type,
+            site_id=request.site_id,
+            run_id=request.run_id,
+            stage_id=request.stage_id,
+            job_id=request.job_id,
+            worker_id=request.worker_id,
+            correlation_id=request.correlation_id,
+            severity=request.severity,
+            outcome=request.outcome,
+            duration_ms=request.duration_ms,
+            component=request.component,
+            from_state=request.from_state,
+            to_state=request.to_state,
+            details=request.details,
+        )
+        return ObservabilityEventResponse.model_validate(event)
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/observability/metrics",
+    response_model=OperationalMetricsResponse,
+)
+def get_operational_metrics(
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    hours: int = 24,
+    db: Session = Depends(get_db),
+):
+    metrics_svc = OperationalMetricsService()
+    try:
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        start_time = now - timedelta(hours=hours)
+        result = metrics_svc.compute_metrics(
+            db,
+            workspace_id=workspace_id,
+            site_id=site_id,
+            start_time=start_time,
+            end_time=now,
+        )
+        return OperationalMetricsResponse(**result)
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/health/system",
+    response_model=SystemHealthResponse,
+)
+def get_system_health(
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    health_svc = SystemHealthService()
+    try:
+        result = health_svc.evaluate_system_health(db, workspace_id, site_id=site_id)
+        return SystemHealthResponse(**result)
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/health/queue",
+    response_model=QueueHealthResponse,
+)
+def get_queue_health(
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    health_svc = SystemHealthService()
+    try:
+        sys_health = health_svc.evaluate_system_health(db, workspace_id, site_id=site_id)
+        queue_dim = sys_health["dimensions"].get("QUEUE", {})
+        evidence = queue_dim.get("evidence", {})
+        return QueueHealthResponse(
+            workspace_id=workspace_id,
+            queue_depth=evidence.get("queue_depth", 0),
+            status=queue_dim.get("status", "HEALTHY"),
+            reasons=queue_dim.get("reasons", []),
+            evidence=evidence,
+        )
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/health/workers",
+    response_model=WorkerHealthResponse,
+)
+def get_worker_health(
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    health_svc = SystemHealthService()
+    try:
+        sys_health = health_svc.evaluate_system_health(db, workspace_id, site_id=site_id)
+        worker_dim = sys_health["dimensions"].get("WORKERS", {})
+        evidence = worker_dim.get("evidence", {})
+        return WorkerHealthResponse(
+            workspace_id=workspace_id,
+            worker_count=evidence.get("worker_count", 0),
+            healthy_workers=evidence.get("healthy_workers", 0),
+            stale_workers=evidence.get("stale_workers", 0),
+            status=worker_dim.get("status", "HEALTHY"),
+            reasons=worker_dim.get("reasons", []),
+            evidence=evidence,
+        )
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/health/providers",
+    response_model=ProviderHealthResponse,
+)
+def get_provider_health(
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    lookback_hours: int = 24,
+    db: Session = Depends(get_db),
+):
+    tracker = DependencyHealthTracker()
+    try:
+        result = tracker.evaluate_providers(db, workspace_id, site_id=site_id, lookback_hours=lookback_hours)
+        return ProviderHealthResponse(
+            workspace_id=workspace_id,
+            status=result["status"],
+            providers=result["providers"],
+            lookback_hours=result["lookback_hours"],
+        )
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/alerts",
+    response_model=AlertListResponse,
+)
+def list_orchestration_alerts(
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    status: str | None = None,
+    severity: str | None = None,
+    alert_type: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    alert_svc = AlertService()
+    try:
+        alerts, total = alert_svc.list_alerts(
+            db,
+            workspace_id=workspace_id,
+            site_id=site_id,
+            status=status,
+            severity=severity,
+            alert_type=alert_type,
+            limit=limit,
+            offset=offset,
+        )
+        return AlertListResponse(
+            workspace_id=workspace_id,
+            total_count=total,
+            alerts=[AlertResponse.model_validate(a) for a in alerts],
+        )
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/alerts/{alert_id}",
+    response_model=AlertResponse,
+)
+def get_orchestration_alert(
+    alert_id: str,
+    workspace_id: str = "default",
+    db: Session = Depends(get_db),
+):
+    alert_svc = AlertService()
+    try:
+        alert = alert_svc.get_alert(db, workspace_id, alert_id)
+        if not alert:
+            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
+        return AlertResponse.model_validate(alert)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/api/orchestration/alerts/{alert_id}/acknowledge",
+    response_model=AlertResponse,
+)
+def acknowledge_orchestration_alert(
+    alert_id: str,
+    request: AlertAcknowledgeRequest,
+    db: Session = Depends(get_db),
+):
+    alert_svc = AlertService()
+    try:
+        alert = alert_svc.acknowledge_alert(
+            db,
+            workspace_id=request.workspace_id,
+            alert_id=alert_id,
+            acknowledged_by=request.acknowledged_by,
+        )
+        return AlertResponse.model_validate(alert)
+    except AlertNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except InvalidAlertTransitionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/api/orchestration/alerts/{alert_id}/resolve",
+    response_model=AlertResponse,
+)
+def resolve_orchestration_alert(
+    alert_id: str,
+    request: AlertResolveRequest,
+    db: Session = Depends(get_db),
+):
+    alert_svc = AlertService()
+    try:
+        alert = alert_svc.resolve_alert(
+            db,
+            workspace_id=request.workspace_id,
+            alert_id=alert_id,
+            resolved_by=request.resolved_by,
+            resolution_reason=request.resolution_reason,
+            evidence=request.evidence,
+        )
+        return AlertResponse.model_validate(alert)
+    except AlertNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/policies",
+    response_model=TenantPolicyResponse,
+)
+def get_tenant_policy(
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    registry = TenantPolicyRegistry()
+    try:
+        policy = registry.get_effective_policy(db, workspace_id, site_id=site_id)
+        return TenantPolicyResponse(**policy)
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.put(
+    "/api/orchestration/policies",
+    response_model=TenantPolicyResponse,
+)
+def upsert_tenant_policy(
+    request: TenantPolicyUpsertRequest,
+    db: Session = Depends(get_db),
+):
+    registry = TenantPolicyRegistry()
+    try:
+        raw_data = request.model_dump(exclude_unset=True)
+        workspace_id = raw_data.pop("workspace_id", "default")
+        site_id = raw_data.pop("site_id", None)
+        policy_model = registry.upsert_policy(
+            db,
+            workspace_id=workspace_id,
+            policy_data=raw_data,
+            site_id=site_id,
+        )
+        policy_dict = registry._model_to_dict(policy_model)
+        return TenantPolicyResponse(**policy_dict)
+    except GlobalCeilingExceededError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/api/orchestration/policies/evaluate",
+    response_model=PolicyEvaluationResponse,
+)
+def evaluate_operational_policy(
+    request: PolicyEvaluationRequest,
+    db: Session = Depends(get_db),
+):
+    evaluator = PolicyEvaluator()
+    try:
+        decision = evaluator.evaluate_run_creation(
+            db,
+            workspace_id=request.workspace_id,
+            site_id=request.site_id,
+            is_automated=request.is_automated,
+            enforce=False,
+        )
+        return PolicyEvaluationResponse(**decision.to_dict())
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# =====================================================================
+# Orchestration Step 7: Product Backend Contract + Controlled End-to-End Orchestrator Endpoints
+# =====================================================================
+from .orchestration.orchestrator import ProductionOrchestrator
+from .orchestration.service import OrchestrationService
+from .orchestration.control import ControlService
+from .orchestration.checkpoints import CheckpointManager
+from .orchestration.exceptions import (
+    RunNotFoundError,
+    StageNotFoundError,
+    IdempotencyConflictError,
+    InvalidStateTransitionError,
+    UnsafeResumeError,
+    CancellationRejectedError,
+)
+from .orchestration.schemas import (
+    OrchestrationRunCreateRequest,
+    OrchestrationRunResponse,
+    OrchestrationStageResponse,
+    OrchestrationRunResultResponse,
+    OrchestrationFailureHistoryResponse,
+    OrchestrationCancelRequest,
+    OrchestrationPauseRequest,
+    OrchestrationResumeRequest,
+    CancellationResponse,
+    PauseResponse,
+    ResumeResponse,
+    CheckpointResponse,
+)
+
+
+@app.post(
+    "/api/orchestration/runs",
+    response_model=OrchestrationRunResponse,
+)
+@app.post(
+    "/orchestration/runs",
+    response_model=OrchestrationRunResponse,
+)
+def create_orchestration_run(
+    request: OrchestrationRunCreateRequest,
+    auto_execute: bool = False,
+    db: Session = Depends(get_db),
+):
+    orchestrator = ProductionOrchestrator()
+    try:
+        run = orchestrator.create_and_execute_run(
+            db=db,
+            workspace_id=request.workspace_id,
+            site_id=request.site_id,
+            run_type=request.run_type,
+            trigger_source=request.trigger_source,
+            actor=request.actor_provenance.model_dump(),
+            idempotency_key=request.idempotency_key,
+            correlation_id=request.correlation_id,
+            parameters=request.metadata_payload,
+            auto_execute=auto_execute,
+        )
+        return OrchestrationRunResponse.model_validate(run)
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except PolicyViolationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except IdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/runs/{run_id}",
+    response_model=OrchestrationRunResponse,
+)
+@app.get(
+    "/orchestration/runs/{run_id}",
+    response_model=OrchestrationRunResponse,
+)
+def get_orchestration_run(
+    run_id: str,
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    svc = OrchestrationService()
+    try:
+        run = svc.get_run(workspace_id=workspace_id, run_id=run_id, db=db, site_id=site_id)
+        return OrchestrationRunResponse.model_validate(run)
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/runs/{run_id}/stages",
+    response_model=list[OrchestrationStageResponse],
+)
+@app.get(
+    "/orchestration/runs/{run_id}/stages",
+    response_model=list[OrchestrationStageResponse],
+)
+def get_orchestration_run_stages(
+    run_id: str,
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    svc = OrchestrationService()
+    try:
+        run = svc.get_run(workspace_id=workspace_id, run_id=run_id, db=db, site_id=site_id)
+        return [OrchestrationStageResponse.model_validate(s) for s in run.stages]
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/runs/{run_id}/events",
+    response_model=list[ObservabilityEventResponse],
+)
+@app.get(
+    "/orchestration/runs/{run_id}/events",
+    response_model=list[ObservabilityEventResponse],
+)
+def get_orchestration_run_events(
+    run_id: str,
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    svc = OrchestrationService()
+    obs_svc = ObservabilityService()
+    try:
+        run = svc.get_run(workspace_id=workspace_id, run_id=run_id, db=db, site_id=site_id)
+        events, _ = obs_svc.list_events(db, workspace_id=workspace_id, run_id=run.id, limit=200)
+        return [ObservabilityEventResponse.model_validate(e) for e in events]
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/runs/{run_id}/failures",
+    response_model=OrchestrationFailureHistoryResponse,
+)
+@app.get(
+    "/orchestration/runs/{run_id}/failures",
+    response_model=OrchestrationFailureHistoryResponse,
+)
+def get_orchestration_run_failures(
+    run_id: str,
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    svc = OrchestrationService()
+    try:
+        run = svc.get_run(workspace_id=workspace_id, run_id=run_id, db=db, site_id=site_id)
+        failures = []
+        if run.error_detail:
+            failures.append(run.error_detail)
+        for stage in run.stages:
+            if stage.error_detail:
+                failures.append(stage.error_detail)
+
+        return OrchestrationFailureHistoryResponse(
+            run_id=run.id,
+            workspace_id=run.workspace_id,
+            site_id=run.site_id,
+            failures=failures,
+            total_attempts=run.attempt_count,
+            is_terminal_failure=run.state == "FAILED",
+            recovery_info=run.recovery_info,
+        )
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/runs/{run_id}/checkpoints",
+    response_model=list[CheckpointResponse],
+)
+@app.get(
+    "/orchestration/runs/{run_id}/checkpoints",
+    response_model=list[CheckpointResponse],
+)
+def get_orchestration_run_checkpoints(
+    run_id: str,
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    svc = OrchestrationService()
+    try:
+        run = svc.get_run(workspace_id=workspace_id, run_id=run_id, db=db, site_id=site_id)
+        checkpoints = CheckpointManager.list_checkpoints(db, run_id=run.id, workspace_id=workspace_id)
+        return [CheckpointResponse.model_validate(c) for c in checkpoints]
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/orchestration/runs/{run_id}/result",
+    response_model=OrchestrationRunResultResponse,
+)
+@app.get(
+    "/orchestration/runs/{run_id}/result",
+    response_model=OrchestrationRunResultResponse,
+)
+def get_orchestration_run_result(
+    run_id: str,
+    workspace_id: str = "default",
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    svc = OrchestrationService()
+    try:
+        run = svc.get_run(workspace_id=workspace_id, run_id=run_id, db=db, site_id=site_id)
+
+        receipts_data = []
+        for r in run.receipts:
+            receipts_data.append({
+                "id": r.id,
+                "operation_type": r.operation_type,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "details": r.details,
+            })
+
+        val_summary = None
+        for s in run.stages:
+            if s.stage_name in ("VERIFYING", "VALIDATION") and s.output_summary:
+                val_summary = (s.output_summary.get("output_refs") or {}).get("validation_summary")
+                break
+
+        return OrchestrationRunResultResponse(
+            run_id=run.id,
+            workspace_id=run.workspace_id,
+            site_id=run.site_id,
+            status=run.state,
+            outcome_summary=run.outcome_summary or {},
+            validation_result=val_summary,
+            receipts=receipts_data,
+            stages_executed=[s.stage_name for s in run.stages if s.state in ("SUCCEEDED", "PARTIAL", "FAILED")],
+            checkpoints_count=len(run.checkpoints),
+            alerts_count=0,
+            completed_at=run.completed_at.isoformat() if run.completed_at else None,
+            timing={
+                "requested_at": run.requested_at.isoformat() if run.requested_at else None,
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            },
+        )
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/api/orchestration/runs/{run_id}/cancel",
+    response_model=CancellationResponse,
+)
+@app.post(
+    "/orchestration/runs/{run_id}/cancel",
+    response_model=CancellationResponse,
+)
+def cancel_orchestration_run(
+    run_id: str,
+    request: OrchestrationCancelRequest,
+    db: Session = Depends(get_db),
+):
+    ctrl_svc = ControlService()
+    try:
+        # Resolve and validate run strictly within requested workspace
+        run = (
+            db.query(OrchestrationRun)
+            .filter(
+                OrchestrationRun.id == run_id,
+                OrchestrationRun.workspace_id == request.workspace_id,
+            )
+            .first()
+        )
+        if not run:
+            raise RunNotFoundError(run_id=run_id, workspace_id=request.workspace_id)
+
+        if request.site_id is not None and run.site_id != request.site_id:
+            raise SiteMismatchError(
+                run_id=run_id,
+                expected_site_id=run.site_id,
+                actual_site_id=request.site_id,
+            )
+
+        site_id = run.site_id
+
+        result = ctrl_svc.request_cancellation(
+            workspace_id=request.workspace_id,
+            site_id=site_id,
+            run_id=run_id,
+            requested_by=request.requested_by,
+            db=db,
+            reason=request.reason,
+        )
+        return CancellationResponse(
+            run_id=result.run_id,
+            status=result.status.value if hasattr(result.status, "value") else str(result.status),
+            outcome=result.outcome.value if hasattr(result.outcome, "value") else str(result.outcome),
+            acknowledged=result.acknowledged,
+            message=result.message,
+        )
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError:
+        raise HTTPException(
+            status_code=403,
+            detail="Tenant boundary violation: access to entity across workspace boundary is forbidden.",
+        )
+    except CancellationRejectedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/api/orchestration/runs/{run_id}/pause",
+    response_model=PauseResponse,
+)
+@app.post(
+    "/orchestration/runs/{run_id}/pause",
+    response_model=PauseResponse,
+)
+def pause_orchestration_run(
+    run_id: str,
+    request: OrchestrationPauseRequest,
+    db: Session = Depends(get_db),
+):
+    ctrl_svc = ControlService()
+    try:
+        # Resolve and validate run strictly within requested workspace
+        run = (
+            db.query(OrchestrationRun)
+            .filter(
+                OrchestrationRun.id == run_id,
+                OrchestrationRun.workspace_id == request.workspace_id,
+            )
+            .first()
+        )
+        if not run:
+            raise RunNotFoundError(run_id=run_id, workspace_id=request.workspace_id)
+
+        if request.site_id is not None and run.site_id != request.site_id:
+            raise SiteMismatchError(
+                run_id=run_id,
+                expected_site_id=run.site_id,
+                actual_site_id=request.site_id,
+            )
+
+        site_id = run.site_id
+
+        result = ctrl_svc.request_pause(
+            workspace_id=request.workspace_id,
+            site_id=site_id,
+            run_id=run_id,
+            requested_by=request.requested_by,
+            db=db,
+            reason=request.reason,
+        )
+        return PauseResponse(
+            run_id=result.run_id,
+            status=result.status.value if hasattr(result.status, "value") else str(result.status),
+            outcome=result.outcome,
+            acknowledged=result.acknowledged,
+            message=result.message,
+            checkpoint_id=result.checkpoint_id,
+        )
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError:
+        raise HTTPException(
+            status_code=403,
+            detail="Tenant boundary violation: access to entity across workspace boundary is forbidden.",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/api/orchestration/runs/{run_id}/resume",
+    response_model=ResumeResponse,
+)
+@app.post(
+    "/orchestration/runs/{run_id}/resume",
+    response_model=ResumeResponse,
+)
+def resume_orchestration_run(
+    run_id: str,
+    request: OrchestrationResumeRequest,
+    db: Session = Depends(get_db),
+):
+    ctrl_svc = ControlService()
+    try:
+        # Resolve and validate run strictly within requested workspace
+        run = (
+            db.query(OrchestrationRun)
+            .filter(
+                OrchestrationRun.id == run_id,
+                OrchestrationRun.workspace_id == request.workspace_id,
+            )
+            .first()
+        )
+        if not run:
+            raise RunNotFoundError(run_id=run_id, workspace_id=request.workspace_id)
+
+        if request.site_id is not None and run.site_id != request.site_id:
+            raise SiteMismatchError(
+                run_id=run_id,
+                expected_site_id=run.site_id,
+                actual_site_id=request.site_id,
+            )
+
+        site_id = run.site_id
+
+        result = ctrl_svc.resume_run(
+            workspace_id=request.workspace_id,
+            site_id=site_id,
+            run_id=run_id,
+            requested_by=request.requested_by,
+            db=db,
+        )
+        return ResumeResponse(
+            run_id=result.run_id,
+            status=result.status.value if hasattr(result.status, "value") else str(result.status),
+            outcome=result.outcome,
+            message=result.message,
+            resumed_from_checkpoint_id=result.resumed_from_checkpoint_id,
+        )
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except SiteMismatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TenantMismatchError:
+        raise HTTPException(
+            status_code=403,
+            detail="Tenant boundary violation: access to entity across workspace boundary is forbidden.",
+        )
+    except UnsafeResumeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 
 
 

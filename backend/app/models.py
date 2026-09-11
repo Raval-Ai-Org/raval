@@ -138,6 +138,18 @@ class Website(Base):
         cascade="all, delete-orphan",
     )
 
+    orchestration_runs = relationship(
+        "OrchestrationRun",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
+    schedules = relationship(
+        "Schedule",
+        back_populates="website",
+        cascade="all, delete-orphan",
+    )
+
 
 
 
@@ -3741,6 +3753,20 @@ class AIMonitoringRun(Base):
         "QuerySet",
         back_populates="monitoring_runs",
     )
+
+
+from .orchestration.models import (
+    ExecutionReceipt,
+    OrchestrationAlert,
+    OrchestrationCheckpoint,
+    OrchestrationControlRequest,
+    OrchestrationEvent,
+    OrchestrationMonitoringObservation,
+    OrchestrationRun,
+    OrchestrationStage,
+    Schedule,
+    TenantOrchestrationPolicy,
+)
 
 
 

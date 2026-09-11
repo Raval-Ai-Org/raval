@@ -78,6 +78,11 @@ AUTO_SAFE_RULES: set[str] = {
     # Generic Anchor Text Remediation
     "source_generic_anchor_text",
     "anchor_text_fix",
+    
+    # Meta tag actions
+    "update_meta_tags",
+    "update_meta_description",
+    "update_title",
 }
 
 ASSISTED_RULES: set[str] = {
@@ -258,7 +263,7 @@ class FixSafetyClassifier:
             return cls._build_auto_safe_result(rule_key, fix_key, "rule_match")
 
         # Fix-type based deterministic meta tag or heading fixes
-        if fix_key in ("meta_tag_improvement", "heading_structure_fix") and cat_key in ("seo", "structure"):
+        if fix_key in ("meta_tag_improvement", "heading_structure_fix", "update_meta_tags", "update_meta_description") and cat_key in ("seo", "structure", "metadata"):
             return cls._build_auto_safe_result(rule_key or fix_key, fix_key, "fix_type_match")
 
         if fix_key == "technical_seo_correction" and ("canonical" in rule_key or "robots" in rule_key):
