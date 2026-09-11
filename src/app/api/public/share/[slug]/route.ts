@@ -61,15 +61,20 @@ async function verifyPassword(
 }
 
 /**
- * Throttle password attempts per share slug. Without this the endpoint is
- * brute-forceable at network speed, and each attempt costs a scrypt derivation.
- * Keyed by slug (not IP) so a distributed attempt set still shares one budget.
- *
- * Fails open like every other limiter call — see src/server/rate-limit.ts.
+ * Throttle password attempts. Two budgets:
+ *   • per (slug, client IP) — 10 / 5 min: stops a single brute-forcer without
+ *     locking the real client out of their own share;
+ *   • per slug, 5× that — caps a distributed attempt set on one share.
+ * Each attempt also costs a scrypt derivation. Fails open like every other
+ * limiter call (src/server/rate-limit.ts).
  */
-async function tooManyPasswordAttempts(slug: string): Promise<boolean> {
-  const result = await consumeRateLimit("share-password", slug);
-  return !result.ok;
+async function tooManyPasswordAttempts(slug: string, request: Request): Promise<boolean> {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ipKey = createHash("sha256").update(ip).digest("hex").slice(0, 24);
+  const perClient = await consumeRateLimit("share-password", `${slug}:${ipKey}`);
+  if (!perClient.ok) return true;
+  const perSlug = await consumeRateLimit("share-password", `${slug}:all`, { cost: 0.2 });
+  return !perSlug.ok;
 }
 
 function json(status: number, payload: unknown, extraHeaders?: Record<string, string>) {
@@ -105,11 +110,12 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     .eq("slug", params.slug)
     .maybeSingle();
 
-  if (error || !share) return json(404, { error: "Not found" });
+  // Same answer for "no such share" and "wrong token": a slug alone reveals nothing.
+  if (error || !share || !tokenMatches(token, (share as any).token_hash))
+    return json(404, { error: "Not found" });
   if ((share as any).status !== "active") return new Response("Gone", { status: 410 });
   if ((share as any).expires_at && new Date((share as any).expires_at).getTime() < Date.now())
     return new Response("Expired", { status: 410 });
-  if (!tokenMatches(token, (share as any).token_hash)) return json(401, { error: "Invalid token" });
 
   const passwordRequired = !!(share as any).password_hash;
 
@@ -126,7 +132,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
         locked: true,
       });
     }
-    if (await tooManyPasswordAttempts(params.slug)) {
+    if (await tooManyPasswordAttempts(params.slug, request)) {
       return json(
         429,
         { error: "Too many password attempts. Try again shortly.", locked: true },
@@ -196,16 +202,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ slug: stri
     .select("id, token_hash, password_hash, status, expires_at, allow_comments, allow_approvals")
     .eq("slug", params.slug)
     .maybeSingle();
-  if (!share) return json(404, { error: "Not found" });
+  if (!share || !tokenMatches(body.token, (share as any).token_hash))
+    return json(404, { error: "Not found" });
   if ((share as any).status !== "active") return new Response("Gone", { status: 410 });
   if ((share as any).expires_at && new Date((share as any).expires_at).getTime() < Date.now())
     return new Response("Expired", { status: 410 });
-  if (!tokenMatches(body.token, (share as any).token_hash))
-    return json(401, { error: "Invalid token" });
 
   // Enforce password when set on the share.
   if ((share as any).password_hash) {
-    if (await tooManyPasswordAttempts(params.slug)) {
+    if (await tooManyPasswordAttempts(params.slug, request)) {
       return json(
         429,
         { error: "Too many password attempts. Try again shortly." },
@@ -227,6 +232,18 @@ export async function POST(request: Request, ctx: { params: Promise<{ slug: stri
     !(share as any).allow_approvals
   )
     return json(403, { error: "Approvals disabled" });
+
+  // An event may only reference an item that belongs to THIS share — a share
+  // link must not be usable to approve or comment on arbitrary content.
+  if (body.itemId) {
+    const { data: item } = await supabaseAdmin
+      .from("client_share_items")
+      .select("id")
+      .eq("id", body.itemId)
+      .eq("share_id", (share as any).id)
+      .maybeSingle();
+    if (!item) return json(404, { error: "Item not found" });
+  }
 
   const { error: insErr } = await supabaseAdmin.from("client_events").insert({
     share_id: (share as any).id,

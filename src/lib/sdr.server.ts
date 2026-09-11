@@ -22,6 +22,10 @@ export function verifyWebhookSignature(
   signatureHeader: string | null,
 ): boolean {
   if (!signatureHeader) return false;
+  // An empty key is not a secret: HMAC with "" is computable by anyone. A
+  // workspace provisioned without SDR_WEBHOOK_BASE_URL has webhook_secret NULL
+  // and must never verify.
+  if (!secret) return false;
   const expected =
     "sha256=" + createHmac("sha256", secret).update(`POST|/webhook|${rawBody}`).digest("hex");
   const a = Buffer.from(expected);
@@ -144,7 +148,7 @@ export function classifySdrStatus(status: number): SdrErrorCode {
 // The base URL is trusted server config (set by provisioning, never user input).
 // Loopback is permitted for local/dev integration; other private hosts are
 // rejected (SSRF hardening). The per-workspace token is supplied by the caller.
-function assertSdrBaseUrl(raw: string): URL {
+export function assertSdrBaseUrl(raw: string): URL {
   const u = new URL(raw);
   if (u.protocol !== "http:" && u.protocol !== "https:") {
     throw new SdrError("SDR_UNREACHABLE", "SDR base URL must be http(s)");

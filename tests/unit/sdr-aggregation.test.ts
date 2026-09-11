@@ -83,6 +83,7 @@ describe("aggregation guard (R2a)", () => {
       ],
     });
     const body = JSON.stringify({
+      timestamp: new Date().toISOString(),
       event: "post.published",
       data: { post_id: "unknown", target_id: "unknown", status: "published" },
     });

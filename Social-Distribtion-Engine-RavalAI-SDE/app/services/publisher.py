@@ -236,6 +236,14 @@ class PublisherService:
         if existing_post:
             return await self._build_job_response(existing_post, db)
 
+        # Validate every target account at INGRESS with the same
+        # workspace-scoped lookup immediate publish uses (FR-MT-03, audit
+        # F-TEN-001). Before this, a foreign or unknown account id was accepted
+        # here and only failed at publish time — or surfaced as a misleading
+        # 409 from the foreign-key violation.
+        for target_req in request.targets:
+            await self._get_account(target_req.account_id, workspace_id, db)
+
         # Create post record
         post_id = str(uuid4())
         now = datetime.now(UTC)
@@ -538,11 +546,15 @@ class PublisherService:
         target.last_error = error_msg
         target.updated_at = now
 
-        # Record failure event
+        # Record failure event — always with the owning workspace (a delivery
+        # log with workspace_id="" is invisible to tenant-scoped audit).
+        workspace_id = (
+            await db.execute(select(Post.workspace_id).where(Post.id == target.post_id))
+        ).scalar_one()
         await self._record_delivery_log(
             post_id=target.post_id,
             post_target_id=target.id,
-            workspace_id=target.post.workspace_id if target.post else "",
+            workspace_id=workspace_id,
             event_type="failed",
             http_status=None,
             error_message=error_msg,
@@ -667,8 +679,11 @@ class PublisherService:
         # The old code hardcoded "dryrun", which mislabeled every job.
         platform_map: dict[str, str] = {}
         if targets:
+            # Workspace-scoped: a job response never reveals the platform of
+            # an account that belongs to another tenant.
             account_stmt = select(Account.id, Account.platform).where(
-                Account.id.in_([t.account_id for t in targets])
+                Account.id.in_([t.account_id for t in targets]),
+                Account.workspace_id == post.workspace_id,
             )
             account_result = await db.execute(account_stmt)
             platform_map = {row[0]: row[1] for row in account_result.all()}

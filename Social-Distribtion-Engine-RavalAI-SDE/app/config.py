@@ -5,8 +5,19 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Fallback values published in docker-compose.yml / this file for local
+# development. Never valid outside development and testing.
+KNOWN_DEV_SECRETS = frozenset(
+    {
+        "dev-token-change-in-production",
+        "dev-secret-change-in-production",
+        "sde_dev_password",
+        "dev-webhook-secret",
+    }
+)
 
 
 class Settings(BaseSettings):
@@ -249,6 +260,34 @@ class Settings(BaseSettings):
         if len(v) < 40:
             raise ValueError("FERNET_KEY appears invalid (too short)")
         return v
+
+    @model_validator(mode="after")
+    def reject_dev_defaults_in_production(self) -> Settings:
+        """Refuse to boot staging/production with a known development secret.
+
+        docker-compose.yml ships fallbacks such as ``dev-token-change-in-production``
+        so local development works out of the box. The length validators above
+        accept some of them, so without this check a production deploy that
+        forgot one variable would run with a secret published in the repo.
+        """
+        if self.ENV not in ("production", "staging"):
+            return self
+        offenders = [
+            name
+            for name, value in (
+                ("SDE_API_TOKEN", self.SDE_API_TOKEN),
+                ("SDE_SIGNING_SECRET", self.SDE_SIGNING_SECRET),
+                ("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD),
+                ("WEBHOOK_DEFAULT_SECRET", self.WEBHOOK_DEFAULT_SECRET),
+            )
+            if value in KNOWN_DEV_SECRETS
+        ]
+        if offenders:
+            raise ValueError(
+                f"Development default secret(s) in {self.ENV}: {', '.join(offenders)}. "
+                "Set real values in the deployment environment."
+            )
+        return self
 
     def __init__(self, **data: Any) -> None:
         """Initialize settings and compute derived URLs."""

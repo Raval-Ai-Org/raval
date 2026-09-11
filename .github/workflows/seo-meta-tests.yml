@@ -7,10 +7,21 @@ name: SEO / meta messaging tests
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, main]
   push:
-    branches: [master]
+    branches: [master, main]
   workflow_dispatch:
+
+# The browser Supabase client refuses placeholder values, so the build and the
+# dev server get CI-only dummies (they reach nothing real). APP_URL drives the
+# canonical URLs, robots.txt and sitemap the suites assert on.
+env:
+  NEXT_PUBLIC_SUPABASE_URL: https://ci-build-only.supabase.co
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_only
+  SUPABASE_URL: https://ci-build-only.supabase.co
+  SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_only
+  APP_URL: http://localhost:8080
+  NEXT_PUBLIC_APP_URL: http://localhost:8080
 
 concurrency:
   group: seo-meta-${{ github.ref }}

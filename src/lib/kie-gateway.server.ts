@@ -1,5 +1,10 @@
 import "server-only";
 import { UpstreamError } from "@/server/upstream";
+import { cache, digest, recordCacheLookup } from "@/server/cache/store";
+import { enforceBudget } from "@/server/ai/budget";
+import { recordUsage } from "@/server/ai/metering";
+import { unitPrice } from "@/server/ai/pricing";
+import { getRequestScope } from "@/server/request-context";
 import {
   getImageModelConfigStatus,
   routeImageModel,
@@ -12,9 +17,16 @@ const SUPPORTED_VIDEO_DURATIONS = [4, 6, 8] as const;
 const TASK_TIMEOUT_MS = 180_000;
 const POLL_INTERVAL_MS = 3_000;
 const IMAGE_URL_TIMEOUT_MS = 30_000;
-const IMAGE_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
-const imageCache = new Map<string, { image: { b64: string; mimeType: string }; expires: number }>();
+/** Generated-image cache (shared cache, per tenant). */
+const IMAGE_CACHE_TTL_SECONDS = 2 * 60 * 60;
+/** A provider-returned image larger than this is refused rather than buffered. */
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+// In-flight dedupe stays per-process; the finished image goes to the shared cache.
 const inflight = new Map<string, Promise<{ b64: string; mimeType: string }>>();
+
+function imagePrice(model: string): number {
+  return unitPrice(/sunburst|premium/i.test(model) ? "kie:image:premium" : "kie:image");
+}
 
 export type MediaType = "image" | "video" | "audio";
 
@@ -172,10 +184,21 @@ function aspectRatio(size: "1024x1024" | "1792x1024" | "1024x1792"): string {
   return "1:1";
 }
 
-async function cacheKey(prompt: string, size: string, model: string): Promise<string> {
-  const bytes = new TextEncoder().encode(`kie|${model}|${size}|${prompt}`);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+/**
+ * Cache key for a generated image. Includes the tenant and the reference
+ * images: the old key (`model|size|prompt`) returned the previous result for
+ * an image-to-image edit of a DIFFERENT reference with the same prompt, and
+ * shared generated images across tenants.
+ */
+async function cacheKey(
+  prompt: string,
+  size: string,
+  model: string,
+  referenceAssets: string[] = [],
+): Promise<string> {
+  const scope = getRequestScope();
+  const tenant = scope.workspaceId ? `ws:${scope.workspaceId}` : scope.userId ? `u:${scope.userId}` : "anon";
+  return `kie:img:${await digest(`${tenant}|${model}|${size}|${referenceAssets.join(",")}|${prompt}`)}`;
 }
 
 function resultUrls(record: any): string[] {
@@ -279,7 +302,12 @@ async function downloadImage(url: string): Promise<{ b64: string; mimeType: stri
     const response = await fetch(url, { signal: controller.signal });
     if (!response.ok)
       throw new KieGatewayError(502, "The generated image could not be downloaded.", "storage");
+    const declared = Number(response.headers.get("content-length") ?? "0");
+    if (declared > MAX_IMAGE_BYTES)
+      throw new KieGatewayError(502, "The generated image is too large to accept.", "response");
     const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > MAX_IMAGE_BYTES)
+      throw new KieGatewayError(502, "The generated image is too large to accept.", "response");
     let binary = "";
     for (let offset = 0; offset < bytes.length; offset += 0x8000) {
       binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
@@ -322,6 +350,8 @@ export async function imageGenerationStream(opts: {
     );
   }
   const plan = routeImageModel({ prompt: opts.prompt, ...opts.routing });
+  // Billed per image: the workspace's monthly image quota and spend ceiling apply.
+  await enforceBudget("image");
   let image: { b64: string; mimeType: string } | undefined;
   let lastError: unknown;
   const candidates = [plan.model, ...plan.fallbacks].slice(
@@ -331,20 +361,48 @@ export async function imageGenerationStream(opts: {
   let attempt = 0;
   for (const model of candidates) {
     attempt += 1;
-    const key = await cacheKey(opts.prompt, size, model);
+    const key = await cacheKey(opts.prompt, size, model, referenceAssets);
     try {
-      const cached = imageCache.get(key);
-      image = cached && cached.expires > Date.now() ? cached.image : undefined;
+      image = (await cache.get<{ b64: string; mimeType: string }>(key)) ?? undefined;
+      recordCacheLookup("image", Boolean(image));
+      if (image) {
+        recordUsage({
+          provider: "kie",
+          model,
+          kind: "image",
+          cached: true,
+          savedUsd: imagePrice(model),
+        });
+      }
       if (!image) {
-        imageCache.delete(key);
         let pending = inflight.get(key);
         if (!pending) {
           pending = (async () => {
-            const taskId = await createTask(opts.prompt, size, model, referenceAssets);
-            const [url] = await waitForTask(taskId);
-            const downloaded = await downloadImage(url);
-            imageCache.set(key, { image: downloaded, expires: Date.now() + IMAGE_CACHE_TTL_MS });
-            return downloaded;
+            const started = Date.now();
+            try {
+              const taskId = await createTask(opts.prompt, size, model, referenceAssets);
+              const [url] = await waitForTask(taskId);
+              const downloaded = await downloadImage(url);
+              recordUsage({
+                provider: "kie",
+                model,
+                kind: "image",
+                units: 1,
+                estCostUsd: imagePrice(model),
+                latencyMs: Date.now() - started,
+              });
+              await cache.set(key, downloaded, IMAGE_CACHE_TTL_SECONDS);
+              return downloaded;
+            } catch (error) {
+              recordUsage({
+                provider: "kie",
+                model,
+                kind: "image",
+                status: "error",
+                latencyMs: Date.now() - started,
+              });
+              throw error;
+            }
           })();
           inflight.set(key, pending);
           void pending.then(
@@ -420,7 +478,44 @@ export async function videoGeneration(opts: {
       "configuration",
     );
   }
+  // The most expensive call in the product: quota + spend ceiling apply.
+  await enforceBudget("video");
+  const started = Date.now();
+  try {
+    const video = await runVideoTask(model, opts.prompt, {
+      aspectRatio,
+      duration,
+      resolution,
+      audio: opts.audio,
+      seed: opts.seed,
+    });
+    recordUsage({
+      provider: "kie",
+      model,
+      kind: "video",
+      units: 1,
+      estCostUsd: unitPrice("kie:video"),
+      latencyMs: Date.now() - started,
+    });
+    return video;
+  } catch (error) {
+    recordUsage({ provider: "kie", model, kind: "video", status: "error", latencyMs: Date.now() - started });
+    throw error;
+  }
+}
 
+async function runVideoTask(
+  model: string,
+  prompt: string,
+  opts: {
+    aspectRatio: ReturnType<typeof normalizeKieAspectRatio>;
+    duration: number;
+    resolution: VideoResolution;
+    audio?: boolean;
+    seed?: number;
+  },
+): Promise<GeneratedVideo> {
+  const { aspectRatio, duration, resolution } = opts;
   const json = await fetchJson(
     `${KIE_BASE}/jobs/createTask`,
     {
@@ -429,7 +524,7 @@ export async function videoGeneration(opts: {
       body: JSON.stringify({
         model,
         input: {
-          prompt: opts.prompt.slice(0, 20_000),
+          prompt: prompt.slice(0, 20_000),
           resolution,
           aspect_ratio: aspectRatio,
           duration,

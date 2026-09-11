@@ -5,14 +5,14 @@
 import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
-import { getWorkspaceSdrKey } from "@/lib/sdr.helpers.server";
+import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import {
   publishContentItemsHandler,
   handleSdrDisabled,
   type PublishSelection,
 } from "@/lib/sdr.handlers";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { isSdrEnabled } from "@/lib/feature-flags";
+import { isSdrEnabledForWorkspace } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,7 @@ export const POST = defineRoute({
   auth: "workspace",
   body: BodySchema,
   workspaceId: ({ body }) => body.workspaceId,
+  minRole: "editor",
   handler: async ({ body, workspaceId }) => {
     const contentItemIds = Array.isArray(body.contentItemIds)
       ? body.contentItemIds.filter((x: unknown): x is string => typeof x === "string")
@@ -36,20 +37,17 @@ export const POST = defineRoute({
       return jsonError(400, "Invalid destination selection");
     }
 
-    // US5 (FR-017): flag off → degrade to today's mock (status flip) server-side.
-    if (!isSdrEnabled()) {
-      const out = await handleSdrDisabled(
-        { workspaceId, contentItemIds, kind: "publish" },
-        { db: supabaseAdmin },
-      );
+    // US5 (FR-017): flag off → refuse honestly; nothing is marked published.
+    if (!isSdrEnabledForWorkspace(workspaceId)) {
+      const out = await handleSdrDisabled({ workspaceId, contentItemIds, kind: "publish" });
       return Response.json(out.body, { status: out.status });
     }
 
     try {
-      const token = await getWorkspaceSdrKey(workspaceId);
+      const { token, baseUrl } = await getWorkspaceSdrConfig(workspaceId);
       const out = await publishContentItemsHandler(
         { workspaceId, contentItemIds, selection },
-        { sdrBaseUrl: process.env.SDR_BASE_URL ?? "", token, db: supabaseAdmin },
+        { sdrBaseUrl: baseUrl, token, db: supabaseAdmin },
       );
       return Response.json(out.body, { status: out.status });
     } catch (e) {

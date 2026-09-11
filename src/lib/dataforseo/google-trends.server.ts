@@ -1,4 +1,7 @@
 import "server-only";
+import { recordUsage } from "@/server/ai/metering";
+import { unitPrice } from "@/server/ai/pricing";
+
 export type GoogleTrendsInput = {
   keywords: string[];
   location?: string;
@@ -297,11 +300,22 @@ export async function createGoogleTrendsTask(
   input: GoogleTrendsInput,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ taskId: string }> {
+  const started = Date.now();
   const payload = await dataForSeoRequest(
     GOOGLE_TRENDS_TASK_POST_URL,
     { method: "POST", body: JSON.stringify([buildTask(input)]) },
     fetchImpl,
   );
+  // DataForSEO bills at task creation and reports the charge as `cost` (USD).
+  const reportedCost = isRecord(payload) && typeof payload.cost === "number" ? payload.cost : undefined;
+  recordUsage({
+    provider: "dataforseo",
+    model: "google_trends/explore/task_post",
+    kind: "search",
+    units: 1,
+    estCostUsd: reportedCost ?? unitPrice("dataforseo:task"),
+    latencyMs: Date.now() - started,
+  });
   assertEnvelopeOk(payload, "task creation");
   const task = payload.tasks[0];
   const taskId = isRecord(task) ? stringValue(task.id) : undefined;

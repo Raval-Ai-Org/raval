@@ -11,6 +11,7 @@ TDD tests covering:
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from datetime import UTC, datetime
@@ -69,6 +70,51 @@ def _seed_webhook(
     return wh_id
 
 
+class FakeQueue:
+    """Stands in for the Celery queue: records each scheduled redelivery and
+    runs it only when drained — after the current delivery has returned, the
+    same ordering a worker gives (and no nested SQLite sessions)."""
+
+    def __init__(self) -> None:
+        self.scheduled: list[tuple[int, float]] = []
+        self.pending: list[tuple] = []
+        self.redeliveries: list[dict] = []
+
+    def schedule(self, webhook_id, event_type, payload, post_id, post_target_id, attempt, delay):
+        self.scheduled.append((attempt, delay))
+        self.pending.append((webhook_id, event_type, payload, post_id, post_target_id, attempt))
+
+    def drain(self) -> dict | None:
+        """Run queued redeliveries until none remain; return the final outcome."""
+        while self.pending:
+            self.redeliveries.append(WebhookService().redeliver(*self.pending.pop(0)))
+        return self.redeliveries[-1] if self.redeliveries else None
+
+
+@pytest.fixture(autouse=True)
+def queue(monkeypatch) -> FakeQueue:
+    q = FakeQueue()
+    monkeypatch.setattr(WebhookService, "_schedule_retry", staticmethod(q.schedule))
+    return q
+
+
+def _deliver(event_type: str = "post.published", payload: dict | None = None) -> list[dict]:
+    return WebhookService().deliver_event(
+        workspace_id="workspace_001",
+        event_type=event_type,
+        payload=payload or {"post_id": "abc123"},
+    )
+
+
+def _log_rows(event_type: str) -> list:
+    engine = get_sync_engine()
+    with engine.connect() as conn:
+        return conn.execute(
+            text("SELECT http_status, event_type FROM delivery_logs WHERE event_type = :e"),
+            {"e": event_type},
+        ).fetchall()
+
+
 # ─── Tests ────────────────────────────────────────────────────────────
 
 
@@ -90,13 +136,7 @@ class TestWebhookService:
                 return httpx.Response(200)
 
             respx.post(WEBHOOK_URL).mock(side_effect=verify)
-
-            service = WebhookService()
-            results = service.deliver_event(
-                workspace_id="workspace_001",
-                event_type="post.published",
-                payload={"post_id": "abc123", "status": "published"},
-            )
+            results = _deliver(payload={"post_id": "abc123", "status": "published"})
 
         assert len(results) == 1
         assert results[0]["status"] == "delivered"
@@ -112,17 +152,8 @@ class TestWebhookService:
 
     def test_no_active_webhooks_returns_empty_list(self):
         """No webhooks for workspace → empty list, no crash."""
-        # Seed a webhook for a DIFFERENT workspace
         _seed_webhook(workspace_id="other_workspace", wh_id="wh-other")
-
-        service = WebhookService()
-        results = service.deliver_event(
-            workspace_id="workspace_001",
-            event_type="post.published",
-            payload={"post_id": "123"},
-        )
-
-        assert results == []
+        assert _deliver(payload={"post_id": "123"}) == []
 
     def test_disabled_webhooks_ignored(self):
         """Disabled webhooks are not called."""
@@ -140,65 +171,39 @@ class TestWebhookService:
                 )
             )
             session.commit()
+        assert _deliver(payload={"post_id": "123"}) == []
 
-        service = WebhookService()
-        results = service.deliver_event(
-            workspace_id="workspace_001",
-            event_type="post.published",
-            payload={"post_id": "123"},
-        )
-
-        assert results == []
-
-    def test_timeout_recorded_gracefully(self):
-        """Timeout → result shows 'timeout' status, no crash."""
+    def test_timeout_recorded_gracefully(self, queue: FakeQueue):
+        """Timeouts are retried on the queue, then reported as 'timeout'."""
         _seed_webhook()
-
         with respx.mock:
             respx.post(WEBHOOK_URL).mock(side_effect=httpx.TimeoutException("timed out"))
+            results = _deliver()
+            final = queue.drain()
 
-            service = WebhookService()
-            results = service.deliver_event(
-                workspace_id="workspace_001",
-                event_type="post.published",
-                payload={"post_id": "abc123"},
-            )
+        assert results[0]["status"] == "retry_scheduled"
+        assert final is not None
+        assert final["status"] == "timeout"
+        assert final["status_code"] is None
 
-        assert len(results) == 1
-        assert results[0]["status"] == "timeout"
-        assert results[0]["status_code"] is None
-
-    def test_connection_error_recorded_gracefully(self):
-        """Connection refused → result shows 'error', no crash."""
+    def test_connection_error_recorded_gracefully(self, queue: FakeQueue):
+        """Connection refused → retried, then 'error', no crash."""
         _seed_webhook()
-
         with respx.mock:
             respx.post(WEBHOOK_URL).mock(side_effect=httpx.ConnectError("Connection refused"))
+            _deliver(event_type="post.failed")
+            final = queue.drain()
 
-            service = WebhookService()
-            results = service.deliver_event(
-                workspace_id="workspace_001",
-                event_type="post.failed",
-                payload={"post_id": "abc123"},
-            )
-
-        assert len(results) == 1
-        assert results[0]["status"] == "error"
-        assert "refused" in results[0].get("error", "").lower()
+        assert final is not None
+        assert final["status"] == "error"
+        assert "refused" in final.get("error", "").lower()
 
     def test_http_404_recorded_as_failed(self):
-        """404 response → recorded as 'failed', not a crash."""
+        """404 response → recorded as 'failed', not a crash, not retried."""
         _seed_webhook()
-
         with respx.mock:
             respx.post(WEBHOOK_URL).mock(return_value=httpx.Response(404))
-
-            service = WebhookService()
-            results = service.deliver_event(
-                workspace_id="workspace_001",
-                event_type="post.published",
-                payload={"post_id": "abc123"},
-            )
+            results = _deliver()
 
         assert len(results) == 1
         assert results[0]["status"] == "failed"
@@ -207,99 +212,98 @@ class TestWebhookService:
     def test_delivery_log_created_on_success(self):
         """Successful delivery creates a DeliveryLog entry."""
         _seed_webhook()
-
         with respx.mock:
             respx.post(WEBHOOK_URL).mock(return_value=httpx.Response(200))
-            service = WebhookService()
-            service.deliver_event(
-                workspace_id="workspace_001",
-                event_type="post.published",
-                payload={"post_id": "abc123"},
-            )
+            _deliver()
 
-        engine = get_sync_engine()
-        with engine.connect() as conn:
-            result = conn.execute(
-                text(
-                    "SELECT http_status, event_type FROM delivery_logs WHERE event_type = 'webhook.post.published'"
-                )
-            )
-            logs = result.fetchall()
-            assert len(logs) == 1
-            assert logs[0].http_status == 200  # type: ignore[union-attr]
+        logs = _log_rows("webhook.post.published")
+        assert len(logs) == 1
+        assert logs[0].http_status == 200  # type: ignore[union-attr]
 
-    def test_delivery_log_created_on_failure(self):
-        """Failed delivery creates a DeliveryLog with error info."""
+    def test_delivery_log_created_once_on_final_failure(self, queue: FakeQueue):
+        """A transient failure logs only its terminal outcome, with error info."""
         _seed_webhook()
-
         with respx.mock:
             respx.post(WEBHOOK_URL).mock(side_effect=httpx.ConnectError("DNS resolution failed"))
-            service = WebhookService()
-            service.deliver_event(
-                workspace_id="workspace_001",
-                event_type="post.failed",
-                payload={"post_id": "abc123"},
-            )
+            _deliver(event_type="post.failed")
+            queue.drain()
 
-        engine = get_sync_engine()
-        with engine.connect() as conn:
-            result = conn.execute(
-                text(
-                    "SELECT http_status, event_type FROM delivery_logs WHERE event_type = 'webhook.post.failed'"
-                )
-            )
-            logs = result.fetchall()
-            assert len(logs) == 1
-            assert logs[0].http_status is None  # type: ignore[union-attr]
+        logs = _log_rows("webhook.post.failed")
+        assert len(logs) == 1
+        assert logs[0].http_status is None  # type: ignore[union-attr]
 
 
 class TestWebhookRetries:
     """T070 — transient webhook failures are retried up to MAX_RETRIES; 4xx and
-    2xx are not. (Backoff patched to 0 for fast tests.)"""
+    2xx are not. Retries are QUEUED with a countdown, never slept inline."""
 
-    @pytest.fixture(autouse=True)
-    def no_backoff(self, monkeypatch):
-        monkeypatch.setattr(WebhookService, "_retry_delay", staticmethod(lambda attempt: 0.0))
+    def test_transient_failure_is_queued_not_slept(self, queue: FakeQueue, monkeypatch):
+        import time as time_module
 
-    def test_retries_transient_5xx_then_succeeds(self):
+        monkeypatch.setattr(
+            time_module, "sleep", lambda *_: pytest.fail("webhook retry must not block the worker")
+        )
         _seed_webhook()
         with respx.mock:
             route = respx.post(WEBHOOK_URL)
             route.mock(side_effect=[httpx.Response(503), httpx.Response(200, json={"ok": True})])
-            service = WebhookService()
-            results = service.deliver_event(workspace_id="workspace_001", event_type="post.published", payload={"post_id": "abc"})
-        assert route.call_count == 2  # 503 → retried → 200
-        assert results[0]["status"] == "delivered"
-        assert results[0]["status_code"] == 200
+            results = _deliver(payload={"post_id": "abc"})
+            assert route.call_count == 1  # nothing retried inline
+            final = queue.drain()
+        assert results[0]["status"] == "retry_scheduled"
+        assert queue.scheduled == [(2, 5.0)]
+        assert final is not None
+        assert final["status"] == "delivered"
+        assert final["status_code"] == 200
+        assert route.call_count == 2
 
-    def test_no_retry_on_permanent_4xx(self):
+    def test_redelivery_is_resigned_with_a_fresh_timestamp(self, queue: FakeQueue):
+        _seed_webhook()
+        bodies: list[bytes] = []
+
+        def capture(request):
+            bodies.append(request.content)
+            return httpx.Response(503) if len(bodies) == 1 else httpx.Response(200)
+
+        with respx.mock:
+            respx.post(WEBHOOK_URL).mock(side_effect=capture)
+            _deliver(payload={"post_id": "abc"})
+            queue.drain()
+
+        stamps = [json.loads(b)["timestamp"] for b in bodies]
+        assert len(stamps) == 2
+        assert stamps[1] >= stamps[0]
+
+    def test_no_retry_on_permanent_4xx(self, queue: FakeQueue):
         _seed_webhook()
         with respx.mock:
             route = respx.post(WEBHOOK_URL)
             route.mock(return_value=httpx.Response(404))
-            service = WebhookService()
-            results = service.deliver_event(workspace_id="workspace_001", event_type="post.published", payload={"post_id": "abc"})
+            results = _deliver(payload={"post_id": "abc"})
         assert route.call_count == 1  # 4xx is permanent — no retry
+        assert queue.scheduled == []
         assert results[0]["status"] == "failed"
         assert results[0]["status_code"] == 404
 
-    def test_exhausts_retries_on_persistent_5xx(self):
+    def test_exhausts_retries_on_persistent_5xx(self, queue: FakeQueue):
         _seed_webhook()
         with respx.mock:
             route = respx.post(WEBHOOK_URL)
             route.mock(return_value=httpx.Response(503))
-            service = WebhookService()
-            results = service.deliver_event(workspace_id="workspace_001", event_type="post.failed", payload={"post_id": "abc"})
+            _deliver(event_type="post.failed", payload={"post_id": "abc"})
+            final = queue.drain()
         assert route.call_count == 3  # MAX_RETRIES attempts
-        assert results[0]["status"] == "failed"
-        assert results[0]["status_code"] == 503
+        assert [attempt for attempt, _ in queue.scheduled] == [2, 3]
+        assert final is not None
+        assert final["status"] == "failed"
+        assert final["status_code"] == 503
 
-    def test_success_is_not_retried(self):
+    def test_success_is_not_retried(self, queue: FakeQueue):
         _seed_webhook()
         with respx.mock:
             route = respx.post(WEBHOOK_URL)
             route.mock(return_value=httpx.Response(200, json={"ok": True}))
-            service = WebhookService()
-            results = service.deliver_event(workspace_id="workspace_001", event_type="post.published", payload={"post_id": "abc"})
+            results = _deliver(payload={"post_id": "abc"})
         assert route.call_count == 1
+        assert queue.scheduled == []
         assert results[0]["status"] == "delivered"

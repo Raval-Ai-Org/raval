@@ -4,8 +4,10 @@
 import "server-only";
 export {
   runJsonPrompt,
+  runStructuredPrompt,
   runTool,
   AiGatewayError,
+  AiOutputError,
   type RunJsonOpts,
   type RunToolOpts,
 } from "./run.server";
@@ -39,5 +41,4 @@ export {
 } from "./workspace-signals.server";
 
 export { safeParseJson, extractFirstJsonObject, stripJsonFences } from "./json";
-export { logAiCall, readTokenLog, type TokenLogEntry } from "./token-log.server";
 export * from "./prompts";

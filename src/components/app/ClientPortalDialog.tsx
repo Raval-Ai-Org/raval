@@ -37,6 +37,9 @@ import { StarAgent } from "@/components/StarAgent";
 import { LoadingIndicator } from "@/components/ui/loading-indicator";
 import { cn } from "@/lib/utils";
 
+/** A guardrail finding returned by POST /api/shares when review is needed. */
+type ShareFinding = { itemTitle: string; rule: string; severity: "warn" | "block"; detail: string };
+
 // Matches the other top-bar pills (Schedule, Brand DNA) for visual cohesion.
 const PILL =
   "group relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-card/70 px-2.5 sm:px-3 text-[12px] font-medium text-foreground/80 backdrop-blur-md transition-[transform,box-shadow,background-color,border-color,color] duration-200 ease-out hover:-translate-y-px hover:border-foreground/20 hover:bg-card hover:text-foreground hover:shadow-[0_4px_12px_-6px_rgba(0,0,0,0.12)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -539,6 +542,8 @@ function NewShareView({
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<{ url: string; slug: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  // Guardrail findings the server wants acknowledged before sharing (409).
+  const [review, setReview] = useState<ShareFinding[] | null>(null);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -559,7 +564,7 @@ function NewShareView({
 
   const selectedCount = Object.values(picked).filter(Boolean).length;
 
-  const create = async () => {
+  const create = async (acknowledgeWarnings = false) => {
     if (!workspaceId) return;
     if (!title.trim()) {
       toast.error("Add a title");
@@ -604,10 +609,22 @@ function NewShareView({
           allowApprovals,
           allowDownload,
           items,
+          acknowledgeWarnings,
         }),
       });
+      if (r.status === 409) {
+        const body = (await r.json().catch(() => null)) as {
+          requiresAcknowledgement?: boolean;
+          findings?: ShareFinding[];
+        } | null;
+        if (body?.requiresAcknowledgement) {
+          setReview(body.findings ?? []);
+          return;
+        }
+      }
       if (!r.ok) throw new Error(await r.text());
       const data = await r.json();
+      setReview(null);
       setCreated({ url: data.url, slug: data.slug });
       try {
         await navigator.clipboard.writeText(data.url);
@@ -781,8 +798,51 @@ function NewShareView({
         )}
       </div>
 
+      {review && (
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 text-[12px]"
+        >
+          <div className="font-semibold text-amber-700 dark:text-amber-400">
+            Review before sharing with your client
+          </div>
+          <p className="mt-0.5 text-muted-foreground">
+            These items contain things a client shouldn&apos;t see unchecked. Edit them, or share
+            anyway if you&apos;ve confirmed they&apos;re fine.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {review.slice(0, 8).map((f, i) => (
+              <li key={i} className="flex gap-2">
+                <span
+                  className={cn(
+                    "shrink-0 rounded px-1.5 py-px text-[10px] font-semibold uppercase",
+                    f.severity === "block"
+                      ? "bg-red-500/15 text-red-600"
+                      : "bg-amber-500/15 text-amber-700",
+                  )}
+                >
+                  {f.severity === "block" ? "Blocker" : "Warning"}
+                </span>
+                <span className="min-w-0">
+                  <span className="font-medium">{f.itemTitle}</span>
+                  <span className="text-muted-foreground"> · {f.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setReview(null)}>
+              Go back and edit
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => create(true)} disabled={busy}>
+              Share anyway
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-end gap-2 border-t border-border/40 pt-3">
-        <Button onClick={create} disabled={busy || !title.trim() || selectedCount === 0}>
+        <Button onClick={() => create()} disabled={busy || !title.trim() || selectedCount === 0}>
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin mr-2" />
           ) : (

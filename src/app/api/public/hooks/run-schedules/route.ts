@@ -1,21 +1,14 @@
+// POST /api/public/hooks/run-schedules — pg_cron (every minute) drives due
+// scheduled_jobs and due Market Brain collections. Auth + heartbeat come from
+// defineCronRoute (x-cron-secret header, timing-safe; 503 if CRON_SECRET unset).
+import { defineCronRoute } from "@/server/cron";
+
 export const dynamic = "force-dynamic";
-// Cron hook — invoked every minute by pg_cron. Authenticates with the
-// Supabase publishable key (apikey header). No PII is returned.
-export async function POST(request: Request) {
-  const { timingSafeEqual } = await import("crypto");
-  // Only accept a dedicated cron secret — never fall back to the
-  // service-role key (which would leak the DB super-key over the wire).
-  const expected = process.env.CRON_SECRET ?? "";
-  const provided = request.headers.get("x-cron-secret") ?? "";
-  if (!expected || expected.length < 16) {
-    return new Response("Server not configured", { status: 503 });
-  }
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-  try {
+
+export const POST = defineCronRoute({
+  job: "run-schedules",
+  expectedIntervalSeconds: 60,
+  handler: async () => {
     const [{ runDueScheduledJobs }, { runDueMarketBrainCollections }] = await Promise.all([
       import("@/lib/schedules.server"),
       import("@/lib/market-brain-scheduler.server"),
@@ -24,17 +17,13 @@ export async function POST(request: Request) {
       runDueScheduledJobs({ max: 25 }),
       runDueMarketBrainCollections({ max: 25 }),
     ]);
-    return Response.json({ ok: true, ran: scheduled.ran + marketBrain.ran });
-  } catch (e) {
-    console.error("run-schedules error", e);
-    const msg = e instanceof Error ? e.message : String(e);
-    return new Response(JSON.stringify({ ok: false, error: msg }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-}
+    return {
+      ran: scheduled.ran + marketBrain.ran,
+      failed: scheduled.failed,
+    };
+  },
+});
 
-export async function GET(_request: Request) {
-  return Response.json({ ok: true, hint: "POST with apikey header" });
+export async function GET() {
+  return Response.json({ ok: true, hint: "POST with the x-cron-secret header" });
 }

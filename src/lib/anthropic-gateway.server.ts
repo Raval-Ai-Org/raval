@@ -1,6 +1,10 @@
 import "server-only";
 import { safeParseJson } from "@/lib/ai/json";
 import { fetchWithRetry, UpstreamError } from "@/server/upstream";
+import { checkBudget } from "@/server/ai/budget";
+import { recordUsage } from "@/server/ai/metering";
+import { estimateTextCost } from "@/server/ai/pricing";
+import { logGuardrailEvent } from "@/server/guardrails/events";
 
 export const CLAUDE_SONNET_MODEL = "claude-sonnet-5";
 export const CLAUDE_OPUS_MODEL = "claude-opus-5";
@@ -126,7 +130,7 @@ async function requestClaude(
 
 export type ClaudeEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
-export async function claudeTextPrompt(opts: {
+export type ClaudeTextOpts = {
   route: string;
   system: string;
   user: string;
@@ -145,25 +149,58 @@ export async function claudeTextPrompt(opts: {
   outputSchema?: Record<string, unknown>;
   timeoutMs?: number;
   retries?: number;
-}): Promise<string> {
-  const model = opts.model ?? selectClaudeModel("default");
+};
+
+export type ClaudeTextResult = { text: string; truncated: boolean; model: string; degraded: boolean };
+
+/** Output cap while a workspace is past its spend ceiling. */
+const DEGRADED_MAX_TOKENS = 1_500;
+
+/**
+ * Claude text completion with budget enforcement, usage metering and
+ * truncation reporting. Past a spend ceiling the call degrades (Opus → Sonnet,
+ * smaller output cap) instead of failing.
+ */
+export async function claudeTextCompletion(opts: ClaudeTextOpts): Promise<ClaudeTextResult> {
+  let model = opts.model ?? selectClaudeModel("default");
+  let maxTokens = Math.max(256, Math.min(opts.maxTokens ?? 1800, 16_000));
+  const budget = await checkBudget("text");
+  const degraded = budget.mode === "degrade";
+  if (degraded) {
+    if (model === CLAUDE_OPUS_MODEL) model = CLAUDE_SONNET_MODEL;
+    maxTokens = Math.min(maxTokens, DEGRADED_MAX_TOKENS);
+  }
+
   const outputConfig: Record<string, unknown> = {};
-  if (opts.effort) outputConfig.effort = opts.effort;
+  if (opts.effort) outputConfig.effort = degraded && opts.effort !== "low" ? "medium" : opts.effort;
   if (opts.outputSchema) {
     outputConfig.format = { type: "json_schema", schema: opts.outputSchema };
   }
-  const response = await requestClaude(
-    {
+  const started = Date.now();
+  let response: any;
+  try {
+    response = await requestClaude(
+      {
+        model,
+        max_tokens: maxTokens,
+        system: opts.system,
+        messages: [{ role: "user", content: opts.user }],
+        ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),
+      },
+      opts.timeoutMs ?? 60_000,
+      opts.route,
+      opts.retries,
+    );
+  } catch (error) {
+    recordUsage({
+      provider: "anthropic",
       model,
-      max_tokens: Math.max(256, Math.min(opts.maxTokens ?? 1800, 16_000)),
-      system: opts.system,
-      messages: [{ role: "user", content: opts.user }],
-      ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),
-    },
-    opts.timeoutMs ?? 60_000,
-    opts.route,
-    opts.retries,
-  );
+      route: opts.route,
+      status: "error",
+      latencyMs: Date.now() - started,
+    });
+    throw error;
+  }
 
   const parts = response?.content ?? [];
   const text = parts
@@ -172,26 +209,36 @@ export async function claudeTextPrompt(opts: {
     .trim();
 
   const stopReason: unknown = response?.stop_reason;
+  const truncated = stopReason === "max_tokens";
+  const usage = response?.usage ?? {};
+  recordUsage({
+    provider: "anthropic",
+    model,
+    route: opts.route,
+    inputTokens: (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0),
+    outputTokens: usage.output_tokens,
+    estCostUsd: estimateTextCost(model, {
+      inputTokens: usage.input_tokens ?? 0,
+      outputTokens: usage.output_tokens ?? 0,
+      cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+    }),
+    truncated,
+    latencyMs: Date.now() - started,
+    status: degraded ? "degraded" : "ok",
+  });
+
   if (stopReason === "refusal") {
     console.error("Claude declined request", { route: opts.route, model });
     throw new AnthropicGatewayError(422, `Claude declined to answer for ${opts.route}.`, "refusal");
   }
-  if (stopReason === "max_tokens") {
-    console.error("Claude output truncated at max_tokens", {
-      route: opts.route,
-      model,
-      maxTokens: opts.maxTokens,
-      outputTokens: response?.usage?.output_tokens,
-    });
-    // Truncated structured output is never valid; free-text callers keep the
-    // partial text (existing behavior) but the truncation is now logged.
-    if (opts.outputSchema) {
-      throw new AnthropicGatewayError(
-        502,
-        `Claude output for ${opts.route} was cut off before completion.`,
-        "max_tokens",
-      );
-    }
+  if (truncated && opts.outputSchema) {
+    // Truncated structured output is never valid.
+    throw new AnthropicGatewayError(
+      502,
+      `Claude output for ${opts.route} was cut off before completion.`,
+      "max_tokens",
+    );
   }
 
   if (!text) {
@@ -202,9 +249,24 @@ export async function claudeTextPrompt(opts: {
     );
   }
 
-  return text;
+  return { text, truncated, model, degraded };
 }
 
+/** Text-only convenience wrapper (existing callers). */
+export async function claudeTextPrompt(opts: ClaudeTextOpts): Promise<string> {
+  return (await claudeTextCompletion(opts)).text;
+}
+
+const JSON_ONLY =
+  "Return ONLY valid JSON matching the requested schema. Do not wrap in markdown fences. Do not add prose before or after the JSON.";
+
+/**
+ * Claude JSON prompt with a safe default. A parse failure gets one repair
+ * attempt (with a larger budget if the first answer was cut off); if that also
+ * fails the fallback is returned and a `parse_failure` guardrail event is
+ * recorded — never silently. Callers that must not use a fallback should use
+ * claudeStructuredPrompt.
+ */
 export async function claudeJsonPrompt<T>(opts: {
   route: string;
   system: string;
@@ -213,14 +275,43 @@ export async function claudeJsonPrompt<T>(opts: {
   model?: string;
   maxTokens?: number;
 }): Promise<T> {
-  const text = await claudeTextPrompt({
+  const system = `${opts.system}\n\n${JSON_ONLY}`;
+  const first = await claudeTextCompletion({
     route: opts.route,
-    system: `${opts.system}\n\nReturn ONLY valid JSON matching the requested schema. Do not wrap in markdown fences. Do not add prose before or after the JSON.`,
+    system,
     user: opts.user,
     model: opts.model,
     maxTokens: opts.maxTokens,
   });
+  const sentinel = Symbol("unparsed");
+  const parsed = safeParseJson<T | typeof sentinel>(first.text, sentinel);
+  if (parsed !== sentinel && parsed != null) return parsed as T;
 
-  const parsed = safeParseJson<T>(text, opts.fallback);
-  return parsed ?? opts.fallback;
+  try {
+    const second = await claudeTextCompletion({
+      route: opts.route,
+      system,
+      user: `${opts.user}\n\n## Correction required\n${
+        first.truncated
+          ? "Your previous answer was cut off. Answer again, more concisely, as complete valid JSON."
+          : "Your previous answer was not valid JSON. Answer again with STRICT valid JSON only."
+      }`,
+      model: opts.model,
+      maxTokens: first.truncated
+        ? Math.min((opts.maxTokens ?? 1800) * 2, 16_000)
+        : opts.maxTokens,
+    });
+    const repaired = safeParseJson<T | typeof sentinel>(second.text, sentinel);
+    if (repaired !== sentinel && repaired != null) return repaired as T;
+  } catch (error) {
+    if (error instanceof AnthropicGatewayError && error.code !== "empty_response") throw error;
+  }
+
+  logGuardrailEvent({
+    kind: "parse_failure",
+    severity: "warn",
+    route: opts.route,
+    detail: { fallbackUsed: true, truncated: first.truncated, provider: "anthropic" },
+  });
+  return opts.fallback;
 }

@@ -52,6 +52,7 @@ describe("delivery view data (webhook → per-platform status + live link)", () 
 
     // LinkedIn publishes first with a live link.
     const li = JSON.stringify({
+      timestamp: new Date().toISOString(),
       event: "post.published",
       data: {
         post_id: "job-1",
@@ -67,6 +68,7 @@ describe("delivery view data (webhook → per-platform status + live link)", () 
 
     // Twitter still retrying → item is publishing (partial), LinkedIn shows the link.
     const tw = JSON.stringify({
+      timestamp: new Date().toISOString(),
       event: "post.retrying",
       data: { post_id: "job-1", target_id: "t-tw", status: "retrying" },
     });
@@ -123,6 +125,7 @@ describe("delivery view data (webhook → per-platform status + live link)", () 
     });
 
     const a = JSON.stringify({
+      timestamp: new Date().toISOString(),
       event: "post.published",
       data: {
         post_id: "job-1",
@@ -133,6 +136,7 @@ describe("delivery view data (webhook → per-platform status + live link)", () 
     });
     await handleSdrWebhook({ rawBody: a, signature: sign(a), eventType: "post.published" }, { db });
     const b = JSON.stringify({
+      timestamp: new Date().toISOString(),
       event: "post.failed",
       data: {
         post_id: "job-1",

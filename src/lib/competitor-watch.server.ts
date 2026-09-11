@@ -7,6 +7,7 @@ import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { normalizeUrl } from "@/lib/crawl/html";
 import { safeFetch } from "@/server/safe-fetch";
+import { getAppUrl } from "@/server/env";
 
 export type Snapshot = {
   fetchedAt: string;
@@ -79,7 +80,7 @@ export async function snapshot(url: string): Promise<Snapshot> {
   const target = normalizeUrl(url);
   const res = await safeFetch(target, {
     headers: {
-      "User-Agent": `MelloxAI-CompetitorWatch/1.0 (+${process.env.APP_URL || "https://raval.ai"})`,
+      "User-Agent": `MelloxAI-CompetitorWatch/1.0 (+${getAppUrl()})`,
       Accept: "text/html,application/xhtml+xml",
     },
     timeoutMs: 15_000,

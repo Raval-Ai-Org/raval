@@ -39,6 +39,7 @@ import {
   type PlatformId,
 } from "@/lib/social-platforms";
 import { getConnections, publishContentItems, scheduleContentItems } from "@/lib/sdr.functions";
+import { canDistribute, useSdrStatus } from "@/hooks/use-sdr-status";
 import { StudioDestinationPicker } from "@/components/app/StudioDestinationPicker";
 import { DeliveryView } from "@/components/app/DeliveryView";
 import type { PublishSelection } from "@/lib/sdr.handlers";
@@ -273,6 +274,10 @@ export function StudioCanvasModal({
   const [editingContent, setEditingContent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // Schedule/Publish go through the distribution engine; hide them when it's
+  // off for this workspace or the caller is a viewer (they would 503/403).
+  const sdrStatus = useSdrStatus(workspaceId);
+  const distributionReady = canDistribute(sdrStatus);
   const progressRef = useRef<number | null>(null);
   const createItem = useServerFn(createContentItem);
   const runUpdate = useServerFn(updateContentItem);
@@ -899,10 +904,9 @@ export function StudioCanvasModal({
       setVariants([]);
       setCaptionsConfirmed(false);
       setEditedPlatforms({});
+      // Progress reflects the real generation phases (no random creep).
       if (progressRef.current) window.clearInterval(progressRef.current);
-      progressRef.current = window.setInterval(() => {
-        setProgress((p) => Math.min(92, p + Math.random() * 6));
-      }, 220);
+      setProgress(8);
 
       const tile = TILE_BY_ID[activeCanvas.type];
       const jobId = newJobId();
@@ -919,15 +923,23 @@ export function StudioCanvasModal({
       try {
         const ctx = brandContextString(brand, workspaceName);
         genQueue.advance(jobId, "research");
+        setProgress(25);
 
         if (isSocialCanvas) {
           if (!platforms.length) throw new Error("Pick at least one platform");
           const res = await authedFetch("/api/social-multi", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: requestPrompt, context: ctx, platforms }),
+            // A second click on Generate is a regenerate: skip the cached answer.
+            body: JSON.stringify({
+              prompt: requestPrompt,
+              context: ctx,
+              platforms,
+              regenerate: generated,
+            }),
           });
           genQueue.advance(jobId, "drafting");
+          setProgress(70);
           const json = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(json?.error || `Generation failed (${res.status})`);
           const vs = (json?.variants ?? []) as SocialVariant[];
@@ -958,9 +970,11 @@ export function StudioCanvasModal({
             prompt: `${requestPrompt}\n\nWrite the complete preview content now. Do not return an empty response. Use only the brand context and website data provided.`,
             context: ctx,
             url: brand?.websiteUrl || undefined,
+            regenerate: generated,
           }),
         });
         genQueue.advance(jobId, "drafting");
+          setProgress(70);
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json?.error || `Generation failed (${res.status})`);
         const text = String(json?.text || "").trim();
@@ -2009,30 +2023,41 @@ export function StudioCanvasModal({
                                     Edit captions
                                   </button>
                                 )}
-                                <motion.button
-                                  whileHover={{ scale: 1.03 }}
-                                  whileTap={{ scale: 0.97 }}
-                                  onClick={onApprove}
-                                  disabled={saving || publishing}
-                                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 text-[12px] font-semibold text-foreground transition hover:bg-secondary disabled:opacity-50"
-                                >
-                                  <Send className="h-3.5 w-3.5" />{" "}
-                                  {saving ? "Scheduling…" : "Schedule"}
-                                </motion.button>
-                                <motion.button
-                                  whileHover={{ scale: 1.03 }}
-                                  whileTap={{ scale: 0.97 }}
-                                  onClick={onPublishNow}
-                                  disabled={saving || publishing}
-                                  className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg disabled:opacity-50"
-                                  style={{
-                                    background: `linear-gradient(135deg, ${color}, ${color}cc)`,
-                                    boxShadow: `0 8px 24px -8px ${color}`,
-                                  }}
-                                >
-                                  <Zap className="h-3.5 w-3.5" />{" "}
-                                  {publishing ? "Publishing…" : "Publish now"}
-                                </motion.button>
+                                {isSocial && sdrStatus && !distributionReady && (
+                                  <span className="text-[11.5px] text-muted-foreground">
+                                    {sdrStatus.enabled
+                                      ? "Your role can't publish — an editor can."
+                                      : "Direct publishing isn't enabled — copy the captions to post."}
+                                  </span>
+                                )}
+                                {(!isSocial || distributionReady) && (
+                                  <motion.button
+                                    whileHover={{ scale: 1.03 }}
+                                    whileTap={{ scale: 0.97 }}
+                                    onClick={onApprove}
+                                    disabled={saving || publishing}
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 text-[12px] font-semibold text-foreground transition hover:bg-secondary disabled:opacity-50"
+                                  >
+                                    <Send className="h-3.5 w-3.5" />{" "}
+                                    {saving ? "Scheduling…" : "Schedule"}
+                                  </motion.button>
+                                )}
+                                {distributionReady && (
+                                  <motion.button
+                                    whileHover={{ scale: 1.03 }}
+                                    whileTap={{ scale: 0.97 }}
+                                    onClick={onPublishNow}
+                                    disabled={saving || publishing}
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold text-white shadow-lg disabled:opacity-50"
+                                    style={{
+                                      background: `linear-gradient(135deg, ${color}, ${color}cc)`,
+                                      boxShadow: `0 8px 24px -8px ${color}`,
+                                    }}
+                                  >
+                                    <Zap className="h-3.5 w-3.5" />{" "}
+                                    {publishing ? "Publishing…" : "Publish now"}
+                                  </motion.button>
+                                )}
                               </>
                             )}
                           </>

@@ -4,8 +4,9 @@
 import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
-import { getWorkspaceSdrKey } from "@/lib/sdr.helpers.server";
+import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import { listAccountsHandler } from "@/lib/sdr.handlers";
+import { isSdrEnabledForWorkspace } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +16,11 @@ export const GET = defineRoute({
   query: z.object({ workspaceId: z.string().optional() }),
   workspaceId: ({ query }) => query.workspaceId,
   handler: async ({ workspaceId }) => {
+    // Distribution off → no SDR exists to provision against; an empty list is the truth.
+    if (!isSdrEnabledForWorkspace(workspaceId)) return Response.json([]);
     try {
-      const token = await getWorkspaceSdrKey(workspaceId);
-      const out = await listAccountsHandler({ sdrBaseUrl: process.env.SDR_BASE_URL ?? "", token });
+      const { token, baseUrl } = await getWorkspaceSdrConfig(workspaceId);
+      const out = await listAccountsHandler({ sdrBaseUrl: baseUrl, token });
       return Response.json(out.body, { status: out.status });
     } catch (e) {
       return jsonError(503, e instanceof Error ? e.message : "SDR provisioning failed");

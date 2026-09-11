@@ -117,79 +117,37 @@ Location: /home/ubuntu/sdr/
 
 ---
 
-## Production Secrets (CRITICAL - STORE SECURELY)
+## Production Secrets
 
-**⚠️ THESE SECRETS ARE PRODUCTION CREDENTIALS - DO NOT COMMIT TO GIT**
+The production values that used to be written here were committed to git and
+must be treated as **compromised**. They have been removed from this document;
+rotate every one of them (see `docs/OPERATIONS-RUNBOOK.md` → "Credential
+rotation"):
 
-### **Database Credentials**
+- Postgres password (`POSTGRES_PASSWORD`, and the password inside
+  `DATABASE_URL` / `DATABASE_URL_SYNC`)
+- SDR API token (`SDE_API_TOKEN`, which must equal the app's `SDR_ADMIN_TOKEN`)
+- Webhook signing secret (`WEBHOOK_SECRET`)
+- OAuth-token encryption key (`FERNET_KEY`) — rotating it requires
+  re-encrypting stored tokens or reconnecting accounts
+- GitHub personal access token used for repository access (revoke it in GitHub)
 
-```bash
-POSTGRES_HOST=postgres
-POSTGRES_DB=raval_sde
-POSTGRES_USER=sde
-POSTGRES_PASSWORD=87589f0a1984551c93455d448091586642f4b069ac7b3d2a51f62fb858c59a3e
-```
-
-### **SDR API Security**
-
-```bash
-# MUST match Vercel's SDR_ADMIN_TOKEN exactly
-SDE_API_TOKEN=<REDACTED>
-
-# Webhook signature verification
-SDE_SIGNING_SECRET=6b100fe03b49406b84cc8869358ceb91117d8c79fc32e7dece428264ed716bfe
-
-# Encryption key (for encrypting OAuth tokens in database)
-FERNET_KEY=0yIvrQov4QCE9bAErwq8LhF4rjA6TRtJ8XjSR5_ydD8=
-```
-
-### **Database Connection Strings**
-
-```bash
-DATABASE_URL=postgresql://sde:87589f0a1984551c93455d448091586642f4b069ac7b3d2a51f62fb858c59a3e@postgres:5432/raval_sde
-DATABASE_URL_SYNC=postgresql+psycopg://sde:87589f0a1984551c93455d448091586642f4b069ac7b3d2a51f62fb858c59a3e@postgres:5432/raval_sde
-```
-
-### **GitHub Access**
-
-```bash
-# Personal Access Token (for private repo access)
-PAT=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
-```
-
-### **Full Production .env**
-
-Location: `/home/ubuntu/sdr/.env`
+Secrets live only in the server's untracked `.env` (mode 600) or a secrets
+manager — never in the repository. Variable names:
 
 ```env
-# Environment
 ENV=production
-
-# Database
-POSTGRES_HOST=postgres
-POSTGRES_DB=raval_sde
 POSTGRES_USER=sde
-POSTGRES_PASSWORD=87589f0a1984551c93455d448091586642f4b069ac7b3d2a51f62fb858c59a3e
-
-# Redis
-REDIS_URL=redis://redis:6379/0
-
-# SDR API Security
-SDE_API_TOKEN=<REDACTED>
-SDE_SIGNING_SECRET=6b100fe03b49406b84cc8869358ceb91117d8c79fc32e7dece428264ed716bfe
-
-# CORS
-CORS_ORIGINS=https://raval.it.com
-
-# Logging
+POSTGRES_PASSWORD=<set on the server>
+POSTGRES_DB=raval_sde
+DATABASE_URL=postgresql+asyncpg://sde:<password>@postgres:5432/raval_sde
+DATABASE_URL_SYNC=postgresql://sde:<password>@postgres:5432/raval_sde
+REDIS_URL=redis://:<redis-password>@redis:6379/0
+SDE_API_TOKEN=<set on the server>
+WEBHOOK_SECRET=<set on the server>
+FERNET_KEY=<set on the server>
+CORS_ORIGINS=<app origin>
 LOG_LEVEL=INFO
-
-# Database URLs (for Celery worker)
-DATABASE_URL=postgresql://sde:87589f0a1984551c93455d448091586642f4b069ac7b3d2a51f62fb858c59a3e@postgres:5432/raval_sde
-DATABASE_URL_SYNC=postgresql+psycopg://sde:87589f0a1984551c93455d448091586642f4b069ac7b3d2a51f62fb858c59a3e@postgres:5432/raval_sde
-
-# Encryption
-FERNET_KEY=0yIvrQov4QCE9bAErwq8LhF4rjA6TRtJ8XjSR5_ydD8=
 ```
 
 ---

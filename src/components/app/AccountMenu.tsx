@@ -158,13 +158,13 @@ export function AccountMenu({
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
-            emitAppEvent("open:upgrade");
+            emitAppEvent("open:usage");
             onClose?.();
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" />
-          Upgrade plan
+          Plan & usage
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
@@ -264,10 +264,10 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           {theme === "dark" ? "Light mode" : "Dark mode"}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => emitAppEvent("open:upgrade")}
+          onSelect={() => emitAppEvent("open:usage")}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
-          <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" /> Upgrade plan
+          <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" /> Plan & usage
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => window.open(`${BASE_URL}/#help`, "_blank", "noopener,noreferrer")}

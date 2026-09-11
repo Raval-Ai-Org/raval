@@ -2,7 +2,7 @@ import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
-import { runJsonPrompt } from "@/lib/ai";
+import { runStructuredPrompt } from "@/lib/ai";
 import { system as sysBuilder } from "@/lib/ai/prompts/assemble";
 import { assemble } from "@/lib/ai/prompts/assemble";
 import { FMT_JSON_STRICT, FMT_NO_FENCES, identitySocialPM } from "@/lib/ai/prompts/fragments";
@@ -23,7 +23,27 @@ const BodySchema = z.object({
   prompt: z.string().min(1).max(4000),
   context: z.string().max(6000).optional(),
   platforms: z.array(PlatformEnum).min(1).max(7),
+  /** The user asked for a different take — bypass the cached answer. */
+  regenerate: z.boolean().optional(),
 });
+
+const VariantsSchema = z.object({
+  variants: z
+    .array(
+      z.object({
+        platform: z.string(),
+        title: z.unknown().optional(),
+        body: z.unknown().optional(),
+        hashtags: z.unknown().optional(),
+      }),
+    )
+    .min(1),
+});
+
+// Output budget per platform variant. The old single budget —
+// min(2400, 400 + N×260), then clamped again to 1,200 by the gateway — left
+// ~170 tokens per variant at seven platforms: thin, generic copy.
+const TOKENS_PER_VARIANT = 450;
 
 type Variant = {
   platform: PlatformId;
@@ -109,21 +129,16 @@ export const POST = defineRoute({
       { body: `Return exactly ${specs.length} variants — one per platform id in the list.` },
     ]);
 
-    const parsed = await runJsonPrompt<{
-      variants?: Array<{
-        platform?: string;
-        title?: unknown;
-        body?: unknown;
-        hashtags?: unknown;
-      }>;
-    }>({
+    // Validated structured output: an unusable answer is repaired once, then
+    // surfaced as a 502 instead of silently becoming "no variants".
+    const parsed = await runStructuredPrompt({
       route: "social.multi",
       system,
       user,
-      fallback: { variants: [] },
-      // Scales with platform count but capped — one call, not N.
-      maxTokens: Math.min(2400, 400 + specs.length * 260),
+      schema: VariantsSchema,
+      maxTokens: Math.min(6000, 300 + specs.length * TOKENS_PER_VARIANT),
       temperature: 0.75,
+      regenerate: body.regenerate,
     });
 
     const byPlatform = new Map<string, { title?: unknown; body?: unknown; hashtags?: unknown }>();

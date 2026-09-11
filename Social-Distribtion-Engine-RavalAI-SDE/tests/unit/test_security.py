@@ -50,7 +50,7 @@ class TestBearerTokenValidation:
         config_mod.settings = Settings(
             SDE_API_TOKEN="test-token-min-16chars",
             SDE_SIGNING_SECRET="test-signing-secret-32-bytes-long-req",
-            FERNET_KEY="CjDXFzZ5c5GzBo2kYN-GYlYDYfN9Z5c5GzBo2kYN-GY=",
+            FERNET_KEY="CjDXFzZ5c5GzBo2kYN-GYlYDYfN9Z5c5GzBo2kYN-GY=",  # secret-scan:allow test fixture
         )
         try:
             result = validate_bearer_token("Bearer test-token-min-16chars")
@@ -86,9 +86,9 @@ class TestBearerTokenValidation:
         # Temporarily override settings
         original_settings = config_mod.settings
         config_mod.settings = Settings(
-            SDE_API_TOKEN="real-token-min-16chars",
+            SDE_API_TOKEN="real-token-min-16chars",  # secret-scan:allow test fixture
             SDE_SIGNING_SECRET="test-signing-secret-32-bytes-long-req",
-            FERNET_KEY="CjDXFzZ5c5GzBo2kYN-GYlYDYfN9Z5c5GzBo2kYN-GY=",
+            FERNET_KEY="CjDXFzZ5c5GzBo2kYN-GYlYDYfN9Z5c5GzBo2kYN-GY=",  # secret-scan:allow test fixture
         )
         try:
             with pytest.raises(InvalidTokenError, match="Invalid or expired token"):
@@ -170,11 +170,68 @@ class TestSignatureVerification:
         result = verify_signature("GET", "/webhook", '{"event":"test"}', sig, "secret")
         assert result is False
 
+    def test_empty_secret_never_verifies(self):
+        """HMAC with an empty key is computable by anyone."""
+        sig = sign_request("POST", "/webhook", '{"event":"test"}', "")
+        assert verify_signature("POST", "/webhook", '{"event":"test"}', sig, "") is False
+
+    def test_stale_timestamp_is_rejected_even_with_valid_signature(self):
+        """tolerance_seconds is enforced when the signed timestamp is supplied."""
+        from datetime import UTC, datetime, timedelta
+
+        sig = sign_request("POST", "/webhook", '{"event":"test"}', "secret")
+        old = datetime.now(UTC) - timedelta(minutes=10)
+        assert (
+            verify_signature(
+                "POST", "/webhook", '{"event":"test"}', sig, "secret", tolerance_seconds=300, timestamp=old
+            )
+            is False
+        )
+        fresh = datetime.now(UTC) - timedelta(seconds=5)
+        assert (
+            verify_signature(
+                "POST", "/webhook", '{"event":"test"}', sig, "secret", tolerance_seconds=300, timestamp=fresh
+            )
+            is True
+        )
+
+
+class TestProductionSecretGuard:
+    """config.py refuses known dev-default secrets outside development."""
+
+    def _settings(self, **overrides):
+        from app.config import Settings
+
+        base = {
+            "POSTGRES_PASSWORD": "a-real-password",
+            "SDE_API_TOKEN": "a-real-api-token-value",
+            "SDE_SIGNING_SECRET": "a-real-signing-secret-at-least-32-bytes",
+            "FERNET_KEY": "x" * 44,
+            "WEBHOOK_DEFAULT_SECRET": "a-real-webhook-secret",
+        }
+        base.update(overrides)
+        return Settings(_env_file=None, **base)
+
+    def test_production_rejects_compose_dev_token(self):
+        with pytest.raises(ValueError, match="SDE_API_TOKEN"):
+            self._settings(ENV="production", SDE_API_TOKEN="dev-token-change-in-production")
+
+    def test_production_rejects_default_webhook_secret(self):
+        with pytest.raises(ValueError, match="WEBHOOK_DEFAULT_SECRET"):
+            self._settings(ENV="staging", WEBHOOK_DEFAULT_SECRET="dev-webhook-secret")
+
+    def test_development_allows_dev_defaults(self):
+        s = self._settings(ENV="development", SDE_API_TOKEN="dev-token-change-in-production")
+        assert s.ENV == "development"
+
+    def test_production_accepts_real_values(self):
+        assert self._settings(ENV="production").ENV == "production"
+
 
 class TestFernetEncryption:
     """Tests for Fernet token encryption/decryption."""
 
-    FERNET_KEY = "CjDXFzZ5c5GzBo2kYN-GYlYDYfN9Z5c5GzBo2kYN-GY="
+    FERNET_KEY = "CjDXFzZ5c5GzBo2kYN-GYlYDYfN9Z5c5GzBo2kYN-GY="  # secret-scan:allow test fixture
 
     def test_encrypt_returns_bytes(self):
         """Encrypted token should be bytes."""

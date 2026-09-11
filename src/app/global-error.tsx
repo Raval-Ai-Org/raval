@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { reportClientError } from "@/lib/report-client-error";
 
 // Catches failures thrown from the root layout itself. Mirrors the branded
 // 500 page the previous server entry rendered for unrecoverable SSR errors.
@@ -13,6 +14,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error(error);
+    reportClientError(error);
   }, [error]);
 
   return (

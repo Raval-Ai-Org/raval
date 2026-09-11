@@ -75,9 +75,13 @@ describe("generated asset storage security posture", () => {
   it("keeps the live scheduler compatible with scheduled_jobs", () => {
     expect(scheduleMigration).toMatch(/locked_at timestamptz/i);
     expect(scheduleMigration).toMatch(/scheduled_jobs_claim_idx/i);
-    expect(scheduleRunner).not.toMatch(/locked_at/);
-    expect(scheduleRunner).not.toMatch(/locked_by/);
+    // Jobs are claimed atomically through the lease RPC…
+    expect(scheduleRunner).toMatch(/rpc\("claim_due_scheduled_jobs"/);
+    // …and a database that has not applied the claim migration yet (the live
+    // project lags the repo) still works: legacy sweep, no lease columns written.
+    expect(scheduleRunner).toMatch(/isMissingRpc\(error\)/);
     expect(scheduleRunner).toMatch(/\.neq\("task_type", "market-brain"\)/);
+    expect(scheduleRunner).toMatch(/leased \? LEASE_RELEASE : \{\}/);
   });
 
   it("prevents authenticated resource ownership spoofing", () => {

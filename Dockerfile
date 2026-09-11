@@ -28,6 +28,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+# Shared AI/image cache across instances (src/server/cache/store.ts). Empty =
+# in-process LRU only. docker-compose.yml points it at the redis service.
+ENV REDIS_URL=
 
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs

@@ -116,7 +116,8 @@ def verify_signature(
     body: str | bytes,
     signature: str,
     secret: str,
-    tolerance_seconds: int = 300,  # noqa: ARG001
+    tolerance_seconds: int = 300,
+    timestamp: datetime | None = None,
 ) -> bool:
     """Verify HMAC-SHA256 signature of request.
 
@@ -129,18 +130,25 @@ def verify_signature(
         signature: Signature from header (format: "sha256=abc123...")
         secret: Shared secret
         tolerance_seconds: Max age of request (default 300s = 5 minutes)
+        timestamp: The request's signed timestamp. When supplied, a request
+            older than ``tolerance_seconds`` is rejected even with a valid
+            signature (replay protection). This parameter used to be accepted
+            and silently ignored.
 
     Returns:
-        True if signature is valid, False otherwise.
+        True if signature is valid (and fresh, when a timestamp is given).
 
     Raises:
         SignatureVerificationError: If signature format is invalid.
-        ReplayAttackError: If request is too old.
+        ReplayAttackError: If the timestamp is too far in the future.
 
     """
     # Extract signature from header
     if not signature or not signature.startswith("sha256="):
         raise SignatureVerificationError("Invalid signature format. Expected: sha256=<hex>")
+    # An empty key is computable by anyone — it never authenticates.
+    if not secret:
+        return False
 
     received_sig = signature.split("=", 1)[1]
 
@@ -149,7 +157,11 @@ def verify_signature(
     expected_sig = expected_sig_obj.split("=", 1)[1]
 
     # Constant-time comparison (prevents timing attacks)
-    return hmac.compare_digest(received_sig, expected_sig)
+    if not hmac.compare_digest(received_sig, expected_sig):
+        return False
+    if timestamp is not None:
+        return validate_timestamp_freshness(timestamp, tolerance_seconds)
+    return True
 
 
 def encrypt_token(token: str, fernet_key: str | None = None) -> bytes:

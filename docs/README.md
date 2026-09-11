@@ -10,6 +10,8 @@ through external planning tools.
 ```
 docs/
 ├── README.md                            (this file)
+├── DEPLOYMENT.md                        Railway or single-VPS deploy, env, migrations, rollback
+├── OPERATIONS-RUNBOOK.md                Health checks, kill switches, cron/Vault, credential rotation, incidents
 ├── TEAM-CREDENTIALS.md                  How to share .env safely between team members
 ├── PLATFORM-CREDENTIALS-STATUS.md      Which dev apps are wired (LinkedIn/Meta/X) and their review status
 ├── adr/                                 Architecture Decision Records
@@ -17,7 +19,10 @@ docs/
 │   ├── 0002-split-scheduling-generation-vs-distribution.md
 │   ├── 0003-deployment-topology-local-first-oracle-tunnel.md
 │   ├── 0004-sdr-integration-full-record.md
-│   └── 0005-aws-lightsail-sdr-production-deployment.md
+│   ├── 0005-aws-lightsail-sdr-production-deployment.md
+│   ├── 0006-route-kernel-and-server-boundaries.md
+│   ├── 0007-agent-control-plane.md
+│   └── 0008-ai-metering-budgets-guardrails.md
 └── specs/                               Feature specifications
     └── 001-sdr-integration/
         ├── spec.md                      Feature requirements
@@ -46,6 +51,10 @@ docs/
 | See the launch plan (timeline + phases)    | [specs/001-sdr-integration/CLIENT-LAUNCH-PLAN.md](specs/001-sdr-integration/CLIENT-LAUNCH-PLAN.md)         |
 | See what's currently blocked / in progress | [specs/001-sdr-integration/INTEGRATION-HOLD.md](specs/001-sdr-integration/INTEGRATION-HOLD.md)             |
 | Deploy SDR to AWS Lightsail                | [adr/0005-aws-lightsail-sdr-production-deployment.md](adr/0005-aws-lightsail-sdr-production-deployment.md) |
+| Deploy the app                             | [DEPLOYMENT.md](DEPLOYMENT.md)                                                                             |
+| Handle an incident / rotate a secret       | [OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md)                                                             |
+| Understand agents, approvals and workers   | [adr/0007-agent-control-plane.md](adr/0007-agent-control-plane.md)                                         |
+| Understand AI spend limits and guardrails  | [adr/0008-ai-metering-budgets-guardrails.md](adr/0008-ai-metering-budgets-guardrails.md)                   |
 
 ## 🆕 Adding new docs
 

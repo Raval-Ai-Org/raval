@@ -3,7 +3,7 @@ import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rateLimitFor } from "@/server/rate-limit";
-import { runJsonPrompt } from "@/lib/ai";
+import { AiOutputError, runJsonPrompt, runStructuredPrompt } from "@/lib/ai";
 import { contentBatchPrompt, nextPostPrompt, regeneratePrompt } from "@/lib/ai/prompts";
 import { buildNextSteps } from "@/lib/ai/deterministic-suggestions";
 import {
@@ -267,60 +267,25 @@ export const rescheduleContentItem = createServerFn({ method: "POST" })
 /* ------------------------------------------------------------ */
 /* AI generation helper                                          */
 /* ------------------------------------------------------------ */
-// Content generation routes through `runJsonPrompt` (shared cache + safe parsing).
+// Content generation routes through runStructuredPrompt (validated output, one
+// repair attempt, then a real error) — never a silent template fallback.
+const RegeneratedSchema = z.object({
+  title: z.string().optional(),
+  body: z.string().min(1),
+  hashtags: z.array(z.string()).optional(),
+});
+const BatchSchema = z.object({
+  items: z.array(
+    z.object({
+      channel: z.string().optional(),
+      kind: z.string().optional(),
+      title: z.string().optional(),
+      body: z.string().optional(),
+      hashtags: z.array(z.string()).optional(),
+    }),
+  ),
+});
 
-function extractBrandFact(context?: string | null, label = "Brand") {
-  if (!context) return "";
-  const line = context
-    .split("\n")
-    .find((l) => l.toLowerCase().startsWith(label.toLowerCase() + ":"));
-  return line?.split(":").slice(1).join(":").trim() ?? "";
-}
-
-function fallbackGeneratedItems(args: {
-  count: number;
-  channels: string[];
-  context?: string | null;
-  prompt: string;
-}): Array<{ channel: string; kind: string; title: string; body: string; hashtags: string[] }> {
-  const brand = extractBrandFact(args.context, "Brand") || "the brand";
-  const offer =
-    extractBrandFact(args.context, "Products") ||
-    extractBrandFact(args.context, "One-liner") ||
-    "the core offer";
-  const audience = extractBrandFact(args.context, "Audience") || "the target audience";
-  return Array.from({ length: args.count }, (_, i) => {
-    const channel = args.channels[i % args.channels.length] ?? "linkedin";
-    const kind = channel === "web" ? "brief" : channel === "email" ? "email" : "post";
-    const title =
-      kind === "brief"
-        ? `${brand}: SEO brief for ${offer}`
-        : kind === "email"
-          ? `${brand}: customer update`
-          : `${brand}: ${channel} post for ${audience}`;
-    const body =
-      kind === "brief"
-        ? `Target query: ${offer}\nIntent: Help ${audience} understand why ${brand} is relevant now.\nAnswer snippet: ${brand} helps ${audience} with ${offer}. Build the page around the problem, proof, offer, FAQ, and one clear next step.\nRecommended H2s: Problem, Solution, Proof, FAQs, CTA.`
-        : kind === "email"
-          ? `Subject: A practical next step from ${brand}\nPreview: Built for ${audience}.\n\nHi — if ${audience} are looking for a clearer way to move forward, ${brand} can help with ${offer}. The next best step is simple: review the offer, match it to the customer's current need, and make the CTA easy to act on.`
-          : `${brand} is built for ${audience}.\n\nThe message to lead with: ${offer}.\n\nWhen the value is specific, useful, and easy to act on, the right people know why they should pay attention.\n\nWhat would you want your audience to do next?`;
-    return {
-      channel,
-      kind,
-      title,
-      body,
-      hashtags: [brand, "marketing", "growth"]
-        .map(
-          (h) =>
-            `#${h
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "")
-              .slice(0, 24)}`,
-        )
-        .filter((h) => h.length > 1),
-    };
-  });
-}
 
 /* ------------------------------------------------------------ */
 /* Regenerate copy on an existing item                           */
@@ -343,20 +308,24 @@ export const regenerateContentItem = createServerFn({ method: "POST" })
       body: existing.body ?? "",
     });
 
-    const parsed = await runJsonPrompt<{ title?: string; body?: string; hashtags?: string[] }>({
+    // A failed regeneration throws (AiOutputError → 502). It used to return
+    // the OLD text as if it had been regenerated, and the cache made pressing
+    // "regenerate" return identical copy for 30 minutes.
+    const parsed = await runStructuredPrompt({
       route: "content.regenerate",
       system,
       user,
-      fallback: {},
-      maxTokens: 900,
+      schema: RegeneratedSchema,
+      maxTokens: 1200,
       temperature: 0.7,
+      regenerate: true,
     });
 
     const { data: row, error } = await context.supabase
       .from("content_items")
       .update({
         title: parsed.title ?? existing.title,
-        body: parsed.body ?? existing.body,
+        body: parsed.body,
         hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.slice(0, 30) : existing.hashtags,
       })
       .eq("id", data.id)
@@ -402,22 +371,25 @@ export const generateContentBatch = createServerFn({ method: "POST" })
       body?: string;
       hashtags?: string[];
     };
-    const parsed = await runJsonPrompt<{ items?: Item[] }>({
+    // Budget scales with the number of pieces requested (one shared 1,200-token
+    // budget used to leave ~150 tokens per post). An unusable answer is
+    // repaired once and then surfaced as an error — the old code inserted
+    // templated "fallback" posts as if the model had written them.
+    const parsed = await runStructuredPrompt({
       route: "content.generateBatch",
       system,
       user,
-      fallback: { items: [] },
-      maxTokens: 1600,
+      schema: BatchSchema,
+      maxTokens: Math.min(6000, 300 + count * 500),
       temperature: 0.72,
     });
 
-    const items = (parsed.items ?? []).filter(
-      (it) => typeof it.body === "string" && it.body.trim(),
-    );
-    const safeItems =
-      items.length > 0
-        ? items.slice(0, count)
-        : fallbackGeneratedItems({ count, channels, context: data.context, prompt: data.prompt });
+    const safeItems: Item[] = parsed.items
+      .filter((it) => typeof it.body === "string" && it.body.trim())
+      .slice(0, count);
+    if (safeItems.length === 0) {
+      throw new AiOutputError("The AI returned no usable drafts. Please try again.", "empty");
+    }
 
     const rows = safeItems.map((it) => ({
       workspace_id: data.workspaceId,

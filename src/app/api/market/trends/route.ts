@@ -149,7 +149,7 @@ export const GET = defineRoute({
     marketLog("poll request received", { operation });
 
     try {
-      const result = await pollGoogleTrendsCollection(collectionId, operation);
+      const result = await pollGoogleTrendsCollection(collectionId, query.workspaceId, operation);
       marketLog("poll response returned", {
         operation,
         state: result.state,

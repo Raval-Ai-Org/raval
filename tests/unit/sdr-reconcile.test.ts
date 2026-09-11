@@ -87,3 +87,44 @@ describe("reconcileStalePublications", () => {
     expect(db._state.content_publications[0].status).toBe("publishing");
   });
 });
+
+describe("reconcileStalePublications — per-workspace SDR + item status", () => {
+  it("asks each row's OWN workspace SDR and recomputes the content item status", async () => {
+    const db = makeMockDb({
+      content_publications: [
+        {
+          id: "pub-9",
+          workspace_id: "ws-9",
+          content_item_id: "item-9",
+          sdr_post_id: "job-9",
+          sdr_target_id: "target-9",
+          platform: "linkedin",
+          account_id: "li-9",
+          status: "publishing",
+          updated_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+      content_items: [
+        { id: "item-9", workspace_id: "ws-9", body: "x", media_url: null, status: "publishing", meta: {} },
+      ],
+    });
+    const calls: string[] = [];
+    const out = await reconcileStalePublications({
+      db,
+      sdrBaseUrl: "http://global-sdr.invalid",
+      getConfig: async (ws) => ({ token: `key-${ws}`, baseUrl: `https://sdr-${ws}.example.com` }),
+      staleMs: 60_000,
+      callSdrFn: async (opts) => {
+        calls.push(`${opts.baseUrl}|${opts.token}`);
+        return {
+          status: 200,
+          data: { targets: [{ target_id: "target-9", status: "published", platform_post_url: "u" }] },
+        };
+      },
+    });
+    expect(calls).toEqual(["https://sdr-ws-9.example.com|key-ws-9"]);
+    expect(out.reconciled).toEqual([{ id: "pub-9", status: "published" }]);
+    expect(db._state.content_publications[0].delivered_at).toBeTruthy();
+    expect(db._state.content_items[0].status).toBe("published");
+  });
+});

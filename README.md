@@ -152,8 +152,8 @@ If anything is wrong, it prints a loud warning. The dev server still starts (so 
 
 | Field    | Value                         |
 | -------- | ----------------------------- |
-| Email    | `junaidsajjad2298@gmail.com`  |
-| Password | `Junaid@1234`                 |
+| Email    | `$E2E_TEST_EMAIL` (your own test account)  |
+| Password | `$E2E_TEST_PASSWORD`                 |
 | URL      | `http://localhost:8080/login` |
 
 If login doesn't work after entering these credentials, the issue is almost always in `.env` — open your browser's DevTools (F12), check the Console for `[Supabase] .env contains placeholder values` and fix accordingly.

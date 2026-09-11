@@ -312,41 +312,31 @@ export async function publishContentItemsHandler(
   return { status: 200, body: { results } };
 }
 
-// ─── Degraded mode (US5, FR-015/FR-017) ─────────────────────────────────────
-// When the SDR feature flag is OFF, publish/schedule degrade to today's mock
-// (a server-side status flip) so the platform NEVER regresses (SC-007) and
-// content is never lost. This is the pre-integration behavior, applied by the
-// routes when isSdrEnabled() is false.
-export async function handleSdrDisabled(
-  args: {
-    workspaceId: string;
-    contentItemIds: string[];
-    kind: "publish" | "schedule";
-    scheduledAt?: string;
-  },
-  deps: { db: any },
-) {
-  const now = new Date().toISOString();
-  const patch =
-    args.kind === "schedule"
-      ? { status: "scheduled", scheduled_at: args.scheduledAt ?? now, updated_at: now }
-      : { status: "published", scheduled_at: now, updated_at: now };
-  const { error } = await deps.db
-    .from("content_items")
-    .update(patch)
-    .in("id", args.contentItemIds)
-    .eq("workspace_id", args.workspaceId);
-  if (error) {
-    return { status: 500, body: { error: { code: "UNKNOWN", detail: error.message } } };
-  }
+// ─── Distribution disabled (US5, FR-015/FR-017) ─────────────────────────────
+// When the SDR feature flag is OFF for a workspace, publish/schedule are
+// REFUSED with DISTRIBUTION_DISABLED and no state changes. Content is never
+// lost (the item stays approved and editable) and nothing claims delivery.
+//
+// The first version "degraded" to a status flip — items became `published` /
+// `scheduled` while nothing was sent anywhere, so the product reported posts
+// that never went out. The UI now reads GET /api/sdr/status and offers manual
+// export instead of the publish controls.
+export const DISTRIBUTION_DISABLED_MESSAGE =
+  "Direct publishing isn't enabled for this workspace yet. Nothing was sent — copy the post and publish it manually, or ask an admin to enable distribution.";
+
+export async function handleSdrDisabled(args: {
+  workspaceId: string;
+  contentItemIds: string[];
+  kind: "publish" | "schedule";
+}) {
+  console.warn(
+    `[sdr] ${args.kind} refused — distribution disabled for workspace ${args.workspaceId} (${args.contentItemIds.length} item(s))`,
+  );
   return {
-    status: 200,
+    status: 503,
     body: {
-      degraded: true,
-      results: args.contentItemIds.map((id) => ({
-        contentItemId: id,
-        status: args.kind === "schedule" ? "scheduled" : "published",
-      })),
+      error: { code: "DISTRIBUTION_DISABLED", detail: DISTRIBUTION_DISABLED_MESSAGE },
+      results: args.contentItemIds.map((id) => ({ contentItemId: id, status: "not_sent" })),
     },
   };
 }

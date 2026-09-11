@@ -77,9 +77,6 @@ import {
   LineChart,
 } from "recharts";
 import {
-  MOCK_APPROVALS,
-  MOCK_SCHEDULED,
-  MOCK_RECENT,
   TILE_BY_ID,
   type QueueItem,
   type CanvasType,
@@ -396,19 +393,8 @@ function AgencyHQ() {
       });
       return [...liveContent, ...legacy];
     }
-    // Fan out mock approvals across known clients (or a placeholder name).
-    const pool = clients.length > 0 ? clients : [{ id: "demo", name: "Demo brand" } as Client];
-    return MOCK_APPROVALS.flatMap((m, i) => {
-      const c = pool[i % pool.length];
-      return [
-        {
-          ...m,
-          clientId: c.id,
-          clientName: c.name,
-          payload: undefined as Record<string, unknown> | undefined,
-        },
-      ];
-    });
+    // Nothing pending yet: an honest empty queue, never demo rows.
+    return [];
   }, [approvals, contentRows, clients, clientById]);
 
   // Approvals visible right now (anything not resolved), optionally filtered by client.
@@ -426,13 +412,13 @@ function AgencyHQ() {
 
   // Role gate: only owner/admin/editor can approve, reject, or publish.
   const PRIVILEGED = new Set(["owner", "admin", "editor"]);
+  // Default deny: no workspace or no known role means no approval rights. (The
+  // old gate allowed anything whose id was not a UUID — "demo" rows — and those
+  // decisions were written to real audit logs.)
   const canApproveClient = (workspaceId: string | undefined | null): boolean => {
-    if (!workspaceId) return true; // mocks (no workspace) are permitted for demo UX
+    if (!workspaceId || !UUID_RE.test(workspaceId)) return false;
     const r = myRoles[workspaceId];
-    // Non-members shouldn't see these items via RLS; if role missing, default deny
-    // for real content ids (UUID) and allow otherwise (mock demo rows).
-    if (!r) return !UUID_RE.test(workspaceId) ? true : false;
-    return PRIVILEGED.has(r);
+    return Boolean(r && PRIVILEGED.has(r));
   };
   const canApproveItem = (id: string): boolean => {
     const wsId = combinedApprovals.find((a) => a.id === id)?.clientId;
@@ -593,8 +579,9 @@ function AgencyHQ() {
     }
   };
 
-  const approveAll = async () => {
-    const ids = pendingApprovals.map((a) => a.id);
+  const approveAll = async (allowedIds?: string[]) => {
+    // Only the ids the user was shown AND is permitted to decide.
+    const ids = (allowedIds ?? pendingApprovals.map((a) => a.id)).filter(canApproveItem);
     if (ids.length === 0) return;
     const prev: Record<string, "approved" | "rejected" | "skipped"> = {};
     ids.forEach((id) => {
@@ -624,10 +611,8 @@ function AgencyHQ() {
           .from("approvals")
           .update({ status: "approved", decided_at: new Date().toISOString() })
           .in("id", approvalIds);
-        if (error) {
-          toast.error("Some approvals failed", { description: error.message });
-          return;
-        }
+        // Throw so the catch below rolls back the optimistic state.
+        if (error) throw new Error(error.message);
       }
       emitAppEvent("content:changed");
       emitAppEvent("approvals:changed");
@@ -640,14 +625,26 @@ function AgencyHQ() {
         duration: 10000,
         action: { label: "Undo", onClick: () => undoBulk(ids, prev) },
       });
+    } catch (e) {
+      // Roll back the optimistic "approved" state: the server refused some of it.
+      setResolved((r) => {
+        const next = { ...r };
+        ids.forEach((id) => {
+          if (prev[id]) next[id] = prev[id];
+          else delete next[id];
+        });
+        return next;
+      });
+      const msg = e instanceof Error ? e.message : "Please try again.";
+      toast.error("Couldn't approve", { description: msg });
     } finally {
       setBulkBusy(false);
     }
   };
 
   // Bulk reject — send the visible queue back for revisions.
-  const rejectAll = async () => {
-    const ids = pendingApprovals.map((a) => a.id);
+  const rejectAll = async (allowedIds?: string[]) => {
+    const ids = (allowedIds ?? pendingApprovals.map((a) => a.id)).filter(canApproveItem);
     if (ids.length === 0) return;
     const prev: Record<string, "approved" | "rejected" | "skipped"> = {};
     ids.forEach((id) => {
@@ -673,10 +670,11 @@ function AgencyHQ() {
         );
       }
       if (approvalIds.length > 0) {
-        await supabase
+        const { error } = await supabase
           .from("approvals")
           .update({ status: "rejected", decided_at: new Date().toISOString() })
           .in("id", approvalIds);
+        if (error) throw new Error(error.message);
       }
       emitAppEvent("content:changed");
       emitAppEvent("approvals:changed");
@@ -690,6 +688,14 @@ function AgencyHQ() {
         action: { label: "Undo", onClick: () => undoBulk(ids, prev) },
       });
     } catch (e) {
+      setResolved((r) => {
+        const next = { ...r };
+        ids.forEach((id) => {
+          if (prev[id]) next[id] = prev[id];
+          else delete next[id];
+        });
+        return next;
+      });
       const msg = e instanceof Error ? e.message : "Please try again.";
       toast.error("Couldn't reject", { description: msg });
     } finally {
@@ -938,13 +944,7 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
           clientName: clientById.get(row.workspace_id)?.name ?? "Client",
         };
       });
-    if (real.length > 0) return real;
-    // Friendly fallback while a brand-new agency has nothing scheduled yet.
-    const pool = clients.length > 0 ? clients : [{ id: "demo", name: "Demo brand" } as Client];
-    return MOCK_SCHEDULED.map((m, i) => {
-      const c = pool[i % pool.length];
-      return { ...m, clientId: c.id, clientName: c.name };
-    });
+    return real;
   }, [contentRows, clients, clientById]);
 
   // Real "recent activity" — published / approved items most recently.
@@ -972,12 +972,7 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
           clientName: clientById.get(c.workspace_id)?.name ?? "Client",
         };
       });
-    if (real.length > 0) return real;
-    const pool = clients.length > 0 ? clients : [{ id: "demo", name: "Demo brand" } as Client];
-    return MOCK_RECENT.map((m, i) => {
-      const c = pool[i % pool.length];
-      return { ...m, clientId: c.id, clientName: c.name };
-    });
+    return real;
   }, [contentRows, clients, clientById]);
 
   // Real-data-grounded suggestions — mirror the deterministic half of
@@ -1683,7 +1678,7 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
             title="All-clients analytics"
             sub="Reach, engagement and channels — combined across every brand."
           />
-          <AllClientsAnalytics clients={clients} onOpenClient={openClient} />
+          <AllClientsAnalytics clients={clients} contentRows={contentRows} onOpenClient={openClient} />
         </div>
       </section>
 
@@ -1749,9 +1744,10 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
         onCancel={() => setBulkConfirm(null)}
         onConfirm={async () => {
           const kind = bulkConfirm?.kind;
+          const ids = bulkConfirm?.ids ?? [];
           setBulkConfirm(null);
-          if (kind === "approve") await approveAll();
-          else if (kind === "reject") await rejectAll();
+          if (kind === "approve") await approveAll(ids);
+          else if (kind === "reject") await rejectAll(ids);
         }}
       />
 
@@ -2765,7 +2761,7 @@ function CanvasPreview({
           custom={3}
           className="px-4 pb-1 pt-2 text-[12.5px] font-semibold text-foreground"
         >
-          12,482 likes
+          Preview · engagement appears after publishing
         </motion.div>
         <motion.p variants={rise} custom={4} className={`px-4 pb-1 ${bodyType}`}>
           <span className="font-semibold text-foreground">{handle.slice(1)}</span> {body}
@@ -3057,33 +3053,6 @@ function EmptyLine({ icon, text }: { icon: React.ReactNode; text: string }) {
   );
 }
 
-const SUGGESTIONS: { title: string; body: string; icon: React.ReactNode; tint: string }[] = [
-  {
-    title: "Refresh weekly schedules",
-    body: "3 clients have nothing scheduled past Friday.",
-    icon: <Calendar className="h-3.5 w-3.5" />,
-    tint: "#3b82f6",
-  },
-  {
-    title: "Approve LinkedIn batch",
-    body: "Echo drafted 5 posts — same brand voice.",
-    icon: <Bell className="h-3.5 w-3.5" />,
-    tint: "#f59e0b",
-  },
-  {
-    title: "Run a content audit",
-    body: "Spark spotted 7 drafts that haven't moved in 14d.",
-    icon: <Activity className="h-3.5 w-3.5" />,
-    tint: "#8b5cf6",
-  },
-  {
-    title: "Take a coffee break ☕",
-    body: "You closed 12 approvals yesterday. Nice.",
-    icon: <Coffee className="h-3.5 w-3.5" />,
-    tint: "#22c55e",
-  },
-];
-
 function Suggestion({
   title,
   body,
@@ -3149,173 +3118,141 @@ function AuroraBackdrop() {
 
 /* ---------- All-clients analytics ---------- */
 
-type ChannelRow = {
-  key: BrandKey;
-  label: string;
-  posts: number;
-  reach: number;
-  engagement: number; // %
-  delta: number; // % vs prev period
-  color: string;
+// Everything below is computed from this agency's real content rows. Reach,
+// engagement and clicks need platform analytics, which are not connected yet —
+// the panel says so instead of showing invented figures (proposal E: "removal
+// of fabricated engagement figures ... presented as measured performance").
+const CHANNEL_META: Record<string, { label: string; color: string; logo: BrandKey | null }> = {
+  instagram: { label: "Instagram", color: "#E1306C", logo: "instagram" },
+  linkedin: { label: "LinkedIn", color: "#0A66C2", logo: "linkedin" },
+  x: { label: "X", color: "#0F172A", logo: "x" },
+  tiktok: { label: "TikTok", color: "#000000", logo: "tiktok" },
+  youtube: { label: "YouTube", color: "#FF0000", logo: "youtube" },
+  facebook: { label: "Facebook", color: "#1877F2", logo: null },
+  blog: { label: "Blog", color: "#64748b", logo: null },
+  email: { label: "Email", color: "#8b5cf6", logo: null },
+  web: { label: "Web", color: "#22c55e", logo: null },
 };
-
-const CHANNELS: ChannelRow[] = [
-  {
-    key: "instagram",
-    label: "Instagram",
-    posts: 42,
-    reach: 68400,
-    engagement: 7.2,
-    delta: 14,
-    color: "#E1306C",
-  },
-  {
-    key: "linkedin",
-    label: "LinkedIn",
-    posts: 28,
-    reach: 51200,
-    engagement: 5.4,
-    delta: 9,
-    color: "#0A66C2",
-  },
-  { key: "x", label: "X", posts: 36, reach: 32800, engagement: 3.1, delta: -4, color: "#0F172A" },
-  {
-    key: "tiktok",
-    label: "TikTok",
-    posts: 14,
-    reach: 22100,
-    engagement: 9.6,
-    delta: 22,
-    color: "#000000",
-  },
-  {
-    key: "youtube",
-    label: "YouTube",
-    posts: 6,
-    reach: 9800,
-    engagement: 4.8,
-    delta: 6,
-    color: "#FF0000",
-  },
-  {
-    key: "reddit",
-    label: "Reddit",
-    posts: 11,
-    reach: 6200,
-    engagement: 2.4,
-    delta: -2,
-    color: "#FF4500",
-  },
-];
-
-const TREND_14D = Array.from({ length: 14 }).map((_, i) => ({
-  day: `D${i + 1}`,
-  reach: 9000 + Math.round(Math.sin(i / 2) * 1800 + i * 420),
-  engagement: 4.2 + Math.round((Math.cos(i / 3) * 0.9 + i * 0.08) * 10) / 10,
-}));
 
 function AllClientsAnalytics({
   clients,
+  contentRows,
   onOpenClient,
 }: {
   clients: Client[];
+  contentRows: ContentRow[];
   onOpenClient: (id: string) => void;
 }) {
-  const totalReach = CHANNELS.reduce((s, c) => s + c.reach, 0);
-  const totalPosts = CHANNELS.reduce((s, c) => s + c.posts, 0);
-  const avgEng = (CHANNELS.reduce((s, c) => s + c.engagement * c.posts, 0) / totalPosts).toFixed(1);
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const inWindow = (iso: string | null, from: number, to: number) => {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return t >= from && t < to;
+  };
+  const published = contentRows.filter(
+    (c) => c.status === "published" && inWindow(c.created_at, now - 14 * DAY, now + 1),
+  );
+  const publishedPrev = contentRows.filter(
+    (c) => c.status === "published" && inWindow(c.created_at, now - 28 * DAY, now - 14 * DAY),
+  );
+  const scheduledNext = contentRows.filter(
+    (c) => c.status === "scheduled" && inWindow(c.scheduled_at, now, now + 14 * DAY),
+  );
+  const awaiting = contentRows.filter((c) => c.status === "pending").length;
+  const activeClients = new Set(published.map((c) => c.workspace_id)).size;
 
-  // Leaderboard — fan reach across known clients deterministically
-  const pool =
-    clients.length > 0
-      ? clients
-      : [
-          { id: "demo-a", name: "Acme Studio" } as Client,
-          { id: "demo-b", name: "Lumen Co." } as Client,
-          { id: "demo-c", name: "Northwind" } as Client,
-        ];
-  const leaderboard = pool.slice(0, 5).map((c, i) => ({
-    id: c.id,
-    name: c.name,
-    reach: Math.round((totalReach / pool.length) * (1.2 - i * 0.12)),
-    delta: [18, 11, 6, -3, -8][i] ?? 0,
-  }));
+  const trend = Array.from({ length: 14 }, (_, i) => {
+    const dayStart = now - (13 - i) * DAY;
+    const d = new Date(dayStart);
+    return {
+      day: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      posts: published.filter((c) => inWindow(c.created_at, dayStart - (dayStart % DAY), dayStart - (dayStart % DAY) + DAY)).length,
+    };
+  });
+
+  const byChannel = Object.entries(
+    published.reduce<Record<string, number>>((acc, c) => {
+      const key = c.channel ?? "other";
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).sort((a, b) => b[1] - a[1]);
+
+  const clientName = new Map(clients.map((c) => [c.id, c.name]));
+  const leaderboard = Object.entries(
+    published.reduce<Record<string, number>>((acc, c) => {
+      acc[c.workspace_id] = (acc[c.workspace_id] ?? 0) + 1;
+      return acc;
+    }, {}),
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id, posts]) => ({ id, name: clientName.get(id) ?? "Client", posts }));
+
+  const delta = published.length - publishedPrev.length;
 
   return (
     <div className="mb-5 rounded-3xl border border-border/70 bg-card/70 p-4 backdrop-blur-xl sm:p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/80">
           <BarChart3 className="h-3.5 w-3.5 text-[#22c55e]" />
-          All-clients analytics
+          All-clients activity
         </h3>
         <span className="text-[10.5px] text-muted-foreground">
-          Last 14 days · combined across {pool.length} {pool.length === 1 ? "client" : "clients"}
+          Last 14 days · {clients.length} {clients.length === 1 ? "client" : "clients"}
         </span>
       </div>
 
-      {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard
+          icon={<Activity className="h-3.5 w-3.5" />}
+          label="Posts published"
+          value={String(published.length)}
+          delta={`${delta >= 0 ? "+" : ""}${delta} vs prior 14d`}
+          up={delta >= 0}
+          tint="#8b5cf6"
+          spark={trend.map((d) => ({ v: d.posts }))}
+        />
+        <KpiCard
           icon={<Eye className="h-3.5 w-3.5" />}
-          label="Total reach"
-          value={fmt(totalReach)}
-          delta="+12.4%"
+          label="Scheduled (next 14d)"
+          value={String(scheduledNext.length)}
+          delta="from your calendar"
           up
           tint="#3b82f6"
-          spark={TREND_14D.map((d) => ({ v: d.reach }))}
+          spark={trend.map(() => ({ v: scheduledNext.length }))}
         />
         <KpiCard
           icon={<Heart className="h-3.5 w-3.5" />}
-          label="Avg engagement"
-          value={`${avgEng}%`}
-          delta="+0.6pt"
-          up
+          label="Awaiting approval"
+          value={String(awaiting)}
+          delta="across all clients"
+          up={awaiting === 0}
           tint="#E1306C"
-          spark={TREND_14D.map((d) => ({ v: d.engagement }))}
-        />
-        <KpiCard
-          icon={<Activity className="h-3.5 w-3.5" />}
-          label="Posts shipped"
-          value={String(totalPosts)}
-          delta="+9"
-          up
-          tint="#8b5cf6"
-          spark={TREND_14D.map((d, i) => ({ v: 2 + (i % 5) }))}
+          spark={trend.map(() => ({ v: awaiting }))}
         />
         <KpiCard
           icon={<MousePointerClick className="h-3.5 w-3.5" />}
-          label="Link clicks"
-          value="3,284"
-          delta="+18%"
+          label="Clients posting"
+          value={`${activeClients} / ${clients.length}`}
+          delta="published in 14d"
           up
           tint="#22c55e"
-          spark={TREND_14D.map((d, i) => ({ v: 180 + i * 16 + (i % 3) * 30 }))}
+          spark={trend.map(() => ({ v: activeClients }))}
         />
       </div>
 
-      {/* Trend + Leaderboard */}
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-2xl border border-border/60 bg-background/60 p-3.5">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-[11.5px] font-medium text-foreground/80">
-              Reach & engagement trend
-            </div>
-            <div className="flex items-center gap-3 text-[10.5px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-[#3b82f6]" /> Reach
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-[#E1306C]" /> Engagement
-              </span>
-            </div>
-          </div>
+          <div className="mb-2 text-[11.5px] font-medium text-foreground/80">Posts published per day</div>
           <div className="h-[180px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={TREND_14D} margin={{ top: 6, right: 4, left: -22, bottom: -4 }}>
+              <AreaChart data={trend} margin={{ top: 6, right: 4, left: -22, bottom: -4 }}>
                 <defs>
-                  <linearGradient id="reachFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                  <linearGradient id="postsFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis
@@ -3325,10 +3262,11 @@ function AllClientsAnalytics({
                   tickLine={false}
                 />
                 <YAxis
+                  allowDecimals={false}
                   tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                   axisLine={false}
                   tickLine={false}
-                  width={36}
+                  width={28}
                 />
                 <Tooltip
                   contentStyle={{
@@ -3338,13 +3276,7 @@ function AllClientsAnalytics({
                     fontSize: 11,
                   }}
                 />
-                <Area
-                  type="monotone"
-                  dataKey="reach"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  fill="url(#reachFill)"
-                />
+                <Area type="monotone" dataKey="posts" stroke="#8b5cf6" strokeWidth={2} fill="url(#postsFill)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -3352,126 +3284,65 @@ function AllClientsAnalytics({
 
         <div className="rounded-2xl border border-border/60 bg-background/60 p-3.5">
           <div className="mb-2 flex items-center justify-between">
-            <div className="text-[11.5px] font-medium text-foreground/80">Top clients by reach</div>
-            <span className="text-[10px] text-muted-foreground">14d</span>
+            <div className="text-[11.5px] font-medium text-foreground/80">Most active clients</div>
+            <span className="text-[10px] text-muted-foreground">posts · 14d</span>
           </div>
-          <ul className="space-y-1.5">
-            {leaderboard.map((c, i) => {
-              const pct = Math.round((c.reach / leaderboard[0].reach) * 100);
-              return (
+          {leaderboard.length ? (
+            <ul className="space-y-1.5">
+              {leaderboard.map((c, i) => (
                 <li key={c.id}>
                   <button
                     onClick={() => onOpenClient(c.id)}
                     className="group w-full rounded-lg px-1.5 py-1.5 text-left transition hover:bg-secondary/60"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="w-4 shrink-0 text-[10.5px] tabular-nums text-muted-foreground">
-                        #{i + 1}
-                      </span>
-                      <span className="flex-1 truncate text-[12px] font-medium text-foreground/90">
-                        {c.name}
-                      </span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-foreground/80">
-                        {fmt(c.reach)}
-                      </span>
-                      <span
-                        className={cn(
-                          "ml-1 shrink-0 text-[10px] font-medium",
-                          c.delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500",
-                        )}
-                      >
-                        {c.delta >= 0 ? "+" : ""}
-                        {c.delta}%
-                      </span>
+                      <span className="w-4 shrink-0 text-[10.5px] tabular-nums text-muted-foreground">#{i + 1}</span>
+                      <span className="flex-1 truncate text-[12px] font-medium text-foreground/90">{c.name}</span>
+                      <span className="shrink-0 text-[11px] tabular-nums text-foreground/80">{c.posts}</span>
                     </div>
                     <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/70">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-[#3b82f6] to-[#8b5cf6]"
-                        style={{ width: `${pct}%` }}
+                        style={{ width: `${Math.round((c.posts / leaderboard[0].posts) * 100)}%` }}
                       />
                     </div>
                   </button>
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[12px] text-muted-foreground">No posts published in the last 14 days.</p>
+          )}
         </div>
       </div>
 
-      {/* Per-channel performance */}
       <div className="mt-4 rounded-2xl border border-border/60 bg-background/60 p-3.5">
         <div className="mb-3 flex items-center justify-between">
-          <div className="text-[11.5px] font-medium text-foreground/80">
-            Per-channel performance
+          <div className="text-[11.5px] font-medium text-foreground/80">Posts by channel</div>
+          <span className="text-[10px] text-muted-foreground">published · 14d</span>
+        </div>
+        {byChannel.length ? (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {byChannel.map(([key, posts]) => {
+              const meta = CHANNEL_META[key] ?? { label: key, color: "#64748b", logo: null };
+              return (
+                <div key={key} className="flex items-center gap-2 rounded-xl border border-border/50 bg-card/50 p-2.5">
+                  <span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: `${meta.color}14` }}>
+                    {meta.logo ? <BrandLogo name={meta.logo} brand size={14} /> : null}
+                  </span>
+                  <div className="min-w-0 flex-1 truncate text-[12px] font-semibold">{meta.label}</div>
+                  <span className="text-[12px] tabular-nums">{posts}</span>
+                </div>
+              );
+            })}
           </div>
-          <span className="text-[10px] text-muted-foreground">
-            Reach · engagement · vs prev 14d
-          </span>
-        </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {CHANNELS.map((ch) => {
-            const pct = Math.round((ch.reach / CHANNELS[0].reach) * 100);
-            return (
-              <div key={ch.key} className="rounded-xl border border-border/50 bg-card/50 p-2.5">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="grid h-7 w-7 place-items-center rounded-lg"
-                    style={{ background: `${ch.color}14` }}
-                  >
-                    <BrandLogo name={ch.key} brand size={14} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12px] font-semibold">{ch.label}</div>
-                    <div className="text-[10.5px] text-muted-foreground">{ch.posts} posts</div>
-                  </div>
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                      ch.delta >= 0
-                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                        : "bg-rose-500/15 text-rose-500",
-                    )}
-                  >
-                    {ch.delta >= 0 ? "+" : ""}
-                    {ch.delta}%
-                  </span>
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Reach
-                    </div>
-                    <div className="text-[13px] font-semibold tabular-nums">{fmt(ch.reach)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Eng.
-                    </div>
-                    <div className="text-[13px] font-semibold tabular-nums">{ch.engagement}%</div>
-                  </div>
-                </div>
-                <div className="mt-2 h-1 overflow-hidden rounded-full bg-secondary/70">
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${pct}%`, background: ch.color }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-between">
-        <div className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <Target className="h-3 w-3" /> 4 of 6 monthly goals on track
-        </div>
-        <Link
-          to="/app"
-          className="inline-flex items-center gap-1 text-[12px] font-medium text-foreground/80 hover:text-foreground"
-        >
-          Open full analytics <ArrowRight className="h-3 w-3" />
-        </Link>
+        ) : (
+          <p className="text-[12px] text-muted-foreground">Nothing published yet.</p>
+        )}
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Reach, engagement and link clicks need platform analytics, which aren&apos;t connected yet — so they
+          aren&apos;t shown.
+        </p>
       </div>
     </div>
   );

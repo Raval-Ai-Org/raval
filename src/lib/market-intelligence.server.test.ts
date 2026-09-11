@@ -257,4 +257,21 @@ describe("Market Intelligence engine", () => {
     const result = await analyzeMarketCollection({ collectionId, workspaceId });
     expect(result).toMatchObject({ state: "failed", error: { code: "max_tokens" } });
   });
+
+  it("runs one billed generation when the same analysis is requested concurrently", async () => {
+    let finish: (value: string) => void = () => {};
+    claudeTextPrompt.mockReturnValue(
+      new Promise<string>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const first = analyzeMarketCollection({ collectionId, workspaceId });
+    const second = analyzeMarketCollection({ collectionId, workspaceId });
+    await vi.waitFor(() => expect(claudeTextPrompt).toHaveBeenCalledOnce());
+    finish(JSON.stringify(validIntelligence));
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.state).toBe("completed");
+    expect(b.state).toBe("completed");
+    expect(claudeTextPrompt).toHaveBeenCalledOnce();
+  });
 });

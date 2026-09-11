@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
-import { getWorkspaceSdrKey } from "@/lib/sdr.helpers.server";
+import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import { disconnectHandler } from "@/lib/sdr.handlers";
 
 export const dynamic = "force-dynamic";
@@ -15,11 +15,12 @@ export const POST = defineRoute({
   auth: "workspace",
   body: BodySchema,
   workspaceId: ({ body }) => body.workspaceId,
+  minRole: "editor",
   handler: async ({ body, workspaceId }) => {
     try {
-      const token = await getWorkspaceSdrKey(workspaceId);
+      const { token, baseUrl } = await getWorkspaceSdrConfig(workspaceId);
       const out = await disconnectHandler(String(body.accountId ?? ""), {
-        sdrBaseUrl: process.env.SDR_BASE_URL ?? "",
+        sdrBaseUrl: baseUrl,
         token,
       });
       return Response.json(out.body, { status: out.status });

@@ -2,6 +2,9 @@ import { z } from "zod";
 import { createHash, randomBytes } from "crypto";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
+import { checkOutput } from "@/server/guardrails/output-check";
+import { moderateImage } from "@/server/guardrails/moderation";
+import { logGuardrailEvent } from "@/server/guardrails/events";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +13,15 @@ const CreateSchema = z.object({
   title: z.string().min(1).max(200),
   clientName: z.string().max(120).optional(),
   clientEmail: z.string().email().max(254).optional().nullable(),
-  password: z.string().min(4).max(200).optional().nullable(),
+  // 8+ characters: a 4-character share password falls to a few thousand guesses.
+  password: z.string().min(8).max(200).optional().nullable(),
   expiresAt: z.string().datetime().optional().nullable(),
   allowComments: z.boolean().default(true),
   allowApprovals: z.boolean().default(true),
   allowDownload: z.boolean().default(false),
   branding: z.record(z.any()).optional(),
+  /** Set after the user reviewed guardrail findings and chose to share anyway. */
+  acknowledgeWarnings: z.boolean().optional(),
   items: z
     .array(
       z.object({
@@ -43,14 +49,76 @@ function sha256(s: string) {
   return createHash("sha256").update(s, "utf8").digest("hex");
 }
 
+// 128 random bits (26 base32 chars). The old slug mixed ~40 bits of
+// randomBytes with Math.random(); access still needs the token, but the slug
+// alone should not be enumerable.
 function makeSlug(): string {
-  return (
-    randomBytes(6)
-      .toString("base64url")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "")
-      .slice(0, 10) + Math.random().toString(36).slice(2, 6)
-  );
+  const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+  const bytes = randomBytes(16);
+  let bits = 0;
+  let value = 0;
+  let out = "";
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += alphabet[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += alphabet[(value << (5 - bits)) & 31];
+  return out;
+}
+
+type ShareFinding = { itemTitle: string; rule: string; severity: "warn" | "block"; detail: string };
+
+async function reviewShareItems(
+  supabase: any,
+  workspaceId: string,
+  items: Array<{ kind: string; refId?: string | null; title?: string }>,
+): Promise<{ findings: ShareFinding[]; blocking: ShareFinding[] }> {
+  const ids = items.filter((i) => i.kind === "content_item" && i.refId).map((i) => i.refId as string);
+  const findings: ShareFinding[] = [];
+  if (!ids.length) return { findings, blocking: [] };
+
+  // RLS-bound read: only the caller's own workspace content is reviewed.
+  const [{ data: rows }, { data: ws }] = await Promise.all([
+    supabase
+      .from("content_items")
+      .select("id, title, body, media_url")
+      .eq("workspace_id", workspaceId)
+      .in("id", ids),
+    supabase.from("workspaces").select("brand_voice").eq("id", workspaceId).maybeSingle(),
+  ]);
+  const dont = (ws?.brand_voice as { dont?: unknown } | null)?.dont;
+  const brandDont = Array.isArray(dont) ? dont.map(String) : typeof dont === "string" ? dont.split(/[,;\n]/) : [];
+
+  for (const row of (rows ?? []) as Array<{ id: string; title: string | null; body: string | null; media_url: string | null }>) {
+    const itemTitle = row.title || "Untitled";
+    for (const f of checkOutput(`${row.title ?? ""}\n${row.body ?? ""}`, { brandDont }).findings) {
+      findings.push({ itemTitle, rule: `${f.kind}:${f.rule}`, severity: f.severity, detail: f.snippet });
+    }
+    if (row.media_url && /^https:\/\//.test(row.media_url)) {
+      const m = await moderateImage(row.media_url);
+      if (m.verdict !== "safe") {
+        findings.push({
+          itemTitle,
+          rule: m.verdict === "flagged" ? "image:flagged" : "image:unverified",
+          severity: "block",
+          detail: m.verdict === "flagged" ? `Image flagged: ${m.categories.join(", ") || "policy"}` : "Image could not be checked for safety",
+        });
+      }
+    }
+  }
+  if (findings.length) {
+    logGuardrailEvent({
+      kind: findings.some((f) => f.rule.startsWith("pii")) ? "pii_redacted" : "claim_flagged",
+      severity: findings.some((f) => f.severity === "block") ? "block" : "warn",
+      workspaceId,
+      detail: { findings: findings.slice(0, 10).map((f) => f.rule) },
+    });
+  }
+  return { findings, blocking: findings.filter((f) => f.severity === "block") };
 }
 
 function makeToken(): string {
@@ -152,6 +220,22 @@ export const POST = defineRoute({
 
     // Default: create
     const body = CreateSchema.parse(await request.json());
+
+    // Output guardrails before anything reaches a client portal (proposal D):
+    // shared content is checked for personal data, unsubstantiated/medical/
+    // financial claims, profanity and brand don'ts, and shared images are
+    // moderated. Blocking findings need an explicit acknowledgement.
+    const review = await reviewShareItems(supabase, body.workspaceId, body.items);
+    if (review.blocking.length && !body.acknowledgeWarnings) {
+      return Response.json(
+        {
+          error: "Review these issues before sharing",
+          requiresAcknowledgement: true,
+          findings: review.findings,
+        },
+        { status: 409 },
+      );
+    }
 
     const slug = makeSlug();
     const token = makeToken();

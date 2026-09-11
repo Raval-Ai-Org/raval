@@ -1,0 +1,43 @@
+# Caddy — TLS + reverse proxy for the Mellox AI app (docker-compose.yml).
+# Certificates are issued and renewed automatically for {$APP_DOMAIN}.
+# Application security headers (CSP, frame-ancestors, nosniff, …) are set by
+# next.config.ts; Caddy adds transport-level ones only.
+{
+	email {$ACME_EMAIL}
+}
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		-Server
+		-X-Powered-By
+	}
+
+	# Caddy sets X-Forwarded-For itself and ignores a client-supplied one, so
+	# the app's per-IP rate limits see the real client address.
+	reverse_proxy app:3000 {
+		health_uri /api/health
+		health_interval 15s
+		health_timeout 5s
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 20MiB
+			roll_keep 5
+			roll_keep_for 336h
+		}
+		format json
+	}
+}
+
+# Reserved for the admin dashboard (proposal workstream F, not built yet).
+# Keep it on its own subdomain with an IP allow-list or SSO in front:
+#
+# admin.{$APP_DOMAIN} {
+# 	@blocked not remote_ip 203.0.113.0/24
+# 	respond @blocked 403
+# 	reverse_proxy app:3000
+# }

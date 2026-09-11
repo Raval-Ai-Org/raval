@@ -87,3 +87,87 @@ jobs:
           SUPABASE_URL: https://ci-build-only.supabase.co
           SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_only
           APP_URL: https://ci-build-only.invalid
+
+  security:
+    name: Secret scan · dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Fails on committed tokens/keys/passwords (patterns in the script).
+      - name: Secret scan
+        run: node scripts/scan-secrets.mjs
+
+      # Production dependencies only; high/critical advisories fail the build.
+      - name: npm audit
+        run: npm audit --omit=dev --audit-level=high
+
+  database:
+    name: Migration replay · RLS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Replays supabase/baseline/manifest.txt + every newer migration on an
+      # empty in-process Postgres (PGlite), re-applies the post-baseline ones to
+      # prove they are idempotent, and fails if any public table lacks RLS.
+      # (The tenant-isolation suite in tests/db runs inside `npm test`.)
+      - name: Replay migrations
+        run: npm run db:verify
+
+  sdr:
+    name: SDR service · pytest · ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: Social-Distribtion-Engine-RavalAI-SDE
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: Social-Distribtion-Engine-RavalAI-SDE/pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # A throwaway key per run: no key material lives in the repository.
+      - name: Generate test encryption key
+        run: echo "FERNET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
+
+      - name: Ruff
+        run: ruff check app tests
+
+      # SQLite + an in-process queue stub (tests/conftest.py): no Postgres or
+      # Redis service needed.
+      - name: Pytest
+        run: pytest -q

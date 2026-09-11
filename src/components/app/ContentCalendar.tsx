@@ -237,18 +237,23 @@ Rules:
 - Mix formats (educational, behind-the-scenes, social proof, launch, lead-magnet).
 - Use platform-native tone. LinkedIn: insight-led. Instagram: visual + emoji. X: punchy + thread when type=thread. Email: subject in title, body in caption.
 - Real, specific copy. No placeholders like "[brand]".
-- Output 8-${Math.min(40, Math.round((input.postsPerWeek * input.days) / 7) + 2)} items. JSON only.`;
+- Output 6-${Math.min(18, Math.round((input.postsPerWeek * input.days) / 7) + 2)} items. JSON only.`;
 
   const res = await authedFetch("/api/ai-generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       task: "freeform",
+      // A calendar is a multi-item batch: ask for the long output budget.
+      size: "long",
       prompt: `${sys}\n\nBrand context: ${input.prompt || "general brand"}`,
     }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || "AI generation failed");
+  if (data.truncated) {
+    throw new Error("The calendar was too long to generate in one go — try fewer days or posts per week.");
+  }
   const text: string = data.text ?? "";
   // Extract JSON array
   const match = text.match(/\[[\s\S]*\]/);
@@ -285,6 +290,8 @@ Make it noticeably different from any previous version. Be specific and useful.`
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       task: "freeform",
+      // A rewrite must never be answered from the response cache.
+      regenerate: true,
       prompt: `${sys}\n\nBrand context: ${brandContext || "general brand"}\n\nPrevious hook: ${entry.hook ?? ""}\nPrevious caption: ${entry.caption ?? ""}`,
     }),
   });

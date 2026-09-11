@@ -1,3 +1,7 @@
+# LOCAL DEVELOPMENT ONLY. The ${VAR:-default} fallbacks below are public dev
+# values; app/config.py refuses to start with them when ENV=staging|production.
+# Every port is bound to 127.0.0.1 so a dev machine never exposes Postgres,
+# Redis or Flower to its network. Production runs on Railway (railway*.toml).
 version: "3.9"
 
 services:
@@ -10,7 +14,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sde_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-raval_sde}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +30,7 @@ services:
     image: redis:7-alpine
     container_name: raval-sde-redis
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -49,13 +53,13 @@ services:
       PYTHONUNBUFFERED: "1"
       ENV: ${ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sde}:${POSTGRES_PASSWORD:-sde_dev_password}@postgres:5432/${POSTGRES_DB:-raval_sde}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sde}:${POSTGRES_PASSWORD:-sde_dev_password}@postgres:5432/${POSTGRES_DB:-raval_sde} # secret-scan:allow local-dev default
       REDIS_URL: redis://redis:6379/0
       SDE_API_TOKEN: ${SDE_API_TOKEN:-dev-token-change-in-production}
       SDE_SIGNING_SECRET: ${SDE_SIGNING_SECRET:-dev-secret-change-in-production}
       FERNET_KEY: ${FERNET_KEY:-}
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,8 +91,8 @@ services:
       # session maker (get_sync_session_maker → DATABASE_URL_SYNC), which
       # config.py otherwise derives from POSTGRES_HOST (defaults to localhost,
       # unreachable inside the container). Point it at the postgres service.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-sde}:${POSTGRES_PASSWORD:-sde_dev_password}@postgres:5432/${POSTGRES_DB:-raval_sde}
-      DATABASE_URL_SYNC: postgresql+psycopg://${POSTGRES_USER:-sde}:${POSTGRES_PASSWORD:-sde_dev_password}@postgres:5432/${POSTGRES_DB:-raval_sde}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sde}:${POSTGRES_PASSWORD:-sde_dev_password}@postgres:5432/${POSTGRES_DB:-raval_sde} # secret-scan:allow local-dev default
+      DATABASE_URL_SYNC: postgresql+psycopg://${POSTGRES_USER:-sde}:${POSTGRES_PASSWORD:-sde_dev_password}@postgres:5432/${POSTGRES_DB:-raval_sde} # secret-scan:allow local-dev default
       REDIS_URL: redis://redis:6379/0
       SDE_API_TOKEN: ${SDE_API_TOKEN:-dev-token-change-in-production}
       SDE_SIGNING_SECRET: ${SDE_SIGNING_SECRET:-dev-secret-change-in-production}
@@ -119,8 +123,8 @@ services:
       # session maker (get_sync_session_maker → DATABASE_URL_SYNC), which
       # config.py otherwise derives from POSTGRES_HOST (defaults to localhost,
       # unreachable inside the container). Point it at the postgres service.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-sde}:${POSTGRES_PASSWORD:-sde_dev_password}@postgres:5432/${POSTGRES_DB:-raval_sde}
-      DATABASE_URL_SYNC: postgresql+psycopg://${POSTGRES_USER:-sde}:${POSTGRES_PASSWORD:-sde_dev_password}@postgres:5432/${POSTGRES_DB:-raval_sde}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sde}:${POSTGRES_PASSWORD:-sde_dev_password}@postgres:5432/${POSTGRES_DB:-raval_sde} # secret-scan:allow local-dev default
+      DATABASE_URL_SYNC: postgresql+psycopg://${POSTGRES_USER:-sde}:${POSTGRES_PASSWORD:-sde_dev_password}@postgres:5432/${POSTGRES_DB:-raval_sde} # secret-scan:allow local-dev default
       REDIS_URL: redis://redis:6379/0
       SDE_API_TOKEN: ${SDE_API_TOKEN:-dev-token-change-in-production}
       SDE_SIGNING_SECRET: ${SDE_SIGNING_SECRET:-dev-secret-change-in-production}
@@ -142,9 +146,12 @@ services:
       dockerfile: Dockerfile
       target: runtime
     container_name: raval-sde-flower
-    command: celery -A app.celery_app flower --port=5555 --broker=redis://redis:6379/0
+    # Opt-in (docker compose --profile monitoring up) and never unauthenticated:
+    # Flower can revoke tasks and shows task arguments.
+    profiles: ["monitoring"]
+    command: celery -A app.celery_app flower --port=5555 --broker=redis://redis:6379/0 --basic-auth=${FLOWER_BASIC_AUTH:?set FLOWER_BASIC_AUTH=user:password to run Flower}
     ports:
-      - "${FLOWER_PORT:-5555}:5555"
+      - "127.0.0.1:${FLOWER_PORT:-5555}:5555"
     depends_on:
       redis:
         condition: service_healthy

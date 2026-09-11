@@ -1,4 +1,6 @@
 import "server-only";
+import { runWithScope } from "@/server/request-context";
+import { isMissingRpc } from "@/lib/schedules.server";
 import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
@@ -152,7 +154,7 @@ async function runMarketBrainJob(job: MarketBrainJob): Promise<"completed" | "pe
 
   const result =
     started.collectionId && started.state === "pending"
-      ? await pollGoogleTrendsCollection(started.collectionId)
+      ? await pollGoogleTrendsCollection(started.collectionId, job.workspace_id)
       : started;
   if (!result.collectionId || result.state === "failed") return "failed";
   if (result.state === "pending") return "pending";
@@ -173,27 +175,43 @@ async function runMarketBrainJob(job: MarketBrainJob): Promise<"completed" | "pe
 export async function runDueMarketBrainCollections(
   opts: { workspaceId?: string; max?: number } = {},
 ) {
-  let query = supabaseAdmin
-    .from("scheduled_jobs")
-    .select("id, workspace_id, next_run_at, meta")
-    .eq("task_type", MARKET_BRAIN_TASK_TYPE)
-    .eq("active", true)
-    .lte("next_run_at", new Date().toISOString())
-    .order("next_run_at", { ascending: true })
-    .limit(opts.max ?? 25);
-  if (opts.workspaceId) query = query.eq("workspace_id", opts.workspaceId);
-
-  const { data: jobs, error } = await query;
-  if (error) throw new Error(error.message);
-  if (!jobs?.length) return { ran: 0, skipped: 0 };
+  // Atomic lease claim (FOR UPDATE SKIP LOCKED): overlapping cron invocations
+  // never run the same Market Brain job twice.
+  const { data: claimed, error } = await supabaseAdmin.rpc("claim_due_scheduled_jobs", {
+    p_max: opts.max ?? 25,
+    p_lease_seconds: 300,
+    p_market_brain: true,
+  });
+  let leased = true;
+  let rows = (claimed ?? []) as unknown as MarketBrainJob[];
+  if (error) {
+    // Claim migration not applied yet on this database: legacy unlocked sweep.
+    if (!isMissingRpc(error)) throw new Error(error.message);
+    leased = false;
+    const { data, error: legacyError } = await supabaseAdmin
+      .from("scheduled_jobs")
+      .select("id, workspace_id, next_run_at, meta")
+      .eq("task_type", MARKET_BRAIN_TASK_TYPE)
+      .eq("active", true)
+      .lte("next_run_at", new Date().toISOString())
+      .order("next_run_at", { ascending: true })
+      .limit(opts.max ?? 25);
+    if (legacyError) throw new Error(legacyError.message);
+    rows = (data ?? []) as MarketBrainJob[];
+  }
+  const jobs = rows.filter((job) => !opts.workspaceId || job.workspace_id === opts.workspaceId);
+  if (!jobs.length) return { ran: 0, skipped: 0 };
 
   let ran = 0;
-  for (const row of jobs) {
-    const job = row as MarketBrainJob;
+  for (const job of jobs) {
     let status: "completed" | "pending" | "failed" = "failed";
     let errorMessage: string | null = null;
     try {
-      status = await runMarketBrainJob(job);
+      // Attribute the job's DataForSEO + Claude spend to its workspace.
+      status = await runWithScope(
+        { workspaceId: job.workspace_id, route: "market-brain.scheduled" },
+        () => runMarketBrainJob(job),
+      );
       if (status === "completed") ran += 1;
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);
@@ -208,6 +226,7 @@ export async function runDueMarketBrainCollections(
         last_run_error: errorMessage,
         run_count: 1,
         next_run_at: nextRunAt(pending ? PENDING_RETRY_INTERVAL_MS : DAILY_COLLECTION_INTERVAL_MS),
+        ...(leased ? { locked_at: null, locked_by: null } : {}),
       })
       .eq("id", job.id);
     if (updateError) throw new Error(updateError.message);

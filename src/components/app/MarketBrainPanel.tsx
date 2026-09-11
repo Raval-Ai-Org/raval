@@ -1,105 +1,44 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import {
   AlertTriangle,
-  ArrowUpRight,
   BrainCircuit,
-  Check,
-  ChevronDown,
   Clock,
   Info,
   Loader2,
   MapPin,
+  Pencil,
   RefreshCw,
   Search,
   Sparkles,
-  TrendingDown,
-  TrendingUp,
+  Wand2,
 } from "lucide-react";
-import { authedFetch } from "@/lib/authed-fetch";
+import {
+  analyzeCurrentResult,
+  checkPendingScan,
+  hydrateMarketBrain,
+  relativeTime,
+  startMarketScan,
+  useMarketBrain,
+  type MarketLens,
+  type MarketNotice,
+} from "@/lib/market-brain-store";
 import { cn } from "@/lib/utils";
+import {
+  computeTrendMetrics,
+  InsightTabs,
+  KpiStrip,
+  PulseSummary,
+  Reveal,
+  TrendChart,
+  TrendExtras,
+} from "./MarketBrainInsights";
+import { PendingNotice, ResultsSkeleton, ScanProgress } from "./MarketBrainProgress";
 
 const MARKET_LOCATION_KEY = "market-brain:location:";
 const MARKET_KEYWORDS_KEY = "market-brain:keywords:";
-// Each scan/poll request returns quickly (the server only reads state or asks
-// DataForSEO for task status), so it keeps a short bound.
-const SCAN_REQUEST_TIMEOUT_MS = 20_000;
-// The analysis request runs one Claude generation (~35-40s measured); the server
-// bounds it at 90s and answers with a structured timeout, so wait just past that.
-const INTELLIGENCE_REQUEST_TIMEOUT_MS = 95_000;
-// DataForSEO's standard queue usually finishes a Google Trends task in 1-3 min.
-// Keep polling (backing off) for that long; after it, the scan stays pending and
-// "Check status" resumes it without creating a new provider task.
-const PENDING_POLL_BUDGET_MS = 4 * 60_000;
-
-function pollDelay(elapsedMs: number): number {
-  if (elapsedMs < 30_000) return 2_500;
-  if (elapsedMs < 90_000) return 5_000;
-  return 10_000;
-}
-
-type TrendPoint = { timestamp: number; date: string; values: number[]; averages?: number[] };
-type TrendData = {
-  keywords: string[];
-  interestOverTime: TrendPoint[];
-  regionalInterest: { geoId: string; geoName: string; values: number[] }[];
-  relatedQueries: { query: string; value: string; kind: "top" | "rising" }[];
-  relatedTopics: {
-    topicId: string;
-    topicTitle: string;
-    topicType: string;
-    value: string;
-    kind: "top" | "rising";
-  }[];
-};
-type Intelligence = {
-  summary: string;
-  trendSignals: {
-    title: string;
-    direction: "rising" | "declining" | "stable" | "mixed" | "unclear";
-    evidence: string[];
-    significance: string;
-    opportunities: string[];
-  }[];
-  opportunities: {
-    title: string;
-    explanation: string;
-    targetAudience: string;
-    recommendedAction: string;
-    priority: "high" | "medium" | "low";
-  }[];
-  recommendations: {
-    action: string;
-    reason: string;
-    expectedMarketingImpact: string;
-    priority: "high" | "medium" | "low";
-  }[];
-  relatedQueries: string[];
-  relatedTopics: string[];
-  confidence: "high" | "medium" | "low";
-  generatedAt: string;
-};
-type ApiResult = {
-  state: "cached" | "pending" | "completed" | "failed" | "no_data";
-  collectionId?: string;
-  taskId?: string;
-  data?: TrendData;
-  error?: { message?: string; code?: string };
-  retryAfterSeconds?: number;
-};
-
-class MarketRequestError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly code?: string,
-  ) {
-    super(message);
-    this.name = "MarketRequestError";
-  }
-}
 
 type Props = { workspaceId: string | null; brandKeywords?: string[] };
 
@@ -119,42 +58,26 @@ function saveLocal(key: string, workspaceId: string | null, value: string) {
   } catch {}
 }
 
-async function readJson(response: Response): Promise<Record<string, unknown>> {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    const error = body.error;
-    const message =
-      typeof error === "string"
-        ? error
-        : error && typeof error === "object" && "message" in error
-          ? String(error.message)
-          : "Market Brain could not load";
-    const code =
-      error && typeof error === "object" && "code" in error ? String(error.code) : undefined;
-    throw new MarketRequestError(message, response.status, code);
-  }
-  return body;
+function parseKeywords(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 5);
 }
 
-function withDetail(prefix: string, detail?: string): string {
-  return detail ? `${prefix} ${detail.replace(/\.?$/, ".")}` : `${prefix} Please try again.`;
-}
-
-function sleep(ms: number, signal: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    const timer = window.setTimeout(resolve, ms);
-    signal.addEventListener(
-      "abort",
-      () => {
-        window.clearTimeout(timer);
-        reject(new DOMException("Market scan aborted", "AbortError"));
-      },
-      { once: true },
-    );
-  });
+/** Re-renders once a minute so relative times ("2h ago") stay current. */
+function useMinuteClock(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
 }
 
 export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
+  const snap = useMarketBrain(workspaceId);
   const defaults = useMemo(() => brandKeywords.filter(Boolean).slice(0, 5), [brandKeywords]);
   const [location, setLocation] = useState(
     () => loadLocal(MARKET_LOCATION_KEY, workspaceId) ?? "United States",
@@ -162,647 +85,517 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
   const [keywords, setKeywords] = useState(
     () => loadLocal(MARKET_KEYWORDS_KEY, workspaceId) ?? defaults.join(", "),
   );
-  const [trendData, setTrendData] = useState<TrendData | null>(null);
-  const [intelligence, setIntelligence] = useState<Intelligence | null>(null);
-  const [state, setState] = useState<ApiResult["state"]>("no_data");
-  const [error, setError] = useState<string | null>(null);
-  const [setupOpen, setSetupOpen] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [phase, setPhase] = useState<"collecting" | "analyzing">("collecting");
-  const requestRef = useRef(0);
-  const controllerRef = useRef<AbortController | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [lensError, setLensError] = useState<string | null>(null);
+  const now = useMinuteClock();
 
   useEffect(() => {
-    controllerRef.current?.abort();
     setLocation(loadLocal(MARKET_LOCATION_KEY, workspaceId) ?? "United States");
     setKeywords(loadLocal(MARKET_KEYWORDS_KEY, workspaceId) ?? defaults.join(", "));
-    setTrendData(null);
-    setIntelligence(null);
-    setState("no_data");
-    setError(null);
+    setEditing(false);
+    setLensError(null);
   }, [workspaceId, defaults]);
 
-  // Stop polling when the panel unmounts.
-  useEffect(() => () => controllerRef.current?.abort(), []);
+  // Show the stored result (free) every time the panel opens.
+  useEffect(() => {
+    if (workspaceId) void hydrateMarketBrain(workspaceId);
+  }, [workspaceId]);
 
-  const run = useCallback(async () => {
+  // Inputs follow the stored result's lens unless the user saved one here.
+  const resultLens = snap.resultLens;
+  useEffect(() => {
+    if (!resultLens || !workspaceId) return;
+    if (!loadLocal(MARKET_KEYWORDS_KEY, workspaceId) && resultLens.keywords.length) {
+      setKeywords(resultLens.keywords.join(", "));
+    }
+    if (!loadLocal(MARKET_LOCATION_KEY, workspaceId) && resultLens.location) {
+      setLocation(resultLens.location);
+    }
+  }, [resultLens, workspaceId]);
+
+  const inputLens = (): MarketLens | null => {
+    const parsed = parseKeywords(keywords);
+    const market = location.trim();
+    return parsed.length && market ? { keywords: parsed, location: market } : null;
+  };
+
+  const runScan = () => {
     if (!workspaceId) return;
-    const requestId = ++requestRef.current;
-    const parsedKeywords = keywords
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .slice(0, 5);
-    if (!parsedKeywords.length || !location.trim()) {
-      setSetupOpen(true);
-      setError("Add a market and at least one keyword to start the scan.");
+    const lens = inputLens();
+    if (!lens) {
+      setLensError("Add a market and at least one keyword to start the scan.");
+      setEditing(true);
       return;
     }
-    saveLocal(MARKET_LOCATION_KEY, workspaceId, location.trim());
-    saveLocal(MARKET_KEYWORDS_KEY, workspaceId, parsedKeywords.join(", "));
-    setKeywords(parsedKeywords.join(", "));
-    setError(null);
-    setIntelligence(null);
-    setState("pending");
-    setPhase("collecting");
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setRunning(true);
+    saveLocal(MARKET_LOCATION_KEY, workspaceId, lens.location);
+    saveLocal(MARKET_KEYWORDS_KEY, workspaceId, lens.keywords.join(", "));
+    setKeywords(lens.keywords.join(", "));
+    setLensError(null);
+    setEditing(false);
+    void startMarketScan(workspaceId, lens);
+  };
 
-    const fetchJson = async (
-      input: RequestInfo | URL,
-      init: RequestInit = {},
-      timeoutMs = SCAN_REQUEST_TIMEOUT_MS,
-    ) => {
-      const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        return await readJson(await authedFetch(input, { ...init, signal: controller.signal }));
-      } finally {
-        window.clearTimeout(timeout);
-      }
-    };
-
-    try {
-      const started = (await fetchJson("/api/market/trends", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId,
-          keywords: parsedKeywords,
-          location: location.trim(),
-          language: "en",
-        }),
-      })) as ApiResult;
-      if (requestId !== requestRef.current) return;
-      if (!started.collectionId) throw new Error("Market collection could not be started");
-      let collection = started;
-      const pollStartedAt = Date.now();
-      while (
-        collection.state === "pending" &&
-        Date.now() - pollStartedAt < PENDING_POLL_BUDGET_MS
-      ) {
-        await sleep(pollDelay(Date.now() - pollStartedAt), controller.signal);
-        if (requestId !== requestRef.current) return;
-        collection = (await fetchJson(
-          `/api/market/trends?collectionId=${encodeURIComponent(started.collectionId)}&workspaceId=${encodeURIComponent(workspaceId)}`,
-        )) as ApiResult;
-      }
-      if (requestId !== requestRef.current) return;
-      if (collection.state === "pending") {
-        setState("pending");
-        setError(null);
-        return;
-      }
-      if (collection.state === "failed") {
-        setState("failed");
-        setError(
-          withDetail(
-            "Google Trends collection failed:",
-            collection.retryAfterSeconds
-              ? `${collection.error?.message ?? "unknown error"} — retry available in ${collection.retryAfterSeconds}s`
-              : collection.error?.message,
-          ),
-        );
-        return;
-      }
-      if (collection.state === "no_data") {
-        setState("no_data");
-        setTrendData(null);
-        setError(
-          `Google Trends found no measurable search interest for “${parsedKeywords.join(", ")}” in ${location.trim()}. Try broader keywords or another market.`,
-        );
-        return;
-      }
-      if (collection.data) setTrendData(collection.data);
-      setPhase("analyzing");
-      const analysis = (await fetchJson(
-        "/api/market/intelligence",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            workspaceId,
-            collectionId: started.collectionId,
-            analysisType: "market_strategy",
-          }),
-        },
-        INTELLIGENCE_REQUEST_TIMEOUT_MS,
-      )) as ApiResult & { data?: Intelligence };
-      if (requestId !== requestRef.current) return;
-      setIntelligence(analysis.data ?? null);
-      setState(analysis.state);
-      if (!analysis.data) {
-        setError(
-          analysis.state === "failed"
-            ? withDetail(
-                "Trend data is ready, but Ravi's analysis failed:",
-                analysis.error?.message,
-              )
-            : analysis.state === "pending"
-              ? "Market data is still being collected. Check status again shortly."
-              : "No market data is available to analyze for this scan.",
-        );
-      }
-    } catch (cause) {
-      if (requestId !== requestRef.current) return;
-      setState("failed");
-      setError(
-        cause instanceof DOMException && cause.name === "AbortError"
-          ? "Market scan timed out. Please try again."
-          : cause instanceof MarketRequestError
-            ? withDetail("Market scan couldn't be completed:", cause.message)
-            : "Market scan couldn't be completed. Please try again.",
-      );
-    } finally {
-      if (requestId === requestRef.current) {
-        setRunning(false);
-        controllerRef.current = null;
-      }
+  const onPrimary = () => {
+    if (!workspaceId) return;
+    if (snap.pending) {
+      const lens = inputLens() ?? snap.resultLens;
+      if (lens) void checkPendingScan(workspaceId, lens);
+      return;
     }
-  }, [keywords, location, workspaceId]);
+    runScan();
+  };
 
-  const chartData =
-    trendData?.interestOverTime.map((point) => ({
-      date:
-        point.date ||
-        new Date(point.timestamp * 1000).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        }),
-      value: point.values[0] ?? 0,
-    })) ?? [];
+  const onNoticeAction = (notice: MarketNotice) => {
+    if (!workspaceId) return;
+    if (notice.action === "analyze") void analyzeCurrentResult(workspaceId);
+    else runScan();
+  };
+
+  const { running, phase, trendData, intelligence, notice } = snap;
+  const hasResults = Boolean(trendData || intelligence);
+  const refreshing = running && snap.staleResults;
+  const analyzingFresh = running && phase === "analyzing" && !intelligence && Boolean(trendData);
+  const metrics = useMemo(() => (trendData ? computeTrendMetrics(trendData) : null), [trendData]);
+  const fresh = snap.freshUntil ? new Date(snap.freshUntil).getTime() > now : false;
+  const showSetup = snap.hydrated && !hasResults && !running && !snap.pending;
+  const displayLens = snap.resultLens ?? inputLens();
+  const buttonLabel = running
+    ? phase === "analyzing"
+      ? "Analyzing…"
+      : "Scanning…"
+    : snap.pending
+      ? "Check status"
+      : "Refresh";
 
   return (
-    <div className="space-y-3" data-testid="market-brain">
-      <header className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-gradient-to-br from-emerald-500/[0.07] via-card to-sky-500/[0.06] p-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-emerald-500">
-            <BrainCircuit className="h-3.5 w-3.5" aria-hidden="true" /> Market Brain
+    <MotionConfig reducedMotion="user">
+      <div className="@container space-y-3" data-testid="market-brain" aria-busy={running}>
+        {/* ── Header ─────────────────────────────────────────── */}
+        <header className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-emerald-500/[0.08] via-card to-sky-500/[0.06] p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
+                <BrainCircuit className="h-3.5 w-3.5" aria-hidden="true" /> Market Brain
+                {running && (
+                  <span className="relative ml-0.5 flex h-1.5 w-1.5" aria-hidden="true">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  </span>
+                )}
+              </div>
+              <h2 className="mt-1.5 text-[17px] font-semibold leading-tight tracking-tight text-foreground @xl:text-[19px]">
+                What is changing in your market?
+              </h2>
+              <p className="mt-1 max-w-[52ch] text-[12px] leading-relaxed text-muted-foreground">
+                Ravi turns measured search interest into your next marketing move.
+              </p>
+            </div>
+            <motion.button
+              type="button"
+              onClick={onPrimary}
+              disabled={running || !workspaceId}
+              whileTap={running ? undefined : { scale: 0.96 }}
+              aria-label={running ? buttonLabel : "Refresh market signals"}
+              title={
+                fresh && !running
+                  ? "Data is fresh — refreshing reuses the stored scan at no extra cost"
+                  : "Refresh market signals"
+              }
+              className="group relative inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-foreground px-3.5 text-[11.5px] font-semibold text-background shadow-sm transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-md disabled:cursor-wait"
+            >
+              {running && (
+                <motion.span
+                  aria-hidden="true"
+                  className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-background/25 to-transparent"
+                  animate={{ x: ["-120%", "260%"] }}
+                  transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                />
+              )}
+              {running ? (
+                <Loader2 className="relative h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <RefreshCw
+                  className="relative h-3.5 w-3.5 transition-transform duration-500 group-hover:rotate-180"
+                  aria-hidden="true"
+                />
+              )}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={buttonLabel}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18 }}
+                  className="relative"
+                >
+                  {buttonLabel}
+                </motion.span>
+              </AnimatePresence>
+            </motion.button>
           </div>
-          <h2 className="mt-1.5 text-[19px] font-semibold leading-tight tracking-tight text-foreground">
-            What is changing in your market?
-          </h2>
-          <p className="mt-1 max-w-[52ch] text-[12px] leading-relaxed text-muted-foreground">
-            Ravi turns measured search interest into the next useful marketing move.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void run()}
-          disabled={running}
-          aria-label={running ? "Analyzing market" : "Refresh market signals"}
-          title="Refresh market signals"
-          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-foreground px-3 py-2 text-[11px] font-semibold text-background transition hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
-        >
-          {running ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          {running ? "Analyzing…" : state === "pending" ? "Check status" : "Refresh"}
-        </button>
-      </header>
 
-      {state === "no_data" && !trendData && !intelligence && (
-        <MarketSetup
-          location={location}
-          keywords={keywords}
-          open
-          onLocation={setLocation}
-          onKeywords={setKeywords}
-          onSubmit={() => {
-            setSetupOpen(false);
-            void run();
-          }}
-        />
-      )}
-      {state === "pending" && (
-        <CollectingState active={running} phase={phase} onCheck={() => void run()} />
-      )}
-      {error && state === "no_data" && (
-        <div
-          className="flex items-start gap-2 rounded-xl border border-border/70 bg-secondary/30 p-3 text-[12px] text-muted-foreground"
-          role="status"
-          data-testid="market-brain-no-data"
-        >
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <div className="min-w-0 flex-1">{error}</div>
-        </div>
-      )}
-      {error && state !== "pending" && state !== "no_data" && (
-        <div
-          className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3 text-[12px] text-amber-700 dark:text-amber-300"
-          role="alert"
-          data-testid="market-brain-error"
-        >
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <div className="min-w-0 flex-1">{error}</div>
-          <button
-            type="button"
-            onClick={() => void run()}
-            disabled={running}
-            className="inline-flex shrink-0 items-center gap-1 font-semibold hover:underline disabled:opacity-60"
-          >
-            <RefreshCw className="h-3 w-3" /> Retry
-          </button>
-        </div>
-      )}
-      {intelligence && (
-        <IntelligenceView
-          intelligence={intelligence}
-          trendData={trendData}
-          chartData={chartData}
-          cached={state === "cached"}
-        />
-      )}
-      {!intelligence && trendData && state !== "pending" && (
-        <TrendEvidence trendData={trendData} chartData={chartData} />
-      )}
-    </div>
-  );
-}
-
-function MarketSetup({
-  location,
-  keywords,
-  open,
-  onLocation,
-  onKeywords,
-  onSubmit,
-}: {
-  location: string;
-  keywords: string;
-  open: boolean;
-  onLocation: (value: string) => void;
-  onKeywords: (value: string) => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <section className="rounded-2xl border border-dashed border-border/80 bg-secondary/20 p-4">
-      <div className="flex items-start gap-3">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-foreground/5 text-foreground">
-          <MapPin className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-[13px] font-semibold text-foreground">Set your market lens</h3>
-          <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
-            Choose where you sell and the topics worth watching. You can change this any time.
-          </p>
-          {open && (
-            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_auto]">
-              <label className="min-w-0">
-                <span className="sr-only">Market location</span>
-                <span className="relative block">
-                  <MapPin className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                  <input
-                    value={location}
-                    onChange={(event) => onLocation(event.target.value)}
-                    placeholder="United States"
-                    className="h-9 w-full rounded-lg border border-border/70 bg-background/60 pl-8 pr-2 text-[12px] outline-none focus:border-foreground/40"
+          {(snap.completedAt || snap.nextRunAt) && (
+            <div
+              className="mt-3 flex flex-wrap items-center gap-1.5"
+              data-testid="market-brain-freshness"
+            >
+              {snap.completedAt && (
+                <Chip>
+                  <span
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      fresh ? "bg-emerald-500" : "bg-amber-500",
+                    )}
+                    aria-hidden="true"
                   />
-                </span>
-              </label>
-              <label className="min-w-0">
-                <span className="sr-only">Market keywords</span>
-                <span className="relative block">
-                  <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                  <input
-                    value={keywords}
-                    onChange={(event) => onKeywords(event.target.value)}
-                    placeholder="AI marketing, marketing automation"
-                    className="h-9 w-full rounded-lg border border-border/70 bg-background/60 pl-8 pr-2 text-[12px] outline-none focus:border-foreground/40"
-                  />
-                </span>
-              </label>
-              <button
-                type="button"
-                onClick={onSubmit}
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 text-[11.5px] font-semibold text-background hover:opacity-90"
-              >
-                <Sparkles className="h-3.5 w-3.5" /> Scan
-              </button>
+                  Updated {relativeTime(snap.completedAt, now)}
+                  {!fresh && <span className="text-muted-foreground/80">· refresh available</span>}
+                </Chip>
+              )}
+              {snap.nextRunAt && (
+                <Chip>
+                  <Clock className="h-3 w-3" aria-hidden="true" />
+                  Auto-refresh {relativeTime(snap.nextRunAt, now)}
+                </Chip>
+              )}
             </div>
           )}
-        </div>
+        </header>
+
+        {/* ── Market lens ────────────────────────────────────── */}
+        {hasResults && !editing && displayLens && (
+          <LensBar lens={displayLens} disabled={running} onEdit={() => setEditing(true)} />
+        )}
+        {(showSetup || editing) && (
+          <LensEditor
+            mode={showSetup && !editing ? "setup" : "edit"}
+            location={location}
+            keywords={keywords}
+            error={lensError}
+            running={running}
+            onLocation={setLocation}
+            onKeywords={setKeywords}
+            onSubmit={runScan}
+            onCancel={hasResults ? () => setEditing(false) : undefined}
+          />
+        )}
+
+        {/* ── Loading / progress ─────────────────────────────── */}
+        <AnimatePresence>
+          {!snap.hydrated && workspaceId && <ResultsSkeleton key="hydrating" />}
+        </AnimatePresence>
+        <AnimatePresence mode="wait">
+          {running && (
+            <ScanProgress
+              key="scan-progress"
+              phase={phase}
+              startedAt={snap.startedAt}
+              phaseStartedAt={snap.phaseStartedAt}
+              refreshing={refreshing}
+            />
+          )}
+        </AnimatePresence>
+        {!running && snap.pending && <PendingNotice onCheck={onPrimary} />}
+
+        <AnimatePresence>
+          {notice && !running && (
+            <NoticeCard key={notice.message} notice={notice} onAction={onNoticeAction} />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {running && !hasResults && <ResultsSkeleton key="skeleton-full" />}
+        </AnimatePresence>
+
+        {/* ── Results (kept, dimmed, while a refresh runs) ───── */}
+        {hasResults && (
+          <div
+            className={cn(
+              "transition-[opacity,filter] duration-500",
+              refreshing && "pointer-events-none select-none opacity-40 blur-[1.5px] saturate-50",
+            )}
+            aria-hidden={refreshing || undefined}
+          >
+            <div className="grid gap-3 @4xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] @4xl:items-start">
+              <div className="min-w-0 space-y-3">
+                <AnimatePresence mode="wait">
+                  {intelligence ? (
+                    <Reveal key={`pulse-${intelligence.generatedAt}`}>
+                      <PulseSummary
+                        intelligence={intelligence}
+                        direction={metrics?.direction ?? null}
+                        completedAt={snap.completedAt}
+                      />
+                    </Reveal>
+                  ) : analyzingFresh ? (
+                    <ResultsSkeleton key="skeleton-summary" variant="summary" />
+                  ) : null}
+                </AnimatePresence>
+                {metrics && (
+                  <Reveal index={1}>
+                    <KpiStrip metrics={metrics} />
+                  </Reveal>
+                )}
+                {trendData && (
+                  <Reveal index={2}>
+                    <TrendChart trendData={trendData} />
+                  </Reveal>
+                )}
+              </div>
+              <div className="min-w-0">
+                <AnimatePresence mode="wait">
+                  {intelligence ? (
+                    <Reveal key={`insights-${intelligence.generatedAt}`} index={3}>
+                      <InsightTabs intelligence={intelligence} trendData={trendData} />
+                    </Reveal>
+                  ) : analyzingFresh ? (
+                    <ResultsSkeleton key="skeleton-details" variant="details" />
+                  ) : trendData && !running ? (
+                    <Reveal key="extras" index={3}>
+                      <TrendExtras trendData={trendData} />
+                    </Reveal>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </section>
+    </MotionConfig>
   );
 }
 
-function CollectingState({
-  active,
-  phase,
-  onCheck,
+function Chip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-[10.5px] font-medium text-foreground/80 backdrop-blur">
+      {children}
+    </span>
+  );
+}
+
+function LensBar({
+  lens,
+  disabled,
+  onEdit,
 }: {
-  active: boolean;
-  phase: "collecting" | "analyzing";
-  onCheck: () => void;
+  lens: MarketLens;
+  disabled: boolean;
+  onEdit: () => void;
 }) {
-  const analyzing = active && phase === "analyzing";
   return (
     <div
-      className="flex items-center gap-3 rounded-xl border border-border/70 bg-card p-4"
-      role="status"
-      aria-live="polite"
-      data-testid="market-brain-pending"
+      className="flex items-center gap-2 rounded-xl border border-border/60 bg-card/70 px-3 py-2"
+      data-testid="market-brain-lens"
     >
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-500">
-        {active ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-[12.5px] font-semibold text-foreground">
-          {analyzing
-            ? "Trend data collected. Ravi is analyzing your market…"
-            : active
-              ? "Market data is still being collected. We'll update this automatically."
-              : "Google Trends is still processing this scan."}
-        </div>
-        <div className="mt-0.5 text-[11px] text-muted-foreground">
-          {analyzing
-            ? "This usually takes under a minute."
-            : active
-              ? "Collection usually takes 1–3 minutes, then Ravi analyzes it. You can keep working."
-              : "It's taking longer than usual. Check again in a minute — no new scan will be started."}
-        </div>
-      </div>
-      {!active && (
-        <button
-          type="button"
-          onClick={onCheck}
-          className="inline-flex shrink-0 items-center gap-1 text-[11.5px] font-semibold text-foreground hover:underline"
-        >
-          <RefreshCw className="h-3 w-3" /> Check status
-        </button>
-      )}
-    </div>
-  );
-}
-
-function IntelligenceView({
-  intelligence,
-  trendData,
-  chartData,
-  cached,
-}: {
-  intelligence: Intelligence;
-  trendData: TrendData | null;
-  chartData: { date: string; value: number }[];
-  cached: boolean;
-}) {
-  return (
-    <>
-      <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
-        <div className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-emerald-500">
-          <Sparkles className="h-3 w-3" /> Market pulse{" "}
-          {cached && (
-            <span className="ml-auto rounded-full bg-background/60 px-2 py-0.5 text-[9.5px] normal-case tracking-normal text-muted-foreground">
-              Latest available
-            </span>
-          )}
-        </div>
-        <p className="mt-2 text-[14px] font-medium leading-relaxed text-foreground">
-          {intelligence.summary}
-        </p>
-        <div className="mt-2 text-[10.5px] text-muted-foreground">
-          Confidence:{" "}
-          <span className="font-semibold capitalize text-foreground/80">
-            {intelligence.confidence}
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        {lens.location && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-semibold text-foreground">
+            <MapPin className="h-3 w-3" aria-hidden="true" />
+            {lens.location}
           </span>
-        </div>
-      </section>
-      <TrendEvidence trendData={trendData} chartData={chartData} />
-      <section>
-        <SectionHeading eyebrow="Interpretation" title="What’s changing" />
-        <div className="space-y-2">
-          {intelligence.trendSignals.map((signal) => (
-            <SignalCard key={signal.title} signal={signal} />
-          ))}
-        </div>
-      </section>
-      <section>
-        <SectionHeading eyebrow="Opportunity" title="Where to lean in" />
-        <div className="grid gap-2 sm:grid-cols-2">
-          {intelligence.opportunities.map((item) => (
-            <OpportunityCard key={item.title} opportunity={item} />
-          ))}
-        </div>
-      </section>
-      <section>
-        <SectionHeading eyebrow="Action" title="What to do next" />
-        <div className="space-y-2">
-          {intelligence.recommendations.map((item) => (
-            <RecommendationCard key={item.action} recommendation={item} />
-          ))}
-        </div>
-      </section>
-      <RelatedSearches queries={intelligence.relatedQueries} topics={intelligence.relatedTopics} />
-    </>
-  );
-}
-
-function TrendEvidence({
-  trendData,
-  chartData,
-}: {
-  trendData: TrendData | null;
-  chartData: { date: string; value: number }[];
-}) {
-  if (!trendData) return null;
-  return (
-    <section className="rounded-xl border border-border/70 bg-card p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Measured signal
-          </div>
-          <div className="mt-1 text-[12px] font-medium text-foreground">
-            {trendData.keywords.join(" · ")}
-          </div>
-        </div>
-        <span className="rounded-full bg-secondary px-2 py-1 text-[10px] text-muted-foreground">
-          Google Trends
-        </span>
-      </div>
-      {chartData.length > 1 ? (
-        <div className="mt-3 h-36 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 6, right: 4, left: -26, bottom: 0 }}>
-              <defs>
-                <linearGradient id="market-brain-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(var(--brand-green))" stopOpacity={0.28} />
-                  <stop offset="100%" stopColor="hsl(var(--brand-green))" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
-                tickLine={false}
-                axisLine={false}
-                minTickGap={28}
-              />
-              <YAxis
-                domain={[0, 100]}
-                tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
-                tickLine={false}
-                axisLine={false}
-                width={34}
-              />
-              <Tooltip
-                contentStyle={{
-                  borderRadius: 10,
-                  border: "1px solid hsl(var(--border))",
-                  background: "hsl(var(--card))",
-                  fontSize: 11,
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke="hsl(var(--brand-green))"
-                fill="url(#market-brain-fill)"
-                strokeWidth={2}
-                dot={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <div className="mt-3 rounded-lg bg-secondary/35 px-3 py-2 text-[11px] text-muted-foreground">
-          Trend history is still compact for this collection; the AI is using the available regional
-          and related-search evidence.
-        </div>
-      )}
-    </section>
-  );
-}
-
-function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
-  return (
-    <div className="mb-2 flex items-baseline gap-2">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {eyebrow}
-      </span>
-      <h3 className="text-[13px] font-semibold text-foreground">{title}</h3>
-    </div>
-  );
-}
-
-function SignalCard({ signal }: { signal: Intelligence["trendSignals"][number] }) {
-  const rising = signal.direction === "rising";
-  const declining = signal.direction === "declining";
-  return (
-    <article className="rounded-xl border border-border/70 bg-card p-3">
-      <div className="flex items-start gap-2">
-        <span
-          className={cn(
-            "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg",
-            rising
-              ? "bg-emerald-500/10 text-emerald-500"
-              : declining
-                ? "bg-amber-500/10 text-amber-500"
-                : "bg-secondary text-muted-foreground",
-          )}
-        >
-          {rising ? (
-            <TrendingUp className="h-3.5 w-3.5" />
-          ) : declining ? (
-            <TrendingDown className="h-3.5 w-3.5" />
-          ) : (
-            <span className="h-1.5 w-3 rounded-full bg-current" />
-          )}
-        </span>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2 text-[12.5px] font-semibold text-foreground">
-            <span>{signal.title}</span>
-            <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9.5px] font-medium capitalize text-muted-foreground">
-              {signal.direction}
-            </span>
-          </div>
-          <div className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
-            <strong className="font-medium text-foreground/80">Evidence:</strong>{" "}
-            {signal.evidence.join(" ")}
-          </div>
-          <div className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
-            <strong className="font-medium text-foreground/80">Why it matters:</strong>{" "}
-            {signal.significance}
-          </div>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function OpportunityCard({ opportunity }: { opportunity: Intelligence["opportunities"][number] }) {
-  return (
-    <article className="rounded-xl border border-border/70 bg-card p-3">
-      <div className="flex items-start justify-between gap-2">
-        <h4 className="text-[12.5px] font-semibold text-foreground">{opportunity.title}</h4>
-        <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-0.5 text-[9.5px] font-semibold capitalize text-violet-500">
-          {opportunity.priority}
-        </span>
-      </div>
-      <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted-foreground">
-        {opportunity.explanation}
-      </p>
-      <div className="mt-2 border-t border-border/50 pt-2 text-[11px]">
-        <span className="font-semibold text-foreground/80">For </span>
-        <span className="text-muted-foreground">{opportunity.targetAudience}</span>
-      </div>
-      <div className="mt-1.5 flex items-start gap-1.5 text-[11.5px] leading-relaxed text-foreground/85">
-        <ArrowUpRight className="mt-0.5 h-3 w-3 shrink-0 text-violet-500" />
-        {opportunity.recommendedAction}
-      </div>
-    </article>
-  );
-}
-
-function RecommendationCard({
-  recommendation,
-}: {
-  recommendation: Intelligence["recommendations"][number];
-}) {
-  return (
-    <article className="flex items-start gap-2.5 rounded-xl border border-border/70 bg-card p-3">
-      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-foreground text-background">
-        <Check className="h-3 w-3" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2 text-[12.5px] font-semibold text-foreground">
-          <span>{recommendation.action}</span>
-          <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9.5px] font-medium capitalize text-muted-foreground">
-            {recommendation.priority}
-          </span>
-        </div>
-        <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
-          <strong className="font-medium text-foreground/80">Why:</strong> {recommendation.reason}
-        </p>
-        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-          <strong className="font-medium text-foreground/80">Expected impact:</strong>{" "}
-          {recommendation.expectedMarketingImpact}
-        </p>
-      </div>
-    </article>
-  );
-}
-
-function RelatedSearches({ queries, topics }: { queries: string[]; topics: string[] }) {
-  if (!queries.length && !topics.length) return null;
-  return (
-    <section className="rounded-xl border border-border/70 bg-secondary/20 p-3">
-      <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-        <Search className="h-3 w-3" /> Related searches
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {[...queries, ...topics].slice(0, 12).map((item) => (
+        )}
+        {lens.keywords.map((keyword) => (
           <span
-            key={item}
-            className="rounded-full border border-border/60 bg-card/70 px-2 py-1 text-[10.5px] text-foreground/80"
+            key={keyword}
+            className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-foreground/80"
           >
-            {item}
+            <Search className="h-2.5 w-2.5 shrink-0 opacity-60" aria-hidden="true" />
+            <span className="truncate">{keyword}</span>
           </span>
         ))}
       </div>
-    </section>
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={disabled}
+        className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full px-2 text-[11px] font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50"
+        aria-label="Edit market lens"
+      >
+        <Pencil className="h-3 w-3" aria-hidden="true" /> Edit
+      </button>
+    </div>
+  );
+}
+
+function LensEditor({
+  mode,
+  location,
+  keywords,
+  error,
+  running,
+  onLocation,
+  onKeywords,
+  onSubmit,
+  onCancel,
+}: {
+  mode: "setup" | "edit";
+  location: string;
+  keywords: string;
+  error: string | null;
+  running: boolean;
+  onLocation: (value: string) => void;
+  onKeywords: (value: string) => void;
+  onSubmit: () => void;
+  onCancel?: () => void;
+}) {
+  const keywordCount = parseKeywords(keywords).length;
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "rounded-2xl border p-4",
+        mode === "setup"
+          ? "border-dashed border-border/80 bg-secondary/20"
+          : "border-border/70 bg-card",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-500/15 to-sky-500/15 text-emerald-600 @md:grid dark:text-emerald-400">
+          <MapPin className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[13px] font-semibold text-foreground">
+            {mode === "setup" ? "Set your market lens" : "Edit market lens"}
+          </h3>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+            {mode === "setup"
+              ? "Choose where you sell and up to 5 topics worth watching. Results are saved and refresh automatically every day."
+              : "Changing the lens starts a new scan. Your current results stay visible until it finishes."}
+          </p>
+          <form
+            className="mt-3 grid gap-2 @xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_auto]"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSubmit();
+            }}
+          >
+            <label className="min-w-0">
+              <span className="mb-1 block text-[10.5px] font-semibold text-muted-foreground">
+                Market
+              </span>
+              <span className="relative block">
+                <MapPin
+                  className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <input
+                  value={location}
+                  onChange={(event) => onLocation(event.target.value)}
+                  placeholder="United States"
+                  aria-label="Market location"
+                  className="h-10 w-full rounded-lg border border-border/70 bg-background/70 pl-8 pr-2 text-[12.5px] outline-none transition focus:border-foreground/40 focus:ring-2 focus:ring-foreground/10"
+                />
+              </span>
+            </label>
+            <label className="min-w-0">
+              <span className="mb-1 flex items-center justify-between text-[10.5px] font-semibold text-muted-foreground">
+                Keywords <span className="font-normal tabular-nums">{keywordCount}/5</span>
+              </span>
+              <span className="relative block">
+                <Search
+                  className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <input
+                  value={keywords}
+                  onChange={(event) => onKeywords(event.target.value)}
+                  placeholder="AI marketing, marketing automation"
+                  aria-label="Market keywords"
+                  className="h-10 w-full rounded-lg border border-border/70 bg-background/70 pl-8 pr-2 text-[12.5px] outline-none transition focus:border-foreground/40 focus:ring-2 focus:ring-foreground/10"
+                />
+              </span>
+            </label>
+            <div className="flex items-end gap-2">
+              {onCancel && (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="inline-flex h-10 flex-1 items-center justify-center rounded-lg px-3 text-[12px] font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground @xl:flex-none"
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={running}
+                className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 text-[12px] font-semibold text-background transition hover:opacity-90 disabled:opacity-60 @xl:flex-none"
+              >
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> Scan
+              </button>
+            </div>
+          </form>
+          {error && (
+            <p
+              className="mt-2 text-[11.5px] font-medium text-amber-700 dark:text-amber-400"
+              role="alert"
+            >
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    </motion.section>
+  );
+}
+
+function NoticeCard({
+  notice,
+  onAction,
+}: {
+  notice: MarketNotice;
+  onAction: (notice: MarketNotice) => void;
+}) {
+  const isError = notice.tone === "error";
+  const testId = isError
+    ? "market-brain-error"
+    : notice.action === "analyze"
+      ? "market-brain-notice"
+      : "market-brain-no-data";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      className={cn(
+        "flex items-start gap-2.5 rounded-xl border p-3 text-[12px] leading-relaxed",
+        isError
+          ? "border-amber-500/30 bg-amber-500/[0.07] text-amber-800 dark:text-amber-300"
+          : "border-border/70 bg-secondary/30 text-muted-foreground",
+      )}
+      role={isError ? "alert" : "status"}
+      data-testid={testId}
+    >
+      {isError ? (
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      ) : (
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      )}
+      <div className="min-w-0 flex-1">{notice.message}</div>
+      {notice.action && (
+        <button
+          type="button"
+          onClick={() => onAction(notice)}
+          className={cn(
+            "group inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-[11.5px] font-semibold transition",
+            isError ? "hover:bg-amber-500/15" : "bg-foreground text-background hover:opacity-90",
+          )}
+        >
+          {notice.action === "analyze" && !isError ? (
+            <>
+              <Wand2 className="h-3 w-3" aria-hidden="true" /> Analyze now
+            </>
+          ) : (
+            <>
+              <RefreshCw
+                className="h-3 w-3 transition-transform duration-500 group-hover:rotate-180"
+                aria-hidden="true"
+              />
+              {notice.action === "analyze" ? "Retry analysis" : "Retry"}
+            </>
+          )}
+        </button>
+      )}
+    </motion.div>
   );
 }

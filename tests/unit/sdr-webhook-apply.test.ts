@@ -41,6 +41,7 @@ function seedWith(pubStatus: string) {
 
 const bodyFor = (status: string) =>
   JSON.stringify({
+    timestamp: new Date().toISOString(),
     event: `post.${status}`,
     data: { post_id: "job-1", target_id: "target-1", status },
   });

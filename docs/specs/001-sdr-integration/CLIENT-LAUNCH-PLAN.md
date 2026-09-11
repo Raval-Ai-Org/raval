@@ -429,8 +429,8 @@ Create `raval/tests/e2e/live-oauth-e2e.spec.ts`:
 ```typescript
 import { test, expect, Page } from "@playwright/test";
 
-const TEST_EMAIL = "junaidsajjad2298@gmail.com";
-const TEST_PASSWORD = "Junaid@1234";
+const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "";
+const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "";
 const BASE_URL = process.env.RAVAL_BASE_URL || "http://localhost:8080";
 
 async function loginAndGoToSocial(page: Page) {

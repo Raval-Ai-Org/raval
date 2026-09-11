@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 8080
+    },
+    {
+      "name": "verify",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set NEXT_DIST_DIR=.next-verify&& npx next dev -p 8081"],
+      "port": 8081
     }
   ]
 }

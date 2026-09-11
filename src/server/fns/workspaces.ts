@@ -78,11 +78,15 @@ export const decideApproval = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
+    const { data: updated, error } = await context.supabase
       .from("approvals")
       .update({ status: data.decision, decided_at: new Date().toISOString() })
-      .eq("id", data.approvalId);
+      .eq("id", data.approvalId)
+      .select("id");
     if (error) throw new Error("Could not update approval");
+    // RLS silently filters an update the caller may not make (viewer, other
+    // workspace): zero rows is a refusal, not a success.
+    if (!updated?.length) throw new Error("Forbidden: you can't decide this approval");
     return { ok: true };
   });
 
@@ -92,12 +96,24 @@ export const createWorkspace = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // The site URL is crawled later (brand extract, coach, geo audit), so a
+    // private or loopback address is refused at the point it is saved too.
+    const websiteUrl = data.websiteUrl?.trim() || null;
+    if (websiteUrl) {
+      const { assertPublicUrl } = await import("@/server/safe-fetch");
+      try {
+        assertPublicUrl(websiteUrl);
+      } catch {
+        throw new Error("Website must be a public http(s) address");
+      }
+    }
+
     const { data: workspace, error: workspaceError } = await supabaseAdmin
       .from("workspaces")
       .insert({
         owner_id: context.userId,
         name: data.name,
-        website_url: data.websiteUrl?.trim() || null,
+        website_url: websiteUrl,
       })
       .select("id")
       .single();

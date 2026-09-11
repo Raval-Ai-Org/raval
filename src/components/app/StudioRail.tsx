@@ -35,6 +35,7 @@ import {
 import { GeneratePostImageButton } from "@/components/app/GeneratePostImageButton";
 import { getAnyCachedImage } from "@/lib/post-image";
 import { publishContentItems } from "@/lib/sdr.functions";
+import { canDistribute, useSdrStatus } from "@/hooks/use-sdr-status";
 import { toast } from "sonner";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -674,6 +675,8 @@ function ApprovalsSection({
   loading: boolean;
   onDecide: (id: string, status: ApprovalStatus) => void;
 }) {
+  // Publish only renders when distribution is enabled and the caller may use it.
+  const canPublish = canDistribute(useSdrStatus());
   if (loading && items.length === 0 && jobs.length === 0) {
     return (
       <section className="ui-section-gap" aria-busy="true" aria-label="Loading review queue">
@@ -858,20 +861,22 @@ function ApprovalsSection({
                       >
                         Approve
                       </motion.button>
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDecide(it.id, "published");
-                        }}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-foreground px-2.5 py-1 text-[11px] font-semibold text-background shadow-sm transition hover:bg-foreground/90"
-                        aria-label="Publish now"
-                        title="Publish immediately"
-                      >
-                        <Zap className="h-3 w-3" strokeWidth={2.5} />
-                        <span className="hidden @[220px]/card:inline">Publish</span>
-                        <span className="@[220px]/card:hidden">Post</span>
-                      </motion.button>
+                      {canPublish && (
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDecide(it.id, "published");
+                          }}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-foreground px-2.5 py-1 text-[11px] font-semibold text-background shadow-sm transition hover:bg-foreground/90"
+                          aria-label="Publish now"
+                          title="Publish immediately"
+                        >
+                          <Zap className="h-3 w-3" strokeWidth={2.5} />
+                          <span className="hidden @[220px]/card:inline">Publish</span>
+                          <span className="@[220px]/card:hidden">Post</span>
+                        </motion.button>
+                      )}
                     </div>
                   </div>
                 </div>

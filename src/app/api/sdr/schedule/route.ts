@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
-import { getWorkspaceSdrKey } from "@/lib/sdr.helpers.server";
+import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import {
   scheduleContentItemsHandler,
   handleSdrDisabled,
@@ -12,7 +12,7 @@ import {
   type ScheduleItem,
 } from "@/lib/sdr.handlers";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { isSdrEnabled } from "@/lib/feature-flags";
+import { isSdrEnabledForWorkspace } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +31,7 @@ export const POST = defineRoute({
   auth: "workspace",
   body: BodySchema,
   workspaceId: ({ body }) => body.workspaceId,
+  minRole: "editor",
   handler: async ({ body, workspaceId }) => {
     const items: ScheduleItem[] = Array.isArray(body.items)
       ? body.items.filter(isScheduleItem)
@@ -43,25 +44,21 @@ export const POST = defineRoute({
       return jsonError(400, "Invalid destination selection");
     }
 
-    // US5 (FR-017): flag off → degrade to today's mock (status flip) server-side.
-    if (!isSdrEnabled()) {
-      const out = await handleSdrDisabled(
-        {
-          workspaceId,
-          contentItemIds: items.map((i) => i.contentItemId),
-          kind: "schedule",
-          scheduledAt: items[0]?.scheduledAt,
-        },
-        { db: supabaseAdmin },
-      );
+    // US5 (FR-017): flag off → refuse honestly; nothing is marked scheduled.
+    if (!isSdrEnabledForWorkspace(workspaceId)) {
+      const out = await handleSdrDisabled({
+        workspaceId,
+        contentItemIds: items.map((i) => i.contentItemId),
+        kind: "schedule",
+      });
       return Response.json(out.body, { status: out.status });
     }
 
     try {
-      const token = await getWorkspaceSdrKey(workspaceId);
+      const { token, baseUrl } = await getWorkspaceSdrConfig(workspaceId);
       const out = await scheduleContentItemsHandler(
         { workspaceId, items, selection },
-        { sdrBaseUrl: process.env.SDR_BASE_URL ?? "", token, db: supabaseAdmin },
+        { sdrBaseUrl: baseUrl, token, db: supabaseAdmin },
       );
       return Response.json(out.body, { status: out.status });
     } catch (e) {

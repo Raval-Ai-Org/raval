@@ -8,8 +8,14 @@
 //   [[action:save-memory title="Brand uses 'workspace' not 'team'" body="..."]]
 //   [[action:schedule title="Weekly newsletter" when="2026-07-02T09:00:00Z" canvas="email" channel="email"]]
 //
-// We parse those out of the streamed text, run them, and render a small
-// chip strip under the assistant message describing what we did.
+// THE APPROVAL BOUNDARY: tags are parsed out of model output, and model output
+// can be steered by text the model read (scraped pages, competitor copy, files).
+// So only NAVIGATION tags run automatically. Anything that changes data or
+// spends money — `save-memory` (persists into every later prompt), `schedule`
+// (creates content), `audit` (a billable crawl) — is shown as a suggestion the
+// user approves or dismisses, one action at a time. An approved `schedule`
+// creates a `pending` draft in the approval queue; it never schedules or
+// publishes anything by itself.
 
 import { emitAppEvent } from "@/lib/app-events";
 import type { CanvasType } from "@/lib/studio";
@@ -24,6 +30,7 @@ export type ChatToolKind =
   | "open-visibility"
   | "open-competitor"
   | "open-coach"
+  | "open-operations"
   | "save-memory"
   | "schedule";
 
@@ -40,15 +47,63 @@ export interface ChatToolResult {
   detail?: string;
 }
 
+const KNOWN_KINDS = new Set<ChatToolKind>([
+  "audit",
+  "open-studio",
+  "open-memory",
+  "open-calendar",
+  "open-clients",
+  "open-visibility",
+  "open-competitor",
+  "open-coach",
+  "open-operations",
+  "save-memory",
+  "schedule",
+]);
+
+/** Actions that change data or spend money: shown for approval, never auto-run. */
+const GATED_KINDS = new Set<ChatToolKind>(["audit", "save-memory", "schedule"]);
+
+export function requiresApproval(kind: ChatToolKind): boolean {
+  return GATED_KINDS.has(kind);
+}
+
+/** Human-readable description of what approving a suggestion will do. */
+export function describeSuggestion(call: ChatToolCall): { title: string; effect: string } {
+  switch (call.kind) {
+    case "audit":
+      return { title: "Run AI visibility audit", effect: "Crawls your site (uses analysis quota)." };
+    case "save-memory":
+      return {
+        title: `Save to Memory · ${(call.params.title || "Note").slice(0, 60)}`,
+        effect: "Adds this note to Brand DNA — it will inform future answers.",
+      };
+    case "schedule":
+      return {
+        title: `Draft “${(call.params.title || "Untitled").slice(0, 60)}”`,
+        effect: "Creates a draft in your approval queue. Nothing is published or scheduled.",
+      };
+    default:
+      return { title: call.kind, effect: "" };
+  }
+}
+
+const MAX_CALLS_PER_REPLY = 3;
+
 // Match [[action:KIND  k1="v1"  k2="v2 with spaces" ]]
 const TAG_RE = /\[\[action:([a-z][a-z0-9-]*)((?:\s+[a-zA-Z_][\w-]*="[^"]*")*)\s*\]\]/g;
 const ATTR_RE = /([a-zA-Z_][\w-]*)="([^"]*)"/g;
 
-/** Parse all tool tags out of a full assistant message. Returns calls + cleaned text. */
+/**
+ * Parse tool tags out of a full assistant message. Returns calls + cleaned text.
+ * Every tag is stripped from the visible text, but only known kinds are
+ * returned, and at most MAX_CALLS_PER_REPLY of them.
+ */
 export function parseToolCalls(text: string): { calls: ChatToolCall[]; cleaned: string } {
   const calls: ChatToolCall[] = [];
   const cleaned = text
     .replace(TAG_RE, (raw, kind, attrs) => {
+      if (!KNOWN_KINDS.has(kind as ChatToolKind) || calls.length >= MAX_CALLS_PER_REPLY) return "";
       const params: Record<string, string> = {};
       let m: RegExpExecArray | null;
       const re = new RegExp(ATTR_RE.source, "g");
@@ -93,7 +148,10 @@ export interface ExecuteCtx {
   saveMemory: (title: string, body: string) => Promise<void> | void;
 }
 
-/** Run a single parsed tool call. */
+/**
+ * Run a single parsed tool call. For gated kinds the caller MUST only invoke
+ * this after the user approved that specific suggestion.
+ */
 export async function executeToolCall(
   call: ChatToolCall,
   ctx: ExecuteCtx,
@@ -111,10 +169,8 @@ export async function executeToolCall(
       emitAppEvent("open:canvas", { type: canvas, brief });
       if (brief) {
         // Stash for the modal — it reads this on mount when the canvas matches.
-        // (A `studio:prefill` event used to be dispatched here too; nothing
-        // listened for it — this handoff is the one StudioCanvasModal reads.)
         try {
-          sessionStorage.setItem(`studio:prefill:${canvas}`, brief);
+          sessionStorage.setItem(`studio:prefill:${canvas}`, brief.slice(0, 2000));
         } catch {
           /* noop */
         }
@@ -150,6 +206,10 @@ export async function executeToolCall(
       emitAppEvent("open:marketing-coach");
       return { kind: call.kind, ok: true, label: "Opening Marketing Coach" };
     }
+    case "open-operations": {
+      emitAppEvent("open:operations");
+      return { kind: call.kind, ok: true, label: "Opening Operations inbox" };
+    }
     case "save-memory": {
       const title = (call.params.title || "Note").slice(0, 120);
       const body = (call.params.body || "").slice(0, 1200);
@@ -183,30 +243,32 @@ export async function executeToolCall(
               : canvas === "seo-brief"
                 ? "brief"
                 : "post";
-      const whenRaw = call.params.when || call.params.at || "";
-      const when = parseWhen(whenRaw);
+      const proposedAt = parseWhen(call.params.when || call.params.at || "");
+      // A draft for the approval queue — the proposed time is kept as a hint.
+      // (The old code inserted status "scheduled" directly, skipping approval.)
       const { error } = await supabase.from("content_items").insert({
         workspace_id: ctx.workspaceId,
         agent: canvas === "seo-brief" ? "scout" : canvas === "social-post" ? "echo" : "spark",
         kind,
         channel,
         title,
-        body: call.params.body || "",
-        status: when ? "scheduled" : "draft",
-        scheduled_at: when,
-        meta: { source: "chat", canvas },
+        body: (call.params.body || "").slice(0, 8000),
+        status: "pending",
+        scheduled_at: null,
+        meta: { source: "chat", canvas, proposed_at: proposedAt },
       });
       if (error)
         return {
           kind: call.kind,
           ok: false,
-          label: `Couldn't schedule "${title}"`,
+          label: `Couldn't create draft "${title}"`,
           detail: error.message,
         };
       return {
         kind: call.kind,
         ok: true,
-        label: when ? `Scheduled "${title}" for ${formatWhen(when)}` : `Saved draft "${title}"`,
+        label: `Draft "${title}" added to approvals`,
+        detail: proposedAt ? `Suggested time: ${formatWhen(proposedAt)}` : undefined,
       };
     }
   }

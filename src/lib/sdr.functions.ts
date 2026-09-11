@@ -54,6 +54,16 @@ async function extractError(res: Response): Promise<string> {
   }
 }
 
+export type SdrStatus = { enabled: boolean; canPublish: boolean; role: string | null };
+
+/** Whether distribution is on for the workspace and the caller may publish.
+ * The UI hides Publish/Schedule controls when it isn't (they would 503). */
+export async function getSdrStatus(workspaceId: string): Promise<SdrStatus> {
+  const res = await authedFetch(`/api/sdr/status?workspaceId=${encodeURIComponent(workspaceId)}`);
+  if (!res.ok) return { enabled: false, canPublish: false, role: null };
+  return res.json();
+}
+
 /** List the workspace's connected accounts (FR-002). */
 export async function getConnections(workspaceId: string): Promise<ConnectedAccount[]> {
   const res = await authedFetch(`/api/sdr/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);

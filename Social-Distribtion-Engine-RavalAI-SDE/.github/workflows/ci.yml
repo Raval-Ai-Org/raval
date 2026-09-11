@@ -94,11 +94,11 @@ jobs:
 
       - name: Run tests
         env:
-          DATABASE_URL: postgresql://sde:sde_test@localhost:5432/raval_sde_test
+          DATABASE_URL: postgresql://sde:sde_test@localhost:5432/raval_sde_test # secret-scan:allow CI test value
           REDIS_URL: redis://localhost:6379/0
           SDE_API_TOKEN: test-token
           SDE_SIGNING_SECRET: test-secret
-          FERNET_KEY: CjDXFzZ5c5GzBo2kYN-GYlYDYfN9Z5c5GzBo2kYN-GY=
+          FERNET_KEY: CjDXFzZ5c5GzBo2kYN-GYlYDYfN9Z5c5GzBo2kYN-GY= # secret-scan:allow CI test value
         run: pytest -v --cov=app --cov-report=xml
 
       - name: Upload coverage

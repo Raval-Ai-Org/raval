@@ -69,6 +69,7 @@ import {
 
 import { detectChatActions, runChatAction, type ChatAction } from "@/lib/chat-actions";
 import type { ChatToolResult } from "@/lib/chat-tools";
+import { SuggestedActions } from "@/components/app/SuggestedActions";
 import {
   Zap as ZapIcon,
   Wand2,
@@ -298,6 +299,18 @@ export function ChatPanel({
   const { isOn } = useAgentToggles();
   const { dna, save: saveDna } = useBrandDna(workspaceId);
   const dnaRef = useRef(dna);
+  // Used by an APPROVED "save to memory" suggestion from a chat reply.
+  const saveMemoryNote = async (title: string, body: string) => {
+    const note = {
+      id: crypto.randomUUID(),
+      title,
+      body,
+      createdAt: Date.now(),
+      source: "chat" as const,
+    };
+    const current = dnaRef.current;
+    await saveDna({ userInsights: [...(current.userInsights ?? []), note] });
+  };
   const messagesRef = useRef<Msg[]>([]);
   useEffect(() => {
     dnaRef.current = dna;
@@ -805,16 +818,15 @@ export function ChatPanel({
     }
     try {
       const { buildSmartChatContext } = await import("@/lib/ai/context-select");
-      const { compactHistory } = await import("@/lib/ai/history-compact");
       const smartCtx = buildSmartChatContext(lastUser, ctxSources, 2500);
-      const compactMessages = compactHistory(
-        history as import("@/lib/ai/history-compact").ChatTurn[],
-      );
+      // The server summarises older turns (history-summary.server.ts); the
+      // client only sends the recent window, within the route's 40-turn cap.
+      const recentMessages = history.slice(-40);
 
       const res = await authedFetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: compactMessages, context: smartCtx }),
+        body: JSON.stringify({ messages: recentMessages, context: smartCtx, modelId }),
       });
 
       if (!res.ok || !res.body) {
@@ -839,6 +851,7 @@ export function ChatPanel({
       const decoder = new TextDecoder();
       let buf = "";
       let acc = "";
+      let truncated = false;
       const aId = crypto.randomUUID();
       setMessages((m) => [...m, { id: aId, role: "assistant", kind: "text", content: "" }]);
       while (true) {
@@ -855,6 +868,8 @@ export function ChatPanel({
           if (json === "[DONE]") break;
           try {
             const parsed = JSON.parse(json);
+            // Server marker: the reply hit the output ceiling (meterSseStream).
+            if (parsed?.mellox?.truncated) truncated = true;
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) {
               acc += delta;
@@ -866,35 +881,33 @@ export function ChatPanel({
           }
         }
       }
+      if (truncated) {
+        acc +=
+          "\n\n_(This reply was cut off at the length limit — say “continue” to pick up where it stopped.)_";
+        setMessages((m) => m.map((x) => (x.id === aId ? { ...x, content: acc } : x)));
+      }
       recordTokens(Math.ceil(acc.length / 4));
 
       // Chat-first: parse any [[action:...]] tags out of the assistant message,
       // strip them from what we render, run them, and append a "what I did" chip row.
       try {
-        const { parseToolCalls, executeToolCall } = await import("@/lib/chat-tools");
+        const { parseToolCalls, executeToolCall, requiresApproval } = await import(
+          "@/lib/chat-tools"
+        );
         const { calls, cleaned } = parseToolCalls(acc);
         if (cleaned !== acc) {
           setMessages((m) => m.map((x) => (x.id === aId ? { ...x, content: cleaned } : x)));
           acc = cleaned;
         }
         if (calls.length) {
-          const saveMemory = async (title: string, body: string) => {
-            const note = {
-              id: crypto.randomUUID(),
-              title,
-              body,
-              createdAt: Date.now(),
-              source: "chat" as const,
-            };
-            const current = dnaRef.current;
-            await saveDna({ userInsights: [...(current.userInsights ?? []), note] });
-          };
+          // Approval boundary: navigation runs now; anything that changes data
+          // or spends money becomes a suggestion the user approves.
           const results: Awaited<ReturnType<typeof executeToolCall>>[] = [];
-          for (const c of calls) {
-            const r = await executeToolCall(c, { workspaceId, saveMemory });
+          const suggestions = calls.filter((c) => requiresApproval(c.kind));
+          for (const c of calls.filter((c) => !requiresApproval(c.kind))) {
+            const r = await executeToolCall(c, { workspaceId, saveMemory: saveMemoryNote });
             results.push(r);
-            if (r.ok) toast.success(r.label, r.detail ? { description: r.detail } : undefined);
-            else toast.error(r.label, r.detail ? { description: r.detail } : undefined);
+            if (!r.ok) toast.error(r.label, r.detail ? { description: r.detail } : undefined);
           }
           setMessages((m) => [
             ...m,
@@ -903,7 +916,7 @@ export function ChatPanel({
               role: "assistant",
               kind: "actions",
               content: "",
-              payload: { results },
+              payload: { results: results.length ? results : undefined, suggestions },
             },
           ]);
         }
@@ -1283,7 +1296,10 @@ export function ChatPanel({
                       </motion.div>
                     );
                   }
-                  if (m.kind === "actions" && (m.payload?.actions || m.payload?.results)) {
+                  if (
+                    m.kind === "actions" &&
+                    (m.payload?.actions || m.payload?.results || m.payload?.suggestions?.length)
+                  ) {
                     return (
                       <motion.div
                         key={m.id}
@@ -1295,6 +1311,18 @@ export function ChatPanel({
                       >
                         {m.payload?.results ? <ToolResultsRow results={m.payload.results} /> : null}
                         {m.payload?.actions ? <ActionChips actions={m.payload.actions} /> : null}
+                        {m.payload?.suggestions?.length ? (
+                          <SuggestedActions
+                            suggestions={m.payload.suggestions}
+                            execute={async (call) => {
+                              const { executeToolCall } = await import("@/lib/chat-tools");
+                              return executeToolCall(call, {
+                                workspaceId,
+                                saveMemory: saveMemoryNote,
+                              });
+                            }}
+                          />
+                        ) : null}
                       </motion.div>
                     );
                   }

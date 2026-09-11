@@ -28,6 +28,7 @@ function builder() {
   let id: string | undefined;
   let requestKey: string | undefined;
   let updatedAt: string | undefined;
+  let workspace: string | undefined;
   const violatesCheck = () => "status" in values && !ALLOWED_STATUSES.has(String(values.status));
   const chain = {
     select() {
@@ -37,6 +38,7 @@ function builder() {
       if (column === "id") id = value;
       if (column === "request_key") requestKey = value;
       if (column === "updated_at") updatedAt = value;
+      if (column === "workspace_id") workspace = value;
       return chain;
     },
     insert(input: Record<string, unknown>) {
@@ -62,7 +64,11 @@ function builder() {
         return { data: { ...row }, error: null };
       }
       const found =
-        state.rows.find((row) => (id ? row.id === id : row.request_key === requestKey)) ?? null;
+        state.rows.find(
+          (row) =>
+            (id ? row.id === id : row.request_key === requestKey) &&
+            (workspace === undefined || row.workspace_id === workspace),
+        ) ?? null;
       const snapshot = found ? { ...found } : null;
       state.afterRead?.(state.reads++);
       return { data: snapshot, error: null };
@@ -181,7 +187,7 @@ describe("Google Trends collection cache", () => {
 
   it("persists pending, completed, and failed poll states", async () => {
     const started = await requestGoogleTrendsCollection(input, workspaceId);
-    const pending = await pollGoogleTrendsCollection(started.collectionId!);
+    const pending = await pollGoogleTrendsCollection(started.collectionId!, workspaceId);
     expect(pending.state).toBe("pending");
 
     vi.mocked(getGoogleTrendsTask).mockResolvedValueOnce({
@@ -190,7 +196,7 @@ describe("Google Trends collection cache", () => {
       statusCode: 20000,
       data: trends([9]),
     });
-    const completed = await pollGoogleTrendsCollection(started.collectionId!);
+    const completed = await pollGoogleTrendsCollection(started.collectionId!, workspaceId);
     expect(completed.state).toBe("completed");
     expect(completed.data?.interestOverTime[0]?.values).toEqual([9]);
 
@@ -202,7 +208,7 @@ describe("Google Trends collection cache", () => {
       statusCode: 40200,
       statusMessage: "Provider failed",
     });
-    const failed = await pollGoogleTrendsCollection(started.collectionId!);
+    const failed = await pollGoogleTrendsCollection(started.collectionId!, workspaceId);
     expect(failed.state).toBe("failed");
     expect(failed.error?.message).toBe("Provider failed");
   });
@@ -320,7 +326,7 @@ describe("Google Trends collection cache", () => {
       statusCode: 20000,
     });
 
-    const result = await pollGoogleTrendsCollection(started.collectionId!);
+    const result = await pollGoogleTrendsCollection(started.collectionId!, workspaceId);
 
     expect(result.state).toBe("no_data");
     expect(result.error?.code).toBe("no_data");
@@ -343,7 +349,7 @@ describe("Google Trends collection cache", () => {
       statusCode: 20000,
       data: trends([0]),
     });
-    const result = await pollGoogleTrendsCollection(started.collectionId!);
+    const result = await pollGoogleTrendsCollection(started.collectionId!, workspaceId);
     expect(result.state).toBe("no_data");
     expect(state.rows[0]?.normalized_result).toBeNull();
   });
@@ -353,7 +359,7 @@ describe("Google Trends collection cache", () => {
     vi.mocked(getGoogleTrendsTask).mockRejectedValueOnce(
       new DataForSeoError("DataForSEO request timed out", 504, undefined, true),
     );
-    const result = await pollGoogleTrendsCollection(started.collectionId!);
+    const result = await pollGoogleTrendsCollection(started.collectionId!, workspaceId);
     expect(result.state).toBe("pending");
     expect(result.error?.message).toBe("DataForSEO request timed out");
     expect(state.rows[0]?.status).toBe("pending");
@@ -362,7 +368,7 @@ describe("Google Trends collection cache", () => {
   it("fails a task that is still pending past the stale cutoff", async () => {
     const started = await requestGoogleTrendsCollection(input, workspaceId);
     state.rows[0].requested_at = new Date(Date.now() - 21 * 60 * 1000).toISOString();
-    const result = await pollGoogleTrendsCollection(started.collectionId!);
+    const result = await pollGoogleTrendsCollection(started.collectionId!, workspaceId);
     expect(result.state).toBe("failed");
     expect(result.error?.code).toBe("provider_timeout");
     expect(state.rows[0]?.status).toBe("failed");
@@ -372,8 +378,53 @@ describe("Google Trends collection cache", () => {
     const started = await requestGoogleTrendsCollection(input, workspaceId);
     state.rows[0].dataforseo_task_id = null;
     state.rows[0].requested_at = new Date(Date.now() - 3 * 60 * 1000).toISOString();
-    const result = await pollGoogleTrendsCollection(started.collectionId!);
+    const result = await pollGoogleTrendsCollection(started.collectionId!, workspaceId);
     expect(result.state).toBe("failed");
     expect(result.error?.code).toBe("task_not_created");
+  });
+
+  it("keeps the previous result stored while a refresh runs and after it fails", async () => {
+    const expired = new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString();
+    state.rows.push({
+      id: "old-1",
+      workspace_id: workspaceId,
+      request_key: trendRequestKey(input),
+      keywords: input.keywords,
+      status: "completed",
+      dataforseo_task_id: "old-task",
+      normalized_result: trends([5]),
+      provider_error: null,
+      requested_at: expired,
+      completed_at: expired,
+      updated_at: expired,
+    });
+
+    const refresh = await requestGoogleTrendsCollection(input, workspaceId);
+    expect(refresh.state).toBe("pending");
+    expect(refresh.data).toBeUndefined();
+    expect(state.rows[0]).toMatchObject({
+      status: "pending",
+      normalized_result: trends([5]),
+      completed_at: expired,
+    });
+
+    vi.mocked(getGoogleTrendsTask).mockResolvedValueOnce({
+      id: "task-1",
+      status: "failed",
+      statusCode: 40200,
+      statusMessage: "Provider failed",
+    });
+    const failed = await pollGoogleTrendsCollection(refresh.collectionId!, workspaceId);
+    expect(failed.state).toBe("failed");
+    expect(failed.data).toBeUndefined();
+    expect(state.rows[0]).toMatchObject({ status: "failed", normalized_result: trends([5]) });
+  });
+
+  it("does not poll a collection that belongs to another workspace", async () => {
+    const started = await requestGoogleTrendsCollection(input, workspaceId);
+    const result = await pollGoogleTrendsCollection(started.collectionId!, "workspace-2");
+    expect(result.state).toBe("no_data");
+    expect(result.data).toBeUndefined();
+    expect(getGoogleTrendsTask).not.toHaveBeenCalled();
   });
 });

@@ -11,6 +11,7 @@ import {
   type GoogleTrendsInput,
 } from "@/lib/dataforseo/google-trends.server";
 import { marketLog, withMarketTimeout } from "@/lib/market-reliability.server";
+import { BudgetExceededError, enforceBudget } from "@/server/ai/budget";
 
 export type TrendCollectionState = "cached" | "pending" | "completed" | "failed" | "no_data";
 
@@ -55,11 +56,12 @@ type CollectionRow = {
   updated_at: string;
 };
 
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+/** How long a completed collection is reused before a scan asks DataForSEO again. */
+export const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const RETRY_AFTER_MS = 60 * 1000;
 // A DataForSEO standard-queue Google Trends task normally finishes in 1-3 minutes.
 // Past this age (from requested_at, which polling does not touch) it is abandoned.
-const STALE_PENDING_MS = 20 * 60 * 1000;
+export const STALE_PENDING_MS = 20 * 60 * 1000;
 // A pending row with no task id after this long means task creation never finished.
 const TASK_CREATION_GRACE_MS = 2 * 60 * 1000;
 const NO_DATA_ERROR: TrendCollectionError = {
@@ -94,7 +96,12 @@ function rowError(row: CollectionRow): TrendCollectionError | undefined {
 }
 
 function resultFromRow(row: CollectionRow, state: TrendCollectionState): TrendCollectionResult {
-  const data = row.normalized_result as GoogleTrendsData | null;
+  // A pending or failed row can still hold the previous scan's data (kept so the
+  // last good result stays readable); it is never returned as this scan's result.
+  const data =
+    state === "cached" || state === "completed"
+      ? (row.normalized_result as GoogleTrendsData | null)
+      : null;
   const error = rowError(row);
   return {
     state: data ? state : state === "cached" || state === "completed" ? "no_data" : state,
@@ -169,6 +176,9 @@ async function updateRow(
  * it since we read it (compare-and-set on updated_at). Returns null when another
  * request won the race — that request owns task creation, so we must not create
  * a second billed DataForSEO task.
+ *
+ * normalized_result and completed_at are deliberately kept: the previous good
+ * result stays available (GET /api/market/latest) until this scan replaces it.
  */
 async function claimRow(row: CollectionRow, operation: string): Promise<CollectionRow | null> {
   const query = supabaseAdmin
@@ -176,10 +186,8 @@ async function claimRow(row: CollectionRow, operation: string): Promise<Collecti
     .update({
       status: "pending",
       dataforseo_task_id: null,
-      normalized_result: null,
       provider_error: null,
       requested_at: new Date().toISOString(),
-      completed_at: null,
       last_polled_at: null,
     })
     .eq("id", row.id)
@@ -299,6 +307,8 @@ async function startCollection(
   }
 
   try {
+    // A new DataForSEO task is billed — the workspace's plan must allow it.
+    await enforceBudget("search", { workspaceId });
     const task = await createGoogleTrendsTask(input);
     row = await updateRow(
       row.id,
@@ -316,6 +326,8 @@ async function startCollection(
       providerCode: details.providerCode,
     });
     row = await updateRow(row.id, { status: "failed", provider_error: details }, operation);
+    // Over the plan's allowance is not a provider failure: surface it as 429.
+    if (error instanceof BudgetExceededError) throw error;
     return { ...resultFromRow(row, "failed"), error: details };
   }
 }
@@ -348,9 +360,16 @@ async function failRow(
 
 export async function pollGoogleTrendsCollection(
   collectionId: string,
+  workspaceId: string,
   operation = "unknown",
 ): Promise<TrendCollectionResult> {
-  const query = supabaseAdmin.from("market_trend_collections").select("*").eq("id", collectionId);
+  // Scoped to the caller's workspace: a collection id alone must not expose
+  // another workspace's data.
+  const query = supabaseAdmin
+    .from("market_trend_collections")
+    .select("*")
+    .eq("id", collectionId)
+    .eq("workspace_id", workspaceId);
   const row = (await withMarketTimeout(
     query.maybeSingle(),
     undefined,

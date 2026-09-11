@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/gemini-icons";
 import { NotesTabBody } from "./NotesPanel";
 import { MarketBrainPanel } from "./MarketBrainPanel";
+import { Maximize2, Minimize2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   getCoachBriefing,
@@ -162,6 +164,8 @@ function fireChat(prompt: string) {
 
 export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, leading }: Props) {
   const [open, setOpen] = useState(false);
+  // The whole coach shown in a large popup; one CoachBody instance at a time.
+  const [maximized, setMaximized] = useState(false);
   const [briefing, setBriefing] = useState<CoachBriefing | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -212,8 +216,8 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
   }, [workspaceId]);
 
   useEffect(() => {
-    if (open && !briefing && !loading) void load();
-  }, [open, briefing, loading, load]);
+    if ((open || maximized) && !briefing && !loading) void load();
+  }, [open, maximized, briefing, loading, load]);
 
   useEffect(() => {
     if (!briefing?.generatedAt) return;
@@ -256,6 +260,75 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
 
   const focusLabel = briefing?.focus?.title;
 
+  const openMaximized = () => {
+    setOpen(false);
+    setMaximized(true);
+  };
+  const restoreCompact = () => {
+    setMaximized(false);
+    setOpen(true);
+  };
+
+  // Rendered either in the compact popover or in the maximized popup — never both,
+  // so tab and briefing state carry over when switching.
+  const coachContent = (
+    <>
+      {loading && !briefing && <SkeletonBrief />}
+      {error && !loading && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
+              aria-hidden="true"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-[12px] font-semibold text-destructive">
+                Couldn't refresh your briefing
+              </div>
+              <div className="mt-0.5 text-[11.5px] leading-snug text-destructive/85">{error}</div>
+              <div className="mt-1 text-[11px] leading-snug text-destructive/70">
+                Tip: check your connection, then retry. If this keeps happening, ask Ravi in chat
+                and I'll run the scan manually.
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void load({ force: true })}
+                  className="inline-flex items-center gap-1 rounded-md bg-destructive px-2 py-1 text-[11px] font-semibold text-destructive-foreground hover:opacity-90"
+                >
+                  <RefreshCw className="h-3 w-3" aria-hidden="true" /> Retry scan
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    fireChat(
+                      "My marketing briefing failed to load — can you run a fresh scan and summarize what you find?",
+                    )
+                  }
+                  className="text-[11px] font-medium text-destructive/85 underline underline-offset-2 hover:text-destructive"
+                >
+                  Ask Ravi instead
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {briefing && (
+        <CoachBody
+          workspaceId={workspaceId ?? null}
+          brandKeywords={brandKeywords}
+          briefing={briefing}
+          tab={tab}
+          onTab={setTab}
+          loading={loading}
+          onRefresh={() => void load({ force: true })}
+          generatedLabel={generatedLabel}
+        />
+      )}
+    </>
+  );
+
   return (
     <motion.div
       ref={panelRef}
@@ -279,68 +352,43 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
             className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(30rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_24px_60px_-24px_rgba(0,0,0,0.55)] backdrop-blur-xl"
           >
             <div className="max-h-[58vh] overflow-auto scrollbar-thin px-3 pb-3 pt-3">
-              {loading && !briefing && <SkeletonBrief />}
-              {error && !loading && (
-                <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle
-                      className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
-                      aria-hidden="true"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[12px] font-semibold text-destructive">
-                        Couldn't refresh your briefing
-                      </div>
-                      <div className="mt-0.5 text-[11.5px] leading-snug text-destructive/85">
-                        {error}
-                      </div>
-                      <div className="mt-1 text-[11px] leading-snug text-destructive/70">
-                        Tip: check your connection, then retry. If this keeps happening, ask Ravi in
-                        chat and I'll run the scan manually.
-                      </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void load({ force: true })}
-                          className="inline-flex items-center gap-1 rounded-md bg-destructive px-2 py-1 text-[11px] font-semibold text-destructive-foreground hover:opacity-90"
-                        >
-                          <RefreshCw className="h-3 w-3" aria-hidden="true" /> Retry scan
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            fireChat(
-                              "My marketing briefing failed to load — can you run a fresh scan and summarize what you find?",
-                            )
-                          }
-                          className="text-[11px] font-medium text-destructive/85 underline underline-offset-2 hover:text-destructive"
-                        >
-                          Ask Ravi instead
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {briefing && (
-                <>
-                  <CoachBody
-                    workspaceId={workspaceId ?? null}
-                    brandKeywords={brandKeywords}
-                    briefing={briefing}
-                    tab={tab}
-                    onTab={setTab}
-                    loading={loading}
-                    onRefresh={() => void load({ force: true })}
-                    generatedLabel={generatedLabel}
-                  />
-                </>
-              )}
+              {coachContent}
             </div>
             <div className="h-px bg-border/60" />
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Dialog open={maximized} onOpenChange={(value) => !value && setMaximized(false)}>
+        <DialogContent
+          data-testid="marketing-coach-maximized"
+          className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 bg-card/95 p-0 backdrop-blur-xl sm:h-[90dvh] sm:max-h-[90dvh] sm:w-[min(1200px,96vw)] sm:rounded-3xl sm:border sm:border-border/60 sm:p-0"
+        >
+          <div className="flex items-center gap-3 border-b border-border/60 bg-gradient-to-r from-emerald-500/[0.07] via-transparent to-sky-500/[0.07] py-3 pl-4 pr-14 sm:pl-6">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-500/20 via-sky-500/15 to-indigo-500/20 text-emerald-500">
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-[15px] sm:text-base">Marketing Coach</DialogTitle>
+              <DialogDescription className="truncate text-[11.5px]">
+                {focusLabel ? `Today: ${focusLabel}` : "Daily brief, market signals and next plays"}
+              </DialogDescription>
+            </div>
+            <button
+              type="button"
+              onClick={restoreCompact}
+              aria-label="Restore Marketing Coach to compact view"
+              title="Restore compact view"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+            >
+              <Minimize2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin px-4 py-4 sm:px-8 sm:py-6">
+            <div className="mx-auto w-full max-w-6xl">{maximized && coachContent}</div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div
         className={cn(
@@ -400,6 +448,15 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
               open ? "rotate-180" : "-rotate-90",
             )}
           />
+        </button>
+        <button
+          type="button"
+          onClick={openMaximized}
+          aria-label="Maximize Marketing Coach"
+          title="Open in a larger window"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        >
+          <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
     </motion.div>

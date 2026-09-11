@@ -31,6 +31,21 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
     };
   }, [router]);
 
-  if (!ready) return null;
+  if (!ready) {
+    // A visible, accessible loading state instead of a blank screen while the
+    // session is checked (it lives in localStorage, so the check is client-side).
+    return (
+      <div
+        className="flex min-h-screen items-center justify-center bg-background"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+          <span className="text-[13px] text-muted-foreground">Loading your workspace…</span>
+        </div>
+      </div>
+    );
+  }
   return <>{children}</>;
 }

@@ -165,6 +165,56 @@ class TestWorkspaceScoping:
                 request=req, workspace_id="workspace_999", brand_id="brand_001", db=db_session
             )
 
+    @pytest.mark.asyncio
+    async def test_schedule_rejects_foreign_account_at_ingress(self, db_session):
+        """F-TEN-001: schedule() used to accept any account id and fail later."""
+        await _seed_account(db_session, account_id="acc-ws-sched", workspace_id="workspace_001")
+
+        service = PublisherService()
+        from app.models import Post
+        from app.schemas import PublishRequest, PublishTarget
+
+        req = PublishRequest(
+            idempotency_key="ik-ws-sched",
+            scheduled_at=datetime.now(UTC) + timedelta(hours=2),
+            targets=[
+                PublishTarget(
+                    account_id="acc-ws-sched",
+                    content={"text": "x", "media_urls": [], "metadata": {}},
+                )
+            ],
+        )
+        with pytest.raises(ValueError, match="not found in this workspace"):
+            await service.schedule(
+                request=req, workspace_id="workspace_999", brand_id="brand_001", db=db_session
+            )
+        await db_session.rollback()
+        leftover = (
+            await db_session.execute(select(Post).where(Post.idempotency_key == "ik-ws-sched"))
+        ).scalar_one_or_none()
+        assert leftover is None, "a rejected schedule must not persist a post"
+
+    @pytest.mark.asyncio
+    async def test_schedule_rejects_unknown_account_with_validation_error(self, db_session):
+        service = PublisherService()
+        from app.schemas import PublishRequest, PublishTarget
+
+        req = PublishRequest(
+            idempotency_key="ik-ws-unknown",
+            scheduled_at=datetime.now(UTC) + timedelta(hours=2),
+            targets=[
+                PublishTarget(
+                    account_id="acc-does-not-exist",
+                    content={"text": "x", "media_urls": [], "metadata": {}},
+                )
+            ],
+        )
+        # Previously surfaced as a misleading 409 "Duplicate idempotency_key".
+        with pytest.raises(ValueError, match="not found in this workspace"):
+            await service.schedule(
+                request=req, workspace_id="workspace_001", brand_id="brand_001", db=db_session
+            )
+
 
 class TestJobPlatformResolution:
     """T061 — job responses report the real platform, never hardcoded "dryrun"."""

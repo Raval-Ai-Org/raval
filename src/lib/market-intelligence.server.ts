@@ -173,6 +173,7 @@ type WorkspaceRow = {
 };
 
 const ANALYSIS_TYPE = "market_strategy";
+const analysisInflight = new Map<string, Promise<MarketIntelligenceResult>>();
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -403,6 +404,46 @@ export async function analyzeMarketCollection(args: {
     });
   }
 
+  // One billed generation per analysis key: a second tab, a resumed client or a
+  // scheduled run arriving mid-generation joins the in-flight one.
+  const running = analysisInflight.get(key);
+  if (running) {
+    marketLog("intelligence joined in-flight analysis", {
+      operation,
+      collectionId: args.collectionId,
+    });
+    return running;
+  }
+  const work = generateIntelligence({
+    args,
+    collection,
+    workspace,
+    key,
+    fingerprint,
+    type,
+    operation,
+  }).finally(() => analysisInflight.delete(key));
+  analysisInflight.set(key, work);
+  return work;
+}
+
+async function generateIntelligence({
+  args,
+  collection,
+  workspace,
+  key,
+  fingerprint,
+  type,
+  operation,
+}: {
+  args: { collectionId: string; workspaceId: string };
+  collection: TrendCollectionRow;
+  workspace: WorkspaceRow;
+  key: string;
+  fingerprint: string;
+  type: string;
+  operation: string;
+}): Promise<MarketIntelligenceResult> {
   const brandContext = serializeBrandContext(asBrandDna(workspace), {
     siteUrl: workspace.website_url,
     maxCharsPerField: 500,

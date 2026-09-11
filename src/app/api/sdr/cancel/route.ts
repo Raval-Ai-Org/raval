@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
-import { getWorkspaceSdrKey } from "@/lib/sdr.helpers.server";
+import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import { cancelScheduledHandler } from "@/lib/sdr.handlers";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -18,12 +18,13 @@ export const POST = defineRoute({
   auth: "workspace",
   body: BodySchema,
   workspaceId: ({ body }) => body.workspaceId,
+  minRole: "editor",
   handler: async ({ body, workspaceId }) => {
     try {
-      const token = await getWorkspaceSdrKey(workspaceId);
+      const { token, baseUrl } = await getWorkspaceSdrConfig(workspaceId);
       const out = await cancelScheduledHandler(
         { workspaceId, contentItemId: body.contentItemId },
-        { sdrBaseUrl: process.env.SDR_BASE_URL ?? "", token, db: supabaseAdmin },
+        { sdrBaseUrl: baseUrl, token, db: supabaseAdmin },
       );
       return Response.json(out.body, { status: out.status });
     } catch (e) {

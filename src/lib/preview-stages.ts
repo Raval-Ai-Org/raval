@@ -186,7 +186,7 @@ export function planFromPrompt(
           { label: "Pricing model", value: "Tiered · from $29/mo" },
           { label: "Primary CTA", value: "Start free trial" },
           { label: "Hero promise", value: "Ship 10× faster" },
-          { label: "Social proof", value: "4.6 ★ G2 · 128 reviews" },
+          { label: "Social proof", value: "Checking review sites…" },
           { label: "Top keyword", value: "ai marketing platform" },
         ],
       },
@@ -358,7 +358,7 @@ function mockResults(brand: string) {
     {
       title: `${titleCase(brand)} reviews on G2`,
       url: `g2.com/products/${brand}`,
-      snippet: "4.6 ★ · 128 reviews",
+      snippet: "Reviews · checking…",
     },
     {
       title: `Best alternatives to ${brand} (2026)`,

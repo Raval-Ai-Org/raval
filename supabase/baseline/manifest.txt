@@ -1,0 +1,40 @@
+# Migration baseline manifest.
+#
+# The ordered set of migrations that builds the Mellox AI schema on an EMPTY
+# database. The files before 20260707193303 are the Lovable-era history: they
+# re-CREATE the same tables with no DROP between them, so the full history
+# cannot be replayed; 20260707193116 dropped everything and 20260707193303+
+# rebuilt it. The live project was bootstrapped from exactly this list (see
+# apply_migrations_cli.py).
+#
+# Every migration NEWER than the last listed file is included automatically,
+# so a new migration can never be silently left out of the baseline.
+# A line starting with "!" excludes a newer file.
+#
+# Verified by: node scripts/db-baseline.mjs --verify   (PGlite, runs in CI)
+# Consolidated output: supabase/baseline/schema.sql    (node scripts/db-baseline.mjs --write)
+
+20260707193303_93348393-698b-4f35-ae22-644af74d8942.sql
+20260707193445_46dd0707-2e4d-4ee8-b7d1-e2cea84ec364.sql
+20260709194343_9ba1d523-b946-4e78-a69d-e6bdaf5ba26e.sql
+20260709212343_4feb1702-87f2-45f0-9b83-6b92ce93a1e9.sql
+20260709213859_80e26c94-28cf-45c1-9383-304df23d4ba5.sql
+20260710100535_45a3451d-82a0-4499-bc1d-7e2e6260ca0c.sql
+20260712203224_2d6ac297-789e-40b6-9228-e05bdb9dfb39.sql
+20260712220251_2a14b1a0-8e29-4a9a-bad7-e71064c4ce68.sql
+20260718184546_e27386a1-4495-4b68-b399-0a94f1d7702d.sql
+20260718184836_4ff53c1f-ade2-4fe4-88c2-518841d56158.sql
+20260720095116_ad729590-6b24-416b-8a9f-bf7cd05b7214.sql
+20260809000001_add_workspace_sdr.sql
+20260809000002_add_content_publications.sql
+20260809000003_publishing_status_doc.sql
+20260810000001_add_publications_perf_indexes.sql
+20260903000000_disable_legacy_competitor_watch_cron.sql
+20260907120000_create_conversations.sql
+20260907150000_enforce_content_lifecycle.sql
+20260910010000_create_persistent_assets.sql
+20260910020000_harden_generated_asset_storage.sql
+20260910030000_harden_client_share_secrets.sql
+20260910040000_protect_workspace_owner_membership.sql
+20260910050000_add_schedule_claim_leases.sql
+20260910060000_lock_workspace_resource_ownership.sql

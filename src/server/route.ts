@@ -16,7 +16,16 @@
 import "server-only";
 import { ZodError, type ZodType, type ZodTypeDef } from "zod";
 import type { UserSupabaseClient } from "@/integrations/supabase/client.user.server";
-import { checkWorkspaceMembership, jsonError, requireUserId } from "./api-auth";
+import {
+  checkWorkspaceMembership,
+  jsonError,
+  requireUserId,
+  UUID_RE,
+  type VerifiedUser,
+  type WorkspaceRole,
+} from "./api-auth";
+import { getRequestScope, runWithRequest, setRequestScope } from "./request-context";
+import { BudgetExceededError } from "./ai/budget";
 import {
   enforceRateLimit,
   RateLimitedError,
@@ -36,10 +45,17 @@ export type RouteContext<TBody, TQuery> = {
   /** RLS-bound client carrying the caller's JWT. */
   supabase: UserSupabaseClient;
   signal: AbortSignal;
+  /**
+   * Workspace this request is attributed to for metering/budgets. On
+   * `auth: "user"` routes it comes from the optional `x-workspace-id` header
+   * and is set ONLY after membership is verified; otherwise undefined.
+   */
+  attributedWorkspaceId?: string;
 };
 
 export type WorkspaceRouteContext<TBody, TQuery> = RouteContext<TBody, TQuery> & {
   workspaceId: string;
+  role: WorkspaceRole;
 };
 
 type RateLimitSpec<Ctx> =
@@ -64,6 +80,8 @@ export type WorkspaceRouteOptions<TBody, TQuery> = CommonOptions<TBody, TQuery> 
   auth: "workspace";
   /** Where the workspace id lives in the validated input. */
   workspaceId: (input: { body: TBody; query: TQuery }) => unknown;
+  /** Minimum workspace role. Side-effecting routes use "editor". Default: any member. */
+  minRole?: WorkspaceRole;
   rateLimit?: RateLimitSpec<WorkspaceRouteContext<TBody, TQuery>>;
   handler: (ctx: WorkspaceRouteContext<TBody, TQuery>) => unknown;
 };
@@ -74,6 +92,11 @@ export type WorkspaceRouteOptions<TBody, TQuery> = CommonOptions<TBody, TQuery> 
  */
 export function knownErrorResponse(error: unknown): Response | null {
   if (error instanceof RateLimitedError) return rateLimitResponse(error.tier, error.result);
+  if (error instanceof BudgetExceededError) {
+    const res = jsonError(429, error.message);
+    res.headers.set("X-Usage-Limit", error.kind);
+    return res;
+  }
   if (error instanceof UpstreamError) return jsonError(error.status, error.message);
   if (error instanceof SsrfBlockedError) return jsonError(400, "URL is not allowed");
   if (error instanceof ZodError) return jsonError(400, "Invalid request");
@@ -118,8 +141,36 @@ async function parseInput<TBody, TQuery>(
 }
 
 function toResponse(result: unknown): Response {
-  if (result instanceof Response) return result;
-  return Response.json(result ?? null, { headers: { "Cache-Control": "no-store" } });
+  const response =
+    result instanceof Response
+      ? result
+      : Response.json(result ?? null, { headers: { "Cache-Control": "no-store" } });
+  // A soft plan limit was crossed during this request (src/server/ai/budget.ts).
+  const warning = getRequestScope().usageWarning;
+  if (!warning) return response;
+  const headers = new Headers(response.headers);
+  headers.set("X-Usage-Warning", warning);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+/**
+ * Resolve the optional `x-workspace-id` attribution header on user routes.
+ * Returns the id only when the caller is a member; a missing, malformed or
+ * foreign id attributes the request to the user alone (never to someone
+ * else's workspace budget).
+ */
+async function attributedWorkspace(
+  auth: VerifiedUser,
+  request: Request,
+): Promise<string | undefined> {
+  const header = request.headers.get("x-workspace-id")?.trim();
+  if (!header || !UUID_RE.test(header)) return undefined;
+  const membership = await checkWorkspaceMembership(auth, header);
+  return membership.ok ? membership.workspaceId : undefined;
 }
 
 export function defineRoute<TBody = undefined, TQuery = undefined>(
@@ -131,53 +182,73 @@ export function defineRoute<TBody = undefined, TQuery = undefined>(
 export function defineRoute<TBody, TQuery>(
   opts: UserRouteOptions<TBody, TQuery> | WorkspaceRouteOptions<TBody, TQuery>,
 ): (request: Request) => Promise<Response> {
-  return async (request: Request) => {
-    try {
-      const auth = await requireUserId(request);
-      if (!auth.ok) return auth.response;
+  return (request: Request) => runWithRequest(request, () => handle(opts, request));
+}
 
-      const input = await parseInput(request, opts);
-      if (!input.ok) return input.response;
+async function handle<TBody, TQuery>(
+  opts: UserRouteOptions<TBody, TQuery> | WorkspaceRouteOptions<TBody, TQuery>,
+  request: Request,
+): Promise<Response> {
+  try {
+    const auth = await requireUserId(request);
+    if (!auth.ok) return auth.response;
+    setRequestScope({ userId: auth.userId, route: opts.name });
 
-      const ctx: RouteContext<TBody, TQuery> = {
-        request,
-        body: input.body,
-        query: input.query,
-        userId: auth.userId,
-        supabase: auth.supabase,
-        signal: request.signal,
+    const input = await parseInput(request, opts);
+    if (!input.ok) return input.response;
+
+    const ctx: RouteContext<TBody, TQuery> = {
+      request,
+      body: input.body,
+      query: input.query,
+      userId: auth.userId,
+      supabase: auth.supabase,
+      signal: request.signal,
+    };
+
+    let handlerCtx: RouteContext<TBody, TQuery> | WorkspaceRouteContext<TBody, TQuery> = ctx;
+    if (opts.auth === "workspace") {
+      const membership = await checkWorkspaceMembership(auth, opts.workspaceId(input), {
+        minRole: opts.minRole,
+      });
+      if (!membership.ok) return membership.response;
+      handlerCtx = {
+        ...ctx,
+        workspaceId: membership.workspaceId,
+        role: membership.role,
+        attributedWorkspaceId: membership.workspaceId,
       };
-
-      let handlerCtx: RouteContext<TBody, TQuery> | WorkspaceRouteContext<TBody, TQuery> = ctx;
-      if (opts.auth === "workspace") {
-        const membership = await checkWorkspaceMembership(auth, opts.workspaceId(input));
-        if (!membership.ok) return membership.response;
-        handlerCtx = { ...ctx, workspaceId: membership.workspaceId };
+      setRequestScope({ workspaceId: membership.workspaceId });
+    } else {
+      const attributed = await attributedWorkspace(auth, request);
+      if (attributed) {
+        handlerCtx = { ...ctx, attributedWorkspaceId: attributed };
+        setRequestScope({ workspaceId: attributed });
       }
-
-      if (opts.rateLimit) {
-        const spec =
-          typeof opts.rateLimit === "string"
-            ? { tier: opts.rateLimit }
-            : (
-                opts.rateLimit as (c: typeof handlerCtx) => {
-                  tier: RateLimitTier;
-                  subject?: string;
-                } | null
-              )(handlerCtx);
-        if (spec) {
-          const limited = await enforceRateLimit(spec.tier, spec.subject ?? auth.userId);
-          if (limited) return limited;
-        }
-      }
-
-      const result = await (opts.handler as (c: typeof handlerCtx) => unknown)(handlerCtx);
-      return toResponse(result);
-    } catch (error) {
-      const known = knownErrorResponse(error);
-      if (known) return known;
-      console.error(`[api] ${opts.name} failed`, error);
-      return jsonError(500, "Request failed. Please try again.");
     }
-  };
+
+    if (opts.rateLimit) {
+      const spec =
+        typeof opts.rateLimit === "string"
+          ? { tier: opts.rateLimit }
+          : (
+              opts.rateLimit as (c: typeof handlerCtx) => {
+                tier: RateLimitTier;
+                subject?: string;
+              } | null
+            )(handlerCtx);
+      if (spec) {
+        const limited = await enforceRateLimit(spec.tier, spec.subject ?? auth.userId);
+        if (limited) return limited;
+      }
+    }
+
+    const result = await (opts.handler as (c: typeof handlerCtx) => unknown)(handlerCtx);
+    return toResponse(result);
+  } catch (error) {
+    const known = knownErrorResponse(error);
+    if (known) return known;
+    console.error(`[api] ${opts.name} failed`, error);
+    return jsonError(500, "Request failed. Please try again.");
+  }
 }

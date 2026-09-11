@@ -1,94 +1,58 @@
-# CRITICAL PRODUCTION SETUP REQUIREMENTS
+# Critical production setup
 
-## ⚠️ Database Webhook URL Migration
+The short list of things that must be true before Mellox AI serves real users.
+The full procedures are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and
+[docs/OPERATIONS-RUNBOOK.md](docs/OPERATIONS-RUNBOOK.md).
 
-The pg_cron scheduler in the database migration `supabase/migrations/20260709194553_bb8d43fe-2f5e-48cb-9c77-8042cb96e8be.sql` contains a hardcoded webhook URL pointing to the development/staging domain:
+## 1. Rotate every credential that was ever committed
 
-```sql
-url := '<DEPLOYMENT_URL>/api/public/hooks/competitor-watch'
-```
+Several production values were committed to git in earlier revisions (the SDR
+deployment ADR, the README test login) and the cron secret was stored in
+plaintext inside a `cron.job` command. They are removed from the files now, but
+git history keeps them: **treat them as compromised and rotate them.** The
+list, and how to rotate each one, is in the runbook under
+"Credential rotation".
 
-### Action Required Before Production Deployment
+## 2. Scheduled jobs go through Vault — never a URL or secret in SQL
 
-This must be updated to point to your production domain. There are two approaches:
+Scheduled publishing, Market Brain collections, competitor alerts, SDR
+reconciliation, the agent tick and ops-watch are all driven by `pg_cron`
+calling `public.call_app_hook(path)`. That function reads the app origin and
+`CRON_SECRET` from **Supabase Vault** at call time, so no committed SQL (and no
+`cron.job` row) contains either value.
 
-#### Option A: Update via Supabase SQL Editor (Immediate Fix)
+1. Set `CRON_SECRET` (32+ random characters) in the app's environment.
+2. Create the Vault secrets `mellox_app_base_url` and `mellox_cron_secret`
+   (STEP 1 of [supabase/ENABLE-CRON-JOBS.sql](supabase/ENABLE-CRON-JOBS.sql)).
+3. Run STEP 3 of the same file (or re-run migration `20260911120600`) to
+   schedule the jobs; any legacy job that embedded a header or URL is
+   replaced.
+4. Verify with `/api/health/ready` — it reports stale cron heartbeats.
 
-1. Go to Supabase Dashboard → SQL Editor
-2. Run this query to update the existing cron job:
-   ```sql
-   SELECT cron.unschedule('competitor-watch-scan');
+## 3. One public origin
 
-   SELECT cron.schedule(
-     'competitor-watch-scan',
-     '*/30 * * * *',
-     $$
-     SELECT net.http_post(
-       url := 'https://YOUR_PRODUCTION_DOMAIN.com/api/public/hooks/competitor-watch',
-       headers := '{"Content-Type": "application/json", "apikey": "sb_publishable_S7mXBNliJnHUMWfCn4jS-Q_-Svjt7JV"}'::jsonb,
-       body := '{}'::jsonb
-     );
-     $$
-   );
-   ```
-3. Replace `YOUR_PRODUCTION_DOMAIN.com` with your actual production domain
+`APP_URL` and `NEXT_PUBLIC_APP_URL` must be the same public HTTPS origin.
+`NEXT_PUBLIC_APP_URL` is inlined at build time, so it must be present as a
+build argument (see the `ARG` lines in the `Dockerfile`). Canonical URLs,
+`robots.txt`, the sitemap, outbound `User-Agent`/`Referer` strings and cron
+callbacks all derive from it (`getAppUrl()` in `src/server/env.ts`). Production
+refuses to boot when it points at localhost.
 
-#### Option B: Create New Migration for Production
+## Checklist
 
-1. Create a new migration file in `supabase/migrations/`:
-   ```
-   [timestamp]_update-competitor-watch-webhook.sql
-   ```
-2. Add the same query as Option A
-3. This keeps the original migration unchanged and documents the production-specific update
+- [ ] Every item in the runbook's rotation list rotated
+- [ ] `APP_URL` = `NEXT_PUBLIC_APP_URL` = the public origin (build + runtime)
+- [ ] `CRON_SECRET` set (32+ chars) and stored in Vault as `mellox_cron_secret`
+- [ ] `mellox_app_base_url` stored in Vault; `mellox-*` cron jobs listed in `cron.job`
+- [ ] Migrations applied (`supabase migration list` shows local = remote)
+- [ ] `REDIS_URL`, `SENTRY_DSN`, `ALERT_WEBHOOK_URL` set (recommended)
+- [ ] `curl -sI https://<domain>/ | grep -i content-security-policy` returns the CSP
+- [ ] `curl -s https://<domain>/api/health/ready` returns `"ok":true`
+- [ ] `curl -X POST https://<domain>/api/public/hooks/run-schedules` returns 401 (secret required)
 
-### Environment-Specific Setup
+## Related documentation
 
-- **Local Development**: No action needed (uses http://localhost:3000 or your local dev URL)
-- **Staging**: Update webhook URL to staging domain
-- **Production**: Update webhook URL to production domain before first deployment
-
-### Important Notes
-
-- The webhook URL must be publicly accessible from Supabase's database server
-- The API route `/api/public/hooks/competitor-watch` must accept unauthenticated POST requests
-- Ensure the `CRON_SECRET` environment variable on your server matches the auth mechanism in the webhook
-- Test the webhook manually: `curl -X POST "https://your-domain.com/api/public/hooks/competitor-watch" -H "Content-Type: application/json" -d '{}'`
-
-## ✅ Application-Level URL Configuration
-
-The application now uses the `APP_URL` environment variable for all dynamic URL generation:
-
-- **Development**: Set `APP_URL=http://localhost:8080` (the port `npm run dev` uses)
-- **Staging**: Set `APP_URL=https://staging.your-domain.com`
-- **Production**: Set `APP_URL=https://your-domain.com`
-
-This controls:
-
-- SEO meta tags (og:url, canonical)
-- JSON-LD structured data
-- Favicon and logo paths
-- Validation script canonical hosts
-
-`NEXT_PUBLIC_APP_URL` must be set to the same value. It is inlined at build
-time, so on Railway it has to exist as a build variable (see the `ARG` lines in
-the `Dockerfile`), not only at runtime.
-
-## Integration Checklist
-
-- [ ] Confirm production domain name
-- [ ] Update database cron webhook URL via Supabase SQL Editor
-- [ ] Set `APP_URL` in the Railway service variables
-- [ ] Set `NEXT_PUBLIC_APP_URL` to the same value as a **build** variable
-- [ ] Set `CRON_SECRET` (min 16 chars) — the hooks return 503 without it
-- [ ] Test SEO meta tags: `curl https://your-domain.com/ | grep 'og:url'`
-- [ ] Test competitor watch webhook (expect 401 without the secret):
-      `curl -X POST https://your-domain.com/api/public/hooks/competitor-watch`
-- [ ] Run validation scripts: `APP_URL=https://your-domain.com npm run test:sitemap`
-
-## Related Documentation
-
-- [Codebase Analysis](./docs/CODEBASE-ANALYSIS-2026-09-11.md)
-- [Team Credentials](./docs/TEAM-CREDENTIALS.md)
-- [Environment Variables Guide](./.env.example)
-- [Google OAuth Setup](./docs/GOOGLE-OAUTH-SETUP.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Operations runbook](docs/OPERATIONS-RUNBOOK.md)
+- [Environment variables](.env.example)
+- [Google OAuth setup](docs/GOOGLE-OAUTH-SETUP.md)

@@ -2,9 +2,8 @@
 // OFF, publish/schedule degrade to today's mock (server-side status flip) so the
 // platform never regresses and content is never lost.
 import { describe, it, expect } from "vitest";
-import { isSdrEnabled } from "@/lib/feature-flags";
+import { isSdrEnabled, isSdrEnabledForWorkspace } from "@/lib/feature-flags";
 import { handleSdrDisabled } from "@/lib/sdr.handlers";
-import { makeMockDb } from "../fixtures/mock-db";
 
 describe("isSdrEnabled", () => {
   it("defaults to false when unset", () => {
@@ -25,32 +24,41 @@ describe("isSdrEnabled", () => {
   });
 });
 
-describe("handleSdrDisabled (degraded mock — US5)", () => {
-  it("publish degrades to a server-side status flip (published), no SDR involved", async () => {
-    const db = makeMockDb({
-      content_items: [{ id: "item-1", workspace_id: "ws-1", status: "draft" }],
+describe("handleSdrDisabled (distribution off — US5)", () => {
+  it("publish is refused with DISTRIBUTION_DISABLED and nothing is marked published", async () => {
+    const out = await handleSdrDisabled({
+      workspaceId: "ws-1",
+      contentItemIds: ["item-1"],
+      kind: "publish",
     });
-    const out = await handleSdrDisabled(
-      { workspaceId: "ws-1", contentItemIds: ["item-1"], kind: "publish" },
-      { db },
-    );
-    expect(out.status).toBe(200);
-    expect(out.body.degraded).toBe(true);
-    expect(out.body.results[0]).toEqual({ contentItemId: "item-1", status: "published" });
-    expect(db._state.content_items[0].status).toBe("published");
-    expect(db._state.content_items[0].scheduled_at).toBeTruthy(); // mirrors the old mock
+    expect(out.status).toBe(503);
+    expect(out.body.error.code).toBe("DISTRIBUTION_DISABLED");
+    expect(out.body.results[0]).toEqual({ contentItemId: "item-1", status: "not_sent" });
   });
 
-  it("schedule degrades to scheduled at the requested time", async () => {
-    const db = makeMockDb({
-      content_items: [{ id: "item-1", workspace_id: "ws-1", status: "draft" }],
+  it("schedule is refused the same way — no fake scheduled state", async () => {
+    const out = await handleSdrDisabled({
+      workspaceId: "ws-1",
+      contentItemIds: ["item-1", "item-2"],
+      kind: "schedule",
     });
-    const at = "2026-08-10T09:00:00.000Z";
-    const out = await handleSdrDisabled(
-      { workspaceId: "ws-1", contentItemIds: ["item-1"], kind: "schedule", scheduledAt: at },
-      { db },
-    );
-    expect(out.body.results[0].status).toBe("scheduled");
-    expect(db._state.content_items[0].scheduled_at).toBe(at);
+    expect(out.status).toBe(503);
+    expect(out.body.results.map((r: { status: string }) => r.status)).toEqual([
+      "not_sent",
+      "not_sent",
+    ]);
+  });
+});
+
+describe("isSdrEnabledForWorkspace", () => {
+  it("lets one workspace be enabled while the global flag is off", () => {
+    process.env.FEATURE_FLAG_SDR_ENABLED = "";
+    process.env.FEATURE_FLAG_SDR_ENABLED_WS_ws9 = "true";
+    try {
+      expect(isSdrEnabledForWorkspace("ws9")).toBe(true);
+      expect(isSdrEnabledForWorkspace("other")).toBe(false);
+    } finally {
+      delete process.env.FEATURE_FLAG_SDR_ENABLED_WS_ws9;
+    }
   });
 });

@@ -5,8 +5,9 @@
 import "server-only";
 import { normalizeUrl } from "@/lib/crawl/html";
 import { assertPublicUrl, fetchPublicText } from "@/server/safe-fetch";
+import { getAppUrl } from "@/server/env";
 
-const UA = "Mozilla/5.0 (compatible; MelloxAI-Audit/1.0; +https://raval.ai/bot)";
+const UA = `Mozilla/5.0 (compatible; MelloxAI-Audit/1.0; +${getAppUrl()}/bot)`;
 
 type CheckStatus = "pass" | "warn" | "fail" | "info";
 type Check = {

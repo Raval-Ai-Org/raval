@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { defineRoute } from "@/server/route";
-import { EXTRACTION_MODEL, extractionCompletion } from "@/lib/ai";
+import { extractionCompletion } from "@/lib/ai";
 import { safeParseJson } from "@/lib/ai/json";
-import { logAiCall } from "@/lib/ai/token-log.server";
+import { logGuardrailEvent } from "@/server/guardrails/events";
 import { MEMORY_SYSTEM } from "@/lib/ai/prompts";
 import { assemble } from "@/lib/ai/prompts/assemble";
 
@@ -155,14 +155,18 @@ export const POST = defineRoute({
       max_tokens: 2000,
     });
     const args = json?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ?? "";
-    logAiCall({
-      route: "memory-extract",
-      model: EXTRACTION_MODEL,
-      inputChars: transcript.length + knownBlock.length + MEMORY_SYSTEM.length,
-      outputChars: String(args).length,
-      cached: json?._cached === true,
-      toolCall: true,
-    });
-    return safeParseJson<typeof EMPTY>(args, EMPTY);
+    // Usage is metered in the gateway. An extraction the model did not return
+    // (or returned unparseable) is recorded, not silently read as "nothing new".
+    const parsed = args ? safeParseJson<typeof EMPTY | null>(args, null) : null;
+    if (!parsed) {
+      logGuardrailEvent({
+        kind: "parse_failure",
+        severity: "warn",
+        route: "memory-extract",
+        detail: { toolCallReturned: Boolean(args), truncated: json?._truncated === true },
+      });
+      return EMPTY;
+    }
+    return parsed;
   },
 });

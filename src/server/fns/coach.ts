@@ -6,6 +6,8 @@ import { rateLimitFor } from "@/server/rate-limit";
 import { coachSystem } from "@/lib/ai/prompts";
 import { assemble } from "@/lib/ai/prompts/assemble";
 import { claudeJsonPrompt, selectClaudeModel } from "@/lib/anthropic-gateway.server";
+import { fetchPublicText } from "@/server/safe-fetch";
+import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 
 const uuid = z.string().uuid();
 
@@ -83,20 +85,17 @@ function stripHtml(html: string, max = 6000) {
     .slice(0, max);
 }
 
+// The workspace website is user-supplied: it is fetched through safeFetch
+// (connect-time private-IP blocking, per-hop redirect checks, byte cap). The
+// previous raw fetch(url, { redirect: "follow" }) would read
+// http://169.254.169.254/ or localhost into the model prompt.
 async function fetchHtml(url: string, timeoutMs = 7000): Promise<string> {
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 MelloxCoachBot" },
-      signal: AbortSignal.timeout(timeoutMs),
-      redirect: "follow",
-    });
-    if (!res.ok) return "";
-    const ct = res.headers.get("content-type") || "";
-    if (!ct.includes("html") && !ct.includes("text")) return "";
-    return await res.text();
-  } catch {
-    return "";
-  }
+  return fetchPublicText(url, {
+    headers: { "User-Agent": "Mozilla/5.0 MelloxCoachBot" },
+    timeoutMs,
+    maxBytes: 2 * 1024 * 1024,
+    requireTextContent: true,
+  });
 }
 
 async function ddgSearch(
@@ -306,20 +305,33 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
     /* 4. Reason with the strongest available model */
     const system = coachSystem(dayName);
 
+    // Scraped pages, search snippets and stored Brand DNA are fenced as
+    // untrusted data: a competitor page saying "ignore your instructions"
+    // stays a quote, never a command (proposal D: prompt-injection boundary).
     const user = assemble([
+      { body: UNTRUSTED_DATA_RULE },
       { body: `Today: ${today.toISOString().slice(0, 10)} (${dayName})` },
       { body: `Brand seed: ${brandSeed || "(unknown — infer from site)"}` },
       { label: "Workspace signals", body: JSON.stringify(signals) },
-      { label: "Brand context (saved Brand DNA)", body: data.brandContext, maxChars: 3500 },
-      { label: "Site content (scraped just now)", body: siteText, maxChars: 6000 },
+      {
+        label: "Brand context (saved Brand DNA)",
+        body: wrapUntrusted("brand-dna", data.brandContext, { maxChars: 3500, route: "coach" }),
+      },
+      {
+        label: "Site content (scraped just now)",
+        body: wrapUntrusted("site-scrape", siteText, { maxChars: 6000, route: "coach" }),
+      },
       {
         label: "Research snippets (competitors/reviews/trends)",
-        body: JSON.stringify({
-          competitors: compResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
-          reviews: reviewResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
-          trends: trendResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
-        }),
-        maxChars: 3500,
+        body: wrapUntrusted(
+          "web-search",
+          JSON.stringify({
+            competitors: compResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
+            reviews: reviewResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
+            trends: trendResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
+          }),
+          { maxChars: 3500, route: "coach" },
+        ),
       },
     ]);
 

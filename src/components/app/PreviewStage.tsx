@@ -644,7 +644,7 @@ function LinkedInDraft({ lines, accent }: { lines: string[]; accent: string }) {
           <div className="min-w-0">
             <div className="truncate text-[11px] font-semibold">Your Brand</div>
             <div className="truncate text-[9.5px] text-muted-foreground">
-              Marketing · 1,204 followers · 1m
+              Marketing · preview
             </div>
           </div>
         </div>
@@ -792,8 +792,7 @@ function SchedulingBody({ stage, accent }: { stage: PreviewStageEvent; accent: s
         ))}
       </div>
       <div className="rounded-lg border bg-background/70 px-3 py-1.5 text-[10.5px]">
-        Best slot · <span style={{ color: accent, fontWeight: 600 }}>3:00 PM</span> · +38%
-        engagement
+        Suggested slot · <span style={{ color: accent, fontWeight: 600 }}>3:00 PM</span> · illustrative
       </div>
     </div>
   );

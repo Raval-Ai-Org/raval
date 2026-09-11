@@ -27,6 +27,10 @@
 --      (32+ recommended). The hooks return 503 below 16.
 --   3. Migration 20260911000100_add_app_hook_caller.sql has been applied.
 --
+-- Migration 20260911120600 schedules the same job list automatically once
+-- both Vault secrets exist; this file is the manual path (and the rotation
+-- reference). Keep the two job lists identical.
+--
 -- =============================================================================
 
 
@@ -97,7 +101,14 @@ BEGIN
       ('mellox-competitor-watch','*/30 * * * *', '/api/public/hooks/competitor-watch'),
       -- Resolves publications stuck in publishing/pending against SDR job
       -- status. Harmless while FEATURE_FLAG_SDR_ENABLED is off — no rows match.
-      ('mellox-sdr-reconcile',   '*/5 * * * *',  '/api/public/hooks/sdr-reconcile')
+      ('mellox-sdr-reconcile',   '*/5 * * * *',  '/api/public/hooks/sdr-reconcile'),
+      -- Distribution Reliability Worker for workspaces with recent SDR activity
+      -- (read-only findings; never mutates delivery state). AGENTS_DISABLED=1
+      -- on the app turns it into a no-op.
+      ('mellox-agents-tick',     '*/15 * * * *', '/api/public/hooks/agents-tick'),
+      -- Missed-heartbeat, AI spend, truncation and webhook-rejection alerts,
+      -- plus retention for operational log tables.
+      ('mellox-ops-watch',       '*/5 * * * *',  '/api/public/hooks/ops-watch')
     ) AS t(jobname, schedule, path)
   LOOP
     IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = v_job.jobname) THEN

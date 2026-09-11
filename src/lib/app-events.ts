@@ -24,6 +24,10 @@ export type AppEventMap = {
   "approvals:changed": RowChange | undefined;
   /** The selected workspace changed; `id: null` on sign-out. */
   "workspace:changed": { id: string | null } | undefined;
+  /** Open the Operations inbox (agent findings, runs, approvals). */
+  "open:operations": { tab?: "findings" | "approvals" | "runs" } | undefined;
+  /** Open the Plan & usage panel (real metered AI usage vs plan limits). */
+  "open:usage": undefined;
   "brand-dna:saved": undefined;
   "notes:changed": { workspaceId: string };
   "assets:changed": undefined;

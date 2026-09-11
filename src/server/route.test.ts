@@ -168,3 +168,50 @@ describe("defineRoute with workspace auth", () => {
     expect(await res.json()).toEqual({ workspaceId: WORKSPACE });
   });
 });
+
+describe("defineRoute role gate and workspace attribution", () => {
+  it("passes minRole to the membership check", async () => {
+    const route = defineRoute({
+      name: "gated",
+      auth: "workspace",
+      body: z.object({ workspaceId: z.string() }),
+      workspaceId: ({ body }) => body.workspaceId,
+      minRole: "editor",
+      handler: () => ({ ok: true }),
+    });
+    await route(post({ workspaceId: WORKSPACE }));
+    expect(checkWorkspaceMembership).toHaveBeenCalledWith(expect.anything(), WORKSPACE, {
+      minRole: "editor",
+    });
+  });
+
+  it("attributes a user route to x-workspace-id only after membership is verified", async () => {
+    const seen = vi.fn();
+    const route = defineRoute({
+      name: "attributed",
+      auth: "user",
+      handler: (ctx) => {
+        seen(ctx.attributedWorkspaceId);
+        return { ok: true };
+      },
+    });
+    const withHeader = (ws: string) =>
+      new Request("http://localhost/api/x", {
+        headers: { authorization: "Bearer a.b.c", "x-workspace-id": ws },
+      });
+
+    await route(withHeader(WORKSPACE));
+    expect(seen).toHaveBeenLastCalledWith(WORKSPACE);
+
+    checkWorkspaceMembership.mockResolvedValueOnce({
+      ok: false,
+      response: Response.json({}, { status: 403 }),
+    });
+    const res = await route(withHeader(WORKSPACE));
+    expect(res.status).toBe(200); // a foreign header never fails the request…
+    expect(seen).toHaveBeenLastCalledWith(undefined); // …and never attributes spend to it
+
+    await route(withHeader("not-a-uuid"));
+    expect(seen).toHaveBeenLastCalledWith(undefined);
+  });
+});

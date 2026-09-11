@@ -1,5 +1,5 @@
 import { resolveServerFn } from "@/server/fns";
-import { runWithRequest } from "@/server/request-context";
+import { runWithRequest, setRequestScope } from "@/server/request-context";
 import { knownErrorResponse } from "@/server/route";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ fn: string
   }
 
   try {
-    const result = await runWithRequest(request, () => serverFn.invoke(data, request.signal));
+    const result = await runWithRequest(request, () => {
+      setRequestScope({ route: `${moduleName}/${fnName}` });
+      return serverFn.invoke(data, request.signal);
+    });
     return json(200, { result: result ?? null });
   } catch (error) {
     // Auth failures → 401 (the client prompts a re-login), ZodError → 400,

@@ -22,7 +22,7 @@ from typing import Any
 import httpx
 from celery import Task
 from celery.exceptions import SoftTimeLimitExceeded
-from sqlalchemy import text
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.orm import Session as SyncSession
 
 from app.adapters.base import ADAPTER_REGISTRY, PublishContent
@@ -41,6 +41,106 @@ CLAIM_BATCH_SIZE = 100  # Max targets claimed per beat tick
 MAX_RETRIES_DEFAULT = 5  # Default max retry attempts
 INITIAL_RETRY_DELAY = 60  # Initial retry delay in seconds
 MAX_RETRY_DELAY = 3600  # Max retry delay (1 hour)
+
+
+# An immediate publish dispatches its own targets (publisher.publish →
+# process_target.delay). The tick only picks up an unscheduled pending target
+# once it has sat this long, as recovery for a lost dispatch — never while the
+# direct dispatch may still be running, which would publish the post twice.
+LOST_DISPATCH_GRACE = timedelta(minutes=5)
+
+
+def claim_due_targets(session: SyncSession, now: datetime, limit: int) -> list[str]:
+    """Atomically claim the targets that are due NOW and mark them publishing.
+
+    Due means one of:
+      * pending, and its post is scheduled for ``scheduled_at <= now``;
+      * pending, unscheduled (an immediate publish), and older than
+        LOST_DISPATCH_GRACE — the direct dispatch was lost;
+      * retrying, with ``next_attempt_at <= now``.
+
+    The previous raw-SQL claim took EVERY pending target, so a post scheduled
+    for next week went out on the next 30 s tick, and an immediate publish was
+    claimed by the tick while its own worker task was already publishing it.
+
+    ``FOR UPDATE SKIP LOCKED`` (Postgres; ignored by SQLite) keeps concurrent
+    beat ticks from claiming the same target. Delivery logs carry the owning
+    workspace (the old code wrote ``workspace_id=""``).
+    """
+    stale_cutoff = now - LOST_DISPATCH_GRACE
+    due = or_(
+        and_(
+            PostTarget.status == "pending",
+            Post.scheduled_at.is_not(None),
+            Post.scheduled_at <= now,
+        ),
+        and_(
+            PostTarget.status == "pending",
+            Post.scheduled_at.is_(None),
+            PostTarget.created_at <= stale_cutoff,
+        ),
+        and_(PostTarget.status == "retrying", PostTarget.next_attempt_at <= now),
+    )
+    rows = session.execute(
+        select(PostTarget.id, PostTarget.post_id, Post.workspace_id)
+        .join(Post, Post.id == PostTarget.post_id)
+        .where(Post.status != "cancelled", due)
+        .order_by(PostTarget.next_attempt_at.asc().nulls_first(), PostTarget.created_at.asc())
+        .limit(limit)
+        .with_for_update(skip_locked=True, of=PostTarget)
+    ).all()
+    if not rows:
+        return []
+
+    ids = [row.id for row in rows]
+    session.execute(
+        update(PostTarget)
+        .where(PostTarget.id.in_(ids))
+        .values(
+            status="publishing",
+            attempts=PostTarget.attempts + 1,
+            next_attempt_at=None,
+            updated_at=now,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    for row in rows:
+        session.add(
+            DeliveryLog(
+                id=str(uuid.uuid4()),
+                post_id=row.post_id,
+                post_target_id=row.id,
+                workspace_id=row.workspace_id,
+                event_type="publishing",
+                created_at=now,
+            )
+        )
+    return ids
+
+
+def claim_target_for_processing(session: SyncSession, target_id: str, now: datetime) -> bool:
+    """Take ownership of a target before publishing it. Returns False to skip.
+
+    Two dispatchers exist: the tick (which already moved the target to
+    ``publishing``) and an immediate publish (target still ``pending``). A
+    target that is already terminal — published, failed, cancelled — must never
+    be published again, whatever redelivered the task.
+    """
+    result = session.execute(
+        update(PostTarget)
+        .where(PostTarget.id == target_id, PostTarget.status.in_(("pending", "retrying")))
+        .values(status="publishing", attempts=PostTarget.attempts + 1, updated_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount:
+        session.commit()
+        return True
+    status = session.execute(
+        select(PostTarget.status).where(PostTarget.id == target_id)
+    ).scalar_one_or_none()
+    # `publishing` = claimed by the tick for this very dispatch (or a Celery
+    # acks_late redelivery of it) — proceed. Anything else is terminal/unknown.
+    return status == "publishing"
 
 
 # ─── Beat Tasks (Run on Schedule) ───────────────────────────────────────
@@ -66,59 +166,12 @@ def tick_due_jobs(self: Task) -> dict[str, Any]:  # type: ignore[no-any-unimport
 
     """
     now = datetime.now(UTC)
-    claimed_targets = []
+    claimed_targets: list[str] = []
 
     try:
         maker = get_sync_session_maker()
         with maker() as session:
-            # Atomically claim due targets using FOR UPDATE SKIP LOCKED
-            # This prevents multiple workers from claiming the same target
-            claim_sql = text("""
-                UPDATE post_targets
-                SET
-                    status = 'publishing',
-                    attempts = attempts + 1,
-                    next_attempt_at = NULL,
-                    updated_at = :now
-                WHERE id IN (
-                    SELECT id
-                    FROM post_targets
-                    WHERE (
-                        status = 'pending'
-                        OR (status = 'retrying' AND next_attempt_at <= :now)
-                    )
-                    ORDER BY next_attempt_at ASC NULLS FIRST
-                    LIMIT :limit
-                    FOR UPDATE SKIP LOCKED
-                )
-                RETURNING id, post_id, account_id
-            """)
-
-            result = session.execute(
-                claim_sql,
-                {
-                    "now": now,
-                    "limit": CLAIM_BATCH_SIZE,
-                },
-            )
-            claimed = result.fetchall()
-
-            # Record delivery log events for claimed targets
-            for row in claimed:
-                target_id, post_id, account_id = row
-
-                # Record queued event
-                delivery_log = DeliveryLog(
-                    id=str(uuid.uuid4()),
-                    post_id=post_id,
-                    post_target_id=target_id,
-                    workspace_id="",  # Will be resolved from post if needed
-                    event_type="publishing",
-                    created_at=now,
-                )
-                session.add(delivery_log)
-                claimed_targets.append(target_id)
-
+            claimed_targets = claim_due_targets(session, now, CLAIM_BATCH_SIZE)
             session.commit()
 
             # Dispatch each claimed target to a worker task
@@ -174,6 +227,16 @@ def process_target(self: Task, target_id: str) -> dict[str, Any]:  # type: ignor
     try:
         maker = get_sync_session_maker()
         with maker() as session:
+            # Ownership first: a terminal target is never published twice,
+            # whichever dispatcher (tick, immediate publish, redelivery) ran us.
+            if not claim_target_for_processing(session, target_id, now):
+                current = session.query(PostTarget).filter(PostTarget.id == target_id).first()
+                if not current:
+                    logger.warning("Target %s not found", target_id)
+                    return {"target_id": target_id, "status": "not_found"}
+                logger.info("Target %s already %s — skipping", target_id, current.status)
+                return {"target_id": target_id, "status": current.status, "skipped": True}
+
             # Load target with related post
             target = session.query(PostTarget).filter(PostTarget.id == target_id).first()
 
@@ -708,6 +771,27 @@ def _event_type_for(status: str) -> str:
         "failed": "post.failed",
         "retrying": "post.retrying",
     }.get(status, "post.updated")
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="webhooks.redeliver",
+    acks_late=True,
+    max_retries=0,
+    soft_time_limit=30,
+    time_limit=45,
+)
+def redeliver_webhook(
+    webhook_id: str,
+    event_type: str,
+    payload: dict[str, Any],
+    post_id: str | None,
+    post_target_id: str | None,
+    attempt: int,
+) -> dict[str, Any]:
+    """Queued webhook redelivery (one attempt; schedules the next on failure)."""
+    return WebhookService().redeliver(
+        webhook_id, event_type, payload, post_id, post_target_id, attempt
+    )
 
 
 def _deliver_webhook(workspace_id: str, event_type: str, payload: dict[str, Any]) -> None:

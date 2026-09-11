@@ -91,8 +91,42 @@ function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({ status, headers: JSON_HEADERS, body: JSON.stringify(body) });
 }
 
+const emptyLatest = {
+  success: true,
+  result: null,
+  intelligence: null,
+  activeScan: null,
+  lastError: null,
+  schedule: null,
+  freshUntil: null,
+};
+
+const storedLatest = {
+  success: true,
+  result: {
+    collectionId: COLLECTION_ID,
+    keywords: ["AI marketing"],
+    location: "United States",
+    completedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    data: completedCollection.data,
+  },
+  intelligence,
+  activeScan: null,
+  lastError: null,
+  schedule: {
+    nextRunAt: new Date(Date.now() + 22 * 60 * 60 * 1000).toISOString(),
+    lastRunStatus: "ok",
+  },
+  freshUntil: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+};
+
 /** Signed-in app shell with the Market tab open. Register /api/market routes first. */
-async function openMarketBrain(page: Page, context: BrowserContext) {
+async function openMarketBrain(
+  page: Page,
+  context: BrowserContext,
+  opts: { latest?: unknown } = {},
+) {
+  await context.route("**/api/market/latest**", (route) => json(route, opts.latest ?? emptyLatest));
   await context.route(
     new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`),
     async (route: Route) => {
@@ -137,12 +171,12 @@ async function openMarketBrain(page: Page, context: BrowserContext) {
   await expect(page.getByText("Loading workspace…")).toHaveCount(0, { timeout: 15_000 });
   await page.getByRole("button", { name: /expand marketing coach/i }).click();
   await expect(page.getByText("Your next best move is ready")).toBeVisible({ timeout: 15_000 });
-  await page.getByRole("tab", { name: /market/i }).click();
+  await page.getByRole("tab", { name: /^market/i }).click();
   await expect(page.getByTestId("market-brain")).toBeVisible();
-  await expect(page.getByText("Set your market lens")).toBeVisible();
 }
 
 async function scan(page: Page) {
+  await expect(page.getByText("Set your market lens")).toBeVisible();
   await page.getByLabel("Market keywords").fill("AI marketing");
   await page.getByRole("button", { name: /scan/i }).click();
 }
@@ -185,8 +219,99 @@ test.describe("Market Brain UI", () => {
     await expect(page.getByText(/market data is still being collected/i)).toBeVisible();
     await expect(page.getByText("Market pulse")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Interest around AI marketing is strong/i)).toBeVisible();
-    await expect(page.getByText("What’s changing")).toBeVisible();
-    await expect(page.getByText("What to do next")).toBeVisible();
+    await expect(page.getByTestId("market-brain-kpis")).toContainText("Interest now");
+    await expect(page.getByRole("tab", { name: /next moves/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.getByText("Publish one practical explainer.")).toBeVisible();
+    await page.getByRole("tab", { name: /signals/i }).click();
+    await expect(page.getByText("Strong search interest")).toBeVisible();
+  });
+
+  test("shows the stored result on open without starting a scan, and after reopening", async ({
+    page,
+    context,
+  }) => {
+    let scans = 0;
+    await context.route("**/api/market/trends**", (route) => {
+      scans += 1;
+      return json(route, completedCollection);
+    });
+
+    await openMarketBrain(page, context, { latest: storedLatest });
+    await expect(page.getByText("Market pulse")).toBeVisible();
+    await expect(page.getByTestId("market-brain-kpis")).toContainText("Interest now");
+    await expect(page.getByTestId("market-brain-lens")).toContainText("United States");
+    await expect(page.getByTestId("market-brain-freshness")).toContainText("Updated 2h ago");
+    await expect(page.getByText("Set your market lens")).toHaveCount(0);
+
+    await page.getByRole("button", { name: /collapse marketing coach/i }).click();
+    await page.getByRole("button", { name: /expand marketing coach/i }).click();
+    await expect(page.getByText("Market pulse")).toBeVisible();
+    expect(scans).toBe(0);
+  });
+
+  test("maximizes the coach into a popup without interrupting a running scan", async ({
+    page,
+    context,
+  }) => {
+    let polls = 0;
+    await context.route("**/api/market/trends**", (route) => {
+      if (route.request().method() === "POST")
+        return json(route, { success: true, state: "pending", collectionId: COLLECTION_ID });
+      polls += 1;
+      return polls >= 3
+        ? json(route, completedCollection)
+        : json(route, { success: true, state: "pending", collectionId: COLLECTION_ID });
+    });
+    await context.route("**/api/market/intelligence**", (route) =>
+      json(route, {
+        success: true,
+        state: "completed",
+        collectionId: COLLECTION_ID,
+        data: intelligence,
+      }),
+    );
+
+    await openMarketBrain(page, context);
+    await scan(page);
+    await expect(page.getByTestId("market-brain-pending")).toBeVisible();
+
+    await page.getByRole("button", { name: /maximize marketing coach/i }).click();
+    const dialog = page.getByTestId("marketing-coach-maximized");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId("market-brain")).toBeVisible();
+    await expect(dialog.getByText("Market pulse")).toBeVisible({ timeout: 25_000 });
+
+    await page.getByRole("button", { name: /restore marketing coach/i }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText("Market pulse")).toBeVisible();
+
+    await page.getByRole("button", { name: /maximize marketing coach/i }).click();
+    await expect(page.getByTestId("marketing-coach-maximized")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("marketing-coach-maximized")).toHaveCount(0);
+  });
+
+  test("fits a phone-sized screen without horizontal scrolling", async ({ page, context }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await openMarketBrain(page, context, { latest: storedLatest });
+    await expect(page.getByText("Market pulse")).toBeVisible();
+    const panelOverflow = await page
+      .getByTestId("market-brain")
+      .evaluate((element) => element.scrollWidth - element.clientWidth);
+    expect(panelOverflow).toBeLessThanOrEqual(1);
+
+    await page.getByRole("button", { name: /maximize marketing coach/i }).click();
+    const dialog = page.getByTestId("marketing-coach-maximized");
+    await expect(dialog.getByText("Market pulse")).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box?.width).toBeLessThanOrEqual(376);
+    const dialogOverflow = await dialog
+      .getByTestId("market-brain")
+      .evaluate((element) => element.scrollWidth - element.clientWidth);
+    expect(dialogOverflow).toBeLessThanOrEqual(1);
   });
 
   test("keeps the trend evidence and shows the provider reason when analysis fails, then retries", async ({
@@ -266,5 +391,59 @@ test.describe("Market Brain UI", () => {
     await expect(alert).toContainText("Google Trends collection failed");
     await expect(alert).toContainText("Payment Required");
     await expect(alert).toContainText("retry available in 42s");
+  });
+
+  test("keeps visible progress moving during a scan and keeps old results while refreshing", async ({
+    page,
+    context,
+  }) => {
+    let polls = 0;
+    await context.route("**/api/market/trends**", async (route) => {
+      if (route.request().method() === "POST")
+        return json(route, { success: true, state: "pending", collectionId: COLLECTION_ID });
+      polls += 1;
+      return polls % 3 === 0
+        ? json(route, completedCollection)
+        : json(route, { success: true, state: "pending", collectionId: COLLECTION_ID });
+    });
+    await context.route("**/api/market/intelligence**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      return json(route, {
+        success: true,
+        state: "completed",
+        collectionId: COLLECTION_ID,
+        data: { ...intelligence, generatedAt: new Date().toISOString() },
+      });
+    });
+
+    await openMarketBrain(page, context);
+    await scan(page);
+
+    const progress = page.getByTestId("market-brain-pending").getByRole("progressbar");
+    await expect(progress).toBeVisible();
+    await expect(page.getByTestId("market-brain-skeleton")).toBeVisible();
+    await expect(page.locator('[aria-current="step"]')).toContainText("Google Trends");
+    const firstValue = Number(await progress.getAttribute("aria-valuenow"));
+    const firstClock = await page
+      .getByTestId("market-brain-pending")
+      .getByText(/^\d+:\d{2}$/)
+      .textContent();
+    await page.waitForTimeout(2_200);
+    expect(Number(await progress.getAttribute("aria-valuenow"))).toBeGreaterThan(firstValue);
+    await expect(page.getByTestId("market-brain-pending").getByText(/^\d+:\d{2}$/)).not.toHaveText(
+      firstClock ?? "",
+    );
+
+    await expect(page.getByText(/Ravi is analyzing your market/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('[aria-current="step"]')).toContainText("Analysis");
+    await expect(page.getByText("Market pulse")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("market-brain-pending")).toHaveCount(0);
+
+    // Refresh: the previous result stays on screen while the new scan runs.
+    await page.getByRole("button", { name: /refresh market signals/i }).click();
+    await expect(page.getByTestId("market-brain-pending")).toBeVisible();
+    await expect(page.getByText("Market pulse")).toBeVisible();
+    await expect(page.getByTestId("market-brain-pending")).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.getByText("Market pulse")).toBeVisible();
   });
 });

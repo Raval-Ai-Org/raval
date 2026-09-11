@@ -108,6 +108,9 @@ import { useRealtimeContent } from "@/hooks/use-realtime-content";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
+import { Activity } from "lucide-react";
+import { OperationsInbox } from "@/components/app/OperationsInbox";
+import { UsagePanel } from "@/components/app/UsagePanel";
 
 // Shape of the deep-link query params (?tab, ?canvas, ?artifact, ?invite_token,
 // ?next) that the Analytics/Studio URL persistence depends on. Next's
@@ -963,6 +966,19 @@ function AppShell() {
                   brandKeywords={brandDna.keywords}
                 />
               </Suspense>
+              <button
+                type="button"
+                onClick={() => emitAppEvent("open:operations")}
+                aria-label="Open Operations inbox"
+                title="Operations inbox — agent findings and approvals"
+                className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-2 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Activity className="h-3.5 w-3.5" aria-hidden />
+                <span className="hidden lg:inline">Operations</span>
+              </button>
+              {/* Self-mounting panels: they open on open:operations / open:usage. */}
+              <OperationsInbox />
+              <UsagePanel />
               <button
                 type="button"
                 onClick={() => emitAppEvent("toggle:studio")}

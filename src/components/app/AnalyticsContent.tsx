@@ -1053,7 +1053,7 @@ function SocialPanel() {
     { label: "Scheduled posts", value: String(totals?.scheduled ?? 0) },
     { label: `Published (${days}d)`, value: String(totals?.published ?? 0) },
 
-    { label: "Active automations", value: String(upcoming.length) },
+    { label: "Upcoming posts", value: String(upcoming.length) },
     { label: "Channels in use", value: String(byChannel.length) },
   ];
 
@@ -1217,111 +1217,19 @@ function ContentPanel() {
 /* -------------------- Audience -------------------- */
 
 function AudiencePanel() {
-  const segments = [
-    { name: "AI-curious marketers", size: 38, color: "#2D7EF8" },
-    { name: "SaaS founders", size: 24, color: "#10A37F" },
-    { name: "Agency owners", size: 18, color: "#F59E0B" },
-    { name: "In-house SEO leads", size: 12, color: "#A855F7" },
-    { name: "Other", size: 8, color: "#94A3B8" },
-  ];
-  const geo = [
-    { country: "United States", pct: 42 },
-    { country: "India", pct: 14 },
-    { country: "United Kingdom", pct: 9 },
-    { country: "Germany", pct: 7 },
-    { country: "Canada", pct: 6 },
-    { country: "Rest of world", pct: 22 },
-  ];
+  // No audience data source is connected, so nothing is shown as measured.
+  // (This panel used to render invented segments, geography and session
+  // counts as if they were real.)
   return (
-    <>
-      <PanelIntro
-        tone="violet"
-        headline="Your audience is mostly AI-curious marketers in the US."
-        sentence={
-          <>
-            The top segment makes up <b>38%</b> of visits, mostly from the United States. Tailor
-            your next 2 pages to their language to lift signal score.
-          </>
-        }
-        ask="Write 2 pages tuned to AI-curious marketers"
-      />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {[
-          { label: "Sessions (30d)", value: "62.4K" },
-          { label: "New vs return", value: "61 / 39" },
-          { label: "Avg. session", value: "2m 14s" },
-          { label: "Signal score", value: "78" },
-        ].map((k) => (
-          <div key={k.label} className="rounded-2xl border border-border bg-card/70 p-4">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              {k.label}
-            </div>
-            <div className="mt-2 text-xl font-semibold tabular-nums">{k.value}</div>
-          </div>
-        ))}
+    <Section title="Audience" subtitle="Who your content reaches">
+      <div className="rounded-xl border border-dashed border-border p-6 text-center">
+        <p className="text-[13px] font-medium">No audience data connected yet</p>
+        <p className="mx-auto mt-1 max-w-md text-[12px] text-muted-foreground">
+          Audience segments, geography and session metrics appear here once a web or social
+          analytics source is connected. Until then Mellox AI won&apos;t estimate them.
+        </p>
       </div>
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Section title="Segments" subtitle="Who's showing up most this month">
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={segments}
-                  dataKey="size"
-                  nameKey="name"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={2}
-                >
-                  {segments.map((s) => (
-                    <Cell key={s.name} fill={s.color} stroke="hsl(var(--card))" strokeWidth={2} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    background: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: 10,
-                    fontSize: 12,
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <ul className="mt-2 space-y-1.5">
-            {segments.map((s) => (
-              <li key={s.name} className="flex items-center justify-between text-[11.5px]">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
-                  {s.name}
-                </span>
-                <span className="tabular-nums text-muted-foreground">{s.size}%</span>
-              </li>
-            ))}
-          </ul>
-        </Section>
-
-        <Section title="Geography" subtitle="Top countries by traffic share">
-          <ul className="space-y-2.5">
-            {geo.map((g) => (
-              <li key={g.country}>
-                <div className="mb-1 flex items-center justify-between text-[12px]">
-                  <span className="font-medium">{g.country}</span>
-                  <span className="tabular-nums text-muted-foreground">{g.pct}%</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary"
-                    style={{ width: `${g.pct * 2.2}%` }}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      </div>
-    </>
+    </Section>
   );
 }
 
