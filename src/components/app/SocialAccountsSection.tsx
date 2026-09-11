@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -79,11 +80,11 @@ export function SocialAccountsSection({ variant, onManage }: Props) {
 
   useEffect(() => {
     const onChange = () => void refresh();
-    window.addEventListener("connections:changed", onChange);
-    window.addEventListener("content:changed", onChange);
+    addAppEventListener("connections:changed", onChange);
+    addAppEventListener("content:changed", onChange);
     return () => {
-      window.removeEventListener("connections:changed", onChange);
-      window.removeEventListener("content:changed", onChange);
+      removeAppEventListener("connections:changed", onChange);
+      removeAppEventListener("content:changed", onChange);
     };
   }, [refresh]);
 
@@ -117,7 +118,7 @@ export function SocialAccountsSection({ variant, onManage }: Props) {
     try {
       await disconnectAccount(workspaceId, accountId);
       await refresh();
-      window.dispatchEvent(new CustomEvent("connections:changed"));
+      emitAppEvent("connections:changed");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to disconnect");
     } finally {

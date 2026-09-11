@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useState, useCallback } from "react";
 import type { CanvasType } from "@/lib/studio";
 
@@ -79,10 +80,11 @@ export function useStudioCanvas() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === "j" || e.key === "J")) {
         e.preventDefault();
-        onOpen(new CustomEvent("open:canvas"));
+        // Same path as any other "open Studio" request: the last canvas, or social-post.
+        emitAppEvent("open:canvas");
       }
     };
-    window.addEventListener("open:canvas", onOpen as EventListener);
+    addAppEventListener("open:canvas", onOpen);
     window.addEventListener("keydown", onKey);
     // Hydrate from URL on mount so `/app?canvas=<type>&artifact=<id>` opens
     // the canvas on a fresh load / refresh, matching the write path in open().
@@ -96,7 +98,7 @@ export function useStudioCanvas() {
     }
 
     return () => {
-      window.removeEventListener("open:canvas", onOpen as EventListener);
+      removeAppEventListener("open:canvas", onOpen);
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);

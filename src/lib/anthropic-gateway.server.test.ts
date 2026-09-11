@@ -51,3 +51,81 @@ describe("selectClaudeModel", () => {
     expect(request).not.toHaveProperty("top_k");
   });
 });
+
+describe("claudeTextPrompt output handling", () => {
+  function respond(body: Record<string, unknown>) {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  const schema = { type: "object", additionalProperties: false, properties: {}, required: [] };
+
+  it("sends effort and the JSON schema through output_config", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    const fetchMock = respond({
+      stop_reason: "end_turn",
+      content: [{ type: "text", text: "{}" }],
+    });
+
+    await claudeTextPrompt({
+      route: "market-intelligence",
+      system: "s",
+      user: "u",
+      model: CLAUDE_OPUS_MODEL,
+      maxTokens: 16_000,
+      effort: "medium",
+      outputSchema: schema,
+    });
+
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(request.max_tokens).toBe(16_000);
+    expect(request.output_config).toEqual({
+      effort: "medium",
+      format: { type: "json_schema", schema },
+    });
+  });
+
+  // Regression: Opus 5 thinks by default and thinking shares max_tokens; a cut-off
+  // JSON answer used to be returned as if complete and fail downstream parsing.
+  it("rejects structured output cut off at max_tokens", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    respond({
+      stop_reason: "max_tokens",
+      usage: { output_tokens: 3000 },
+      content: [{ type: "text", text: '{"summary":"partial' }],
+    });
+
+    await expect(
+      claudeTextPrompt({
+        route: "market-intelligence",
+        system: "s",
+        user: "u",
+        outputSchema: schema,
+      }),
+    ).rejects.toMatchObject({ code: "max_tokens" });
+  });
+
+  it("keeps partial free text at max_tokens for callers without a schema", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    respond({ stop_reason: "max_tokens", content: [{ type: "text", text: "partial prose" }] });
+
+    await expect(claudeTextPrompt({ route: "chat", system: "s", user: "u" })).resolves.toBe(
+      "partial prose",
+    );
+  });
+
+  it("surfaces refusals as their own error", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    respond({ stop_reason: "refusal", content: [] });
+
+    await expect(
+      claudeTextPrompt({ route: "market-intelligence", system: "s", user: "u" }),
+    ).rejects.toMatchObject({ code: "refusal", status: 422 });
+  });
+});

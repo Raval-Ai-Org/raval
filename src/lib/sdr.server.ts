@@ -7,6 +7,7 @@
 // Wire identifiers use `twitter` (matching the SDR contract + RavalAI PlatformId),
 // NOT `x` (the display label only). See specs/001-sdr-integration (F1).
 
+import "server-only";
 import { createHmac, createHash, timingSafeEqual } from "node:crypto";
 
 export const SDR_PLATFORMS = ["twitter", "linkedin", "facebook", "instagram"] as const;

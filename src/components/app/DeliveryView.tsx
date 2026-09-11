@@ -7,6 +7,7 @@
 // webhook-fed content_publications mirror); the panel re-fetches on
 // content:changed so webhook-driven updates appear without a manual refresh
 // (R2d). Empty state = the item has no SDR delivery rows (not distributed).
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -125,8 +126,8 @@ export function DeliveryView({
     // R2d: re-fetch on content:changed so webhook-driven status updates appear
     // without a manual refresh (US4 / SC-002).
     const onChange = () => void load();
-    window.addEventListener("content:changed", onChange);
-    return () => window.removeEventListener("content:changed", onChange);
+    addAppEventListener("content:changed", onChange);
+    return () => removeAppEventListener("content:changed", onChange);
   }, [load]);
 
   if (rows === null) {

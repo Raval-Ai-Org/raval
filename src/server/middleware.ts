@@ -1,6 +1,7 @@
 // Minimal middleware primitive for server functions: a middleware receives
 // `{ next, context }` and calls `next({ context })` to contribute to the context
 // the handler eventually sees.
+import "server-only";
 export type MiddlewareContext = Record<string, unknown>;
 
 export type NextFn = (options?: { context?: MiddlewareContext }) => Promise<MiddlewareResult>;

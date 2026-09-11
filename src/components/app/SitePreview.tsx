@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -124,11 +125,11 @@ export function SitePreview({ workspaceId }: { workspaceId: string | null }) {
       });
     };
     const onIdle = () => setWorking((w) => ({ ...w, active: false }));
-    window.addEventListener("chat:working", onWorking as EventListener);
-    window.addEventListener("chat:idle", onIdle);
+    addAppEventListener("chat:working", onWorking);
+    addAppEventListener("chat:idle", onIdle);
     return () => {
-      window.removeEventListener("chat:working", onWorking as EventListener);
-      window.removeEventListener("chat:idle", onIdle);
+      removeAppEventListener("chat:working", onWorking);
+      removeAppEventListener("chat:idle", onIdle);
     };
   }, []);
 

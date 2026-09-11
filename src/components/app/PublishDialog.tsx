@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Slot } from "@radix-ui/react-slot";
@@ -46,8 +47,8 @@ export function PublishDialog({ workspaceId, children }: Props) {
 
   useEffect(() => {
     const h = () => setOpen(true);
-    window.addEventListener("open:publish", h);
-    return () => window.removeEventListener("open:publish", h);
+    addAppEventListener("open:publish", h);
+    return () => removeAppEventListener("open:publish", h);
   }, []);
 
   // Load pending approvals

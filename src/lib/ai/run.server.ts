@@ -2,9 +2,11 @@
 // structured response or a tool call goes through here — one place to
 // tune caching, token caps, models, and telemetry.
 
+import "server-only";
 import {
   chatCompletion,
   extractionCompletion,
+  CHAT_MODEL,
   EXTRACTION_MODEL,
   AiGatewayError,
 } from "@/lib/ai-gateway.server";
@@ -60,7 +62,7 @@ export async function runJsonPrompt<T>(opts: RunJsonOpts<T>): Promise<T> {
     const output = String(raw);
     logAiCall({
       route: opts.route,
-      model: opts.model ?? (isExtraction ? EXTRACTION_MODEL : "qwen/qwen3-max"),
+      model: opts.model ?? (isExtraction ? EXTRACTION_MODEL : CHAT_MODEL),
       inputChars,
       outputChars: output.length,
       cached: json?._cached === true,
@@ -115,7 +117,7 @@ export async function runTool<T>(opts: RunToolOpts): Promise<T | null> {
   const argsStr = call?.function?.arguments ?? "";
   logAiCall({
     route: opts.route,
-    model: "qwen/qwen3-max",
+    model: CHAT_MODEL,
     inputChars,
     outputChars: String(argsStr).length,
     cached: false,

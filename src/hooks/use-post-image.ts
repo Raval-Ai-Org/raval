@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -70,8 +71,8 @@ export function usePostImage(args: {
         setImage(getCachedImage(postId, activeSize));
       }
     };
-    window.addEventListener("post-image:cached", onCached as EventListener);
-    return () => window.removeEventListener("post-image:cached", onCached as EventListener);
+    addAppEventListener("post-image:cached", onCached);
+    return () => removeAppEventListener("post-image:cached", onCached);
   }, [postId, activeSize]);
 
   const cancel = useCallback(() => {

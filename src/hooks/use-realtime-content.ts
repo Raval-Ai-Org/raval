@@ -1,5 +1,6 @@
 "use client";
 
+import { emitAppEvent } from "@/lib/app-events";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -26,7 +27,7 @@ export function useRealtimeContent(workspaceId: string | null) {
         },
         (payload) => {
           try {
-            window.dispatchEvent(new CustomEvent("content:changed", { detail: payload }));
+            emitAppEvent("content:changed", payload);
           } catch {
             /* noop */
           }
@@ -42,7 +43,7 @@ export function useRealtimeContent(workspaceId: string | null) {
         },
         (payload) => {
           try {
-            window.dispatchEvent(new CustomEvent("approvals:changed", { detail: payload }));
+            emitAppEvent("approvals:changed", payload);
           } catch {
             /* noop */
           }

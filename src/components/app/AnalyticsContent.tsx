@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useState, createContext, useContext, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@/lib/use-server-fn";
@@ -69,10 +70,10 @@ function useActiveWorkspaceId(): string | null {
       else read();
     };
     window.addEventListener("storage", read);
-    window.addEventListener("workspace:changed", onWorkspaceChanged);
+    addAppEventListener("workspace:changed", onWorkspaceChanged);
     return () => {
       window.removeEventListener("storage", read);
-      window.removeEventListener("workspace:changed", onWorkspaceChanged);
+      removeAppEventListener("workspace:changed", onWorkspaceChanged);
     };
   }, []);
   return id;
@@ -170,11 +171,11 @@ function useAnalyticsSummary(workspaceId: string | null) {
       qc.invalidateQueries({ queryKey: ["analytics-summary", workspaceId] });
       qc.invalidateQueries({ queryKey: ["analytics-drilldown", workspaceId] });
     };
-    window.addEventListener("geo:audit-complete", invalidate);
-    window.addEventListener("workspace:changed", invalidate);
+    addAppEventListener("geo:audit-complete", invalidate);
+    addAppEventListener("workspace:changed", invalidate);
     return () => {
-      window.removeEventListener("geo:audit-complete", invalidate);
-      window.removeEventListener("workspace:changed", invalidate);
+      removeAppEventListener("geo:audit-complete", invalidate);
+      removeAppEventListener("workspace:changed", invalidate);
     };
   }, [qc, workspaceId]);
   return query;
@@ -452,8 +453,8 @@ function PanelIntro({
           {ask && (
             <button
               onClick={() => {
-                window.dispatchEvent(new CustomEvent("chat:prefill", { detail: ask }));
-                window.dispatchEvent(new CustomEvent("chat:focus"));
+                emitAppEvent("chat:prefill", ask);
+                emitAppEvent("chat:focus");
               }}
               className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-[12px] font-medium text-foreground/85 backdrop-blur transition hover:-translate-y-0.5 hover:border-foreground/30 hover:text-foreground"
             >
@@ -631,7 +632,7 @@ function OverviewPanel() {
             ].map((p) => (
               <button
                 key={p}
-                onClick={() => window.dispatchEvent(new CustomEvent("chat:prefill", { detail: p }))}
+                onClick={() => emitAppEvent("chat:prefill", p)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-[12px] font-medium text-foreground/85 backdrop-blur transition hover:-translate-y-0.5 hover:border-foreground/30 hover:text-foreground"
               >
                 {p} <ArrowUpRight className="h-3 w-3" />
@@ -967,7 +968,7 @@ function OrganicPanel() {
           </div>
           {!audit && !isLoading && (
             <button
-              onClick={() => window.dispatchEvent(new CustomEvent("open:visibility"))}
+              onClick={() => emitAppEvent("open:ai-visibility")}
               className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-3 py-2 text-[12px] font-medium hover:border-foreground/30"
             >
               Run first visibility audit <ArrowUpRight className="h-3 w-3" />

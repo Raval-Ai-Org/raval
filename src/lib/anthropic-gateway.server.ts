@@ -1,4 +1,6 @@
+import "server-only";
 import { safeParseJson } from "@/lib/ai/json";
+import { fetchWithRetry, UpstreamError } from "@/server/upstream";
 
 export const CLAUDE_SONNET_MODEL = "claude-sonnet-5";
 export const CLAUDE_OPUS_MODEL = "claude-opus-5";
@@ -14,15 +16,10 @@ export function selectClaudeModel(
   return CLAUDE_SONNET_MODEL;
 }
 
-export class AnthropicGatewayError extends Error {
-  status: number;
-  code?: string;
-
+export class AnthropicGatewayError extends UpstreamError {
   constructor(status: number, message: string, code?: string) {
-    super(message);
+    super(status, message, { provider: "anthropic", code });
     this.name = "AnthropicGatewayError";
-    this.status = status;
-    this.code = code;
   }
 }
 
@@ -38,162 +35,134 @@ function getAnthropicKey(): string {
   return key;
 }
 
-function isRetryableStatus(status: number): boolean {
-  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
-}
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
-  timeoutMessage: string,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } catch (error: unknown) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new AnthropicGatewayError(504, timeoutMessage, "timeout");
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    throw new AnthropicGatewayError(
-      502,
-      `Claude request failed while contacting the API: ${message.slice(0, 200)}`,
-      "network_error",
-    );
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 async function requestClaude(
   payload: Record<string, unknown>,
   timeoutMs = 60_000,
   route = "unknown",
+  retries?: number,
 ): Promise<any> {
   const apiKey = getAnthropicKey();
-  const url = "https://api.anthropic.com/v1/messages";
 
-  let lastError: unknown;
-  const retries = 2;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const res = await fetchWithTimeout(
-        url,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-            "User-Agent": "MelloxAI/1.0",
-          },
-          body: JSON.stringify(payload),
-        },
-        timeoutMs,
-        "Claude did not respond in time. Please retry.",
+  const res = await fetchWithRetry(
+    "https://api.anthropic.com/v1/messages",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "User-Agent": "MelloxAI/1.0",
+      },
+      body: JSON.stringify(payload),
+    },
+    {
+      timeoutMs,
+      retries,
+      // Anthropic returns 500 for transient failures, 529 for overload, plus 5xx gateway errors.
+      retryableStatuses: [429, 500, 502, 503, 504, 529],
+      onTransportError: ({ kind, detail }) =>
+        kind === "timeout"
+          ? new AnthropicGatewayError(
+              504,
+              "Claude did not respond in time. Please retry.",
+              "timeout",
+            )
+          : new AnthropicGatewayError(
+              502,
+              `Claude request failed while contacting the API: ${detail}`,
+              "network_error",
+            ),
+    },
+  );
+
+  if (!res.ok) {
+    const raw = await res.text().catch(() => "");
+    const status = res.status;
+    const requestId = res.headers.get("request-id") || res.headers.get("x-request-id");
+    console.error("Claude request failed", {
+      route,
+      provider: "anthropic",
+      model: payload.model ?? "unknown",
+      status,
+      requestId: requestId || undefined,
+      category: status === 400 ? "invalid_request" : status === 401 ? "auth" : "provider_error",
+    });
+    if (status === 401) {
+      throw new AnthropicGatewayError(
+        401,
+        "Claude rejected the API key. Check ANTHROPIC_API_KEY.",
+        "invalid_api_key",
       );
-
-      if (!res.ok) {
-        const raw = await res.text().catch(() => "");
-        const message = raw.slice(0, 300);
-        const status = res.status;
-        const requestId = res.headers.get("request-id") || res.headers.get("x-request-id");
-        console.error("Claude request failed", {
-          route,
-          provider: "anthropic",
-          model: payload.model ?? "unknown",
-          status,
-          requestId: requestId || undefined,
-          category: status === 400 ? "invalid_request" : status === 401 ? "auth" : "provider_error",
-        });
-        if (isRetryableStatus(status) && attempt < retries) {
-          const delayMs = 500 * Math.pow(2, attempt);
-          await sleep(delayMs);
-          continue;
-        }
-        if (status === 401) {
-          throw new AnthropicGatewayError(
-            401,
-            "Claude rejected the API key. Check ANTHROPIC_API_KEY.",
-            "invalid_api_key",
-          );
-        }
-        if (status === 429) {
-          throw new AnthropicGatewayError(
-            429,
-            "Claude rate limit reached. Please try again in a moment.",
-            "rate_limited",
-          );
-        }
-        throw new AnthropicGatewayError(
-          status || 502,
-          message || "Claude request failed.",
-          "provider_error",
-        );
-      }
-
-      let json: any;
-      try {
-        json = await res.json();
-      } catch {
-        throw new AnthropicGatewayError(
-          502,
-          "Claude returned malformed JSON.",
-          "malformed_response",
-        );
-      }
-
-      if (!json?.content || !Array.isArray(json.content)) {
-        throw new AnthropicGatewayError(
-          502,
-          "Claude returned an unexpected response shape.",
-          "malformed_response",
-        );
-      }
-
-      return json;
-    } catch (error) {
-      lastError = error;
-      if (error instanceof AnthropicGatewayError && !isRetryableStatus(error.status)) {
-        throw error;
-      }
-      if (attempt >= retries) {
-        throw error instanceof AnthropicGatewayError
-          ? error
-          : new AnthropicGatewayError(502, "Claude request failed unexpectedly.", "provider_error");
-      }
-      await sleep(500 * Math.pow(2, attempt));
     }
+    if (status === 429) {
+      throw new AnthropicGatewayError(
+        429,
+        "Claude rate limit reached. Please try again in a moment.",
+        "rate_limited",
+      );
+    }
+    throw new AnthropicGatewayError(
+      status || 502,
+      raw.slice(0, 300) || "Claude request failed.",
+      "provider_error",
+    );
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new AnthropicGatewayError(502, "Claude request failed unexpectedly.", "provider_error");
+  let json: any;
+  try {
+    json = await res.json();
+  } catch {
+    throw new AnthropicGatewayError(502, "Claude returned malformed JSON.", "malformed_response");
+  }
+  if (!json?.content || !Array.isArray(json.content)) {
+    throw new AnthropicGatewayError(
+      502,
+      "Claude returned an unexpected response shape.",
+      "malformed_response",
+    );
+  }
+  return json;
 }
+
+export type ClaudeEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export async function claudeTextPrompt(opts: {
   route: string;
   system: string;
   user: string;
   model?: string;
+  /**
+   * Output ceiling. On Claude Opus 5 adaptive thinking is on by default and its
+   * tokens count against this ceiling, so it must cover thinking + the answer.
+   */
   maxTokens?: number;
+  /** output_config.effort — bounds thinking depth, and with it latency and spend. */
+  effort?: ClaudeEffort;
+  /**
+   * JSON Schema for structured output (output_config.format). Only the subset the
+   * API supports: no string-length or numeric constraints, additionalProperties: false.
+   */
+  outputSchema?: Record<string, unknown>;
+  timeoutMs?: number;
+  retries?: number;
 }): Promise<string> {
   const model = opts.model ?? selectClaudeModel("default");
+  const outputConfig: Record<string, unknown> = {};
+  if (opts.effort) outputConfig.effort = opts.effort;
+  if (opts.outputSchema) {
+    outputConfig.format = { type: "json_schema", schema: opts.outputSchema };
+  }
   const response = await requestClaude(
     {
       model,
-      max_tokens: Math.max(256, Math.min(opts.maxTokens ?? 1800, 8192)),
+      max_tokens: Math.max(256, Math.min(opts.maxTokens ?? 1800, 16_000)),
       system: opts.system,
       messages: [{ role: "user", content: opts.user }],
+      ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),
     },
-    60_000,
+    opts.timeoutMs ?? 60_000,
     opts.route,
+    opts.retries,
   );
 
   const parts = response?.content ?? [];
@@ -201,6 +170,29 @@ export async function claudeTextPrompt(opts: {
     .map((part: any) => (part?.type === "text" ? part.text : ""))
     .join("")
     .trim();
+
+  const stopReason: unknown = response?.stop_reason;
+  if (stopReason === "refusal") {
+    console.error("Claude declined request", { route: opts.route, model });
+    throw new AnthropicGatewayError(422, `Claude declined to answer for ${opts.route}.`, "refusal");
+  }
+  if (stopReason === "max_tokens") {
+    console.error("Claude output truncated at max_tokens", {
+      route: opts.route,
+      model,
+      maxTokens: opts.maxTokens,
+      outputTokens: response?.usage?.output_tokens,
+    });
+    // Truncated structured output is never valid; free-text callers keep the
+    // partial text (existing behavior) but the truncation is now logged.
+    if (opts.outputSchema) {
+      throw new AnthropicGatewayError(
+        502,
+        `Claude output for ${opts.route} was cut off before completion.`,
+        "max_tokens",
+      );
+    }
+  }
 
   if (!text) {
     throw new AnthropicGatewayError(

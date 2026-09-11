@@ -1,5 +1,7 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
+import { appendNote } from "@/lib/notes-store";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,8 +96,8 @@ export function ClientPortalButton({ workspaceId }: { workspaceId: string | null
 
   useEffect(() => {
     const h = () => setOpen(true);
-    window.addEventListener("open:client-portal", h);
-    return () => window.removeEventListener("open:client-portal", h);
+    addAppEventListener("open:client-portal", h);
+    return () => removeAppEventListener("open:client-portal", h);
   }, []);
 
   // Poll pending count cheap
@@ -333,17 +335,20 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
   };
 
   const saveToMemory = async (ev: EventRow) => {
+    if (!workspaceId) return;
     setBusy(ev.id);
     try {
-      // Use existing memory note bus
-      const note = {
-        id: crypto.randomUUID(),
-        title: `Client suggestion · ${ev.actor_name ?? "client"}`,
-        body: ev.body ?? "",
-        createdAt: Date.now(),
-        source: "client" as const,
-      };
-      window.dispatchEvent(new CustomEvent("memory:add-note", { detail: note }));
+      // Written straight to the workspace's notes so it is kept even when the
+      // Notes panel isn't open; a mounted panel refreshes via notes:changed.
+      const text = [`Client suggestion · ${ev.actor_name ?? "client"}`, ev.body ?? ""]
+        .filter(Boolean)
+        .join("\n\n");
+      if (!appendNote(workspaceId, { text, color: "sky" })) {
+        toast.error("Couldn't save to Memory", {
+          description: "Browser storage is unavailable.",
+        });
+        return;
+      }
       await decide(ev.id, "applied");
       toast.success("Saved to Memory");
     } finally {

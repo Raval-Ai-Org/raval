@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { Link, useNavigate } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
 import { useEffect, useMemo, useState } from "react";
@@ -251,12 +252,12 @@ function AgencyHQ() {
     const onLocal = () => {
       void refreshFromDb(ids);
     };
-    window.addEventListener("content:changed", onLocal);
-    window.addEventListener("approvals:changed", onLocal);
+    addAppEventListener("content:changed", onLocal);
+    addAppEventListener("approvals:changed", onLocal);
     return () => {
       supabase.removeChannel(channel);
-      window.removeEventListener("content:changed", onLocal);
-      window.removeEventListener("approvals:changed", onLocal);
+      removeAppEventListener("content:changed", onLocal);
+      removeAppEventListener("approvals:changed", onLocal);
     };
   }, [clients]);
 
@@ -465,8 +466,8 @@ function AgencyHQ() {
         }
       }
       // Notify any open Studio rail / Calendar so they refresh too.
-      window.dispatchEvent(new CustomEvent("content:changed"));
-      window.dispatchEvent(new CustomEvent("approvals:changed"));
+      emitAppEvent("content:changed");
+      emitAppEvent("approvals:changed");
       const wsId = combinedApprovals.find((a) => a.id === id)?.clientId;
       if (wsId) void logAudit(wsId, decision === "approved" ? "approve" : "reject", id);
       toast.success(decision === "approved" ? "Approved" : "Rejected", {
@@ -508,7 +509,7 @@ function AgencyHQ() {
         }
         setResolved((r) => ({ ...r, [id]: "approved" }));
       }
-      window.dispatchEvent(new CustomEvent("content:changed"));
+      emitAppEvent("content:changed");
       const wsId = combinedApprovals.find((a) => a.id === id)?.clientId;
       if (wsId) void logAudit(wsId, "publish", id);
       toast.success("Post submitted", {
@@ -579,8 +580,8 @@ function AgencyHQ() {
           .update({ status: "pending", decided_at: null })
           .in("id", approvalIds);
       }
-      window.dispatchEvent(new CustomEvent("content:changed"));
-      window.dispatchEvent(new CustomEvent("approvals:changed"));
+      emitAppEvent("content:changed");
+      emitAppEvent("approvals:changed");
       const wsIds = ids
         .map((id) => combinedApprovals.find((a) => a.id === id)?.clientId)
         .filter(Boolean) as string[];
@@ -628,8 +629,8 @@ function AgencyHQ() {
           return;
         }
       }
-      window.dispatchEvent(new CustomEvent("content:changed"));
-      window.dispatchEvent(new CustomEvent("approvals:changed"));
+      emitAppEvent("content:changed");
+      emitAppEvent("approvals:changed");
       const wsIdsA = ids
         .map((id) => combinedApprovals.find((a) => a.id === id)?.clientId)
         .filter(Boolean) as string[];
@@ -677,8 +678,8 @@ function AgencyHQ() {
           .update({ status: "rejected", decided_at: new Date().toISOString() })
           .in("id", approvalIds);
       }
-      window.dispatchEvent(new CustomEvent("content:changed"));
-      window.dispatchEvent(new CustomEvent("approvals:changed"));
+      emitAppEvent("content:changed");
+      emitAppEvent("approvals:changed");
       const wsIdsR = ids
         .map((id) => combinedApprovals.find((a) => a.id === id)?.clientId)
         .filter(Boolean) as string[];
@@ -729,7 +730,7 @@ function AgencyHQ() {
       }),
     );
     setBulkBusy(false);
-    window.dispatchEvent(new CustomEvent("content:changed"));
+    emitAppEvent("content:changed");
     toast.success(`Drafted ${created} items`, {
       description: "Fresh approvals across every brand.",
     });

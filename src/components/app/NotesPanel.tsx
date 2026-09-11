@@ -13,12 +13,12 @@ import {
   Search,
 } from "@/components/ui/gemini-icons";
 import { cn } from "@/lib/utils";
+import { useAppEvent } from "@/lib/app-events";
+import { newNoteId, readNotes, writeNotes, type Note, type NoteColor } from "@/lib/notes-store";
 
 /* -------------------- Storage -------------------- */
 
-const NOTES_PREFIX = "raval:notes:v1:";
 const OPEN_PREFIX = "raval:notes:open:v1:";
-const notesKey = (wsId: string) => `${NOTES_PREFIX}${wsId}`;
 const openKey = (wsId: string) => `${OPEN_PREFIX}${wsId}`;
 
 const PALETTE = [
@@ -48,32 +48,9 @@ const PALETTE = [
     bg: "bg-slate-50 dark:bg-slate-500/10",
     ring: "ring-slate-200/60 dark:ring-slate-500/20",
   },
-] as const;
-type PaletteName = (typeof PALETTE)[number]["name"];
+] as const satisfies readonly { name: NoteColor; bg: string; ring: string }[];
+type PaletteName = NoteColor;
 
-interface Note {
-  id: string;
-  text: string;
-  color: PaletteName;
-  pinned: boolean;
-  updatedAt: number;
-}
-
-function readNotes(wsId: string): Note[] {
-  try {
-    const raw = localStorage.getItem(notesKey(wsId));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Note[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-function writeNotes(wsId: string, notes: Note[]) {
-  try {
-    localStorage.setItem(notesKey(wsId), JSON.stringify(notes));
-  } catch {}
-}
 function readOpen(wsId: string): boolean {
   try {
     return localStorage.getItem(openKey(wsId)) === "1";
@@ -87,7 +64,7 @@ function writeOpen(wsId: string, v: boolean) {
   } catch {}
 }
 
-const rid = () => `n_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+const rid = newNoteId;
 
 /* -------------------- Panel -------------------- */
 
@@ -103,6 +80,10 @@ export function NotesPanel({ workspaceId }: { workspaceId: string }) {
     setNotes(readNotes(workspaceId));
     setOpen(readOpen(workspaceId));
   }, [workspaceId]);
+  // Notes added elsewhere (e.g. the client portal's "Save to Memory").
+  useAppEvent("notes:changed", (e) => {
+    if (e.detail.workspaceId === workspaceId) setNotes(readNotes(workspaceId));
+  });
   useEffect(() => writeNotes(workspaceId, notes), [workspaceId, notes]);
   useEffect(() => writeOpen(workspaceId, open), [workspaceId, open]);
 

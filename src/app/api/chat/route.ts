@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { jsonError, requireUserId } from "@/server/api-auth";
-import { chatCompletionStream, AiGatewayError } from "@/lib/ai-gateway.server";
+import { defineRoute } from "@/server/route";
+import { chatCompletionStream } from "@/lib/ai-gateway.server";
 import { chatSystem, chatContextBlock } from "@/lib/ai/prompts";
 import { compactHistory } from "@/lib/ai/history-compact";
 
@@ -19,21 +19,14 @@ const MessagesSchema = z.object({
   context: z.string().max(6000).optional(),
 });
 
-export async function POST(request: Request) {
-  const auth = await requireUserId(request);
-  if (!auth.ok) return auth.response;
-
-  let body: z.infer<typeof MessagesSchema>;
-  try {
-    body = MessagesSchema.parse(await request.json());
-  } catch {
-    return jsonError(400, "Invalid request body");
-  }
-
-  const safeMessages = compactHistory(body.messages.filter((m) => m.role !== "system") as never);
-
-  try {
-    return await chatCompletionStream({
+export const POST = defineRoute({
+  name: "chat",
+  auth: "user",
+  body: MessagesSchema,
+  rateLimit: "chat",
+  handler: ({ body }) => {
+    const safeMessages = compactHistory(body.messages.filter((m) => m.role !== "system") as never);
+    return chatCompletionStream({
       stream: true,
       messages: [
         { role: "system", content: chatSystem() },
@@ -41,8 +34,5 @@ export async function POST(request: Request) {
         ...safeMessages,
       ],
     });
-  } catch (e) {
-    if (e instanceof AiGatewayError) return jsonError(e.status, e.message);
-    throw e;
-  }
-}
+  },
+});

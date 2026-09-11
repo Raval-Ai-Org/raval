@@ -30,7 +30,10 @@ export type LibraryAsset = {
 const imageExts = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp"]);
 const videoExts = new Set([".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv", ".mpeg", ".mpg"]);
 
-export function inferLibraryAssetType(url?: string | null, mimeType?: string | null): LibraryAssetType {
+export function inferLibraryAssetType(
+  url?: string | null,
+  mimeType?: string | null,
+): LibraryAssetType {
   const normalized = (url ?? "").toLowerCase();
   const mime = (mimeType ?? "").toLowerCase();
 
@@ -74,7 +77,8 @@ export function normalizeLibraryAsset(input: {
 }): LibraryAsset {
   const url = input.media_url ?? null;
   const type = inferLibraryAssetType(url, input.mime_type ?? null);
-  const name = (input.title ?? getFilenameFromUrl(url) ?? "Untitled asset").trim() || "Untitled asset";
+  const name =
+    (input.title ?? getFilenameFromUrl(url) ?? "Untitled asset").trim() || "Untitled asset";
 
   return {
     id: input.id,

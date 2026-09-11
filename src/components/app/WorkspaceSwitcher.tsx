@@ -1,5 +1,6 @@
 "use client";
 
+import { emitAppEvent } from "@/lib/app-events";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
 import {
@@ -86,7 +87,7 @@ export function WorkspaceSwitcher({
       localStorage.setItem("workspace:selected", w.id);
       localStorage.setItem("workspace:name", name);
     } catch {}
-    window.dispatchEvent(new CustomEvent("workspace:changed", { detail: { id: w.id } }));
+    emitAppEvent("workspace:changed", { id: w.id });
     setOpen(false);
     onSwitch?.();
     // Hard reload to reinitialize all workspace-scoped state (chat, studio, brand DNA).

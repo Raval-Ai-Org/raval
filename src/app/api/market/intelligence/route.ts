@@ -1,8 +1,14 @@
 import { z } from "zod";
-import { jsonError } from "@/server/api-auth";
-import { requireWorkspaceAccess } from "@/lib/sdr.helpers.server";
+import { defineRoute } from "@/server/route";
 import { analyzeMarketCollection, MarketIntelligenceError } from "@/lib/market-intelligence.server";
-import { marketLog, operationId, withMarketTimeout } from "@/lib/market-reliability.server";
+import {
+  MARKET_INTELLIGENCE_ROUTE_TIMEOUT_MS,
+  marketFailure,
+  marketLog,
+  MarketTimeoutError,
+  operationId,
+  withMarketTimeout,
+} from "@/lib/market-reliability.server";
 
 export const dynamic = "force-dynamic";
 
@@ -12,44 +18,66 @@ const BodySchema = z.object({
   analysisType: z.string().trim().min(1).max(60).optional(),
 });
 
-export async function POST(request: Request) {
-  const operation = operationId("market-intelligence");
-  marketLog("intelligence API request received", { operation });
-  let body: z.infer<typeof BodySchema>;
-  try {
-    body = BodySchema.parse(await request.json());
-  } catch {
-    return jsonError(400, "Invalid request body");
-  }
+export const POST = defineRoute({
+  name: "market/intelligence",
+  auth: "workspace",
+  body: BodySchema,
+  workspaceId: ({ body }) => body.workspaceId,
+  // DataForSEO queries plus a Claude analysis, both billed per run, scoped to
+  // the validated user+workspace.
+  rateLimit: ({ userId, workspaceId }) => ({ tier: "audit", subject: `${userId}:${workspaceId}` }),
+  handler: async ({ body }) => {
+    const operation = operationId("market-intelligence");
+    marketLog("intelligence API request received", { operation, collectionId: body.collectionId });
 
-  const access = await requireWorkspaceAccess(request, body.workspaceId);
-  if (!access.ok) return access.response;
-
-  try {
-    const result = await withMarketTimeout(
-      analyzeMarketCollection({
-        collectionId: body.collectionId,
-        workspaceId: body.workspaceId,
-        analysisType: body.analysisType,
+    try {
+      const result = await withMarketTimeout(
+        analyzeMarketCollection({
+          collectionId: body.collectionId,
+          workspaceId: body.workspaceId,
+          analysisType: body.analysisType,
+          operation,
+        }),
+        MARKET_INTELLIGENCE_ROUTE_TIMEOUT_MS,
+        "Market intelligence took too long to generate. Please retry.",
+      );
+      marketLog("intelligence API response returned", {
         operation,
-      }),
-      75_000,
-      "Market intelligence request timed out",
-    );
-    marketLog("intelligence API response returned", { operation, state: result.state });
-    return Response.json({ success: true, source: "market_intelligence", ...result });
-  } catch (error) {
-    if (error instanceof MarketIntelligenceError) {
-      marketLog("intelligence API failed", { operation, code: error.code });
-      return Response.json(
-        { status: "failed", data: null, error: { message: error.message, code: error.code } },
-        { status: error.status },
+        state: result.state,
+        code: result.error?.code,
+      });
+      return Response.json({
+        success: result.state !== "failed",
+        source: "market_intelligence",
+        ...result,
+      });
+    } catch (error) {
+      if (error instanceof MarketIntelligenceError) {
+        marketLog("intelligence API failed", {
+          operation,
+          code: error.code,
+          message: error.message,
+        });
+        return marketFailure(
+          error.status,
+          { message: error.message, code: error.code },
+          { collectionId: body.collectionId },
+        );
+      }
+      if (error instanceof MarketTimeoutError) {
+        marketLog("intelligence API timed out", { operation, message: error.message });
+        return marketFailure(
+          504,
+          { message: error.message, code: error.code },
+          { collectionId: body.collectionId },
+        );
+      }
+      console.error("[market] intelligence API failed", { operation, error });
+      return marketFailure(
+        502,
+        { message: "Market intelligence service unavailable", code: "unexpected_error" },
+        { collectionId: body.collectionId },
       );
     }
-    marketLog("intelligence API failed", { operation, reason: error instanceof Error ? error.message : "unknown" });
-    return Response.json(
-      { status: "failed", data: null, error: { message: "Market intelligence service unavailable" } },
-      { status: 502 },
-    );
-  }
-}
+  },
+});

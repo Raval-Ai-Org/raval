@@ -2,6 +2,7 @@
 // Cached in-memory per workspace for a short window so back-to-back AI
 // calls (chat -> suggest -> coach) don't re-hit the DB three times.
 
+import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export type WorkspaceSignals = {

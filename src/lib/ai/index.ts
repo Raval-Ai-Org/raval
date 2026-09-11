@@ -1,6 +1,7 @@
 // Public AI surface. Import from here rather than the individual files
 // so future refactors (renaming, splitting, provider swaps) touch one place.
 
+import "server-only";
 export {
   runJsonPrompt,
   runTool,

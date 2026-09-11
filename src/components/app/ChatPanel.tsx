@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -392,7 +393,7 @@ export function ChatPanel({
     preserveMessagesOnRouteRef.current = true;
     skipNextHistoryLoadRef.current = true;
     navigate({ to: `/app/chat/${data.id}`, replace: true });
-    window.dispatchEvent(new CustomEvent("chat:conversation-changed"));
+    emitAppEvent("chat:conversation-changed");
     return data.id;
   };
 
@@ -514,11 +515,11 @@ export function ChatPanel({
       }
     };
     const onFocus = () => textareaRef.current?.focus();
-    window.addEventListener("chat:prefill", onPrefill as EventListener);
-    window.addEventListener("chat:focus", onFocus);
+    addAppEventListener("chat:prefill", onPrefill);
+    addAppEventListener("chat:focus", onFocus);
     return () => {
-      window.removeEventListener("chat:prefill", onPrefill as EventListener);
-      window.removeEventListener("chat:focus", onFocus);
+      removeAppEventListener("chat:prefill", onPrefill);
+      removeAppEventListener("chat:focus", onFocus);
     };
   }, []);
 
@@ -546,9 +547,6 @@ export function ChatPanel({
     const agent = agentList.find((a) => a.slug === slug);
     if (!agent || !isOn(agent.id)) return false;
     navigate({ to: `/app/${slug}` as any });
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("agent:deploy", { detail: { slug } }));
-    }, 350);
     toast.success(`${agent.role} on it`, { description: agent.missions[0]?.label });
     return true;
   };
@@ -798,9 +796,7 @@ export function ChatPanel({
 
   const runChatStream = async (history: { role: string; content: string }[]) => {
     setStreaming(true);
-    window.dispatchEvent(
-      new CustomEvent("chat:working", { detail: { label: "Agents working on your site…" } }),
-    );
+    emitAppEvent("chat:working", { label: "Agents working on your site…" });
     // Drive the rich preview stages from the latest user message.
     const lastUser = [...history].reverse().find((h) => h.role === "user")?.content ?? "";
     if (lastUser) {
@@ -835,7 +831,7 @@ export function ChatPanel({
           toast.error("AI request failed", { description: detail });
         }
         setStreaming(false);
-        window.dispatchEvent(new CustomEvent("chat:idle"));
+        emitAppEvent("chat:idle");
         stopPreviewPlan();
         return;
       }
@@ -927,14 +923,14 @@ export function ChatPanel({
           content: acc,
           status: "completed",
         });
-        window.dispatchEvent(new CustomEvent("chat:conversation-changed"));
+        emitAppEvent("chat:conversation-changed");
       }
     } catch {
       toast.error("Connection lost");
       stopPreviewPlan();
     } finally {
       setStreaming(false);
-      window.dispatchEvent(new CustomEvent("chat:idle"));
+      emitAppEvent("chat:idle");
       completePreviewPlan("All done", "Your update is ready");
       // Background memory extraction — only if enough new turns since last sync.
       void maybeSyncMemory();
@@ -1064,7 +1060,7 @@ export function ChatPanel({
         .update({ title: titleFromPrompt(text || visibleText) })
         .eq("id", activeConversationId);
     }
-    window.dispatchEvent(new CustomEvent("chat:conversation-changed"));
+    emitAppEvent("chat:conversation-changed");
 
     // Stash the wire content on the msg for history construction below.
     (userMsg as any)._wire = wireContent;

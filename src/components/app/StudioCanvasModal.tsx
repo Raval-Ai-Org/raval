@@ -1,5 +1,6 @@
 "use client";
 
+import { emitAppEvent } from "@/lib/app-events";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -562,7 +563,7 @@ export function StudioCanvasModal({
                       },
                     });
                     try {
-                      window.dispatchEvent(new CustomEvent("content:changed"));
+                      emitAppEvent("content:changed");
                     } catch {}
                   }
                   setImageProgress(100);
@@ -874,7 +875,7 @@ export function StudioCanvasModal({
             .eq("workspace_id", workspaceId);
         }
         try {
-          window.dispatchEvent(new CustomEvent("content:changed"));
+          emitAppEvent("content:changed");
         } catch {}
       } catch (e) {
         console.warn("[studio] persistDrafts failed", e);
@@ -1045,7 +1046,7 @@ export function StudioCanvasModal({
         await persistDrafts({ canvasType: canvas.type, text: result.trim() });
       }
       setEditingContent(false);
-      window.dispatchEvent(new CustomEvent("content:changed"));
+      emitAppEvent("content:changed");
       toast.success("Changes saved", { description: "Your draft is up to date." });
     } catch (error) {
       toast.error("Couldn't save changes", {
@@ -1263,7 +1264,7 @@ export function StudioCanvasModal({
         });
       }
       try {
-        window.dispatchEvent(new CustomEvent("content:changed"));
+        emitAppEvent("content:changed");
       } catch {}
       onClose();
     } catch (e: unknown) {
@@ -1302,7 +1303,7 @@ export function StudioCanvasModal({
           },
         );
         try {
-          window.dispatchEvent(new CustomEvent("content:changed"));
+          emitAppEvent("content:changed");
         } catch {}
         onClose();
       } else {
@@ -1327,7 +1328,7 @@ export function StudioCanvasModal({
           description: "Live now — visible in Recent and the client portal.",
         });
         try {
-          window.dispatchEvent(new CustomEvent("content:changed"));
+          emitAppEvent("content:changed");
         } catch {}
         onClose();
       }

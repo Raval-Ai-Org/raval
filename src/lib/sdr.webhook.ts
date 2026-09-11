@@ -27,9 +27,15 @@ export function aggregateItemStatus(rows: Array<{ status: string }>): string {
   const hasFailed = active.some((r) => r.status === "failed");
   const allPublished = active.every((r) => r.status === "published");
   const allFailed = active.every((r) => r.status === "failed");
+  // Anything not yet terminal means the item is still being delivered.
+  const hasInFlight = active.some((r) => !TERMINAL.has(r.status));
   if (allPublished) return "published";
   if (allFailed) return "failed";
-  if (hasPublished && hasFailed) return "partial_failed"; // some live, some dead
+  // `partial_failed` reads as terminal in the UI, so only report it once every
+  // destination has settled. Otherwise a 3-target item with one published, one
+  // failed and one still publishing would show "partially failed" mid-flight
+  // and invite an operator to retry a post that is about to succeed.
+  if (hasPublished && hasFailed && !hasInFlight) return "partial_failed";
   return "publishing"; // any in-flight (publishing/pending/retrying)
 }
 

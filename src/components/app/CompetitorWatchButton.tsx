@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
 
@@ -105,11 +106,11 @@ export function CompetitorWatchButton({ workspaceId }: { workspaceId: string | n
     };
     document.addEventListener("visibilitychange", onVis);
     const openHandler = () => setManageOpen(true);
-    window.addEventListener("open:competitor-watch", openHandler);
+    addAppEventListener("open:competitor-watch", openHandler);
     return () => {
       if (t) window.clearInterval(t);
       document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("open:competitor-watch", openHandler);
+      removeAppEventListener("open:competitor-watch", openHandler);
     };
   }, [workspaceId, refresh]);
 

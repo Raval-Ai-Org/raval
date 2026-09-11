@@ -1,6 +1,8 @@
+import "server-only";
 import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { rateLimitFor } from "@/server/rate-limit";
 
 const uuid = z.string().uuid();
 
@@ -44,7 +46,7 @@ export const listCompetitorWatches = createServerFn({ method: "POST" })
   });
 
 export const addCompetitorWatch = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("audit")])
   .inputValidator((d) =>
     z
       .object({
@@ -57,7 +59,7 @@ export const addCompetitorWatch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const clean = data.url.trim().replace(/\/+$/, "");
     const url = /^https?:\/\//i.test(clean) ? clean : `https://${clean}`;
-    const { assertPublicUrl } = await import("@/server/api-auth");
+    const { assertPublicUrl } = await import("@/server/safe-fetch");
     try {
       assertPublicUrl(url);
     } catch (e) {
@@ -106,7 +108,7 @@ export const toggleCompetitorWatch = createServerFn({ method: "POST" })
   });
 
 export const runCompetitorWatchNow = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("audit")])
   .inputValidator((d) => z.object({ id: uuid }).parse(d))
   .handler(async ({ data, context }) => {
     // Verify caller is a member of the watch's workspace via RLS SELECT.

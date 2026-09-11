@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Sparkles } from "@/components/ui/gemini-icons";
@@ -20,11 +21,11 @@ export function AiVisibilityDialog({ workspaceId }: { workspaceId: string | null
   useEffect(() => {
     const openFn = () => setOpen(true);
     const toggleFn = () => setOpen((v) => !v);
-    window.addEventListener("open:ai-visibility", openFn as EventListener);
-    window.addEventListener("toggle:ai-visibility", toggleFn as EventListener);
+    addAppEventListener("open:ai-visibility", openFn);
+    addAppEventListener("toggle:ai-visibility", toggleFn);
     return () => {
-      window.removeEventListener("open:ai-visibility", openFn as EventListener);
-      window.removeEventListener("toggle:ai-visibility", toggleFn as EventListener);
+      removeAppEventListener("open:ai-visibility", openFn);
+      removeAppEventListener("toggle:ai-visibility", toggleFn);
     };
   }, []);
 

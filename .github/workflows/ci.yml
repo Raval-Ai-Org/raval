@@ -1,0 +1,89 @@
+name: CI
+
+# The gate the repo was missing. Before this workflow the only automated check
+# was seo-meta-tests.yml (Playwright SEO snapshots) — so `tsc`, `eslint` and the
+# 183 vitest tests (including every SDR contract suite that proves webhook
+# signature verification, idempotency and terminal-wins) never ran on a PR.
+#
+# Configure "verify" as a required status check in branch protection.
+
+on:
+  pull_request:
+    branches: [master, main]
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck · Lint · Format · Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Runs first: a type error makes every later failure harder to read.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Warnings are allowed (386 pre-existing `any`/unused findings). Errors
+      # are not. Drop --max-warnings once that backlog is paid down.
+      - name: Lint
+        run: npx eslint . --max-warnings 400
+
+      # Guards the LF normalization from .gitattributes. Without this a Windows
+      # contributor can reintroduce CRLF and no one notices until lint explodes.
+      - name: Format check
+        run: npm run format:check
+
+      # Unit + contract + SDR integration suites. No network, no Supabase:
+      # handlers take injected deps and tests/fixtures/mock-sdr.ts stands in
+      # for the distribution service.
+      - name: Tests
+        run: npm test
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # next build inlines NEXT_PUBLIC_* at build time, so CI supplies dummies.
+      # They must NOT contain "placeholder" / "YOUR_" — createSupabaseClient()
+      # in src/integrations/supabase/client.ts throws on those patterns by
+      # design. These values are not credentials and reach nothing real.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-build-only.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_only
+          SUPABASE_URL: https://ci-build-only.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_only
+          APP_URL: https://ci-build-only.invalid

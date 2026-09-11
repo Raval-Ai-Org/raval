@@ -1,5 +1,6 @@
 import { resolveServerFn } from "@/server/fns";
 import { runWithRequest } from "@/server/request-context";
+import { knownErrorResponse } from "@/server/route";
 
 export const dynamic = "force-dynamic";
 
@@ -41,14 +42,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ fn: string
     const result = await runWithRequest(request, () => serverFn.invoke(data, request.signal));
     return json(200, { result: result ?? null });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Request failed";
-    // Auth failures surface as 401 so the client can prompt a re-login; the
-    // validators throw ZodError for bad input, which is a 400.
-    if (/^Unauthorized/i.test(message)) return json(401, { error: message });
-    if (error instanceof Error && error.name === "ZodError") {
-      return json(400, { error: "Invalid request" });
-    }
+    // Auth failures → 401 (the client prompts a re-login), ZodError → 400,
+    // provider errors → their own status. Same mapping as the /api kernel.
+    const known = knownErrorResponse(error);
+    if (known) return known;
     console.error(`[rpc] ${moduleName}/${fnName}`, error);
-    return json(500, { error: message });
+    // Handlers throw user-facing messages ("Workspace not found"), so the
+    // message is passed through rather than replaced with a generic one.
+    return json(500, { error: error instanceof Error ? error.message : "Request failed" });
   }
 }

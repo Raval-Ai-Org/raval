@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { jsonError, requireUserId } from "@/server/api-auth";
-import { AiGatewayError, extractionCompletion } from "@/lib/ai";
+import { defineRoute } from "@/server/route";
+import { EXTRACTION_MODEL, extractionCompletion } from "@/lib/ai";
 import { safeParseJson } from "@/lib/ai/json";
 import { logAiCall } from "@/lib/ai/token-log.server";
 import { MEMORY_SYSTEM } from "@/lib/ai/prompts";
@@ -121,35 +121,30 @@ const MEMORY_TOOL = {
   },
 };
 
-export async function POST(request: Request) {
-  const auth = await requireUserId(request);
-  if (!auth.ok) return auth.response;
+export const POST = defineRoute({
+  name: "memory-extract",
+  auth: "user",
+  body: BodySchema,
+  // Gemini tool call over up to 12k chars of transcript.
+  rateLimit: "generate",
+  handler: async ({ body }) => {
+    const transcript = body.messages
+      .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+      .join("\n\n")
+      .slice(0, 12_000);
 
-  let body: z.infer<typeof BodySchema>;
-  try {
-    body = BodySchema.parse(await request.json());
-  } catch {
-    return jsonError(400, "Invalid request body");
-  }
+    const known = body.current ?? {};
+    const knownBlock = assemble([
+      {
+        body: `Brand: ${known.brandName ?? "(unknown)"}${known.oneLiner ? ` — ${known.oneLiner}` : ""}`,
+      },
+      { label: "Known insights", body: known.knownInsights?.slice(0, 20).join("; ") },
+      { label: "Known competitors", body: known.knownCompetitors?.slice(0, 15).join("; ") },
+      { label: "Known triggers", body: known.knownTriggers?.slice(0, 15).join("; ") },
+      { label: "Known objections", body: known.knownObjections?.slice(0, 15).join("; ") },
+      { label: "Known feedback", body: known.knownFeedback?.slice(0, 15).join("; ") },
+    ]);
 
-  const transcript = body.messages
-    .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
-    .join("\n\n")
-    .slice(0, 12_000);
-
-  const known = body.current ?? {};
-  const knownBlock = assemble([
-    {
-      body: `Brand: ${known.brandName ?? "(unknown)"}${known.oneLiner ? ` — ${known.oneLiner}` : ""}`,
-    },
-    { label: "Known insights", body: known.knownInsights?.slice(0, 20).join("; ") },
-    { label: "Known competitors", body: known.knownCompetitors?.slice(0, 15).join("; ") },
-    { label: "Known triggers", body: known.knownTriggers?.slice(0, 15).join("; ") },
-    { label: "Known objections", body: known.knownObjections?.slice(0, 15).join("; ") },
-    { label: "Known feedback", body: known.knownFeedback?.slice(0, 15).join("; ") },
-  ]);
-
-  try {
     const json: any = await extractionCompletion({
       messages: [
         { role: "system", content: MEMORY_SYSTEM },
@@ -162,15 +157,12 @@ export async function POST(request: Request) {
     const args = json?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ?? "";
     logAiCall({
       route: "memory-extract",
-      model: "google/gemini-2.5-pro",
+      model: EXTRACTION_MODEL,
       inputChars: transcript.length + knownBlock.length + MEMORY_SYSTEM.length,
       outputChars: String(args).length,
       cached: json?._cached === true,
       toolCall: true,
     });
-    return Response.json(safeParseJson<typeof EMPTY>(args, EMPTY));
-  } catch (e) {
-    if (e instanceof AiGatewayError) return jsonError(e.status, e.message);
-    throw e;
-  }
-}
+    return safeParseJson<typeof EMPTY>(args, EMPTY);
+  },
+});

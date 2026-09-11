@@ -1,3 +1,4 @@
+import "server-only";
 import type { AnyServerFn } from "@/server/server-fn";
 
 import * as analytics from "./analytics";

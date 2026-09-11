@@ -1,3 +1,4 @@
+import { emitAppEvent } from "@/lib/app-events";
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -37,7 +38,7 @@ export async function signOutAndRedirect(queryClient?: QueryClient) {
       for (const key of WORKSPACE_STORAGE_KEYS) window.localStorage.removeItem(key);
       window.sessionStorage.removeItem(AUTH_NEXT_KEY);
     } catch {}
-    window.dispatchEvent(new CustomEvent("workspace:changed", { detail: { id: null } }));
+    emitAppEvent("workspace:changed", { id: null });
     window.location.replace("/login");
   }
 }

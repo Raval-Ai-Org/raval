@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { Link, useRouterState, useNavigate } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -108,9 +109,10 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
 
-// Preserve deep-link query params (?tab, ?canvas, ?artifact, ?invite_token, ?next)
-// through the router. Without validateSearch, TanStack Router drops unknown
-// params on match, which would break the Analytics/Studio URL persistence.
+// Shape of the deep-link query params (?tab, ?canvas, ?artifact, ?invite_token,
+// ?next) that the Analytics/Studio URL persistence depends on. Next's
+// useSearchParams preserves unknown params on navigation, so this type is
+// documentation and read-site safety rather than a router-level schema.
 type AppSearch = {
   tab?: string;
   canvas?: string;
@@ -340,10 +342,10 @@ function AppShell() {
         toggleChat();
       }
     };
-    window.addEventListener("open:analytics", onOpen as EventListener);
+    addAppEventListener("open:analytics", onOpen);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("open:analytics", onOpen as EventListener);
+      removeAppEventListener("open:analytics", onOpen);
       window.removeEventListener("keydown", onKey);
     };
   }, []);
@@ -441,7 +443,7 @@ function AppShell() {
     if (typeof window === "undefined") return;
     if (new URL(window.location.href).searchParams.get("calendar") !== "1") return;
     const timer = window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("open:content-calendar"));
+      emitAppEvent("open:content-calendar");
       const url = new URL(window.location.href);
       url.searchParams.delete("calendar");
       window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
@@ -614,7 +616,7 @@ function AppShell() {
             icon: CalendarIcon,
             label: "Content calendar",
             accent: "hsl(var(--brand-blue))",
-            onClick: () => window.dispatchEvent(new CustomEvent("open:content-calendar")),
+            onClick: () => emitAppEvent("open:content-calendar"),
           })}
         </SidebarSection>
 
@@ -628,7 +630,7 @@ function AppShell() {
             hint: "GEO · AEO",
             accent: "hsl(var(--brand-blue))",
             onClick: () => {
-              window.dispatchEvent(new CustomEvent("open:ai-visibility"));
+              emitAppEvent("open:ai-visibility");
               setNavOpen(false);
             },
           })}
@@ -636,18 +638,18 @@ function AppShell() {
             icon: Brain,
             label: "Brand DNA",
             accent: "hsl(var(--brand-blue))",
-            onClick: () => window.dispatchEvent(new CustomEvent("open:brand-dna")),
+            onClick: () => emitAppEvent("open:brand-dna"),
           })}
           {sidebarAction({
             icon: CalendarIcon,
             label: "Schedule",
-            onClick: () => window.dispatchEvent(new CustomEvent("open:schedule")),
+            onClick: () => emitAppEvent("open:schedule"),
           })}
           {sidebarAction({
             icon: Bot,
             label: "Automations",
             accent: "rgb(16 185 129)",
-            onClick: () => window.dispatchEvent(new CustomEvent("open:autopilot")),
+            onClick: () => emitAppEvent("open:autopilot"),
           })}
           {sidebarAction({
             icon: Radio,
@@ -655,7 +657,7 @@ function AppShell() {
             hint: "Alerts",
             accent: "hsl(var(--brand-green))",
             onClick: () => {
-              window.dispatchEvent(new CustomEvent("open:competitor-watch"));
+              emitAppEvent("open:competitor-watch");
               setNavOpen(false);
             },
           })}
@@ -668,19 +670,19 @@ function AppShell() {
           {sidebarAction({
             icon: Rocket,
             label: "Client Portal",
-            onClick: () => window.dispatchEvent(new CustomEvent("open:client-portal")),
+            onClick: () => emitAppEvent("open:client-portal"),
           })}
           {sidebarAction({
             icon: Share2,
             label: "Share",
             accent: "hsl(var(--brand-green))",
-            onClick: () => window.dispatchEvent(new CustomEvent("open:share")),
+            onClick: () => emitAppEvent("open:share"),
           })}
         </SidebarSection>
 
         <div className="mt-2 border-t border-border/50 pt-2">
           <AccountMenu
-            onOpenSettings={() => window.dispatchEvent(new CustomEvent("open:settings"))}
+            onOpenSettings={() => emitAppEvent("open:settings")}
             onClose={() => setNavOpen(false)}
           />
         </div>
@@ -755,27 +757,27 @@ function AppShell() {
                 {
                   icon: Sparkles,
                   label: "AI Visibility",
-                  onClick: () => window.dispatchEvent(new CustomEvent("open:ai-visibility")),
+                  onClick: () => emitAppEvent("open:ai-visibility"),
                 },
                 {
                   icon: BarChart3,
                   label: "Analytics",
-                  onClick: () => window.dispatchEvent(new CustomEvent("open:analytics")),
+                  onClick: () => emitAppEvent("open:analytics"),
                 },
                 {
                   icon: CalendarIcon,
                   label: "Calendar",
-                  onClick: () => window.dispatchEvent(new CustomEvent("open:content-calendar")),
+                  onClick: () => emitAppEvent("open:content-calendar"),
                 },
                 {
                   icon: Brain,
                   label: "Brand DNA",
-                  onClick: () => window.dispatchEvent(new CustomEvent("open:brand-dna")),
+                  onClick: () => emitAppEvent("open:brand-dna"),
                 },
                 {
                   icon: Radio,
                   label: "Competitors",
-                  onClick: () => window.dispatchEvent(new CustomEvent("open:competitor-watch")),
+                  onClick: () => emitAppEvent("open:competitor-watch"),
                 },
               ].map(({ icon: Icon, label, onClick }) => (
                 <Tooltip key={label}>
@@ -801,9 +803,7 @@ function AppShell() {
 
             {/* Account avatar pinned to bottom (ChatGPT-style) */}
             <div className="mt-2 border-t border-border/60 pt-3">
-              <AccountMenuCompact
-                onOpenSettings={() => window.dispatchEvent(new CustomEvent("open:settings"))}
-              />
+              <AccountMenuCompact onOpenSettings={() => emitAppEvent("open:settings")} />
             </div>
           </TooltipProvider>
         </aside>
@@ -919,7 +919,7 @@ function AppShell() {
 
               <button
                 type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent("open:content-calendar"))}
+                onClick={() => emitAppEvent("open:content-calendar")}
                 aria-label="Open calendar"
                 title="Calendar"
                 className="group flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
@@ -933,7 +933,7 @@ function AppShell() {
               </Suspense>
 
               <button
-                onClick={() => window.dispatchEvent(new CustomEvent("open:share"))}
+                onClick={() => emitAppEvent("open:share")}
                 aria-label="Share workspace"
                 title="Share with workspace members"
                 className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
@@ -965,7 +965,7 @@ function AppShell() {
               </Suspense>
               <button
                 type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent("toggle:studio"))}
+                onClick={() => emitAppEvent("toggle:studio")}
                 aria-label="Open Studio"
                 title="Open Studio"
                 className="group relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-[hsl(var(--brand-green)/0.35)] bg-[hsl(var(--brand-green)/0.10)] px-2.5 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-[hsl(var(--brand-green)/0.18)] hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97]"
@@ -1000,7 +1000,7 @@ function AppShell() {
                   <DropdownMenuItem
                     onSelect={(e) => {
                       e.preventDefault();
-                      window.dispatchEvent(new CustomEvent("open:share"));
+                      emitAppEvent("open:share");
                     }}
                     className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
                   >
@@ -1015,7 +1015,7 @@ function AppShell() {
                   <DropdownMenuItem
                     onSelect={(e) => {
                       e.preventDefault();
-                      window.dispatchEvent(new CustomEvent("open:client-portal"));
+                      emitAppEvent("open:client-portal");
                     }}
                     className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
                   >
@@ -1031,7 +1031,7 @@ function AppShell() {
                   <DropdownMenuItem
                     onSelect={(e) => {
                       e.preventDefault();
-                      window.dispatchEvent(new CustomEvent("open:publish"));
+                      emitAppEvent("open:publish");
                     }}
                     className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
                   >
@@ -1143,11 +1143,11 @@ function MobileManusLayout({
   useEffect(() => {
     const open = () => setStudioOpen(true);
     const toggle = () => setStudioOpen((v) => !v);
-    window.addEventListener("open:studio", open as EventListener);
-    window.addEventListener("toggle:studio", toggle as EventListener);
+    addAppEventListener("open:studio", open);
+    addAppEventListener("toggle:studio", toggle);
     return () => {
-      window.removeEventListener("open:studio", open as EventListener);
-      window.removeEventListener("toggle:studio", toggle as EventListener);
+      removeAppEventListener("open:studio", open);
+      removeAppEventListener("toggle:studio", toggle);
     };
   }, []);
 

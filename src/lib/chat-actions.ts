@@ -1,6 +1,7 @@
 // Detect actionable intents from a user prompt and produce inline chips
 // that the chat surfaces so it can drive the Studio + AI Diagnostics panel.
 
+import { emitAppEvent } from "@/lib/app-events";
 import type { CanvasType } from "@/lib/studio";
 
 export type ChatAction =
@@ -91,16 +92,16 @@ export function runChatAction(action: ChatAction): { toast?: string } {
   if (typeof window === "undefined") return {};
   switch (action.kind) {
     case "audit":
-      window.dispatchEvent(new CustomEvent("geo:run-audit"));
+      emitAppEvent("geo:run-audit");
       return { toast: "Running AI visibility audit…" };
     case "studio":
-      window.dispatchEvent(new CustomEvent("open:canvas", { detail: { type: action.canvas } }));
+      emitAppEvent("open:canvas", { type: action.canvas });
       return { toast: `Opening ${action.label.replace(/^Open /, "")}` };
     case "memory":
-      window.dispatchEvent(new CustomEvent("open:brand-dna"));
+      emitAppEvent("open:brand-dna");
       return { toast: "Opening Memory" };
     case "calendar":
-      window.dispatchEvent(new CustomEvent("open:analytics", { detail: { tab: "calendar" } }));
+      emitAppEvent("open:analytics", { tab: "calendar" });
       return { toast: "Opening Content Calendar" };
   }
 }

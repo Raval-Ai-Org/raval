@@ -1,3 +1,4 @@
+import "server-only";
 export type GoogleTrendsInput = {
   keywords: string[];
   location?: string;
@@ -52,6 +53,8 @@ export class DataForSeoError extends Error {
     message: string,
     public readonly status: number,
     public readonly code?: number,
+    /** Transport-level failure (timeout, network, HTTP 429/5xx) worth retrying later. */
+    public readonly transient = false,
   ) {
     super(message);
     this.name = "DataForSeoError";
@@ -167,6 +170,38 @@ export function normalizeGoogleTrendsItems(items: unknown[], keywords: string[])
   return data;
 }
 
+// DataForSEO reports errors inside a 200 body: a top-level status_code/message
+// for account-level failures (auth, balance, rate limit), then one per task.
+function assertEnvelopeOk(
+  payload: unknown,
+  context: string,
+): asserts payload is {
+  status_code: 20000;
+  tasks: unknown[];
+} {
+  if (!isRecord(payload)) {
+    throw new DataForSeoError(`DataForSEO returned an unreadable ${context} response`, 502);
+  }
+  if (payload.status_code !== 20000) {
+    const code = typeof payload.status_code === "number" ? payload.status_code : undefined;
+    const message = stringValue(payload.status_message) ?? "request rejected";
+    throw new DataForSeoError(`DataForSEO ${context} failed: ${message}`, 502, code);
+  }
+  if (!Array.isArray(payload.tasks) || payload.tasks.length === 0) {
+    throw new DataForSeoError(`DataForSEO returned no task in the ${context} response`, 502);
+  }
+}
+
+/** True when a normalized collection carries any measured signal at all. */
+export function hasTrendSignal(data: GoogleTrendsData): boolean {
+  return (
+    data.interestOverTime.some((point) => point.values.some((value) => value > 0)) ||
+    data.regionalInterest.some((region) => region.values.some((value) => value > 0)) ||
+    data.relatedQueries.length > 0 ||
+    data.relatedTopics.length > 0
+  );
+}
+
 function parseResultPayload(payload: unknown, keywords: string[]): GoogleTrendsData {
   if (!isRecord(payload) || payload.status_code !== 20000 || !Array.isArray(payload.tasks)) {
     throw new DataForSeoError("DataForSEO returned an unexpected response", 502);
@@ -204,6 +239,7 @@ function buildTask(input: GoogleTrendsInput) {
 
 export type GoogleTrendsTask = {
   id: string;
+  /** "completed" without `data` means the task finished with no search results. */
   status: "pending" | "completed" | "failed";
   statusCode: number;
   statusMessage?: string;
@@ -236,14 +272,22 @@ async function dataForSeoRequest(
       signal: controller.signal,
     });
     const payload: unknown = await response.json().catch(() => null);
-    if (!response.ok) throw new DataForSeoError("DataForSEO request failed", 502, response.status);
+    if (!response.ok) {
+      const message = isRecord(payload) ? stringValue(payload.status_message) : undefined;
+      throw new DataForSeoError(
+        `DataForSEO request failed (HTTP ${response.status}${message ? `: ${message}` : ""})`,
+        502,
+        response.status,
+        response.status === 429 || response.status >= 500,
+      );
+    }
     return payload;
   } catch (error) {
     if (error instanceof DataForSeoError) throw error;
     if (error instanceof Error && error.name === "AbortError") {
-      throw new DataForSeoError("DataForSEO request timed out", 504);
+      throw new DataForSeoError("DataForSEO request timed out", 504, undefined, true);
     }
-    throw new DataForSeoError("Unable to reach DataForSEO", 502);
+    throw new DataForSeoError("Unable to reach DataForSEO", 502, undefined, true);
   } finally {
     clearTimeout(timer);
   }
@@ -258,14 +302,19 @@ export async function createGoogleTrendsTask(
     { method: "POST", body: JSON.stringify([buildTask(input)]) },
     fetchImpl,
   );
-  if (!isRecord(payload) || payload.status_code !== 20000 || !Array.isArray(payload.tasks)) {
-    throw new DataForSeoError("DataForSEO returned an unexpected task response", 502);
-  }
+  assertEnvelopeOk(payload, "task creation");
   const task = payload.tasks[0];
   const taskId = isRecord(task) ? stringValue(task.id) : undefined;
-  if (!taskId) {
+  const statusCode =
+    isRecord(task) && typeof task.status_code === "number" ? task.status_code : undefined;
+  // 20100 "Task Created." is the only success; a rejected task still carries an id.
+  if (!taskId || (statusCode !== undefined && statusCode !== 20100 && statusCode !== 20000)) {
     const message = isRecord(task) ? stringValue(task.status_message) : undefined;
-    throw new DataForSeoError(message ?? "DataForSEO did not return a task ID", 502);
+    throw new DataForSeoError(
+      `DataForSEO rejected the task: ${message ?? "no task ID returned"}`,
+      502,
+      statusCode,
+    );
   }
   return { taskId };
 }
@@ -280,9 +329,7 @@ export async function getGoogleTrendsTask(
     { method: "GET" },
     fetchImpl,
   );
-  if (!isRecord(payload) || payload.status_code !== 20000 || !Array.isArray(payload.tasks)) {
-    throw new DataForSeoError("DataForSEO returned an unexpected task response", 502);
-  }
+  assertEnvelopeOk(payload, "task status");
   const task = payload.tasks[0];
   if (!isRecord(task) || typeof task.status_code !== "number") {
     throw new DataForSeoError("DataForSEO returned an invalid task response", 502);
@@ -290,6 +337,11 @@ export async function getGoogleTrendsTask(
   const statusCode = task.status_code;
   const statusMessage = stringValue(task.status_message);
   if (statusCode === 20000 && Array.isArray(task.result)) {
+    const result = task.result[0];
+    // A finished task whose result carries no items found no search interest.
+    if (!isRecord(result) || !Array.isArray(result.items) || result.items.length === 0) {
+      return { id: taskId, status: "completed", statusCode, statusMessage };
+    }
     return {
       id: taskId,
       status: "completed",
@@ -297,6 +349,10 @@ export async function getGoogleTrendsTask(
       statusMessage,
       data: parseResultPayload({ status_code: 20000, tasks: [task] }, keywords),
     };
+  }
+  // 40102 "No Search Results." is a finished task with nothing to report.
+  if (statusCode === 40102) {
+    return { id: taskId, status: "completed", statusCode, statusMessage };
   }
   if (
     statusCode === 20100 ||

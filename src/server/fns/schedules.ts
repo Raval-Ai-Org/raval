@@ -1,6 +1,8 @@
+import "server-only";
 import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { rateLimitFor } from "@/server/rate-limit";
 
 type JsonValue =
   string | number | boolean | null | { [k: string]: JsonValue | undefined } | JsonValue[];
@@ -149,7 +151,7 @@ export const deleteScheduledJob = createServerFn({ method: "POST" })
 
 /* Run now — fires the scheduler executor immediately for one job */
 export const runScheduledJobNow = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("generate")])
   .inputValidator((data) => z.object({ id: uuid }).parse(data))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase

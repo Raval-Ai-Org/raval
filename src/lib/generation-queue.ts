@@ -2,6 +2,7 @@
 // Surfaces NotebookLM-style "being created" rows in the approvals section
 // until the real content_items row appears.
 
+import { emitAppEvent, onAppEvent } from "@/lib/app-events";
 import type { CanvasType } from "@/lib/studio";
 
 // Phases map 1:1 to real generation events. The UI never advances past the
@@ -25,12 +26,10 @@ export type GenJob = {
   phaseAt: number;
 };
 
-const EVT = "gen:queue:changed";
 const jobs = new Map<string, GenJob>();
 
 function emit() {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(EVT));
+  emitAppEvent("gen:queue:changed");
 }
 
 export const genQueue = {
@@ -68,9 +67,7 @@ export const genQueue = {
     return Array.from(jobs.values()).sort((a, b) => b.startedAt - a.startedAt);
   },
   subscribe(cb: () => void): () => void {
-    if (typeof window === "undefined") return () => {};
-    window.addEventListener(EVT, cb);
-    return () => window.removeEventListener(EVT, cb);
+    return onAppEvent("gen:queue:changed", cb);
   },
 };
 

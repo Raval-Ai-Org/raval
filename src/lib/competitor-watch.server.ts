@@ -3,7 +3,10 @@
 // against the previous snapshot, and inserts alerts. Imported only from
 // server handlers (cron route + auth'd "run now" server fn).
 
+import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { normalizeUrl } from "@/lib/crawl/html";
+import { safeFetch } from "@/server/safe-fetch";
 
 export type Snapshot = {
   fetchedAt: string;
@@ -66,26 +69,24 @@ function hash(str: string): string {
   return h.toString(16);
 }
 
-function normalizeUrl(input: string): string {
-  const u = input.trim();
-  if (!/^https?:\/\//i.test(u)) return `https://${u}`;
-  return u;
-}
+// Competitor homepages are HTML; the snapshot only reads the first 40 KB of
+// body text anyway, so anything past this is waste.
+const MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024;
 
 export async function snapshot(url: string): Promise<Snapshot> {
+  // safeFetch validates the URL, pins connections to public addresses and
+  // re-checks every redirect hop.
   const target = normalizeUrl(url);
-  const { assertPublicUrl } = await import("@/server/api-auth");
-  assertPublicUrl(target);
-  const res = await fetch(target, {
-    redirect: "follow",
+  const res = await safeFetch(target, {
     headers: {
       "User-Agent": `MelloxAI-CompetitorWatch/1.0 (+${process.env.APP_URL || "https://raval.ai"})`,
       Accept: "text/html,application/xhtml+xml",
     },
-    signal: AbortSignal.timeout(15_000),
+    timeoutMs: 15_000,
+    maxBytes: MAX_SNAPSHOT_BYTES,
   });
   const status = res.status;
-  const html = await res.text();
+  const html = res.text();
 
   const title = pick(html, /<title[^>]*>([^<]{1,300})<\/title>/i);
   const description =

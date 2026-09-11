@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
 import { AppModalShell } from "@/components/app/AppModalShell";
@@ -30,15 +31,15 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
     const openDetails = () => setDetailsOpen(true);
     const openSettings = () => setSettingsOpen(true);
     const openConnectors = () => setConnectorsOpen(true);
-    window.addEventListener("open:rename", openRename);
-    window.addEventListener("open:details", openDetails);
-    window.addEventListener("open:settings", openSettings);
-    window.addEventListener("open:connectors", openConnectors);
+    addAppEventListener("open:rename", openRename);
+    addAppEventListener("open:details", openDetails);
+    addAppEventListener("open:settings", openSettings);
+    addAppEventListener("open:connectors", openConnectors);
     return () => {
-      window.removeEventListener("open:rename", openRename);
-      window.removeEventListener("open:details", openDetails);
-      window.removeEventListener("open:settings", openSettings);
-      window.removeEventListener("open:connectors", openConnectors);
+      removeAppEventListener("open:rename", openRename);
+      removeAppEventListener("open:details", openDetails);
+      removeAppEventListener("open:settings", openSettings);
+      removeAppEventListener("open:connectors", openConnectors);
     };
   }, []);
 

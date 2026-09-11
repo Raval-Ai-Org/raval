@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { useVisibleInterval } from "@/hooks/use-visible-interval";
@@ -54,7 +55,7 @@ export function tintFor(type: CanvasType) {
 }
 
 function openCanvas(type: CanvasType, id?: string, mode?: "draft" | "review" | "view") {
-  window.dispatchEvent(new CustomEvent("open:canvas", { detail: { type, id, mode } }));
+  emitAppEvent("open:canvas", { type, id, mode });
 }
 
 type Mode = "draft" | "review" | "view";
@@ -131,10 +132,10 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
       }
     };
     syncWorkspace();
-    window.addEventListener("workspace:changed", syncWorkspace);
+    addAppEventListener("workspace:changed", syncWorkspace);
     window.addEventListener("storage", syncWorkspace);
     return () => {
-      window.removeEventListener("workspace:changed", syncWorkspace);
+      removeAppEventListener("workspace:changed", syncWorkspace);
       window.removeEventListener("storage", syncWorkspace);
     };
   }, []);
@@ -238,13 +239,13 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
     const run = () => loadApprovals(cancelledRef).catch(() => {});
     run();
     const onChange = () => run();
-    window.addEventListener("content:changed", onChange);
-    window.addEventListener("approvals:changed", onChange);
+    addAppEventListener("content:changed", onChange);
+    addAppEventListener("approvals:changed", onChange);
     // interval handled by useVisibleInterval below
     return () => {
       cancelled = true;
-      window.removeEventListener("content:changed", onChange);
-      window.removeEventListener("approvals:changed", onChange);
+      removeAppEventListener("content:changed", onChange);
+      removeAppEventListener("approvals:changed", onChange);
       // no interval to clear here
     };
   }, [loadApprovals]);
@@ -322,18 +323,18 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
     };
     load();
     const onChange = () => load();
-    window.addEventListener("content:changed", onChange);
+    addAppEventListener("content:changed", onChange);
     const t = window.setInterval(load, 30000);
     return () => {
       cancelled = true;
-      window.removeEventListener("content:changed", onChange);
+      removeAppEventListener("content:changed", onChange);
     };
   }, [workspaceId]);
 
   // Poll approvals + scheduled/recent only while tab is visible (60s cadence,
   // was 30s and ran forever on background tabs).
   useVisibleInterval(() => {
-    window.dispatchEvent(new Event("content:changed"));
+    emitAppEvent("content:changed");
   }, 60000);
 
   if (!embedded && !open) {
@@ -595,8 +596,8 @@ export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
                   const patch: { status: ApprovalStatus } = { status };
                   await runUpdate({ data: { id, patch } });
                 }
-                window.dispatchEvent(new CustomEvent("content:changed"));
-                window.dispatchEvent(new CustomEvent("approvals:changed"));
+                emitAppEvent("content:changed");
+                emitAppEvent("approvals:changed");
               } catch {
                 // Reload truth on failure
                 loadApprovals().catch(() => {});
@@ -646,9 +647,7 @@ function BrandDnaCta() {
 
   return (
     <button
-      onClick={() =>
-        window.dispatchEvent(new CustomEvent("open:brand-dna", { detail: { tab: "essentials" } }))
-      }
+      onClick={() => emitAppEvent("open:brand-dna", { tab: "essentials" })}
       className="mt-2 flex min-h-10 w-full items-center gap-2 rounded-xl border border-dashed border-brand-green/40 bg-brand-green/5 px-2.5 py-2 text-left text-[11.5px] font-medium text-foreground/80 transition hover:border-brand-green/70 hover:bg-brand-green/10"
     >
       <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-brand-green/15 text-brand-green">
@@ -724,24 +723,14 @@ function ApprovalsSection({
           </p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             <button
-              onClick={() =>
-                window.dispatchEvent(
-                  new CustomEvent("open:canvas", {
-                    detail: { type: "social-post", mode: "draft" },
-                  }),
-                )
-              }
+              onClick={() => emitAppEvent("open:canvas", { type: "social-post", mode: "draft" })}
               className="rounded-full bg-foreground px-3 py-1 text-[11.5px] font-medium text-background transition hover:bg-foreground/90"
             >
               Open Studio
             </button>
             <button
               onClick={() =>
-                window.dispatchEvent(
-                  new CustomEvent("chat:prefill", {
-                    detail: { text: "Draft a post for this week", focus: true },
-                  }),
-                )
+                emitAppEvent("chat:prefill", { text: "Draft a post for this week", focus: true })
               }
               className="rounded-full border border-border/60 bg-transparent px-3 py-1 text-[11.5px] font-medium text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
             >
@@ -918,8 +907,8 @@ function RowLeadingVisual({
       if (!d?.postId || d.postId === postId) setImg(getAnyCachedImage(postId));
     };
     setImg(getAnyCachedImage(postId));
-    window.addEventListener("post-image:cached", on as EventListener);
-    return () => window.removeEventListener("post-image:cached", on as EventListener);
+    addAppEventListener("post-image:cached", on);
+    return () => removeAppEventListener("post-image:cached", on);
   }, [postId]);
 
   if (img && (canvas === "social-post" || canvas === "design-asset")) {
@@ -975,8 +964,8 @@ function Thumbnail({
       if (!d?.postId || d.postId === postId) setCachedImg(getAnyCachedImage(postId));
     };
     setCachedImg(imageUrl || getAnyCachedImage(postId));
-    window.addEventListener("post-image:cached", on as EventListener);
-    return () => window.removeEventListener("post-image:cached", on as EventListener);
+    addAppEventListener("post-image:cached", on);
+    return () => removeAppEventListener("post-image:cached", on);
   }, [imageUrl, postId]);
 
   if (cachedImg) {

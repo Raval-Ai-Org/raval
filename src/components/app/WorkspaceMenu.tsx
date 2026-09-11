@@ -1,5 +1,6 @@
 "use client";
 
+import { emitAppEvent } from "@/lib/app-events";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "@/lib/navigation";
@@ -104,7 +105,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
       localStorage.setItem("workspace:selected", w.id);
       localStorage.setItem("workspace:name", name);
     } catch {}
-    window.dispatchEvent(new CustomEvent("workspace:changed", { detail: { id: w.id } }));
+    emitAppEvent("workspace:changed", { id: w.id });
     setOpen(false);
     if (typeof window !== "undefined") window.location.assign("/app");
     else navigate({ to: "/app" });
@@ -178,7 +179,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
           <button
             onClick={() => {
               setOpen(false);
-              window.dispatchEvent(new CustomEvent("open:publish"));
+              emitAppEvent("open:publish");
             }}
             className="relative mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] px-2 py-1.5 text-[11.5px] font-semibold text-background shadow-[inset_0_1px_0_hsl(0_0%_100%/0.3),0_3px_10px_-3px_hsl(var(--brand-green)/0.5)] transition-transform active:scale-[0.98]"
           >

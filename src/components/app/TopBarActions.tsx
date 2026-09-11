@@ -1,5 +1,6 @@
 "use client";
 
+import { emitAppEvent, useAppEvent, type AppEventName } from "@/lib/app-events";
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
@@ -49,12 +50,8 @@ const PILL =
 const SEG =
   "group relative inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-secondary/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
-function useOpenOnEvent(eventName: string, setOpen: (v: boolean) => void) {
-  useEffect(() => {
-    const h = () => setOpen(true);
-    window.addEventListener(eventName, h);
-    return () => window.removeEventListener(eventName, h);
-  }, [eventName, setOpen]);
+function useOpenOnEvent(eventName: AppEventName, setOpen: (v: boolean) => void) {
+  useAppEvent(eventName, () => setOpen(true));
 }
 
 /* ───────────────────────── BRAND DNA ───────────────────────── */
@@ -296,7 +293,7 @@ export function ScheduleButton({ workspaceId }: { workspaceId: string | null }) 
     try {
       await runNow({ data: { id } });
       toast.success("Running now", { description: "Draft will appear in approvals." });
-      window.dispatchEvent(new CustomEvent("content:changed"));
+      emitAppEvent("content:changed");
       refresh();
     } catch (e) {
       toast.error("Could not run", { description: e instanceof Error ? e.message : String(e) });

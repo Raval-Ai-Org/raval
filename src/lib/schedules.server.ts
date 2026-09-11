@@ -2,6 +2,7 @@
 // due scheduled_jobs row and inserts a pending content_items entry.
 // Imported only inside server handlers (cron route + run-now server fn).
 
+import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { runJsonPrompt } from "./ai";
 import { SCHEDULE_SYSTEMS } from "./ai/prompts";

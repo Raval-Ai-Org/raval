@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -155,8 +156,8 @@ function writeCache(wsId: string, b: CoachBriefing) {
 }
 
 function fireChat(prompt: string) {
-  window.dispatchEvent(new CustomEvent("chat:prefill", { detail: prompt }));
-  window.dispatchEvent(new CustomEvent("chat:focus"));
+  emitAppEvent("chat:prefill", prompt);
+  emitAppEvent("chat:focus");
 }
 
 export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, leading }: Props) {
@@ -222,8 +223,8 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
 
   useEffect(() => {
     const h = () => setOpen(true);
-    window.addEventListener("open:marketing-coach", h);
-    return () => window.removeEventListener("open:marketing-coach", h);
+    addAppEventListener("open:marketing-coach", h);
+    return () => removeAppEventListener("open:marketing-coach", h);
   }, []);
 
   useEffect(() => {

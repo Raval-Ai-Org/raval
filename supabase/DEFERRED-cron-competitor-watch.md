@@ -1,80 +1,55 @@
-# Deferred: `competitor-watch-scan` pg_cron job (migration 20260709194553)
+# Scheduled jobs — status and how to enable them
 
-> **Status: DEFERRED — do NOT apply until the app has a real production deployment URL.**
-> The original migration file `supabase/migrations/20260709194553_bb8d43fe-2f5e-48cb-9c77-8042cb96e8be.sql`
-> is left **unchanged** and is **excluded** from the final-state apply set in
-> `apply_migrations_cli.py` / `apply_migrations_via_cli.py`.
+> **Superseded procedure.** This file previously covered only the
+> `competitor-watch-scan` job. The problem is broader: **no cron job is
+> scheduled at all**, and three separate features depend on one. The enable
+> procedure now lives in **[`ENABLE-CRON-JOBS.sql`](./ENABLE-CRON-JOBS.sql)**.
 
-## Why it is deferred
+## Current state
 
-1. **Stale target.** The SQL points at an old preview deployment,
-   which will not exist for the new Mellox deployment.
-2. **No production URL yet.** Raval is not deployed (no Vercel URL). We must not invent a
-   URL, and must not put a placeholder into production SQL that could accidentally fire.
-3. **Incompatible auth contract.** The job sends an `apikey` header. The current app hook
-   (`src/routes/api/public/hooks/competitor-watch.ts`) requires a dedicated
-   **`x-cron-secret`** header equal to the `CRON_SECRET` env var (it explicitly never falls
-   back to the publishable/service-role key). As written, the job would be rejected (401).
-4. **Not required to build the schema.** `competitor_watches` / `competitor_alerts` tables
-   are created by `20260709194343` and exist without this job. The cron only triggers the
-   background scan that _populates_ alerts.
+`cron.job` is empty of app jobs. The original `competitor-watch-scan`
+(migration `20260709194553`) was unscheduled by `20260903000000` and never
+replaced, because it had two defects:
 
-## What the original SQL does
+1. **Stale target** — it pointed at an old preview deployment URL.
+2. **Wrong auth** — it sent an `apikey` header, but every hook in
+   `src/app/api/public/hooks/*` requires `x-cron-secret` equal to
+   `CRON_SECRET` and explicitly never falls back to the publishable or
+   service-role key. As written it would have been rejected with 401.
 
-- Ensures `pg_cron` and `pg_net` extensions.
-- Creates (and re-schedules) a pg_cron job named `competitor-watch-scan`, every 30 min.
-- Each run: `SELECT net.http_post(url := '<app>/api/public/hooks/competitor-watch', headers := {...}, body := '{}')` — an **HTTP POST** with `Content-Type: application/json`, an `apikey` header, and an empty JSON body.
+The original migration file is left unchanged.
 
-## The hook it must call
+## What is silently not running
 
-Route: `POST /api/public/hooks/competitor-watch`
+| Hook                                 | Feature that stops working                                                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/api/public/hooks/run-schedules`    | **Scheduled content never publishes**, and Market Brain collections are never refreshed (`runDueScheduledJobs` + `runDueMarketBrainCollections`) |
+| `/api/public/hooks/competitor-watch` | Competitor alerts are never generated (`runDueCompetitorScans`)                                                                                  |
+| `/api/public/hooks/sdr-reconcile`    | Publications can sit stuck in `publishing`/`pending` with no sweep to resolve them                                                               |
 
-- Requires header `x-cron-secret` == `process.env.CRON_SECRET` (length ≥ 16).
-- Returns 401 without a matching secret; 503 if `CRON_SECRET` is unset/too short.
+`run-schedules` is the one that matters most: a user can schedule a post in the
+calendar, see it accepted, and it will never go out.
 
-## Required before this can be applied
+## How it is enabled now
 
-Fill in **real** values (do not guess / do not commit placeholders):
+Two pieces, split so that no secret or environment URL is ever committed:
 
-1. `CRON_SECRET` — a long random string (32+ chars) set as an env var on the deployed app
-   (and in `.env` for local cron testing). This must match what the hook checks.
-2. `APP_BASE_URL` — the real deployed production origin, e.g. `https://<vercel-domain>`.
-3. Replace the stale `apikey` header with the correct `x-cron-secret` header (or reconcile
-   the hook contract). The publishable key is not a valid hook credential.
+1. **`migrations/20260911000100_add_app_hook_caller.sql`** — creates
+   `public.call_app_hook(path)`, which reads the app origin and cron secret
+   from Supabase Vault at call time and POSTs with the correct
+   `x-cron-secret` header. Safe to apply everywhere: it schedules nothing, and
+   raises a clear error if the Vault entries are absent.
 
-## Procedure to apply later (after deployment)
+2. **`ENABLE-CRON-JOBS.sql`** — run manually in the SQL Editor, once per
+   environment. Creates the two Vault secrets, verifies one call end to end,
+   then schedules all three jobs.
 
-1. Confirm the app is deployed and `CRON_SECRET` is configured on the environment.
-2. Verify the hook: `curl -X POST https://<app>/api/public/hooks/competitor-watch -H 'x-cron-secret: <CRON_SECRET>' -d '{}'` returns `{"ok":true,...}`.
-3. Create a NEW migration (e.g. `supabase/migrations/<timestamp>_enable_competitor_watch_cron.sql`)
-   containing the corrected SQL below, then apply it via the linked Supabase CLI.
-4. Do not edit the original `20260709194553` file.
+Because the secret is read from Vault on every run, rotating `CRON_SECRET` is a
+`vault.update_secret` call — the jobs do not need rescheduling.
 
-```sql
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-CREATE EXTENSION IF NOT EXISTS pg_net;
+## Prerequisites
 
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'competitor-watch-scan') THEN
-    PERFORM cron.unschedule('competitor-watch-scan');
-  END IF;
-END $$;
-
-SELECT cron.schedule(
-  'competitor-watch-scan',
-  '*/30 * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'REPLACE_WITH_REAL_APP_BASE_URL/api/public/hooks/competitor-watch',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'x-cron-secret', 'REPLACE_WITH_REAL_CRON_SECRET'
-    ),
-    body := '{}'::jsonb
-  );
-  $$
-);
-```
-
-> ⚠️ **Never apply this until `REPLACE_WITH_*` placeholders are filled with real values.**
+1. The app is deployed at a public HTTPS origin reachable from Supabase.
+2. `CRON_SECRET` is set in the app environment, 16+ characters (the hooks
+   return 503 below that; 32+ recommended).
+3. Migration `20260911000100` has been applied.

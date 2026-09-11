@@ -1,6 +1,8 @@
+import "server-only";
 import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { rateLimitFor } from "@/server/rate-limit";
 import { runJsonPrompt } from "@/lib/ai";
 import { contentBatchPrompt, nextPostPrompt, regeneratePrompt } from "@/lib/ai/prompts";
 import { buildNextSteps } from "@/lib/ai/deterministic-suggestions";
@@ -324,7 +326,7 @@ function fallbackGeneratedItems(args: {
 /* Regenerate copy on an existing item                           */
 /* ------------------------------------------------------------ */
 export const regenerateContentItem = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("generate")])
   .inputValidator((data) => z.object({ id: uuid }).parse(data))
   .handler(async ({ data, context }) => {
     const { data: existing, error: readErr } = await context.supabase
@@ -378,7 +380,7 @@ const GenerateSchema = z.object({
 });
 
 export const generateContentBatch = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("generate")])
   .inputValidator((data) => GenerateSchema.parse(data))
   .handler(async ({ data, context }) => {
     const channels = data.channels ?? ["instagram", "x", "linkedin"];
@@ -582,7 +584,7 @@ const CHANNEL_ROTATION: Array<z.infer<typeof ChannelEnum>> = [
 ];
 
 export const generateNextPost = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("generate")])
   .inputValidator((data) => NextPostSchema.parse(data))
   .handler(async ({ data, context }) => {
     // Recent items ground the suggestion in real history

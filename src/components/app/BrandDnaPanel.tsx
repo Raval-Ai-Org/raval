@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -181,8 +182,8 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
       else if (tab && TILE_KEYS.includes(tab as TileKey)) setActiveTile(tab as TileKey);
       else setActiveTile(null);
     };
-    window.addEventListener("open:brand-dna", h);
-    return () => window.removeEventListener("open:brand-dna", h);
+    addAppEventListener("open:brand-dna", h);
+    return () => removeAppEventListener("open:brand-dna", h);
   }, []);
 
   // Escape from an open tile returns to the overview (without closing the dialog).

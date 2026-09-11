@@ -11,6 +11,7 @@
 // We parse those out of the streamed text, run them, and render a small
 // chip strip under the assistant message describing what we did.
 
+import { emitAppEvent } from "@/lib/app-events";
 import type { CanvasType } from "@/lib/studio";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -101,21 +102,22 @@ export async function executeToolCall(
 
   switch (call.kind) {
     case "audit": {
-      window.dispatchEvent(new CustomEvent("geo:run-audit"));
+      emitAppEvent("geo:run-audit");
       return { kind: call.kind, ok: true, label: "Running AI visibility audit" };
     }
     case "open-studio": {
       const canvas = resolveCanvas(call.params.canvas) ?? "article";
       const brief = call.params.brief || call.params.prompt || "";
-      window.dispatchEvent(new CustomEvent("open:canvas", { detail: { type: canvas, brief } }));
+      emitAppEvent("open:canvas", { type: canvas, brief });
       if (brief) {
         // Stash for the modal — it reads this on mount when the canvas matches.
+        // (A `studio:prefill` event used to be dispatched here too; nothing
+        // listened for it — this handoff is the one StudioCanvasModal reads.)
         try {
           sessionStorage.setItem(`studio:prefill:${canvas}`, brief);
         } catch {
           /* noop */
         }
-        window.dispatchEvent(new CustomEvent("studio:prefill", { detail: { canvas, brief } }));
       }
       return {
         kind: call.kind,
@@ -125,27 +127,27 @@ export async function executeToolCall(
       };
     }
     case "open-memory": {
-      window.dispatchEvent(new CustomEvent("open:brand-dna"));
+      emitAppEvent("open:brand-dna");
       return { kind: call.kind, ok: true, label: "Opening Memory" };
     }
     case "open-calendar": {
-      window.dispatchEvent(new CustomEvent("open:analytics", { detail: { tab: "calendar" } }));
+      emitAppEvent("open:analytics", { tab: "calendar" });
       return { kind: call.kind, ok: true, label: "Opening Content Calendar" };
     }
     case "open-clients": {
-      window.dispatchEvent(new CustomEvent("open:client-portal"));
+      emitAppEvent("open:client-portal");
       return { kind: call.kind, ok: true, label: "Opening Client portal" };
     }
     case "open-visibility": {
-      window.dispatchEvent(new CustomEvent("open:ai-visibility"));
+      emitAppEvent("open:ai-visibility");
       return { kind: call.kind, ok: true, label: "Opening AI Visibility" };
     }
     case "open-competitor": {
-      window.dispatchEvent(new CustomEvent("open:competitor-watch"));
+      emitAppEvent("open:competitor-watch");
       return { kind: call.kind, ok: true, label: "Opening Competitor Watch" };
     }
     case "open-coach": {
-      window.dispatchEvent(new CustomEvent("open:marketing-coach"));
+      emitAppEvent("open:marketing-coach");
       return { kind: call.kind, ok: true, label: "Opening Marketing Coach" };
     }
     case "save-memory": {

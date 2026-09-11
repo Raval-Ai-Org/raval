@@ -1,3 +1,4 @@
+import "server-only";
 export type ImageRoutingInput = {
   prompt: string;
   taskType?: "generation" | "editing" | "variation" | "reference";

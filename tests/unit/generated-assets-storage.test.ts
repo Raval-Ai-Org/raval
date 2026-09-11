@@ -44,8 +44,10 @@ describe("generated asset storage security posture", () => {
     expect(persistRoute).not.toMatch(/getPublicUrl\(/);
     expect(libraryRoute).toMatch(/createSignedUrls\(/);
     expect(libraryRoute).not.toMatch(/getPublicUrl\(/);
-    expect(libraryRoute).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY/);
-    expect(libraryRoute).toMatch(/SUPABASE_PUBLISHABLE_KEY/);
+    // The library reads through the caller's RLS-bound client from the route
+    // kernel, never the service role.
+    expect(libraryRoute).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|supabaseAdmin/);
+    expect(libraryRoute).toMatch(/ctx\.supabase/);
     expect(persistRoute).toMatch(/media_url: null/);
     expect(persistRoute).toMatch(/asset_storage_path: path/);
     expect(contentFn).toMatch(/createSignedUrls\(paths, 3600\)/);

@@ -4,9 +4,16 @@
 //
 // All server routes/functions in this project call ONLY the helpers below.
 // Swap providers by editing this one file.
+import "server-only";
+import {
+  fetchWithRetry,
+  fetchWithTimeout,
+  UpstreamError,
+  type TransportFailure,
+} from "@/server/upstream";
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-const CHAT_MODEL = "qwen/qwen3-max";
+export const CHAT_MODEL = "qwen/qwen3-max";
 export const EXTRACTION_MODEL = "google/gemini-2.5-pro";
 
 const REFERER = process.env.APP_URL || "https://raval.ai";
@@ -52,9 +59,6 @@ const MAX_INPUT_CHARS = 16_000;
 const EXTRACTION_MAX_INPUT_CHARS = 60_000;
 const CHAT_TIMEOUT_MS = 60_000;
 const STREAM_TIMEOUT_MS = 90_000; // time to first byte
-// Retry policy for transient upstream failures (429 / 5xx / network).
-const MAX_RETRIES = 2;
-const RETRY_BASE_MS = 500;
 
 type CacheEntry = { value: any; expires: number };
 const responseCache = new Map<string, CacheEntry>();
@@ -93,28 +97,91 @@ function capTokens(n: number | undefined, ceiling = MAX_TOKENS_CAP): number {
   return Math.min(Math.max(1, Math.floor(n)), ceiling);
 }
 
-/** Truncate long text content in messages to keep input tokens bounded. */
-function trimMessages(messages: ChatMessage[], budgetChars = MAX_INPUT_CHARS): ChatMessage[] {
+// Share of the budget the system block may consume before it is itself cut.
+// Guards against a caller passing a runaway "context" string; the /api/chat
+// schema already caps context at 6k, so this only ever binds on abuse.
+const SYSTEM_BUDGET_RATIO = 0.6;
+// What a message cut down to a stub keeps, so its role still reads as a turn.
+const TRUNCATED_MESSAGE_CHARS = 200;
+
+/**
+ * Truncate message content to keep input tokens bounded.
+ *
+ * Allocation is by PRIORITY, not array order:
+ *   1. system messages  — identity, grounding rules, action tags, brand context
+ *   2. the newest turn  — the question actually being answered
+ *   3. remaining turns  — newest first, oldest dropped to a stub
+ *
+ * The previous implementation walked front-to-back and spent the budget in
+ * array order, so leading system prompts and the *oldest* history consumed it
+ * and the current user question — always the last element — was the first thing
+ * cut to 200 chars. Twelve turns into a conversation the model answered a
+ * fragment of the question with stale history fully intact, and nothing
+ * surfaced the truncation to the user.
+ *
+ * Output order always matches input order; only allocation order changed.
+ *
+ * Exported for tests. Like the previous implementation, a message reduced to a
+ * stub can overshoot the budget by up to TRUNCATED_MESSAGE_CHARS — keeping the
+ * turn's role legible is worth more than the exact ceiling.
+ */
+export function trimMessages(
+  messages: ChatMessage[],
+  budgetChars = MAX_INPUT_CHARS,
+): ChatMessage[] {
+  const out: ChatMessage[] = [...messages];
+  const textIndices = messages
+    .map((m, i) => (typeof m.content === "string" ? i : -1))
+    .filter((i) => i >= 0);
+  if (textIndices.length === 0) return out;
+
   let budget = budgetChars;
-  return messages.map((m) => {
-    if (typeof m.content !== "string") return m;
-    if (budget <= 0) return { ...m, content: m.content.slice(0, 200) };
-    if (m.content.length <= budget) {
-      budget -= m.content.length;
-      return m;
+
+  const spend = (index: number, allowance: number): void => {
+    const content = messages[index].content as string;
+    if (content.length <= allowance) {
+      budget -= content.length;
+      return;
     }
-    const trimmed = m.content.slice(0, budget);
-    budget = 0;
-    return { ...m, content: trimmed };
-  });
+    const keep = Math.max(TRUNCATED_MESSAGE_CHARS, allowance);
+    out[index] = { ...messages[index], content: content.slice(0, keep) };
+    budget -= Math.min(keep, allowance);
+  };
+
+  // 1. System messages first, bounded so they cannot starve the conversation.
+  const systemIndices = textIndices.filter((i) => messages[i].role === "system");
+  let systemAllowance = Math.floor(budgetChars * SYSTEM_BUDGET_RATIO);
+  for (const i of systemIndices) {
+    const before = budget;
+    spend(i, Math.min(systemAllowance, budget));
+    systemAllowance -= before - budget;
+  }
+
+  // 2. The newest turn gets whatever remains, before any older history.
+  const conversationIndices = textIndices.filter((i) => messages[i].role !== "system");
+  const newest = conversationIndices.pop();
+  if (newest !== undefined) spend(newest, Math.max(budget, 0));
+
+  // 3. Older history, newest first. Anything past the budget becomes a stub.
+  for (let k = conversationIndices.length - 1; k >= 0; k--) {
+    spend(conversationIndices[k], Math.max(budget, 0));
+  }
+
+  return out;
 }
 
-export class AiGatewayError extends Error {
-  status: number;
+export class AiGatewayError extends UpstreamError {
   constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
+    super(status, message, { provider: "openrouter" });
+    this.name = "AiGatewayError";
   }
+}
+
+function transportError(timeoutMessage?: string) {
+  return ({ kind, detail }: TransportFailure) =>
+    kind === "timeout"
+      ? new AiGatewayError(504, timeoutMessage ?? "AI provider timed out. Please retry.")
+      : new AiGatewayError(502, `Network error contacting AI provider: ${detail}`);
 }
 
 function getKey(): string {
@@ -157,78 +224,6 @@ function mapStatus(status: number, body: string): AiGatewayError {
   if (status === 429)
     return new AiGatewayError(429, "AI rate limit reached. Please try again in a moment.");
   return new AiGatewayError(status || 502, body?.slice(0, 300) || "AI provider error");
-}
-
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
-  timeoutMessage?: string,
-): Promise<Response> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
-  } catch (error: any) {
-    if (error?.name === "AbortError") {
-      throw new AiGatewayError(504, timeoutMessage ?? "AI provider timed out. Please retry.");
-    }
-    // Network / DNS / socket failures — surface as 502 with clear message.
-    throw new AiGatewayError(
-      502,
-      `Network error contacting AI provider: ${String(error?.message ?? error).slice(0, 200)}`,
-    );
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function isRetryableStatus(status: number): boolean {
-  return status === 429 || status === 502 || status === 503 || status === 504;
-}
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-/**
- * Fetch with timeout + exponential backoff on 429/5xx and network errors.
- * Honors `Retry-After` header when present.
- */
-async function fetchWithRetry(
-  url: string,
-  init: RequestInit,
-  opts: { timeoutMs: number; retries?: number; timeoutMessage?: string },
-): Promise<Response> {
-  const retries = opts.retries ?? MAX_RETRIES;
-  let lastErr: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const res = await fetchWithTimeout(url, init, opts.timeoutMs, opts.timeoutMessage);
-      if (res.ok || !isRetryableStatus(res.status) || attempt === retries) {
-        return res;
-      }
-      // Retryable status — honor Retry-After when reasonable, else backoff.
-      const retryAfter = Number(res.headers.get("retry-after") ?? "");
-      const delayMs =
-        Number.isFinite(retryAfter) && retryAfter > 0 && retryAfter <= 10
-          ? retryAfter * 1000
-          : RETRY_BASE_MS * Math.pow(2, attempt) + Math.floor(Math.random() * 200);
-      // Drain body so the connection can be reused.
-      await res.text().catch(() => "");
-      await sleep(delayMs);
-    } catch (e) {
-      lastErr = e;
-      // Retry only on 502/504 gateway errors we raised or transient network drops.
-      const status = e instanceof AiGatewayError ? e.status : 0;
-      if (attempt === retries || (status !== 0 && status !== 502 && status !== 504)) {
-        throw e;
-      }
-      await sleep(RETRY_BASE_MS * Math.pow(2, attempt) + Math.floor(Math.random() * 200));
-    }
-  }
-  // Unreachable, but satisfies TS.
-  throw lastErr instanceof Error ? lastErr : new AiGatewayError(502, "AI provider unavailable");
 }
 
 /* -------- In-flight dedupe: coalesce concurrent identical requests -------- */
@@ -289,7 +284,7 @@ export async function chatCompletion(opts: ChatOptions & { _extraction?: boolean
         headers: headers(key),
         body: JSON.stringify(body),
       },
-      { timeoutMs: CHAT_TIMEOUT_MS },
+      { timeoutMs: CHAT_TIMEOUT_MS, onTransportError: transportError() },
     );
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -344,8 +339,10 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
       headers: headers(key),
       body: JSON.stringify(body),
     },
-    STREAM_TIMEOUT_MS,
-    "AI provider did not respond in time. Please retry.",
+    {
+      timeoutMs: STREAM_TIMEOUT_MS,
+      onTransportError: transportError("AI provider did not respond in time. Please retry."),
+    },
   );
 
   if (!upstream.ok || !upstream.body) {

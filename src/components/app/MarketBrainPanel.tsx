@@ -8,6 +8,8 @@ import {
   BrainCircuit,
   Check,
   ChevronDown,
+  Clock,
+  Info,
   Loader2,
   MapPin,
   RefreshCw,
@@ -21,9 +23,22 @@ import { cn } from "@/lib/utils";
 
 const MARKET_LOCATION_KEY = "market-brain:location:";
 const MARKET_KEYWORDS_KEY = "market-brain:keywords:";
-const POLL_INTERVAL_MS = 2500;
-const MAX_POLLS = 16;
-const REQUEST_TIMEOUT_MS = 20_000;
+// Each scan/poll request returns quickly (the server only reads state or asks
+// DataForSEO for task status), so it keeps a short bound.
+const SCAN_REQUEST_TIMEOUT_MS = 20_000;
+// The analysis request runs one Claude generation (~35-40s measured); the server
+// bounds it at 90s and answers with a structured timeout, so wait just past that.
+const INTELLIGENCE_REQUEST_TIMEOUT_MS = 95_000;
+// DataForSEO's standard queue usually finishes a Google Trends task in 1-3 min.
+// Keep polling (backing off) for that long; after it, the scan stays pending and
+// "Check status" resumes it without creating a new provider task.
+const PENDING_POLL_BUDGET_MS = 4 * 60_000;
+
+function pollDelay(elapsedMs: number): number {
+  if (elapsedMs < 30_000) return 2_500;
+  if (elapsedMs < 90_000) return 5_000;
+  return 10_000;
+}
 
 type TrendPoint = { timestamp: number; date: string; values: number[]; averages?: number[] };
 type TrendData = {
@@ -71,8 +86,20 @@ type ApiResult = {
   collectionId?: string;
   taskId?: string;
   data?: TrendData;
-  error?: { message?: string };
+  error?: { message?: string; code?: string };
+  retryAfterSeconds?: number;
 };
+
+class MarketRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = "MarketRequestError";
+  }
+}
 
 type Props = { workspaceId: string | null; brandKeywords?: string[] };
 
@@ -102,9 +129,15 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
         : error && typeof error === "object" && "message" in error
           ? String(error.message)
           : "Market Brain could not load";
-    throw new Error(message);
+    const code =
+      error && typeof error === "object" && "code" in error ? String(error.code) : undefined;
+    throw new MarketRequestError(message, response.status, code);
   }
   return body;
+}
+
+function withDetail(prefix: string, detail?: string): string {
+  return detail ? `${prefix} ${detail.replace(/\.?$/, ".")}` : `${prefix} Please try again.`;
 }
 
 function sleep(ms: number, signal: AbortSignal) {
@@ -135,6 +168,7 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [running, setRunning] = useState(false);
+  const [phase, setPhase] = useState<"collecting" | "analyzing">("collecting");
   const requestRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
 
@@ -145,7 +179,11 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
     setTrendData(null);
     setIntelligence(null);
     setState("no_data");
+    setError(null);
   }, [workspaceId, defaults]);
+
+  // Stop polling when the panel unmounts.
+  useEffect(() => () => controllerRef.current?.abort(), []);
 
   const run = useCallback(async () => {
     if (!workspaceId) return;
@@ -166,13 +204,18 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
     setError(null);
     setIntelligence(null);
     setState("pending");
+    setPhase("collecting");
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
     setRunning(true);
 
-    const fetchJson = async (input: RequestInfo | URL, init: RequestInit = {}) => {
-      const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const fetchJson = async (
+      input: RequestInfo | URL,
+      init: RequestInit = {},
+      timeoutMs = SCAN_REQUEST_TIMEOUT_MS,
+    ) => {
+      const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
       try {
         return await readJson(await authedFetch(input, { ...init, signal: controller.signal }));
       } finally {
@@ -182,41 +225,60 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
 
     try {
       const started = (await fetchJson("/api/market/trends", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            workspaceId,
-            keywords: parsedKeywords,
-            location: location.trim(),
-            language: "en",
-          }),
-        })) as ApiResult;
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          keywords: parsedKeywords,
+          location: location.trim(),
+          language: "en",
+        }),
+      })) as ApiResult;
       if (requestId !== requestRef.current) return;
       if (!started.collectionId) throw new Error("Market collection could not be started");
       let collection = started;
-      for (let poll = 0; poll < MAX_POLLS && collection.state === "pending"; poll++) {
-        await sleep(POLL_INTERVAL_MS, controller.signal);
+      const pollStartedAt = Date.now();
+      while (
+        collection.state === "pending" &&
+        Date.now() - pollStartedAt < PENDING_POLL_BUDGET_MS
+      ) {
+        await sleep(pollDelay(Date.now() - pollStartedAt), controller.signal);
         if (requestId !== requestRef.current) return;
         collection = (await fetchJson(
           `/api/market/trends?collectionId=${encodeURIComponent(started.collectionId)}&workspaceId=${encodeURIComponent(workspaceId)}`,
         )) as ApiResult;
       }
+      if (requestId !== requestRef.current) return;
       if (collection.state === "pending") {
         setState("pending");
-        setError("Market data is still being collected. We'll update this automatically.");
+        setError(null);
         return;
       }
-      if (collection.state === "failed" || collection.state === "no_data") {
-        setState(collection.state);
+      if (collection.state === "failed") {
+        setState("failed");
         setError(
-          collection.state === "failed"
-            ? "Market scan couldn't be completed. Please try again."
-            : "No reliable market data was found for this scan.",
+          withDetail(
+            "Google Trends collection failed:",
+            collection.retryAfterSeconds
+              ? `${collection.error?.message ?? "unknown error"} — retry available in ${collection.retryAfterSeconds}s`
+              : collection.error?.message,
+          ),
+        );
+        return;
+      }
+      if (collection.state === "no_data") {
+        setState("no_data");
+        setTrendData(null);
+        setError(
+          `Google Trends found no measurable search interest for “${parsedKeywords.join(", ")}” in ${location.trim()}. Try broader keywords or another market.`,
         );
         return;
       }
       if (collection.data) setTrendData(collection.data);
-      const analysis = (await fetchJson("/api/market/intelligence", {
+      setPhase("analyzing");
+      const analysis = (await fetchJson(
+        "/api/market/intelligence",
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -224,23 +286,33 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
             collectionId: started.collectionId,
             analysisType: "market_strategy",
           }),
-        })) as ApiResult & { data?: Intelligence };
+        },
+        INTELLIGENCE_REQUEST_TIMEOUT_MS,
+      )) as ApiResult & { data?: Intelligence };
       if (requestId !== requestRef.current) return;
       setIntelligence(analysis.data ?? null);
       setState(analysis.state);
-      if (!analysis.data)
+      if (!analysis.data) {
         setError(
           analysis.state === "failed"
-            ? "Market scan couldn't be completed. Please try again."
-            : "Market intelligence is not ready yet.",
+            ? withDetail(
+                "Trend data is ready, but Ravi's analysis failed:",
+                analysis.error?.message,
+              )
+            : analysis.state === "pending"
+              ? "Market data is still being collected. Check status again shortly."
+              : "No market data is available to analyze for this scan.",
         );
+      }
     } catch (cause) {
       if (requestId !== requestRef.current) return;
       setState("failed");
       setError(
         cause instanceof DOMException && cause.name === "AbortError"
           ? "Market scan timed out. Please try again."
-          : "Market scan couldn't be completed. Please try again.",
+          : cause instanceof MarketRequestError
+            ? withDetail("Market scan couldn't be completed:", cause.message)
+            : "Market scan couldn't be completed. Please try again.",
       );
     } finally {
       if (requestId === requestRef.current) {
@@ -305,18 +377,32 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
           }}
         />
       )}
-      {state === "pending" && <CollectingState />}
-      {error && state !== "pending" && (
+      {state === "pending" && (
+        <CollectingState active={running} phase={phase} onCheck={() => void run()} />
+      )}
+      {error && state === "no_data" && (
+        <div
+          className="flex items-start gap-2 rounded-xl border border-border/70 bg-secondary/30 p-3 text-[12px] text-muted-foreground"
+          role="status"
+          data-testid="market-brain-no-data"
+        >
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <div className="min-w-0 flex-1">{error}</div>
+        </div>
+      )}
+      {error && state !== "pending" && state !== "no_data" && (
         <div
           className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3 text-[12px] text-amber-700 dark:text-amber-300"
           role="alert"
+          data-testid="market-brain-error"
         >
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <div className="min-w-0 flex-1">{error}</div>
           <button
             type="button"
             onClick={() => void run()}
-            className="inline-flex shrink-0 items-center gap-1 font-semibold hover:underline"
+            disabled={running}
+            className="inline-flex shrink-0 items-center gap-1 font-semibold hover:underline disabled:opacity-60"
           >
             <RefreshCw className="h-3 w-3" /> Retry
           </button>
@@ -404,24 +490,51 @@ function MarketSetup({
   );
 }
 
-function CollectingState() {
+function CollectingState({
+  active,
+  phase,
+  onCheck,
+}: {
+  active: boolean;
+  phase: "collecting" | "analyzing";
+  onCheck: () => void;
+}) {
+  const analyzing = active && phase === "analyzing";
   return (
     <div
       className="flex items-center gap-3 rounded-xl border border-border/70 bg-card p-4"
       role="status"
       aria-live="polite"
+      data-testid="market-brain-pending"
     >
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-500">
-        <Loader2 className="h-4 w-4 animate-spin" />
+        {active ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
       </span>
-      <div>
+      <div className="min-w-0 flex-1">
         <div className="text-[12.5px] font-semibold text-foreground">
-          Market data is still being collected. We'll update this automatically.
+          {analyzing
+            ? "Trend data collected. Ravi is analyzing your market…"
+            : active
+              ? "Market data is still being collected. We'll update this automatically."
+              : "Google Trends is still processing this scan."}
         </div>
         <div className="mt-0.5 text-[11px] text-muted-foreground">
-          The scan is running in the background. You can keep working.
+          {analyzing
+            ? "This usually takes under a minute."
+            : active
+              ? "Collection usually takes 1–3 minutes, then Ravi analyzes it. You can keep working."
+              : "It's taking longer than usual. Check again in a minute — no new scan will be started."}
         </div>
       </div>
+      {!active && (
+        <button
+          type="button"
+          onClick={onCheck}
+          className="inline-flex shrink-0 items-center gap-1 text-[11.5px] font-semibold text-foreground hover:underline"
+        >
+          <RefreshCw className="h-3 w-3" /> Check status
+        </button>
+      )}
     </div>
   );
 }

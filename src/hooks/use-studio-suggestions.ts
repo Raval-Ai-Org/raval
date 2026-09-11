@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,17 +43,13 @@ function hasRecentAudit(wsId: string): boolean {
   }
 }
 
-function fire(event: string, detail?: unknown) {
-  window.dispatchEvent(new CustomEvent(event, { detail }));
-}
-
 function openCanvas(type: string) {
-  fire("open:canvas", { type });
+  emitAppEvent("open:canvas", { type });
 }
 
 function chatPrefill(prompt: string) {
-  fire("chat:prefill", prompt);
-  fire("chat:focus");
+  emitAppEvent("chat:prefill", prompt);
+  emitAppEvent("chat:focus");
 }
 
 export function useStudioSuggestions() {
@@ -113,7 +110,7 @@ export function useStudioSuggestions() {
         hint: "30s · unlocks personalised drafts",
         accent: "violet",
         icon: "Brain",
-        run: () => fire("open:brand-dna"),
+        run: () => emitAppEvent("open:brand-dna"),
       });
     }
 
@@ -124,7 +121,7 @@ export function useStudioSuggestions() {
         hint: "40-point GEO / AEO scan",
         accent: "blue",
         icon: "Search",
-        run: () => fire("geo:run-audit"),
+        run: () => emitAppEvent("geo:run-audit"),
       });
     }
 
@@ -163,7 +160,7 @@ export function useStudioSuggestions() {
         hint: "Approve or polish to keep momentum",
         accent: "amber",
         icon: "Wand2",
-        run: () => fire("open:content-calendar"),
+        run: () => emitAppEvent("open:content-calendar"),
       });
     }
 
@@ -185,7 +182,7 @@ export function useStudioSuggestions() {
         hint: "Get approvals in one link",
         accent: "rose",
         icon: "Share2",
-        run: () => fire("open:client-portal"),
+        run: () => emitAppEvent("open:client-portal"),
       });
     }
 
@@ -320,11 +317,11 @@ export function useStudioSuggestions() {
     const onSignalChange = () => {
       loadAi(true).catch(() => {});
     };
-    window.addEventListener("content:changed", onChange);
-    window.addEventListener("brand-dna:saved", onChange);
-    window.addEventListener("brand-dna:saved", onSignalChange);
-    window.addEventListener("geo:audit-complete", onChange);
-    window.addEventListener("geo:audit-complete", onSignalChange);
+    addAppEventListener("content:changed", onChange);
+    addAppEventListener("brand-dna:saved", onChange);
+    addAppEventListener("brand-dna:saved", onSignalChange);
+    addAppEventListener("geo:audit-complete", onChange);
+    addAppEventListener("geo:audit-complete", onSignalChange);
     const t = window.setInterval(() => {
       if (!document.hidden) load().catch(() => {});
     }, 120000);
@@ -334,11 +331,11 @@ export function useStudioSuggestions() {
     document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelled = true;
-      window.removeEventListener("content:changed", onChange);
-      window.removeEventListener("brand-dna:saved", onChange);
-      window.removeEventListener("brand-dna:saved", onSignalChange);
-      window.removeEventListener("geo:audit-complete", onChange);
-      window.removeEventListener("geo:audit-complete", onSignalChange);
+      removeAppEventListener("content:changed", onChange);
+      removeAppEventListener("brand-dna:saved", onChange);
+      removeAppEventListener("brand-dna:saved", onSignalChange);
+      removeAppEventListener("geo:audit-complete", onChange);
+      removeAppEventListener("geo:audit-complete", onSignalChange);
       window.clearInterval(t);
       document.removeEventListener("visibilitychange", onVis);
     };
@@ -410,19 +407,19 @@ function aiIconFor(intent: string): StudioSuggestion["icon"] {
 function runIntent(intent: string, prompt: string) {
   switch (intent) {
     case "geo-audit":
-      fire("geo:run-audit");
+      emitAppEvent("geo:run-audit");
       return;
     case "brand-dna":
-      fire("open:brand-dna");
+      emitAppEvent("open:brand-dna");
       return;
     case "review-drafts":
-      fire("open:content-calendar");
+      emitAppEvent("open:content-calendar");
       return;
     case "share":
-      fire("open:client-portal");
+      emitAppEvent("open:client-portal");
       return;
     case "seo-brief":
-      window.dispatchEvent(new CustomEvent("open:canvas", { detail: { type: "seo-brief" } }));
+      emitAppEvent("open:canvas", { type: "seo-brief" });
       return;
     default:
       chatPrefill(prompt);

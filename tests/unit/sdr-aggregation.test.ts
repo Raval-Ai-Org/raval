@@ -27,6 +27,30 @@ describe("aggregateItemStatus", () => {
     expect(aggregateItemStatus([{ status: "pending" }])).toBe("publishing");
   });
 
+  it("published + failed + still in-flight → publishing, NOT partial_failed", () => {
+    // A 3-destination item mid-delivery: LinkedIn published, X failed,
+    // Instagram still going. `partial_failed` reads as terminal in the
+    // delivery view, so reporting it here would invite an operator to retry a
+    // post that is about to succeed.
+    for (const inFlight of ["publishing", "pending", "retrying"]) {
+      expect(
+        aggregateItemStatus([{ status: "published" }, { status: "failed" }, { status: inFlight }]),
+      ).toBe("publishing");
+    }
+  });
+
+  it("settles to partial_failed once the last in-flight destination resolves", () => {
+    expect(
+      aggregateItemStatus([{ status: "published" }, { status: "failed" }, { status: "published" }]),
+    ).toBe("partial_failed");
+  });
+
+  it("ignores cancelled destinations when deciding partial_failed", () => {
+    expect(
+      aggregateItemStatus([{ status: "published" }, { status: "failed" }, { status: "cancelled" }]),
+    ).toBe("partial_failed");
+  });
+
   it("all cancelled → approved (item is back to actionable after cancel)", () => {
     expect(aggregateItemStatus([{ status: "cancelled" }])).toBe("approved");
   });

@@ -1,3 +1,4 @@
+import "server-only";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -18,30 +19,30 @@ const Priority = z.enum(["high", "medium", "low"]);
 const Confidence = z.enum(["high", "medium", "low"]);
 
 const TrendSignalSchema = z.object({
-  title: z.string().min(1).max(160),
+  title: z.string().min(1).max(200),
   direction: Direction,
-  evidence: z.array(z.string().min(1).max(400)).min(1).max(5),
-  significance: z.string().min(1).max(500),
-  opportunities: z.array(z.string().min(1).max(300)).max(4),
+  evidence: z.array(z.string().min(1).max(600)).min(1).max(5),
+  significance: z.string().min(1).max(800),
+  opportunities: z.array(z.string().min(1).max(400)).max(4),
 });
 
 const OpportunitySchema = z.object({
-  title: z.string().min(1).max(160),
-  explanation: z.string().min(1).max(500),
-  targetAudience: z.string().min(1).max(240),
-  recommendedAction: z.string().min(1).max(400),
+  title: z.string().min(1).max(200),
+  explanation: z.string().min(1).max(800),
+  targetAudience: z.string().min(1).max(400),
+  recommendedAction: z.string().min(1).max(600),
   priority: Priority,
 });
 
 const RecommendationSchema = z.object({
-  action: z.string().min(1).max(300),
-  reason: z.string().min(1).max(400),
-  expectedMarketingImpact: z.string().min(1).max(300),
+  action: z.string().min(1).max(400),
+  reason: z.string().min(1).max(600),
+  expectedMarketingImpact: z.string().min(1).max(400),
   priority: Priority,
 });
 
 export const MarketIntelligenceSchema = z.object({
-  summary: z.string().min(1).max(800),
+  summary: z.string().min(1).max(1200),
   trendSignals: z.array(TrendSignalSchema).max(8),
   opportunities: z.array(OpportunitySchema).max(8),
   recommendations: z.array(RecommendationSchema).max(8),
@@ -50,6 +51,84 @@ export const MarketIntelligenceSchema = z.object({
   confidence: Confidence,
   generatedAt: z.string().min(1).max(80),
 });
+
+const stringList = { type: "array", items: { type: "string" } } as const;
+
+// Structured-output schema sent to Claude (output_config.format). The API does not
+// enforce length or item-count limits, so the prompt states them and
+// parseIntelligence() enforces them with MarketIntelligenceSchema. generatedAt is
+// stamped server-side and therefore not requested from the model.
+export const MARKET_INTELLIGENCE_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "summary",
+    "trendSignals",
+    "opportunities",
+    "recommendations",
+    "relatedQueries",
+    "relatedTopics",
+    "confidence",
+  ],
+  properties: {
+    summary: { type: "string" },
+    trendSignals: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "direction", "evidence", "significance", "opportunities"],
+        properties: {
+          title: { type: "string" },
+          direction: { type: "string", enum: Direction.options },
+          evidence: stringList,
+          significance: { type: "string" },
+          opportunities: stringList,
+        },
+      },
+    },
+    opportunities: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "explanation", "targetAudience", "recommendedAction", "priority"],
+        properties: {
+          title: { type: "string" },
+          explanation: { type: "string" },
+          targetAudience: { type: "string" },
+          recommendedAction: { type: "string" },
+          priority: { type: "string", enum: Priority.options },
+        },
+      },
+    },
+    recommendations: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["action", "reason", "expectedMarketingImpact", "priority"],
+        properties: {
+          action: { type: "string" },
+          reason: { type: "string" },
+          expectedMarketingImpact: { type: "string" },
+          priority: { type: "string", enum: Priority.options },
+        },
+      },
+    },
+    relatedQueries: stringList,
+    relatedTopics: stringList,
+    confidence: { type: "string", enum: Confidence.options },
+  },
+} as const;
+
+// Opus 5 thinks adaptively by default and thinking tokens share max_tokens; the
+// ceiling must cover thinking plus a full answer (the old 3000 truncated the JSON).
+const CLAUDE_MAX_TOKENS = 16_000;
+// Measured end-to-end at 34-38s for a typical collection (output generation
+// dominates). Bounded per attempt; one retry covers fast transient failures
+// (429/5xx/529). MARKET_INTELLIGENCE_ROUTE_TIMEOUT_MS is the overall backstop.
+const CLAUDE_TIMEOUT_MS = 65_000;
 
 export type MarketIntelligence = z.infer<typeof MarketIntelligenceSchema>;
 export type IntelligenceState = "completed" | "cached" | "pending" | "failed" | "no_data";
@@ -111,9 +190,15 @@ function contextFingerprint(workspace: WorkspaceRow): string {
   return createHash("sha256").update(context).digest("hex");
 }
 
-function analysisKey(collectionId: string, fingerprint: string, analysisType: string): string {
+// A collection row is refreshed in place when its data expires, keeping its id,
+// so the key includes completed_at: new trend data must never hit old analysis.
+function analysisKey(
+  collection: Pick<TrendCollectionRow, "id" | "completed_at">,
+  fingerprint: string,
+  analysisType: string,
+): string {
   return createHash("sha256")
-    .update(`${collectionId}:${fingerprint}:${analysisType}`)
+    .update(`${collection.id}:${collection.completed_at ?? ""}:${fingerprint}:${analysisType}`)
     .digest("hex");
 }
 
@@ -122,17 +207,14 @@ function asBrandDna(workspace: WorkspaceRow): BrandCtxDna {
 }
 
 function serializeTrendEvidence(data: GoogleTrendsData): string {
-  return JSON.stringify(
-    {
-      keywords: data.keywords,
-      interestOverTime: data.interestOverTime,
-      regionalInterest: data.regionalInterest,
-      relatedQueries: data.relatedQueries,
-      relatedTopics: data.relatedTopics,
-    },
-    null,
-    2,
-  );
+  // Compact JSON: the same measured evidence at roughly half the input tokens.
+  return JSON.stringify({
+    keywords: data.keywords,
+    interestOverTime: data.interestOverTime,
+    regionalInterest: data.regionalInterest,
+    relatedQueries: data.relatedQueries,
+    relatedTopics: data.relatedTopics,
+  });
 }
 
 function buildPrompt(args: {
@@ -148,8 +230,8 @@ function buildPrompt(args: {
       "Reason in this order: evidence, market signal, business relevance, opportunity, recommended action.",
       "Separate measured evidence from interpretation. Never invent statistics, customer behavior, competitors, market facts, or trend movement.",
       "If evidence is weak or absent, say so and lower confidence. Missing Brand DNA must not block useful but clearly generic recommendations.",
-      "Return strict JSON only using exactly the requested schema.",
-      "Schema: {summary, trendSignals:[{title,direction,evidence,significance,opportunities}], opportunities:[{title,explanation,targetAudience,recommendedAction,priority}], recommendations:[{action,reason,expectedMarketingImpact,priority}], relatedQueries:string[], relatedTopics:string[], confidence:high|medium|low, generatedAt:string}",
+      "Keep it concise: summary under 600 characters; at most 5 trendSignals (1-3 evidence items and at most 3 opportunities each), 5 opportunities, 5 recommendations, 10 relatedQueries and 10 relatedTopics; keep every text field under 300 characters.",
+      "relatedQueries and relatedTopics must only contain queries and topic titles present in the supplied evidence.",
     ].join("\n"),
     user: [
       `Collection date: ${args.collection.completed_at ?? "unknown"}`,
@@ -162,20 +244,60 @@ function buildPrompt(args: {
   };
 }
 
-function parseIntelligence(raw: string): MarketIntelligence {
+const LIST_LIMITS = {
+  trendSignals: 8,
+  opportunities: 8,
+  recommendations: 8,
+  relatedQueries: 20,
+  relatedTopics: 20,
+} as const;
+
+// Item-count limits are presentation limits: extra items are dropped rather than
+// failing an otherwise valid analysis. Content is never rewritten.
+function capLists(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  const capped: JsonRecord = { ...value };
+  for (const [key, limit] of Object.entries(LIST_LIMITS)) {
+    if (Array.isArray(capped[key])) capped[key] = (capped[key] as unknown[]).slice(0, limit);
+  }
+  if (Array.isArray(capped.trendSignals)) {
+    capped.trendSignals = capped.trendSignals.map((signal) =>
+      isRecord(signal)
+        ? {
+            ...signal,
+            evidence: Array.isArray(signal.evidence)
+              ? signal.evidence.slice(0, 5)
+              : signal.evidence,
+            opportunities: Array.isArray(signal.opportunities)
+              ? signal.opportunities.slice(0, 4)
+              : signal.opportunities,
+          }
+        : signal,
+    );
+  }
+  return capped;
+}
+
+export function parseIntelligence(raw: string): MarketIntelligence {
   const parsed = safeParseJson<unknown>(raw, null);
-  const result = MarketIntelligenceSchema.safeParse(parsed);
+  const result = MarketIntelligenceSchema.safeParse({
+    ...(capLists(parsed) as JsonRecord),
+    generatedAt: new Date().toISOString(),
+  });
   if (!result.success) {
+    const issue = result.error.issues[0];
     throw new MarketIntelligenceError(
-      "Claude returned malformed market intelligence",
+      `Claude returned malformed market intelligence${
+        issue ? ` (${issue.path.join(".") || "root"}: ${issue.message})` : ""
+      }`,
       502,
       "malformed_response",
     );
   }
-  return { ...result.data, generatedAt: new Date().toISOString() };
+  return result.data;
 }
 
-function providerError(error: unknown): MarketIntelligenceResult["error"] {
+function providerError(error: unknown): NonNullable<MarketIntelligenceResult["error"]> {
   if (error instanceof AnthropicGatewayError) {
     return { message: error.message, status: error.status, code: error.code };
   }
@@ -196,7 +318,7 @@ async function loadCollection(
       "id, workspace_id, status, keywords, location, language, completed_at, normalized_result, provider_error",
     )
     .eq("workspace_id", workspaceId)
-    .eq("id", collectionId)
+    .eq("id", collectionId);
   const { data, error } = await withMarketTimeout(
     query.maybeSingle(),
     undefined,
@@ -207,11 +329,14 @@ async function loadCollection(
   return data as TrendCollectionRow | null;
 }
 
-async function loadWorkspace(workspaceId: string, operation = "unknown"): Promise<WorkspaceRow | null> {
+async function loadWorkspace(
+  workspaceId: string,
+  operation = "unknown",
+): Promise<WorkspaceRow | null> {
   const query = supabaseAdmin
     .from("workspaces")
     .select("name, industry, audience, goals, website_url, brand_voice")
-    .eq("id", workspaceId)
+    .eq("id", workspaceId);
   const { data, error } = await withMarketTimeout(
     query.maybeSingle(),
     undefined,
@@ -253,11 +378,11 @@ export async function analyzeMarketCollection(args: {
   if (!workspace) return { state: "no_data", collectionId: args.collectionId };
   const type = args.analysisType ?? ANALYSIS_TYPE;
   const fingerprint = contextFingerprint(workspace);
-  const key = analysisKey(args.collectionId, fingerprint, type);
+  const key = analysisKey(collection, fingerprint, type);
   const cacheQuery = supabaseAdmin
     .from("market_intelligence_cache")
     .select("result")
-    .eq("analysis_key", key)
+    .eq("analysis_key", key);
   const { data: cached, error: cacheError } = await withMarketTimeout(
     cacheQuery.maybeSingle(),
     undefined,
@@ -267,9 +392,15 @@ export async function analyzeMarketCollection(args: {
     throw new MarketIntelligenceError("Unable to read intelligence cache", 500, "storage_error");
   if (cached?.result) {
     const validated = MarketIntelligenceSchema.safeParse(cached.result);
-    if (validated.success)
+    if (validated.success) {
       marketLog("intelligence cache hit", { operation, collectionId: args.collectionId });
       return { state: "cached", collectionId: args.collectionId, data: validated.data };
+    }
+    // An unreadable cache entry is regenerated (and overwritten) below.
+    marketLog("intelligence cache entry invalid; regenerating", {
+      operation,
+      collectionId: args.collectionId,
+    });
   }
 
   const brandContext = serializeBrandContext(asBrandDna(workspace), {
@@ -277,21 +408,47 @@ export async function analyzeMarketCollection(args: {
     maxCharsPerField: 500,
   });
   const prompt = buildPrompt({ collection, workspace, brandContext });
+  const model = selectClaudeModel("deep-strategy");
+  const startedAt = Date.now();
   let intelligence: MarketIntelligence;
   try {
-    marketLog("Claude intelligence request started", { operation, collectionId: args.collectionId });
+    marketLog("Claude intelligence request started", {
+      operation,
+      collectionId: args.collectionId,
+      model,
+      promptChars: prompt.system.length + prompt.user.length,
+    });
     const raw = await claudeTextPrompt({
       route: "market-intelligence",
       system: prompt.system,
       user: prompt.user,
-      model: selectClaudeModel("deep-strategy"),
-      maxTokens: 3000,
+      model,
+      maxTokens: CLAUDE_MAX_TOKENS,
+      // Interactive route: medium effort keeps thinking (and latency) bounded;
+      // the task is a structured summary of supplied evidence, not open research.
+      effort: "medium",
+      outputSchema: MARKET_INTELLIGENCE_OUTPUT_SCHEMA,
+      timeoutMs: CLAUDE_TIMEOUT_MS,
+      retries: 1,
     });
     intelligence = parseIntelligence(raw);
-    marketLog("Claude response received", { operation, collectionId: args.collectionId });
+    marketLog("Claude response received", {
+      operation,
+      collectionId: args.collectionId,
+      durationMs: Date.now() - startedAt,
+    });
   } catch (error) {
-    marketLog("Claude intelligence request failed", { operation, collectionId: args.collectionId });
-    return { state: "failed", collectionId: args.collectionId, error: providerError(error) };
+    const details = providerError(error);
+    marketLog("Claude intelligence request failed", {
+      operation,
+      collectionId: args.collectionId,
+      model,
+      durationMs: Date.now() - startedAt,
+      code: details.code,
+      status: details.status,
+      message: details.message,
+    });
+    return { state: "failed", collectionId: args.collectionId, error: details };
   }
 
   const cacheWrite = supabaseAdmin.from("market_intelligence_cache").upsert(
@@ -311,11 +468,15 @@ export async function analyzeMarketCollection(args: {
     "Market intelligence cache write timed out",
   );
   if (insertError) {
-    return {
-      state: "failed",
+    // The analysis is valid and already paid for: return it, and log the storage
+    // failure so it is visible (the next request regenerates instead of hitting cache).
+    marketLog("intelligence cache write failed", {
+      operation,
       collectionId: args.collectionId,
-      error: { message: "Unable to store market intelligence", status: 500, code: "storage_error" },
-    };
+      code: insertError.code,
+      message: insertError.message,
+    });
+    return { state: "completed", collectionId: args.collectionId, data: intelligence };
   }
   marketLog("intelligence cache written", { operation, collectionId: args.collectionId });
   return { state: "completed", collectionId: args.collectionId, data: intelligence };

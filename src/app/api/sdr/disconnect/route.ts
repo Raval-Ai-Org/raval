@@ -1,29 +1,30 @@
 // POST /api/sdr/disconnect — disconnect a connected account (FR-003).
+import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
-import { requireWorkspaceAccess, getWorkspaceSdrKey } from "@/lib/sdr.helpers.server";
+import { defineRoute } from "@/server/route";
+import { getWorkspaceSdrKey } from "@/lib/sdr.helpers.server";
 import { disconnectHandler } from "@/lib/sdr.handlers";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
-  let body: { workspaceId?: unknown; accountId?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError(400, "Invalid request body");
-  }
-  const ws = await requireWorkspaceAccess(request, body.workspaceId);
-  if (!ws.ok) return ws.response;
+// accountId is validated by disconnectHandler, which owns the 400 for it.
+const BodySchema = z.object({ workspaceId: z.unknown(), accountId: z.unknown() });
 
-  try {
-    const token = await getWorkspaceSdrKey(ws.workspaceId);
-    const baseUrl = process.env.SDR_BASE_URL ?? "";
-    const out = await disconnectHandler(String(body.accountId ?? ""), {
-      sdrBaseUrl: baseUrl,
-      token,
-    });
-    return Response.json(out.body, { status: out.status });
-  } catch (e) {
-    return jsonError(503, e instanceof Error ? e.message : "SDR provisioning failed");
-  }
-}
+export const POST = defineRoute({
+  name: "sdr/disconnect",
+  auth: "workspace",
+  body: BodySchema,
+  workspaceId: ({ body }) => body.workspaceId,
+  handler: async ({ body, workspaceId }) => {
+    try {
+      const token = await getWorkspaceSdrKey(workspaceId);
+      const out = await disconnectHandler(String(body.accountId ?? ""), {
+        sdrBaseUrl: process.env.SDR_BASE_URL ?? "",
+        token,
+      });
+      return Response.json(out.body, { status: out.status });
+    } catch (e) {
+      return jsonError(503, e instanceof Error ? e.message : "SDR provisioning failed");
+    }
+  },
+});

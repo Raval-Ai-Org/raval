@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
 import { MessageSquare, MoreHorizontal, Pin, Plus, Search } from "@/components/ui/gemini-icons";
@@ -67,8 +68,8 @@ export function RecentChats({
   useEffect(() => {
     void load();
     const onChanged = () => void load();
-    window.addEventListener("chat:conversation-changed", onChanged);
-    return () => window.removeEventListener("chat:conversation-changed", onChanged);
+    addAppEventListener("chat:conversation-changed", onChanged);
+    return () => removeAppEventListener("chat:conversation-changed", onChanged);
   }, [load]);
 
   const newChat = async () => {
@@ -108,7 +109,7 @@ export function RecentChats({
       return;
     }
     await load();
-    window.dispatchEvent(new CustomEvent("chat:conversation-changed"));
+    emitAppEvent("chat:conversation-changed");
   };
 
   const manage = async (conversation: Conversation) => {

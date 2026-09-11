@@ -6,6 +6,7 @@
 // the AI streams, and emit a `preview:stage` window event for the preview to
 // pick up. When the caller signals completion, we jump to the `complete` stage
 // and then idle.
+import { onAppEvent, emitAppEvent } from "@/lib/app-events";
 
 export type StageKind =
   | "thinking"
@@ -47,10 +48,6 @@ export interface PreviewStageEvent extends PreviewStage {
   total: number;
 }
 
-const EV = "preview:stage";
-const IDLE = "preview:idle";
-const CTX = "preview:context";
-
 /* ── Live context store ───────────────────────────────────────────────────
  * The preview surface (SitePreview) registers what it currently has access
  * to — site URL, live screenshot URL, favicon. Stages read this so visuals
@@ -63,24 +60,18 @@ export interface PreviewContext {
 let previewContext: PreviewContext = {};
 export function setPreviewContext(ctx: PreviewContext) {
   previewContext = { ...previewContext, ...ctx };
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent<PreviewContext>(CTX, { detail: previewContext }));
-  }
+  emitAppEvent("preview:context", previewContext);
 }
 export function getPreviewContext(): PreviewContext {
   return previewContext;
 }
 
 function dispatch(stage: PreviewStage, index: number, total: number) {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent<PreviewStageEvent>(EV, { detail: { ...stage, index, total } }),
-  );
+  emitAppEvent("preview:stage", { ...stage, index, total });
 }
 
 function dispatchIdle() {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(IDLE));
+  emitAppEvent("preview:idle");
 }
 
 // ── Intent planner ────────────────────────────────────────────────────────
@@ -437,13 +428,11 @@ import { useEffect, useState } from "react";
 export function usePreviewStage() {
   const [stage, setStage] = useState<PreviewStageEvent | null>(null);
   useEffect(() => {
-    const onStage = (e: Event) => setStage((e as CustomEvent<PreviewStageEvent>).detail);
-    const onIdle = () => setStage(null);
-    window.addEventListener(EV, onStage as EventListener);
-    window.addEventListener(IDLE, onIdle);
+    const offStage = onAppEvent("preview:stage", (e) => setStage(e.detail));
+    const offIdle = onAppEvent("preview:idle", () => setStage(null));
     return () => {
-      window.removeEventListener(EV, onStage as EventListener);
-      window.removeEventListener(IDLE, onIdle);
+      offStage();
+      offIdle();
     };
   }, []);
   return stage;

@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppModalShell } from "@/components/app/AppModalShell";
@@ -460,8 +461,8 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
   // Listen to global event
   useEffect(() => {
     const h = () => setOpen(true);
-    window.addEventListener("open:content-calendar", h);
-    return () => window.removeEventListener("open:content-calendar", h);
+    addAppEventListener("open:content-calendar", h);
+    return () => removeAppEventListener("open:content-calendar", h);
   }, []);
 
   // Load on workspace change / open
@@ -1123,7 +1124,7 @@ function MonthGrid({
                               .then(() => {
                                 toast.success("Scheduled post cancelled");
                                 try {
-                                  window.dispatchEvent(new CustomEvent("content:changed"));
+                                  emitAppEvent("content:changed");
                                 } catch {}
                               })
                               .catch((err: unknown) =>

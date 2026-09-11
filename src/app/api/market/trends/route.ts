@@ -1,12 +1,16 @@
 import { z } from "zod";
-import { jsonError, requireUserId } from "@/server/api-auth";
-import { requireWorkspaceAccess } from "@/lib/sdr.helpers.server";
+import { defineRoute } from "@/server/route";
 import {
   pollGoogleTrendsCollection,
   requestGoogleTrendsCollection,
 } from "@/lib/dataforseo/google-trends-collection.server";
 import { ensureMarketBrainSchedule } from "@/lib/market-brain-scheduler.server";
-import { marketLog, operationId, withMarketTimeout } from "@/lib/market-reliability.server";
+import {
+  marketFailure,
+  marketLog,
+  operationId,
+  withMarketTimeout,
+} from "@/lib/market-reliability.server";
 
 export const dynamic = "force-dynamic";
 
@@ -49,38 +53,39 @@ const BodySchema = z.object({
     .optional(),
 });
 
-export async function POST(request: Request) {
-  const operation = operationId("market-scan");
-  marketLog("scan request received", { operation });
-  const auth = await requireUserId(request);
-  if (!auth.ok) return auth.response;
+const PollQuerySchema = z.object({
+  collectionId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+});
 
-  let body: z.infer<typeof BodySchema>;
-  try {
-    body = BodySchema.parse(await request.json());
-  } catch {
-    return jsonError(400, "Invalid request body");
-  }
+export const POST = defineRoute({
+  name: "market/trends",
+  auth: "workspace",
+  body: BodySchema,
+  workspaceId: ({ body }) => body.workspaceId,
+  // Each scan is a billed DataForSEO query and feeds a billed analysis; shares
+  // the per-workspace "audit" bucket with /api/market/intelligence.
+  rateLimit: ({ userId, workspaceId }) => ({ tier: "audit", subject: `${userId}:${workspaceId}` }),
+  handler: async ({ body }) => {
+    const operation = operationId("market-scan");
+    marketLog("scan request received", { operation });
+    marketLog("workspace resolved", { operation, workspaceId: body.workspaceId });
 
-  const access = await requireWorkspaceAccess(request, body.workspaceId);
-  if (!access.ok) return access.response;
-  marketLog("workspace resolved", { operation, workspaceId: body.workspaceId });
-
-  try {
-    const result = await requestGoogleTrendsCollection(
-      {
-        keywords: body.keywords,
-        location: body.location,
-        language: body.language,
-        dateFrom: body.dateFrom,
-        dateTo: body.dateTo,
-        timeRange: body.timeRange,
-      },
-      body.workspaceId,
-      operation,
-    );
-    marketLog("keywords generated", { operation, count: body.keywords.length });
-    const schedulePayload: {
+    try {
+      const result = await requestGoogleTrendsCollection(
+        {
+          keywords: body.keywords,
+          location: body.location,
+          language: body.language,
+          dateFrom: body.dateFrom,
+          dateTo: body.dateTo,
+          timeRange: body.timeRange,
+        },
+        body.workspaceId,
+        operation,
+      );
+      marketLog("keywords generated", { operation, count: body.keywords.length });
+      const schedulePayload: {
         workspaceId: string;
         keywords: string[];
         location?: string | null;
@@ -99,50 +104,74 @@ export async function POST(request: Request) {
       if (body.dateTo) schedulePayload.dateTo = body.dateTo;
       if (body.timeRange) schedulePayload.timeRange = body.timeRange;
 
-    await withMarketTimeout(
-      ensureMarketBrainSchedule(schedulePayload),
-      5_000,
-      "Market schedule registration timed out",
-    ).catch((error) => {
-      marketLog("schedule registration failed", { operation, reason: error instanceof Error ? error.message : "unknown" });
-    });
-    marketLog("scan response returned", { operation, state: result.state, collectionId: result.collectionId });
-    return Response.json({ success: true, source: "google_trends", ...result });
-  } catch (error) {
-    marketLog("scan request failed", { operation, reason: error instanceof Error ? error.message : "unknown" });
-    return Response.json(
-      { status: "failed", data: null, error: { message: "Market scan could not be started" } },
-      { status: 502 },
-    );
-  }
-}
+      await withMarketTimeout(
+        ensureMarketBrainSchedule(schedulePayload),
+        5_000,
+        "Market schedule registration timed out",
+      ).catch((error) => {
+        marketLog("schedule registration failed", {
+          operation,
+          reason: error instanceof Error ? error.message : "unknown",
+        });
+      });
+      marketLog("scan response returned", {
+        operation,
+        state: result.state,
+        collectionId: result.collectionId,
+        error: result.error?.message,
+      });
+      return Response.json({
+        success: result.state !== "failed",
+        source: "google_trends",
+        ...result,
+      });
+    } catch (error) {
+      marketLog("scan request failed", {
+        operation,
+        reason: error instanceof Error ? error.message : "unknown",
+      });
+      return marketFailure(502, {
+        message: "Market scan could not be started",
+        code: "scan_start_failed",
+      });
+    }
+  },
+});
 
-export async function GET(request: Request) {
-  const operation = operationId("market-poll");
-  marketLog("poll request received", { operation });
-  const auth = await requireUserId(request);
-  if (!auth.ok) return auth.response;
+export const GET = defineRoute({
+  name: "market/trends:poll",
+  auth: "workspace",
+  query: PollQuerySchema,
+  workspaceId: ({ query }) => query.workspaceId,
+  handler: async ({ query }) => {
+    const { collectionId } = query;
+    const operation = operationId("market-poll");
+    marketLog("poll request received", { operation });
 
-  const collectionId = new URL(request.url).searchParams.get("collectionId");
-  const workspaceId = new URL(request.url).searchParams.get("workspaceId");
-  if (!collectionId || !z.string().uuid().safeParse(collectionId).success) {
-    return jsonError(400, "collectionId is required");
-  }
-  if (!workspaceId || !z.string().uuid().safeParse(workspaceId).success) {
-    return jsonError(400, "workspaceId is required");
-  }
-  const access = await requireWorkspaceAccess(request, workspaceId);
-  if (!access.ok) return access.response;
-
-  try {
-    const result = await pollGoogleTrendsCollection(collectionId, operation);
-    marketLog("poll response returned", { operation, state: result.state, collectionId });
-    return Response.json({ success: true, source: "google_trends", ...result });
-  } catch (error) {
-    marketLog("poll request failed", { operation, reason: error instanceof Error ? error.message : "unknown" });
-    return Response.json(
-      { status: "failed", data: null, error: { message: "Market scan could not be polled" } },
-      { status: 502 },
-    );
-  }
-}
+    try {
+      const result = await pollGoogleTrendsCollection(collectionId, operation);
+      marketLog("poll response returned", {
+        operation,
+        state: result.state,
+        collectionId,
+        error: result.error?.message,
+      });
+      return Response.json({
+        success: result.state !== "failed",
+        source: "google_trends",
+        ...result,
+      });
+    } catch (error) {
+      marketLog("poll request failed", {
+        operation,
+        collectionId,
+        reason: error instanceof Error ? error.message : "unknown",
+      });
+      return marketFailure(
+        502,
+        { message: "Market scan status could not be checked", code: "poll_failed" },
+        { collectionId },
+      );
+    }
+  },
+});

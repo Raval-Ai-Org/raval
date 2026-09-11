@@ -1,6 +1,8 @@
+import "server-only";
 import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { rateLimitFor } from "@/server/rate-limit";
 import { coachSystem } from "@/lib/ai/prompts";
 import { assemble } from "@/lib/ai/prompts/assemble";
 import { claudeJsonPrompt, selectClaudeModel } from "@/lib/anthropic-gateway.server";
@@ -145,7 +147,7 @@ function extractMeta(html: string) {
 /* -------------------- Server function -------------------- */
 
 export const getCoachBriefing = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("audit")])
   .inputValidator((data) =>
     z
       .object({

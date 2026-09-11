@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authed-fetch";
 import { normalizeLibraryAsset, type LibraryAsset } from "@/lib/library";
@@ -93,11 +94,11 @@ export function LibraryPage() {
   useEffect(() => {
     void loadAssets();
     const refresh = () => void loadAssets();
-    window.addEventListener("assets:changed", refresh);
-    window.addEventListener("workspace:changed", refresh);
+    addAppEventListener("assets:changed", refresh);
+    addAppEventListener("workspace:changed", refresh);
     return () => {
-      window.removeEventListener("assets:changed", refresh);
-      window.removeEventListener("workspace:changed", refresh);
+      removeAppEventListener("assets:changed", refresh);
+      removeAppEventListener("workspace:changed", refresh);
     };
   }, [loadAssets, workspaceId]);
 

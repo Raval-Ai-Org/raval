@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { jsonError, requireUserId } from "@/server/api-auth";
-import { AiGatewayError, extractionCompletion } from "@/lib/ai";
+import { jsonError } from "@/server/api-auth";
+import { defineRoute } from "@/server/route";
+import { extractionCompletion } from "@/lib/ai";
 import { FILE_EXTRACT_SYSTEM } from "@/lib/ai/prompts";
 
 export const dynamic = "force-dynamic";
@@ -11,21 +12,16 @@ const Body = z.object({
   dataUrl: z.string().min(20).max(28_000_000),
 });
 
-export async function POST(request: Request) {
-  const auth = await requireUserId(request);
-  if (!auth.ok) return auth.response;
+export const POST = defineRoute({
+  name: "file-extract",
+  auth: "user",
+  body: Body,
+  // Vision extraction on Gemini 2.5 Pro — billed per call.
+  rateLimit: "generate",
+  handler: async ({ body }) => {
+    const isImage = body.mime.startsWith("image/") || body.dataUrl.startsWith("data:image/");
+    if (!isImage) return jsonError(400, "Only images are supported by this endpoint");
 
-  let body: z.infer<typeof Body>;
-  try {
-    body = Body.parse(await request.json());
-  } catch {
-    return jsonError(400, "Invalid request body");
-  }
-
-  const isImage = body.mime.startsWith("image/") || body.dataUrl.startsWith("data:image/");
-  if (!isImage) return jsonError(400, "Only images are supported by this endpoint");
-
-  try {
     const j: any = await extractionCompletion({
       messages: [
         {
@@ -38,9 +34,6 @@ export async function POST(request: Request) {
       ],
     });
     const text: string = j?.choices?.[0]?.message?.content ?? "";
-    return Response.json({ text });
-  } catch (e) {
-    if (e instanceof AiGatewayError) return jsonError(e.status, e.message);
-    throw e;
-  }
-}
+    return { text };
+  },
+});

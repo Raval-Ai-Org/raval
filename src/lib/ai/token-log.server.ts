@@ -2,6 +2,7 @@
 // an internal debug route if needed. Never contains raw prompts — just
 // route/model/size metadata.
 
+import "server-only";
 export type TokenLogEntry = {
   ts: number;
   route: string;

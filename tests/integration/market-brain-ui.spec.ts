@@ -1,4 +1,4 @@
-import { test, expect, type Route } from "@playwright/test";
+import { test, expect, type BrowserContext, type Page, type Route } from "@playwright/test";
 
 const SUPABASE_HOST = "slcmqbbjzyztqyucauol.supabase.co";
 const STORAGE_KEY = "sb-slcmqbbjzyztqyucauol-auth-token";
@@ -16,7 +16,6 @@ function session() {
     expires_at: Math.floor(Date.now() / 1000) + 3600,
     user: { id: USER_ID, email: "test@example.com", aud: "authenticated", role: "authenticated" },
   };
-  let trendPolls = 0;
 }
 
 const briefing = {
@@ -72,154 +71,200 @@ const intelligence = {
   generatedAt: new Date().toISOString(),
 };
 
+const completedCollection = {
+  success: true,
+  state: "completed",
+  collectionId: COLLECTION_ID,
+  data: {
+    keywords: ["AI marketing"],
+    interestOverTime: [
+      { timestamp: 1, date: "2026-09-01", values: [80] },
+      { timestamp: 2, date: "2026-09-02", values: [90] },
+    ],
+    regionalInterest: [],
+    relatedQueries: [],
+    relatedTopics: [],
+  },
+};
+
+function json(route: Route, body: unknown, status = 200) {
+  return route.fulfill({ status, headers: JSON_HEADERS, body: JSON.stringify(body) });
+}
+
+/** Signed-in app shell with the Market tab open. Register /api/market routes first. */
+async function openMarketBrain(page: Page, context: BrowserContext) {
+  await context.route(
+    new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`),
+    async (route: Route) => {
+      const url = route.request().url();
+      const wantsSingle = (route.request().headers()["accept"] || "").includes("pgrst.object");
+      if (url.includes("/auth/v1/user")) return json(route, session().user);
+      if (url.includes("/auth/v1/session")) return json(route, session());
+      if (url.includes("/auth/v1/token")) return json(route, session());
+      if (url.includes("/rest/v1/workspaces"))
+        return json(
+          route,
+          wantsSingle
+            ? { id: WS_ID, name: "Mellox", website_url: null }
+            : [{ id: WS_ID, name: "Mellox", website_url: null }],
+        );
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: wantsSingle ? "null" : "[]",
+      });
+    },
+  );
+  await context.route("**/api/rpc/coach/getCoachBriefing", (route) =>
+    json(route, { result: briefing }),
+  );
+  await context.route("**/_serverFn/coach/getCoachBriefing", (route) =>
+    json(route, { data: briefing }),
+  );
+  await context.route("**/_serverFn/**", (route) => json(route, { data: briefing }));
+
+  await page.addInitScript(
+    ({ storageKey, sess, wsId }) => {
+      localStorage.setItem(storageKey, JSON.stringify(sess));
+      localStorage.setItem("workspace:selected", wsId);
+      localStorage.setItem("workspace:name", "Mellox");
+      localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
+    },
+    { storageKey: STORAGE_KEY, sess: session(), wsId: WS_ID },
+  );
+
+  await page.goto("/app", { waitUntil: "domcontentloaded" });
+  await expect(page.getByText("Loading workspace…")).toHaveCount(0, { timeout: 15_000 });
+  await page.getByRole("button", { name: /expand marketing coach/i }).click();
+  await expect(page.getByText("Your next best move is ready")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("tab", { name: /market/i }).click();
+  await expect(page.getByTestId("market-brain")).toBeVisible();
+  await expect(page.getByText("Set your market lens")).toBeVisible();
+}
+
+async function scan(page: Page) {
+  await page.getByLabel("Market keywords").fill("AI marketing");
+  await page.getByRole("button", { name: /scan/i }).click();
+}
+
 test.describe("Market Brain UI", () => {
   test("moves from setup through collection to grounded intelligence", async ({
     page,
     context,
   }) => {
-    await context.route(
-      new RegExp(`https?://${SUPABASE_HOST}/(auth|rest|realtime)/.*`),
-      async (route: Route) => {
-        const url = route.request().url();
-        const wantsSingle = (route.request().headers()["accept"] || "").includes("pgrst.object");
-        if (url.includes("/auth/v1/user"))
-          return route.fulfill({
-            status: 200,
-            headers: JSON_HEADERS,
-            body: JSON.stringify(session().user),
-          });
-        if (url.includes("/auth/v1/session"))
-          return route.fulfill({
-            status: 200,
-            headers: JSON_HEADERS,
-            body: JSON.stringify(session()),
-          });
-        if (url.includes("/auth/v1/token"))
-          return route.fulfill({
-            status: 200,
-            headers: JSON_HEADERS,
-            body: JSON.stringify(session()),
-          });
-        if (url.includes("/rest/v1/workspaces"))
-          return route.fulfill({
-            status: 200,
-            headers: JSON_HEADERS,
-            body: JSON.stringify(
-              wantsSingle
-                ? { id: WS_ID, name: "Mellox", website_url: null }
-                : [{ id: WS_ID, name: "Mellox", website_url: null }],
-            ),
-          });
-        return route.fulfill({
-          status: 200,
-          headers: JSON_HEADERS,
-          body: wantsSingle ? "null" : "[]",
-        });
-      },
-    );
-    await context.route("**/api/rpc/coach/getCoachBriefing", (route) =>
-      route.fulfill({
-        status: 200,
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ result: briefing }),
-      }),
-    );
-    await context.route("**/_serverFn/coach/getCoachBriefing", (route) =>
-      route.fulfill({
-        status: 200,
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ data: briefing }),
-      }),
-    );
     let trendPolls = 0;
     await context.route("**/api/market/trends**", async (route) => {
       if (route.request().method() === "POST")
-        return route.fulfill({
-          status: 200,
-          headers: JSON_HEADERS,
-          body: JSON.stringify({
-            success: true,
-            state: "pending",
-            collectionId: COLLECTION_ID,
-            taskId: "task-1",
-          }),
+        return json(route, {
+          success: true,
+          state: "pending",
+          collectionId: COLLECTION_ID,
+          taskId: "task-1",
         });
       trendPolls += 1;
       if (trendPolls === 1)
-        return route.fulfill({
-          status: 200,
-          headers: JSON_HEADERS,
-          body: JSON.stringify({
-            success: true,
-            state: "pending",
-            collectionId: COLLECTION_ID,
-            taskId: "task-1",
-          }),
-        });
-      return route.fulfill({
-        status: 200,
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
+        return json(route, {
           success: true,
-          state: "completed",
+          state: "pending",
           collectionId: COLLECTION_ID,
-          data: {
-            keywords: ["AI marketing"],
-            interestOverTime: [
-              { timestamp: 1, date: "2026-09-01", values: [80] },
-              { timestamp: 2, date: "2026-09-02", values: [90] },
-            ],
-            regionalInterest: [],
-            relatedQueries: [],
-            relatedTopics: [],
-          },
-        }),
-      });
+          taskId: "task-1",
+        });
+      return json(route, completedCollection);
     });
     await context.route("**/api/market/intelligence**", (route) =>
-      route.fulfill({
-        status: 200,
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          success: true,
-          state: "completed",
-          collectionId: COLLECTION_ID,
-          data: intelligence,
-        }),
-      }),
-    );
-    await context.route("**/_serverFn/**", (route) =>
-      route.fulfill({
-        status: 200,
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ data: briefing }),
+      json(route, {
+        success: true,
+        state: "completed",
+        collectionId: COLLECTION_ID,
+        data: intelligence,
       }),
     );
 
-    await page.addInitScript(
-      ({ storageKey, sess, wsId }) => {
-        localStorage.setItem(storageKey, JSON.stringify(sess));
-        localStorage.setItem("workspace:selected", wsId);
-        localStorage.setItem("workspace:name", "Mellox");
-        localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
-      },
-      { storageKey: STORAGE_KEY, sess: session(), wsId: WS_ID },
-    );
-
-    await page.goto("/app", { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("Loading workspace…")).toHaveCount(0, { timeout: 15_000 });
-    await page.getByRole("button", { name: /expand marketing coach/i }).click();
-    await expect(page.getByText("Your next best move is ready")).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("tab", { name: /market/i }).click();
-    await expect(page.getByTestId("market-brain")).toBeVisible();
-    await expect(page.getByText("Set your market lens")).toBeVisible();
-
-    await page.getByLabel("Market keywords").fill("AI marketing");
-    await page.getByRole("button", { name: /scan/i }).click();
+    await openMarketBrain(page, context);
+    await scan(page);
     await expect(page.getByText(/market data is still being collected/i)).toBeVisible();
     await expect(page.getByText("Market pulse")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Interest around AI marketing is strong/i)).toBeVisible();
     await expect(page.getByText("What’s changing")).toBeVisible();
     await expect(page.getByText("What to do next")).toBeVisible();
+  });
+
+  test("keeps the trend evidence and shows the provider reason when analysis fails, then retries", async ({
+    page,
+    context,
+  }) => {
+    await context.route("**/api/market/trends**", (route) => json(route, completedCollection));
+    let analyses = 0;
+    await context.route("**/api/market/intelligence**", (route) => {
+      analyses += 1;
+      return analyses === 1
+        ? json(route, {
+            success: false,
+            state: "failed",
+            collectionId: COLLECTION_ID,
+            error: {
+              message: "Claude output for market-intelligence was cut off before completion.",
+              code: "max_tokens",
+            },
+          })
+        : json(route, {
+            success: true,
+            state: "completed",
+            collectionId: COLLECTION_ID,
+            data: intelligence,
+          });
+    });
+
+    await openMarketBrain(page, context);
+    await scan(page);
+    const alert = page.getByTestId("market-brain-error");
+    await expect(alert).toContainText("Trend data is ready, but Ravi's analysis failed");
+    await expect(alert).toContainText("cut off before completion");
+    await expect(page.getByText("Measured signal")).toBeVisible();
+
+    await alert.getByRole("button", { name: /retry/i }).click();
+    await expect(page.getByText("Market pulse")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("market-brain-error")).toHaveCount(0);
+  });
+
+  test("shows no_data as a neutral notice, distinct from failure", async ({ page, context }) => {
+    await context.route("**/api/market/trends**", (route) =>
+      json(route, {
+        success: true,
+        state: "no_data",
+        collectionId: COLLECTION_ID,
+        error: { message: "No measurable search interest.", code: "no_data" },
+      }),
+    );
+
+    await openMarketBrain(page, context);
+    await scan(page);
+    await expect(page.getByTestId("market-brain-no-data")).toContainText(
+      "found no measurable search interest",
+    );
+    await expect(page.getByTestId("market-brain-error")).toHaveCount(0);
+    await expect(page.getByText("Set your market lens")).toBeVisible();
+  });
+
+  test("shows the provider reason when the collection fails", async ({ page, context }) => {
+    await context.route("**/api/market/trends**", (route) =>
+      json(route, {
+        success: false,
+        state: "failed",
+        collectionId: COLLECTION_ID,
+        error: {
+          message: "DataForSEO task creation failed: Payment Required.",
+          providerCode: 40200,
+        },
+        retryAfterSeconds: 42,
+      }),
+    );
+
+    await openMarketBrain(page, context);
+    await scan(page);
+    const alert = page.getByTestId("market-brain-error");
+    await expect(alert).toContainText("Google Trends collection failed");
+    await expect(alert).toContainText("Payment Required");
+    await expect(alert).toContainText("retry available in 42s");
   });
 });

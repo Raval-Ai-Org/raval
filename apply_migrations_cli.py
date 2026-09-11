@@ -60,7 +60,11 @@ EXCLUDED_MIGRATIONS = {"20260709194553_bb8d43fe-2f5e-48cb-9c77-8042cb96e8be.sql"
 all_migration_names = [
     os.path.basename(path) for path in glob.glob(os.path.join("supabase", "migrations", "*.sql"))
 ]
-filename_pattern = re.compile(r"^\d{14}_[A-Za-z0-9-]+\.sql$")
+# Underscores are allowed: every hand-written migration since 20260809 uses
+# snake_case (add_workspace_sdr, create_persistent_assets, ...). Without `_` in
+# this class the check rejected 16 committed migrations and the script exited 1
+# before applying anything.
+filename_pattern = re.compile(r"^\d{14}_[A-Za-z0-9_-]+\.sql$")
 malformed = sorted(name for name in all_migration_names if not filename_pattern.fullmatch(name))
 if malformed:
     print(f"Malformed migration filename(s): {', '.join(malformed)}")

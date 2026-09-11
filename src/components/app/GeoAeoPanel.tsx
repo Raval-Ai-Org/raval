@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import {
@@ -477,8 +478,8 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
     const onRun = () => {
       void run();
     };
-    window.addEventListener("geo:run-audit", onRun);
-    return () => window.removeEventListener("geo:run-audit", onRun);
+    addAppEventListener("geo:run-audit", onRun);
+    return () => removeAppEventListener("geo:run-audit", onRun);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, running]);
 
@@ -507,7 +508,7 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
         }
       }
       try {
-        window.dispatchEvent(new CustomEvent("geo:audit-complete"));
+        emitAppEvent("geo:audit-complete");
       } catch {
         /* noop */
       }

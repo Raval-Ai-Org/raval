@@ -1,0 +1,36 @@
+# Normalize every text file to LF in the repository AND in the working tree.
+#
+# Why eol=lf and not just text=auto: the team works on Windows, where
+# core.autocrlf=true checks files out as CRLF. Prettier is configured
+# "endOfLine": "lf" (.prettierrc), so every line in a CRLF file became a
+# `Delete ␍` lint error — 6,690 of them, which made `npm run lint` unusable.
+# This file overrides core.autocrlf for everyone, so checkouts stay LF.
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF or PowerShell/cmd can mis-parse them.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary — never touch, never diff as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.mp4 binary
+*.webm binary
+*.zip binary
+*.gz binary
+
+# Generated — collapse in PR diffs.
+package-lock.json linguist-generated=true -diff
+tsconfig.tsbuildinfo -diff

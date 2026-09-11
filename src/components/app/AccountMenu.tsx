@@ -1,5 +1,6 @@
 "use client";
 
+import { emitAppEvent } from "@/lib/app-events";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
@@ -157,7 +158,7 @@ export function AccountMenu({
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
-            window.dispatchEvent(new CustomEvent("open:upgrade"));
+            emitAppEvent("open:upgrade");
             onClose?.();
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
@@ -263,7 +264,7 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           {theme === "dark" ? "Light mode" : "Dark mode"}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => window.dispatchEvent(new CustomEvent("open:upgrade"))}
+          onSelect={() => emitAppEvent("open:upgrade")}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" /> Upgrade plan

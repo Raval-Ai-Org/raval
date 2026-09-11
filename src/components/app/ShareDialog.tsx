@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
 import { AppModalShell } from "@/components/app/AppModalShell";
@@ -83,8 +84,8 @@ export function ShareDialog({
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const h = () => setOpen(true);
-    window.addEventListener("open:share", h);
-    return () => window.removeEventListener("open:share", h);
+    addAppEventListener("open:share", h);
+    return () => removeAppEventListener("open:share", h);
   }, []);
 
   const [email, setEmail] = useState("");

@@ -1,7 +1,15 @@
 import { z } from "zod";
-import { createHash, scryptSync, timingSafeEqual } from "crypto";
+import { createHash, scrypt, timingSafeEqual } from "crypto";
+import { promisify } from "util";
+import { consumeRateLimit } from "@/server/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+const scryptAsync = promisify(scrypt) as (
+  password: string,
+  salt: Buffer,
+  keylen: number,
+) => Promise<Buffer>;
 
 const EventSchema = z.object({
   token: z.string().min(8).max(128),
@@ -24,7 +32,18 @@ function tokenMatches(provided: string, stored: string): boolean {
   return timingSafeEqual(a, b);
 }
 
-function verifyPassword(provided: string | undefined, stored: string | null | undefined): boolean {
+/**
+ * Verify a share password.
+ *
+ * Async scrypt, not scryptSync: this endpoint is unauthenticated, and Node's
+ * default scrypt cost blocks the event loop for ~50-100ms per call. A handful
+ * of concurrent requests against a password-protected slug would stall every
+ * other request in the process. The async form runs on the threadpool.
+ */
+async function verifyPassword(
+  provided: string | undefined,
+  stored: string | null | undefined,
+): Promise<boolean> {
   if (!stored) return true;
   if (!provided) return false;
   // Format: scrypt$<saltHex>$<keyHex>
@@ -33,12 +52,24 @@ function verifyPassword(provided: string | undefined, stored: string | null | un
   try {
     const salt = Buffer.from(parts[1], "hex");
     const expected = Buffer.from(parts[2], "hex");
-    const actual = scryptSync(provided, salt, expected.length);
+    const actual = await scryptAsync(provided, salt, expected.length);
     if (actual.length !== expected.length) return false;
     return timingSafeEqual(actual, expected);
   } catch {
     return false;
   }
+}
+
+/**
+ * Throttle password attempts per share slug. Without this the endpoint is
+ * brute-forceable at network speed, and each attempt costs a scrypt derivation.
+ * Keyed by slug (not IP) so a distributed attempt set still shares one budget.
+ *
+ * Fails open like every other limiter call — see src/server/rate-limit.ts.
+ */
+async function tooManyPasswordAttempts(slug: string): Promise<boolean> {
+  const result = await consumeRateLimit("share-password", slug);
+  return !result.ok;
 }
 
 function json(status: number, payload: unknown, extraHeaders?: Record<string, string>) {
@@ -95,7 +126,16 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
         locked: true,
       });
     }
-    if (!verifyPassword(password, (share as any).password_hash)) {
+    if (await tooManyPasswordAttempts(params.slug)) {
+      return json(
+        429,
+        { error: "Too many password attempts. Try again shortly.", locked: true },
+        {
+          "Retry-After": "300",
+        },
+      );
+    }
+    if (!(await verifyPassword(password, (share as any).password_hash))) {
       return json(401, { error: "Invalid password", passwordRequired: true, locked: true });
     }
   }
@@ -165,7 +205,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ slug: stri
 
   // Enforce password when set on the share.
   if ((share as any).password_hash) {
-    if (!verifyPassword(body.password, (share as any).password_hash)) {
+    if (await tooManyPasswordAttempts(params.slug)) {
+      return json(
+        429,
+        { error: "Too many password attempts. Try again shortly." },
+        {
+          "Retry-After": "300",
+        },
+      );
+    }
+    if (!(await verifyPassword(body.password, (share as any).password_hash))) {
       return json(401, { error: "Password required", passwordRequired: true });
     }
   }

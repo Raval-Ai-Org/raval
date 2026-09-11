@@ -1,6 +1,8 @@
+import "server-only";
 import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { rateLimitFor } from "@/server/rate-limit";
 import {
   buildSmartSuggestions,
   type SmartSuggestion as DetSuggestion,
@@ -109,7 +111,7 @@ export type SmartSuggestion = {
 // through `runJsonPrompt` (shared cache, telemetry, safe parsing).
 
 export const refreshSuggestions = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("generate")])
   .inputValidator((data) =>
     z
       .object({

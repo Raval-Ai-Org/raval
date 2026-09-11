@@ -5,3 +5,14 @@ dist
 pnpm-lock.yaml
 package-lock.json
 bun.lock
+test-results
+playwright-report
+tsconfig.tsbuildinfo
+
+# Separate FastAPI/Celery service vendored into this repo. It has its own
+# formatting toolchain (ruff/black via pyproject.toml) — this project's
+# Prettier config must not rewrite its docs and configs.
+Social-Distribtion-Engine-RavalAI-SDE
+
+# Playwright snapshot baselines are byte-compared; reformatting breaks them.
+tests/**/*-snapshots/

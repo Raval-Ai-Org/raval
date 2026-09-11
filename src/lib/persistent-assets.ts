@@ -1,3 +1,4 @@
+import { emitAppEvent } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
 
 export type PersistGeneratedAssetInput = {
@@ -27,6 +28,6 @@ export async function persistGeneratedAsset(input: PersistGeneratedAssetInput) {
   });
   const payload = (await response.json().catch(() => ({}))) as { asset?: unknown; error?: string };
   if (!response.ok || !payload.asset) throw new Error(payload.error || "Asset persistence failed");
-  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("assets:changed"));
+  if (typeof window !== "undefined") emitAppEvent("assets:changed");
   return payload.asset;
 }

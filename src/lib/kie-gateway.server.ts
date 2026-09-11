@@ -1,3 +1,5 @@
+import "server-only";
+import { UpstreamError } from "@/server/upstream";
 import {
   getImageModelConfigStatus,
   routeImageModel,
@@ -84,13 +86,12 @@ export function getKieConfigStatus() {
   } as const;
 }
 
-export class KieGatewayError extends Error {
-  status: number;
-  category: string;
+export class KieGatewayError extends UpstreamError {
+  readonly category: string;
 
   constructor(status: number, message: string, category = "provider") {
-    super(message);
-    this.status = status;
+    super(status, message, { provider: "kie", code: category });
+    this.name = "KieGatewayError";
     this.category = category;
   }
 }

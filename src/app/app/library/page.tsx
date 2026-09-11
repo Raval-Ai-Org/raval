@@ -5,7 +5,8 @@ import { LibraryPage } from "@/components/app/LibraryPage";
 
 export const metadata: Metadata = pageMetadata({
   title: "Library · Mellox AI",
-  description: "Asset library for the active workspace — generated media, uploads, files and brand assets.",
+  description:
+    "Asset library for the active workspace — generated media, uploads, files and brand assets.",
   path: "/app/library",
   noindex: true,
 });

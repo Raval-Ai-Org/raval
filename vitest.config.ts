@@ -3,7 +3,12 @@ import path from "path";
 
 export default defineConfig({
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    // import.meta.dirname (not __dirname) — Vite's native config loader warns
+    // on CJS globals and will drop support for them in a future major.
+    alias: {
+      "@": path.resolve(import.meta.dirname, "./src"),
+      "server-only": path.resolve(import.meta.dirname, "./tests/fixtures/empty-module.ts"),
+    },
   },
   test: {
     environment: "node",

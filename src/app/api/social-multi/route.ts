@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { jsonError, requireUserId } from "@/server/api-auth";
+import { jsonError } from "@/server/api-auth";
+import { defineRoute } from "@/server/route";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { runJsonPrompt } from "@/lib/ai";
 import { system as sysBuilder } from "@/lib/ai/prompts/assemble";
@@ -75,45 +76,39 @@ function finalizeVariant(
   return { platform, title, body: finalText, hashtags: tags, chars: finalText.length };
 }
 
-export async function POST(request: Request) {
-  const auth = await requireUserId(request);
-  if (!auth.ok) return auth.response;
+export const POST = defineRoute({
+  name: "social-multi",
+  auth: "user",
+  body: BodySchema,
+  rateLimit: "generate",
+  handler: async ({ body }) => {
+    // ── Single LLM call for all platforms (was N calls) ─────────
+    // Build a per-platform rubric deterministically, and ask the
+    // model to emit one JSON object with one variant per platform.
+    const specs = body.platforms.map((p) => PLATFORMS[p]);
+    const rubric = specs
+      .map(
+        (s) =>
+          `- ${s.id} (${s.label}): body ≤ ${s.maxChars - 60}c, sweet spot ~${s.optimalChars}c, ${s.hashtags[0]}-${s.hashtags[1]} hashtags. Style: ${s.style}`,
+      )
+      .join("\n");
 
-  let body: z.infer<typeof BodySchema>;
-  try {
-    body = BodySchema.parse(await request.json());
-  } catch {
-    return jsonError(400, "Invalid request body");
-  }
+    const system = sysBuilder(
+      identitySocialPM("multiple platforms"),
+      "Write ONE native variant per requested platform. Each must be rewritten — different length, hook, rhythm — never copy-pasted between platforms.",
+      "Body includes emojis/line breaks/CTA — NOT hashtags (hashtags go in the array).",
+      FMT_JSON_STRICT,
+      FMT_NO_FENCES,
+      `Schema: {"variants":[{"platform":"<id>","title":string,"body":string,"hashtags":string[]}]}`,
+    );
 
-  // ── Single LLM call for all platforms (was N calls) ─────────
-  // Build a per-platform rubric deterministically, and ask the
-  // model to emit one JSON object with one variant per platform.
-  const specs = body.platforms.map((p) => PLATFORMS[p]);
-  const rubric = specs
-    .map(
-      (s) =>
-        `- ${s.id} (${s.label}): body ≤ ${s.maxChars - 60}c, sweet spot ~${s.optimalChars}c, ${s.hashtags[0]}-${s.hashtags[1]} hashtags. Style: ${s.style}`,
-    )
-    .join("\n");
+    const user = assemble([
+      { label: "Brand context", body: body.context, maxChars: 4000 },
+      { label: "Brief", body: body.prompt },
+      { label: "Platforms + rules", body: rubric },
+      { body: `Return exactly ${specs.length} variants — one per platform id in the list.` },
+    ]);
 
-  const system = sysBuilder(
-    identitySocialPM("multiple platforms"),
-    "Write ONE native variant per requested platform. Each must be rewritten — different length, hook, rhythm — never copy-pasted between platforms.",
-    "Body includes emojis/line breaks/CTA — NOT hashtags (hashtags go in the array).",
-    FMT_JSON_STRICT,
-    FMT_NO_FENCES,
-    `Schema: {"variants":[{"platform":"<id>","title":string,"body":string,"hashtags":string[]}]}`,
-  );
-
-  const user = assemble([
-    { label: "Brand context", body: body.context, maxChars: 4000 },
-    { label: "Brief", body: body.prompt },
-    { label: "Platforms + rules", body: rubric },
-    { body: `Return exactly ${specs.length} variants — one per platform id in the list.` },
-  ]);
-
-  try {
     const parsed = await runJsonPrompt<{
       variants?: Array<{
         platform?: string;
@@ -148,9 +143,6 @@ export async function POST(request: Request) {
     }
 
     if (!variants.length) return jsonError(502, errors[0]?.error ?? "All variants failed");
-    return Response.json({ variants, errors });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return jsonError(502, msg);
-  }
-}
+    return { variants, errors };
+  },
+});

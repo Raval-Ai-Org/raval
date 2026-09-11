@@ -208,4 +208,53 @@ describe("Market Intelligence engine", () => {
     expect(second.state).toBe("cached");
     expect(claudeTextPrompt).not.toHaveBeenCalled();
   });
+
+  // Regression: max_tokens 3000 left no room for Opus 5's default adaptive
+  // thinking, so the JSON was truncated and every analysis failed.
+  it("requests structured output with room for thinking plus the full answer", async () => {
+    await analyzeMarketCollection({ collectionId, workspaceId });
+    const call = claudeTextPrompt.mock.calls[0][0];
+    expect(call.maxTokens).toBeGreaterThanOrEqual(16_000);
+    expect(call.effort).toBe("medium");
+    expect(call.outputSchema).toMatchObject({ type: "object", additionalProperties: false });
+    expect(call.timeoutMs).toBeLessThan(90_000);
+  });
+
+  it("regenerates when the collection is refreshed in place with new data", async () => {
+    await analyzeMarketCollection({ collectionId, workspaceId });
+    state.collection!.completed_at = "2026-09-11T06:00:00.000Z";
+    const refreshed = await analyzeMarketCollection({ collectionId, workspaceId });
+    expect(refreshed.state).toBe("completed");
+    expect(claudeTextPrompt).toHaveBeenCalledTimes(2);
+  });
+
+  it("regenerates instead of returning an empty cached result when the cache entry is invalid", async () => {
+    await analyzeMarketCollection({ collectionId, workspaceId });
+    state.cached!.result = { summary: "" };
+    const result = await analyzeMarketCollection({ collectionId, workspaceId });
+    expect(result.state).toBe("completed");
+    expect(result.data?.summary).toBe(validIntelligence.summary);
+    expect(claudeTextPrompt).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps over-long lists instead of failing an otherwise valid analysis", async () => {
+    claudeTextPrompt.mockResolvedValue(
+      JSON.stringify({
+        ...validIntelligence,
+        relatedQueries: Array.from({ length: 30 }, (_, index) => `query ${index}`),
+      }),
+    );
+    const result = await analyzeMarketCollection({ collectionId, workspaceId });
+    expect(result.state).toBe("completed");
+    expect(result.data?.relatedQueries).toHaveLength(20);
+  });
+
+  it("returns a truncation from the gateway as a failed state with its code", async () => {
+    const { AnthropicGatewayError } = await import("@/lib/anthropic-gateway.server");
+    const truncated = new AnthropicGatewayError(502, "cut off", "max_tokens");
+    Object.assign(truncated, { status: 502, code: "max_tokens", message: "cut off" });
+    claudeTextPrompt.mockRejectedValue(truncated);
+    const result = await analyzeMarketCollection({ collectionId, workspaceId });
+    expect(result).toMatchObject({ state: "failed", error: { code: "max_tokens" } });
+  });
 });

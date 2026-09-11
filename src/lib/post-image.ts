@@ -11,6 +11,7 @@
 //   • Stable "style seed" per post keeps every aspect ratio visually consistent
 //     so square / landscape / portrait feel like one campaign.
 
+import { emitAppEvent } from "@/lib/app-events";
 import type { PlatformId } from "@/lib/social-platforms";
 import { PLATFORMS } from "@/lib/social-platforms";
 import { deriveCreativeBrief, validateCreativeBrief } from "./creative-brief";
@@ -725,7 +726,7 @@ export function setCachedImage(postId: string, size: ImgSize, dataUrl: string) {
   c[postId] = { ...(c[postId] || {}), [size]: dataUrl };
   writeCache(c);
   try {
-    window.dispatchEvent(new CustomEvent("post-image:cached", { detail: { postId, size } }));
+    emitAppEvent("post-image:cached", { postId, size });
   } catch {}
 }
 
@@ -773,8 +774,6 @@ export function removeCachedImage(postId: string, size?: ImgSize) {
   }
   writeCache(c);
   try {
-    window.dispatchEvent(
-      new CustomEvent("post-image:cached", { detail: { postId, size, removed: true } }),
-    );
+    emitAppEvent("post-image:cached", { postId, size, removed: true });
   } catch {}
 }

@@ -1,6 +1,9 @@
 import { z } from "zod";
-import { jsonError, requireUserId, assertPublicUrl } from "@/server/api-auth";
-import { AiGatewayError, chatCompletion } from "@/lib/ai";
+import { jsonError } from "@/server/api-auth";
+import { defineRoute } from "@/server/route";
+import { fetchPublicText } from "@/server/safe-fetch";
+import { chatCompletion } from "@/lib/ai";
+import { stripHtml } from "@/lib/crawl/html";
 import { TASK_SYSTEMS } from "@/lib/ai/prompts";
 import { assemble } from "@/lib/ai/prompts/assemble";
 
@@ -24,51 +27,36 @@ const BodySchema = z.object({
   context: z.string().max(4000).optional(),
 });
 
-export async function POST(request: Request) {
-  const auth = await requireUserId(request);
-  if (!auth.ok) return auth.response;
+export const POST = defineRoute({
+  name: "ai-generate",
+  auth: "user",
+  body: BodySchema,
+  // `seo-audit` crawls a page and runs a long completion, so it bills like an analysis.
+  rateLimit: ({ body }) => ({ tier: body.task === "seo-audit" ? "audit" : "generate" }),
+  handler: async ({ body }) => {
+    const system = TASK_SYSTEMS[body.task] ?? TASK_SYSTEMS.freeform;
 
-  let body: z.infer<typeof BodySchema>;
-  try {
-    body = BodySchema.parse(await request.json());
-  } catch {
-    return jsonError(400, "Invalid request body");
-  }
+    // Optional page scrape. safeFetch rejects private targets and re-checks
+    // every redirect; a failed scrape just means no page context.
+    const scraped = body.url
+      ? stripHtml(
+          await fetchPublicText(body.url, {
+            headers: { "User-Agent": "Mozilla/5.0 MelloxAI-Bot" },
+            timeoutMs: 8000,
+            maxBytes: 2 * 1024 * 1024,
+          }),
+          4000,
+        )
+      : "";
 
-  const system = TASK_SYSTEMS[body.task] ?? TASK_SYSTEMS.freeform;
+    const user =
+      assemble([
+        { label: "Request", body: body.prompt },
+        { label: "Context", body: body.context, maxChars: 3800 },
+        { label: "Target URL", body: body.url },
+        { label: "Page content", body: scraped, maxChars: 4000 },
+      ]) || "Generate a useful default response.";
 
-  // Optional: scrape page text (SSRF-guarded)
-  let scraped = "";
-  if (body.url) {
-    try {
-      const safeUrl = assertPublicUrl(body.url);
-      const res = await fetch(safeUrl.toString(), {
-        headers: { "User-Agent": "Mozilla/5.0 ThreeReachBot" },
-        signal: AbortSignal.timeout(8000),
-        redirect: "error",
-      });
-      if (res.ok) {
-        scraped = (await res.text())
-          .replace(/<script[\s\S]*?<\/script>/gi, "")
-          .replace(/<style[\s\S]*?<\/style>/gi, "")
-          .replace(/<[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .slice(0, 4000);
-      }
-    } catch (e) {
-      console.warn("scrape failed", e);
-    }
-  }
-
-  const user =
-    assemble([
-      { label: "Request", body: body.prompt },
-      { label: "Context", body: body.context, maxChars: 3800 },
-      { label: "Target URL", body: body.url },
-      { label: "Page content", body: scraped, maxChars: 4000 },
-    ]) || "Generate a useful default response.";
-
-  try {
     const json: any = await chatCompletion({
       messages: [
         { role: "system", content: system },
@@ -79,9 +67,6 @@ export async function POST(request: Request) {
     });
     const text = String(json?.choices?.[0]?.message?.content ?? "").trim();
     if (!text) return jsonError(502, "AI returned an empty draft");
-    return Response.json({ text });
-  } catch (e) {
-    if (e instanceof AiGatewayError) return jsonError(e.status, e.message);
-    throw e;
-  }
-}
+    return { text };
+  },
+});

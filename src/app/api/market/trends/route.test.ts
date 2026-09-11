@@ -1,8 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/server/api-auth", () => ({
-  jsonError: (status: number, message: string) => Response.json({ error: message }, { status }),
-  requireUserId: vi.fn(async () => ({ ok: true, userId: "test-user" })),
+vi.mock("@/server/api-auth", async (importActual) => ({
+  ...(await importActual<typeof import("@/server/api-auth")>()),
+  requireUserId: vi.fn(async () => ({ ok: true, userId: "test-user", claims: {}, supabase: {} })),
+  checkWorkspaceMembership: vi.fn(async (_auth: unknown, workspaceId: string) => ({
+    ok: true,
+    workspaceId,
+  })),
+}));
+vi.mock("@/server/rate-limit", async (importActual) => ({
+  ...(await importActual<typeof import("@/server/rate-limit")>()),
+  enforceRateLimit: vi.fn(async () => null),
 }));
 
 const ensureMarketBrainSchedule = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
@@ -25,10 +33,6 @@ vi.mock("@/lib/dataforseo/google-trends-collection.server", () => ({
       regionalInterest: [],
     },
   })),
-}));
-
-vi.mock("@/lib/sdr.helpers.server", () => ({
-  requireWorkspaceAccess: vi.fn(async () => ({ ok: true, response: Response.json({ ok: true }) })),
 }));
 
 vi.mock("@/lib/market-brain-scheduler.server", () => ({

@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -116,8 +117,8 @@ export function GeneratePostImageButton({
   useEffect(() => {
     const on = () => setHasCached(hasAnyCachedImage(postId));
     on();
-    window.addEventListener("post-image:cached", on);
-    return () => window.removeEventListener("post-image:cached", on);
+    addAppEventListener("post-image:cached", on);
+    return () => removeAppEventListener("post-image:cached", on);
   }, [postId]);
 
   // Prime the post body + channel the moment the card scrolls into view.

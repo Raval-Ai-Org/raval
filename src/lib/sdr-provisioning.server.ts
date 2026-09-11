@@ -7,6 +7,7 @@
 // Dependencies are injectable for tests (mock Supabase + mock SDR calls); in
 // production they default to supabaseAdmin + callSdr + server-only env.
 
+import "server-only";
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { callSdr } from "@/lib/sdr.server";

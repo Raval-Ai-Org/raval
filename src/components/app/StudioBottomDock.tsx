@@ -1,5 +1,6 @@
 "use client";
 
+import { emitAppEvent } from "@/lib/app-events";
 import { useState } from "react";
 import {
   Sheet,
@@ -15,7 +16,7 @@ import { TINT_HEX } from "@/components/app/StudioRail";
 import { StudioRail } from "@/components/app/StudioRail";
 
 function openCanvas(type: CanvasType) {
-  window.dispatchEvent(new CustomEvent("open:canvas", { detail: { type } }));
+  emitAppEvent("open:canvas", { type });
 }
 
 export function StudioBottomDock() {

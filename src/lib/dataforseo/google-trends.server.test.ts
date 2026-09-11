@@ -218,10 +218,13 @@ describe("DataForSEO Google Trends client", () => {
 
   it("times out when DataForSEO never responds", async () => {
     vi.useFakeTimers();
-    const fetchMock = vi.fn<typeof fetch>((_input, init) =>
-      new Promise<Response>((_, reject) => {
-        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
-      }),
+    const fetchMock = vi.fn<typeof fetch>(
+      (_input, init) =>
+        new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        }),
     );
     const request = createGoogleTrendsTask({ keywords: ["AI marketing"] }, fetchMock).catch(
       (error) => error,
@@ -229,7 +232,82 @@ describe("DataForSEO Google Trends client", () => {
 
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(15_001);
-    await expect(request).resolves.toMatchObject({ name: "DataForSeoError", status: 504 });
+    await expect(request).resolves.toMatchObject({
+      name: "DataForSeoError",
+      status: 504,
+      transient: true,
+    });
     vi.useRealTimers();
   }, 20_000);
+
+  function json(body: unknown, status = 200) {
+    return vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(body), { status }));
+  }
+
+  it("surfaces account-level DataForSEO errors instead of a generic message", async () => {
+    await expect(
+      createGoogleTrendsTask(
+        { keywords: ["AI marketing"] },
+        json({ status_code: 40200, status_message: "Payment Required.", tasks: [] }),
+      ),
+    ).rejects.toMatchObject({
+      message: "DataForSEO task creation failed: Payment Required.",
+      code: 40200,
+      transient: false,
+    });
+  });
+
+  it("rejects a task the provider did not accept even when it returns an id", async () => {
+    await expect(
+      createGoogleTrendsTask(
+        { keywords: ["AI marketing"] },
+        json({
+          status_code: 20000,
+          tasks: [
+            { id: "t-1", status_code: 40501, status_message: "Invalid Field: 'location_name'." },
+          ],
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 40501, message: expect.stringContaining("location_name") });
+  });
+
+  it("marks HTTP 5xx and 429 responses as transient", async () => {
+    await expect(
+      getGoogleTrendsTask("t", ["AI marketing"], json({ status_message: "busy" }, 503)),
+    ).rejects.toMatchObject({ code: 503, transient: true });
+    await expect(getGoogleTrendsTask("t", ["AI marketing"], json({}, 401))).rejects.toMatchObject({
+      code: 401,
+      transient: false,
+    });
+  });
+
+  it("reports finished tasks without search results as completed with no data", async () => {
+    await expect(
+      getGoogleTrendsTask(
+        "empty",
+        ["AI marketing"],
+        json({ status_code: 20000, tasks: [{ status_code: 20000, result: [{ items: null }] }] }),
+      ),
+    ).resolves.toEqual({
+      id: "empty",
+      status: "completed",
+      statusCode: 20000,
+      statusMessage: undefined,
+    });
+    await expect(
+      getGoogleTrendsTask(
+        "none",
+        ["AI marketing"],
+        json({
+          status_code: 20000,
+          tasks: [{ status_code: 40102, status_message: "No Search Results." }],
+        }),
+      ),
+    ).resolves.toEqual({
+      id: "none",
+      status: "completed",
+      statusCode: 40102,
+      statusMessage: "No Search Results.",
+    });
+  });
 });

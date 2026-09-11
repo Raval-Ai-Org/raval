@@ -1225,6 +1225,19 @@ export type Database = {
     };
     Functions: {
       accept_workspace_invite: { Args: { _token: string }; Returns: string };
+      consume_rate_limit: {
+        Args: {
+          p_bucket_key: string;
+          p_cost?: number;
+          p_limit: number;
+          p_window_seconds: number;
+        };
+        Returns: {
+          allowed: boolean;
+          current_count: number;
+          reset_at: string;
+        }[];
+      };
       create_workspace: {
         Args: { p_name: string; p_website_url?: string };
         Returns: string;

@@ -161,6 +161,11 @@ async function extractDocx(file: File): Promise<string> {
 }
 
 async function extractSpreadsheet(file: File): Promise<string> {
+  // xlsx is pinned to the SheetJS CDN tarball in package.json, not the npm
+  // registry: npm's newest publish is 0.18.5, which carries an unfixed
+  // prototype-pollution (GHSA-4r6h-8v6p-xvw6) and ReDoS (GHSA-5pgg-2g8v-p4x9).
+  // Both are triggered by parsing a crafted workbook — which is exactly what
+  // this function does. SheetJS ships patches only from cdn.sheetjs.com.
   const XLSX: any = await import("xlsx");
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });

@@ -1,5 +1,6 @@
 "use client";
 
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
 import { Command } from "cmdk";
@@ -98,10 +99,10 @@ export function CommandBar() {
     };
     const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    window.addEventListener("open:command-bar", onOpen);
+    addAppEventListener("open:command-bar", onOpen);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("open:command-bar", onOpen);
+      removeAppEventListener("open:command-bar", onOpen);
     };
   }, []);
 
@@ -111,8 +112,8 @@ export function CommandBar() {
 
   const askChat = (prompt: string) => {
     setOpen(false);
-    window.dispatchEvent(new CustomEvent("chat:prefill", { detail: prompt }));
-    window.dispatchEvent(new CustomEvent("chat:focus"));
+    emitAppEvent("chat:prefill", prompt);
+    emitAppEvent("chat:focus");
     emit({ kind: "nav", title: "Asked Mellox AI" });
   };
 
@@ -122,9 +123,9 @@ export function CommandBar() {
     emit({ kind: "nav", title: `Opened ${label}` });
   };
 
-  const fireEvent = (name: string) => {
+  const fireEvent = (name: (typeof WORKSPACE_ACTIONS)[number]["event"]) => {
     setOpen(false);
-    window.dispatchEvent(new CustomEvent(name));
+    emitAppEvent(name);
   };
 
   const toggle = (id: string, on: boolean) => {
@@ -226,9 +227,7 @@ export function CommandBar() {
                   onSelect={() => {
                     if (r.analyticsTab) {
                       setOpen(false);
-                      window.dispatchEvent(
-                        new CustomEvent("open:analytics", { detail: { tab: r.analyticsTab } }),
-                      );
+                      emitAppEvent("open:analytics", { tab: r.analyticsTab });
                       emit({ kind: "nav", title: `Opened ${r.label}` });
                     } else {
                       go(r.to, r.label, r.search);
@@ -253,9 +252,7 @@ export function CommandBar() {
                   value={`create ${t.label} ${t.sub}`}
                   onSelect={() => {
                     setOpen(false);
-                    window.dispatchEvent(
-                      new CustomEvent("open:canvas", { detail: { type: t.id } }),
-                    );
+                    emitAppEvent("open:canvas", { type: t.id });
                     emit({ kind: "nav", title: `Opened ${t.label} canvas` });
                   }}
                   className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm data-[selected=true]:bg-secondary"

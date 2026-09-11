@@ -59,7 +59,7 @@ This must be updated to point to your production domain. There are two approache
 
 The application now uses the `APP_URL` environment variable for all dynamic URL generation:
 
-- **Development**: Set `APP_URL=http://localhost:5173` (or your dev port)
+- **Development**: Set `APP_URL=http://localhost:8080` (the port `npm run dev` uses)
 - **Staging**: Set `APP_URL=https://staging.your-domain.com`
 - **Production**: Set `APP_URL=https://your-domain.com`
 
@@ -70,18 +70,25 @@ This controls:
 - Favicon and logo paths
 - Validation script canonical hosts
 
+`NEXT_PUBLIC_APP_URL` must be set to the same value. It is inlined at build
+time, so on Railway it has to exist as a build variable (see the `ARG` lines in
+the `Dockerfile`), not only at runtime.
+
 ## Integration Checklist
 
 - [ ] Confirm production domain name
 - [ ] Update database cron webhook URL via Supabase SQL Editor
-- [ ] Set `APP_URL` environment variable in deployment platform (Vercel, Cloudflare Workers, etc.)
-- [ ] Verify `VITE_APP_URL` is set to same value (or browser will auto-detect)
+- [ ] Set `APP_URL` in the Railway service variables
+- [ ] Set `NEXT_PUBLIC_APP_URL` to the same value as a **build** variable
+- [ ] Set `CRON_SECRET` (min 16 chars) — the hooks return 503 without it
 - [ ] Test SEO meta tags: `curl https://your-domain.com/ | grep 'og:url'`
-- [ ] Test competitor watch webhook: `curl -X POST https://your-domain.com/api/public/hooks/competitor-watch`
-- [ ] Run validation scripts: `APP_URL=https://your-domain.com npm run validate:sitemap`
+- [ ] Test competitor watch webhook (expect 401 without the secret):
+      `curl -X POST https://your-domain.com/api/public/hooks/competitor-watch`
+- [ ] Run validation scripts: `APP_URL=https://your-domain.com npm run test:sitemap`
 
 ## Related Documentation
 
-- [Authentication Reset Details](./AUTHENTICATION-RESET-DETAILS.md)
+- [Codebase Analysis](./docs/CODEBASE-ANALYSIS-2026-09-11.md)
+- [Team Credentials](./docs/TEAM-CREDENTIALS.md)
 - [Environment Variables Guide](./.env.example)
-- [Supabase Setup Instructions](./docs/SUPABASE-AUTH-SETUP.md)
+- [Google OAuth Setup](./docs/GOOGLE-OAUTH-SETUP.md)

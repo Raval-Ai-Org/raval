@@ -1,6 +1,6 @@
 /* eslint-disable no-control-regex */
 import { z } from "zod";
-import { jsonError, requireUserId } from "@/server/api-auth";
+import { defineRoute } from "@/server/route";
 import { buildAgentTasks } from "@/lib/ai/deterministic-suggestions";
 
 export const dynamic = "force-dynamic";
@@ -28,18 +28,10 @@ const BodySchema = z.object({
   existing: z.array(safeText(160)).max(20).optional(),
 });
 
-export async function POST(request: Request) {
-  const auth = await requireUserId(request);
-  if (!auth.ok) return auth.response;
-
-  let body: z.infer<typeof BodySchema>;
-  try {
-    body = BodySchema.parse(await request.json());
-  } catch {
-    return jsonError(400, "Invalid request body");
-  }
-
+export const POST = defineRoute({
+  name: "agent-tasks",
+  auth: "user",
+  body: BodySchema,
   // Deterministic — no LLM. Templated tasks from missions + existing dedupe.
-  const tasks = buildAgentTasks(body);
-  return Response.json({ tasks });
-}
+  handler: ({ body }) => ({ tasks: buildAgentTasks(body) }),
+});

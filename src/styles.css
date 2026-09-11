@@ -422,22 +422,8 @@
   }
   /* Utility hover transforms (for example buttons and tabs) must also
      respect reduced motion, even when they do not use a named hover class. */
-  :where(
-    button,
-    a,
-    [role="button"],
-    [role="tab"],
-    [role="menuitem"],
-    summary
-  ):hover,
-  :where(
-    button,
-    a,
-    [role="button"],
-    [role="tab"],
-    [role="menuitem"],
-    summary
-  ):active {
+  :where(button, a, [role="button"], [role="tab"], [role="menuitem"], summary):hover,
+  :where(button, a, [role="button"], [role="tab"], [role="menuitem"], summary):active {
     transform: none !important;
   }
   /* Suppress ambient / decorative loops entirely. */

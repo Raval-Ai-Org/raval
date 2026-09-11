@@ -1,3 +1,4 @@
+import "server-only";
 import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
@@ -30,10 +31,21 @@ type MarketBrainJob = {
 };
 
 function normalizeKeywords(keywords: string[]): string[] {
-  return Array.from(new Set(keywords.map((value) => value.trim()).filter(Boolean).slice(0, 5)));
+  return Array.from(
+    new Set(
+      keywords
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .slice(0, 5),
+    ),
+  );
 }
 
-function buildScheduleKey(workspaceId: string, keywords: string[], location?: string | null): string {
+function buildScheduleKey(
+  workspaceId: string,
+  keywords: string[],
+  location?: string | null,
+): string {
   return createHash("sha256")
     .update(`${workspaceId}:${normalizeKeywords(keywords).join("|")}:${location ?? "global"}`)
     .digest("hex");
@@ -55,7 +67,9 @@ function scheduleMeta(args: MarketBrainScheduleConfig): Record<string, unknown> 
   };
 }
 
-export async function ensureMarketBrainSchedule(args: MarketBrainScheduleConfig): Promise<{ ok: true }> {
+export async function ensureMarketBrainSchedule(
+  args: MarketBrainScheduleConfig,
+): Promise<{ ok: true }> {
   const meta = scheduleMeta(args);
   if (!Array.isArray(meta.keywords) || !meta.keywords.length) return { ok: true };
 
@@ -70,9 +84,10 @@ export async function ensureMarketBrainSchedule(args: MarketBrainScheduleConfig)
 
   if (existing) {
     const existingMeta = (existing.meta ?? {}) as Record<string, unknown>;
-    const next = existing.active && new Date(existing.next_run_at).getTime() > Date.now()
-      ? existing.next_run_at
-      : nextRunAt(DAILY_COLLECTION_INTERVAL_MS);
+    const next =
+      existing.active && new Date(existing.next_run_at).getTime() > Date.now()
+        ? existing.next_run_at
+        : nextRunAt(DAILY_COLLECTION_INTERVAL_MS);
     const { error } = await supabaseAdmin
       .from("scheduled_jobs")
       .update({
@@ -97,7 +112,8 @@ export async function ensureMarketBrainSchedule(args: MarketBrainScheduleConfig)
     last_run_status: "scheduled",
     meta: meta as never,
   });
-  if (insertError) throw new Error(`Failed to create Market Brain schedule: ${insertError.message}`);
+  if (insertError)
+    throw new Error(`Failed to create Market Brain schedule: ${insertError.message}`);
   return { ok: true };
 }
 
@@ -106,7 +122,9 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }
 
 async function runMarketBrainJob(job: MarketBrainJob): Promise<"completed" | "pending" | "failed"> {
@@ -132,21 +150,29 @@ async function runMarketBrainJob(job: MarketBrainJob): Promise<"completed" | "pe
     job.workspace_id,
   );
 
-  const result = started.collectionId && started.state === "pending"
-    ? await pollGoogleTrendsCollection(started.collectionId)
-    : started;
-  if (!result.collectionId || result.state === "failed" || result.state === "no_data") return "failed";
+  const result =
+    started.collectionId && started.state === "pending"
+      ? await pollGoogleTrendsCollection(started.collectionId)
+      : started;
+  if (!result.collectionId || result.state === "failed") return "failed";
   if (result.state === "pending") return "pending";
+  // The provider answered with no measurable interest: a successful run with
+  // nothing to analyze, not an error.
+  if (result.state === "no_data") return "completed";
 
   const intelligence = await analyzeMarketCollection({
     collectionId: result.collectionId,
     workspaceId: job.workspace_id,
     analysisType: "market_strategy",
   });
-  return intelligence.state === "completed" || intelligence.state === "cached" ? "completed" : "failed";
+  return intelligence.state === "completed" || intelligence.state === "cached"
+    ? "completed"
+    : "failed";
 }
 
-export async function runDueMarketBrainCollections(opts: { workspaceId?: string; max?: number } = {}) {
+export async function runDueMarketBrainCollections(
+  opts: { workspaceId?: string; max?: number } = {},
+) {
   let query = supabaseAdmin
     .from("scheduled_jobs")
     .select("id, workspace_id, next_run_at, meta")

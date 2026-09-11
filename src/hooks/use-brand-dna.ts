@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { emitAppEvent } from "@/lib/app-events";
 import { buildDesignMd, saveDesignMd } from "@/lib/design-md";
 
 export interface BrandColor {
@@ -197,6 +198,16 @@ const TEXT_FIELDS: (keyof BrandDna)[] = [
   "dontRules",
 ];
 
+// Brand DNA fields save on every keystroke, but `brand-dna:saved` listeners
+// (Studio re-derives suggestions, including a model call) should run once an
+// edit settles — not per character. Trailing debounce, shared by all hooks.
+const SAVED_SETTLE_MS = 2000;
+let savedTimer: ReturnType<typeof setTimeout> | undefined;
+function announceSaved() {
+  clearTimeout(savedTimer);
+  savedTimer = setTimeout(() => emitAppEvent("brand-dna:saved"), SAVED_SETTLE_MS);
+}
+
 export function useBrandDna(workspaceId: string | null) {
   const key = workspaceId ? `brand-dna:v3:${workspaceId}` : null;
   const legacyKeys = workspaceId ? [`brand-dna:v2:${workspaceId}`, `brand-dna:${workspaceId}`] : [];
@@ -233,6 +244,7 @@ export function useBrandDna(workspaceId: string | null) {
         saveDesignMd(workspaceId, buildDesignMd(next));
       } catch {}
     }
+    announceSaved();
   };
 
   const save = (next: Partial<BrandDna>) => {
