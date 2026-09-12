@@ -99,7 +99,10 @@ function luhnValid(digits: string): boolean {
 }
 
 function snippetOf(text: string, index: number, length: number): string {
-  return text.slice(Math.max(0, index - 20), index + length + 20).replace(/\s+/g, " ").trim();
+  return text
+    .slice(Math.max(0, index - 20), index + length + 20)
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function escapeRe(s: string): string {
@@ -109,8 +112,12 @@ function escapeRe(s: string): string {
 /** Run every output check. `brandDont` is the brand's own "don't" list. */
 export function checkOutput(text: string, opts: { brandDont?: string[] } = {}): OutputCheck {
   const findings: OutputFinding[] = [];
-  const add = (kind: OutputFindingKind, rule: string, severity: OutputSeverity, m: RegExpExecArray) =>
-    findings.push({ kind, rule, severity, snippet: snippetOf(text, m.index, m[0].length) });
+  const add = (
+    kind: OutputFindingKind,
+    rule: string,
+    severity: OutputSeverity,
+    m: RegExpExecArray,
+  ) => findings.push({ kind, rule, severity, snippet: snippetOf(text, m.index, m[0].length) });
 
   // Cards first; their digits are then masked so the phone/id rules do not
   // re-report fragments of the same number.
@@ -118,13 +125,15 @@ export function checkOutput(text: string, opts: { brandDont?: string[] } = {}): 
   for (const m of text.matchAll(CARD_CANDIDATE)) {
     if (!luhnValid(m[0].replace(/\D/g, ""))) continue;
     add("pii", "payment_card", "block", m as RegExpExecArray);
-    masked = masked.slice(0, m.index) + "#".repeat(m[0].length) + masked.slice(m.index + m[0].length);
+    masked =
+      masked.slice(0, m.index) + "#".repeat(m[0].length) + masked.slice(m.index + m[0].length);
   }
   for (const r of PII_RULES) {
     for (const m of masked.matchAll(r.re)) add("pii", r.rule, r.severity, m as RegExpExecArray);
   }
   const profanityRe = new RegExp(`\\b(${PROFANITY.map(escapeRe).join("|")})\\b`, "gi");
-  for (const m of text.matchAll(profanityRe)) add("profanity", "profanity", "warn", m as RegExpExecArray);
+  for (const m of text.matchAll(profanityRe))
+    add("profanity", "profanity", "warn", m as RegExpExecArray);
   for (const r of CLAIM_RULES) {
     for (const m of text.matchAll(r.re)) add("claim", r.rule, r.severity, m as RegExpExecArray);
   }
@@ -132,7 +141,8 @@ export function checkOutput(text: string, opts: { brandDont?: string[] } = {}): 
     const p = phrase.trim();
     if (p.length < 3 || p.length > 80) continue;
     const re = new RegExp(`\\b${escapeRe(p)}\\b`, "gi");
-    for (const m of text.matchAll(re)) add("brand_rule", `brand_dont:${p.slice(0, 40)}`, "warn", m as RegExpExecArray);
+    for (const m of text.matchAll(re))
+      add("brand_rule", `brand_dont:${p.slice(0, 40)}`, "warn", m as RegExpExecArray);
   }
 
   const severity = findings.some((f) => f.severity === "block")

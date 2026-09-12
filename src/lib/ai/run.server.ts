@@ -171,7 +171,12 @@ export async function runTool<T>(opts: RunToolOpts): Promise<T | null> {
   if (!argsStr) return null;
   const parsed = safeParseJson<T | null>(argsStr, null);
   if (parsed == null) {
-    logGuardrailEvent({ kind: "parse_failure", severity: "warn", route: opts.route, detail: { tool: opts.name } });
+    logGuardrailEvent({
+      kind: "parse_failure",
+      severity: "warn",
+      route: opts.route,
+      detail: { tool: opts.name },
+    });
   }
   return parsed;
 }

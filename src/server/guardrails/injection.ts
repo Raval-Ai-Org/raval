@@ -10,8 +10,14 @@ const PATTERNS: Array<{ id: string; re: RegExp }> = [
     id: "override_instructions",
     re: /\b(ignore|disregard|forget|override)\b[^.\n]{0,40}\b(previous|prior|above|earlier|all|any|system)\b[^.\n]{0,40}\b(instructions?|prompts?|rules?|directions?)\b/i,
   },
-  { id: "role_reassignment", re: /\byou are (now|no longer)\b|\bact as (a |an )?(system|developer|admin)\b/i },
-  { id: "system_prompt_probe", re: /\b(reveal|print|show|repeat)\b[^.\n]{0,30}\b(system prompt|hidden instructions|your instructions)\b/i },
+  {
+    id: "role_reassignment",
+    re: /\byou are (now|no longer)\b|\bact as (a |an )?(system|developer|admin)\b/i,
+  },
+  {
+    id: "system_prompt_probe",
+    re: /\b(reveal|print|show|repeat)\b[^.\n]{0,30}\b(system prompt|hidden instructions|your instructions)\b/i,
+  },
   { id: "fake_system_turn", re: /^\s*(system|developer)\s*:/im },
   { id: "chat_template", re: /<\|?\s*(im_start|im_end)\s*\|?>/i },
   { id: "action_tag", re: /\[\s*\[\s*action\s*:/i },

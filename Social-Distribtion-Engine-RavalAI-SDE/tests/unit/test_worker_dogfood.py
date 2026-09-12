@@ -33,7 +33,6 @@ from app.adapters.base import (  # noqa: E402
     PublishResult,
     PublishStatus,
 )
-from app.celery_app import celery_app  # noqa: E402
 from app.database import get_sync_engine, get_sync_session_maker  # noqa: E402
 from app.models import Account, Base, DeliveryLog, Post, PostTarget  # noqa: E402
 from app.security import decrypt_token, encrypt_token  # noqa: E402

@@ -891,9 +891,8 @@ export function ChatPanel({
       // Chat-first: parse any [[action:...]] tags out of the assistant message,
       // strip them from what we render, run them, and append a "what I did" chip row.
       try {
-        const { parseToolCalls, executeToolCall, requiresApproval } = await import(
-          "@/lib/chat-tools"
-        );
+        const { parseToolCalls, executeToolCall, requiresApproval } =
+          await import("@/lib/chat-tools");
         const { calls, cleaned } = parseToolCalls(acc);
         if (cleaned !== acc) {
           setMessages((m) => m.map((x) => (x.id === aId ? { ...x, content: cleaned } : x)));

@@ -16,17 +16,17 @@ The Python Social Distribution Engine contains **no ML inference or model SDKs**
 
 ## Runtime Model Inventory
 
-| Model ID | Provider | Purpose | Runtime classification |
-|---|---|---|---|
-| `qwen/qwen3-max` | OpenRouter | General chat, content generation, JSON generation, and tool calling | Primary chat model |
-| `google/gemini-2.5-pro` | OpenRouter | Structured extraction, image/vision understanding, and memory extraction | Primary extraction model |
-| `claude-sonnet-5` | Anthropic | Brand DNA extraction and normal Marketing Coach generation | Default Claude model |
-| `claude-opus-5` | Anthropic | Deep strategy and complex Marketing Coach analysis | Conditional premium model |
-| `gpt-image-2-5-flare-text-to-image` | KIE | Normal/default image generation | Default and fast image model |
-| `gpt-image-2-5-sunburst-text-to-image` | KIE | High-quality or complex image generation | Premium image model |
-| `gpt-image-2-5-flare-image-to-image` | KIE | Reference-image editing and variations | Default edit model |
-| `gpt-image-2-5-sunburst-image-to-image` | KIE | High-quality reference-image editing | Premium edit model |
-| `veo-3-1` | KIE | Video generation | Configurable video model |
+| Model ID                                | Provider   | Purpose                                                                  | Runtime classification       |
+| --------------------------------------- | ---------- | ------------------------------------------------------------------------ | ---------------------------- |
+| `qwen/qwen3-max`                        | OpenRouter | General chat, content generation, JSON generation, and tool calling      | Primary chat model           |
+| `google/gemini-2.5-pro`                 | OpenRouter | Structured extraction, image/vision understanding, and memory extraction | Primary extraction model     |
+| `claude-sonnet-5`                       | Anthropic  | Brand DNA extraction and normal Marketing Coach generation               | Default Claude model         |
+| `claude-opus-5`                         | Anthropic  | Deep strategy and complex Marketing Coach analysis                       | Conditional premium model    |
+| `gpt-image-2-5-flare-text-to-image`     | KIE        | Normal/default image generation                                          | Default and fast image model |
+| `gpt-image-2-5-sunburst-text-to-image`  | KIE        | High-quality or complex image generation                                 | Premium image model          |
+| `gpt-image-2-5-flare-image-to-image`    | KIE        | Reference-image editing and variations                                   | Default edit model           |
+| `gpt-image-2-5-sunburst-image-to-image` | KIE        | High-quality reference-image editing                                     | Premium edit model           |
+| `veo-3-1`                               | KIE        | Video generation                                                         | Configurable video model     |
 
 ## OpenRouter Models
 

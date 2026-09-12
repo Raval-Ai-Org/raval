@@ -77,7 +77,9 @@ async function reviewShareItems(
   workspaceId: string,
   items: Array<{ kind: string; refId?: string | null; title?: string }>,
 ): Promise<{ findings: ShareFinding[]; blocking: ShareFinding[] }> {
-  const ids = items.filter((i) => i.kind === "content_item" && i.refId).map((i) => i.refId as string);
+  const ids = items
+    .filter((i) => i.kind === "content_item" && i.refId)
+    .map((i) => i.refId as string);
   const findings: ShareFinding[] = [];
   if (!ids.length) return { findings, blocking: [] };
 
@@ -91,12 +93,26 @@ async function reviewShareItems(
     supabase.from("workspaces").select("brand_voice").eq("id", workspaceId).maybeSingle(),
   ]);
   const dont = (ws?.brand_voice as { dont?: unknown } | null)?.dont;
-  const brandDont = Array.isArray(dont) ? dont.map(String) : typeof dont === "string" ? dont.split(/[,;\n]/) : [];
+  const brandDont = Array.isArray(dont)
+    ? dont.map(String)
+    : typeof dont === "string"
+      ? dont.split(/[,;\n]/)
+      : [];
 
-  for (const row of (rows ?? []) as Array<{ id: string; title: string | null; body: string | null; media_url: string | null }>) {
+  for (const row of (rows ?? []) as Array<{
+    id: string;
+    title: string | null;
+    body: string | null;
+    media_url: string | null;
+  }>) {
     const itemTitle = row.title || "Untitled";
     for (const f of checkOutput(`${row.title ?? ""}\n${row.body ?? ""}`, { brandDont }).findings) {
-      findings.push({ itemTitle, rule: `${f.kind}:${f.rule}`, severity: f.severity, detail: f.snippet });
+      findings.push({
+        itemTitle,
+        rule: `${f.kind}:${f.rule}`,
+        severity: f.severity,
+        detail: f.snippet,
+      });
     }
     if (row.media_url && /^https:\/\//.test(row.media_url)) {
       const m = await moderateImage(row.media_url);
@@ -105,7 +121,10 @@ async function reviewShareItems(
           itemTitle,
           rule: m.verdict === "flagged" ? "image:flagged" : "image:unverified",
           severity: "block",
-          detail: m.verdict === "flagged" ? `Image flagged: ${m.categories.join(", ") || "policy"}` : "Image could not be checked for safety",
+          detail:
+            m.verdict === "flagged"
+              ? `Image flagged: ${m.categories.join(", ") || "policy"}`
+              : "Image could not be checked for safety",
         });
       }
     }

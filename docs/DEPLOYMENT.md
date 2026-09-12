@@ -3,10 +3,10 @@
 Two supported targets. Both run the same `Dockerfile` (Next.js standalone
 server, non-root user, container health check on `/api/health`).
 
-| Target | When | TLS / proxy | Cache |
-| --- | --- | --- | --- |
-| **Railway** (current) | Managed hosting, zero server admin | Railway edge | Add a Railway Redis and set `REDIS_URL`, or run without (in-process LRU) |
-| **Single VPS** (`docker-compose.yml`) | Own server (Lightsail, Hetzner, …) | Caddy, automatic Let's Encrypt | Bundled Redis (cache only, 256 MB LRU) |
+| Target                                | When                               | TLS / proxy                    | Cache                                                                    |
+| ------------------------------------- | ---------------------------------- | ------------------------------ | ------------------------------------------------------------------------ |
+| **Railway** (current)                 | Managed hosting, zero server admin | Railway edge                   | Add a Railway Redis and set `REDIS_URL`, or run without (in-process LRU) |
+| **Single VPS** (`docker-compose.yml`) | Own server (Lightsail, Hetzner, …) | Caddy, automatic Let's Encrypt | Bundled Redis (cache only, 256 MB LRU)                                   |
 
 The Social Distribution Engine (SDR) deploys separately — see
 [ADR-0005](adr/0005-aws-lightsail-sdr-production-deployment.md).

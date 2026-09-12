@@ -22,7 +22,12 @@ export async function runWorker(args: {
   const worker = getWorker(args.worker);
   if (!worker) throw new Error(`Unknown worker: ${args.worker}`);
   if (agentsGloballyDisabled()) {
-    return { runId: "", status: "failed", summary: "", error: "Agents are disabled platform-wide." };
+    return {
+      runId: "",
+      status: "failed",
+      summary: "",
+      error: "Agents are disabled platform-wide.",
+    };
   }
   return executeRun(worker, {
     workspaceId: args.workspaceId,
@@ -47,13 +52,16 @@ export async function agentsTick(opts: { maxWorkspaces?: number } = {}) {
     .gte("updated_at", since)
     .limit(5000);
   if (error) throw new Error(error.message);
-  const workspaces = [...new Set((data ?? []).map((r: { workspace_id: string }) => r.workspace_id))].slice(
-    0,
-    opts.maxWorkspaces ?? 50,
-  );
+  const workspaces = [
+    ...new Set((data ?? []).map((r: { workspace_id: string }) => r.workspace_id)),
+  ].slice(0, opts.maxWorkspaces ?? 50);
   const outcomes: Array<{ workspaceId: string; status: string }> = [];
   for (const workspaceId of workspaces) {
-    const out = await runWorker({ worker: "distribution-reliability", workspaceId, trigger: "cron" });
+    const out = await runWorker({
+      worker: "distribution-reliability",
+      workspaceId,
+      trigger: "cron",
+    });
     outcomes.push({ workspaceId, status: out.status });
   }
   return {

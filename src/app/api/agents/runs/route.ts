@@ -19,10 +19,17 @@ export const GET = defineRoute({
   handler: async ({ query, workspaceId, supabase }) => {
     if (query.id) {
       const [{ data: run, error }, { data: steps }] = await Promise.all([
-        supabase.from("agent_runs").select(RUN_COLS).eq("id", query.id).eq("workspace_id", workspaceId).maybeSingle(),
+        supabase
+          .from("agent_runs")
+          .select(RUN_COLS)
+          .eq("id", query.id)
+          .eq("workspace_id", workspaceId)
+          .maybeSingle(),
         supabase
           .from("agent_run_steps")
-          .select("seq, kind, tool, redacted_args, policy_decision, status, result_summary, latency_ms, cost_usd, created_at")
+          .select(
+            "seq, kind, tool, redacted_args, policy_decision, status, result_summary, latency_ms, cost_usd, created_at",
+          )
           .eq("run_id", query.id)
           .eq("workspace_id", workspaceId)
           .order("seq", { ascending: true }),

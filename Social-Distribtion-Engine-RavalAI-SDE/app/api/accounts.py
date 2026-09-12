@@ -204,8 +204,10 @@ async def disconnect_account(
 
 
 def _is_allowed_redirect(url: str) -> bool:
-    """Only allow the post-connect browser redirect to a TRUSTED origin (reuse
-    the CORS allowlist). Prevents an open-redirect vector through OAuth."""
+    """Check a post-connect browser redirect against the trusted origins.
+
+    Reuses the CORS allowlist; prevents an open-redirect vector through OAuth.
+    """
     try:
         parsed = urlparse(url)
     except ValueError:

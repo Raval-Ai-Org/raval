@@ -6,11 +6,7 @@
 // States: Suggested → Executing → Executed / Failed, or Dismissed.
 import { useState } from "react";
 import { Check, Loader2, X } from "lucide-react";
-import {
-  describeSuggestion,
-  type ChatToolCall,
-  type ChatToolResult,
-} from "@/lib/chat-tools";
+import { describeSuggestion, type ChatToolCall, type ChatToolResult } from "@/lib/chat-tools";
 
 type State = "suggested" | "executing" | "executed" | "failed" | "dismissed";
 

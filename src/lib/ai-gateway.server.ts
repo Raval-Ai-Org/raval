@@ -270,7 +270,11 @@ export function completionCost(model: string, usage: OpenRouterUsage | undefined
 /** Tenant scope for cache keys: a cached answer is never served across tenants. */
 function cacheScope(): string {
   const scope = getRequestScope();
-  return scope.workspaceId ? `ws:${scope.workspaceId}` : scope.userId ? `u:${scope.userId}` : "anon";
+  return scope.workspaceId
+    ? `ws:${scope.workspaceId}`
+    : scope.userId
+      ? `u:${scope.userId}`
+      : "anon";
 }
 
 type CachedCompletion = { json: any; costUsd: number };
@@ -346,12 +350,24 @@ export async function chatCompletion(
         { timeoutMs: CHAT_TIMEOUT_MS, onTransportError: transportError() },
       );
     } catch (error) {
-      recordUsage({ provider: "openrouter", model, route, status: "error", latencyMs: Date.now() - started });
+      recordUsage({
+        provider: "openrouter",
+        model,
+        route,
+        status: "error",
+        latencyMs: Date.now() - started,
+      });
       throw error;
     }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      recordUsage({ provider: "openrouter", model, route, status: "error", latencyMs: Date.now() - started });
+      recordUsage({
+        provider: "openrouter",
+        model,
+        route,
+        status: "error",
+        latencyMs: Date.now() - started,
+      });
       throw mapStatus(res.status, text);
     }
     let json: any;

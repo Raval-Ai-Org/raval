@@ -35,11 +35,11 @@ A small control plane in `src/server/agents/`:
    proposed change, preview and expiry. Approving is compare-and-set on the
    status, re-checks policy and role, then executes with an idempotency key.
 5. **Workers**, both bounded:
-   - *Distribution Reliability* (read-only): deterministic evidence from
+   - _Distribution Reliability_ (read-only): deterministic evidence from
      publications, delivery failures, webhook rejections and heartbeats →
      `agent_findings` using the audit's finding contract. Never mutates
      delivery state.
-   - *Content-Fit* (approval-gated): platform limits and guardrail checks →
+   - _Content-Fit_ (approval-gated): platform limits and guardrail checks →
      a proposed `content.apply_revision` that a human approves.
 6. **Chat actions** go through the same idea: navigation tags run; `audit`,
    `save-memory` and `schedule` render as Suggested chips needing Approve, and

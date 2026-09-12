@@ -40,7 +40,11 @@ export function setAlertSink(next: AlertSink | null): void {
 export async function sendAlert(alert: Alert): Promise<boolean> {
   const n = await cache.incr(`alert:${alert.key}`, COOLDOWN_SECONDS);
   if (n > 1) return false;
-  log.warn(`alert: ${alert.title}`, { key: alert.key, severity: alert.severity, detail: alert.detail });
+  log.warn(`alert: ${alert.title}`, {
+    key: alert.key,
+    severity: alert.severity,
+    detail: alert.detail,
+  });
   try {
     await sink(alert);
   } catch (error) {

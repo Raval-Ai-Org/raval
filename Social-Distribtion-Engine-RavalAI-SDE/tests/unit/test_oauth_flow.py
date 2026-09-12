@@ -221,9 +221,12 @@ class TestRedirectAfter:
     @patch("app.api.accounts._fetch_user_profile", new_callable=AsyncMock, return_value={"id": "u1", "username": "tester"})
     @patch("app.api.accounts._exchange_code_for_token", new_callable=AsyncMock, return_value={"access_token": "tok"})
     async def test_callback_redirects_to_redirect_after(
-        self, mock_exchange, mock_profile, async_client, auth_header
+        self,
+        mock_exchange,  # noqa: ARG002 - injected by @patch, asserted via behavior
+        mock_profile,  # noqa: ARG002 - injected by @patch
+        async_client,
+        auth_header,
     ):
-        from unittest.mock import patch  # noqa: F811  (kept for clarity)
 
         start = await async_client.get(
             "/api/v1/oauth/twitter/start?redirect_after=https://raval.it.com/app",
@@ -243,7 +246,11 @@ class TestRedirectAfter:
     @patch("app.api.accounts._fetch_user_profile", new_callable=AsyncMock, return_value={"id": "u2", "username": "t2"})
     @patch("app.api.accounts._exchange_code_for_token", new_callable=AsyncMock, return_value={"access_token": "tok"})
     async def test_callback_without_redirect_after_returns_json(
-        self, mock_exchange, mock_profile, async_client, auth_header
+        self,
+        mock_exchange,  # noqa: ARG002 - injected by @patch
+        mock_profile,  # noqa: ARG002 - injected by @patch
+        async_client,
+        auth_header,
     ):
         start = await async_client.get("/api/v1/oauth/twitter/start", headers=auth_header)
         state_token = start.json()["state_token"]

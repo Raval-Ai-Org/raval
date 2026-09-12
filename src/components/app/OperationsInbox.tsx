@@ -10,7 +10,15 @@
 // Labels follow the audit's UX rules: Suggested / Awaiting approval /
 // Executed / Failed / Needs review — a recommendation is never shown as done.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2, PauseCircle, PlayCircle, RefreshCw, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  PauseCircle,
+  PlayCircle,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { authedFetch, getActiveWorkspaceId } from "@/lib/authed-fetch";
@@ -104,7 +112,11 @@ export function OperationsInbox() {
   const [actions, setActions] = useState<ActionRow[]>([]);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [runDetail, setRunDetail] = useState<{ id: string; steps: StepRow[] } | null>(null);
-  const [settings, setSettings] = useState<{ agentsPaused: boolean; canManage: boolean; globallyDisabled: boolean } | null>(null);
+  const [settings, setSettings] = useState<{
+    agentsPaused: boolean;
+    canManage: boolean;
+    globallyDisabled: boolean;
+  } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -128,14 +140,18 @@ export function OperationsInbox() {
         api<{ findings: FindingRow[] }>(`/api/agents/findings?${q}&status=open`),
         api<{ actions: ActionRow[] }>(`/api/agents/actions?${q}&status=all`),
         api<{ runs: RunRow[] }>(`/api/agents/runs?${q}`),
-        api<{ agentsPaused: boolean; canManage: boolean; globallyDisabled: boolean }>(`/api/agents/settings?${q}`),
+        api<{ agentsPaused: boolean; canManage: boolean; globallyDisabled: boolean }>(
+          `/api/agents/settings?${q}`,
+        ),
       ]);
       setFindings(f.findings);
       setActions(a.actions);
       setRuns(r.runs);
       setSettings(s);
     } catch (e) {
-      toast.error("Couldn't load operations", { description: e instanceof Error ? e.message : undefined });
+      toast.error("Couldn't load operations", {
+        description: e instanceof Error ? e.message : undefined,
+      });
     } finally {
       setLoading(false);
     }
@@ -159,15 +175,20 @@ export function OperationsInbox() {
     if (!workspaceId) return;
     setBusy("run");
     try {
-      const out = await api<{ status: string; summary: string; error?: string }>("/api/agents/run", {
-        method: "POST",
-        body: JSON.stringify({ workspaceId, worker: "distribution-reliability" }),
-      });
+      const out = await api<{ status: string; summary: string; error?: string }>(
+        "/api/agents/run",
+        {
+          method: "POST",
+          body: JSON.stringify({ workspaceId, worker: "distribution-reliability" }),
+        },
+      );
       if (out.status === "failed") toast.error("Check failed", { description: out.error });
       else toast.success("Delivery check complete", { description: out.summary.slice(0, 160) });
       await load();
     } catch (e) {
-      toast.error("Couldn't run the check", { description: e instanceof Error ? e.message : undefined });
+      toast.error("Couldn't run the check", {
+        description: e instanceof Error ? e.message : undefined,
+      });
     } finally {
       setBusy(null);
     }
@@ -177,11 +198,19 @@ export function OperationsInbox() {
     if (!workspaceId) return;
     setBusy(id);
     try {
-      await api("/api/agents/findings", { method: "POST", body: JSON.stringify({ workspaceId, id, action }) });
+      await api("/api/agents/findings", {
+        method: "POST",
+        body: JSON.stringify({ workspaceId, id, action }),
+      });
       setFindings((rows) => rows.filter((r) => r.id !== id || action === "acknowledge"));
-      if (action === "acknowledge") setFindings((rows) => rows.map((r) => (r.id === id ? { ...r, status: "acknowledged" } : r)));
+      if (action === "acknowledge")
+        setFindings((rows) =>
+          rows.map((r) => (r.id === id ? { ...r, status: "acknowledged" } : r)),
+        );
     } catch (e) {
-      toast.error("Couldn't update finding", { description: e instanceof Error ? e.message : undefined });
+      toast.error("Couldn't update finding", {
+        description: e instanceof Error ? e.message : undefined,
+      });
     } finally {
       setBusy(null);
     }
@@ -217,7 +246,9 @@ export function OperationsInbox() {
       setSettings({ ...settings, agentsPaused: out.agentsPaused });
       toast.success(out.agentsPaused ? "Agents paused for this workspace" : "Agents resumed");
     } catch (e) {
-      toast.error("Couldn't change agent settings", { description: e instanceof Error ? e.message : undefined });
+      toast.error("Couldn't change agent settings", {
+        description: e instanceof Error ? e.message : undefined,
+      });
     } finally {
       setBusy(null);
     }
@@ -239,7 +270,10 @@ export function OperationsInbox() {
   const pending = actions.filter((a) => a.status === "suggested");
 
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end bg-black/30" onClick={() => setOpen(false)}>
+    <div
+      className="fixed inset-0 z-[70] flex justify-end bg-black/30"
+      onClick={() => setOpen(false)}
+    >
       <aside
         role="dialog"
         aria-modal="true"
@@ -281,10 +315,16 @@ export function OperationsInbox() {
           <button
             type="button"
             onClick={() => void runCheck()}
-            disabled={busy === "run" || !workspaceId || settings?.agentsPaused || settings?.globallyDisabled}
+            disabled={
+              busy === "run" || !workspaceId || settings?.agentsPaused || settings?.globallyDisabled
+            }
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-[12px] font-medium text-primary-foreground disabled:opacity-50"
           >
-            {busy === "run" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />}
+            {busy === "run" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <PlayCircle className="h-3.5 w-3.5" />
+            )}
             Run delivery check
           </button>
           {settings?.canManage ? (
@@ -299,14 +339,22 @@ export function OperationsInbox() {
             </button>
           ) : null}
           {settings?.agentsPaused ? (
-            <span className="text-[12px] text-amber-700 dark:text-amber-300">Agents are paused in this workspace.</span>
+            <span className="text-[12px] text-amber-700 dark:text-amber-300">
+              Agents are paused in this workspace.
+            </span>
           ) : null}
           {settings?.globallyDisabled ? (
-            <span className="text-[12px] text-amber-700 dark:text-amber-300">Agents are disabled platform-wide.</span>
+            <span className="text-[12px] text-amber-700 dark:text-amber-300">
+              Agents are disabled platform-wide.
+            </span>
           ) : null}
         </div>
 
-        <nav className="flex gap-1 border-b border-border px-3" role="tablist" aria-label="Operations sections">
+        <nav
+          className="flex gap-1 border-b border-border px-3"
+          role="tablist"
+          aria-label="Operations sections"
+        >
           {(
             [
               ["findings", `Findings (${findings.length})`],
@@ -320,7 +368,9 @@ export function OperationsInbox() {
               aria-selected={tab === id}
               onClick={() => setTab(id)}
               className={`border-b-2 px-2.5 py-2 text-[13px] ${
-                tab === id ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground"
+                tab === id
+                  ? "border-primary font-medium text-foreground"
+                  : "border-transparent text-muted-foreground"
               }`}
             >
               {label}
@@ -330,7 +380,9 @@ export function OperationsInbox() {
 
         <div className="flex-1 overflow-y-auto px-4 py-3" role="tabpanel">
           {!workspaceId ? (
-            <p className="text-[13px] text-muted-foreground">Select a workspace to see its operations.</p>
+            <p className="text-[13px] text-muted-foreground">
+              Select a workspace to see its operations.
+            </p>
           ) : loading && !findings.length && !actions.length && !runs.length ? (
             <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
@@ -342,14 +394,18 @@ export function OperationsInbox() {
                   <li key={f.id} className="rounded-xl border border-border p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <span className={`mr-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${SEVERITY_STYLE[f.severity]}`}>
+                        <span
+                          className={`mr-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${SEVERITY_STYLE[f.severity]}`}
+                        >
                           {f.severity}
                         </span>
                         <span className="text-[13.5px] font-medium">{f.title}</span>
                         <p className="mt-1 text-[12.5px] text-muted-foreground">{f.summary}</p>
                       </div>
                       {f.status === "acknowledged" ? (
-                        <span className="shrink-0 text-[11px] text-muted-foreground">Acknowledged</span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          Acknowledged
+                        </span>
                       ) : null}
                     </div>
                     {f.hypotheses?.length ? (
@@ -376,7 +432,8 @@ export function OperationsInbox() {
                     ) : null}
                     <div className="mt-2 flex items-center justify-between text-[11.5px] text-muted-foreground">
                       <span>
-                        {f.worker} · seen {f.occurrences}× · confidence {Math.round(f.confidence * 100)}%
+                        {f.worker} · seen {f.occurrences}× · confidence{" "}
+                        {Math.round(f.confidence * 100)}%
                       </span>
                       <span className="flex gap-1.5">
                         {f.status !== "acknowledged" ? (
@@ -404,7 +461,8 @@ export function OperationsInbox() {
               </ul>
             ) : (
               <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" /> No open findings. Run a delivery check anytime.
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" /> No open findings. Run a
+                delivery check anytime.
               </p>
             )
           ) : tab === "approvals" ? (
@@ -419,17 +477,26 @@ export function OperationsInbox() {
                       </span>
                     </div>
                     <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-                      Proposed by {a.source} · {a.tool} · expires {new Date(a.expires_at).toLocaleDateString()}
+                      Proposed by {a.source} · {a.tool} · expires{" "}
+                      {new Date(a.expires_at).toLocaleDateString()}
                     </div>
                     {a.preview?.before || a.preview?.after ? (
                       <div className="mt-2 grid gap-2 text-[12.5px] sm:grid-cols-2">
                         <div className="rounded-lg bg-muted/60 p-2">
-                          <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">Before</div>
-                          <p className="whitespace-pre-wrap break-words">{a.preview.before?.body ?? "—"}</p>
+                          <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                            Before
+                          </div>
+                          <p className="whitespace-pre-wrap break-words">
+                            {a.preview.before?.body ?? "—"}
+                          </p>
                         </div>
                         <div className="rounded-lg bg-emerald-500/10 p-2">
-                          <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">After</div>
-                          <p className="whitespace-pre-wrap break-words">{a.preview.after?.body ?? "—"}</p>
+                          <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                            After
+                          </div>
+                          <p className="whitespace-pre-wrap break-words">
+                            {a.preview.after?.body ?? "—"}
+                          </p>
                         </div>
                       </div>
                     ) : Object.keys(a.preview ?? {}).length ? (
@@ -484,12 +551,19 @@ export function OperationsInbox() {
             )
           ) : runDetail ? (
             <div>
-              <button type="button" onClick={() => setRunDetail(null)} className="mb-2 text-[12px] text-primary">
+              <button
+                type="button"
+                onClick={() => setRunDetail(null)}
+                className="mb-2 text-[12px] text-primary"
+              >
                 ← All runs
               </button>
               <ol className="flex flex-col gap-1.5">
                 {runDetail.steps.map((s) => (
-                  <li key={s.seq} className="rounded-lg border border-border px-2.5 py-1.5 text-[12px]">
+                  <li
+                    key={s.seq}
+                    className="rounded-lg border border-border px-2.5 py-1.5 text-[12px]"
+                  >
                     <span className="font-medium">
                       #{s.seq} {s.kind}
                       {s.tool ? ` · ${s.tool}` : ""}
@@ -500,7 +574,9 @@ export function OperationsInbox() {
                       {s.latency_ms != null ? ` · ${s.latency_ms} ms` : ""}
                     </span>
                     {Object.keys(s.result_summary ?? {}).length ? (
-                      <div className="mt-0.5 break-all text-muted-foreground">{JSON.stringify(s.result_summary)}</div>
+                      <div className="mt-0.5 break-all text-muted-foreground">
+                        {JSON.stringify(s.result_summary)}
+                      </div>
                     ) : null}
                   </li>
                 ))}
@@ -517,7 +593,9 @@ export function OperationsInbox() {
                   >
                     <div className="flex items-center justify-between gap-2 text-[13px]">
                       <span className="font-medium">{r.worker}</span>
-                      <span className="text-[11.5px] text-muted-foreground">{STATUS_LABEL[r.status] ?? r.status}</span>
+                      <span className="text-[11.5px] text-muted-foreground">
+                        {STATUS_LABEL[r.status] ?? r.status}
+                      </span>
                     </div>
                     <div className="mt-0.5 text-[12px] text-muted-foreground">
                       {r.trigger} · {new Date(r.created_at).toLocaleString()}

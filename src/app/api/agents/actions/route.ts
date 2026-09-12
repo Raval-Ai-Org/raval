@@ -51,7 +51,13 @@ export const POST = defineRoute({
   handler: async ({ body, workspaceId, userId, role }) => {
     const store = productionStore();
     if (body.decision === "reject") {
-      const out = await rejectAction({ store, requestId: body.id, workspaceId, userId, reason: body.reason });
+      const out = await rejectAction({
+        store,
+        requestId: body.id,
+        workspaceId,
+        userId,
+        reason: body.reason,
+      });
       return out.ok ? { status: "rejected" } : jsonError(409, out.error ?? "Could not reject");
     }
     const out = await approveAction({
@@ -65,7 +71,13 @@ export const POST = defineRoute({
     });
     if (out.ok) return { status: out.status, result: out.result };
     const status =
-      out.status === "not_found" ? 404 : out.status === "denied" ? 403 : out.status === "failed" ? 502 : 409;
+      out.status === "not_found"
+        ? 404
+        : out.status === "denied"
+          ? 403
+          : out.status === "failed"
+            ? 502
+            : 409;
     return jsonError(status, out.error);
   },
 });

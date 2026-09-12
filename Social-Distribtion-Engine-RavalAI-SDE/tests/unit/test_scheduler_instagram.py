@@ -11,11 +11,11 @@ Both are verified here with mocks — no live Instagram account is used.
 
 from __future__ import annotations
 
-import pytest
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from app.adapters.base import ADAPTER_REGISTRY, BaseAdapter, PublishResult, PublishStatus
-from app.config import get_settings
 from app.database import get_sync_engine, get_sync_session_maker
 from app.models import Account, Base, DeliveryLog, Post, PostTarget
 from app.security import encrypt_token
@@ -149,7 +149,7 @@ class TestInstagramRefreshStrategy:
 
         captured: dict[str, object] = {}
 
-        def fake_refresh_facebook(account, settings):
+        def fake_refresh_facebook(account, _settings):
             captured["called"] = True
             captured["platform"] = account.platform
             return "new_long_token", None, datetime.now(UTC) + timedelta(days=60)

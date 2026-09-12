@@ -30,9 +30,23 @@ type Usage = {
   };
 };
 
-const PLAN_LABEL: Record<string, string> = { starter: "Starter", growth: "Growth", agency: "Agency OS" };
+const PLAN_LABEL: Record<string, string> = {
+  starter: "Starter",
+  growth: "Growth",
+  agency: "Agency OS",
+};
 
-function Meter({ label, used, limit, format }: { label: string; used: number; limit: number; format: (n: number) => string }) {
+function Meter({
+  label,
+  used,
+  limit,
+  format,
+}: {
+  label: string;
+  used: number;
+  limit: number;
+  format: (n: number) => string;
+}) {
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const tone = pct >= 100 ? "bg-destructive" : pct >= 80 ? "bg-amber-500" : "bg-primary";
   return (
@@ -95,7 +109,10 @@ export function UsagePanel() {
   if (!open) return null;
   const aiHit = data?.cache.hitRates.find((h) => h.namespace === "ai");
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 p-4" onClick={() => setOpen(false)}>
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 p-4"
+      onClick={() => setOpen(false)}
+    >
       <section
         role="dialog"
         aria-modal="true"
@@ -108,9 +125,16 @@ export function UsagePanel() {
             <h2 id="usage-title" className="text-[15px] font-semibold">
               Plan & usage
             </h2>
-            <p className="text-[12px] text-muted-foreground">Measured AI usage for this workspace.</p>
+            <p className="text-[12px] text-muted-foreground">
+              Measured AI usage for this workspace.
+            </p>
           </div>
-          <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded-md p-1 hover:bg-muted">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Close"
+            className="rounded-md p-1 hover:bg-muted"
+          >
             <X className="h-4 w-4" />
           </button>
         </header>
@@ -131,16 +155,38 @@ export function UsagePanel() {
             {data.notice ? (
               <p
                 className={`rounded-lg px-3 py-2 text-[12.5px] ${
-                  data.status === "warn" ? "bg-amber-500/10 text-amber-800 dark:text-amber-300" : "bg-destructive/10 text-destructive"
+                  data.status === "warn"
+                    ? "bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                    : "bg-destructive/10 text-destructive"
                 }`}
               >
                 {data.notice}
               </p>
             ) : null}
-            <Meter label="AI spend today" used={data.spend.todayUsd} limit={data.spend.dailyLimitUsd} format={usd} />
-            <Meter label="AI spend this month" used={data.spend.monthUsd} limit={data.spend.monthlyLimitUsd} format={usd} />
-            <Meter label="Images this month" used={data.quotas.images.used} limit={data.quotas.images.limit} format={count} />
-            <Meter label="Videos this month" used={data.quotas.videos.used} limit={data.quotas.videos.limit} format={count} />
+            <Meter
+              label="AI spend today"
+              used={data.spend.todayUsd}
+              limit={data.spend.dailyLimitUsd}
+              format={usd}
+            />
+            <Meter
+              label="AI spend this month"
+              used={data.spend.monthUsd}
+              limit={data.spend.monthlyLimitUsd}
+              format={usd}
+            />
+            <Meter
+              label="Images this month"
+              used={data.quotas.images.used}
+              limit={data.quotas.images.limit}
+              format={count}
+            />
+            <Meter
+              label="Videos this month"
+              used={data.quotas.videos.used}
+              limit={data.quotas.videos.limit}
+              format={count}
+            />
             <div className="rounded-xl border border-border px-3 py-2 text-[12.5px]">
               <div className="flex justify-between">
                 <span>Answers served from cache (this month)</span>
@@ -160,8 +206,8 @@ export function UsagePanel() {
               ) : null}
             </div>
             <p className="text-[11.5px] text-muted-foreground">
-              Near a limit you'll see a warning; past it, text answers switch to an economy model and new
-              images or videos pause until the next period.
+              Near a limit you'll see a warning; past it, text answers switch to an economy model
+              and new images or videos pause until the next period.
             </p>
           </div>
         )}

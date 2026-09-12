@@ -133,10 +133,7 @@ async function getRedis(): Promise<RedisLike | null> {
 const memory = new MemoryLru();
 const PREFIX = "mellox:";
 
-async function withRedis<T>(
-  op: (redis: RedisLike) => Promise<T>,
-  fallback: () => T,
-): Promise<T> {
+async function withRedis<T>(op: (redis: RedisLike) => Promise<T>, fallback: () => T): Promise<T> {
   const redis = await getRedis();
   if (!redis) return fallback();
   try {
@@ -148,7 +145,8 @@ async function withRedis<T>(
 }
 
 export const cache: CacheStore = {
-  backend: () => (process.env.REDIS_URL?.trim() && Date.now() >= redisDownUntil ? "redis" : "memory"),
+  backend: () =>
+    process.env.REDIS_URL?.trim() && Date.now() >= redisDownUntil ? "redis" : "memory",
 
   async get<T>(key: string): Promise<T | null> {
     const k = PREFIX + key;

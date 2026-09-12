@@ -47,7 +47,8 @@ const publicationsSummary: ToolDefinition<{ days: number }, Record<string, numbe
       .gte("updated_at", sinceIso(ctx, days * 24));
     if (error) throw new Error(error.message);
     const counts: Record<string, number> = {};
-    for (const r of (data ?? []) as Array<{ status: string }>) counts[r.status] = (counts[r.status] ?? 0) + 1;
+    for (const r of (data ?? []) as Array<{ status: string }>)
+      counts[r.status] = (counts[r.status] ?? 0) + 1;
     return counts;
   },
 };
@@ -61,7 +62,12 @@ const publicationsListStale: ToolDefinition<
   effect: "read",
   minRole: "viewer",
   input: z.object({
-    olderThanMinutes: z.number().int().min(5).max(24 * 60).default(30),
+    olderThanMinutes: z
+      .number()
+      .int()
+      .min(5)
+      .max(24 * 60)
+      .default(30),
     limit: z.number().int().min(1).max(100).default(50),
   }),
   output: z.array(PublicationRow),
@@ -70,7 +76,9 @@ const publicationsListStale: ToolDefinition<
   async handler({ olderThanMinutes, limit }, ctx) {
     const { data, error } = await ctx.db
       .from("content_publications")
-      .select("id, content_item_id, platform, account_id, status, error_category, last_error, updated_at, attempt")
+      .select(
+        "id, content_item_id, platform, account_id, status, error_category, last_error, updated_at, attempt",
+      )
       .eq("workspace_id", ctx.workspaceId)
       .in("status", IN_FLIGHT)
       .lt("updated_at", new Date(ctx.now().getTime() - olderThanMinutes * 60_000).toISOString())
@@ -90,7 +98,12 @@ const publicationsRecentFailures: ToolDefinition<
   effect: "read",
   minRole: "viewer",
   input: z.object({
-    hours: z.number().int().min(1).max(24 * 14).default(72),
+    hours: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 14)
+      .default(72),
     limit: z.number().int().min(1).max(200).default(100),
   }),
   output: z.array(PublicationRow),
@@ -99,7 +112,9 @@ const publicationsRecentFailures: ToolDefinition<
   async handler({ hours, limit }, ctx) {
     const { data, error } = await ctx.db
       .from("content_publications")
-      .select("id, content_item_id, platform, account_id, status, error_category, last_error, updated_at, attempt")
+      .select(
+        "id, content_item_id, platform, account_id, status, error_category, last_error, updated_at, attempt",
+      )
       .eq("workspace_id", ctx.workspaceId)
       .eq("status", "failed")
       .gte("updated_at", sinceIso(ctx, hours))
@@ -120,7 +135,11 @@ const contentStatusContradictions: ToolDefinition<
   minRole: "viewer",
   input: z.object({ limit: z.number().int().min(1).max(200).default(100) }),
   output: z.array(
-    z.object({ contentItemId: z.string(), itemStatus: z.string(), deliveryStatuses: z.array(z.string()) }),
+    z.object({
+      contentItemId: z.string(),
+      itemStatus: z.string(),
+      deliveryStatuses: z.array(z.string()),
+    }),
   ),
   timeoutMs: 15_000,
   idempotent: true,
@@ -144,17 +163,21 @@ const contentStatusContradictions: ToolDefinition<
     for (const p of (pubs ?? []) as Array<{ content_item_id: string; status: string }>) {
       byItem.set(p.content_item_id, [...(byItem.get(p.content_item_id) ?? []), p.status]);
     }
-    const out: Array<{ contentItemId: string; itemStatus: string; deliveryStatuses: string[] }> = [];
+    const out: Array<{ contentItemId: string; itemStatus: string; deliveryStatuses: string[] }> =
+      [];
     for (const item of (items ?? []) as Array<{ id: string; status: string }>) {
       const statuses = byItem.get(item.id) ?? [];
       if (!statuses.length) continue;
       const inFlight = statuses.some((s) => IN_FLIGHT.includes(s));
       const allTerminal = statuses.every((s) => ["published", "failed", "cancelled"].includes(s));
       const contradiction =
-        ((item.status === "published" || item.status === "failed" || item.status === "partial_failed") &&
+        ((item.status === "published" ||
+          item.status === "failed" ||
+          item.status === "partial_failed") &&
           inFlight) ||
         (item.status === "publishing" && allTerminal);
-      if (contradiction) out.push({ contentItemId: item.id, itemStatus: item.status, deliveryStatuses: statuses });
+      if (contradiction)
+        out.push({ contentItemId: item.id, itemStatus: item.status, deliveryStatuses: statuses });
     }
     return out;
   },
@@ -168,7 +191,14 @@ const webhooksRecentRejections: ToolDefinition<
   description: "Delivery-webhook receipts for this workspace: verified vs rejected vs stale.",
   effect: "read",
   minRole: "viewer",
-  input: z.object({ hours: z.number().int().min(1).max(24 * 7).default(24) }),
+  input: z.object({
+    hours: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 7)
+      .default(24),
+  }),
   output: z.object({
     rejected: z.number(),
     stale: z.number(),
@@ -191,14 +221,20 @@ const webhooksRecentRejections: ToolDefinition<
       rejected: rows.filter((r) => r.outcome === "rejected").length,
       stale: rows.filter((r) => r.outcome === "stale").length,
       verified: rows.filter((r) => r.outcome === "verified").length,
-      lastRejectedAt: rows.find((r) => r.outcome === "rejected" || r.outcome === "stale")?.received_at ?? null,
+      lastRejectedAt:
+        rows.find((r) => r.outcome === "rejected" || r.outcome === "stale")?.received_at ?? null,
     };
   },
 };
 
 const schedulerHeartbeats: ToolDefinition<
   Record<string, never>,
-  Array<{ job: string; lastSucceededAt: string | null; expectedIntervalSeconds: number; overdue: boolean }>
+  Array<{
+    job: string;
+    lastSucceededAt: string | null;
+    expectedIntervalSeconds: number;
+    overdue: boolean;
+  }>
 > = {
   name: "scheduler.heartbeats",
   description: "Platform scheduler health: when each cron job last succeeded (no tenant data).",
@@ -220,16 +256,21 @@ const schedulerHeartbeats: ToolDefinition<
       .from("cron_heartbeats")
       .select("job, last_succeeded_at, expected_interval_seconds");
     if (error) throw new Error(error.message);
-    return ((data ?? []) as Array<{ job: string; last_succeeded_at: string | null; expected_interval_seconds: number }>).map(
-      (r) => ({
-        job: r.job,
-        lastSucceededAt: r.last_succeeded_at,
-        expectedIntervalSeconds: r.expected_interval_seconds,
-        overdue:
-          !r.last_succeeded_at ||
-          ctx.now().getTime() - new Date(r.last_succeeded_at).getTime() > r.expected_interval_seconds * 3000,
-      }),
-    );
+    return (
+      (data ?? []) as Array<{
+        job: string;
+        last_succeeded_at: string | null;
+        expected_interval_seconds: number;
+      }>
+    ).map((r) => ({
+      job: r.job,
+      lastSucceededAt: r.last_succeeded_at,
+      expectedIntervalSeconds: r.expected_interval_seconds,
+      overdue:
+        !r.last_succeeded_at ||
+        ctx.now().getTime() - new Date(r.last_succeeded_at).getTime() >
+          r.expected_interval_seconds * 3000,
+    }));
   },
 };
 
@@ -276,7 +317,10 @@ const RevisionInput = z.object({
   reasons: z.array(z.string().max(300)).max(10).default([]),
 });
 
-const contentApplyRevision: ToolDefinition<z.infer<typeof RevisionInput>, { id: string; status: string }> = {
+const contentApplyRevision: ToolDefinition<
+  z.infer<typeof RevisionInput>,
+  { id: string; status: string }
+> = {
   name: "content.apply_revision",
   description: "Apply a proposed revision to a content item's copy",
   effect: "write",
@@ -294,8 +338,16 @@ const contentApplyRevision: ToolDefinition<z.infer<typeof RevisionInput>, { id: 
       .eq("workspace_id", ctx.workspaceId)
       .maybeSingle();
     return {
-      before: { title: data?.title ?? null, body: data?.body ?? null, hashtags: data?.hashtags ?? [] },
-      after: { title: input.title ?? data?.title ?? null, body: input.body, hashtags: input.hashtags ?? data?.hashtags ?? [] },
+      before: {
+        title: data?.title ?? null,
+        body: data?.body ?? null,
+        hashtags: data?.hashtags ?? [],
+      },
+      after: {
+        title: input.title ?? data?.title ?? null,
+        body: input.body,
+        hashtags: input.hashtags ?? data?.hashtags ?? [],
+      },
       reasons: input.reasons,
     };
   },
@@ -333,7 +385,11 @@ const contentCreateDraft: ToolDefinition<z.infer<typeof DraftInput>, { id: strin
   output: z.object({ id: z.string() }),
   timeoutMs: 15_000,
   idempotent: false,
-  preview: (input) => ({ title: input.title, channel: input.channel ?? null, proposedAt: input.proposedAt ?? null }),
+  preview: (input) => ({
+    title: input.title,
+    channel: input.channel ?? null,
+    proposedAt: input.proposedAt ?? null,
+  }),
   async handler(input, ctx) {
     const { data, error } = await ctx.db
       .from("content_items")

@@ -18,7 +18,12 @@ import "server-only";
 import { cache } from "@/server/cache/store";
 import { getRequestScope, setRequestScope } from "@/server/request-context";
 import { logGuardrailEvent } from "@/server/guardrails/events";
-import { getPlanLimits, SOFT_LIMIT_RATIO, userDailyCeilingUsd, type PlanLimits } from "@/server/plans";
+import {
+  getPlanLimits,
+  SOFT_LIMIT_RATIO,
+  userDailyCeilingUsd,
+  type PlanLimits,
+} from "@/server/plans";
 
 export type BudgetKind = "text" | "image" | "video" | "search";
 export type BudgetMode = "ok" | "warn" | "degrade" | "block";
@@ -131,7 +136,10 @@ export function decide(
   usage: UsageSummary,
   limits: { dailyUsd: number; monthlyUsd: number; monthlyImages: number; monthlyVideos: number },
 ): { mode: BudgetMode; reason?: string } {
-  const spend = Math.max(ratio(usage.todayCostUsd, limits.dailyUsd), ratio(usage.monthCostUsd, limits.monthlyUsd));
+  const spend = Math.max(
+    ratio(usage.todayCostUsd, limits.dailyUsd),
+    ratio(usage.monthCostUsd, limits.monthlyUsd),
+  );
   const quota =
     kind === "image"
       ? ratio(usage.monthImages, limits.monthlyImages)
@@ -157,7 +165,12 @@ export function decide(
 }
 
 /** Log a budget event at most once per scope per hour. */
-async function noteBudgetEvent(scopeKey: string, mode: BudgetMode, kind: BudgetKind, reason?: string) {
+async function noteBudgetEvent(
+  scopeKey: string,
+  mode: BudgetMode,
+  kind: BudgetKind,
+  reason?: string,
+) {
   if (mode !== "degrade" && mode !== "block") return;
   const flag = `budget:event:${scopeKey}:${mode}:${kind}:${new Date().toISOString().slice(0, 13)}`;
   if ((await cache.incr(flag, 3600)) > 1) return;
@@ -188,7 +201,8 @@ export async function checkBudget(
       const summary = usage ?? emptySummary();
       const verdict = decide(kind, summary, limits);
       await noteBudgetEvent(scopeKey, verdict.mode, kind, verdict.reason);
-      if (verdict.mode === "warn" && verdict.reason) setRequestScope({ usageWarning: verdict.reason });
+      if (verdict.mode === "warn" && verdict.reason)
+        setRequestScope({ usageWarning: verdict.reason });
       return {
         ...verdict,
         scope: "workspace",
@@ -206,10 +220,16 @@ export async function checkBudget(
       const scopeKey = `user:${userId}`;
       const summary = (await cachedSummary(scopeKey)) ?? emptySummary();
       const daily = userDailyCeilingUsd();
-      const limits = { dailyUsd: daily, monthlyUsd: daily * 31, monthlyImages: 50, monthlyVideos: 3 };
+      const limits = {
+        dailyUsd: daily,
+        monthlyUsd: daily * 31,
+        monthlyImages: 50,
+        monthlyVideos: 3,
+      };
       const verdict = decide(kind, summary, limits);
       await noteBudgetEvent(scopeKey, verdict.mode, kind, verdict.reason);
-      if (verdict.mode === "warn" && verdict.reason) setRequestScope({ usageWarning: verdict.reason });
+      if (verdict.mode === "warn" && verdict.reason)
+        setRequestScope({ usageWarning: verdict.reason });
       return { ...verdict, scope: "user", usage: summary, limits: { plan: "personal", ...limits } };
     }
     return { mode: "ok", scope: "none" };

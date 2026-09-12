@@ -5,16 +5,16 @@ Deployment itself is in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Health at a glance
 
-| Check | Where | Healthy |
-| --- | --- | --- |
-| Liveness | `GET /api/health` | 200 |
-| Readiness | `GET /api/health/ready` | 200, `ok: true` (503 lists what failed: Supabase, Redis, stale cron) |
-| Scheduler | `select * from cron_heartbeats order by job;` | every job's `last_succeeded_at` within 3× its interval |
-| Cron delivery | `select * from net._http_response order by created desc limit 20;` | `status_code` 200 |
-| AI spend | `select * from ai_usage_daily where day = current_date order by cost_usd desc;` | within plan ceilings |
-| Guardrails | `select kind, severity, count(*) from guardrail_events where created_at > now() - interval '1 day' group by 1,2;` | no unexplained spikes |
-| Webhooks | `select outcome, reason, count(*) from sdr_webhook_events where received_at > now() - interval '1 hour' group by 1,2;` | rejections near zero |
-| Agent findings | Operations inbox in the app, or `agent_findings where status = 'open'` | reviewed |
+| Check          | Where                                                                                                                  | Healthy                                                              |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Liveness       | `GET /api/health`                                                                                                      | 200                                                                  |
+| Readiness      | `GET /api/health/ready`                                                                                                | 200, `ok: true` (503 lists what failed: Supabase, Redis, stale cron) |
+| Scheduler      | `select * from cron_heartbeats order by job;`                                                                          | every job's `last_succeeded_at` within 3× its interval               |
+| Cron delivery  | `select * from net._http_response order by created desc limit 20;`                                                     | `status_code` 200                                                    |
+| AI spend       | `select * from ai_usage_daily where day = current_date order by cost_usd desc;`                                        | within plan ceilings                                                 |
+| Guardrails     | `select kind, severity, count(*) from guardrail_events where created_at > now() - interval '1 day' group by 1,2;`      | no unexplained spikes                                                |
+| Webhooks       | `select outcome, reason, count(*) from sdr_webhook_events where received_at > now() - interval '1 hour' group by 1,2;` | rejections near zero                                                 |
+| Agent findings | Operations inbox in the app, or `agent_findings where status = 'open'`                                                 | reviewed                                                             |
 
 `ops-watch` (every 5 min) alerts to `ALERT_WEBHOOK_URL` on missed jobs, AI
 spend anomalies (today > 3× trailing 7-day average and > $5), truncation above
@@ -23,13 +23,13 @@ de-duplicated per key for an hour.
 
 ## Kill switches
 
-| Switch | Effect | How |
-| --- | --- | --- |
-| `AGENTS_DISABLED=1` (app env) | Every agent run and agent tool call is denied by policy; cron tick becomes a no-op | Set and redeploy/restart |
-| Workspace agents paused | Same, for one workspace | Operations inbox → settings (owner/admin), or `update workspace_agent_settings set agents_paused = true where workspace_id = …` |
-| `FEATURE_FLAG_SDR_ENABLED` off | Publish/schedule return 503 `DISTRIBUTION_DISABLED`; nothing is marked published; the UI hides the controls | Unset and restart. Per workspace: `FEATURE_FLAG_SDR_ENABLED_WS_<id>` |
-| Stop all cron jobs | Scheduler, reconcile, agents, ops-watch stop | `select cron.unschedule(jobname) from cron.job where jobname like 'mellox-%';` |
-| AI spend | Lower ceilings without a deploy | `PLAN_<ID>_DAILY_USD` / `_MONTHLY_USD`, `AI_USER_DAILY_USD` (see `src/server/plans.ts`) |
+| Switch                         | Effect                                                                                                      | How                                                                                                                             |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS_DISABLED=1` (app env)  | Every agent run and agent tool call is denied by policy; cron tick becomes a no-op                          | Set and redeploy/restart                                                                                                        |
+| Workspace agents paused        | Same, for one workspace                                                                                     | Operations inbox → settings (owner/admin), or `update workspace_agent_settings set agents_paused = true where workspace_id = …` |
+| `FEATURE_FLAG_SDR_ENABLED` off | Publish/schedule return 503 `DISTRIBUTION_DISABLED`; nothing is marked published; the UI hides the controls | Unset and restart. Per workspace: `FEATURE_FLAG_SDR_ENABLED_WS_<id>`                                                            |
+| Stop all cron jobs             | Scheduler, reconcile, agents, ops-watch stop                                                                | `select cron.unschedule(jobname) from cron.job where jobname like 'mellox-%';`                                                  |
+| AI spend                       | Lower ceilings without a deploy                                                                             | `PLAN_<ID>_DAILY_USD` / `_MONTHLY_USD`, `AI_USER_DAILY_USD` (see `src/server/plans.ts`)                                         |
 
 At 80% of a ceiling users see a warning (`X-Usage-Warning`); at 100% text
 generation degrades to a cheap model with a 1 000-token cap, and image/video
@@ -56,15 +56,15 @@ These values were committed to git or stored in plaintext at some point.
 Git history keeps them: **rotate all of them**, then update every place that
 uses each one.
 
-| Credential | Where it was exposed | Rotate by | Also update |
-| --- | --- | --- | --- |
-| `CRON_SECRET` | Plaintext in a `cron.job` command on the live project | New random 32+ chars | App env **and** Vault `mellox_cron_secret` (`vault.update_secret`), then re-run STEP 3 |
-| `SDR_ADMIN_TOKEN` / `SDE_API_TOKEN` | ADR-0005 (history) | New random token | App env and SDR `.env` (must match) |
-| SDR `WEBHOOK_SECRET` | ADR-0005 (history) | New random secret | SDR `.env`; per-workspace webhook secrets are re-issued on reconnect |
-| SDR `FERNET_KEY` | ADR-0005 (history) | New Fernet key | SDR `.env`; stored OAuth tokens must be re-encrypted, or accounts reconnected |
-| SDR Postgres password | ADR-0005 (history) | `ALTER USER sde PASSWORD …` | `POSTGRES_PASSWORD`, `DATABASE_URL`, `DATABASE_URL_SYNC` |
-| GitHub personal access token | ADR-0005 (history) | Revoke in GitHub → Settings → Developer settings | Use a deploy key or fine-grained token instead |
-| Test account password | README / launch plan (history) | Change the password in Supabase Auth | `E2E_TEST_PASSWORD` in CI secrets only |
+| Credential                          | Where it was exposed                                  | Rotate by                                        | Also update                                                                            |
+| ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `CRON_SECRET`                       | Plaintext in a `cron.job` command on the live project | New random 32+ chars                             | App env **and** Vault `mellox_cron_secret` (`vault.update_secret`), then re-run STEP 3 |
+| `SDR_ADMIN_TOKEN` / `SDE_API_TOKEN` | ADR-0005 (history)                                    | New random token                                 | App env and SDR `.env` (must match)                                                    |
+| SDR `WEBHOOK_SECRET`                | ADR-0005 (history)                                    | New random secret                                | SDR `.env`; per-workspace webhook secrets are re-issued on reconnect                   |
+| SDR `FERNET_KEY`                    | ADR-0005 (history)                                    | New Fernet key                                   | SDR `.env`; stored OAuth tokens must be re-encrypted, or accounts reconnected          |
+| SDR Postgres password               | ADR-0005 (history)                                    | `ALTER USER sde PASSWORD …`                      | `POSTGRES_PASSWORD`, `DATABASE_URL`, `DATABASE_URL_SYNC`                               |
+| GitHub personal access token        | ADR-0005 (history)                                    | Revoke in GitHub → Settings → Developer settings | Use a deploy key or fine-grained token instead                                         |
+| Test account password               | README / launch plan (history)                        | Change the password in Supabase Auth             | `E2E_TEST_PASSWORD` in CI secrets only                                                 |
 
 `node scripts/scan-secrets.mjs` (also a CI job) fails if any of these patterns
 come back.

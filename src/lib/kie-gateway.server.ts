@@ -197,7 +197,11 @@ async function cacheKey(
   referenceAssets: string[] = [],
 ): Promise<string> {
   const scope = getRequestScope();
-  const tenant = scope.workspaceId ? `ws:${scope.workspaceId}` : scope.userId ? `u:${scope.userId}` : "anon";
+  const tenant = scope.workspaceId
+    ? `ws:${scope.workspaceId}`
+    : scope.userId
+      ? `u:${scope.userId}`
+      : "anon";
   return `kie:img:${await digest(`${tenant}|${model}|${size}|${referenceAssets.join(",")}|${prompt}`)}`;
 }
 
@@ -499,7 +503,13 @@ export async function videoGeneration(opts: {
     });
     return video;
   } catch (error) {
-    recordUsage({ provider: "kie", model, kind: "video", status: "error", latencyMs: Date.now() - started });
+    recordUsage({
+      provider: "kie",
+      model,
+      kind: "video",
+      status: "error",
+      latencyMs: Date.now() - started,
+    });
     throw error;
   }
 }

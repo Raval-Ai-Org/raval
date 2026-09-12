@@ -63,7 +63,8 @@ function envNumber(name: string): number | undefined {
 export function normalizePlanId(plan: string | null | undefined): PlanId {
   const p = (plan ?? "").toLowerCase().trim();
   if (p === "growth" || p === "pro") return "growth";
-  if (p === "agency" || p === "agency-os" || p === "agency_os" || p === "enterprise") return "agency";
+  if (p === "agency" || p === "agency-os" || p === "agency_os" || p === "enterprise")
+    return "agency";
   return "starter";
 }
 

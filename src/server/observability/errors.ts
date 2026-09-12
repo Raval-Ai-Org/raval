@@ -28,7 +28,10 @@ export function parseDsn(dsn: string | undefined): Dsn | null {
 const recent = new Map<string, number>();
 const DEDUPE_MS = 60_000;
 
-export type ErrorContext = { source?: "server" | "client" | "cron" | "agent"; extra?: Record<string, unknown> };
+export type ErrorContext = {
+  source?: "server" | "client" | "cron" | "agent";
+  extra?: Record<string, unknown>;
+};
 
 export function reportError(error: unknown, ctx: ErrorContext = {}): void {
   const err = error instanceof Error ? error : new Error(String(error));
@@ -63,7 +66,11 @@ export function reportError(error: unknown, ctx: ErrorContext = {}): void {
     message: err.stack?.split("\n").slice(0, 12).join("\n"),
   };
   const envelope = [
-    JSON.stringify({ event_id: eventId, sent_at: new Date().toISOString(), dsn: process.env.SENTRY_DSN }),
+    JSON.stringify({
+      event_id: eventId,
+      sent_at: new Date().toISOString(),
+      dsn: process.env.SENTRY_DSN,
+    }),
     JSON.stringify({ type: "event" }),
     JSON.stringify(event),
   ].join("\n");

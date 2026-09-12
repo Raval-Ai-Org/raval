@@ -55,7 +55,13 @@ const REQUIRED_IN_PRODUCTION = [
   "CRON_SECRET",
 ] as const;
 
-const RECOMMENDED = ["ANTHROPIC_API_KEY", "KIE_API_KEY", "REDIS_URL", "SENTRY_DSN", "ALERT_WEBHOOK_URL"] as const;
+const RECOMMENDED = [
+  "ANTHROPIC_API_KEY",
+  "KIE_API_KEY",
+  "REDIS_URL",
+  "SENTRY_DSN",
+  "ALERT_WEBHOOK_URL",
+] as const;
 
 export type EnvReport = { ok: boolean; errors: string[]; warnings: string[] };
 
@@ -77,18 +83,26 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
     if (!env[name]) (production ? errors : warnings).push(`${name} is not set`);
   }
   if (env.FEATURE_FLAG_SDR_ENABLED && /^(1|true|yes)$/i.test(env.FEATURE_FLAG_SDR_ENABLED)) {
-    for (const name of ["SDR_BASE_URL", "SDR_ADMIN_TOKEN", "SDR_SECRET_ENCRYPTION_KEY", "SDR_WEBHOOK_BASE_URL"]) {
+    for (const name of [
+      "SDR_BASE_URL",
+      "SDR_ADMIN_TOKEN",
+      "SDR_SECRET_ENCRYPTION_KEY",
+      "SDR_WEBHOOK_BASE_URL",
+    ]) {
       if (!env[name]) errors.push(`${name} is required when FEATURE_FLAG_SDR_ENABLED is on`);
     }
   }
   if (env.APP_URL && env.NEXT_PUBLIC_APP_URL && env.APP_URL !== env.NEXT_PUBLIC_APP_URL) {
-    warnings.push("APP_URL and NEXT_PUBLIC_APP_URL differ — canonical URLs and cron callbacks will disagree");
+    warnings.push(
+      "APP_URL and NEXT_PUBLIC_APP_URL differ — canonical URLs and cron callbacks will disagree",
+    );
   }
   if (production && env.APP_URL && /localhost|127\.0\.0\.1/.test(env.APP_URL)) {
     errors.push("APP_URL points at localhost in production");
   }
   for (const name of RECOMMENDED) {
-    if (!env[name]) warnings.push(`${name} is not set (the related feature is degraded or disabled)`);
+    if (!env[name])
+      warnings.push(`${name} is not set (the related feature is degraded or disabled)`);
   }
   return { ok: errors.length === 0, errors, warnings };
 }

@@ -11,7 +11,12 @@ const SENSITIVE = /token|secret|password|authorization|api[-_]?key|cookie|signat
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 5) return "[depth]";
   if (typeof value === "string") return value.length > 2000 ? `${value.slice(0, 2000)}…` : value;
-  if (value instanceof Error) return { name: value.name, message: value.message, stack: value.stack?.split("\n").slice(0, 8).join("\n") };
+  if (value instanceof Error)
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack?.split("\n").slice(0, 8).join("\n"),
+    };
   if (Array.isArray(value)) return value.slice(0, 50).map((v) => redact(v, depth + 1));
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};

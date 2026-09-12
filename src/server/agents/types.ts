@@ -24,8 +24,7 @@ export type PolicyDecision = "allow" | "require_approval" | "deny";
 
 /** Who is acting: a signed-in member, or a worker acting for a workspace. */
 export type AgentActor =
-  | { kind: "user"; userId: string; role: WorkspaceRole }
-  | { kind: "worker"; worker: string };
+  { kind: "user"; userId: string; role: WorkspaceRole } | { kind: "worker"; worker: string };
 
 export type ToolContext = {
   workspaceId: string;
@@ -50,7 +49,10 @@ export type ToolDefinition<I = any, O = any> = {
   /** Safe to retry with the same idempotency key without double effects. */
   idempotent: boolean;
   /** Short, human-readable preview of what an approval would change. */
-  preview?: (input: I, ctx: ToolContext) => Promise<Record<string, unknown>> | Record<string, unknown>;
+  preview?: (
+    input: I,
+    ctx: ToolContext,
+  ) => Promise<Record<string, unknown>> | Record<string, unknown>;
   /** Record ids the call affects (shown in the approval drawer). */
   affects?: (input: I) => Array<{ table: string; id: string }>;
   handler: (input: I, ctx: ToolContext) => Promise<O>;
@@ -62,12 +64,7 @@ export type WorkspaceAgentSettings = {
 };
 
 export type RunStatus =
-  | "queued"
-  | "running"
-  | "awaiting_approval"
-  | "succeeded"
-  | "failed"
-  | "cancelled";
+  "queued" | "running" | "awaiting_approval" | "succeeded" | "failed" | "cancelled";
 
 export type RunBudget = {
   maxSteps: number;
@@ -92,12 +89,7 @@ export type Finding = {
 };
 
 export type ActionRequestStatus =
-  | "suggested"
-  | "approved"
-  | "rejected"
-  | "executed"
-  | "failed"
-  | "expired";
+  "suggested" | "approved" | "rejected" | "executed" | "failed" | "expired";
 
 export type ActionRequest = {
   id: string;

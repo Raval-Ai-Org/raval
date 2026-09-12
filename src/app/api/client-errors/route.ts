@@ -35,6 +35,9 @@ export async function POST(request: Request) {
   const err = new Error(parsed.data.message);
   err.name = "ClientError";
   if (parsed.data.stack) err.stack = parsed.data.stack;
-  reportError(err, { source: "client", extra: { digest: parsed.data.digest, path: parsed.data.path } });
+  reportError(err, {
+    source: "client",
+    extra: { digest: parsed.data.digest, path: parsed.data.path },
+  });
   return new Response(null, { status: 204 });
 }

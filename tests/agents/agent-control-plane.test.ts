@@ -32,7 +32,10 @@ function fakeDb(tables: Record<string, Array<Record<string, any>>>) {
     const rows = () => (tables[table] ?? []).filter((r) => filters.every((f) => f(r)));
     const exec = () => {
       if (insertRows) {
-        const created = insertRows.map((r, i) => ({ id: `new-${table}-${(tables[table]?.length ?? 0) + i}`, ...r }));
+        const created = insertRows.map((r, i) => ({
+          id: `new-${table}-${(tables[table]?.length ?? 0) + i}`,
+          ...r,
+        }));
         tables[table] = [...(tables[table] ?? []), ...created];
         return created;
       }
@@ -67,15 +70,39 @@ function fakeDb(tables: Record<string, Array<Record<string, any>>>) {
 function seedDb() {
   return fakeDb({
     content_items: [
-      { id: ITEM_A, workspace_id: WS_A, channel: "x", kind: "post", status: "draft", title: "A", body: "Hello", hashtags: [], media_url: null },
-      { id: ITEM_B, workspace_id: WS_B, channel: "x", kind: "post", status: "draft", title: "B", body: "Secret B", hashtags: [], media_url: null },
+      {
+        id: ITEM_A,
+        workspace_id: WS_A,
+        channel: "x",
+        kind: "post",
+        status: "draft",
+        title: "A",
+        body: "Hello",
+        hashtags: [],
+        media_url: null,
+      },
+      {
+        id: ITEM_B,
+        workspace_id: WS_B,
+        channel: "x",
+        kind: "post",
+        status: "draft",
+        title: "B",
+        body: "Secret B",
+        hashtags: [],
+        media_url: null,
+      },
     ],
     content_publications: [],
     memory_insights: [],
   });
 }
 
-const userCtx = (db: any, role: "owner" | "editor" | "viewer" = "editor", ws = WS_A): ToolContext => ({
+const userCtx = (
+  db: any,
+  role: "owner" | "editor" | "viewer" = "editor",
+  ws = WS_A,
+): ToolContext => ({
   workspaceId: ws,
   actor: { kind: "user", userId: "u-1", role },
   db,
@@ -99,12 +126,20 @@ describe("tool registry & policy", () => {
     const names = listTools().map((t) => t.name);
     expect(names.some((n) => /publish|oauth|token|credential|sql|reconnect/i.test(n))).toBe(false);
     expect(listTools().every((t) => t.effect !== "external")).toBe(true);
-    expect(listTools().filter((t) => t.effect === "write").every((t) => t.requiresApproval)).toBe(true);
+    expect(
+      listTools()
+        .filter((t) => t.effect === "write")
+        .every((t) => t.requiresApproval),
+    ).toBe(true);
   });
 
   it("requires approval for writes, allows reads, denies below-role", () => {
     const settings = { agentsPaused: false, disabledWorkers: [] };
-    const write = { name: "content.apply_revision", effect: "write" as const, minRole: "editor" as const };
+    const write = {
+      name: "content.apply_revision",
+      effect: "write" as const,
+      minRole: "editor" as const,
+    };
     const read = { name: "content.get", effect: "read" as const, minRole: "viewer" as const };
     const editor = { kind: "user" as const, userId: "u", role: "editor" as const };
     const viewer = { kind: "user" as const, userId: "u", role: "viewer" as const };
@@ -117,19 +152,26 @@ describe("tool registry & policy", () => {
   it("the workspace kill switch and the global flag deny workers", () => {
     const read = { name: "content.get", effect: "read" as const, minRole: "viewer" as const };
     const w = { kind: "worker" as const, worker: "distribution-reliability" };
-    expect(decidePolicy(read, w, { agentsPaused: true, disabledWorkers: [] }).decision).toBe("deny");
+    expect(decidePolicy(read, w, { agentsPaused: true, disabledWorkers: [] }).decision).toBe(
+      "deny",
+    );
     expect(
-      decidePolicy(read, w, { agentsPaused: false, disabledWorkers: ["distribution-reliability"] }).decision,
+      decidePolicy(read, w, { agentsPaused: false, disabledWorkers: ["distribution-reliability"] })
+        .decision,
     ).toBe("deny");
     vi.stubEnv("AGENTS_DISABLED", "true");
-    expect(decidePolicy(read, w, { agentsPaused: false, disabledWorkers: [] }).decision).toBe("deny");
+    expect(decidePolicy(read, w, { agentsPaused: false, disabledWorkers: [] }).decision).toBe(
+      "deny",
+    );
   });
 });
 
 describe("tool invocation", () => {
   it("rejects malformed input before touching data", async () => {
     const store = memoryAgentStore();
-    await expect(invokeTool(userCtx(seedDb()), "content.get", { id: "not-a-uuid" }, { store })).rejects.toMatchObject({
+    await expect(
+      invokeTool(userCtx(seedDb()), "content.get", { id: "not-a-uuid" }, { store }),
+    ).rejects.toMatchObject({
       code: "invalid_input",
     });
   });
@@ -157,7 +199,10 @@ describe("tool invocation", () => {
     );
     expect(out.status).toBe("pending_approval");
     expect(db.tables.content_items[0].body).toBe("Hello");
-    expect([...store.actions.values()][0]).toMatchObject({ status: "suggested", tool: "content.apply_revision" });
+    expect([...store.actions.values()][0]).toMatchObject({
+      status: "suggested",
+      tool: "content.apply_revision",
+    });
   });
 
   it("the same proposal twice is one request (idempotent suggestion)", async () => {
@@ -193,16 +238,40 @@ describe("approvals", () => {
 
   it("an editor's approval executes exactly that action once", async () => {
     const { db, store, id } = await proposal();
-    const first = await approveAction({ store, db, requestId: id, workspaceId: WS_A, userId: "u-1", role: "editor", now: () => NOW });
+    const first = await approveAction({
+      store,
+      db,
+      requestId: id,
+      workspaceId: WS_A,
+      userId: "u-1",
+      role: "editor",
+      now: () => NOW,
+    });
     expect(first).toMatchObject({ ok: true, status: "executed" });
     expect(db.tables.content_items[0].body).toBe("Rewritten");
-    const second = await approveAction({ store, db, requestId: id, workspaceId: WS_A, userId: "u-2", role: "owner", now: () => NOW });
+    const second = await approveAction({
+      store,
+      db,
+      requestId: id,
+      workspaceId: WS_A,
+      userId: "u-2",
+      role: "owner",
+      now: () => NOW,
+    });
     expect(second).toMatchObject({ ok: false, status: "conflict" });
   });
 
   it("a viewer cannot approve; the request stays suggested", async () => {
     const { db, store, id } = await proposal();
-    const out = await approveAction({ store, db, requestId: id, workspaceId: WS_A, userId: "v", role: "viewer", now: () => NOW });
+    const out = await approveAction({
+      store,
+      db,
+      requestId: id,
+      workspaceId: WS_A,
+      userId: "v",
+      role: "viewer",
+      now: () => NOW,
+    });
     expect(out).toMatchObject({ ok: false, status: "denied" });
     expect(db.tables.content_items[0].body).toBe("Hello");
     expect(store.actions.get(id)?.status).toBe("suggested");
@@ -210,22 +279,56 @@ describe("approvals", () => {
 
   it("a member of another workspace cannot see or approve it", async () => {
     const { db, store, id } = await proposal();
-    const out = await approveAction({ store, db, requestId: id, workspaceId: WS_B, userId: "u-b", role: "owner", now: () => NOW });
+    const out = await approveAction({
+      store,
+      db,
+      requestId: id,
+      workspaceId: WS_B,
+      userId: "u-b",
+      role: "owner",
+      now: () => NOW,
+    });
     expect(out).toMatchObject({ ok: false, status: "not_found" });
   });
 
   it("an expired suggestion cannot be executed", async () => {
     const { db, store, id } = await proposal();
     const later = () => new Date(NOW.getTime() + 8 * 86_400_000);
-    const out = await approveAction({ store, db, requestId: id, workspaceId: WS_A, userId: "u", role: "owner", now: later });
+    const out = await approveAction({
+      store,
+      db,
+      requestId: id,
+      workspaceId: WS_A,
+      userId: "u",
+      role: "owner",
+      now: later,
+    });
     expect(out).toMatchObject({ ok: false, status: "expired" });
     expect(db.tables.content_items[0].body).toBe("Hello");
   });
 
   it("rejection is recorded and blocks later approval", async () => {
     const { db, store, id } = await proposal();
-    expect((await rejectAction({ store, requestId: id, workspaceId: WS_A, userId: "u", reason: "off-brand" })).ok).toBe(true);
-    const out = await approveAction({ store, db, requestId: id, workspaceId: WS_A, userId: "u", role: "owner", now: () => NOW });
+    expect(
+      (
+        await rejectAction({
+          store,
+          requestId: id,
+          workspaceId: WS_A,
+          userId: "u",
+          reason: "off-brand",
+        })
+      ).ok,
+    ).toBe(true);
+    const out = await approveAction({
+      store,
+      db,
+      requestId: id,
+      workspaceId: WS_A,
+      userId: "u",
+      role: "owner",
+      now: () => NOW,
+    });
     expect(out.ok).toBe(false);
   });
 });
@@ -296,7 +399,9 @@ describe("reliability worker — evaluation fixtures", () => {
 
   it("replayed/forged callbacks with nothing verified → critical", () => {
     const f = analyzeDeliveryEvidence(
-      baseEvidence({ webhooks: { rejected: 4, stale: 3, verified: 0, lastRejectedAt: NOW.toISOString() } }),
+      baseEvidence({
+        webhooks: { rejected: 4, stale: 3, verified: 0, lastRejectedAt: NOW.toISOString() },
+      }),
     );
     expect(f[0]).toMatchObject({ fingerprint: "webhook-rejections", severity: "critical" });
   });
@@ -304,7 +409,13 @@ describe("reliability worker — evaluation fixtures", () => {
   it("contradictory item vs delivery status → contradiction finding citing items", () => {
     const f = analyzeDeliveryEvidence(
       baseEvidence({
-        contradictions: [{ contentItemId: "i-1", itemStatus: "published", deliveryStatuses: ["published", "publishing"] }],
+        contradictions: [
+          {
+            contentItemId: "i-1",
+            itemStatus: "published",
+            deliveryStatuses: ["published", "publishing"],
+          },
+        ],
       }),
     );
     expect(f[0].affected).toEqual([{ table: "content_items", id: "i-1" }]);
@@ -338,13 +449,31 @@ describe("reliability worker — evaluation fixtures", () => {
     expect(store.steps.every((s) => s.policyDecision !== "require_approval")).toBe(true);
     expect(db.tables.content_publications.find((p) => p.id === "p1")?.status).toBe("publishing");
     // Re-running bumps the same finding instead of duplicating it.
-    await executeRun(distributionReliabilityWorker, { workspaceId: WS_A, trigger: "cron", store, db, input: { explain: false }, now: () => NOW });
-    expect([...store.findings.values()].filter((f) => f.fingerprint === "stale-deliveries")[0].occurrences).toBe(2);
+    await executeRun(distributionReliabilityWorker, {
+      workspaceId: WS_A,
+      trigger: "cron",
+      store,
+      db,
+      input: { explain: false },
+      now: () => NOW,
+    });
+    expect(
+      [...store.findings.values()].filter((f) => f.fingerprint === "stale-deliveries")[0]
+        .occurrences,
+    ).toBe(2);
   });
 
   it("a paused workspace does not run at all", async () => {
-    const store = memoryAgentStore({ settings: { [WS_A]: { agentsPaused: true, disabledWorkers: [] } } });
-    const out = await executeRun(distributionReliabilityWorker, { workspaceId: WS_A, trigger: "cron", store, db: fakeDb({}), now: () => NOW });
+    const store = memoryAgentStore({
+      settings: { [WS_A]: { agentsPaused: true, disabledWorkers: [] } },
+    });
+    const out = await executeRun(distributionReliabilityWorker, {
+      workspaceId: WS_A,
+      trigger: "cron",
+      store,
+      db: fakeDb({}),
+      now: () => NOW,
+    });
     expect(out.status).toBe("failed");
     expect(store.runs.size).toBe(0);
   });
@@ -365,7 +494,13 @@ describe("content-fit deterministic checks", () => {
 
   it("passes a clean post that fits", () => {
     expect(
-      contentFitIssues({ channel: "linkedin", title: "Hiring", body: "We're hiring a designer in Lahore.", hashtags: [], media_url: null }),
+      contentFitIssues({
+        channel: "linkedin",
+        title: "Hiring",
+        body: "We're hiring a designer in Lahore.",
+        hashtags: [],
+        media_url: null,
+      }),
     ).toEqual([]);
   });
 });

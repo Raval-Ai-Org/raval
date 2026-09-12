@@ -88,7 +88,9 @@ describe("cron route kernel", () => {
       finish: async (job, ok) => void calls.push(`finish:${job}:${ok}`),
     });
     const handler = vi.fn(async () => ({ ran: 2 }));
-    const res = await defineCronRoute({ job: "test-job", expectedIntervalSeconds: 60, handler })(req(SECRET));
+    const res = await defineCronRoute({ job: "test-job", expectedIntervalSeconds: 60, handler })(
+      req(SECRET),
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, ran: 2 });
     expect(calls).toEqual(["start:test-job:60", "finish:test-job:true"]);
@@ -97,7 +99,9 @@ describe("cron route kernel", () => {
   it("does not run the handler without the secret", async () => {
     vi.stubEnv("CRON_SECRET", SECRET);
     const handler = vi.fn(async () => ({}));
-    const res = await defineCronRoute({ job: "j", expectedIntervalSeconds: 60, handler })(req("nope"));
+    const res = await defineCronRoute({ job: "j", expectedIntervalSeconds: 60, handler })(
+      req("nope"),
+    );
     expect(res.status).toBe(401);
     expect(handler).not.toHaveBeenCalled();
   });
@@ -132,9 +136,11 @@ describe("cron route kernel", () => {
         throw new Error("heartbeat table missing");
       },
     });
-    const res = await defineCronRoute({ job: "j", expectedIntervalSeconds: 60, handler: async () => ({ ok: 1 }) })(
-      req(SECRET),
-    );
+    const res = await defineCronRoute({
+      job: "j",
+      expectedIntervalSeconds: 60,
+      handler: async () => ({ ok: 1 }),
+    })(req(SECRET));
     expect(res.status).toBe(200);
   });
 });
@@ -144,9 +150,27 @@ describe("ops-watch", () => {
 
   it("flags a job with no success within 3x its interval", () => {
     const rows = [
-      { job: "fresh", expected_interval_seconds: 60, last_succeeded_at: new Date(NOW - 120_000).toISOString(), last_started_at: null, last_error: null },
-      { job: "stale", expected_interval_seconds: 60, last_succeeded_at: new Date(NOW - 200_000).toISOString(), last_started_at: null, last_error: null },
-      { job: "never", expected_interval_seconds: 300, last_succeeded_at: null, last_started_at: null, last_error: null },
+      {
+        job: "fresh",
+        expected_interval_seconds: 60,
+        last_succeeded_at: new Date(NOW - 120_000).toISOString(),
+        last_started_at: null,
+        last_error: null,
+      },
+      {
+        job: "stale",
+        expected_interval_seconds: 60,
+        last_succeeded_at: new Date(NOW - 200_000).toISOString(),
+        last_started_at: null,
+        last_error: null,
+      },
+      {
+        job: "never",
+        expected_interval_seconds: 300,
+        last_succeeded_at: null,
+        last_started_at: null,
+        last_error: null,
+      },
     ];
     expect(missedHeartbeats(rows, NOW).map((r) => r.job)).toEqual(["stale", "never"]);
   });
@@ -163,7 +187,8 @@ describe("ops-watch", () => {
         const result = { data: tables[table] ?? [], error: null };
         const q: Record<string, unknown> = {};
         for (const m of ["select", "gte", "like", "in", "limit", "eq"]) q[m] = () => q;
-        q.then = (ok: (v: unknown) => unknown, bad: (e: unknown) => unknown) => Promise.resolve(result).then(ok, bad);
+        q.then = (ok: (v: unknown) => unknown, bad: (e: unknown) => unknown) =>
+          Promise.resolve(result).then(ok, bad);
         return q;
       },
       rpc: async () => ({ data: { pruned: 3 }, error: null }),
@@ -174,8 +199,20 @@ describe("ops-watch", () => {
     const today = "2026-09-12";
     const db = fakeDb({
       cron_heartbeats: [
-        { job: "run-schedules", expected_interval_seconds: 60, last_succeeded_at: null, last_started_at: null, last_error: "boom" },
-        { job: "ops-watch", expected_interval_seconds: 300, last_succeeded_at: null, last_started_at: null, last_error: null },
+        {
+          job: "run-schedules",
+          expected_interval_seconds: 60,
+          last_succeeded_at: null,
+          last_started_at: null,
+          last_error: "boom",
+        },
+        {
+          job: "ops-watch",
+          expected_interval_seconds: 300,
+          last_succeeded_at: null,
+          last_started_at: null,
+          last_error: null,
+        },
       ],
       ai_usage_daily: [
         { day: today, cost_usd: 40, truncated_calls: 20, calls: 100, scope_key: "ws:a" },
@@ -203,9 +240,17 @@ describe("ops-watch", () => {
   it("stays quiet on a healthy day", async () => {
     const db = fakeDb({
       cron_heartbeats: [
-        { job: "run-schedules", expected_interval_seconds: 60, last_succeeded_at: new Date(NOW - 30_000).toISOString(), last_started_at: null, last_error: null },
+        {
+          job: "run-schedules",
+          expected_interval_seconds: 60,
+          last_succeeded_at: new Date(NOW - 30_000).toISOString(),
+          last_started_at: null,
+          last_error: null,
+        },
       ],
-      ai_usage_daily: [{ day: "2026-09-12", cost_usd: 2, truncated_calls: 1, calls: 100, scope_key: "ws:a" }],
+      ai_usage_daily: [
+        { day: "2026-09-12", cost_usd: 2, truncated_calls: 1, calls: 100, scope_key: "ws:a" },
+      ],
       sdr_webhook_events: [],
     });
     const alert = vi.fn(async () => true);

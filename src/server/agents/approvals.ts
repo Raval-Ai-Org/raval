@@ -12,20 +12,22 @@ import { ToolError, type ActionRequest } from "./types";
 
 export type ApprovalOutcome =
   | { ok: true; status: "executed"; result: unknown }
-  | { ok: false; status: "failed" | "expired" | "not_found" | "conflict" | "denied"; error: string };
+  | {
+      ok: false;
+      status: "failed" | "expired" | "not_found" | "conflict" | "denied";
+      error: string;
+    };
 
-export async function approveAction(
-  args: {
-    store: AgentStore;
-    db: any;
-    requestId: string;
-    workspaceId: string;
-    userId: string;
-    role: WorkspaceRole;
-    reason?: string;
-    now?: () => Date;
-  },
-): Promise<ApprovalOutcome> {
+export async function approveAction(args: {
+  store: AgentStore;
+  db: any;
+  requestId: string;
+  workspaceId: string;
+  userId: string;
+  role: WorkspaceRole;
+  reason?: string;
+  now?: () => Date;
+}): Promise<ApprovalOutcome> {
   const now = args.now ?? (() => new Date());
   const req = await args.store.getActionRequest(args.requestId);
   // A request from another workspace is indistinguishable from a missing one.
@@ -46,7 +48,8 @@ export async function approveAction(
     { status: "approved", decidedBy: args.userId, decisionReason: args.reason ?? null },
     "suggested",
   );
-  if (!claimed) return { ok: false, status: "conflict", error: "Someone else already decided this" };
+  if (!claimed)
+    return { ok: false, status: "conflict", error: "Someone else already decided this" };
 
   try {
     const result = await invokeTool(
@@ -62,7 +65,11 @@ export async function approveAction(
       { store: args.store, approvalGranted: true, idempotencyKey: req.idempotencyKey },
     );
     if (result.status !== "ok") throw new ToolError("failed", "Tool did not execute");
-    await args.store.updateActionRequest(req.id, { status: "executed", result: result.output, error: null });
+    await args.store.updateActionRequest(req.id, {
+      status: "executed",
+      result: result.output,
+      error: null,
+    });
     return { ok: true, status: "executed", result: result.output };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -86,7 +93,8 @@ export async function rejectAction(args: {
   reason?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const req: ActionRequest | null = await args.store.getActionRequest(args.requestId);
-  if (!req || req.workspaceId !== args.workspaceId) return { ok: false, error: "Action request not found" };
+  if (!req || req.workspaceId !== args.workspaceId)
+    return { ok: false, error: "Action request not found" };
   const ok = await args.store.updateActionRequest(
     req.id,
     { status: "rejected", decidedBy: args.userId, decisionReason: args.reason ?? null },

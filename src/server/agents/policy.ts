@@ -36,7 +36,10 @@ export function decidePolicy(
       return { decision: "deny", reason: "Agents are paused for this workspace." };
     }
     if (settings.disabledWorkers.includes(actor.worker)) {
-      return { decision: "deny", reason: `The ${actor.worker} worker is disabled for this workspace.` };
+      return {
+        decision: "deny",
+        reason: `The ${actor.worker} worker is disabled for this workspace.`,
+      };
     }
     if (tool.effect === "external") {
       return { decision: "deny", reason: "Workers may never take external actions." };

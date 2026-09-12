@@ -56,7 +56,7 @@ services:
       - --appendonly
       - "no"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      test: ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG']
       interval: 10s
       timeout: 3s
       retries: 5

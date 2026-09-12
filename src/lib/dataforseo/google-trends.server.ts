@@ -307,7 +307,8 @@ export async function createGoogleTrendsTask(
     fetchImpl,
   );
   // DataForSEO bills at task creation and reports the charge as `cost` (USD).
-  const reportedCost = isRecord(payload) && typeof payload.cost === "number" ? payload.cost : undefined;
+  const reportedCost =
+    isRecord(payload) && typeof payload.cost === "number" ? payload.cost : undefined;
   recordUsage({
     provider: "dataforseo",
     model: "google_trends/explore/task_post",

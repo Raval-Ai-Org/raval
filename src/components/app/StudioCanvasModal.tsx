@@ -974,7 +974,7 @@ export function StudioCanvasModal({
           }),
         });
         genQueue.advance(jobId, "drafting");
-          setProgress(70);
+        setProgress(70);
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json?.error || `Generation failed (${res.status})`);
         const text = String(json?.text || "").trim();

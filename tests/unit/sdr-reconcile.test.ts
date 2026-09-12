@@ -105,7 +105,14 @@ describe("reconcileStalePublications — per-workspace SDR + item status", () =>
         },
       ],
       content_items: [
-        { id: "item-9", workspace_id: "ws-9", body: "x", media_url: null, status: "publishing", meta: {} },
+        {
+          id: "item-9",
+          workspace_id: "ws-9",
+          body: "x",
+          media_url: null,
+          status: "publishing",
+          meta: {},
+        },
       ],
     });
     const calls: string[] = [];
@@ -118,7 +125,9 @@ describe("reconcileStalePublications — per-workspace SDR + item status", () =>
         calls.push(`${opts.baseUrl}|${opts.token}`);
         return {
           status: 200,
-          data: { targets: [{ target_id: "target-9", status: "published", platform_post_url: "u" }] },
+          data: {
+            targets: [{ target_id: "target-9", status: "published", platform_post_url: "u" }],
+          },
         };
       },
     });

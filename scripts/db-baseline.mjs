@@ -30,11 +30,15 @@ async function main() {
   const db = await createSupabaseDb();
   const started = Date.now();
   await applyMigrations(db, names);
-  console.log(`✓ ${names.length} migrations replayed on an empty database (${Date.now() - started} ms)`);
+  console.log(
+    `✓ ${names.length} migrations replayed on an empty database (${Date.now() - started} ms)`,
+  );
 
   const reapply = names.filter((n) => n >= IDEMPOTENT_FROM);
   await applyMigrations(db, reapply);
-  console.log(`✓ ${reapply.length} post-${IDEMPOTENT_FROM} migrations are idempotent (re-applied cleanly)`);
+  console.log(
+    `✓ ${reapply.length} post-${IDEMPOTENT_FROM} migrations are idempotent (re-applied cleanly)`,
+  );
 
   const { rows } = await db.query(
     `select c.relname as table, c.relrowsecurity as rls
@@ -57,9 +61,7 @@ async function main() {
       "-- pg_cron + pg_net extensions to be enabled first.",
       "",
     ].join("\n");
-    const body = names
-      .map((n) => `-- ═══ ${n} ═══\n${readMigration(n).trim()}\n`)
-      .join("\n");
+    const body = names.map((n) => `-- ═══ ${n} ═══\n${readMigration(n).trim()}\n`).join("\n");
     const out = path.join(REPO_ROOT, "supabase", "baseline", "schema.sql");
     writeFileSync(out, `${header}\n${body}`, "utf8");
     console.log(`✓ wrote ${path.relative(REPO_ROOT, out)}`);

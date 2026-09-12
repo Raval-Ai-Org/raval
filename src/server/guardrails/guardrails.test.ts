@@ -68,7 +68,8 @@ describe("prompt-injection boundary", () => {
 
 describe("output checks", () => {
   it("flags PII and redacts it", () => {
-    const text = "Email me at jane.doe@example.com or call +92 300 1234567. Card 4242 4242 4242 4242.";
+    const text =
+      "Email me at jane.doe@example.com or call +92 300 1234567. Card 4242 4242 4242 4242.";
     const check = checkOutput(text);
     expect(check.findings.map((f) => f.rule)).toEqual(
       expect.arrayContaining(["email_address", "phone_number", "payment_card"]),
@@ -81,13 +82,15 @@ describe("output checks", () => {
   });
 
   it("does not treat a non-Luhn digit run as a card", () => {
-    expect(checkOutput("Order 1234 5678 9012 3456 shipped").findings.map((f) => f.rule)).not.toContain(
-      "payment_card",
-    );
+    expect(
+      checkOutput("Order 1234 5678 9012 3456 shipped").findings.map((f) => f.rule),
+    ).not.toContain("payment_card");
   });
 
   it("flags unsubstantiated claims, medical promises and profanity", () => {
-    const check = checkOutput("The world's best coffee — guaranteed results, and it cures anxiety. Damn good shit.");
+    const check = checkOutput(
+      "The world's best coffee — guaranteed results, and it cures anxiety. Damn good shit.",
+    );
     const rules = check.findings.map((f) => f.rule);
     expect(rules).toEqual(
       expect.arrayContaining(["unverified_superlative", "guarantee", "medical_claim", "profanity"]),
@@ -108,7 +111,11 @@ describe("output checks", () => {
 describe("image moderation", () => {
   it("returns flagged verdicts from the classifier and logs a block", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    setModerationClassifier(async () => ({ safe: false, categories: ["violence"], reason: "gore" }));
+    setModerationClassifier(async () => ({
+      safe: false,
+      categories: ["violence"],
+      reason: "gore",
+    }));
     const r = await moderateImage("https://cdn.example.com/a-flagged.png");
     expect(r).toMatchObject({ verdict: "flagged", categories: ["violence"] });
     expect(events.some((e) => e.kind === "moderation_blocked")).toBe(true);
@@ -119,7 +126,9 @@ describe("image moderation", () => {
     setModerationClassifier(async () => {
       throw new Error("provider down");
     });
-    expect((await moderateImage("https://cdn.example.com/b-unknown.png")).verdict).toBe("unverified");
+    expect((await moderateImage("https://cdn.example.com/b-unknown.png")).verdict).toBe(
+      "unverified",
+    );
   });
 
   it("rejects non-https sources without calling the provider", async () => {

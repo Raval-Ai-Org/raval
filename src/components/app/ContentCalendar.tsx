@@ -252,7 +252,9 @@ Rules:
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || "AI generation failed");
   if (data.truncated) {
-    throw new Error("The calendar was too long to generate in one go — try fewer days or posts per week.");
+    throw new Error(
+      "The calendar was too long to generate in one go — try fewer days or posts per week.",
+    );
   }
   const text: string = data.text ?? "";
   // Extract JSON array

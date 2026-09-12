@@ -104,7 +104,10 @@ export function defineCronRoute(opts: CronRouteOptions) {
       try {
         const result = await opts.handler(request);
         await safely(() => heartbeats.finish(opts.job, true, Date.now() - started, result));
-        return Response.json({ ok: true, ...(result && typeof result === "object" ? result : { result }) });
+        return Response.json({
+          ok: true,
+          ...(result && typeof result === "object" ? result : { result }),
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error(`[cron] ${opts.job} failed`, message);

@@ -76,11 +76,7 @@ import {
   Line,
   LineChart,
 } from "recharts";
-import {
-  TILE_BY_ID,
-  type QueueItem,
-  type CanvasType,
-} from "@/lib/studio";
+import { TILE_BY_ID, type QueueItem, type CanvasType } from "@/lib/studio";
 import { Rocket } from "@/components/ui/gemini-icons";
 
 type Client = {
@@ -1678,7 +1674,11 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
             title="All-clients analytics"
             sub="Reach, engagement and channels — combined across every brand."
           />
-          <AllClientsAnalytics clients={clients} contentRows={contentRows} onOpenClient={openClient} />
+          <AllClientsAnalytics
+            clients={clients}
+            contentRows={contentRows}
+            onOpenClient={openClient}
+          />
         </div>
       </section>
 
@@ -3167,7 +3167,9 @@ function AllClientsAnalytics({
     const d = new Date(dayStart);
     return {
       day: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-      posts: published.filter((c) => inWindow(c.created_at, dayStart - (dayStart % DAY), dayStart - (dayStart % DAY) + DAY)).length,
+      posts: published.filter((c) =>
+        inWindow(c.created_at, dayStart - (dayStart % DAY), dayStart - (dayStart % DAY) + DAY),
+      ).length,
     };
   });
 
@@ -3245,7 +3247,9 @@ function AllClientsAnalytics({
 
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-2xl border border-border/60 bg-background/60 p-3.5">
-          <div className="mb-2 text-[11.5px] font-medium text-foreground/80">Posts published per day</div>
+          <div className="mb-2 text-[11.5px] font-medium text-foreground/80">
+            Posts published per day
+          </div>
           <div className="h-[180px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trend} margin={{ top: 6, right: 4, left: -22, bottom: -4 }}>
@@ -3276,7 +3280,13 @@ function AllClientsAnalytics({
                     fontSize: 11,
                   }}
                 />
-                <Area type="monotone" dataKey="posts" stroke="#8b5cf6" strokeWidth={2} fill="url(#postsFill)" />
+                <Area
+                  type="monotone"
+                  dataKey="posts"
+                  stroke="#8b5cf6"
+                  strokeWidth={2}
+                  fill="url(#postsFill)"
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -3296,9 +3306,15 @@ function AllClientsAnalytics({
                     className="group w-full rounded-lg px-1.5 py-1.5 text-left transition hover:bg-secondary/60"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="w-4 shrink-0 text-[10.5px] tabular-nums text-muted-foreground">#{i + 1}</span>
-                      <span className="flex-1 truncate text-[12px] font-medium text-foreground/90">{c.name}</span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-foreground/80">{c.posts}</span>
+                      <span className="w-4 shrink-0 text-[10.5px] tabular-nums text-muted-foreground">
+                        #{i + 1}
+                      </span>
+                      <span className="flex-1 truncate text-[12px] font-medium text-foreground/90">
+                        {c.name}
+                      </span>
+                      <span className="shrink-0 text-[11px] tabular-nums text-foreground/80">
+                        {c.posts}
+                      </span>
                     </div>
                     <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/70">
                       <div
@@ -3311,7 +3327,9 @@ function AllClientsAnalytics({
               ))}
             </ul>
           ) : (
-            <p className="text-[12px] text-muted-foreground">No posts published in the last 14 days.</p>
+            <p className="text-[12px] text-muted-foreground">
+              No posts published in the last 14 days.
+            </p>
           )}
         </div>
       </div>
@@ -3326,11 +3344,19 @@ function AllClientsAnalytics({
             {byChannel.map(([key, posts]) => {
               const meta = CHANNEL_META[key] ?? { label: key, color: "#64748b", logo: null };
               return (
-                <div key={key} className="flex items-center gap-2 rounded-xl border border-border/50 bg-card/50 p-2.5">
-                  <span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: `${meta.color}14` }}>
+                <div
+                  key={key}
+                  className="flex items-center gap-2 rounded-xl border border-border/50 bg-card/50 p-2.5"
+                >
+                  <span
+                    className="grid h-7 w-7 place-items-center rounded-lg"
+                    style={{ background: `${meta.color}14` }}
+                  >
                     {meta.logo ? <BrandLogo name={meta.logo} brand size={14} /> : null}
                   </span>
-                  <div className="min-w-0 flex-1 truncate text-[12px] font-semibold">{meta.label}</div>
+                  <div className="min-w-0 flex-1 truncate text-[12px] font-semibold">
+                    {meta.label}
+                  </div>
                   <span className="text-[12px] tabular-nums">{posts}</span>
                 </div>
               );
@@ -3340,8 +3366,8 @@ function AllClientsAnalytics({
           <p className="text-[12px] text-muted-foreground">Nothing published yet.</p>
         )}
         <p className="mt-3 text-[11px] text-muted-foreground">
-          Reach, engagement and link clicks need platform analytics, which aren&apos;t connected yet — so they
-          aren&apos;t shown.
+          Reach, engagement and link clicks need platform analytics, which aren&apos;t connected yet
+          — so they aren&apos;t shown.
         </p>
       </div>
     </div>

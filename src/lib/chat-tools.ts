@@ -72,7 +72,10 @@ export function requiresApproval(kind: ChatToolKind): boolean {
 export function describeSuggestion(call: ChatToolCall): { title: string; effect: string } {
   switch (call.kind) {
     case "audit":
-      return { title: "Run AI visibility audit", effect: "Crawls your site (uses analysis quota)." };
+      return {
+        title: "Run AI visibility audit",
+        effect: "Crawls your site (uses analysis quota).",
+      };
     case "save-memory":
       return {
         title: `Save to Memory · ${(call.params.title || "Note").slice(0, 60)}`,

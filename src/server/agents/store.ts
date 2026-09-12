@@ -62,7 +62,12 @@ export interface AgentStore {
     expectStatus?: ActionRequestStatus,
   ): Promise<boolean>;
   /** Insert a finding, or bump the open one with the same fingerprint. */
-  upsertFinding(workspaceId: string, runId: string | null, worker: string, f: Finding): Promise<"created" | "updated">;
+  upsertFinding(
+    workspaceId: string,
+    runId: string | null,
+    worker: string,
+    f: Finding,
+  ): Promise<"created" | "updated">;
 }
 
 const EMPTY_SETTINGS: WorkspaceAgentSettings = { agentsPaused: false, disabledWorkers: [] };
@@ -96,7 +101,10 @@ export function supabaseAgentStore(db: any): AgentStore {
         .eq("workspace_id", workspaceId)
         .maybeSingle();
       return data
-        ? { agentsPaused: Boolean(data.agents_paused), disabledWorkers: data.disabled_workers ?? [] }
+        ? {
+            agentsPaused: Boolean(data.agents_paused),
+            disabledWorkers: data.disabled_workers ?? [],
+          }
         : EMPTY_SETTINGS;
     },
     async createRun(run) {
@@ -176,7 +184,11 @@ export function supabaseAgentStore(db: any): AgentStore {
       return actionFromRow(data);
     },
     async getActionRequest(id) {
-      const { data } = await db.from("agent_action_requests").select("*").eq("id", id).maybeSingle();
+      const { data } = await db
+        .from("agent_action_requests")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
       return data ? actionFromRow(data) : null;
     },
     async findActionRequestByKey(key) {
@@ -251,7 +263,10 @@ export function memoryAgentStore(seed: { settings?: Record<string, WorkspaceAgen
   const runs = new Map<string, RunRecord>();
   const steps: StepRecord[] = [];
   const actions = new Map<string, ActionRequest>();
-  const findings = new Map<string, Finding & { workspaceId: string; occurrences: number; status: string }>();
+  const findings = new Map<
+    string,
+    Finding & { workspaceId: string; occurrences: number; status: string }
+  >();
   const settings = new Map(Object.entries(seed.settings ?? {}));
   let n = 0;
   const id = (p: string) => `${p}-${++n}`;

@@ -38,7 +38,12 @@ export function spendAnomaly(
 
 export async function runOpsWatch(deps: {
   db: any;
-  alert: (a: { key: string; severity: "warning" | "critical"; title: string; detail: string }) => Promise<boolean>;
+  alert: (a: {
+    key: string;
+    severity: "warning" | "critical";
+    title: string;
+    detail: string;
+  }) => Promise<boolean>;
   now?: () => number;
 }) {
   const now = deps.now?.() ?? Date.now();
@@ -69,7 +74,12 @@ export async function runOpsWatch(deps: {
     .gte("day", since)
     .like("scope_key", "ws:%");
   const byDay = new Map<string, { cost: number; truncated: number; calls: number }>();
-  for (const r of (daily ?? []) as Array<{ day: string; cost_usd: number; truncated_calls: number; calls: number }>) {
+  for (const r of (daily ?? []) as Array<{
+    day: string;
+    cost_usd: number;
+    truncated_calls: number;
+    calls: number;
+  }>) {
     const cur = byDay.get(r.day) ?? { cost: 0, truncated: 0, calls: 0 };
     byDay.set(r.day, {
       cost: cur.cost + Number(r.cost_usd),

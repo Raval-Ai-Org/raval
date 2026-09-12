@@ -43,9 +43,14 @@ export function contentFitIssues(item: {
       issues.push({ rule: `platform:${platform}`, message, severity: "block" });
     }
   }
-  if (!item.body?.trim()) issues.push({ rule: "empty_body", message: "The post has no body copy.", severity: "block" });
+  if (!item.body?.trim())
+    issues.push({ rule: "empty_body", message: "The post has no body copy.", severity: "block" });
   for (const f of checkOutput(`${item.title ?? ""}\n${item.body ?? ""}`).findings) {
-    issues.push({ rule: `${f.kind}:${f.rule}`, message: `Flagged ${f.rule.replace(/_/g, " ")}: “${f.snippet}”`, severity: f.severity });
+    issues.push({
+      rule: `${f.kind}:${f.rule}`,
+      message: `Flagged ${f.rule.replace(/_/g, " ")}: “${f.snippet}”`,
+      severity: f.severity,
+    });
   }
   return issues;
 }
@@ -58,7 +63,8 @@ const RevisionSchema = z.object({
 
 export const contentFitWorker: WorkerDefinition = {
   name: "content-fit",
-  objective: "Check one content item against platform rules and brand safety; propose a fix for approval.",
+  objective:
+    "Check one content item against platform rules and brand safety; propose a fix for approval.",
   budget: { maxSteps: 6, deadlineMs: 60_000, maxCostUsd: 0.05 },
   async run(ctx) {
     const contentItemId = String(ctx.input.contentItemId ?? "");
@@ -78,7 +84,11 @@ export const contentFitWorker: WorkerDefinition = {
     // Media rules can't be fixed by rewriting copy; only text issues get a proposal.
     const fixable = issues.filter((i) => !/media/i.test(i.message));
     if (!fixable.length) {
-      return { summary: issues.length ? `Only media issues: ${issues.map((i) => i.message).join(" ")}` : "Fits the platform and passes brand-safety checks." };
+      return {
+        summary: issues.length
+          ? `Only media issues: ${issues.map((i) => i.message).join(" ")}`
+          : "Fits the platform and passes brand-safety checks.",
+      };
     }
 
     const platform = item.channel ? PLATFORM_BY_CHANNEL[item.channel] : undefined;
@@ -107,7 +117,11 @@ export const contentFitWorker: WorkerDefinition = {
     });
 
     // Re-check the proposal deterministically before offering it.
-    const remaining = contentFitIssues({ ...item, ...revision, hashtags: revision.hashtags ?? item.hashtags });
+    const remaining = contentFitIssues({
+      ...item,
+      ...revision,
+      hashtags: revision.hashtags ?? item.hashtags,
+    });
     const proposed = await ctx.tool("content.apply_revision", {
       contentItemId: item.id,
       title: revision.title,

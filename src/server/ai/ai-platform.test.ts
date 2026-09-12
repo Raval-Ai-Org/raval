@@ -84,7 +84,13 @@ describe("budget decisions", () => {
 describe("metering", () => {
   it("attributes a call to the request scope's workspace, user and route", () => {
     const row = runWithScope({ userId: "u-9", workspaceId: "ws-9", route: "chat" }, () =>
-      toUsageRow({ provider: "openrouter", model: "m", inputTokens: 10.4, outputTokens: 3, estCostUsd: 0.01 }),
+      toUsageRow({
+        provider: "openrouter",
+        model: "m",
+        inputTokens: 10.4,
+        outputTokens: 3,
+        estCostUsd: 0.01,
+      }),
     );
     expect(row).toMatchObject({
       workspace_id: "ws-9",
@@ -97,7 +103,9 @@ describe("metering", () => {
   });
 
   it("never charges a cache hit", () => {
-    expect(toUsageRow({ provider: "openrouter", model: "m", cached: true, estCostUsd: 1 }).est_cost_usd).toBe(0);
+    expect(
+      toUsageRow({ provider: "openrouter", model: "m", cached: true, estCostUsd: 1 }).est_cost_usd,
+    ).toBe(0);
   });
 
   it("logs a truncation guardrail event alongside the usage row", async () => {
@@ -106,7 +114,12 @@ describe("metering", () => {
     const restoreUsage = setUsageSink(async (row) => void rows.push(row));
     const restoreGuard = setGuardrailSink(async (row) => void events.push(row));
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    recordUsage({ provider: "anthropic", model: "claude-sonnet-5", truncated: true, route: "coach" });
+    recordUsage({
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      truncated: true,
+      route: "coach",
+    });
     await new Promise((r) => setTimeout(r, 0));
     restoreUsage();
     restoreGuard();
@@ -175,10 +188,14 @@ describe("structured output", () => {
 describe("pricing", () => {
   it("prices Claude Sonnet 5 at $2 / $10 per million tokens", () => {
     expect(tokenPrice("claude-sonnet-5")).toEqual({ inPerM: 2, outPerM: 10 });
-    expect(estimateTextCost("claude-sonnet-5", { inputTokens: 1_000_000, outputTokens: 100_000 })).toBe(3);
+    expect(
+      estimateTextCost("claude-sonnet-5", { inputTokens: 1_000_000, outputTokens: 100_000 }),
+    ).toBe(3);
   });
   it("prices an unknown model conservatively rather than as free", () => {
-    expect(estimateTextCost("mystery/model", { inputTokens: 1_000_000, outputTokens: 0 })).toBeGreaterThan(0);
+    expect(
+      estimateTextCost("mystery/model", { inputTokens: 1_000_000, outputTokens: 0 }),
+    ).toBeGreaterThan(0);
   });
   it("honours an env override", () => {
     vi.stubEnv("AI_PRICE_QWEN_QWEN3_MAX_OUT", "9");
@@ -251,7 +268,10 @@ describe("SSE stream metering", () => {
   it("inserts the truncation event before [DONE] when the reply hit the ceiling", async () => {
     const out = await read(
       meterSseStream(
-        sse('data: {"choices":[{"delta":{"content":"cut"},"finish_reason":"length"}]}', "data: [DONE]"),
+        sse(
+          'data: {"choices":[{"delta":{"content":"cut"},"finish_reason":"length"}]}',
+          "data: [DONE]",
+        ),
         () => {},
       ),
     );

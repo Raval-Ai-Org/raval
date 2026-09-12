@@ -193,10 +193,10 @@ def _no_broker_dispatch():
 
     original = scheduler_tasks.process_target.delay
     original_redeliver = scheduler_tasks.redeliver_webhook.apply_async
-    scheduler_tasks.process_target.delay = lambda *args, **kwargs: None  # type: ignore[assignment]
+    scheduler_tasks.process_target.delay = lambda *_args, **_kwargs: None  # type: ignore[assignment]
     # Queued webhook redeliveries (webhook_out._schedule_retry) likewise never
     # reach a broker; test_webhook_out drives them through its own fake queue.
-    scheduler_tasks.redeliver_webhook.apply_async = lambda *args, **kwargs: None  # type: ignore[assignment]
+    scheduler_tasks.redeliver_webhook.apply_async = lambda *_args, **_kwargs: None  # type: ignore[assignment]
     yield
     scheduler_tasks.process_target.delay = original  # type: ignore[assignment]
     scheduler_tasks.redeliver_webhook.apply_async = original_redeliver  # type: ignore[assignment]

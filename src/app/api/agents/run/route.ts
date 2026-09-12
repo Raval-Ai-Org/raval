@@ -12,7 +12,11 @@ export const dynamic = "force-dynamic";
 
 const Body = z.discriminatedUnion("worker", [
   z.object({ workspaceId: z.string(), worker: z.literal("distribution-reliability") }),
-  z.object({ workspaceId: z.string(), worker: z.literal("content-fit"), contentItemId: z.string().uuid() }),
+  z.object({
+    workspaceId: z.string(),
+    worker: z.literal("content-fit"),
+    contentItemId: z.string().uuid(),
+  }),
 ]);
 
 export const POST = defineRoute({
@@ -30,7 +34,8 @@ export const POST = defineRoute({
       createdBy: userId,
       input: body.worker === "content-fit" ? { contentItemId: body.contentItemId } : {},
     });
-    if (out.status === "failed" && !out.runId) return jsonError(409, out.error ?? "Agents are paused");
+    if (out.status === "failed" && !out.runId)
+      return jsonError(409, out.error ?? "Agents are paused");
     return out;
   },
 });

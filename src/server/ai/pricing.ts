@@ -60,7 +60,12 @@ export function tokenPrice(model: string): TokenPrice {
 /** Estimated USD for a text call from token usage. Cache reads bill at ~0.1×. */
 export function estimateTextCost(
   model: string,
-  usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number },
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  },
 ): number {
   const p = tokenPrice(model);
   const cachedRead = usage.cacheReadTokens ?? 0;

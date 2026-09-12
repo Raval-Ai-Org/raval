@@ -151,7 +151,12 @@ export type ClaudeTextOpts = {
   retries?: number;
 };
 
-export type ClaudeTextResult = { text: string; truncated: boolean; model: string; degraded: boolean };
+export type ClaudeTextResult = {
+  text: string;
+  truncated: boolean;
+  model: string;
+  degraded: boolean;
+};
 
 /** Output cap while a workspace is past its spend ceiling. */
 const DEGRADED_MAX_TOKENS = 1_500;
@@ -297,9 +302,7 @@ export async function claudeJsonPrompt<T>(opts: {
           : "Your previous answer was not valid JSON. Answer again with STRICT valid JSON only."
       }`,
       model: opts.model,
-      maxTokens: first.truncated
-        ? Math.min((opts.maxTokens ?? 1800) * 2, 16_000)
-        : opts.maxTokens,
+      maxTokens: first.truncated ? Math.min((opts.maxTokens ?? 1800) * 2, 16_000) : opts.maxTokens,
     });
     const repaired = safeParseJson<T | typeof sentinel>(second.text, sentinel);
     if (repaired !== sentinel && repaired != null) return repaired as T;

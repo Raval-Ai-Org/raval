@@ -17,7 +17,10 @@ const RULES = [
   { id: "aws-access-key", re: /\bAKIA[0-9A-Z]{16}\b/ },
   { id: "private-key", re: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/ },
   // A Supabase service-role JWT (role claim inside the base64 payload).
-  { id: "supabase-service-jwt", re: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*c2VydmljZV9yb2xl[A-Za-z0-9_-]*\.[A-Za-z0-9_-]{10,}/ },
+  {
+    id: "supabase-service-jwt",
+    re: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*c2VydmljZV9yb2xl[A-Za-z0-9_-]*\.[A-Za-z0-9_-]{10,}/,
+  },
   { id: "supabase-secret-key", re: /\bsb_secret_[A-Za-z0-9_-]{20,}\b/ },
   // Fernet keys: 43 base64url chars + "=".
   { id: "fernet-key", re: /\b(?:FERNET_KEY|fernet_key)\s*[:=]\s*["']?[A-Za-z0-9_-]{43}=/ },
@@ -26,19 +29,33 @@ const RULES = [
     id: "assigned-secret",
     re: /\b[A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[:=]\s*["']?(?=[A-Za-z0-9+/_!#%.-]*\d)(?=[A-Za-z0-9+/_!#%.-]*[A-Za-z])[A-Za-z0-9+/_!#%.-]{20,}/,
   },
-  { id: "postgres-url-password", re: /postgres(?:ql)?(?:\+\w+)?:\/\/[^:\s/]+:(?!\$\{|<|\*{3})[^@\s]{8,}@/ },
+  {
+    id: "postgres-url-password",
+    re: /postgres(?:ql)?(?:\+\w+)?:\/\/[^:\s/]+:(?!\$\{|<|\*{3})[^@\s]{8,}@/,
+  },
 ];
 
 // Documented placeholders that look like assignments but are not secrets.
-const PLACEHOLDER = /(?:change[-_]?(?:me|in[-_]production)|replace[-_]?me|your[-_]|example|placeholder|dummy|test[-_]|fake|xxxx|\*{3}|<[^>]+>|\$\{)/i;
+const PLACEHOLDER =
+  /(?:change[-_]?(?:me|in[-_]production)|replace[-_]?me|your[-_]|example|placeholder|dummy|test[-_]|fake|xxxx|\*{3}|<[^>]+>|\$\{)/i;
 
-const SKIP = [/^node_modules\//, /^\.next/, /package-lock\.json$/, /\.(png|jpe?g|gif|webp|ico|pdf|woff2?|ttf|mp4|zip)$/i, /^supabase\/baseline\/schema\.sql$/];
+const SKIP = [
+  /^node_modules\//,
+  /^\.next/,
+  /package-lock\.json$/,
+  /\.(png|jpe?g|gif|webp|ico|pdf|woff2?|ttf|mp4|zip)$/i,
+  /^supabase\/baseline\/schema\.sql$/,
+];
 
 const staged = process.argv.includes("--staged");
-const files = execFileSync("git", staged ? ["diff", "--cached", "--name-only", "--diff-filter=ACM"] : ["ls-files"], {
-  encoding: "utf8",
-  maxBuffer: 64 * 1024 * 1024,
-})
+const files = execFileSync(
+  "git",
+  staged ? ["diff", "--cached", "--name-only", "--diff-filter=ACM"] : ["ls-files"],
+  {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  },
+)
   .split("\n")
   .map((f) => f.trim())
   .filter((f) => f && !SKIP.some((re) => re.test(f)));
@@ -68,7 +85,9 @@ for (const file of files) {
 }
 
 if (hits) {
-  console.error(`\n${hits} possible secret(s). Remove them (and rotate anything real), or mark a false positive with "secret-scan:allow".`);
+  console.error(
+    `\n${hits} possible secret(s). Remove them (and rotate anything real), or mark a false positive with "secret-scan:allow".`,
+  );
   process.exit(1);
 }
 console.log(`✓ no secrets found in ${files.length} tracked files`);

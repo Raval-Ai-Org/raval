@@ -58,7 +58,10 @@ async function seedWorkspace(ws: string, owner: string, tag: string) {
      values ($1, $2, 'body', 'draft', $3) returning id`,
     [ws, `secret-${tag}`, owner],
   );
-  await q(`insert into public.approvals (workspace_id, action, content_item_id) values ($1, 'publish', $2)`, [ws, item.id]);
+  await q(
+    `insert into public.approvals (workspace_id, action, content_item_id) values ($1, 'publish', $2)`,
+    [ws, item.id],
+  );
   const {
     rows: [share],
   } = await q<{ id: string }>(
@@ -66,7 +69,9 @@ async function seedWorkspace(ws: string, owner: string, tag: string) {
      values ($1, $2, $3, 'hash') returning id`,
     [ws, owner, `slug-${tag}`],
   );
-  await q(`insert into public.client_share_items (share_id, kind) values ($1, 'content')`, [share.id]);
+  await q(`insert into public.client_share_items (share_id, kind) values ($1, 'content')`, [
+    share.id,
+  ]);
   await q(
     `insert into public.workspace_sdr (workspace_id, sdr_workspace_id, encrypted_api_key, sdr_base_url)
      values ($1, $2, 'v1:secret', 'https://sdr.example.com')`,
@@ -84,16 +89,28 @@ async function seedWorkspace(ws: string, owner: string, tag: string) {
     [ws, `gen-${tag}`, `idem-${tag}`],
   );
   await q(`insert into public.conversations (workspace_id) values ($1)`, [ws]);
-  await q(`insert into public.chat_messages (workspace_id, role, content) values ($1, 'user', 'hi')`, [ws]);
+  await q(
+    `insert into public.chat_messages (workspace_id, role, content) values ($1, 'user', 'hi')`,
+    [ws],
+  );
   await q(`insert into public.memory_insights (workspace_id, body) values ($1, 'insight')`, [ws]);
   await q(
     `insert into public.scheduled_jobs (workspace_id, title, next_run_at) values ($1, 'job', now())`,
     [ws],
   );
   await q(`select public.record_ai_usage($1::jsonb)`, [
-    JSON.stringify({ workspace_id: ws, user_id: owner, route: "chat", provider: "openrouter", model: "m", est_cost_usd: 0.01 }),
+    JSON.stringify({
+      workspace_id: ws,
+      user_id: owner,
+      route: "chat",
+      provider: "openrouter",
+      model: "m",
+      est_cost_usd: 0.01,
+    }),
   ]);
-  await q(`insert into public.guardrail_events (workspace_id, kind) values ($1, 'pii_redacted')`, [ws]);
+  await q(`insert into public.guardrail_events (workspace_id, kind) values ($1, 'pii_redacted')`, [
+    ws,
+  ]);
   const {
     rows: [run],
   } = await q<{ id: string }>(
@@ -117,7 +134,9 @@ async function seedWorkspace(ws: string, owner: string, tag: string) {
     [ws, `idem-action-${tag}`],
   );
   await q(`insert into public.workspace_agent_settings (workspace_id) values ($1)`, [ws]);
-  await q(`insert into public.sdr_webhook_events (workspace_id, outcome) values ($1, 'verified')`, [ws]);
+  await q(`insert into public.sdr_webhook_events (workspace_id, outcome) values ($1, 'verified')`, [
+    ws,
+  ]);
 }
 
 // Tables a workspace member may read (their own rows only).
@@ -212,7 +231,10 @@ describe("tenant isolation — reads", () => {
 describe("tenant isolation — writes", () => {
   it("another tenant cannot update or delete Alice's content", async () => {
     await as(BOB, async (tx) => {
-      const upd = await tx.query(`update public.content_items set title = 'pwned' where workspace_id = $1`, [wsA]);
+      const upd = await tx.query(
+        `update public.content_items set title = 'pwned' where workspace_id = $1`,
+        [wsA],
+      );
       expect(upd.affectedRows ?? 0).toBe(0);
       const del = await tx.query(`delete from public.content_items where workspace_id = $1`, [wsA]);
       expect(del.affectedRows ?? 0).toBe(0);
@@ -234,20 +256,44 @@ describe("tenant isolation — writes", () => {
 
   it("a viewer cannot change content or decide approvals", async () => {
     await as(VERA, async (tx) => {
-      const content = await tx.query(`update public.content_items set title = 'v' where workspace_id = $1`, [wsA]);
+      const content = await tx.query(
+        `update public.content_items set title = 'v' where workspace_id = $1`,
+        [wsA],
+      );
       expect(content.affectedRows ?? 0).toBe(0);
-      const approvals = await tx.query(`update public.approvals set status = 'approved' where workspace_id = $1`, [wsA]);
+      const approvals = await tx.query(
+        `update public.approvals set status = 'approved' where workspace_id = $1`,
+        [wsA],
+      );
       expect(approvals.affectedRows ?? 0).toBe(0);
     });
   });
 
   it.each([
-    ["ai_usage_events", "insert into public.ai_usage_events (workspace_id, route, provider, model) values ($1, 'r', 'p', 'm')"],
-    ["guardrail_events", "insert into public.guardrail_events (workspace_id, kind) values ($1, 'pii_redacted')"],
-    ["agent_findings", "insert into public.agent_findings (workspace_id, worker, fingerprint, severity, title) values ($1, 'w', 'f2', 'low', 't')"],
-    ["agent_action_requests", "insert into public.agent_action_requests (workspace_id, tool, title, idempotency_key) values ($1, 't', 't', 'k2')"],
-    ["workspace_agent_settings", "update public.workspace_agent_settings set agents_paused = true where workspace_id = $1"],
-    ["sdr_webhook_events", "insert into public.sdr_webhook_events (workspace_id, outcome) values ($1, 'verified')"],
+    [
+      "ai_usage_events",
+      "insert into public.ai_usage_events (workspace_id, route, provider, model) values ($1, 'r', 'p', 'm')",
+    ],
+    [
+      "guardrail_events",
+      "insert into public.guardrail_events (workspace_id, kind) values ($1, 'pii_redacted')",
+    ],
+    [
+      "agent_findings",
+      "insert into public.agent_findings (workspace_id, worker, fingerprint, severity, title) values ($1, 'w', 'f2', 'low', 't')",
+    ],
+    [
+      "agent_action_requests",
+      "insert into public.agent_action_requests (workspace_id, tool, title, idempotency_key) values ($1, 't', 't', 'k2')",
+    ],
+    [
+      "workspace_agent_settings",
+      "update public.workspace_agent_settings set agents_paused = true where workspace_id = $1",
+    ],
+    [
+      "sdr_webhook_events",
+      "insert into public.sdr_webhook_events (workspace_id, outcome) values ($1, 'verified')",
+    ],
   ])("%s: even the owner cannot write it directly (server-only)", async (_table, sql) => {
     await expect(as(ALICE, (tx) => tx.query(sql, [wsA]))).rejects.toThrow(/permission denied/i);
   });
@@ -257,7 +303,10 @@ describe("tenant isolation — functions", () => {
   it.each([
     ["record_ai_usage", "select public.record_ai_usage('{}'::jsonb)"],
     ["ai_usage_summary", "select * from public.ai_usage_summary('ws:x')"],
-    ["claim_due_scheduled_jobs", "select * from public.claim_due_scheduled_jobs(1, 60, false, null)"],
+    [
+      "claim_due_scheduled_jobs",
+      "select * from public.claim_due_scheduled_jobs(1, 60, false, null)",
+    ],
     ["prune_operational_logs", "select public.prune_operational_logs()"],
   ])("%s is not callable by an authenticated user", async (_fn, sql) => {
     await expect(as(ALICE, (tx) => tx.query(sql))).rejects.toThrow(/permission denied/i);
@@ -270,9 +319,13 @@ describe("tenant isolation — functions", () => {
   });
 
   it("claim_due_scheduled_jobs leases a job once until the lease expires", async () => {
-    const first = await db.query(`select id from public.claim_due_scheduled_jobs(10, 300, false, null)`);
+    const first = await db.query(
+      `select id from public.claim_due_scheduled_jobs(10, 300, false, null)`,
+    );
     expect(first.rows.length).toBe(2);
-    const second = await db.query(`select id from public.claim_due_scheduled_jobs(10, 300, false, null)`);
+    const second = await db.query(
+      `select id from public.claim_due_scheduled_jobs(10, 300, false, null)`,
+    );
     expect(second.rows.length).toBe(0);
     await db.query(`update public.scheduled_jobs set locked_at = null`);
   });

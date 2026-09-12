@@ -56,7 +56,10 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, name: string): Pr
     return await Promise.race([
       promise,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new ToolError("timeout", `${name} timed out after ${ms} ms`)), ms);
+        timer = setTimeout(
+          () => reject(new ToolError("timeout", `${name} timed out after ${ms} ms`)),
+          ms,
+        );
       }),
     ]);
   } finally {
@@ -76,13 +79,14 @@ export type InvokeOptions = {
 };
 
 export type InvokeResult<O> =
-  | { status: "ok"; output: O }
-  | { status: "pending_approval"; actionRequest: ActionRequest };
+  { status: "ok"; output: O } | { status: "pending_approval"; actionRequest: ActionRequest };
 
 async function stableKey(parts: unknown[]): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(parts));
   const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+  return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
 }
 
 export async function invokeTool<O = unknown>(
@@ -101,17 +105,31 @@ export async function invokeTool<O = unknown>(
       console.error("[agents] audit step not recorded", e instanceof Error ? e.message : e);
     }
   };
-  const base = { runId: ctx.runId ?? "", workspaceId: ctx.workspaceId, seq, kind: "tool" as const, tool: name };
+  const base = {
+    runId: ctx.runId ?? "",
+    workspaceId: ctx.workspaceId,
+    seq,
+    kind: "tool" as const,
+    tool: name,
+  };
 
   if (!tool) {
-    await audit({ ...base, status: "denied", policyDecision: "deny", resultSummary: { error: "unknown tool" } });
+    await audit({
+      ...base,
+      status: "denied",
+      policyDecision: "deny",
+      resultSummary: { error: "unknown tool" },
+    });
     throw new ToolError("unknown_tool", `No tool named ${name}`);
   }
 
   const parsed = tool.input.safeParse(rawInput);
   if (!parsed.success) {
     await audit({ ...base, status: "error", resultSummary: { error: "invalid input" } });
-    throw new ToolError("invalid_input", `${name}: ${parsed.error.issues[0]?.message ?? "invalid input"}`);
+    throw new ToolError(
+      "invalid_input",
+      `${name}: ${parsed.error.issues[0]?.message ?? "invalid input"}`,
+    );
   }
   const input = parsed.data;
   const redacted = redactArgs(input) as Record<string, unknown>;
@@ -120,13 +138,20 @@ export async function invokeTool<O = unknown>(
   const policy = decidePolicy(tool, ctx.actor, settings, { approvalGranted: opts.approvalGranted });
 
   if (policy.decision === "deny") {
-    await audit({ ...base, redactedArgs: redacted, policyDecision: "deny", status: "denied", resultSummary: { reason: policy.reason } });
+    await audit({
+      ...base,
+      redactedArgs: redacted,
+      policyDecision: "deny",
+      status: "denied",
+      resultSummary: { reason: policy.reason },
+    });
     throw new ToolError("denied", policy.reason);
   }
 
   if (policy.decision === "require_approval") {
     const idempotencyKey =
-      opts.idempotencyKey ?? `${ctx.workspaceId}:${name}:${await stableKey([ctx.runId ?? null, input])}`;
+      opts.idempotencyKey ??
+      `${ctx.workspaceId}:${name}:${await stableKey([ctx.runId ?? null, input])}`;
     // The same proposal twice is one request, not two.
     const existing = await opts.store.findActionRequestByKey(idempotencyKey);
     const actionRequest =
@@ -158,7 +183,8 @@ export async function invokeTool<O = unknown>(
   try {
     const output = await withTimeout(tool.handler(input, ctx), tool.timeoutMs, name);
     const checked = tool.output.safeParse(output);
-    if (!checked.success) throw new ToolError("invalid_output", `${name} returned an invalid result`);
+    if (!checked.success)
+      throw new ToolError("invalid_output", `${name} returned an invalid result`);
     await audit({
       ...base,
       redactedArgs: redacted,
@@ -225,7 +251,12 @@ export async function executeRun(
   const settings = await opts.store.getSettings(opts.workspaceId);
   const actor: AgentActor = { kind: "worker", worker: worker.name };
   if (settings.agentsPaused || settings.disabledWorkers.includes(worker.name)) {
-    return { runId: "", status: "failed", summary: "", error: "Agents are paused for this workspace." };
+    return {
+      runId: "",
+      status: "failed",
+      summary: "",
+      error: "Agents are paused for this workspace.",
+    };
   }
 
   const run = await opts.store.createRun({
@@ -242,7 +273,13 @@ export async function executeRun(
   const started = Date.now();
   let steps = 0;
   const seen = new Map<string, number>();
-  const toolCtx: ToolContext = { workspaceId: opts.workspaceId, actor, runId: run.id, db: opts.db, now };
+  const toolCtx: ToolContext = {
+    workspaceId: opts.workspaceId,
+    actor,
+    runId: run.id,
+    db: opts.db,
+    now,
+  };
 
   const ctx: WorkerContext = {
     workspaceId: opts.workspaceId,
@@ -252,8 +289,10 @@ export async function executeRun(
     input: opts.input ?? {},
     tool: async (name, input) => {
       steps += 1;
-      if (steps > budget.maxSteps) throw new ToolError("budget", `Step budget (${budget.maxSteps}) exhausted`);
-      if (Date.now() - started > budget.deadlineMs) throw new ToolError("budget", "Run deadline exceeded");
+      if (steps > budget.maxSteps)
+        throw new ToolError("budget", `Step budget (${budget.maxSteps}) exhausted`);
+      if (Date.now() - started > budget.deadlineMs)
+        throw new ToolError("budget", "Run deadline exceeded");
       // Loop detection: the same call more than 3 times is a stuck agent.
       const signature = `${name}:${JSON.stringify(input)}`;
       const count = (seen.get(signature) ?? 0) + 1;

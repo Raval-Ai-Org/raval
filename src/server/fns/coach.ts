@@ -326,7 +326,11 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
         body: wrapUntrusted(
           "web-search",
           JSON.stringify({
-            competitors: compResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
+            competitors: compResults.map((r) => ({
+              title: r.title,
+              url: r.url,
+              snippet: r.snippet,
+            })),
             reviews: reviewResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
             trends: trendResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
           }),

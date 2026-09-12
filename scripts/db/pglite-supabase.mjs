@@ -20,7 +20,8 @@ export const MIGRATIONS_DIR = path.join(REPO_ROOT, "supabase", "migrations");
 export const MANIFEST_PATH = path.join(REPO_ROOT, "supabase", "baseline", "manifest.txt");
 
 /** Extensions PGlite cannot load; the stubs provide their schema surface. */
-const UNAVAILABLE_EXTENSIONS = /CREATE\s+EXTENSION\s+(IF\s+NOT\s+EXISTS\s+)?"?(pg_cron|pg_net|supabase_vault|pg_graphql|pg_stat_statements)"?[^;]*;/gi;
+const UNAVAILABLE_EXTENSIONS =
+  /CREATE\s+EXTENSION\s+(IF\s+NOT\s+EXISTS\s+)?"?(pg_cron|pg_net|supabase_vault|pg_graphql|pg_stat_statements)"?[^;]*;/gi;
 
 export function preprocessMigration(sql) {
   return sql.replace(UNAVAILABLE_EXTENSIONS, "-- [pglite] extension provided by stubs\n");
@@ -32,9 +33,7 @@ export function resolveManifest() {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith("#"));
-  const excluded = new Set(
-    listed.filter((l) => l.startsWith("!")).map((l) => l.slice(1).trim()),
-  );
+  const excluded = new Set(listed.filter((l) => l.startsWith("!")).map((l) => l.slice(1).trim()));
   const included = listed.filter((l) => !l.startsWith("!"));
   const all = readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
@@ -49,7 +48,9 @@ export function resolveManifest() {
 
 export async function createSupabaseDb() {
   const db = new PGlite({ extensions: { pgcrypto, uuid_ossp } });
-  await db.exec("CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";");
+  await db.exec(
+    'CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS "uuid-ossp";',
+  );
   await db.exec(readFileSync(path.join(here, "supabase-stubs.sql"), "utf8"));
   return db;
 }
