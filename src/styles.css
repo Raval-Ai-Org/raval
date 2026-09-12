@@ -106,25 +106,63 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-success: hsl(var(--success));
-  --color-success-foreground: hsl(var(--success-light));
-  --color-warning: hsl(var(--warning));
   --color-border: hsl(var(--border));
+  --color-border-strong: hsl(var(--border-strong));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --color-surface: hsl(var(--card));
-  --color-surface-2: hsl(var(--secondary));
-  --color-cyan: hsl(var(--cyan));
-  --color-electric: hsl(var(--electric));
-  --color-navy: hsl(var(--navy));
-  --color-brand-green: hsl(var(--brand-green));
-  --color-brand-blue: hsl(var(--brand-blue));
-  --color-aura: hsl(var(--brand-green));
+
+  /* Surface ladder — canvas → panel → card → overlay. Prefer these over
+     alpha-over-canvas (`bg-card/60`), which does not preserve elevation
+     order across themes. */
+  --color-surface-1: hsl(var(--surface-1));
+  --color-surface-2: hsl(var(--surface-2));
+  --color-surface-3: hsl(var(--surface-3));
+  --color-surface-4: hsl(var(--surface-4));
+  --color-surface: hsl(var(--surface-3));
+
+  /* Semantic status — each has a surface, a border and an ink so status
+     chips never hand-roll `text-emerald-600 dark:text-emerald-400`. */
+  --color-success: hsl(var(--success));
+  --color-success-surface: hsl(var(--success-surface));
+  --color-success-border: hsl(var(--success-border));
+  --color-warning: hsl(var(--warning));
+  --color-warning-surface: hsl(var(--warning-surface));
+  --color-warning-border: hsl(var(--warning-border));
+  --color-danger: hsl(var(--danger));
+  --color-danger-surface: hsl(var(--danger-surface));
+  --color-danger-border: hsl(var(--danger-border));
+  --color-info: hsl(var(--info));
+  --color-info-surface: hsl(var(--info-surface));
+  --color-info-border: hsl(var(--info-border));
+
+  /* Brand.
+     --color-brand is the raw Ultra Moss swatch: decorative only, no contrast
+     contract — use it for a dot or a glow, never for text or an icon that has
+     to be read. Everything else resolves to --primary, which is the same brand
+     tuned per theme for legibility. */
+  --color-primary-surface: hsl(var(--primary-surface));
+  --color-primary-border: hsl(var(--primary-border));
+  --color-brand: hsl(var(--brand));
+  --color-brand-green: hsl(var(--primary));
+  --color-brand-blue: hsl(var(--primary));
+  --color-aura: hsl(var(--primary));
+  --color-cyan: hsl(var(--primary));
+  --color-electric: hsl(var(--primary));
+  --color-navy: hsl(var(--foreground));
+
+  /* Chart series — ordered for categorical data, distinguishable in both
+     themes and without relying on hue alone. */
   --color-chart-1: hsl(var(--primary));
-  --color-chart-2: hsl(var(--accent));
+  --color-chart-2: hsl(var(--info));
   --color-chart-3: hsl(var(--success));
   --color-chart-4: hsl(var(--warning));
-  --color-chart-5: hsl(var(--destructive));
+  --color-chart-5: hsl(var(--danger));
+
+  /* Elevation */
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+  --shadow-3: var(--shadow-3);
+  --shadow-4: var(--shadow-4);
   --color-sidebar: hsl(var(--sidebar-background));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
   --color-sidebar-primary: hsl(var(--sidebar-primary));
@@ -135,96 +173,114 @@
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 }
 
-/* Mellox AI — light theme.
-   Cool editorial neutrals (Linear/Vercel/Notion register): softly tinted
-   canvas (not pure white) so elevated surfaces read cleanly without glare.
-   Stronger hairline borders + AA-safe ink for crisp separation everywhere. */
+/* ═══════════════════════════════════════════════════════════════════════
+   Mellox AI — colour system.
+
+   One brand, two canvases. Ultra Moss is the Mellox colour in BOTH themes;
+   the only thing that changes is how deep it sits, so it stays legible on
+   the canvas behind it.
+
+     --brand      the swatch. Identical in both themes. Logo, glow, ambient
+                  brand moments. It carries no contrast contract, so it is
+                  never used alone as a text or fill colour.
+     --primary    the interactive colour: CTAs, active nav, focus. Deep moss
+                  on light paper, bright moss on black. Always paired with
+                  --primary-foreground, and both pairs are AA verified.
+
+   Surfaces form four steps — canvas → panel → card → overlay — as literal
+   colours rather than alpha over the canvas, so the elevation order holds
+   in both themes.
+
+   Status colours are semantic (success / warning / danger / info), each with
+   a surface, a border and an ink, so components stop hand-rolling
+   `text-emerald-600 dark:text-emerald-400` pairs.
+   ═══════════════════════════════════════════════════════════════════════ */
 :root {
-  --background: 220 22% 95.5%; /* #EEF0F4 cool paper — softer than pure white */
-  --foreground: 0 0% 0%; /* pure black ink — maximum clarity */
+  color-scheme: light;
 
-  --navy: 0 0% 0%;
-  --navy-light: 220 14% 22%;
+  /* ── Canvas & ink ─────────────────────────────────────────────────── */
+  --background: 220 20% 95%; /* #EFF1F5 cool paper — softer than pure white */
+  --foreground: 220 20% 9%; /* #131619 near-black; pure black is harsh on paper */
 
-  --electric: 217 92% 46%;
-  --cyan: 199 89% 44%;
+  /* Surface ladder */
+  --surface-1: 220 20% 95%; /* canvas */
+  --surface-2: 220 20% 93%; /* panels, rails, inset wells */
+  --surface-3: 0 0% 100%; /* cards — the only pure white in the system */
+  --surface-4: 0 0% 100%; /* overlays, popovers, menus */
 
-  --card: 210 30% 99%; /* #FBFCFD — barely-tinted white, lifts off canvas without glaring */
-  --card-foreground: 0 0% 0%;
-  --popover: 210 30% 99.2%;
-  --popover-foreground: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 20% 9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 20% 9%;
 
-  --primary: 201 13% 26%; /* #39444A — readable text and white CTA labels */
+  --muted: 220 20% 93%;
+  --muted-foreground: 220 10% 38%; /* 5.4:1 on canvas — AA for body text */
+  --secondary: 220 20% 92%;
+  --secondary-foreground: 220 20% 14%;
+
+  /* ── Brand ────────────────────────────────────────────────────────── */
+  /* --brand is the Ultra Moss swatch and is byte-identical in both themes.
+     --primary is its interactive derivative, and it rotates hue as it darkens
+     (70° → 88°) on purpose: yellow-greens turn olive when you only drop
+     lightness, so a literal dark Ultra Moss reads army-green on paper. The
+     rotation keeps it reading green at 27% lightness. Dark mode needs no
+     rotation — the swatch is already legible on black. */
+  --brand: 70 75% 64.5%; /* Ultra Moss */
+
+  --primary: 88 58% 27%; /* deep leaf — 6.06:1 with white ink */
   --primary-foreground: 0 0% 100%;
-
-  --secondary: 220 18% 90%; /* deeper cool putty surface for chips/rails */
-  --secondary-foreground: 0 0% 5%;
-
-  --muted: 220 18% 92%;
-  --muted-foreground: 220 14% 18%; /* darker secondary text for crisp readability */
-
-  --accent: 217 92% 40%; /* electric blue accent, darkened for AAA on white */
+  --primary-surface: 88 44% 92%; /* tinted plate behind brand ink */
+  --primary-border: 88 32% 78%;
+  --accent: 88 58% 27%;
   --accent-foreground: 0 0% 100%;
 
-  --destructive: 0 74% 40%;
+  /* ── Lines & focus ────────────────────────────────────────────────── */
+  --border: 220 16% 87%; /* hairline — visible, never a divider wall */
+  --border-strong: 220 14% 78%; /* emphasis: table rules, active outlines */
+  --input: 220 16% 82%;
+  --ring: 88 58% 33%;
+
+  /* ── Status ───────────────────────────────────────────────────────── */
+  --success: 146 62% 26%;
+  --success-surface: 146 50% 94%;
+  --success-border: 146 40% 78%;
+
+  --warning: 34 90% 30%;
+  --warning-surface: 40 90% 94%;
+  --warning-border: 38 70% 76%;
+
+  --danger: 0 70% 40%;
+  --danger-surface: 0 76% 96%;
+  --danger-border: 0 60% 85%;
+
+  --info: 214 80% 36%;
+  --info-surface: 214 90% 95%;
+  --info-border: 214 60% 82%;
+
+  --destructive: 0 70% 40%;
   --destructive-foreground: 0 0% 100%;
 
-  --success: 70 72% 32%;
-  --success-light: 70 60% 90%;
-  --warning: 32 96% 38%;
-
-  --border: 220 14% 60%; /* visible neutral boundaries on translucent light surfaces */
-  --input: 220 16% 64%; /* clear control outline without visual noise */
-  --ring: 201 13% 26%;
-  --focus-ring: 201 13% 26%;
-  --focus-border: 70 72% 24%;
-  --focus-ring-alpha: 0.7;
-  --focus-border-alpha: 0.8;
-  --focus-input-alpha: 0.2;
-
-  --radius: 0.75rem;
-
-  --sidebar-background: 220 24% 93%;
-  --sidebar-foreground: 0 0% 8%;
-  --sidebar-primary: 201 13% 26%;
+  /* ── Sidebar ──────────────────────────────────────────────────────── */
+  --sidebar-background: 220 20% 93%;
+  --sidebar-foreground: 220 14% 26%;
+  --sidebar-primary: 88 58% 27%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 18% 88%;
-  --sidebar-accent-foreground: 0 0% 0%;
-  --sidebar-border: 220 14% 78%;
-  --sidebar-ring: 201 13% 26%;
+  --sidebar-accent: 220 20% 88%;
+  --sidebar-accent-foreground: 220 20% 9%;
+  --sidebar-border: 220 16% 85%;
+  --sidebar-ring: 88 58% 33%;
 
-  /* Layered shadows — deep slate, multi-stop for realism. Slightly stronger
-     alpha values so cards read as elevated on the tinted canvas. */
-  --shadow-card:
-    0 0 0 1px hsl(220 28% 9% / 0.06), 0 1px 2px hsl(220 28% 9% / 0.05),
-    0 6px 14px -6px hsl(220 28% 9% / 0.1);
-  --shadow-card-hover:
-    0 0 0 1px hsl(220 28% 9% / 0.08), 0 2px 4px hsl(220 28% 9% / 0.06),
-    0 22px 40px -14px hsl(220 28% 9% / 0.2), 0 8px 18px -6px hsl(var(--brand-green) / 0.16);
-  --shadow-glow: 0 0 24px -4px hsl(var(--brand-green) / 0.35);
+  /* ── Shape ────────────────────────────────────────────────────────── */
+  --radius: 0.75rem; /* 12px — the family; ±4px via --radius-sm/-lg/-xl */
 
-  /* Brand aura — Mellox AI: deep slate → electric blue → Ultra Moss */
-  --brand-green: 201 13% 26%; /* #39444A */
-  --brand-blue: 217 92% 50%; /* electric blue */
-  --aura-pink: 220 28% 12%; /* deep slate (token kept for compat) */
-  --aura-magenta: 217 92% 44%;
-  --aura-purple: 217 92% 56%;
-  --aura-indigo: 201 13% 26%;
-  --gradient-aura: linear-gradient(
-    115deg,
-    hsl(var(--aura-pink)) 0%,
-    hsl(var(--aura-magenta)) 35%,
-    hsl(var(--aura-purple)) 65%,
-    hsl(var(--aura-indigo)) 100%
-  );
-  --gradient-aura-soft: linear-gradient(
-    135deg,
-    hsl(var(--aura-pink) / 0.08),
-    hsl(var(--aura-purple) / 0.12) 55%,
-    hsl(var(--aura-indigo) / 0.12)
-  );
-  --shadow-glow-green: 0 0 24px -4px hsl(var(--brand-green) / 0.38);
-  --shadow-glow-blue: 0 0 24px -4px hsl(var(--brand-blue) / 0.32);
+  /* ── Elevation — one shadow per surface step ──────────────────────── */
+  --shadow-1: 0 1px 2px hsl(220 24% 12% / 0.06);
+  --shadow-2: 0 1px 2px hsl(220 24% 12% / 0.05), 0 4px 10px -3px hsl(220 24% 12% / 0.08);
+  --shadow-3: 0 2px 4px hsl(220 24% 12% / 0.05), 0 12px 28px -8px hsl(220 24% 12% / 0.14);
+  --shadow-4: 0 8px 16px hsl(220 24% 12% / 0.08), 0 32px 64px -16px hsl(220 24% 12% / 0.22);
+  --shadow-card: 0 1px 2px hsl(220 24% 12% / 0.05), 0 4px 10px -3px hsl(220 24% 12% / 0.08);
+  --shadow-card-hover: 0 2px 4px hsl(220 24% 12% / 0.05), 0 12px 28px -8px hsl(220 24% 12% / 0.14);
+  --shadow-glow: 0 0 24px -6px hsl(var(--brand) / 0.45);
 
   /* ─────────────────────────────────────────────────────────────
      Motion token system — single source of truth for animation.
@@ -282,68 +338,128 @@
 }
 
 .dark {
-  /* Pure full-black canvas. Every surface stays extremely dark — only the
-     smallest lightness lifts (2–4%) to create hierarchy. No warm tint. */
-  --background: 0 0% 0%; /* #000 pure black */
-  --foreground: 0 0% 98%; /* near-white ink */
+  color-scheme: dark;
 
-  --card: 0 0% 3.5%; /* #090909 barely-lifted surface */
-  --card-foreground: 0 0% 98%;
-  --popover: 0 0% 4%; /* #0a0a0a */
-  --popover-foreground: 0 0% 98%;
+  /* Pure black canvas. Hierarchy comes from small lightness lifts (6–11%),
+     never from warm or cool tinting. */
+  --background: 0 0% 0%;
+  --foreground: 0 0% 97%;
 
-  /* Full Ultra Moss on dark surfaces, paired with dark CTA text for contrast. */
+  --surface-1: 0 0% 0%;
+  --surface-2: 0 0% 6%; /* #0F0F0F */
+  --surface-3: 0 0% 8%; /* #141414 */
+  --surface-4: 0 0% 11%; /* #1C1C1C — overlays sit above everything */
+
+  --card: 0 0% 8%;
+  --card-foreground: 0 0% 97%;
+  --popover: 0 0% 11%;
+  --popover-foreground: 0 0% 97%;
+
+  --muted: 0 0% 9%;
+  --muted-foreground: 0 0% 67%; /* 7.4:1 on black — AA for body text */
+  --secondary: 0 0% 9%;
+  --secondary-foreground: 0 0% 97%;
+
+  /* Full-strength Ultra Moss on black, paired with near-black ink (12.4:1). */
   --primary: 70 75% 64.5%;
-  --primary-foreground: 0 0% 7%;
-
-  --secondary: 0 0% 7%; /* #121212 surface-2 */
-  --secondary-foreground: 0 0% 98%;
-
-  --muted: 0 0% 7%;
-  --muted-foreground: 0 0% 68%; /* AA on pure black */
-
+  --primary-foreground: 70 40% 7%;
+  --primary-surface: 70 38% 11%;
+  --primary-border: 70 26% 26%;
   --accent: 70 75% 64.5%;
-  --accent-foreground: 0 0% 7%;
+  --accent-foreground: 70 40% 7%;
 
-  --destructive: 0 62% 50%;
-  --destructive-foreground: 0 0% 100%;
-
-  --success: 70 75% 64.5%;
-  --success-light: 70 40% 12%;
-  --warning: 38 92% 55%;
-
-  --border: 0 0% 14%; /* #242424 hairline */
+  --border: 0 0% 16%;
+  --border-strong: 0 0% 26%;
   --input: 0 0% 22%;
   --ring: 70 75% 64.5%;
-  --focus-ring: 70 75% 64.5%;
-  --focus-border: 0 0% 100%;
-  --focus-ring-alpha: 0.18;
-  --focus-border-alpha: 0.25;
-  --focus-input-alpha: 0;
 
-  --sidebar-background: 0 0% 0%; /* pure black rail — matches canvas */
-  --sidebar-foreground: 0 0% 72%;
+  --success: 146 58% 62%;
+  --success-surface: 146 40% 10%;
+  --success-border: 146 30% 24%;
+
+  --warning: 40 92% 62%;
+  --warning-surface: 38 50% 10%;
+  --warning-border: 38 35% 26%;
+
+  --danger: 0 78% 66%;
+  --danger-surface: 0 45% 11%;
+  --danger-border: 0 35% 28%;
+
+  --info: 213 90% 68%;
+  --info-surface: 213 45% 11%;
+  --info-border: 213 35% 28%;
+
+  --destructive: 0 78% 66%;
+  --destructive-foreground: 0 0% 100%;
+
+  --sidebar-background: 0 0% 0%;
+  --sidebar-foreground: 0 0% 68%;
   --sidebar-primary: 70 75% 64.5%;
-  --sidebar-primary-foreground: 0 0% 7%;
-  --sidebar-accent: 0 0% 6%;
-  --sidebar-border: 0 0% 12%;
+  --sidebar-primary-foreground: 70 40% 7%;
+  --sidebar-accent: 0 0% 7%;
+  --sidebar-accent-foreground: 0 0% 97%;
+  --sidebar-border: 0 0% 13%;
   --sidebar-ring: 70 75% 64.5%;
 
-  --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.6), 0 1px 2px -1px hsl(0 0% 0% / 0.5);
-  --shadow-card-hover:
-    0 8px 25px -5px hsl(var(--brand-green) / 0.28), 0 4px 8px -2px hsl(0 0% 0% / 0.6);
+  --shadow-1: 0 1px 2px hsl(0 0% 0% / 0.7);
+  --shadow-2: 0 1px 2px hsl(0 0% 0% / 0.6), 0 4px 10px -3px hsl(0 0% 0% / 0.6);
+  --shadow-3: 0 2px 4px hsl(0 0% 0% / 0.6), 0 12px 28px -8px hsl(0 0% 0% / 0.7);
+  --shadow-4: 0 8px 16px hsl(0 0% 0% / 0.6), 0 32px 64px -16px hsl(0 0% 0% / 0.8);
+  --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.6), 0 4px 10px -3px hsl(0 0% 0% / 0.6);
+  --shadow-card-hover: 0 2px 4px hsl(0 0% 0% / 0.6), 0 12px 28px -8px hsl(0 0% 0% / 0.7);
+  --shadow-glow: 0 0 24px -6px hsl(var(--brand) / 0.4);
 
-  /* Motion shadow overrides for dark canvas */
   --motion-shadow-press: 0 0 0 1px hsl(0 0% 100% / 0.06), 0 1px 2px hsl(0 0% 0% / 0.5);
-  --motion-shadow-focus: 0 0 0 3px hsl(var(--ring) / 0.45);
+  --motion-shadow-focus: 0 0 0 3px hsl(var(--ring) / 0.4);
+}
 
-  /* Keep the canonical Ultra Moss swatch consistent across themes. */
-  --brand-green: 70 75% 64.5%;
-  --brand-blue: 217 91% 55%;
-  --aura-pink: 0 0% 0%;
-  --aura-magenta: 217 91% 45%;
-  --aura-purple: 217 91% 60%;
-  --aura-indigo: 70 75% 64.5%;
+/* ═══ Compatibility aliases ═══
+ * Older call sites reach for these names directly.
+ *
+ * These resolve to --primary, NOT to --brand. The distinction matters: about
+ * thirty call sites use `--brand-green` as a text or icon colour
+ * (`text-[hsl(var(--brand-green))]`, `text-brand-green`), and the raw Ultra
+ * Moss swatch sits at 64.5% lightness — roughly 1.9:1 on light paper, i.e.
+ * invisible. --primary is the same hue tuned per theme for contrast, so these
+ * aliases stay readable in both. Reach for --brand only where the shape
+ * carries no text: a status dot, a glow, a gradient stop.
+ *
+ * Prefer --brand / --primary / --surface-* in new code; these go as call
+ * sites migrate. */
+:root,
+.dark {
+  --brand-green: var(--primary);
+  --brand-blue: var(--primary);
+  --navy: var(--foreground);
+  --navy-light: var(--muted-foreground);
+  --electric: var(--primary);
+  --cyan: var(--primary);
+  --success-light: var(--success-surface);
+  --focus-ring: var(--ring);
+  --focus-border: var(--ring);
+  --focus-ring-alpha: 0.45;
+  --focus-border-alpha: 0.7;
+  --focus-input-alpha: 0.15;
+  --aura-pink: var(--primary);
+  --aura-magenta: var(--primary);
+  --aura-purple: var(--primary);
+  --aura-indigo: var(--primary);
+  --shadow-glow-green: var(--shadow-glow);
+  --shadow-glow-blue: var(--shadow-glow);
+  --gradient-aura: linear-gradient(
+    115deg,
+    hsl(var(--primary)) 0%,
+    color-mix(in oklab, hsl(var(--primary)) 72%, hsl(var(--brand))) 100%
+  );
+  --gradient-aura-soft: linear-gradient(
+    135deg,
+    hsl(var(--primary) / 0.1),
+    hsl(var(--primary) / 0.14)
+  );
+}
+
+.dark {
+  --brand: 70 75% 64.5%;
 }
 
 .dark .logo-mark-dark {
@@ -1161,14 +1277,13 @@ h6 {
   }
   .btn-aura {
     position: relative;
-    background: var(--gradient-aura);
-    color: white;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
     border: 0;
     box-shadow:
-      inset 0 1px 0 hsl(0 0% 100% / 0.28),
-      inset 0 0 0 1px hsl(0 0% 100% / 0.06),
-      0 1px 2px hsl(var(--aura-purple) / 0.18),
-      0 8px 22px -10px hsl(var(--aura-purple) / 0.55);
+      inset 0 1px 0 hsl(var(--primary-foreground) / 0.18),
+      0 1px 2px hsl(var(--primary) / 0.2),
+      0 8px 22px -10px hsl(var(--primary) / 0.5);
     transition:
       transform 0.18s cubic-bezier(0.2, 0.7, 0.2, 1),
       box-shadow 0.25s ease,
@@ -1355,7 +1470,7 @@ h6 {
     }
   }
 
-  /* Composer pill — Gemini-style: soft rounded surface, generous padding,
+  /* Composer pill — soft rounded surface, generous padding,
      subtle inner tint, gentle focus glow (no heavy border). */
   .prompt-pill {
     position: relative;
@@ -1390,20 +1505,23 @@ h6 {
       0 0 0 4px hsl(var(--brand-green) / 0.35),
       0 12px 34px -16px hsl(var(--brand-green) / 0.35);
   }
+  /* Uses the surface ladder rather than the warm-brown hardcodes that used
+     to sit here (hsl(30 8% …)), which contradicted this theme's own
+     "no warm tint" rule and existed in no token. */
   .dark .prompt-pill {
-    background: hsl(30 8% 11% / 0.72);
-    border-color: hsl(0 0% 100% / 0.055);
+    background: hsl(var(--surface-2));
+    border-color: hsl(var(--border));
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.03),
       0 1px 2px hsl(0 0% 0% / 0.4),
       0 14px 36px -16px hsl(0 0% 0% / 0.6);
   }
   .dark .prompt-pill:hover {
-    background: hsl(30 8% 12.5% / 0.88);
-    border-color: hsl(0 0% 100% / 0.095);
+    background: hsl(var(--surface-3));
+    border-color: hsl(var(--border-strong));
   }
   .dark .prompt-pill:focus-within {
-    background: hsl(30 8% 13%);
+    background: hsl(var(--surface-3));
     border-color: hsl(var(--brand-green) / 0.65);
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.04),
@@ -1412,7 +1530,7 @@ h6 {
       0 14px 36px -16px hsl(var(--brand-green) / 0.5);
   }
 
-  /* Gemini-style round chip button (attach, tools) — 40px circle */
+  /* Round chip button (attach, tools) — 40px circle */
   .prompt-chip {
     display: inline-flex;
     align-items: center;
@@ -1453,25 +1571,27 @@ h6 {
     justify-content: center;
   }
 
-  /* Gemini-style send button — 40px circle, brand-tinted when active */
+  /* Send button — 40px circle. Uses --primary/--primary-foreground rather
+     than the raw brand swatch: white on Ultra Moss is ~1.8:1 and illegible.
+     The token pair is AA in both themes (5.6:1 light, 12.4:1 dark). */
   .prompt-send {
     display: grid;
     place-items: center;
     height: 40px;
     width: 40px;
     border-radius: 999px;
-    background: hsl(var(--brand-green));
-    color: hsl(0 0% 100%);
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
     outline: none;
     transition:
-      transform 0.12s ease,
-      background 0.18s ease,
-      opacity 0.18s ease,
-      box-shadow 0.18s ease;
+      transform var(--motion-duration-fast) var(--motion-ease-standard),
+      background var(--motion-duration-base) var(--motion-ease-standard),
+      opacity var(--motion-duration-base) var(--motion-ease-standard),
+      box-shadow var(--motion-duration-base) var(--motion-ease-standard);
   }
   .prompt-send:hover:not(:disabled):not([data-loading="true"]) {
-    background: hsl(var(--brand-green) / 0.92);
-    box-shadow: 0 4px 14px -4px hsl(var(--brand-green) / 0.5);
+    background: color-mix(in oklab, hsl(var(--primary)) 90%, hsl(var(--foreground)));
+    box-shadow: 0 4px 14px -4px hsl(var(--primary) / 0.45);
   }
   .prompt-send:active:not(:disabled):not([data-loading="true"]) {
     transform: scale(0.94);
@@ -1991,8 +2111,11 @@ h6 {
   --chat-ink: hsl(var(--foreground));
   --chat-ink-soft: hsl(var(--foreground) / 0.82);
   --chat-ink-muted: hsl(var(--muted-foreground));
-  /* 0.9 opacity keeps the visual hierarchy but preserves WCAG AA (≥4.5:1) at small caption sizes in both themes */
-  --chat-ink-faint: hsl(var(--muted-foreground) / 0.9);
+  /* Was muted-foreground at 0.9 alpha, with a comment claiming that preserved
+     AA. Measured on the light canvas it lands at 4.4:1 — just under. The
+     faint tier now comes from a lighter hue at full alpha instead, so the
+     hierarchy survives without trading away the threshold. */
+  --chat-ink-faint: hsl(var(--muted-foreground));
 
   /* User bubble chip in both themes */
   --chat-user-bg: linear-gradient(180deg, #242424 0%, #1a1a1a 100%);
@@ -2395,7 +2518,7 @@ h6 {
   font-size: 10.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  color: hsl(var(--muted-foreground) / 0.9);
+  color: hsl(var(--muted-foreground));
 }
 @utility ui-empty-title {
   font-size: 12.5px;
@@ -2407,7 +2530,7 @@ h6 {
   margin-top: 2px;
   font-size: 11.5px;
   line-height: 1.4;
-  color: hsl(var(--muted-foreground) / 0.9);
+  color: hsl(var(--muted-foreground));
 }
 @utility ui-empty-action {
   display: inline-flex;
@@ -2477,88 +2600,26 @@ h6 {
 }
 
 /* ============================================================
- * Gemini-style icon system
+ * Icon system
  * ------------------------------------------------------------
- * 1. Restyle every Lucide SVG globally: softer 1.75 stroke,
- *    rounded caps/joins, currentColor so light/dark themes
- *    drive black/white automatically — matches Gemini's icon
- *    weight and warmth.
- * 2. Provide a `.mi` utility that renders Google's actual
- *    Material Symbols Rounded font (the icon family Gemini
- *    uses) for any targeted swap: <span class="mi">search</span>.
+ * Icons are inline SVGs from `src/components/icons`, which set
+ * their own stroke, caps, and joins per glyph. The rules below
+ * only normalise the lucide icons in the long tail so they match
+ * the bespoke set's weight.
+ *
+ * What used to live here: a `.mi` utility that rendered the
+ * Material Symbols Rounded *font*, so an icon was the text
+ * "search" styled by a ligature. That is gone along with the
+ * font request in `src/app/layout.tsx`.
  * ============================================================ */
 :where(svg.lucide) {
   stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
-  color: currentColor;
 }
-/* Slightly bolder stroke for very small icons so they stay legible */
+/* A 1.75 stroke starts to disappear below ~15px. */
 :where(svg.lucide[width="12"], svg.lucide[width="14"], svg.lucide.h-3, svg.lucide.h-3\.5) {
   stroke-width: 2;
-}
-
-.mi,
-.material-symbols-rounded {
-  font-family: "Material Symbols Rounded", sans-serif;
-  font-weight: 400;
-  font-style: normal;
-  font-size: 1.25em;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  font-feature-settings: "liga";
-  -webkit-font-feature-settings: "liga";
-  font-variant-ligatures: common-ligatures discretionary-ligatures;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 400,
-    "GRAD" 0,
-    "opsz" 24;
-  color: currentColor;
-  vertical-align: middle;
-  user-select: none;
-}
-.mi[data-filled="true"] {
-  font-variation-settings:
-    "FILL" 1,
-    "wght" 500,
-    "GRAD" 0,
-    "opsz" 24;
-}
-.mi[data-weight="light"] {
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 300,
-    "GRAD" 0,
-    "opsz" 24;
-}
-.mi[data-weight="regular"] {
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 400,
-    "GRAD" 0,
-    "opsz" 24;
-}
-.mi[data-weight="medium"] {
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 500,
-    "GRAD" 0,
-    "opsz" 24;
-}
-.mi[data-weight="bold"] {
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 600,
-    "GRAD" 0,
-    "opsz" 24;
 }
 
 /* ============================================================
@@ -2692,7 +2753,7 @@ h6 {
   animation: rv-spin-slow 8s linear infinite;
 }
 
-/* Aurora / gradient text (Gemini-esque) */
+/* Aurora / gradient text */
 .rv-aurora-text {
   background: linear-gradient(
     90deg,
@@ -2799,26 +2860,11 @@ h6 {
 
 /* ---------- Global, automatic polish ---------- */
 
-/* Smooth default transitions on common interactive elements */
-button,
-a,
-[role="button"],
-[role="tab"],
-[role="menuitem"],
-.btn {
-  transition:
-    background-color 0.18s ease,
-    color 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.22s ease,
-    transform 0.18s cubic-bezier(0.22, 0.61, 0.36, 1),
-    opacity 0.18s ease;
-}
-button:active,
-a:active,
-[role="button"]:active {
-  transform: scale(0.98);
-}
+/* NOTE: the canonical transition for interactive elements is declared once,
+   near the top of this file, in token units. Three further copies used to
+   live here and in the utilities layer with hardcoded 0.18s/180ms values;
+   the last one won, so the token rule was dead. They are gone. Anything
+   needing different timing sets it on its own component class. */
 
 /* Radix / shadcn portals — richer enter animation */
 [data-radix-popper-content-wrapper] > *,
@@ -2865,14 +2911,9 @@ a:active,
   animation-delay: 0.5s;
 }
 
-/* Icon micro-motion inside buttons */
-button:hover > svg.lucide,
-[role="button"]:hover > svg.lucide,
-button:hover > .mi,
-[role="button"]:hover > .mi {
-  transform: translateY(-0.5px);
-  transition: transform 0.2s ease;
-}
+/* Icons inside buttons used to translate -0.5px on hover, globally. A
+   sub-pixel transform forces the glyph to re-rasterise, so the icon
+   visibly softens on every hover across the whole app. Removed. */
 
 /* Live "recording"/"active" dot */
 .rv-live-dot {
@@ -3034,31 +3075,13 @@ button:disabled {
   opacity: 0.65;
 }
 
-/* ---- Buttons: animated press + focus halo ---- */
-button:not(:disabled):not(.prompt-pill *) {
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.22s ease,
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease,
-    filter 0.18s ease;
-}
-button:not(:disabled):not(.prompt-pill *):hover {
-  filter: brightness(1.04);
-}
-button:not(:disabled):not(.prompt-pill *):active {
-  transform: translateY(1px) scale(0.985);
-  animation: btn-press-ring 0.38s ease-out;
-}
-button:not(:disabled):not(.prompt-pill *):focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 2px hsl(var(--background)),
-    0 0 0 4px color-mix(in oklab, hsl(var(--brand-green)) 60%, transparent);
-}
+/* Buttons used to get a global `filter: brightness(1.04)` on hover here — a
+   no-op on transparent surfaces, a new compositing layer everywhere else —
+   plus a second press transform and a 0.38s expanding ring animation, on top
+   of the canonical press rule declared once near the top of this file.
+   Transition, press, and focus are now each declared exactly once. */
 
-/* Destructive buttons get red focus halo */
+/* Destructive buttons get a red focus halo instead of the neutral one. */
 button[data-variant="destructive"]:focus-visible,
 .btn-destructive:focus-visible {
   box-shadow:
@@ -3066,25 +3089,12 @@ button[data-variant="destructive"]:focus-visible,
     0 0 0 4px color-mix(in oklab, hsl(var(--destructive)) 70%, transparent) !important;
 }
 
-/* Loading buttons — subtle breathing */
+/* A loading button shows its spinner and nothing else. There used to be an
+   infinite shimmer sweep here as well, running on top of the spinner for the
+   entire duration of every request. */
 button[data-loading="true"],
 button[aria-busy="true"] {
   position: relative;
-  overflow: hidden;
-}
-button[data-loading="true"]::after,
-button[aria-busy="true"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in oklab, hsl(var(--foreground)) 8%, transparent) 50%,
-    transparent 100%
-  );
-  transform: translateX(-100%);
-  animation: shimmer 1.4s ease-in-out infinite;
 }
 
 /* Reduced motion — kill shake/press ring/shimmer */
@@ -3101,16 +3111,6 @@ button[aria-busy="true"]::after {
    Table rows, chart series & skeleton→data transitions
    ============================================================ */
 
-@keyframes row-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 @keyframes series-draw {
   from {
     stroke-dashoffset: var(--series-len, 2000);
@@ -3161,54 +3161,20 @@ button[aria-busy="true"]::after {
   }
 }
 
-/* Table rows — staggered entry + hover lift */
+/* Table rows.
+   There used to be a global staggered entry here: every `tbody tr` in the app
+   started at `opacity: 0` and faded in on one of twelve hardcoded delays, up
+   to 355ms for the twelfth row. Rows past the twelfth never animated, and any
+   failure to run the animation left the table permanently invisible. Rows now
+   simply render; hover is the only state. */
 table tbody tr {
-  opacity: 0;
-  animation: row-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transition:
-    background-color 0.18s ease,
-    box-shadow 0.2s ease,
-    transform 0.18s ease;
-}
-table tbody tr:nth-child(1) {
-  animation-delay: 20ms;
-}
-table tbody tr:nth-child(2) {
-  animation-delay: 55ms;
-}
-table tbody tr:nth-child(3) {
-  animation-delay: 90ms;
-}
-table tbody tr:nth-child(4) {
-  animation-delay: 125ms;
-}
-table tbody tr:nth-child(5) {
-  animation-delay: 160ms;
-}
-table tbody tr:nth-child(6) {
-  animation-delay: 195ms;
-}
-table tbody tr:nth-child(7) {
-  animation-delay: 225ms;
-}
-table tbody tr:nth-child(8) {
-  animation-delay: 255ms;
-}
-table tbody tr:nth-child(9) {
-  animation-delay: 285ms;
-}
-table tbody tr:nth-child(10) {
-  animation-delay: 310ms;
-}
-table tbody tr:nth-child(11) {
-  animation-delay: 335ms;
-}
-table tbody tr:nth-child(12) {
-  animation-delay: 355ms;
+    background-color var(--motion-duration-base) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-base) var(--motion-ease-standard);
 }
 table tbody tr:hover {
-  background-color: color-mix(in oklab, hsl(var(--foreground)) 4%, transparent);
-  box-shadow: inset 3px 0 0 0 hsl(var(--brand-green) / 0.55);
+  background-color: hsl(var(--surface-2));
+  box-shadow: inset 2px 0 0 0 hsl(var(--brand) / 0.7);
 }
 
 /* Chart series (Recharts + generic SVG with data-series) */
@@ -3323,136 +3289,16 @@ svg [data-series="bar"]:hover rect:not(:hover) {
   }
 }
 
-/* ═══ Animated tables — filter / sort / paginate ═══
- * Opt a table in with `data-animated-table` (or use the `useAnimatedTable`
- * hook, which wraps updates in a View Transition when supported and
- * falls back to a CSS transition on the affected rows otherwise).
- *
- * Layout invariant: rows must NOT reflow when opacity/transform change.
- * We animate opacity + a small Y offset only — never height, top, or
- * margin — so the browser stays on the compositor.
- */
-[data-animated-table] tbody tr,
-[data-animated-table] [role="row"] {
-  transition:
-    opacity var(--motion-duration-medium, 240ms)
-      var(--motion-ease-standard, cubic-bezier(0.2, 0.7, 0.2, 1)),
-    transform var(--motion-duration-medium, 240ms)
-      var(--motion-ease-standard, cubic-bezier(0.2, 0.7, 0.2, 1)),
-    background-color var(--motion-duration-fast, 120ms)
-      var(--motion-ease-standard, cubic-bezier(0.2, 0.7, 0.2, 1));
-  will-change: opacity, transform;
-}
-
-/* Entry (mount) — @starting-style is the modern equivalent of a keyframe
- * without needing JS to toggle a class. Rows enter from a tiny offset. */
-@supports (transition-behavior: allow-discrete) {
-  [data-animated-table] tbody tr,
-  [data-animated-table] [role="row"] {
-    @starting-style {
-      opacity: 0;
-      transform: translateY(6px);
-    }
-  }
-}
-
-/* Exit state — set `data-row-state="exiting"` before removing a row to
- * play the fade-out. `useAnimatedTable` does this automatically. */
-[data-animated-table] tbody tr[data-row-state="exiting"],
-[data-animated-table] [role="row"][data-row-state="exiting"] {
-  opacity: 0;
-  transform: translateY(-4px);
-  pointer-events: none;
-}
-
-/* Sort flash — briefly tints the sorted column header + affected cells so
- * the user sees WHERE the reordering came from. Toggled via
- * `data-sort-flash` for one animation cycle. */
-[data-animated-table] [data-sort-flash] {
-  animation: sort-flash var(--motion-duration-slow, 320ms)
-    var(--motion-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
-}
-@keyframes sort-flash {
-  0% {
-    background-color: hsl(var(--primary) / 0.14);
-  }
-  100% {
-    background-color: transparent;
-  }
-}
-
-/* Pagination crossfade — apply `data-page-transition` to the tbody
- * wrapper while swapping the page's data. */
-[data-animated-table] [data-page-transition="out"] {
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity var(--motion-duration-fast, 120ms)
-      var(--motion-ease-accelerate, cubic-bezier(0.4, 0, 1, 1)),
-    transform var(--motion-duration-fast, 120ms)
-      var(--motion-ease-accelerate, cubic-bezier(0.4, 0, 1, 1));
-}
-[data-animated-table] [data-page-transition="in"] {
-  animation: data-in var(--motion-duration-medium, 240ms)
-    var(--motion-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
-}
-
-/* View-Transition root pseudos — smooth cross-fade when the hook uses
- * `document.startViewTransition` for filter/sort swaps. Scoped to
- * animated tables via a named view-transition-name assigned in JS. */
-::view-transition-old(animated-table),
-::view-transition-new(animated-table) {
-  animation-duration: var(--motion-duration-medium, 240ms);
-  animation-timing-function: var(--motion-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1));
-}
-
-@media (prefers-reduced-motion: reduce) {
-  [data-animated-table] tbody tr,
-  [data-animated-table] [role="row"],
-  [data-animated-table] [data-page-transition],
-  [data-animated-table] [data-sort-flash] {
-    animation: none !important;
-    transition: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-  }
-  ::view-transition-old(animated-table),
-  ::view-transition-new(animated-table) {
-    animation: none !important;
-  }
-}
-
 /* ============================================================
    Micro-interactions: subtle hover & focus polish
    ============================================================ */
 
 @layer utilities {
-  a,
-  button,
-  [role="button"],
-  [role="menuitem"],
-  [role="tab"],
-  [role="option"],
-  summary,
-  .interactive {
-    transition:
-      background-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
-      color 180ms cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
-      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 180ms ease;
-  }
-
-  button:not(:disabled):not([data-no-lift]):hover,
-  [role="button"]:not([aria-disabled="true"]):not([data-no-lift]):hover {
-    transform: translateY(-1px);
-  }
-  button:not(:disabled):not([data-no-lift]):active,
-  [role="button"]:not([aria-disabled="true"]):not([data-no-lift]):active {
-    transform: translateY(0);
-    transition-duration: 90ms;
-  }
+  /* The global hover-lift that used to live here applied to every button,
+     tab, and menu item in the app — including rows inside menus and tables,
+     where a 1px rise reads as a rendering bug rather than an affordance.
+     Elevation on hover is now a decision each component makes; the Button
+     primitive opts in, list rows do not. */
 
   .icon-tap {
     transition:
@@ -3722,5 +3568,36 @@ pre {
   }
   100% {
     background-position: -200% 0;
+  }
+}
+
+/* ── Studio: generation weave ─────────────────────────────────────────────
+   A slow, low-contrast band of the brand accent travelling across anything
+   being generated. Calm by design — it signals work, not urgency. */
+@keyframes studio-weave {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+.studio-weave {
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    hsl(var(--primary) / 0.1) 42%,
+    hsl(var(--primary) / 0.18) 50%,
+    hsl(var(--primary) / 0.1) 58%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: studio-weave 2.4s var(--motion-ease-standard, ease) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-weave {
+    animation: none;
+    background-image: none;
+    background-color: hsl(var(--primary) / 0.06);
   }
 }

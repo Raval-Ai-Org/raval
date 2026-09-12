@@ -1,12 +1,39 @@
 "use client";
 
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
-import { MessageSquare, MoreHorizontal, Pin, Plus, Search } from "@/components/ui/gemini-icons";
+import {
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  Plus,
+  Search,
+  Trash,
+} from "@/components/icons";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Conversation = {
   id: string;
@@ -15,6 +42,8 @@ type Conversation = {
   updated_at: string;
   is_pinned: boolean;
 };
+
+const TITLE_MAX = 120;
 
 function relativeTime(value: string) {
   const seconds = Math.max(0, (Date.now() - new Date(value).getTime()) / 1000);
@@ -38,6 +67,13 @@ export function RecentChats({
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  // Rename happens in place in the list rather than in a dialog — it is a
+  // one-field edit, and a modal for it would be heavier than the task.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
@@ -71,6 +107,10 @@ export function RecentChats({
     addAppEventListener("chat:conversation-changed", onChanged);
     return () => removeAppEventListener("chat:conversation-changed", onChanged);
   }, [load]);
+
+  useEffect(() => {
+    if (renamingId) renameInputRef.current?.select();
+  }, [renamingId]);
 
   const newChat = async () => {
     if (!workspaceId || creating) return;
@@ -112,108 +152,216 @@ export function RecentChats({
     emitAppEvent("chat:conversation-changed");
   };
 
-  const manage = async (conversation: Conversation) => {
-    const action = window.prompt(
-      "Conversation action: type rename, pin, unpin, or delete",
-      conversation.is_pinned ? "unpin" : "rename",
-    );
-    if (action === "rename") {
-      const title = window.prompt("Rename conversation", conversation.title)?.trim();
-      if (title) await update(conversation.id, { title: title.slice(0, 120) });
-    } else if (action === "pin" || action === "unpin") {
-      await update(conversation.id, { is_pinned: action === "pin" });
-    } else if (
-      action === "delete" &&
-      window.confirm("Remove this conversation and its messages?")
-    ) {
-      if (!workspaceId) return;
-      const { error } = await supabase
-        .from("conversations")
-        .delete()
-        .eq("id", conversation.id)
-        .eq("workspace_id", workspaceId);
-      if (error) {
-        toast.error("Couldn't delete conversation", { description: error.message });
-        return;
-      }
-      if (activeConversationId === conversation.id) navigate({ to: "/app" });
-      await load();
+  const startRename = (conversation: Conversation) => {
+    setRenamingId(conversation.id);
+    setDraftTitle(conversation.title);
+  };
+
+  const commitRename = async () => {
+    const id = renamingId;
+    const title = draftTitle.trim().slice(0, TITLE_MAX);
+    setRenamingId(null);
+    if (!id || !title) return;
+    const previous = items.find((item) => item.id === id)?.title;
+    if (title === previous) return;
+    await update(id, { title });
+  };
+
+  const confirmDelete = async () => {
+    const conversation = pendingDelete;
+    if (!conversation || !workspaceId) return;
+    setDeleting(true);
+    const { error } = await supabase
+      .from("conversations")
+      .delete()
+      .eq("id", conversation.id)
+      .eq("workspace_id", workspaceId);
+    setDeleting(false);
+    setPendingDelete(null);
+    if (error) {
+      toast.error("Couldn't delete conversation", { description: error.message });
+      return;
     }
+    if (activeConversationId === conversation.id) navigate({ to: "/app" });
+    await load();
+    emitAppEvent("chat:conversation-changed");
   };
 
   return (
     <div className="space-y-2">
-      <button
-        type="button"
+      <Button
+        size="sm"
+        className="w-full justify-start"
         onClick={() => void newChat()}
-        disabled={creating}
-        className="flex h-9 w-full items-center gap-2 rounded-lg bg-primary px-3 text-left text-[12.5px] font-semibold text-primary-foreground transition hover:-translate-y-px hover:shadow-sm disabled:pointer-events-none disabled:opacity-60"
+        loading={creating}
       >
-        <Plus className={cn("h-4 w-4", creating && "animate-pulse")} aria-hidden />
-        {creating ? "Starting..." : "New Chat"}
-      </button>
-      <label className="flex h-8 items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-2.5 text-muted-foreground focus-within:border-primary/50">
-        <Search className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        {creating ? null : <Plus className="size-4" />}
+        {creating ? "Starting…" : "New chat"}
+      </Button>
+
+      <label className="flex h-9 items-center gap-2 rounded-lg border border-border bg-surface-2 px-2.5 text-muted-foreground focus-within:border-ring">
+        <Search className="size-4 shrink-0" aria-hidden />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search conversations"
           aria-label="Search conversations"
-          className="min-w-0 flex-1 bg-transparent text-[11.5px] text-foreground outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
       </label>
+
       {loading ? (
-        <div className="space-y-1 px-1">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-9 animate-pulse rounded-lg bg-surface/60" />
+        <div className="space-y-1 px-1" role="status" aria-label="Loading conversations">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-11 animate-pulse rounded-lg bg-surface-2" />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border/70 px-3 py-4 text-center text-[11px] leading-relaxed text-muted-foreground">
-          No conversations yet. Start a new chat to begin.
-        </div>
+        <EmptyState
+          size="sm"
+          icon={MessageSquare}
+          title={query.trim() ? "No matches" : "No conversations yet"}
+          description={
+            query.trim()
+              ? `Nothing matches "${query.trim()}".`
+              : "Start a chat and it will show up here."
+          }
+          action={
+            query.trim() ? (
+              <Button variant="ghost" size="sm" onClick={() => setQuery("")}>
+                Clear search
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
-        <div className="max-h-[min(46vh,28rem)] space-y-0.5 overflow-y-auto pr-0.5 scrollbar-thin">
-          {items.map((conversation) => (
-            <div key={conversation.id} className="group relative flex items-center">
-              <button
-                type="button"
-                onClick={() => open(conversation.id)}
-                className={cn(
-                  "min-w-0 flex-1 rounded-lg px-2.5 py-2 pr-8 text-left transition",
-                  activeConversationId === conversation.id
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-surface hover:text-foreground",
+        <ul className="max-h-[min(46vh,28rem)] space-y-0.5 overflow-y-auto pr-0.5 scrollbar-thin">
+          {items.map((conversation) => {
+            const isActive = activeConversationId === conversation.id;
+            const isRenaming = renamingId === conversation.id;
+
+            return (
+              <li key={conversation.id} className="group relative flex items-center">
+                {isRenaming ? (
+                  <input
+                    ref={renameInputRef}
+                    value={draftTitle}
+                    maxLength={TITLE_MAX}
+                    onChange={(event) => setDraftTitle(event.target.value)}
+                    onBlur={() => void commitRename()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void commitRename();
+                      } else if (event.key === "Escape") {
+                        event.preventDefault();
+                        setRenamingId(null);
+                      }
+                    }}
+                    aria-label="Conversation title"
+                    className="h-11 min-w-0 flex-1 rounded-lg border border-ring bg-surface-3 px-2.5 text-sm font-medium text-foreground outline-none"
+                  />
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => open(conversation.id)}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
+                        "min-w-0 flex-1 rounded-lg px-2.5 py-2 pr-10 text-left transition-colors",
+                        isActive
+                          ? "bg-surface-2 text-foreground"
+                          : "text-muted-foreground hover:bg-surface-2 hover:text-foreground",
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        {conversation.is_pinned ? (
+                          <Pin className="size-3.5 shrink-0 text-primary" aria-label="Pinned" />
+                        ) : (
+                          <MessageSquare className="size-3.5 shrink-0 opacity-70" aria-hidden />
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {conversation.title}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 block truncate pl-[22px] text-xs text-muted-foreground/80">
+                        {conversation.preview?.trim() || "No messages yet"} ·{" "}
+                        {relativeTime(conversation.updated_at)}
+                      </span>
+                    </button>
+
+                    {/* 36px hit area rather than the 24px it used to be, and
+                        always reachable: hiding the trigger behind :hover left
+                        touch users with no way to manage a conversation. */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`Actions for ${conversation.title}`}
+                          className="absolute right-1 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:opacity-100 data-[state=open]:bg-surface-3 data-[state=open]:text-foreground md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                        >
+                          <MoreHorizontal className="size-4" aria-hidden />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onSelect={() => startRename(conversation)}>
+                          <Pencil className="size-4" />
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            void update(conversation.id, { is_pinned: !conversation.is_pinned })
+                          }
+                        >
+                          <Pin className="size-4" />
+                          {conversation.is_pinned ? "Unpin" : "Pin to top"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => setPendingDelete(conversation)}
+                        >
+                          <Trash className="size-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
                 )}
-              >
-                <span className="flex items-center gap-2">
-                  {conversation.is_pinned ? (
-                    <Pin className="h-3 w-3 shrink-0 text-primary" aria-label="Pinned" />
-                  ) : (
-                    <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
-                    {conversation.title}
-                  </span>
-                </span>
-                <span className="mt-0.5 block truncate pl-5 text-[10.5px] text-muted-foreground/80">
-                  {conversation.preview || "Empty conversation"} ·{" "}
-                  {relativeTime(conversation.updated_at)}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => void manage(conversation)}
-                aria-label={`Manage ${conversation.title}`}
-                title="Conversation actions"
-                className="absolute right-1.5 top-2.5 grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-background hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
-              >
-                <MoreHorizontal className="h-4 w-4" aria-hidden />
-              </button>
-            </div>
-          ))}
-        </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
+
+      <AlertDialog
+        open={pendingDelete !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this conversation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{pendingDelete?.title}&rdquo; and every message in it will be removed. This
+              can&rsquo;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDelete();
+              }}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting…" : "Delete conversation"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -3,38 +3,31 @@
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { Link, useRouterState, useNavigate } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { acceptWorkspaceInvite } from "@/lib/workspaces.functions";
-import { workspaceModules } from "@/lib/app-nav";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
-  BarChart3,
-  Calendar as CalendarIcon,
-  Settings,
-  Rocket,
-  ChevronDown,
-  Sun,
-  Moon,
-  Menu,
-  X,
-  MessageSquare,
-  Share2,
-  PanelRightOpen,
-  type LucideIcon,
-} from "@/components/brand/icons";
-import {
-  MoreHorizontal,
-  Brain,
-  Bot,
+  Activity,
   ArrowLeft,
-  Users,
-  Sparkles,
-  Radio,
-  Plus,
+  BarChart3,
   BookOpen,
-} from "@/components/ui/gemini-icons";
+  Bot,
+  Brain,
+  Building2,
+  Calendar as CalendarIcon,
+  ChevronDown,
+  PanelRightOpen,
+  Plus,
+  Radio,
+  Rocket,
+  Share2,
+  Sparkles,
+  Users,
+  type LucideIcon,
+} from "@/components/icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,17 +41,18 @@ import { CommandBar } from "@/components/app/CommandBar";
 import { TopBarActions } from "@/components/app/TopBarActions";
 import { StudioRail } from "@/components/app/StudioRail";
 import { RecentChats } from "@/components/app/RecentChats";
-import { StudioBottomDock } from "@/components/app/StudioBottomDock";
 import { WorkspaceSwitcher } from "@/components/app/WorkspaceSwitcher";
-import { Wand2 } from "@/components/ui/gemini-icons";
 import { AccountMenu, AccountMenuCompact } from "@/components/app/AccountMenu";
 
 // Heavy modules — loaded on demand to shrink the initial workspace bundle.
 const AnalyticsModal = lazy(() =>
   import("@/components/app/AnalyticsModal").then((m) => ({ default: m.AnalyticsModal })),
 );
-const StudioCanvasModal = lazy(() =>
-  import("@/components/app/StudioCanvasModal").then((m) => ({ default: m.StudioCanvasModal })),
+const StudioComposer = lazy(() =>
+  import("@/components/studio/StudioComposer").then((m) => ({ default: m.StudioComposer })),
+);
+const ContentItemDialog = lazy(() =>
+  import("@/components/studio/ContentItemDialog").then((m) => ({ default: m.ContentItemDialog })),
 );
 const ContentCalendar = lazy(() =>
   import("@/components/app/ContentCalendar").then((m) => ({ default: m.ContentCalendar })),
@@ -66,17 +60,11 @@ const ContentCalendar = lazy(() =>
 const WorkspaceDialogs = lazy(() =>
   import("@/components/app/WorkspaceDialogs").then((m) => ({ default: m.WorkspaceDialogs })),
 );
-const GeoAeoPanel = lazy(() =>
-  import("@/components/app/GeoAeoPanel").then((m) => ({ default: m.GeoAeoPanel })),
-);
 const PublishDialog = lazy(() =>
   import("@/components/app/PublishDialog").then((m) => ({ default: m.PublishDialog })),
 );
 const ShareDialog = lazy(() =>
   import("@/components/app/ShareDialog").then((m) => ({ default: m.ShareDialog })),
-);
-const ClientPortalButton = lazy(() =>
-  import("@/components/app/ClientPortalDialog").then((m) => ({ default: m.ClientPortalButton })),
 );
 const AiVisibilityDialog = lazy(() =>
   import("@/components/app/AiVisibilityDialog").then((m) => ({ default: m.AiVisibilityDialog })),
@@ -90,17 +78,10 @@ const MarketingCoachPanel = lazy(() =>
   import("@/components/app/MarketingCoachPanel").then((m) => ({ default: m.MarketingCoachPanel })),
 );
 
-import { useStudioCanvas } from "@/hooks/use-studio";
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { useTheme } from "@/hooks/use-theme";
-import { useIsMobile, useIsCompact } from "@/hooks/use-mobile";
+import { useStudioEntry } from "@/hooks/use-studio";
+import { StudioDock } from "@/components/studio/StudioDock";
+import { useStudioStore } from "@/lib/studio/session-store";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Logo } from "@/components/brand/Logo";
 import { WorkspaceMenu } from "@/components/app/WorkspaceMenu";
 import { useBrandDna } from "@/hooks/use-brand-dna";
@@ -108,44 +89,8 @@ import { useRealtimeContent } from "@/hooks/use-realtime-content";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
-import { Activity } from "lucide-react";
 import { OperationsInbox } from "@/components/app/OperationsInbox";
 import { UsagePanel } from "@/components/app/UsagePanel";
-
-// Shape of the deep-link query params (?tab, ?canvas, ?artifact, ?invite_token,
-// ?next) that the Analytics/Studio URL persistence depends on. Next's
-// useSearchParams preserves unknown params on navigation, so this type is
-// documentation and read-site safety rather than a router-level schema.
-type AppSearch = {
-  tab?: string;
-  canvas?: string;
-  artifact?: string;
-  invite_token?: string;
-  next?: string;
-};
-
-function ChevronRightSep() {
-  return (
-    <svg
-      className="h-3 w-3 shrink-0 text-border"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M9 6l6 6-6 6" />
-    </svg>
-  );
-}
-
-type ModuleDef = (typeof workspaceModules)[number];
-
-const modules: ModuleDef[] = workspaceModules;
-
-const GROWTH_PATHS: string[] = [];
 
 function AppShell() {
   const navigate = useNavigate();
@@ -153,6 +98,7 @@ function AppShell() {
   // Start null on SSR to avoid hydration mismatch; hydrate from localStorage
   // immediately on mount so ChatPanel renders without waiting on the network.
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [workspaceStatus, setWorkspaceStatus] = useState<"loading" | "ready" | "none">("loading");
   const [workspaceName, setWorkspaceName] = useState<string>("Workspace");
   const [workspaceWebsite, setWorkspaceWebsite] = useState<string | null>(null);
   useEffect(() => {
@@ -166,7 +112,6 @@ function AppShell() {
     } catch {}
   }, []);
 
-  const { theme, toggle } = useTheme();
   const { dna: brandDna } = useBrandDna(workspaceId);
   const brandLogo = brandDna.logoUrl || brandDna.faviconUrl;
   const brandContextForCoach = useMemo(() => {
@@ -199,9 +144,7 @@ function AppShell() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const activeConversationId = path.match(/^\/app\/chat\/([^/]+)/)?.[1] ?? null;
   const isMobile = useIsMobile();
-  const isCompact = useIsCompact();
   const [navOpen, setNavOpen] = useState(false);
-  const navTriggerRef = useRef<HTMLButtonElement | null>(null);
   // Sidebar is always inline — reserves its own space at every screen size.
   const isInlineNav = true;
   // Narrower on phones so chat still breathes; wider on desktop.
@@ -246,50 +189,9 @@ function AppShell() {
   }, [navOpen]);
   const [, setChatOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
-  const { canvas: studioCanvas, close: closeStudio } = useStudioCanvas();
-  const [chatWidth, setChatWidth] = useState<number>(360);
-  const [chatCollapsed, setChatCollapsed] = useState<boolean>(false);
-  useEffect(() => {
-    try {
-      const saved = Number(localStorage.getItem("chat:width"));
-      if (saved && saved >= 300 && saved <= 720) setChatWidth(saved);
-      const c = localStorage.getItem("chat:collapsed");
-      if (c === "1") setChatCollapsed(true);
-    } catch {}
-  }, []);
-  const toggleChat = () => {
-    setChatCollapsed((v) => {
-      const next = !v;
-      try {
-        localStorage.setItem("chat:collapsed", next ? "1" : "0");
-      } catch {}
-      return next;
-    });
-  };
-  const [dragging, setDragging] = useState(false);
-
-  useEffect(() => {
-    if (!dragging) return;
-    const onMove = (e: MouseEvent) => {
-      const next = Math.min(720, Math.max(300, e.clientX));
-      setChatWidth(next);
-    };
-    const onUp = () => {
-      setDragging(false);
-      localStorage.setItem("chat:width", String(chatWidth));
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-  }, [dragging, chatWidth]);
-
+  useStudioEntry(workspaceId);
+  // Load the composer bundle only once someone opens Studio.
+  const studioInUse = useStudioStore((st) => st.activeId !== null || st.sessions.length > 0);
   // Open Analytics modal via custom event, ⌘./Ctrl+. keybind, or sessionStorage flag set by /app/analytics redirect.
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -340,9 +242,13 @@ function AppShell() {
         e.preventDefault();
         setAnalyticsOpen((o) => !o);
       }
+      // ⌘\ used to call toggleChat(), which set a `chatCollapsed` flag that
+      // nothing read — the shortcut swallowed the keystroke and did nothing.
+      // It now toggles the sidebar, which is the panel a user pressing a
+      // collapse shortcut in this layout would expect to move.
       if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
         e.preventDefault();
-        toggleChat();
+        setNavOpen((open) => !open);
       }
     };
     addAppEventListener("open:analytics", onOpen);
@@ -406,6 +312,7 @@ function AppShell() {
       if (data?.id) {
         localStorage.setItem("workspace:selected", data.id);
         setWorkspaceId(data.id);
+        setWorkspaceStatus("ready");
         const domain = data.website_url
           ? data.website_url
               .replace(/^https?:\/\//i, "")
@@ -421,11 +328,14 @@ function AppShell() {
           else localStorage.removeItem("workspace:website");
         } catch {}
       } else {
-        // No workspace (or stale selection) — keep the app usable without setup.
+        // No workspace, or a stale selection pointing at one the user can no
+        // longer see. This is a terminal state, not a loading one — the shell
+        // renders a create-a-workspace prompt for it.
         localStorage.removeItem("workspace:selected");
         setWorkspaceId(null);
         setWorkspaceName("Workspace");
         setWorkspaceWebsite(null);
+        setWorkspaceStatus("none");
       }
     };
     load();
@@ -453,48 +363,6 @@ function AppShell() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
-
-  // Active state for the top tabs
-  const isActive = (m: ModuleDef) => {
-    if (m.slug === "growth") return GROWTH_PATHS.some((p) => path.startsWith(p));
-    if (m.exact) return path === m.to;
-    return path === m.to || path.startsWith(m.to + "/");
-  };
-
-  const TopTabs = (
-    <nav className="relative flex items-center gap-0.5 rounded-full border border-border/70 bg-background/60 p-1 shadow-[0_1px_2px_rgba(0,0,0,0.04),inset_0_1px_0_hsl(0_0%_100%/0.6)] backdrop-blur">
-      {modules.map((m) => {
-        const active = isActive(m);
-        const Icon = m.icon;
-        return (
-          <Link
-            key={m.to}
-            to={m.to}
-            className={cn(
-              "relative z-10 flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors",
-              active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {active && (
-              <motion.span
-                layoutId="top-tab-active"
-                transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                className="absolute inset-0 -z-10 rounded-full bg-card ring-1 ring-border/80 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_14px_-6px_hsl(var(--brand-blue)/0.35)]"
-              />
-            )}
-            <Icon
-              className={cn(
-                "h-3.5 w-3.5 transition-colors",
-                active && "text-[hsl(var(--brand-blue))]",
-              )}
-              strokeWidth={2.2}
-            />
-            <span>{m.label}</span>
-          </Link>
-        );
-      })}
-    </nav>
-  );
 
   const sidebarAction = (opts: {
     icon: LucideIcon;
@@ -543,9 +411,9 @@ function AppShell() {
       {/* Brand row — sticky; height matches main header (h-14) for aligned baseline */}
       <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between bg-sidebar/95 px-2 backdrop-blur-xl">
         <Link
-          to="/workspaces"
-          aria-label="Back to all workspaces"
-          title="Back to all workspaces"
+          to="/app"
+          aria-label="Mellox AI — workspace home"
+          title="Workspace home"
           className="group flex h-9 items-center gap-1 rounded-md pl-1 pr-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <Logo height={28} markOnly />
@@ -703,12 +571,12 @@ function AppShell() {
           aria-label="Sidebar rail"
           className="flex h-full w-[48px] flex-none flex-col items-center border-r border-border/60 bg-sidebar py-3"
         >
-          {/* Brand mark — always visible; links back to workspaces */}
+          {/* Brand mark — always visible; goes to workspace home. */}
           <div className="group relative mb-3 h-9 w-9">
             <Link
-              to="/workspaces"
-              aria-label="Mellox AI — back to workspaces"
-              title="Back to all workspaces"
+              to="/app"
+              aria-label="Mellox AI — workspace home"
+              title="Workspace home"
               className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <Logo height={26} markOnly />
@@ -890,8 +758,6 @@ function AppShell() {
                 </motion.button>
               }
             />
-
-            {modules.length > 1 && <span className="hidden md:block ml-1.5">{TopTabs}</span>}
           </div>
 
           {/* RIGHT — status cluster + actions */}
@@ -901,54 +767,22 @@ function AppShell() {
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className="flex min-w-0 shrink items-center gap-1 sm:gap-1.5"
           >
-            {/* Desktop-only (xl+) — full action row stays untouched */}
-            <div className="hidden items-center gap-1.5">
-              {/* xl action row disabled — unified layout */}
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={() => setAnalyticsOpen(true)}
-                title="Analytics  ·  ⌘ ."
-                aria-label="Open analytics"
-                className="group inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
-              >
-                <BarChart3
-                  className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-green))]"
-                  strokeWidth={2}
-                />
-                <span>Analytics</span>
-              </motion.button>
+            {/* The duplicate "xl action row" that used to sit here —
+              Analytics, Calendar, Client portal and Share, all behind a
+              bare className="hidden" with no breakpoint — is gone. It was
+              invisible to sighted users but still focusable, so tabbing
+              through the header hit four controls nobody could see. Those
+              actions live in the sidebar and the Share menu below. */}
 
-              <span className="mx-0.5 h-4 w-px bg-border/70" />
-
-              <button
-                type="button"
-                onClick={() => emitAppEvent("open:content-calendar")}
-                aria-label="Open calendar"
-                title="Calendar"
-                className="group flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
-              >
-                <CalendarIcon className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-blue))]" />
-                <span>Calendar</span>
-              </button>
-
-              <Suspense fallback={null}>
-                <ClientPortalButton workspaceId={workspaceId} />
-              </Suspense>
-
-              <button
-                onClick={() => emitAppEvent("open:share")}
-                aria-label="Share workspace"
-                title="Share with workspace members"
-                className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
-              >
-                <Share2 className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-green))]" />
-              </button>
-            </div>
-
-            {/* Mount Schedule + 24/7 Autopilot dialogs off-screen so their
-              open:schedule / open:autopilot event listeners are always live,
-              even though the visible triggers now live in the sidebar. */}
-            <div className="sr-only" aria-hidden>
+            {/* Mounted, not displayed: the Schedule and Autopilot dialogs live
+              in here and their open:schedule / open:autopilot listeners have to
+              stay attached, while the visible triggers are in the sidebar.
+              `hidden` (display:none) keeps React mounted and the listeners
+              live, and — unlike the `sr-only aria-hidden` this used to use —
+              takes the triggers out of the tab order instead of leaving a row
+              of focusable controls that neither sighted nor screen-reader
+              users could perceive. */}
+            <div hidden>
               <TopBarActions workspaceId={workspaceId} />
             </div>
 
@@ -984,7 +818,7 @@ function AppShell() {
                 onClick={() => emitAppEvent("toggle:studio")}
                 aria-label="Open Studio"
                 title="Open Studio"
-                className="group relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-[hsl(var(--brand-green)/0.35)] bg-[hsl(var(--brand-green)/0.10)] px-2.5 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-[hsl(var(--brand-green)/0.18)] hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97]"
+                className="group relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-primary-border bg-primary-surface px-2.5 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-primary-surface hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97]"
               >
                 <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
                 <span className="hidden sm:inline">Studio</span>
@@ -1082,16 +916,17 @@ function AppShell() {
             data-workspace-main="true"
             className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background"
           >
-            <MobileManusLayout
+            <WorkspaceSurface
               workspaceId={workspaceId}
+              workspaceStatus={workspaceStatus}
               activeConversationId={activeConversationId}
-              brandContext={brandContextForCoach}
             />
           </main>
         </div>
       </div>
 
       <CommandBar />
+      <StudioDock />
       <Suspense fallback={null}>
         {analyticsOpen && (
           <AnalyticsModal
@@ -1112,14 +947,8 @@ function AppShell() {
           />
         )}
 
-        {studioCanvas && (
-          <StudioCanvasModal
-            canvas={studioCanvas}
-            onClose={closeStudio}
-            workspaceName={workspaceName}
-            workspaceId={workspaceId}
-          />
-        )}
+        {studioInUse && <StudioComposer />}
+        <ContentItemDialog />
         <WorkspaceDialogs
           workspaceId={workspaceId}
           workspaceName={workspaceName}
@@ -1131,14 +960,14 @@ function AppShell() {
   );
 }
 
-function MobileManusLayout({
+function WorkspaceSurface({
   workspaceId,
+  workspaceStatus,
   activeConversationId,
-  brandContext,
 }: {
   workspaceId: string | null;
+  workspaceStatus: "loading" | "ready" | "none";
   activeConversationId: string | null;
-  brandContext?: string;
 }) {
   const isMobile = useIsMobile();
   const [studioOpen, setStudioOpen] = useState(false);
@@ -1197,15 +1026,43 @@ function MobileManusLayout({
     <div className="flex min-h-0 min-w-0 flex-1 flex-row bg-background">
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {workspaceId ? (
-          <>
-            <ChatPanel
-              workspaceId={workspaceId}
-              conversationId={activeConversationId}
-              variant="centered"
-            />
-          </>
+          <ChatPanel
+            workspaceId={workspaceId}
+            conversationId={activeConversationId}
+            variant="centered"
+          />
+        ) : workspaceStatus === "none" ? (
+          <EmptyState
+            className="h-full"
+            icon={Building2}
+            title="No workspace yet"
+            description="A workspace holds one brand: its Brand DNA, content, calendar and connected accounts. Create one to get started."
+            action={
+              <Button asChild>
+                <Link to="/onboarding">
+                  <Plus className="size-4" />
+                  Create a workspace
+                </Link>
+              </Button>
+            }
+            secondaryAction={
+              <Button asChild variant="ghost">
+                <Link to="/workspaces">See all workspaces</Link>
+              </Button>
+            }
+          />
         ) : (
-          <div className="p-6 text-sm text-muted-foreground">Loading workspace…</div>
+          <div
+            role="status"
+            aria-label="Loading workspace"
+            className="flex h-full flex-col items-center justify-end gap-4 p-6"
+          >
+            <div className="w-full max-w-2xl space-y-3">
+              <div className="h-4 w-2/3 animate-pulse rounded bg-surface-2" />
+              <div className="h-4 w-1/2 animate-pulse rounded bg-surface-2" />
+            </div>
+            <div className="h-14 w-full max-w-2xl animate-pulse rounded-2xl bg-surface-2" />
+          </div>
         )}
       </section>
 
@@ -1244,58 +1101,7 @@ function MobileManusLayout({
           </>
         )}
       </AnimatePresence>
-
-      <div className="hidden">
-        <StudioBottomDock />
-      </div>
     </div>
-  );
-}
-
-function MiniSiteThumb({ workspaceId }: { workspaceId: string | null }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  useEffect(() => {
-    if (!workspaceId) return;
-    let cancelled = false;
-    supabase
-      .from("workspaces")
-      .select("website_url")
-      .eq("id", workspaceId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return;
-        const raw = data?.website_url?.trim();
-        if (!raw) return;
-        setUrl(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId]);
-
-  const shot = url
-    ? `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1024&viewport.height=640`
-    : null;
-
-  return (
-    <span className="relative grid h-12 w-[68px] shrink-0 place-items-center overflow-hidden rounded-lg bg-gradient-to-br from-[hsl(var(--brand-blue)/0.18)] to-[hsl(var(--brand-green)/0.18)] ring-1 ring-border/60 shadow-sm">
-      {shot && (
-        <img
-          src={shot}
-          alt=""
-          onLoad={() => setLoaded(true)}
-          className={cn(
-            "absolute inset-0 h-full w-full object-cover object-top transition-opacity",
-            loaded ? "opacity-100" : "opacity-0",
-          )}
-          draggable={false}
-        />
-      )}
-      {!loaded && (
-        <span className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--brand-green))] shadow-[0_0_8px_hsl(var(--brand-green)/0.7)]" />
-      )}
-    </span>
   );
 }
 

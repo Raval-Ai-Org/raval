@@ -18,7 +18,7 @@
 // publishes anything by itself.
 
 import { emitAppEvent } from "@/lib/app-events";
-import type { CanvasType } from "@/lib/studio";
+import { normalizeStudioType, STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { supabase } from "@/integrations/supabase/client";
 
 export type ChatToolKind =
@@ -119,31 +119,18 @@ export function parseToolCalls(text: string): { calls: ChatToolCall[]; cleaned: 
   return { calls, cleaned };
 }
 
-const CANVAS_ALIASES: Record<string, CanvasType> = {
-  "social-post": "social-post",
-  social: "social-post",
-  linkedin: "social-post",
-  instagram: "social-post",
-  tweet: "social-post",
-  x: "social-post",
-  "seo-brief": "seo-brief",
-  brief: "seo-brief",
-  seo: "seo-brief",
-  "landing-page": "landing-page",
-  landing: "landing-page",
-  email: "email",
-  newsletter: "email",
-  article: "article",
-  blog: "article",
-  post: "article",
-  "design-asset": "design-asset",
-  design: "design-asset",
-  creative: "design-asset",
+// Platform names the assistant sometimes uses in place of a format.
+const PLATFORM_ALIASES: Record<string, StudioType> = {
+  linkedin: "social",
+  instagram: "social",
+  tweet: "social",
+  x: "social",
+  brief: "article",
 };
 
-function resolveCanvas(v?: string): CanvasType | null {
+function resolveCanvas(v?: string): StudioType | null {
   if (!v) return null;
-  return CANVAS_ALIASES[v.toLowerCase().trim()] ?? null;
+  return normalizeStudioType(v) ?? PLATFORM_ALIASES[v.toLowerCase().trim()] ?? null;
 }
 
 export interface ExecuteCtx {
@@ -167,21 +154,15 @@ export async function executeToolCall(
       return { kind: call.kind, ok: true, label: "Running AI visibility audit" };
     }
     case "open-studio": {
-      const canvas = resolveCanvas(call.params.canvas) ?? "article";
-      const brief = call.params.brief || call.params.prompt || "";
-      emitAppEvent("open:canvas", { type: canvas, brief });
-      if (brief) {
-        // Stash for the modal — it reads this on mount when the canvas matches.
-        try {
-          sessionStorage.setItem(`studio:prefill:${canvas}`, brief.slice(0, 2000));
-        } catch {
-          /* noop */
-        }
-      }
+      const canvas = resolveCanvas(call.params.canvas) ?? "social";
+      const brief = (call.params.brief || call.params.prompt || "").slice(0, 4000);
+      // The brief travels with the event; the composer opens on it for review
+      // before anything is generated.
+      emitAppEvent("open:canvas", { type: canvas, brief: brief || undefined });
       return {
         kind: call.kind,
         ok: true,
-        label: `Opening ${canvas.replace("-", " ")} studio`,
+        label: `Opening Studio · ${STUDIO_FORMATS[canvas].label}`,
         detail: brief ? "brief prefilled" : undefined,
       };
     }
@@ -226,32 +207,15 @@ export async function executeToolCall(
     }
     case "schedule": {
       const title = (call.params.title || "Untitled").slice(0, 200);
-      const canvas = resolveCanvas(call.params.canvas) ?? "social-post";
-      const channel =
-        call.params.channel ||
-        (canvas === "email"
-          ? "email"
-          : canvas === "article"
-            ? "blog"
-            : canvas === "landing-page"
-              ? "web"
-              : "linkedin");
-      const kind =
-        canvas === "email"
-          ? "email"
-          : canvas === "article"
-            ? "blog"
-            : canvas === "landing-page"
-              ? "landing"
-              : canvas === "seo-brief"
-                ? "brief"
-                : "post";
+      const canvas = resolveCanvas(call.params.canvas) ?? "social";
+      const channel = call.params.channel || (canvas === "article" ? "blog" : "linkedin");
+      const kind = STUDIO_FORMATS[canvas].kind;
       const proposedAt = parseWhen(call.params.when || call.params.at || "");
       // A draft for the approval queue — the proposed time is kept as a hint.
       // (The old code inserted status "scheduled" directly, skipping approval.)
       const { error } = await supabase.from("content_items").insert({
         workspace_id: ctx.workspaceId,
-        agent: canvas === "seo-brief" ? "scout" : canvas === "social-post" ? "echo" : "spark",
+        agent: STUDIO_FORMATS[canvas].agent,
         kind,
         channel,
         title,

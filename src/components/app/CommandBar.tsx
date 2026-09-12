@@ -24,7 +24,8 @@ import {
 import { agentList } from "@/lib/agents";
 import { useAgentToggles } from "@/hooks/use-agent-toggles";
 import { emit } from "@/lib/activity-bus";
-import { STUDIO_TILES } from "@/lib/studio";
+import { STUDIO_FORMATS, STUDIO_TYPE_ORDER } from "@/lib/studio/formats";
+import { TYPE_ICON } from "@/components/studio/studio-ui";
 
 const ROUTES = [
   {
@@ -171,7 +172,7 @@ export function CommandBar() {
                 value={`ask ${trimmed}`}
                 forceMount
                 onSelect={() => askChat(trimmed)}
-                className="mb-1 flex cursor-pointer items-center gap-2.5 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-2.5 text-sm data-[selected=true]:bg-primary/10"
+                className="mb-1 flex cursor-pointer items-center gap-2.5 rounded-lg border border-primary-border bg-primary/5 px-2.5 py-2.5 text-sm data-[selected=true]:bg-primary-surface"
               >
                 <span className="grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br from-primary to-accent text-primary-foreground">
                   <Zap className="h-3.5 w-3.5" />
@@ -248,25 +249,29 @@ export function CommandBar() {
               heading="Studio · create"
               className="px-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
             >
-              {STUDIO_TILES.map((t) => (
-                <Command.Item
-                  key={t.id}
-                  value={`create ${t.label} ${t.sub}`}
-                  onSelect={() => {
-                    setOpen(false);
-                    emitAppEvent("open:canvas", { type: t.id });
-                    emit({ kind: "nav", title: `Opened ${t.label} canvas` });
-                  }}
-                  className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm data-[selected=true]:bg-secondary"
-                >
-                  <t.icon className="h-4 w-4 text-aura" />
-                  <span className="flex-1">
-                    Create {t.label}
-                    <span className="ml-1.5 text-xs text-muted-foreground">{t.sub}</span>
-                  </span>
-                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-                </Command.Item>
-              ))}
+              {STUDIO_TYPE_ORDER.map((id) => {
+                const t = STUDIO_FORMATS[id];
+                const Icon = TYPE_ICON[id];
+                return (
+                  <Command.Item
+                    key={id}
+                    value={`create ${t.label} ${t.description}`}
+                    onSelect={() => {
+                      setOpen(false);
+                      emitAppEvent("open:canvas", { type: id });
+                      emit({ kind: "nav", title: `Opened Studio · ${t.label}` });
+                    }}
+                    className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm data-[selected=true]:bg-secondary"
+                  >
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">
+                      Create {t.label.toLowerCase()}
+                      <span className="ml-1.5 text-xs text-muted-foreground">{t.description}</span>
+                    </span>
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Command.Item>
+                );
+              })}
             </Command.Group>
 
             <Command.Group

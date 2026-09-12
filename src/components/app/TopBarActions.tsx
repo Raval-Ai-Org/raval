@@ -1,6 +1,7 @@
 "use client";
 
-import { emitAppEvent, useAppEvent, type AppEventName } from "@/lib/app-events";
+import { emitAppEvent, type AppEventName } from "@/lib/app-events";
+import { useAppEvent } from "@/hooks/use-app-event";
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {

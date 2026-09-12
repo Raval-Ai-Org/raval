@@ -9,9 +9,9 @@
 // is a type error. ESLint forbids `new CustomEvent(` outside this file.
 //
 // Still plain window events underneath: listeners registered with
-// addEventListener elsewhere keep working, and nothing here is React-specific
-// except `useAppEvent`.
-import { useEffect, useRef } from "react";
+// addEventListener elsewhere keep working. This module has no React
+// dependency (see `use-app-event.ts` for the hook) so it's safe to import
+// from server code — every function here is a no-op off the client.
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import type { PreviewContext, PreviewStageEvent } from "@/lib/preview-stages";
 
@@ -57,7 +57,19 @@ export type AppEventMap = {
   "open:brand-dna": { tab?: string } | undefined;
   /** Open a Studio canvas. `type` is validated by the listener (use-studio). */
   "open:canvas":
-    { type?: string; id?: string; mode?: "draft" | "review" | "view"; brief?: string } | undefined;
+    | {
+        type?: string;
+        id?: string;
+        mode?: "draft" | "review" | "view";
+        brief?: string;
+        goal?: string;
+        ideaId?: string;
+        ideaSource?: string;
+        platforms?: string[];
+      }
+    | undefined;
+  /** Review a single content item outside a Studio job (legacy or chat-created). */
+  "open:content-item": { id: string };
   "open:ai-visibility": undefined;
   "open:autopilot": undefined;
   "open:client-portal": undefined;
@@ -121,16 +133,4 @@ export function onAppEvent<K extends AppEventName>(
   if (typeof window === "undefined") return () => {};
   addAppEventListener(name, handler);
   return () => removeAppEventListener(name, handler);
-}
-
-/**
- * Subscribe for the component's lifetime. The latest handler is always
- * called, so it can close over fresh state without re-subscribing.
- */
-export function useAppEvent<K extends AppEventName>(name: K, handler: AppEventHandler<K>): void {
-  const ref = useRef(handler);
-  useEffect(() => {
-    ref.current = handler;
-  });
-  useEffect(() => onAppEvent(name, (event) => ref.current(event)), [name]);
 }

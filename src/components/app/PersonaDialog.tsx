@@ -82,8 +82,8 @@ export function PersonaDialog({
               disabled={!!saving || saved}
               className={cn(
                 "group relative flex h-full flex-col overflow-hidden rounded-2xl border p-5 text-left transition",
-                "border-border/60 bg-card/60 hover:border-brand-green/70 hover:bg-brand-green/[0.04]",
-                isSaving && "border-brand-green/70 bg-brand-green/[0.06]",
+                "border-border/60 bg-card/60 hover:border-primary-border hover:bg-primary-surface",
+                isSaving && "border-primary-border bg-primary-surface",
                 !!saving && !isSaving && "opacity-50",
               )}
             >

@@ -5,13 +5,15 @@ import { useCallback, useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authed-fetch";
 import { normalizeLibraryAsset, type LibraryAsset } from "@/lib/library";
 import {
-  Folder,
   Image as ImageIcon,
   LayoutGrid,
   RefreshCw,
+  Sparkles,
   Video as VideoIcon,
-} from "@/components/ui/gemini-icons";
-import { toast } from "sonner";
+} from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import { EmptyState, ErrorState } from "@/components/ui/empty-state";
+import { emitAppEvent } from "@/lib/app-events";
 
 type LibraryApiAsset = {
   id: string;
@@ -31,6 +33,7 @@ export function LibraryPage() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -47,6 +50,7 @@ export function LibraryPage() {
       return;
     }
     setLoading(true);
+    setError(null);
     try {
       const response = await authedFetch(
         `/api/assets/library?workspaceId=${encodeURIComponent(workspaceId)}`,
@@ -81,12 +85,9 @@ export function LibraryPage() {
       if (payload.diagnostic && process.env.NODE_ENV !== "production") {
         console.debug("Library diagnostic", payload.diagnostic);
       }
-    } catch (error) {
-      console.error("Library query failed", error);
-      toast.error("Could not load your library", {
-        description: error instanceof Error ? error.message : undefined,
-      });
-      setAssets([]);
+    } catch (cause) {
+      console.error("Library query failed", cause);
+      setError(cause instanceof Error ? cause.message : "The request failed.");
     }
     setLoading(false);
   }, [workspaceId]);
@@ -104,22 +105,34 @@ export function LibraryPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">
-      <header className="flex items-center justify-between border-b border-border/70 bg-background/80 px-4 py-5 backdrop-blur-sm sm:px-6">
-        <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
-            <LayoutGrid className="h-5 w-5" aria-hidden="true" />
+      <header className="flex items-center justify-between gap-3 border-b border-border bg-background px-4 py-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            aria-hidden
+            className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-surface text-primary ring-1 ring-primary-border"
+          >
+            <LayoutGrid className="size-5" />
           </span>
-          <h1 className="text-2xl font-semibold tracking-tight">Library</h1>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold tracking-tight">Library</h1>
+            <p className="truncate text-xs text-muted-foreground">
+              {loading
+                ? "Loading your assets…"
+                : assets.length > 0
+                  ? `${assets.length} ${assets.length === 1 ? "asset" : "assets"}`
+                  : "Images and video generated in the Studio"}
+            </p>
+          </div>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="icon"
           onClick={() => void loadAssets()}
           disabled={loading}
           aria-label="Refresh library"
-          className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50"
         >
-          <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-        </button>
+          <RefreshCw className={loading ? "animate-spin" : undefined} />
+        </Button>
       </header>
       <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
         {loading ? (
@@ -128,12 +141,25 @@ export function LibraryPage() {
               <div key={index} className="aspect-square animate-pulse rounded-xl bg-secondary/25" />
             ))}
           </div>
+        ) : error ? (
+          <ErrorState
+            title="Couldn't load your library"
+            description="Your assets are still there — this was a problem fetching them."
+            detail={error}
+            onRetry={() => void loadAssets()}
+          />
         ) : assets.length === 0 ? (
-          <div className="flex min-h-[360px] items-center justify-center">
-            <div className="grid aspect-square w-full max-w-xs place-items-center rounded-xl border border-dashed border-border bg-secondary/20">
-              <Folder className="h-8 w-8 text-muted-foreground" />
-            </div>
-          </div>
+          <EmptyState
+            icon={ImageIcon}
+            title="Nothing in your library yet"
+            description="Images and video you generate in the Studio are saved here, ready to attach to a post."
+            action={
+              <Button onClick={() => emitAppEvent("open:studio")}>
+                <Sparkles className="size-4" />
+                Open the Studio
+              </Button>
+            }
+          />
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {assets.map((asset) => (

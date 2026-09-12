@@ -308,8 +308,8 @@ function AgencyHQ() {
               data: {
                 workspaceId: c.id,
                 agent: "spark",
-                prompt: `Draft a fresh weekly mix for ${c.name}: 1 instagram post, 1 linkedin post, 1 short SEO brief (kind:"brief", channel:"web"), and 1 newsletter teaser (kind:"email", channel:"email"). Make every piece specific to this brand — reference real products, audience and voice from the brand context. No placeholder copy.`,
-                channels: ["instagram", "linkedin", "web", "email"],
+                prompt: `Draft a fresh weekly mix for ${c.name}: 1 instagram post (kind:"post"), 1 linkedin post (kind:"post"), 1 image-post caption with a one-line visual direction (kind:"image", channel:"instagram"), and 1 short blog article (kind:"blog", channel:"blog"). Make every piece specific to this brand — reference real products, audience and voice from the brand context. No placeholder copy.`,
+                channels: ["instagram", "linkedin", "instagram", "blog"],
                 count: 4,
                 context: brandCtx,
                 websiteUrl: c.website_url ?? undefined,
@@ -716,8 +716,8 @@ function AgencyHQ() {
             data: {
               workspaceId: c.id,
               agent: "spark",
-              prompt: `Weekly mix for ${c.name}: 1 instagram, 1 linkedin, 1 SEO brief, 1 newsletter teaser. Real, on-brand copy.`,
-              channels: ["instagram", "linkedin", "web", "email"],
+              prompt: `Weekly mix for ${c.name}: 1 instagram post, 1 linkedin post, 1 image-post caption (kind:"image"), 1 short blog article (kind:"blog"). Real, on-brand copy.`,
+              channels: ["instagram", "linkedin", "instagram", "blog"],
               count: 4,
               context: `Brand: ${c.name}${c.website_url ? `\nWebsite: ${c.website_url}` : ""}`,
               websiteUrl: c.website_url ?? undefined,

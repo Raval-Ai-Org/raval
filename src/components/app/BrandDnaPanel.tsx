@@ -676,17 +676,17 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
                   />
                   <TileGrid dna={dna} onOpen={openTile} query={tileQuery} category={tileCategory} />
                   {status === "error" && lastError && (
-                    <div className="mt-5 flex items-start gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/5 px-4 py-3 text-[12.5px] text-rose-400">
+                    <div className="mt-5 flex items-start gap-2 rounded-2xl border border-danger-border bg-danger-surface px-4 py-3 text-[12.5px] text-danger">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                       <div className="flex-1">
-                        <div className="font-medium text-rose-300">Couldn't read your site</div>
+                        <div className="font-medium text-danger">Couldn't read your site</div>
                         <div className="opacity-80">{lastError}</div>
                       </div>
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => runFetch()}
-                        className="h-7 rounded-full px-2.5 text-rose-300 hover:text-rose-200"
+                        className="h-7 rounded-full px-2.5 text-danger hover:text-danger"
                       >
                         <RefreshCw className="h-3.5 w-3.5" /> Retry
                       </Button>
@@ -764,7 +764,7 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
                 setOpen(false);
                 setActiveTile(null);
               }}
-              className="group h-9 rounded-full px-5 text-[13px] font-medium text-white shadow-[0_8px_22px_-8px_hsl(var(--brand-green)/0.65)] transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              className="group h-9 rounded-full px-5 text-[13px] font-medium text-primary-foreground shadow-[0_8px_22px_-8px_hsl(var(--brand-green)/0.65)] transition-transform hover:scale-[1.02] active:scale-[0.98]"
               style={{
                 backgroundImage:
                   "linear-gradient(120deg, hsl(var(--brand-blue)) 0%, hsl(var(--brand-green)) 100%)",
@@ -801,7 +801,7 @@ function StatusPill({
       };
     }
     if (status === "error")
-      return { icon: XCircle, spin: false, label: "Sync failed", tone: "text-rose-400" };
+      return { icon: XCircle, spin: false, label: "Sync failed", tone: "text-danger" };
     if (status === "ok" || extractedAt)
       return {
         icon: CheckCircle2,
@@ -2568,17 +2568,17 @@ function UrlConnectStep({
       )}
 
       {status === "error" && lastError && (
-        <div className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/5 px-3 py-2.5 text-[12px] text-rose-400">
+        <div className="flex items-start gap-2 rounded-xl border border-danger-border bg-danger-surface px-3 py-2.5 text-[12px] text-danger">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <div className="flex-1">
-            <div className="font-medium text-rose-300">Couldn't read your site</div>
+            <div className="font-medium text-danger">Couldn't read your site</div>
             <div className="opacity-80">{lastError}</div>
           </div>
           <Button
             size="sm"
             variant="ghost"
             onClick={onRetry}
-            className="h-7 rounded-full px-2.5 text-rose-300 hover:text-rose-200"
+            className="h-7 rounded-full px-2.5 text-danger hover:text-danger"
           >
             <RefreshCw className="h-3.5 w-3.5" /> Retry
           </Button>

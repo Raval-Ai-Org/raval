@@ -1,13 +1,13 @@
 import {
-  Linkedin,
-  Twitter,
-  Instagram,
-  Facebook,
-  Youtube,
-  MessageCircle,
-  Music2,
+  FacebookIcon,
+  InstagramIcon,
+  LinkedinIcon,
+  ThreadsIcon,
+  TiktokIcon,
+  XIcon,
+  YoutubeIcon,
   type LucideIcon,
-} from "@/components/ui/gemini-icons";
+} from "@/components/icons";
 
 export type PlatformId =
   "linkedin" | "twitter" | "instagram" | "facebook" | "threads" | "tiktok" | "youtube";
@@ -31,7 +31,7 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
   linkedin: {
     id: "linkedin",
     label: "LinkedIn",
-    icon: Linkedin,
+    icon: LinkedinIcon,
     color: "#0A66C2",
     maxChars: 3000,
     optimalChars: 1300,
@@ -42,8 +42,8 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
   twitter: {
     id: "twitter",
     label: "X / Twitter",
-    icon: Twitter,
-    color: "#0F1419",
+    icon: XIcon,
+    color: "#71767B",
     maxChars: 280,
     optimalChars: 240,
     hashtags: [0, 2],
@@ -53,7 +53,7 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
   instagram: {
     id: "instagram",
     label: "Instagram",
-    icon: Instagram,
+    icon: InstagramIcon,
     color: "#E1306C",
     maxChars: 2200,
     optimalChars: 150,
@@ -64,7 +64,7 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
   facebook: {
     id: "facebook",
     label: "Facebook",
-    icon: Facebook,
+    icon: FacebookIcon,
     color: "#1877F2",
     maxChars: 2000,
     optimalChars: 450,
@@ -75,8 +75,8 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
   threads: {
     id: "threads",
     label: "Threads",
-    icon: MessageCircle,
-    color: "#000000",
+    icon: ThreadsIcon,
+    color: "#71767B",
     maxChars: 500,
     optimalChars: 380,
     hashtags: [0, 1],
@@ -86,7 +86,7 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
   tiktok: {
     id: "tiktok",
     label: "TikTok",
-    icon: Music2,
+    icon: TiktokIcon,
     color: "#FE2C55",
     maxChars: 2200,
     optimalChars: 150,
@@ -97,7 +97,7 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
   youtube: {
     id: "youtube",
     label: "YouTube",
-    icon: Youtube,
+    icon: YoutubeIcon,
     color: "#FF0000",
     maxChars: 1000,
     optimalChars: 500,

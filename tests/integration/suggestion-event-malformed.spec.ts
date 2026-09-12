@@ -190,9 +190,9 @@ test.describe("Malformed / unknown suggestion event deep-links", () => {
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 5_000 });
     const search1 = await page.evaluate(() => window.location.search);
     expect(search1).not.toMatch(/totally-bogus/);
-    expect(search1).toMatch(
-      /canvas=(social-post|seo-brief|landing-page|email|article|design-asset)/,
-    );
+    // An unknown type falls back to the last-used format (or a social post)
+    // and opens the composer instead of writing the value into the URL.
+    await expect(page.getByRole("dialog", { name: /^New /i })).toBeVisible({ timeout: 5_000 });
 
     // Close, then try more malformed detail shapes.
     await page.keyboard.press("Escape");
@@ -316,8 +316,8 @@ test.describe("Malformed / unknown suggestion event deep-links", () => {
     });
 
     // Dispatch a valid open:canvas — the real handler must still run.
-    await dispatch(page, "open:canvas", { type: "seo-brief" });
-    await expect(page.getByRole("dialog", { name: /SEO Brief/i })).toBeVisible({ timeout: 5_000 });
+    await dispatch(page, "open:canvas", { type: "article" });
+    await expect(page.getByRole("dialog", { name: /New article/i })).toBeVisible({ timeout: 5_000 });
 
     // The rogue throw becomes a global error, but the app is still usable.
     const errs = await readErrors(page);

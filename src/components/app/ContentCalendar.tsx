@@ -5,6 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -85,14 +92,20 @@ export type VersionSnapshot = {
   images?: string[];
 };
 
-const CHANNELS: { id: Channel; label: string; color: string; emoji: string; brand?: BrandKey }[] = [
-  { id: "instagram", label: "Instagram", color: "#E1306C", emoji: "📸", brand: "instagram" },
-  { id: "linkedin", label: "LinkedIn", color: "#0A66C2", emoji: "💼", brand: "linkedin" },
-  { id: "twitter", label: "X / Twitter", color: "#000000", emoji: "🐦", brand: "x" },
-  { id: "tiktok", label: "TikTok", color: "#000000", emoji: "🎵", brand: "tiktok" },
-  { id: "youtube", label: "YouTube", color: "#FF0000", emoji: "▶️", brand: "youtube" },
-  { id: "blog", label: "Blog", color: "#14b8a6", emoji: "📝" },
-  { id: "email", label: "Email", color: "#f43f5e", emoji: "✉️" },
+/**
+ * `color` tints channel dots, lane accents and chips. X and TikTok used to be
+ * #000000, which is invisible against the dark theme's black canvas, so they
+ * carry each brand's published secondary instead — X's neutral grey and
+ * TikTok's pink — both of which read on either theme.
+ */
+const CHANNELS: { id: Channel; label: string; color: string; brand?: BrandKey }[] = [
+  { id: "instagram", label: "Instagram", color: "#E1306C", brand: "instagram" },
+  { id: "linkedin", label: "LinkedIn", color: "#0A66C2", brand: "linkedin" },
+  { id: "twitter", label: "X / Twitter", color: "#71767B", brand: "x" },
+  { id: "tiktok", label: "TikTok", color: "#FE2C55", brand: "tiktok" },
+  { id: "youtube", label: "YouTube", color: "#FF0000", brand: "youtube" },
+  { id: "blog", label: "Blog", color: "#14B8A6" },
+  { id: "email", label: "Email", color: "#F43F5E" },
 ];
 
 function ChannelIcon({
@@ -323,6 +336,7 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
   const rescheduleItem = useServerFn(rescheduleContentItem);
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [anchor, setAnchor] = useState<Date>(() => startOfMonth(new Date()));
   const [view, setView] = useState<"month" | "list">("month");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -478,9 +492,11 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      setLoading(true);
       const legacy = loadEntries(workspaceId).filter((entry) => !UUID_RE.test(entry.id));
       if (!workspaceId) {
         setEntries(legacy);
+        setLoading(false);
         return;
       }
       try {
@@ -493,6 +509,8 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
             description: "Your older local calendar drafts are still available.",
           });
         }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     void load();
@@ -643,7 +661,7 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
         <Button
           size="sm"
           onClick={() => setShowGenerator((v) => !v)}
-          className="shrink-0 gap-1.5 bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-white shadow-[0_6px_18px_-6px_hsl(var(--brand-blue)/0.7)] hover:opacity-95 lg:hidden"
+          className="shrink-0 gap-1.5 bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-primary-foreground shadow-[0_6px_18px_-6px_hsl(var(--brand-blue)/0.7)] hover:opacity-95 lg:hidden"
         >
           <Wand2 className="h-3.5 w-3.5" />
           {showGenerator ? "Close" : "AI"}
@@ -670,10 +688,17 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
             <ChannelLanes dragging onDropChannel={(ch) => moveEntry(draggingId, { channel: ch })} />
           )}
 
-          {entries.length === 0 ? (
+          {loading ? (
+            <CalendarSkeleton view={view} />
+          ) : entries.length === 0 ? (
             <EmptyState
               onOpenGenerator={() => setShowGenerator(true)}
               onNewBlank={() => createBlankPost()}
+            />
+          ) : filtered.length === 0 ? (
+            <FilteredEmpty
+              channel={CH_BY_ID[filter as Channel]?.label ?? "this channel"}
+              onClear={() => setFilter("all")}
             />
           ) : view === "month" ? (
             <MonthGrid
@@ -862,7 +887,7 @@ function Toolbar({
         <Button
           size="sm"
           onClick={onNewPost}
-          className="h-7 gap-1 bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] px-2.5 text-[11px] text-white shadow-[0_6px_16px_-8px_hsl(var(--brand-blue)/0.7)] hover:opacity-95"
+          className="h-7 gap-1 bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] px-2.5 text-[11px] text-primary-foreground shadow-[0_6px_16px_-8px_hsl(var(--brand-blue)/0.7)] hover:opacity-95"
           title="Create a custom post"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -894,21 +919,23 @@ function ChannelFilter({
   onChange: (v: Channel | "all") => void;
 }) {
   return (
-    <div className="flex items-center gap-1 rounded-full border border-border bg-card px-2 py-1">
-      <Filter className="h-3 w-3 text-muted-foreground" />
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as any)}
-        className="bg-transparent text-[11px] outline-none"
-      >
-        <option value="all">All channels</option>
+    <Select value={value} onValueChange={(v) => onChange(v as Channel | "all")}>
+      <SelectTrigger className="h-8 w-auto min-w-[150px] gap-2 rounded-full px-3 text-xs">
+        <Filter className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <SelectValue placeholder="All channels" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">All channels</SelectItem>
         {CHANNELS.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.emoji} {c.label}
-          </option>
+          <SelectItem key={c.id} value={c.id}>
+            <span className="flex items-center gap-2">
+              <ChannelIcon ch={c} size={14} brand={false} />
+              {c.label}
+            </span>
+          </SelectItem>
         ))}
-      </select>
-    </div>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -1057,7 +1084,7 @@ function MonthGrid({
                   className={cn(
                     "text-[11px] font-semibold tabular-nums",
                     isToday &&
-                      "grid h-5 w-5 place-items-center rounded-full bg-[hsl(var(--brand-blue))] text-white",
+                      "grid h-5 w-5 place-items-center rounded-full bg-[hsl(var(--brand-blue))] text-primary-foreground",
                   )}
                 >
                   {d.getDate()}
@@ -1321,7 +1348,7 @@ function Generator({
   return (
     <section className="space-y-3 border-b border-border p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">
+        <span className="grid h-6 w-6 place-items-center rounded-md bg-primary-surface text-primary">
           <Wand2 className="h-3.5 w-3.5" />
         </span>
         <div className="flex-1">
@@ -1415,7 +1442,7 @@ function Generator({
       <Button
         onClick={generate}
         disabled={loading || channels.length === 0}
-        className="w-full bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-white shadow-[0_8px_24px_-8px_hsl(var(--brand-blue)/0.7)] hover:opacity-95"
+        className="w-full bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-primary-foreground shadow-[0_8px_24px_-8px_hsl(var(--brand-blue)/0.7)] hover:opacity-95"
       >
         {loading ? (
           <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1733,7 +1760,7 @@ function EntryEditor({
         }}
       >
         {isDragOver && (
-          <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-primary/10 backdrop-blur-sm">
+          <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-primary-surface backdrop-blur-sm">
             <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary bg-card/95 px-6 py-5 shadow-xl">
               <Upload className="h-6 w-6 text-primary" />
               <div className="text-[13px] font-semibold">Drop images to add</div>
@@ -2239,7 +2266,7 @@ function HistoryPanel({
                         {idx === 0 ? "Latest" : `v${versions.length - idx}`}
                       </span>
                       {v.label === "manual" && (
-                        <span className="rounded-full bg-primary/15 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-primary">
+                        <span className="rounded-full bg-primary-surface px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-primary">
                           Saved
                         </span>
                       )}
@@ -2315,6 +2342,69 @@ function formatAgo(ts: number): string {
 /* Empty state                                                */
 /* ---------------------------------------------------------- */
 
+/**
+ * Shaped like the view it stands in for — a month grid or a list — so the
+ * layout does not jump when the real content arrives.
+ */
+function CalendarSkeleton({ view }: { view: "month" | "list" }) {
+  if (view === "list") {
+    return (
+      <div
+        className="flex-1 space-y-2 overflow-hidden p-4"
+        role="status"
+        aria-label="Loading calendar"
+      >
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 rounded-xl border border-border p-3">
+            <div className="size-9 shrink-0 animate-pulse rounded-lg bg-surface-2" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="h-3.5 w-1/3 animate-pulse rounded bg-surface-2" />
+              <div className="h-3 w-2/3 animate-pulse rounded bg-surface-2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="flex min-h-0 flex-1 flex-col p-3" role="status" aria-label="Loading calendar">
+      <div className="grid grid-cols-7 gap-1.5">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={`h${i}`} className="h-4 animate-pulse rounded bg-surface-2" />
+        ))}
+      </div>
+      <div className="mt-1.5 grid min-h-0 flex-1 grid-cols-7 grid-rows-5 gap-1.5">
+        {Array.from({ length: 35 }).map((_, i) => (
+          <div key={i} className="animate-pulse rounded-lg bg-surface-2" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The calendar has posts, just none on the selected channel. */
+function FilteredEmpty({ channel, onClear }: { channel: string; onClear: () => void }) {
+  return (
+    <div className="flex flex-1 items-center justify-center p-6">
+      <div className="max-w-sm text-center">
+        <span
+          aria-hidden
+          className="mx-auto grid size-11 place-items-center rounded-2xl bg-surface-2 text-muted-foreground ring-1 ring-border"
+        >
+          <Filter className="size-5" />
+        </span>
+        <p className="mt-4 text-sm font-medium text-foreground">Nothing on {channel}</p>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          You have scheduled posts, just none on this channel this month.
+        </p>
+        <Button variant="outline" size="sm" className="mt-4" onClick={onClear}>
+          Show all channels
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({
   onOpenGenerator,
   onNewBlank,
@@ -2325,7 +2415,7 @@ function EmptyState({
   return (
     <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
       <div className="w-full max-w-md text-center">
-        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-white shadow-[0_12px_32px_-12px_hsl(var(--brand-blue)/0.7)]">
+        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-primary-foreground shadow-[0_12px_32px_-12px_hsl(var(--brand-blue)/0.7)]">
           <CalendarDays className="h-7 w-7" />
         </div>
         <h3 className="text-[16px] font-semibold">Your calendar is empty</h3>
@@ -2337,7 +2427,7 @@ function EmptyState({
           <Button
             size="sm"
             onClick={onOpenGenerator}
-            className="gap-1.5 bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-white shadow-[0_8px_24px_-8px_hsl(var(--brand-blue)/0.7)] hover:opacity-95"
+            className="gap-1.5 bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-primary-foreground shadow-[0_8px_24px_-8px_hsl(var(--brand-blue)/0.7)] hover:opacity-95"
           >
             <Sparkles className="h-3.5 w-3.5" /> Generate my plan
           </Button>

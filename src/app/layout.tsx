@@ -43,9 +43,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Must match --background in src/styles.css, or the browser chrome on mobile
+  // renders a different colour than the page it frames.
   themeColor: [
-    { color: "#0f1411", media: "(prefers-color-scheme: dark)" },
-    { color: "#f7f8fa", media: "(prefers-color-scheme: light)" },
+    { color: "#000000", media: "(prefers-color-scheme: dark)" },
+    { color: "#f1f3f6", media: "(prefers-color-scheme: light)" },
   ],
 };
 
@@ -78,17 +80,22 @@ const ORGANIZATION_LD = {
   ],
 };
 
-// Runs before paint to apply persisted theme/density/reduced-motion preferences
-// so the chat surface never flashes the wrong theme on reload.
+// Runs before paint so the page never flashes the wrong theme on reload.
+// The storage key must stay in sync with THEME_STORAGE_KEY in
+// src/hooks/use-theme.tsx; 'reach-theme' is the superseded key, read once so
+// existing users keep the theme they picked.
+//
+// An absent preference means "system", which is why prefers-color-scheme is
+// consulted here rather than defaulting everyone to dark.
 const PRE_HYDRATE = `(function(){try{
-  var d=document.documentElement,ls=window.localStorage;
-  var t=ls.getItem('reach-theme');
-  if(!t){ t='dark'; }
-  d.classList.toggle('dark', t==='dark');
+  var d=document.documentElement,ls=window.localStorage,mm=window.matchMedia;
+  var t=ls.getItem('mellox:theme')||ls.getItem('reach-theme')||'system';
+  var dark = t==='dark' || (t!=='light' && !(mm&&mm('(prefers-color-scheme: light)').matches));
+  d.classList.toggle('dark', dark);
   var den=ls.getItem('chat-density'); d.dataset.chatDensity=(den==='compact'||den==='comfortable')?den:'comfortable';
   var rm=ls.getItem('chat-reduced-motion');
   if(rm==='1'||rm==='0'){ d.dataset.chatMotion=rm==='1'?'reduced':'full'; }
-  else { d.dataset.chatMotion=(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)?'reduced':'full'; }
+  else { d.dataset.chatMotion=(mm&&mm('(prefers-reduced-motion: reduce)').matches)?'reduced':'full'; }
 }catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -99,13 +106,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta property="og:type" content="website" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Text fonts only. The Material Symbols Rounded icon font that used
+            to be requested here is gone: icons are inline SVGs now
+            (src/components/icons), so there is no second blocking stylesheet
+            and no flash of glyph names like "arrow_back" before it lands. */}
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@8..144,100..1000&family=Michroma:wght@400&display=swap"
-        />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..600,0..1,-25..0&display=swap"
         />
         <script
           type="application/ld+json"

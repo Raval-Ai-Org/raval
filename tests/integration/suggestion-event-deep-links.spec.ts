@@ -215,9 +215,9 @@ test.describe("Suggestion event deep-links", () => {
     await seed(page);
     await freshLoad(page);
 
-    await dispatch(page, "open:canvas", { type: "seo-brief" });
-    // StudioCanvasModal sets DialogPrimitive.Title to the tile label.
-    await expect(page.getByRole("dialog", { name: /SEO Brief/i })).toBeVisible({ timeout: 3_000 });
+    await dispatch(page, "open:canvas", { type: "article" });
+    // The Studio composer titles a fresh brief "New <format noun>".
+    await expect(page.getByRole("dialog", { name: /New article/i })).toBeVisible({ timeout: 5_000 });
   });
 
   test("geo:run-audit triggers a POST to /api/geo-audit from GeoAeoPanel", async ({

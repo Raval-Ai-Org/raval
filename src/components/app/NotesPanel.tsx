@@ -13,7 +13,7 @@ import {
   Search,
 } from "@/components/ui/gemini-icons";
 import { cn } from "@/lib/utils";
-import { useAppEvent } from "@/lib/app-events";
+import { useAppEvent } from "@/hooks/use-app-event";
 import { newNoteId, readNotes, writeNotes, type Note, type NoteColor } from "@/lib/notes-store";
 
 /* -------------------- Storage -------------------- */

@@ -41,8 +41,12 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
         aria-live="polite"
       >
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
-          <span className="text-[13px] text-muted-foreground">Loading your workspace…</span>
+          {/* The track was `border-muted`, which on the light canvas is within
+              two lightness points of the background — only the moving arc was
+              visible, so the spinner read as a flickering sliver rather than a
+              ring. `border-border-strong` holds its shape in both themes. */}
+          <div className="size-8 animate-spin rounded-full border-2 border-border-strong border-t-primary" />
+          <span className="text-sm text-muted-foreground">Loading your workspace…</span>
         </div>
       </div>
     );

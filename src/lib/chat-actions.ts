@@ -2,26 +2,60 @@
 // that the chat surfaces so it can drive the Studio + AI Diagnostics panel.
 
 import { emitAppEvent } from "@/lib/app-events";
-import type { CanvasType } from "@/lib/studio";
+import type { StudioType } from "@/lib/studio/formats";
 
 export type ChatAction =
   | { kind: "audit"; label: string; hint: string }
-  | { kind: "studio"; canvas: CanvasType; label: string; hint: string }
+  | { kind: "studio"; canvas: StudioType; label: string; hint: string }
   | { kind: "memory"; label: string; hint: string }
   | { kind: "calendar"; label: string; hint: string };
 
 const RE = {
   audit:
     /\b(audit|scan|ai\s*visibil|geo\b|aeo\b|llms?\.txt|robots\.txt|schema|structured\s*data|how\s*do\s*(ai|engines|chatgpt|gemini|perplexity)\s*see)/i,
-  social: /\b(social\s*post|linkedin|instagram|tweet|x\s*post|tiktok|carousel|reel)\b/i,
-  article: /\b(blog|article|long[-\s]?form|pillar\s*post)\b/i,
-  landing: /\b(landing\s*page|hero\s*section|pricing\s*page|sales\s*page)\b/i,
-  email: /\b(email|newsletter|drip|sequence|cold\s*email)\b/i,
-  seo: /\b(seo\s*brief|keyword\s*research|content\s*brief|rank\s*for)\b/i,
-  design: /\b(design|creative|banner|graphic|cover\s*image|thumbnail)\b/i,
+  carousel: /\b(carousel|swipe\s*post|slides?\s*post)\b/i,
+  video: /\b(reels?|tiktok|shorts|video\s*script|short[-\s]?form\s*video)\b/i,
+  social: /\b(social\s*post|linkedin|instagram|tweet|x\s*post|threads|facebook\s*post)\b/i,
+  ad: /\b(ad\s*copy|ad\s*creative|facebook\s*ads?|meta\s*ads?|paid\s*social|advert)\b/i,
+  article: /\b(blog|article|long[-\s]?form|pillar\s*post|seo\s*brief|content\s*brief)\b/i,
+  design: /\b(design|creative|banner|graphic|cover\s*image|thumbnail|visual)\b/i,
   memory: /\b(brand\s*dna|memory|crawl\s*(my|the)\s*site|extract\s*(from|my)\s*website)\b/i,
   calendar: /\b(content\s*calendar|schedule|this\s*week|plan\s*(my|the)\s*week)\b/i,
 };
+
+const STUDIO_CHIPS: { re: RegExp; canvas: StudioType; label: string; hint: string }[] = [
+  {
+    re: RE.carousel,
+    canvas: "carousel",
+    label: "Create a carousel",
+    hint: "Swipeable slides with a CTA",
+  },
+  {
+    re: RE.video,
+    canvas: "script",
+    label: "Write a short-form script",
+    hint: "Hook, beats, on-screen text",
+  },
+  {
+    re: RE.social,
+    canvas: "social",
+    label: "Create a social post",
+    hint: "A native version per platform",
+  },
+  { re: RE.ad, canvas: "ad", label: "Create an ad", hint: "Variants to test, sized to placement" },
+  {
+    re: RE.article,
+    canvas: "article",
+    label: "Write an article",
+    hint: "Structured, readable long-form",
+  },
+  {
+    re: RE.design,
+    canvas: "image",
+    label: "Create an image post",
+    hint: "On-brand visual with captions",
+  },
+];
 
 export function detectChatActions(prompt: string): ChatAction[] {
   const out: ChatAction[] = [];
@@ -32,48 +66,10 @@ export function detectChatActions(prompt: string): ChatAction[] {
       label: "Run AI visibility audit",
       hint: "Scan your site for GEO + AEO issues",
     });
-  if (RE.social.test(t))
-    out.push({
-      kind: "studio",
-      canvas: "social-post",
-      label: "Open Social Post studio",
-      hint: "Draft LinkedIn / IG / X",
-    });
-  if (RE.article.test(t))
-    out.push({
-      kind: "studio",
-      canvas: "article",
-      label: "Open Article studio",
-      hint: "Outline & draft long-form",
-    });
-  if (RE.landing.test(t))
-    out.push({
-      kind: "studio",
-      canvas: "landing-page",
-      label: "Open Landing Page studio",
-      hint: "Hero · CTA · sections",
-    });
-  if (RE.email.test(t))
-    out.push({
-      kind: "studio",
-      canvas: "email",
-      label: "Open Email studio",
-      hint: "Newsletter or drip",
-    });
-  if (RE.seo.test(t))
-    out.push({
-      kind: "studio",
-      canvas: "seo-brief",
-      label: "Open SEO Brief studio",
-      hint: "AEO-ready outline",
-    });
-  if (RE.design.test(t))
-    out.push({
-      kind: "studio",
-      canvas: "design-asset",
-      label: "Open Design studio",
-      hint: "Creative & brand kit",
-    });
+  for (const chip of STUDIO_CHIPS) {
+    if (chip.re.test(t))
+      out.push({ kind: "studio", canvas: chip.canvas, label: chip.label, hint: chip.hint });
+  }
   if (RE.memory.test(t))
     out.push({ kind: "memory", label: "Open Memory", hint: "Extract brand DNA from your site" });
   if (RE.calendar.test(t))
@@ -88,15 +84,15 @@ export function detectChatActions(prompt: string): ChatAction[] {
   return out.filter((a) => (seen.has(a.label) ? false : (seen.add(a.label), true))).slice(0, 3);
 }
 
-export function runChatAction(action: ChatAction): { toast?: string } {
+export function runChatAction(action: ChatAction, prompt?: string): { toast?: string } {
   if (typeof window === "undefined") return {};
   switch (action.kind) {
     case "audit":
       emitAppEvent("geo:run-audit");
       return { toast: "Running AI visibility audit…" };
     case "studio":
-      emitAppEvent("open:canvas", { type: action.canvas });
-      return { toast: `Opening ${action.label.replace(/^Open /, "")}` };
+      emitAppEvent("open:canvas", { type: action.canvas, brief: prompt?.slice(0, 2000) });
+      return { toast: "Opening Studio" };
     case "memory":
       emitAppEvent("open:brand-dna");
       return { toast: "Opening Memory" };

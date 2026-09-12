@@ -14,6 +14,7 @@ import {
   isScheduleWithinWindow,
 } from "@/lib/sdr.server";
 import { getPublishableAccounts, resolveTargetAccounts } from "@/lib/sdr.targets";
+import { canTransitionContent, isContentStatus, type ContentStatus } from "@/lib/content-lifecycle";
 
 export type SdrHandlerDeps = {
   sdrBaseUrl: string;
@@ -141,6 +142,38 @@ export type PublishSelection =
 
 export type PublishDeps = SdrHandlerDeps & { db: any };
 
+/**
+ * Move an item into a state from which `target` is a legal lifecycle
+ * transition. An explicit publish/schedule click on a draft (or a previously
+ * failed/published item being re-sent) is the user's consent, so those are
+ * promoted to `approved` first. Returns an error message when the item cannot
+ * be distributed from its current state.
+ */
+async function prepareForDistribution(
+  db: any,
+  item: any,
+  target: "publishing" | "scheduled",
+): Promise<string | null> {
+  const from = String(item.status ?? "");
+  // Already in flight — re-sending would create a second delivery job.
+  if (from === "publishing") return "This content is already being published";
+  if (isContentStatus(from) && canTransitionContent(from, target)) return null;
+  const path: ContentStatus[] =
+    from === "published"
+      ? ["draft", "approved"]
+      : from === "draft" || from === "failed"
+        ? ["approved"]
+        : [];
+  if (!path.length)
+    return `Content in status "${from}" can't be ${target === "publishing" ? "published" : "scheduled"}`;
+  for (const status of path) {
+    const { error } = await db.from("content_items").update({ status }).eq("id", item.id);
+    if (error) return `Couldn't approve content before distribution: ${error.message}`;
+    item.status = status;
+  }
+  return null;
+}
+
 async function resolveMediaUrl(db: any, item: any): Promise<string | null> {
   const storagePath =
     item.meta && typeof item.meta === "object" && typeof item.meta.asset_storage_path === "string"
@@ -265,6 +298,12 @@ export async function publishContentItemsHandler(
       })),
     };
 
+    const notReady = await prepareForDistribution(deps.db, item, "publishing");
+    if (notReady) {
+      results.push({ contentItemId: id, status: "skipped", reason: notReady });
+      continue;
+    }
+
     const res = await call(deps, {
       baseUrl: deps.sdrBaseUrl,
       token: deps.token,
@@ -291,15 +330,19 @@ export async function publishContentItemsHandler(
           .upsert(rows, { onConflict: "content_item_id,sdr_target_id" });
       }
       const newMeta = { ...(item.meta ?? {}), sdr_job_id: res.data.job_id, sdr_revision: revision };
-      await deps.db
+      const { error: statusError } = await deps.db
         .from("content_items")
         .update({ status: "publishing", meta: newMeta })
         .eq("id", id);
+      if (statusError) {
+        console.error(`[sdr] publish accepted but status not recorded for ${id}`, statusError);
+      }
       results.push({
         contentItemId: id,
         status: "publishing",
         sdrJobId: res.data.job_id,
         targets: rows.length,
+        ...(statusError ? { reason: "Sent — delivery status will update when confirmed" } : {}),
       });
     } else if (res.status === 200 || res.status === 409) {
       // Idempotent resubmission → the existing job is returned (SC-003).
@@ -452,6 +495,12 @@ export async function scheduleContentItemsHandler(
       })),
     };
 
+    const notReady = await prepareForDistribution(deps.db, item, "scheduled");
+    if (notReady) {
+      results.push({ contentItemId: id, status: "skipped", reason: notReady });
+      continue;
+    }
+
     const res = await call(deps, {
       baseUrl: deps.sdrBaseUrl,
       token: deps.token,
@@ -477,10 +526,13 @@ export async function scheduleContentItemsHandler(
           .upsert(rows, { onConflict: "content_item_id,sdr_target_id" });
       }
       const newMeta = { ...(item.meta ?? {}), sdr_job_id: res.data.job_id, sdr_revision: revision };
-      await deps.db
+      const { error: statusError } = await deps.db
         .from("content_items")
         .update({ status: "scheduled", scheduled_at: utc, meta: newMeta })
         .eq("id", id);
+      if (statusError) {
+        console.error(`[sdr] schedule accepted but status not recorded for ${id}`, statusError);
+      }
       results.push({
         contentItemId: id,
         status: "publishing",

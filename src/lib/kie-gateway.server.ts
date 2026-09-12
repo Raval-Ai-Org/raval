@@ -453,6 +453,162 @@ export async function imageGenerationStream(opts: {
   });
 }
 
+/* ───────────── Async task API (Studio jobs) ─────────────
+ * The functions above hold a request open until the provider finishes. Studio
+ * instead starts a task, stores its id, and checks it on each poll — so a
+ * render survives navigation and never outlives an HTTP timeout. */
+
+export type KieImageSize = "1024x1024" | "1024x1280" | "1792x1024" | "1024x1792";
+
+function imageAspect(size: KieImageSize): string {
+  return size === "1024x1280"
+    ? "4:5"
+    : aspectRatio(size as "1024x1024" | "1792x1024" | "1024x1792");
+}
+
+export type StartedTask = { taskId: string; model: string; route: string; fallbacks: string[] };
+
+/** Route a model, enforce the image budget, and create one provider task. */
+export async function startImageTask(opts: {
+  prompt: string;
+  size: KieImageSize;
+  referenceAssets?: string[];
+  model?: string;
+}): Promise<StartedTask> {
+  const referenceAssets = (opts.referenceAssets ?? [])
+    .filter((value) => /^https:\/\//i.test(value))
+    .slice(0, 4);
+  const plan = routeImageModel({
+    prompt: opts.prompt,
+    hasReference: referenceAssets.length > 0,
+    referenceAssets,
+    editing: referenceAssets.length > 0,
+  });
+  if (!opts.model) await enforceBudget("image");
+  const model = opts.model ?? plan.model;
+  const key = getApiKey();
+  const input: Record<string, unknown> = {
+    prompt: opts.prompt.slice(0, 10_000),
+    aspect_ratio: imageAspect(opts.size),
+    resolution: "1K",
+    background: "opaque",
+  };
+  if (referenceAssets.length) input.image_urls = referenceAssets;
+  const json = await fetchJson(
+    `${KIE_BASE}/jobs/createTask`,
+    { method: "POST", headers: headers(key), body: JSON.stringify({ model, input }) },
+    30_000,
+  );
+  const taskId = json?.data?.taskId ?? json?.data?.task_id ?? json?.taskId ?? json?.task_id;
+  if (typeof taskId !== "string" || !taskId) {
+    throw new KieGatewayError(502, "The image provider did not return a task ID.", "response");
+  }
+  return {
+    taskId,
+    model,
+    route: plan.route,
+    fallbacks: plan.fallbacks.filter((m) => m !== model),
+  };
+}
+
+/** Enforce the video budget and create one provider task. */
+export async function startVideoTask(opts: {
+  prompt: string;
+  aspectRatio?: VideoAspectRatio;
+  duration?: number;
+  resolution?: VideoResolution;
+  audio?: boolean;
+  seed?: number;
+}): Promise<StartedTask> {
+  const duration = opts.duration ?? 6;
+  if (!SUPPORTED_VIDEO_DURATIONS.includes(duration as (typeof SUPPORTED_VIDEO_DURATIONS)[number])) {
+    throw new KieGatewayError(400, "Video duration must be 4, 6, or 8 seconds.", "request");
+  }
+  await enforceBudget("video");
+  const model = KIE_VIDEO_MODEL;
+  const json = await fetchJson(
+    `${KIE_BASE}/jobs/createTask`,
+    {
+      method: "POST",
+      headers: headers(getApiKey()),
+      body: JSON.stringify({
+        model,
+        input: {
+          prompt: opts.prompt.slice(0, 20_000),
+          resolution: opts.resolution ?? "720P",
+          aspect_ratio: normalizeKieAspectRatio(opts.aspectRatio),
+          duration,
+          audio: opts.audio ?? true,
+          seed: opts.seed ?? 0,
+          nsfw_checker: true,
+        },
+      }),
+    },
+    30_000,
+  );
+  const taskId = json?.data?.taskId ?? json?.data?.task_id ?? json?.taskId ?? json?.task_id;
+  if (typeof taskId !== "string" || !taskId) {
+    throw new KieGatewayError(502, "The video provider did not return a task ID.", "response");
+  }
+  return { taskId, model, route: "video", fallbacks: [] };
+}
+
+export type TaskCheck =
+  | { state: "pending" }
+  | { state: "success"; urls: string[] }
+  | { state: "failed"; message: string };
+
+/** One status read — never waits. */
+export async function checkTask(taskId: string): Promise<TaskCheck> {
+  const json = await fetchJson(
+    `${KIE_BASE}/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
+    { headers: headers(getApiKey()) },
+    30_000,
+  );
+  const record = json?.data ?? json;
+  const state = String(record?.state ?? record?.status ?? record?.taskStatus ?? "").toLowerCase();
+  if (["success", "completed", "succeeded"].includes(state)) {
+    const urls = resultUrls(record);
+    if (!urls.length) return { state: "failed", message: "The provider returned no result." };
+    return { state: "success", urls };
+  }
+  if (["fail", "failed", "error", "cancelled"].includes(state)) {
+    const reason =
+      typeof record?.failMsg === "string" && record.failMsg.trim()
+        ? record.failMsg.trim().slice(0, 200)
+        : "The provider could not complete this render.";
+    return { state: "failed", message: reason };
+  }
+  return { state: "pending" };
+}
+
+export function recordTaskUsage(args: {
+  kind: "image" | "video";
+  model: string;
+  latencyMs: number;
+  ok: boolean;
+}) {
+  recordUsage({
+    provider: "kie",
+    model: args.model,
+    kind: args.kind,
+    ...(args.ok
+      ? {
+          units: 1,
+          estCostUsd: args.kind === "video" ? unitPrice("kie:video") : imagePrice(args.model),
+        }
+      : { status: "error" as const }),
+    latencyMs: args.latencyMs,
+  });
+}
+
+export function pickVideoUrl(urls: string[]): { videoUrl?: string; thumbnailUrl?: string } {
+  return {
+    videoUrl: urls.find((url) => /\.(mp4|webm|mov)(?:\?|$)/i.test(url)) ?? urls[0],
+    thumbnailUrl: urls.find((url) => /\.(png|jpe?g|webp)(?:\?|$)/i.test(url)),
+  };
+}
+
 export async function videoGeneration(opts: {
   prompt: string;
   aspectRatio?: VideoAspectRatio;

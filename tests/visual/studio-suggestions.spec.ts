@@ -313,7 +313,7 @@ test.describe("Studio rail suggestion cards", () => {
       if (c.forceMobile) await forceRailVisibleForMobile(page);
 
       // Wait for the rail + the seeded suggestion cards to render.
-      await expect(page.getByRole("button", { name: /create a new canvas/i })).toBeVisible({
+      await expect(page.getByRole("button", { name: /create something new/i })).toBeVisible({
         timeout: 15_000,
       });
       await expect(page.getByRole("heading", { name: /suggestions for you/i })).toBeVisible({
@@ -389,7 +389,7 @@ test.describe("Studio rail suggestion cards — extreme content", () => {
 
       if (c.forceMobile) await forceRailVisibleForMobile(page);
 
-      await expect(page.getByRole("button", { name: /create a new canvas/i })).toBeVisible({
+      await expect(page.getByRole("button", { name: /create something new/i })).toBeVisible({
         timeout: 15_000,
       });
       await expect(page.getByRole("heading", { name: /suggestions for you/i })).toBeVisible({

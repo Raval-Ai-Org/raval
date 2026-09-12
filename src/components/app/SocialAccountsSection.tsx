@@ -391,8 +391,8 @@ export function SocialAccountsSection({ variant, onManage }: Props) {
               Connect {pendingLabel}
             </h4>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              RavalAI will redirect you to {pendingLabel}'s official authorization page. You choose
-              the permissions there, and can revoke access at any time.
+              Mellox AI will redirect you to {pendingLabel}&rsquo;s official authorization page. You
+              choose the permissions there, and can revoke access at any time.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setPendingPlatform(null)}>

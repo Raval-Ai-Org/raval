@@ -166,12 +166,12 @@ export function useStudioSuggestions() {
 
     if ((blogCount.count ?? 0) === 0) {
       out.push({
-        id: "first-seo-brief",
-        label: "Draft your first SEO brief",
-        hint: "Target an AEO-friendly question",
+        id: "first-article",
+        label: "Write your first article",
+        hint: "Answer a question your buyers search for",
         accent: "blue",
         icon: "FileText",
-        run: () => openCanvas("seo-brief"),
+        run: () => openCanvas("article"),
       });
     }
 
@@ -419,7 +419,11 @@ function runIntent(intent: string, prompt: string) {
       emitAppEvent("open:client-portal");
       return;
     case "seo-brief":
-      emitAppEvent("open:canvas", { type: "seo-brief" });
+    case "blog":
+      emitAppEvent("open:canvas", { type: "article", brief: prompt });
+      return;
+    case "social":
+      emitAppEvent("open:canvas", { type: "social", brief: prompt });
       return;
     default:
       chatPrefill(prompt);

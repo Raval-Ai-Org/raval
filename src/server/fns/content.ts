@@ -10,6 +10,7 @@ import {
   assertContentTransition,
   CONTENT_STATUSES,
   hasMeaningfulContentChange,
+  mergeMeta,
   type ContentStatus,
 } from "@/lib/content-lifecycle";
 
@@ -24,11 +25,24 @@ const ChannelEnum = z.enum([
   "facebook",
   "tiktok",
   "youtube",
+  "threads",
   "blog",
   "email",
   "web",
 ]);
-const KindEnum = z.enum(["post", "brief", "email", "landing", "blog"]);
+// brief / email / landing are legacy kinds: still readable, no longer created by Studio.
+const KindEnum = z.enum([
+  "post",
+  "carousel",
+  "image",
+  "video",
+  "ad",
+  "script",
+  "blog",
+  "brief",
+  "email",
+  "landing",
+]);
 const AgentEnum = z.enum(["scout", "spark", "echo"]);
 const StatusEnum = z.enum(CONTENT_STATUSES);
 
@@ -128,10 +142,12 @@ const CreateSchema = z.object({
   kind: KindEnum.default("post"),
   channel: ChannelEnum.optional().nullable(),
   title: z.string().max(280).optional().nullable(),
-  body: z.string().max(8000).optional().nullable(),
+  body: z.string().max(40000).optional().nullable(),
   hashtags: z.array(z.string().max(60)).max(30).optional(),
   media_url: z.string().url().max(2048).optional().nullable(),
-  status: StatusEnum.optional(),
+  // New work always enters the lifecycle at the start; approval, scheduling and
+  // publishing are transitions, never an insert-time shortcut.
+  status: z.enum(["draft", "pending"]).optional(),
   scheduled_at: z.string().datetime().optional().nullable(),
   meta: z.record(z.string(), z.any()).optional(),
 });
@@ -170,7 +186,7 @@ const UpdateSchema = z.object({
   patch: z
     .object({
       title: z.string().max(280).optional().nullable(),
-      body: z.string().max(8000).optional().nullable(),
+      body: z.string().max(40000).optional().nullable(),
       hashtags: z.array(z.string().max(60)).max(30).optional(),
       channel: ChannelEnum.optional().nullable(),
       media_url: z.string().url().max(2048).optional().nullable(),
@@ -187,7 +203,7 @@ export const updateContentItem = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: current, error: readError } = await context.supabase
       .from("content_items")
-      .select("status")
+      .select("status, meta")
       .eq("id", data.id)
       .single();
     if (readError || !current) throw new Error(readError?.message ?? "Content item not found");
@@ -196,7 +212,16 @@ export const updateContentItem = createServerFn({ method: "POST" })
     const currentStatus = current.status as ContentStatus;
     const requestedStatus = patch.status as string | undefined;
 
-    if (currentStatus === "approved" && hasMeaningfulContentChange(patch)) {
+    // `meta` is shared bookkeeping (platform, asset link, SDR job ids). Merge
+    // instead of replacing so one writer never erases another's keys; a `null`
+    // value removes a key.
+    if (data.patch.meta) patch.meta = mergeMeta(current.meta, data.patch.meta);
+
+    if (
+      currentStatus === "approved" &&
+      hasMeaningfulContentChange(patch) &&
+      (!requestedStatus || requestedStatus === currentStatus)
+    ) {
       // Editing approved work invalidates its approval and requires review again.
       patch.status = "draft";
     } else if (requestedStatus) {

@@ -45,16 +45,27 @@ type Signals = {
 
 function grepLine(ctx: string | undefined | null, label: string): string {
   if (!ctx) return "";
-  const rx = new RegExp(`^\\s*${label}\\s*:\\s*(.+)$`, "im");
+  // Context strings come in several shapes: "Brand: X" (Studio), "- Brand: X"
+  // (serializeBrandContext / chat) and "brandName: X" (older rail payloads).
+  const rx = new RegExp(`^\\s*(?:[-*•]\\s*)?${label}\\s*:\\s*(.+)$`, "im");
   const m = ctx.match(rx);
   return m ? m[1].trim() : "";
 }
 
 export function extractBrandBits(ctx?: string | null) {
   return {
-    brand: grepLine(ctx, "Brand") || grepLine(ctx, "Brand name") || "your brand",
-    audience: grepLine(ctx, "Audience") || "your audience",
-    offer: grepLine(ctx, "Products") || grepLine(ctx, "One-liner") || "your offer",
+    brand:
+      grepLine(ctx, "Brand") ||
+      grepLine(ctx, "Brand name") ||
+      grepLine(ctx, "brandName") ||
+      "your brand",
+    audience: grepLine(ctx, "Audience") || grepLine(ctx, "audience") || "your audience",
+    offer:
+      grepLine(ctx, "Products") ||
+      grepLine(ctx, "products") ||
+      grepLine(ctx, "One-liner") ||
+      grepLine(ctx, "oneLiner") ||
+      "your offer",
   };
 }
 
@@ -108,13 +119,6 @@ const ALL_SUGGESTIONS: Array<
     when: (s) => (s.publishedLast7d < 2 ? 60 : 30),
   },
   {
-    label: "Draft an email",
-    hint: "Move an idea into the inbox",
-    prompt: "Draft a short customer email grounded in my brand DNA",
-    intent: "email",
-    when: () => 40,
-  },
-  {
     label: "Outline a blog post",
     hint: "No long-form yet — build SEO surface",
     prompt: "Outline a blog post that ranks for a query my audience searches",
@@ -127,13 +131,6 @@ const ALL_SUGGESTIONS: Array<
     prompt: "Give me 5 sharp campaign angles for this week grounded in my brand",
     intent: "ideate",
     when: () => 35,
-  },
-  {
-    label: "Write an SEO brief",
-    hint: "Turn a query into a ranking page",
-    prompt: "Write an SEO brief for a query my audience is searching",
-    intent: "seo-brief",
-    when: (s) => (s.hasBlog ? 45 : 25),
   },
   {
     label: "Share progress with client",

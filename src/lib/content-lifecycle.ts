@@ -38,6 +38,22 @@ export function assertContentTransition(from: string, to: string): asserts to is
   }
 }
 
+/** Shallow-merge a meta patch into the stored meta; `null` removes a key. */
+export function mergeMeta(
+  current: unknown,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  const base =
+    current && typeof current === "object" && !Array.isArray(current)
+      ? { ...(current as Record<string, unknown>) }
+      : {};
+  for (const [key, value] of Object.entries(next)) {
+    if (value === null) delete base[key];
+    else base[key] = value;
+  }
+  return base;
+}
+
 export function hasMeaningfulContentChange(patch: Record<string, unknown>): boolean {
   return ["title", "body", "hashtags", "channel", "media_url", "meta"].some(
     (field) => field in patch,

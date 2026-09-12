@@ -82,7 +82,7 @@ export function AccountMenu({
             "transition-colors hover:bg-secondary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
           )}
         >
-          <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[11px] font-semibold text-white ring-1 ring-border/60">
+          <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[11px] font-semibold text-primary-foreground ring-1 ring-border/60">
             {user?.avatar ? (
               <Image
                 src={user.avatar}
@@ -110,7 +110,7 @@ export function AccountMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" sideOffset={8} className="w-64 p-1.5">
         <DropdownMenuLabel className="flex items-center gap-2.5 px-2 py-2">
-          <span className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[12px] font-semibold text-white">
+          <span className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[12px] font-semibold text-primary-foreground">
             {user?.avatar ? (
               <Image
                 src={user.avatar}
@@ -168,7 +168,7 @@ export function AccountMenu({
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
-            window.open(`${BASE_URL}/#help`, "_blank", "noopener,noreferrer");
+            window.open("mailto:support@mellox.ai", "_blank", "noopener,noreferrer");
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
@@ -205,7 +205,7 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           type="button"
           aria-label={`Account — ${name}`}
           title={name}
-          className="relative grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[10px] font-semibold text-white ring-1 ring-border/60 transition hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="relative grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[10px] font-semibold text-primary-foreground ring-1 ring-border/60 transition hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           {user?.avatar ? (
             <Image
@@ -223,7 +223,7 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="right" sideOffset={10} className="w-64 p-1.5">
         <DropdownMenuLabel className="flex items-center gap-2.5 px-2 py-2">
-          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[12px] font-semibold text-white">
+          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-[12px] font-semibold text-primary-foreground">
             {user?.avatar ? (
               <img
                 src={user.avatar}
@@ -270,7 +270,7 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" /> Plan & usage
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => window.open(`${BASE_URL}/#help`, "_blank", "noopener,noreferrer")}
+          onSelect={() => window.open("mailto:support@mellox.ai", "_blank", "noopener,noreferrer")}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <HelpCircle className="h-4 w-4 text-muted-foreground" /> Help & FAQ

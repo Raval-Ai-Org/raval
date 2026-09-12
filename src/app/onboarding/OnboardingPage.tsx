@@ -602,7 +602,7 @@ function ReviewView({
               value={String(brand[key] || "")}
               onChange={(event) => onChange({ [key]: event.target.value })}
               placeholder={placeholder}
-              className="h-11 w-full rounded-xl border border-border bg-card px-3.5 text-[13.5px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className="h-11 w-full rounded-xl border border-border bg-card px-3.5 text-[13.5px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-border"
             />
           </label>
         ))}

@@ -388,9 +388,9 @@ function AgencyHqPill() {
     <Link
       to="/agency"
       aria-label="Open Command Center — combined view across all clients"
-      className="group relative inline-flex h-9 items-center gap-2 overflow-hidden rounded-full border border-brand-green/35 bg-brand-green/[0.09] pl-1 pr-3.5 text-[13px] font-semibold text-brand-green backdrop-blur-md transition hover:bg-brand-green/[0.14] hover:border-brand-green/55 hover:shadow-[0_0_28px_-6px_hsl(var(--brand-green)/0.38)]"
+      className="group relative inline-flex h-9 items-center gap-2 overflow-hidden rounded-full border border-primary-border bg-primary-surface pl-1 pr-3.5 text-[13px] font-semibold text-brand-green backdrop-blur-md transition hover:bg-primary-surface hover:border-primary-border hover:shadow-[0_0_28px_-6px_hsl(var(--brand-green)/0.38)]"
     >
-      <span className="relative grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-brand-green to-emerald-700 text-white shadow-[0_0_14px_-3px_hsl(var(--brand-green)/0.5)] transition group-hover:scale-[1.06]">
+      <span className="relative grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-brand-green to-emerald-700 text-primary-foreground shadow-[0_0_14px_-3px_hsl(var(--brand-green)/0.5)] transition group-hover:scale-[1.06]">
         <LayoutDashboard className="h-3.5 w-3.5" strokeWidth={2.2} />
         <span className="pointer-events-none absolute inset-0 rounded-full border border-white/20" />
       </span>
@@ -741,7 +741,7 @@ function ProjectCard({
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="grid place-items-center rounded-2xl border border-dashed border-border/70 bg-background/40 px-6 py-14 text-center">
-      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-aura via-aura-purple to-aura-pink text-white">
+      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-aura via-aura-purple to-aura-pink text-primary-foreground">
         <Sparkles className="h-5 w-5" />
       </div>
       <h3 className="mt-3 text-[15px] font-semibold tracking-tight">No projects yet</h3>
@@ -830,7 +830,7 @@ function PasteLinkBar({
         onSubmit={submit}
         className={cn(
           "group relative flex h-14 items-center gap-1.5 rounded-full border border-border/70 bg-card/95 pl-1.5 pr-1.5 shadow-[0_10px_28px_-18px_hsl(var(--foreground)/0.32),0_1px_0_hsl(var(--foreground)/0.04)_inset] backdrop-blur-xl",
-          "transition focus-within:border-brand-green/70 focus-within:shadow-[0_12px_32px_-18px_hsl(var(--brand-green)/0.38),0_1px_0_hsl(var(--foreground)/0.05)_inset]",
+          "transition focus-within:border-primary-border focus-within:shadow-[0_12px_32px_-18px_hsl(var(--brand-green)/0.38),0_1px_0_hsl(var(--foreground)/0.05)_inset]",
         )}
       >
         <button
@@ -860,7 +860,7 @@ function PasteLinkBar({
           className={cn(
             "!mt-0 grid h-11 w-11 shrink-0 place-items-center rounded-full transition",
             isValid && !saving
-              ? "bg-gradient-to-br from-aura via-aura-purple to-aura-pink text-white shadow-[0_8px_24px_-10px_hsl(var(--aura)/0.7)] hover:-translate-y-0.5"
+              ? "bg-gradient-to-br from-aura via-aura-purple to-aura-pink text-primary-foreground shadow-[0_8px_24px_-10px_hsl(var(--aura)/0.7)] hover:-translate-y-0.5"
               : "bg-secondary text-muted-foreground",
           )}
         >

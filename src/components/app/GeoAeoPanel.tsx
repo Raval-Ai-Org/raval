@@ -595,7 +595,7 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
             "relative inline-flex shrink-0 items-center gap-1.5 overflow-hidden rounded-full px-3 py-1.5 text-[11.5px] font-medium transition-all sm:px-3.5 sm:text-[12px]",
             result
               ? "border border-border/70 bg-card hover:border-foreground/20 hover:bg-secondary"
-              : "bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-white shadow-[0_4px_18px_-6px_hsl(var(--brand-blue)/0.6)]",
+              : "bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-primary-foreground shadow-[0_4px_18px_-6px_hsl(var(--brand-blue)/0.6)]",
             "disabled:opacity-50 disabled:cursor-not-allowed",
           )}
         >
@@ -830,7 +830,7 @@ export function GeoAeoPanel({ workspaceId }: { workspaceId: string | null }) {
                             "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10.5px] font-semibold transition-all sm:text-[11px]",
                             isOpen
                               ? "border border-foreground/20 bg-secondary text-foreground"
-                              : "bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-white shadow-[0_2px_10px_-3px_hsl(var(--brand-blue)/0.6)]",
+                              : "bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-primary-foreground shadow-[0_2px_10px_-3px_hsl(var(--brand-blue)/0.6)]",
                           )}
                         >
                           <Wrench className="h-2.5 w-2.5" strokeWidth={2.4} />

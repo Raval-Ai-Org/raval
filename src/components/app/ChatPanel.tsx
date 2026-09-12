@@ -1,43 +1,33 @@
 "use client";
 
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { useNavigate } from "@/lib/navigation";
 import {
   ArrowUp,
-  Sparkles,
-  ChevronDown,
-  Square,
-  Search,
   Check,
-  Paperclip,
-  SlidersHorizontal,
-  Target,
-  Globe,
-  MessageSquare,
-  Bot,
-  Command as CmdIcon,
-  Sun,
-  Moon,
-} from "@/components/brand/icons";
-import {
-  Rows3,
-  Rows2,
-  Zap,
-  ZapOff,
-  FileText,
-  FileSpreadsheet,
-  FileImage,
+  ChevronDown,
   File as FileIcon,
-  X,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  Globe,
+  Bot,
   Loader2,
+  MessageSquare,
+  Paperclip,
   Plus,
-} from "@/components/ui/gemini-icons";
-import { Mi } from "@/components/ui/mi";
+  RefreshCw,
+  Search,
+  Sparkles,
+  Stop,
+  X,
+} from "@/components/icons";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
   classify as classifyAttachment,
   extractAttachment,
@@ -83,7 +73,7 @@ import {
 type Msg = {
   id: string;
   role: "user" | "assistant" | "system";
-  kind: "text" | "approval" | "progress" | "reminder" | "clarify" | "actions";
+  kind: "text" | "approval" | "progress" | "reminder" | "clarify" | "actions" | "notice" | "error";
   content: string;
   status?: "sending" | "streaming" | "completed" | "failed" | "cancelled";
   payload?: any;
@@ -146,7 +136,7 @@ function ToolResultsRow({ results }: { results: ChatToolResult[] }) {
           transition={{ delay: 0.04 * i }}
           className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium ${
             r.ok
-              ? "border-[hsl(var(--brand-green)/0.35)] bg-[hsl(var(--brand-green)/0.08)] text-foreground"
+              ? "border-primary-border bg-primary-surface text-foreground"
               : "border-amber-500/40 bg-amber-500/10 text-foreground"
           }`}
           title={r.detail}
@@ -193,6 +183,17 @@ export function ChatPanel({
   const [userId, setUserId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  // Held so the composer's stop button can actually interrupt the request.
+  // Before this, the button rendered a stop icon, was deliberately left
+  // enabled during streaming, and called send() — which returns immediately
+  // while `streaming` is true. Clicking it did nothing at all.
+  const abortRef = useRef<AbortController | null>(null);
+  const [failedTurn, setFailedTurn] = useState<{ role: string; content: string }[] | null>(null);
+
+  const stopStreaming = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, []);
   const [clarifying, setClarifying] = useState(false);
   const [modelId, setModelId] = useState(MODELS[0].id);
   const [modelOpen, setModelOpen] = useState(false);
@@ -807,7 +808,18 @@ export function ChatPanel({
     return buildSmartChatContext("", ctxSources, 3000);
   }, [ctxSources]);
 
+  const retryFailedTurn = async () => {
+    const history = failedTurn;
+    if (!history || streaming) return;
+    setFailedTurn(null);
+    setMessages((m) => m.filter((x) => x.kind !== "error"));
+    await runChatStream(history);
+  };
+
   const runChatStream = async (history: { role: string; content: string }[]) => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setFailedTurn(null);
     setStreaming(true);
     emitAppEvent("chat:working", { label: "Agents working on your site…" });
     // Drive the rich preview stages from the latest user message.
@@ -827,6 +839,7 @@ export function ChatPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: recentMessages, context: smartCtx, modelId }),
+        signal: controller.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -842,6 +855,11 @@ export function ChatPanel({
         } else {
           toast.error("AI request failed", { description: detail });
         }
+        setFailedTurn(history);
+        setMessages((m) => [
+          ...m,
+          { id: crypto.randomUUID(), role: "assistant", kind: "error", content: detail },
+        ]);
         setStreaming(false);
         emitAppEvent("chat:idle");
         stopPreviewPlan();
@@ -855,6 +873,10 @@ export function ChatPanel({
       const aId = crypto.randomUUID();
       setMessages((m) => [...m, { id: aId, role: "assistant", kind: "text", content: "" }]);
       while (true) {
+        if (controller.signal.aborted) {
+          await reader.cancel().catch(() => {});
+          break;
+        }
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
@@ -937,10 +959,36 @@ export function ChatPanel({
         });
         emitAppEvent("chat:conversation-changed");
       }
-    } catch {
-      toast.error("Connection lost");
+    } catch (error) {
       stopPreviewPlan();
+      if ((error as Error)?.name === "AbortError" || controller.signal.aborted) {
+        // The user stopped it. Keep whatever streamed in and say so, rather
+        // than reporting a connection failure they caused deliberately.
+        setMessages((m) => [
+          ...m,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            kind: "notice",
+            content: "Stopped.",
+          },
+        ]);
+      } else {
+        setFailedTurn(history);
+        setMessages((m) => [
+          ...m,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            kind: "error",
+            content:
+              (error as Error)?.message?.trim() ||
+              "The connection dropped before the reply finished.",
+          },
+        ]);
+      }
     } finally {
+      abortRef.current = null;
       setStreaming(false);
       emitAppEvent("chat:idle");
       completePreviewPlan("All done", "Your update is ready");
@@ -1326,6 +1374,52 @@ export function ChatPanel({
                     );
                   }
 
+                  if (m.kind === "notice") {
+                    return (
+                      <motion.div key={m.id} layout={!reducedMotion} {...mFade}>
+                        <p className="pl-10 text-xs text-muted-foreground">{m.content}</p>
+                      </motion.div>
+                    );
+                  }
+
+                  if (m.kind === "error") {
+                    const isLast = i === messages.length - 1;
+                    return (
+                      <motion.div key={m.id} layout={!reducedMotion} {...mFade}>
+                        <div
+                          role="alert"
+                          className="ml-10 flex flex-col gap-2 rounded-xl border border-danger-border bg-danger-surface px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="flex min-w-0 items-start gap-2.5">
+                            <AlertTriangle
+                              className="mt-px size-4 shrink-0 text-danger"
+                              aria-hidden
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground">
+                                That reply didn&rsquo;t finish
+                              </p>
+                              <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                                {m.content}
+                              </p>
+                            </div>
+                          </div>
+                          {isLast && failedTurn ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="shrink-0 self-start sm:self-auto"
+                              onClick={() => void retryFailedTurn()}
+                            >
+                              <RefreshCw className="size-4" />
+                              Try again
+                            </Button>
+                          ) : null}
+                        </div>
+                      </motion.div>
+                    );
+                  }
+
                   return (
                     <motion.div
                       key={m.id}
@@ -1439,11 +1533,11 @@ export function ChatPanel({
                     a.kind === "image"
                       ? "text-fuchsia-400"
                       : a.kind === "xlsx"
-                        ? "text-emerald-400"
+                        ? "text-success"
                         : a.kind === "pdf"
-                          ? "text-rose-400"
+                          ? "text-danger"
                           : a.kind === "docx"
-                            ? "text-sky-400"
+                            ? "text-info"
                             : "text-muted-foreground";
                   return (
                     <div
@@ -1503,7 +1597,7 @@ export function ChatPanel({
                 aria-label="Attach file"
                 title="Attach files — PDF, DOCX, XLSX, images, code, text (max 20MB each)"
               >
-                <Mi name="add" size={22} weight="medium" />
+                <Plus size={22} />
               </button>
 
               <textarea
@@ -1540,23 +1634,19 @@ export function ChatPanel({
               />
 
               <button
-                onClick={() => {
-                  send();
-                }}
-                disabled={!input.trim() && !attachments.length && !streaming}
+                type="button"
+                onClick={() => (streaming ? stopStreaming() : send())}
+                disabled={!streaming && !input.trim() && !attachments.length}
                 aria-label={streaming ? "Stop generating" : "Send message"}
+                title={streaming ? "Stop generating" : "Send message"}
                 className="prompt-send chat-focus shrink-0"
               >
-                {streaming ? (
-                  <Mi name="stop" size={20} weight="bold" filled />
-                ) : (
-                  <Mi name="arrow_upward" size={22} weight="bold" />
-                )}
+                {streaming ? <Stop size={16} /> : <ArrowUp size={20} />}
               </button>
             </div>
           </div>
           {dragging && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/60 bg-primary/10 backdrop-blur-sm">
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/60 bg-primary-surface backdrop-blur-sm">
               <div className="flex items-center gap-2 rounded-full bg-background/90 px-4 py-1.5 text-[12px] font-medium text-foreground shadow-lg">
                 <Paperclip className="h-3.5 w-3.5" />
                 Drop to attach · PDF · DOCX · XLSX · images · code

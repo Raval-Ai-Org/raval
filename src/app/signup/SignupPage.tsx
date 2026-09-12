@@ -249,7 +249,7 @@ function SignupPage() {
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-primary/25 bg-primary/5 p-4 text-center"
+          className="rounded-2xl border border-primary-border bg-primary/5 p-4 text-center"
         >
           <p className="text-sm font-medium text-foreground">
             Check your email to finish signing up.

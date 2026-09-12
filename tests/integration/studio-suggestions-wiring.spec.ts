@@ -75,7 +75,7 @@ const SUGGESTIONS = [
   },
   {
     id: "s-brief",
-    label: "Draft your first SEO brief",
+    label: "Write your first article",
     hint: "AEO-friendly question",
     accent: "blue",
     icon: "FileText",
@@ -221,7 +221,7 @@ test.describe("Studio suggestions wiring", () => {
     await clickAndExpect(/Run suggestion: Capture your Brand DNA/, "open:brand-dna");
     await clickAndExpect(/Run suggestion: Review drafts/, "open:content-calendar");
     await clickAndExpect(/Run suggestion: Share with a client/, "open:client-portal");
-    await clickAndExpect(/Run suggestion: Draft your first SEO brief/, "open:canvas");
+    await clickAndExpect(/Run suggestion: Write your first article/, "open:canvas");
     await clickAndExpect(/Run suggestion: Plan this week's content/, "chat:prefill");
   });
 });

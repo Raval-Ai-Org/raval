@@ -2,616 +2,343 @@
 
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
-import { useVisibleInterval } from "@/hooks/use-visible-interval";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { toast } from "sonner";
 import {
-  PanelRightClose,
-  PanelRightOpen,
-  Plus,
-  ChevronRight,
-  Sparkles,
-  Mail,
-  Wand2,
-  Calendar,
+  AlertTriangle,
   Brain,
+  Calendar,
+  Check,
+  FileText,
+  Plus,
   Search,
   Share2,
-  FileText,
-  Zap,
-} from "@/components/brand/icons";
-import { AnimatePresence, motion } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { STUDIO_TILES, TILE_BY_ID, type QueueItem, type CanvasType } from "@/lib/studio";
+  Sparkles,
+  Wand2,
+  X,
+  Mail,
+} from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { supabase } from "@/integrations/supabase/client";
-import { useServerFn } from "@/lib/use-server-fn";
+import { getActiveWorkspaceId } from "@/lib/authed-fetch";
+import { cn } from "@/lib/utils";
+import { duration, ease } from "@/lib/motion";
 import { updateContentItem } from "@/lib/content.functions";
-import { genQueue, type GenJob } from "@/lib/generation-queue";
-import { GenerationQueueRow } from "@/components/app/GenerationQueueRow";
+import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
+import {
+  STUDIO_FORMATS,
+  LEGACY_KINDS,
+  studioTypeFromContent,
+  type StudioType,
+} from "@/lib/studio/formats";
+import { isActiveJob, type StudioJob } from "@/lib/studio/jobs";
+import {
+  cancelSession,
+  getStudioState,
+  openComposer,
+  openJob,
+  useStudioStore,
+} from "@/lib/studio/session-store";
+import { openItemOrJob } from "@/hooks/use-studio";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import {
   useStudioSuggestions,
   type StudioSuggestion,
   type StudioSuggestionAccent,
 } from "@/hooks/use-studio-suggestions";
-import { GeneratePostImageButton } from "@/components/app/GeneratePostImageButton";
-import { getAnyCachedImage } from "@/lib/post-image";
-import { publishContentItems } from "@/lib/sdr.functions";
-import { canDistribute, useSdrStatus } from "@/hooks/use-sdr-status";
-import { toast } from "sonner";
+import { TypeGlyph } from "@/components/studio/studio-ui";
+import { studioApi } from "@/lib/studio/client";
 
-const EASE = [0.22, 1, 0.36, 1] as const;
-
-export const TINT_HEX: Record<string, string> = {
-  "brand-blue": "#3b82f6",
-  "brand-green": "#22c55e",
-  amber: "#f59e0b",
-  sky: "#0ea5e9",
-  violet: "#8b5cf6",
-  rose: "#f43f5e",
-  teal: "#14b8a6",
-  fuchsia: "#d946ef",
+type ContentRow = {
+  id: string;
+  title: string | null;
+  body: string | null;
+  kind: string;
+  channel: string | null;
+  status: string;
+  meta: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  scheduled_at: string | null;
 };
 
-export function tintFor(type: CanvasType) {
-  return TINT_HEX[TILE_BY_ID[type].tint] ?? "#3b82f6";
-}
-
-function openCanvas(type: CanvasType, id?: string, mode?: "draft" | "review" | "view") {
-  emitAppEvent("open:canvas", { type, id, mode });
-}
-
-type Mode = "draft" | "review" | "view";
-type Row = QueueItem & {
-  mode: Mode;
-  meta: string;
-  body?: string;
-  mediaUrl?: string | null;
+type Group = {
+  key: string;
+  ids: string[];
+  type: StudioType | "legacy";
+  legacyLabel?: string;
+  title: string;
+  excerpt: string;
+  platforms: PlatformId[];
+  storagePath: string | null;
+  mediaType: "image" | "video" | null;
+  createdAt: string;
+  jobId: string | null;
 };
 
-function kindToCanvas(kind: string | null, channel: string | null): CanvasType {
-  if (kind === "brief") return "seo-brief";
-  if (kind === "landing") return "landing-page";
-  if (kind === "email") return "email";
-  if (kind === "blog") return "article";
-  if (channel === "instagram" || channel === "tiktok") return "design-asset";
-  return "social-post";
-}
-
-function cleanPreviewText(value: string | null | undefined): string {
+function cleanText(value: string | null | undefined): string {
   return (value ?? "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/[*_`#]/g, "")
+    .replace(/[*_`#>]/g, "")
     .replace(/^\s*[-•]\s+/gm, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function loadSelectedBrandContext(wsId: string) {
-  let brandContext = "";
-  let websiteUrl: string | null = null;
-  try {
-    const keys = [`brand-dna:v3:${wsId}`, `brand-dna:v2:${wsId}`, `brand-dna:${wsId}`];
-    for (const k of keys) {
-      const raw = localStorage.getItem(k);
-      if (!raw) continue;
-      const b = JSON.parse(raw) as Record<string, string | null | undefined>;
-      const parts: string[] = [];
-      if (b.brandName) parts.push(`Brand: ${b.brandName}`);
-      if (b.oneLiner) parts.push(`One-liner: ${b.oneLiner}`);
-      if (b.industry) parts.push(`Industry: ${b.industry}`);
-      if (b.products) parts.push(`Products: ${b.products}`);
-      if (b.audience) parts.push(`Audience: ${b.audience}`);
-      if (b.voice) parts.push(`Voice: ${b.voice}`);
-      if (b.values) parts.push(`Values: ${b.values}`);
-      if (b.doRules) parts.push(`Do: ${b.doRules}`);
-      if (b.dontRules) parts.push(`Don't: ${b.dontRules}`);
-      brandContext = parts.join("\n");
-      websiteUrl = (b.websiteUrl as string) ?? null;
-      break;
-    }
-  } catch {}
-  return { brandContext, websiteUrl };
+function ago(iso: string): string {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
 }
 
-export function StudioRail({ embedded = false }: { embedded?: boolean } = {}) {
-  // Start with the SSR default; hydrate from localStorage after mount to avoid
-  // server/client markup mismatch.
-  const [open, setOpen] = useState<boolean>(true);
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [approvals, setApprovals] = useState<Row[]>([]);
-  const [approvalsLoading, setApprovalsLoading] = useState(true);
-  const [scheduledRows, setScheduledRows] = useState<Row[] | null>(null);
-  const [recentRows, setRecentRows] = useState<Row[] | null>(null);
-  const [genJobs, setGenJobs] = useState<GenJob[]>(() => genQueue.list());
-  const runUpdate = useServerFn(updateContentItem);
+function when(iso: string | null): string {
+  if (!iso) return "Scheduled";
+  const d = new Date(iso);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === today.toDateString()) return `Today · ${time}`;
+  if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow · ${time}`;
+  return `${d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · ${time}`;
+}
+
+function groupRows(rows: ContentRow[]): Group[] {
+  const map = new Map<string, Group>();
+  for (const r of rows) {
+    const meta = r.meta ?? {};
+    const state = meta.studio_state;
+    if (state === "generating" || state === "failed") continue;
+    const key = typeof meta.group_id === "string" ? meta.group_id : r.id;
+    const platform =
+      typeof meta.platform === "string" && meta.platform in PLATFORMS
+        ? (meta.platform as PlatformId)
+        : null;
+    const existing = map.get(key);
+    if (existing) {
+      existing.ids.push(r.id);
+      if (platform && !existing.platforms.includes(platform)) existing.platforms.push(platform);
+      continue;
+    }
+    const type = studioTypeFromContent(r.kind, meta);
+    map.set(key, {
+      key,
+      ids: [r.id],
+      type,
+      legacyLabel: type === "legacy" ? LEGACY_KINDS[r.kind] : undefined,
+      title: cleanText(r.title) || cleanText(r.body).slice(0, 80) || "Untitled",
+      excerpt: cleanText(r.body).slice(0, 140),
+      platforms: platform ? [platform] : [],
+      storagePath: typeof meta.asset_storage_path === "string" ? meta.asset_storage_path : null,
+      mediaType: meta.media_type === "video" ? "video" : meta.asset_storage_path ? "image" : null,
+      createdAt: r.created_at,
+      jobId: typeof meta.job_id === "string" ? meta.job_id : null,
+    });
+  }
+  return [...map.values()];
+}
+
+/** Workspace id that follows the switcher. */
+function useWorkspaceId(): string | null {
+  const [id, setId] = useState<string | null>(null);
   useEffect(() => {
-    const syncWorkspace = () => {
-      try {
-        setWorkspaceId(localStorage.getItem("workspace:selected"));
-      } catch {
-        setWorkspaceId(null);
-      }
-    };
-    syncWorkspace();
-    addAppEventListener("workspace:changed", syncWorkspace);
-    window.addEventListener("storage", syncWorkspace);
-    return () => {
-      removeAppEventListener("workspace:changed", syncWorkspace);
-      window.removeEventListener("storage", syncWorkspace);
-    };
-  }, []);
-  useEffect(() => {
-    const sync = () => setGenJobs(genQueue.list());
+    const sync = () => setId(getActiveWorkspaceId());
     sync();
-    return genQueue.subscribe(sync);
+    addAppEventListener("workspace:changed", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      removeAppEventListener("workspace:changed", sync);
+      window.removeEventListener("storage", sync);
+    };
   }, []);
-  useEffect(() => {
-    if (embedded) {
-      setOpen(true);
+  return id;
+}
+
+export function StudioRail(_props: { embedded?: boolean } = {}) {
+  const workspaceId = useWorkspaceId();
+  const [pending, setPending] = useState<ContentRow[] | null>(null);
+  const [legacyApprovals, setLegacyApprovals] = useState<Group[]>([]);
+  const [scheduled, setScheduled] = useState<ContentRow[]>([]);
+  const [recent, setRecent] = useState<ContentRow[]>([]);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const ws = workspaceId;
+    if (!ws) {
+      setPending([]);
       return;
     }
-    try {
-      if (localStorage.getItem("studio:open") === "0") setOpen(false);
-    } catch {}
-  }, [embedded]);
-  useEffect(() => {
-    if (embedded) return;
-    try {
-      localStorage.setItem("studio:open", open ? "1" : "0");
-    } catch {}
-  }, [embedded, open]);
+    const cols =
+      "id, title, body, kind, channel, status, meta, created_at, updated_at, scheduled_at";
+    const [queue, legacy, sched, rec] = await Promise.all([
+      supabase
+        .from("content_items")
+        .select(cols)
+        .eq("workspace_id", ws)
+        .in("status", ["pending", "draft"])
+        .order("created_at", { ascending: false })
+        .limit(40),
+      supabase
+        .from("approvals")
+        .select("id, action, payload, created_at")
+        .eq("workspace_id", ws)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(10),
+      supabase
+        .from("content_items")
+        .select(cols)
+        .eq("workspace_id", ws)
+        .eq("status", "scheduled")
+        .order("scheduled_at", { ascending: true, nullsFirst: false })
+        .limit(6),
+      supabase
+        .from("content_items")
+        .select(cols)
+        .eq("workspace_id", ws)
+        .in("status", ["approved", "published", "publishing"])
+        .order("updated_at", { ascending: false })
+        .limit(6),
+    ]);
+    if (queue.error) {
+      setLoadError("Couldn't load your queue.");
+      setPending((p) => p ?? []);
+      return;
+    }
+    setLoadError(null);
+    const queueRows = (queue.data ?? []) as ContentRow[];
+    setPending(queueRows);
+    setLegacyApprovals(
+      (
+        (legacy.data ?? []) as Array<{
+          id: string;
+          action: string | null;
+          payload: Record<string, unknown> | null;
+          created_at: string;
+        }>
+      ).map((a) => ({
+        key: `approval-${a.id}`,
+        ids: [a.id],
+        type: "legacy" as const,
+        legacyLabel: "Approval",
+        title: cleanText(a.action) || "Pending approval",
+        excerpt: typeof a.payload?.body === "string" ? cleanText(a.payload.body).slice(0, 140) : "",
+        platforms: [],
+        storagePath: null,
+        mediaType: null,
+        createdAt: a.created_at,
+        jobId: null,
+      })),
+    );
+    setScheduled((sched.data ?? []) as ContentRow[]);
+    setRecent((rec.data ?? []) as ContentRow[]);
 
-  const loadApprovals = useCallback(
-    async (cancelledRef?: { readonly current: boolean }) => {
-      const wsId = workspaceId;
-      setApprovalsLoading(true);
-      if (!wsId) {
-        if (!cancelledRef?.current) {
-          setApprovals([]);
-          setApprovalsLoading(false);
-        }
-        return;
-      }
-
-      const [content, legacy] = await Promise.all([
-        supabase
-          .from("content_items")
-          .select("id, title, body, kind, channel, status, media_url, created_at")
-          .eq("workspace_id", wsId)
-          .in("status", ["pending", "draft"])
-          .order("created_at", { ascending: false })
-          .limit(12),
-        supabase
-          .from("approvals")
-          .select("id, action, status, payload, created_at")
-          .eq("workspace_id", wsId)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(12),
-      ]);
-
-      if (cancelledRef?.current) return;
-
-      const realRows: Row[] = ((content.data ?? []) as any[]).map((r): Row => ({
-        id: r.id,
-        title:
-          cleanPreviewText(r.title) ||
-          (r.body ? cleanPreviewText(String(r.body)).slice(0, 72) : "Untitled draft"),
-        canvas: kindToCanvas(r.kind, r.channel),
-        channel: r.channel ?? undefined,
-        mode: "review",
-        meta: r.status === "draft" ? "draft ready" : "needs approval",
-        body: r.body ?? undefined,
-        mediaUrl: r.media_url ?? null,
-      }));
-
-      const legacyRows: Row[] = ((legacy.data ?? []) as any[]).map((row): Row => {
-        const payload = (row.payload ?? {}) as Record<string, unknown>;
-        const canvas = (
-          typeof payload.canvas === "string" ? payload.canvas : "social-post"
-        ) as CanvasType;
-        return {
-          id: row.id,
-          title: cleanPreviewText(row.action) || "Pending approval",
-          canvas,
-          channel: typeof payload.channel === "string" ? payload.channel : undefined,
-          mode: "review",
-          meta: "needs approval",
-          body: typeof payload.body === "string" ? payload.body : undefined,
-          mediaUrl: typeof payload.media_url === "string" ? payload.media_url : null,
-        };
-      });
-
-      setApprovals([...realRows, ...legacyRows]);
-      setApprovalsLoading(false);
-    },
-    [workspaceId],
-  );
-
-  // Refresh approvals on mount, when content changes elsewhere (Studio save,
-  // chat actions, approvals from the client portal), and on a slow interval.
-  useEffect(() => {
-    let cancelled = false;
-    const cancelledRef = {
-      get current() {
-        return cancelled;
-      },
-    };
-    const run = () => loadApprovals(cancelledRef).catch(() => {});
-    run();
-    const onChange = () => run();
-    addAppEventListener("content:changed", onChange);
-    addAppEventListener("approvals:changed", onChange);
-    // interval handled by useVisibleInterval below
-    return () => {
-      cancelled = true;
-      removeAppEventListener("content:changed", onChange);
-      removeAppEventListener("approvals:changed", onChange);
-      // no interval to clear here
-    };
-  }, [loadApprovals]);
-
-  // Load real scheduled + recent from content_items
-  useEffect(() => {
-    let cancelled = false;
-    const fmtWhen = (iso: string | null) => {
-      if (!iso) return "scheduled";
-      const d = new Date(iso);
-      const today = new Date();
-      const sameDay = d.toDateString() === today.toDateString();
-      const tmrw = new Date(today);
-      tmrw.setDate(tmrw.getDate() + 1);
-      const isTmrw = d.toDateString() === tmrw.toDateString();
-      const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      if (sameDay) return `Today · ${time}`;
-      if (isTmrw) return `Tomorrow · ${time}`;
-      return `${d.toLocaleDateString([], { weekday: "short" })} · ${time}`;
-    };
-    const fmtAgo = (iso: string) => {
-      const diff = Date.now() - new Date(iso).getTime();
-      const m = Math.round(diff / 60000);
-      if (m < 1) return "just now";
-      if (m < 60) return `${m}m ago`;
-      const h = Math.round(m / 60);
-      if (h < 24) return `${h}h ago`;
-      return `${Math.round(h / 24)}d ago`;
-    };
-    const load = async () => {
-      const wsId = workspaceId;
-      if (!wsId) {
-        if (!cancelled) {
-          setScheduledRows([]);
-          setRecentRows([]);
-        }
-        return;
-      }
-      const [sched, recent] = await Promise.all([
-        supabase
-          .from("content_items")
-          .select("id, title, kind, channel, scheduled_at, status")
-          .eq("workspace_id", wsId)
-          .eq("status", "scheduled")
-          .order("scheduled_at", { ascending: true, nullsFirst: false })
-          .limit(8),
-        supabase
-          .from("content_items")
-          .select("id, title, kind, channel, updated_at, status")
-          .eq("workspace_id", wsId)
-          .order("updated_at", { ascending: false })
-          .limit(8),
-      ]);
-      if (cancelled) return;
-      setScheduledRows(
-        ((sched.data ?? []) as any[]).map((r): Row => ({
-          id: r.id,
-          title: r.title || "Untitled",
-          canvas: kindToCanvas(r.kind, r.channel),
-          channel: r.channel ?? undefined,
-          mode: "view",
-          meta: fmtWhen(r.scheduled_at),
-        })),
-      );
-      setRecentRows(
-        ((recent.data ?? []) as any[]).map((r): Row => ({
-          id: r.id,
-          title: r.title || "Untitled",
-          canvas: kindToCanvas(r.kind, r.channel),
-          channel: r.channel ?? undefined,
-          mode: "view",
-          meta: fmtAgo(r.updated_at),
-        })),
-      );
-    };
-    load();
-    const onChange = () => load();
-    addAppEventListener("content:changed", onChange);
-    const t = window.setInterval(load, 30000);
-    return () => {
-      cancelled = true;
-      removeAppEventListener("content:changed", onChange);
-    };
+    const paths = [
+      ...new Set(
+        queueRows
+          .map((r) => r.meta?.asset_storage_path)
+          .filter((p): p is string => typeof p === "string"),
+      ),
+    ];
+    if (paths.length) {
+      const { data } = await supabase.storage
+        .from("generated-assets")
+        .createSignedUrls(paths, 3600);
+      const next: Record<string, string> = {};
+      for (const s of data ?? []) if (s.path && s.signedUrl) next[s.path] = s.signedUrl;
+      setThumbs(next);
+    }
   }, [workspaceId]);
 
-  // Poll approvals + scheduled/recent only while tab is visible (60s cadence,
-  // was 30s and ran forever on background tabs).
-  useVisibleInterval(() => {
-    emitAppEvent("content:changed");
-  }, 60000);
+  useEffect(() => {
+    setPending(null);
+    void load();
+    const on = () => void load();
+    addAppEventListener("content:changed", on);
+    addAppEventListener("approvals:changed", on);
+    return () => {
+      removeAppEventListener("content:changed", on);
+      removeAppEventListener("approvals:changed", on);
+    };
+  }, [load]);
+  useVisibleInterval(() => void load(), 60_000);
 
-  if (!embedded && !open) {
-    const pendingCount = approvals.length;
-    return (
-      <aside className="hidden xl:flex w-12 shrink-0 flex-col items-center justify-start py-4 pr-2 pl-1">
-        <motion.button
-          initial={{ opacity: 0, x: 8 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.25, ease: EASE }}
-          whileHover={{ y: -2, scale: 1.05 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={() => setOpen(true)}
-          aria-label="Open Studio"
-          className="group relative grid h-10 w-10 place-items-center overflow-hidden rounded-2xl text-white shadow-[0_6px_18px_-6px_hsl(var(--brand-green)/0.55),0_2px_6px_-2px_hsl(var(--brand-blue)/0.35)] transition-all duration-200 hover:shadow-[0_10px_28px_-8px_hsl(var(--brand-green)/0.65),0_4px_10px_-2px_hsl(var(--brand-blue)/0.45)]"
-        >
-          {/* Gradient background */}
-          <span
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(135deg, hsl(var(--brand-green)) 0%, hsl(var(--brand-blue)) 100%)",
-            }}
-          />
-          {/* Top gloss */}
-          <span
-            aria-hidden
-            className="absolute inset-x-0 top-0 h-1/2 rounded-t-2xl opacity-60"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0) 100%)",
-            }}
-          />
-          {/* Inner ring */}
-          <span
-            aria-hidden
-            className="absolute inset-[2.5px] rounded-[13px] border border-white/20"
-          />
-          {/* Icon */}
-          <Wand2
-            className="relative h-[18px] w-[18px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]"
-            strokeWidth={2.2}
-          />
-
-          {pendingCount > 0 && (
-            <span
-              className="absolute -right-0.5 -top-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-[hsl(var(--brand-blue))] text-[9px] font-bold text-white ring-2 ring-background shadow-[0_0_8px_hsl(var(--brand-blue)/0.7)]"
-              aria-label={`${pendingCount} pending`}
-            >
-              {pendingCount > 9 ? "9+" : pendingCount}
-            </span>
-          )}
-
-          {/* Tooltip */}
-          <span className="pointer-events-none absolute right-full mr-3 whitespace-nowrap rounded-lg bg-foreground px-2.5 py-1.5 text-[11px] font-medium text-background opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-x-0.5">
-            Studio
-          </span>
-        </motion.button>
-      </aside>
-    );
-  }
-
-  const scheduled: Row[] = scheduledRows ?? [];
-  const recent: Row[] = recentRows ?? [];
+  const jobs = useStudioStore((s) => s.jobs);
+  const sessions = useStudioStore((s) => s.sessions);
+  const groups = useMemo(
+    () => [...groupRows(pending ?? []), ...legacyApprovals],
+    [pending, legacyApprovals],
+  );
 
   return (
-    <motion.aside
-      initial={{ x: 16, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      transition={{ duration: 0.35, ease: EASE }}
-      className={cn(
-        embedded
-          ? "flex h-full w-full min-w-0 flex-1 flex-col py-0"
-          : "hidden xl:flex w-[300px] 2xl:w-[316px] shrink-0 flex-col py-3 pr-3 pl-1",
-      )}
-    >
-      <div
-        className={cn(
-          "relative flex min-h-0 flex-1 flex-col overflow-hidden",
-          embedded
-            ? "bg-transparent"
-            : "rounded-[28px] border border-border/60 bg-sidebar shadow-[0_10px_40px_-18px_rgba(0,0,0,0.18)]",
-        )}
-      >
-        {!embedded && (
-          <>
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 rounded-full opacity-[0.08] blur-3xl"
-              style={{
-                background: "radial-gradient(circle, hsl(var(--brand-blue)), transparent 60%)",
-              }}
-            />
-            <div
-              aria-hidden
-              className="pointer-events-none absolute bottom-0 -left-16 h-56 w-56 rounded-full opacity-[0.06] blur-3xl"
-              style={{
-                background: "radial-gradient(circle, hsl(var(--brand-green)), transparent 60%)",
-              }}
-            />
-          </>
-        )}
-
-        {!embedded && (
-          <header className="relative flex shrink-0 items-center justify-between border-b border-border/40 px-3.5 py-3">
-            <div className="flex items-center gap-2.5">
-              <motion.span
-                aria-hidden
-                animate={{ rotate: [0, 8, -6, 0], scale: [1, 1.08, 1] }}
-                transition={{ duration: 4, repeat: Infinity, ease: EASE }}
-                className="grid h-4 w-4 place-items-center rounded-[5px]"
-                style={{
-                  background:
-                    "linear-gradient(135deg, hsl(var(--brand-blue)), hsl(var(--brand-green)))",
-                  boxShadow: "0 0 12px hsl(var(--brand-blue) / 0.45)",
-                }}
-              >
-                <Sparkles className="h-2.5 w-2.5 text-white" strokeWidth={2.5} />
-              </motion.span>
-              <div>
-                <h2 className="text-[14px] font-semibold tracking-tight text-foreground">Studio</h2>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">Create, review, ship</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setOpen(false)}
-              title="Collapse Studio"
-              aria-label="Collapse Studio panel"
-              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-            >
-              <PanelRightClose className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          </header>
-        )}
-
-        <div className="relative min-h-0 flex-1 space-y-0 overflow-y-auto px-3.5 pt-4 pb-5 scrollbar-thin">
-          <motion.button
-            onClick={() => setCreateOpen((o) => !o)}
-            whileTap={{ scale: 0.985 }}
-            aria-expanded={createOpen}
-            aria-controls="studio-create-canvases"
-            aria-label={createOpen ? "Close canvas picker" : "Create a new canvas"}
-            className="group relative flex min-h-[58px] w-full items-center justify-between gap-3 overflow-hidden rounded-2xl border border-border/70 bg-card/80 px-2.5 text-left text-foreground shadow-[0_10px_26px_-18px_rgba(0,0,0,0.38)] transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-foreground/25 hover:bg-card hover:shadow-[0_14px_30px_-18px_rgba(0,0,0,0.42)]"
-          >
-            <span className="flex min-w-0 items-center gap-2.5">
-              <motion.span
-                animate={{ rotate: createOpen ? 135 : 0 }}
-                transition={{ duration: 0.3, ease: EASE }}
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-white shadow-[0_2px_8px_-2px_hsl(var(--brand-blue)/0.6)]"
-                style={{
-                  background:
-                    "linear-gradient(135deg, hsl(var(--brand-blue)), hsl(var(--brand-green)))",
-                }}
-                aria-hidden
-              >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2.75} />
-              </motion.span>
-              <span className="min-w-0">
-                <span className="block truncate text-[12.5px] font-semibold">
-                  {createOpen ? "Choose what to create" : "Create something new"}
-                </span>
-                <span className="mt-0.5 block truncate text-[10.5px] font-normal text-muted-foreground">
-                  Posts, articles, visuals, and more
-                </span>
-              </span>
-            </span>
-            <span
-              className="pointer-events-none hidden shrink-0 items-center rounded-md bg-secondary/70 px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground sm:inline-flex"
-              aria-hidden
-            >
-              ⌘J
-            </span>
-          </motion.button>
-
-          <AnimatePresence initial={false}>
-            {createOpen && (
-              <motion.ul
-                id="studio-create-canvases"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.28, ease: EASE }}
-                className="grid grid-cols-2 gap-1.5 overflow-hidden"
-              >
-                {STUDIO_TILES.map((t, idx) => (
-                  <motion.li
-                    key={t.id}
-                    initial={{ opacity: 0, x: -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.025, duration: 0.22, ease: EASE }}
-                  >
-                    <button
-                      onClick={() => {
-                        openCanvas(t.id);
-                        setCreateOpen(false);
-                      }}
-                      className="group flex min-h-[54px] w-full items-center gap-2 rounded-xl border border-border/45 bg-card/35 px-2 text-left text-[11px] text-foreground/80 transition-all duration-200 hover:-translate-y-px hover:border-foreground/20 hover:bg-secondary/75 hover:text-foreground"
-                    >
-                      <span
-                        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-border/40 transition-all duration-200 group-hover:scale-110"
-                        style={{
-                          background: `linear-gradient(135deg, ${TINT_HEX[t.tint]}22, ${TINT_HEX[t.tint]}08)`,
-                          boxShadow: `inset 0 0 0 1px ${TINT_HEX[t.tint]}1a`,
-                        }}
-                      >
-                        <t.icon
-                          className="h-3 w-3"
-                          strokeWidth={2.25}
-                          style={{ color: TINT_HEX[t.tint] }}
-                        />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{t.label}</span>
-                        <span className="mt-0.5 block truncate text-[9.5px] text-muted-foreground">
-                          {t.sub.split(" · ")[0]}
-                        </span>
-                      </span>
-                    </button>
-                  </motion.li>
-                ))}
-              </motion.ul>
-            )}
-          </AnimatePresence>
-
-          <BrandDnaCta />
-
-          <ApprovalsSection
-            items={approvals}
-            jobs={genJobs}
-            loading={approvalsLoading}
-            onDecide={async (id, status) => {
-              // Optimistic remove
-              setApprovals((prev) => prev.filter((r) => r.id !== id));
-              try {
-                if (status === "published") {
-                  // FR-024: approval stays editorial; "publish" then distributes.
-                  await runUpdate({ data: { id, patch: { status: "approved" } } });
-                  const wsId =
-                    typeof window !== "undefined"
-                      ? localStorage.getItem("workspace:selected")
-                      : null;
-                  if (wsId) {
-                    try {
-                      const res = await publishContentItems(wsId, [id], { type: "all" });
-                      const skipped = res.results.filter((r) => r.status === "skipped");
-                      if (skipped.length) {
-                        toast.info("Nothing published", {
-                          description: skipped[0].reason ?? "No active target",
-                        });
-                      }
-                    } catch (e) {
-                      toast.error("Publish failed", {
-                        description: e instanceof Error ? e.message : "Please try again.",
-                      });
-                    }
-                  }
-                } else {
-                  const patch: { status: ApprovalStatus } = { status };
-                  await runUpdate({ data: { id, patch } });
-                }
-                emitAppEvent("content:changed");
-                emitAppEvent("approvals:changed");
-              } catch {
-                // Reload truth on failure
-                loadApprovals().catch(() => {});
-              }
-            }}
+    <aside aria-label="Studio" className="flex h-full w-full min-w-0 flex-col">
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3.5 pb-6 pt-4">
+        <CreateButton />
+        <BrandDnaCta />
+        <LayoutGroup id="studio-rail">
+          <InProgressSection
+            jobs={jobs}
+            sessionsJobIds={
+              new Set(sessions.flatMap((s) => [s.job?.id]).filter(Boolean) as string[])
+            }
           />
-
-          <SuggestionsSection />
-          <Section title="Scheduled" empty="Nothing scheduled." items={scheduled} />
-          <Section title="Recent" empty="Nothing yet." items={recent} muted />
-        </div>
+          <ApprovalSection
+            groups={groups}
+            loading={pending === null}
+            error={loadError}
+            thumbs={thumbs}
+            jobs={jobs}
+            onChanged={() => void load()}
+          />
+        </LayoutGroup>
+        <SuggestionsSection />
+        <CompactList
+          title="Scheduled"
+          rows={scheduled}
+          empty="Nothing scheduled yet."
+          meta={(r) => when(r.scheduled_at)}
+        />
+        <CompactList
+          title="Recent"
+          rows={recent}
+          empty="Approved and published work shows here."
+          meta={(r) => ago(r.updated_at)}
+        />
       </div>
-    </motion.aside>
+    </aside>
+  );
+}
+
+/* ───────────────────────── Create ───────────────────────── */
+
+/** One entry point: the composer's start screen holds formats and ideas together. */
+function CreateButton() {
+  return (
+    <button
+      type="button"
+      onClick={() => openComposer()}
+      aria-label="Create something new"
+      className="group flex min-h-14 w-full items-center gap-3 rounded-xl border border-border bg-surface-3 px-3 text-left shadow-1 transition-colors duration-[--motion-duration-fast] hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+    >
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-transform duration-[--motion-duration-fast] group-hover:scale-105">
+        <Plus className="size-4" strokeWidth={2.5} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-foreground">Create</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          Posts, visuals, video, articles
+        </span>
+      </span>
+      <kbd className="hidden rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground ring-1 ring-border sm:inline">
+        ⌘J
+      </kbd>
+    </button>
   );
 }
 
@@ -620,18 +347,18 @@ function BrandDnaCta() {
   useEffect(() => {
     const read = () => {
       try {
-        const wsId = localStorage.getItem("workspace:selected") || "";
-        const keys = wsId
+        const wsId = getActiveWorkspaceId() ?? "";
+        for (const k of wsId
           ? [`brand-dna:v3:${wsId}`, `brand-dna:v2:${wsId}`, `brand-dna:${wsId}`]
-          : [];
-        for (const k of keys) {
+          : []) {
           const raw = localStorage.getItem(k);
           if (!raw) continue;
           const b = JSON.parse(raw) as Record<string, string | undefined>;
-          const n = ["audience", "voice", "values", "doRules", "dontRules"].filter((f) =>
-            (b[f] ?? "").trim(),
-          ).length;
-          setFilled(n);
+          setFilled(
+            ["audience", "voice", "values", "doRules", "dontRules"].filter((f) =>
+              (b[f] ?? "").trim(),
+            ).length,
+          );
           return;
         }
         setFilled(0);
@@ -640,485 +367,492 @@ function BrandDnaCta() {
       }
     };
     read();
+    addAppEventListener("brand-dna:saved", read);
     window.addEventListener("storage", read);
-    return () => window.removeEventListener("storage", read);
+    return () => {
+      removeAppEventListener("brand-dna:saved", read);
+      window.removeEventListener("storage", read);
+    };
   }, []);
-
   if (filled === null || filled >= 5) return null;
-
   return (
     <button
+      type="button"
       onClick={() => emitAppEvent("open:brand-dna", { tab: "essentials" })}
-      className="mt-2 flex min-h-10 w-full items-center gap-2 rounded-xl border border-dashed border-brand-green/40 bg-brand-green/5 px-2.5 py-2 text-left text-[11.5px] font-medium text-foreground/80 transition hover:border-brand-green/70 hover:bg-brand-green/10"
+      className="flex min-h-10 w-full items-center gap-2.5 rounded-lg border border-dashed border-primary-border bg-primary-surface px-3 py-2 text-left text-xs text-foreground transition-colors hover:border-primary"
     >
-      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-brand-green/15 text-brand-green">
-        <Sparkles className="h-3 w-3" strokeWidth={2.5} />
+      <Sparkles className="size-3.5 shrink-0 text-primary" />
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium">Complete your Brand DNA</span>
+        <span className="block text-muted-foreground">Sharper ideas and on-voice drafts</span>
       </span>
-      <span className="min-w-0 flex-1 truncate">Complete your Brand DNA</span>
-      <span className="rounded-full bg-background/70 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
-        {filled}/5
-      </span>
+      <span className="tabular-nums text-muted-foreground">{filled}/5</span>
     </button>
   );
 }
 
-type ApprovalStatus = "approved" | "rejected" | "published";
+/* ───────────────────────── In progress ───────────────────────── */
 
-function ApprovalsSection({
-  items,
+const DISMISSED_JOBS = "studio:rail-dismissed-jobs";
+
+function readDismissedJobs(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(DISMISSED_JOBS) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
+function InProgressSection({
   jobs,
-  loading,
-  onDecide,
+  sessionsJobIds,
 }: {
-  items: Row[];
-  jobs: GenJob[];
-  loading: boolean;
-  onDecide: (id: string, status: ApprovalStatus) => void;
+  jobs: StudioJob[];
+  sessionsJobIds: Set<string>;
 }) {
-  // Publish only renders when distribution is enabled and the caller may use it.
-  const canPublish = canDistribute(useSdrStatus());
-  if (loading && items.length === 0 && jobs.length === 0) {
-    return (
-      <section className="ui-section-gap" aria-busy="true" aria-label="Loading review queue">
-        <div className="mb-2 flex items-center gap-2 px-1">
-          <h3 className="ui-eyebrow">Needs your attention</h3>
-          <span className="h-4 w-7 animate-pulse rounded-full bg-muted/60" />
-        </div>
-        <div className="space-y-2">
-          {[0, 1].map((key) => (
-            <div
-              key={key}
-              className="flex gap-2.5 rounded-xl border border-border/50 bg-card/45 p-2.5"
-            >
-              <div className="h-[72px] w-[72px] shrink-0 animate-pulse rounded-xl bg-muted/60" />
-              <div className="min-w-0 flex-1 space-y-2 py-1">
-                <div className="h-2.5 w-2/5 animate-pulse rounded bg-muted/60" />
-                <div className="h-3 w-4/5 animate-pulse rounded bg-muted/60" />
-                <div className="h-2 w-3/5 animate-pulse rounded bg-muted/60" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  }
-  if (items.length === 0 && jobs.length === 0) {
-    return (
-      <section className="ui-section-gap">
-        <div className="mb-2 flex items-center gap-2 px-1">
-          <h3 className="ui-eyebrow">Needs your attention</h3>
-          <span className="ui-count-pill">0</span>
-        </div>
-        <motion.div
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: EASE }}
-          className="relative overflow-hidden rounded-2xl border border-dashed border-border/60 bg-card/35 p-4"
-        >
-          <div className="mb-3 flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <Sparkles className="h-3.5 w-3.5" />
-            </span>
-            <p className="text-[13px] font-semibold text-foreground">You're all caught up</p>
-          </div>
-          <p className="text-[11.5px] leading-relaxed text-muted-foreground">
-            New drafts from Studio and chat will appear here when they need your review.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <button
-              onClick={() => emitAppEvent("open:canvas", { type: "social-post", mode: "draft" })}
-              className="rounded-full bg-foreground px-3 py-1 text-[11.5px] font-medium text-background transition hover:bg-foreground/90"
-            >
-              Open Studio
-            </button>
-            <button
-              onClick={() =>
-                emitAppEvent("chat:prefill", { text: "Draft a post for this week", focus: true })
-              }
-              className="rounded-full border border-border/60 bg-transparent px-3 py-1 text-[11.5px] font-medium text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
-            >
-              Ask in chat
-            </button>
-          </div>
-        </motion.div>
-      </section>
-    );
-  }
-  const totalCount = items.length + jobs.length;
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  useEffect(() => setDismissed(readDismissedJobs()), []);
+  const visible = jobs.filter(
+    (j) =>
+      isActiveJob(j) ||
+      (j.status === "failed" &&
+        !j.parent_job_id &&
+        !dismissed.includes(j.id) &&
+        Date.now() - Date.parse(j.updated_at) < 6 * 3_600_000),
+  );
+  if (!visible.length) return null;
+
+  const dismiss = (id: string) => {
+    const next = [...dismissed, id].slice(-50);
+    setDismissed(next);
+    try {
+      localStorage.setItem(DISMISSED_JOBS, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
-    <section className="relative ui-section-gap">
-      <div className="relative mb-2 flex items-center justify-between gap-3 px-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <h3 className="ui-eyebrow">Needs your attention</h3>
-          <motion.span
-            key={totalCount}
-            initial={{ scale: 0.7, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 420, damping: 20 }}
-            className="ui-count-pill !bg-amber-500/12 !font-semibold !text-amber-600 ring-1 ring-amber-500/20 dark:!text-amber-400"
-          >
-            {totalCount}
-          </motion.span>
-        </div>
+    <section data-no-rhythm aria-labelledby="rail-progress">
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <h3 id="rail-progress" className="ui-eyebrow">
+          In progress
+        </h3>
+        <span className="ui-count-pill">
+          {visible.filter(isActiveJob).length || visible.length}
+        </span>
       </div>
-
-      <ul className="relative space-y-1.5">
+      <ul className="space-y-1.5">
         <AnimatePresence initial={false}>
-          {jobs.map((job) => (
-            <GenerationQueueRow key={job.id} job={job} />
+          {visible.map((job) => (
+            <JobRow
+              key={job.id}
+              job={job}
+              tracked={sessionsJobIds.has(job.id)}
+              onDismiss={() => dismiss(job.id)}
+            />
           ))}
-        </AnimatePresence>
-        <AnimatePresence initial={false}>
-          {items.map((it, idx) => {
-            const tile = TILE_BY_ID[it.canvas];
-            const color = TINT_HEX[tile.tint];
-            return (
-              <motion.li
-                key={it.id}
-                layout
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, x: -8, transition: { duration: 0.18 } }}
-                transition={{ delay: idx * 0.04, duration: 0.28, ease: EASE }}
-              >
-                <div
-                  onClick={() => openCanvas(it.canvas, it.id, it.mode)}
-                  className="group @container/card relative flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/80 text-left shadow-[0_8px_24px_-18px_rgba(0,0,0,0.26)] transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-foreground/20 hover:bg-card hover:shadow-[0_12px_28px_-16px_rgba(0,0,0,0.28)]"
-                >
-                  {/* Preview first: the queue should feel like a creative review surface. */}
-                  <div className="flex min-w-0 items-start gap-2.5 p-2.5 pb-2">
-                    <Thumbnail
-                      type={it.canvas}
-                      color={color}
-                      postId={it.id}
-                      imageUrl={it.mediaUrl}
-                    />
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <span
-                          className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-                          style={{ background: `${color}18`, color }}
-                        >
-                          <tile.icon className="h-2.5 w-2.5" strokeWidth={2.5} />
-                          <span className="truncate">{tile.label}</span>
-                        </span>
-                        {it.channel && (
-                          <span className="truncate text-[10.5px] font-medium text-muted-foreground/80">
-                            {it.channel}
-                          </span>
-                        )}
-                        <span className="ml-auto shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-amber-600 dark:text-amber-400">
-                          {it.meta === "draft ready" ? "Draft" : "Review"}
-                        </span>
-                      </div>
-                      <p className="line-clamp-2 text-[12.5px] font-medium leading-tight text-foreground">
-                        {it.title}
-                      </p>
-                      {it.body && it.body !== it.title && (
-                        <p className="line-clamp-1 text-[10px] leading-snug text-muted-foreground">
-                          {cleanPreviewText(it.body)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Quiet action row: opening the card remains the review action. */}
-                  <div className="flex flex-wrap items-center gap-1 border-t border-border/50 bg-muted/20 px-2.5 py-1.5">
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDecide(it.id, "rejected");
-                      }}
-                      className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium text-muted-foreground transition hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400"
-                      aria-label="Reject draft"
-                    >
-                      Skip
-                    </motion.button>
-                    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <GeneratePostImageButton
-                        postId={it.id}
-                        postTitle={it.title}
-                        platform={(it.channel as any) ?? null}
-                        workspaceId={
-                          typeof window !== "undefined"
-                            ? localStorage.getItem("workspace:selected")
-                            : null
-                        }
-                      />
-                    </div>
-
-                    <div className="ml-auto flex shrink-0 items-center gap-1">
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDecide(it.id, "approved");
-                        }}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-foreground/80 transition hover:bg-muted"
-                        aria-label="Approve draft"
-                        title="Approve draft"
-                      >
-                        Approve
-                      </motion.button>
-                      {canPublish && (
-                        <motion.button
-                          whileTap={{ scale: 0.95 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDecide(it.id, "published");
-                          }}
-                          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-foreground px-2.5 py-1 text-[11px] font-semibold text-background shadow-sm transition hover:bg-foreground/90"
-                          aria-label="Publish now"
-                          title="Publish immediately"
-                        >
-                          <Zap className="h-3 w-3" strokeWidth={2.5} />
-                          <span className="hidden @[220px]/card:inline">Publish</span>
-                          <span className="@[220px]/card:hidden">Post</span>
-                        </motion.button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </motion.li>
-            );
-          })}
         </AnimatePresence>
       </ul>
     </section>
   );
 }
 
-function RowLeadingVisual({
-  canvas,
-  postId,
-  color,
-  Icon,
+function JobRow({
+  job,
+  tracked,
+  onDismiss,
 }: {
-  canvas: CanvasType;
-  postId: string;
-  color: string;
-  Icon: React.ComponentType<{
-    className?: string;
-    style?: React.CSSProperties;
-    strokeWidth?: number;
-  }>;
+  job: StudioJob;
+  tracked: boolean;
+  onDismiss: () => void;
 }) {
-  const [img, setImg] = useState<string | null>(() => getAnyCachedImage(postId));
-  useEffect(() => {
-    if (!postId) return;
-    const on = (e: Event) => {
-      const d = (e as CustomEvent).detail as { postId?: string } | undefined;
-      if (!d?.postId || d.postId === postId) setImg(getAnyCachedImage(postId));
-    };
-    setImg(getAnyCachedImage(postId));
-    addAppEventListener("post-image:cached", on);
-    return () => removeAppEventListener("post-image:cached", on);
-  }, [postId]);
-
-  if (img && (canvas === "social-post" || canvas === "design-asset")) {
-    return (
-      <span
-        className="relative grid h-6 w-6 shrink-0 overflow-hidden rounded-md transition-transform duration-200 group-hover:scale-110"
-        style={{ boxShadow: `inset 0 0 0 1px ${color}33` }}
-      >
-        <img src={img} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        <span
-          className="absolute -bottom-0.5 -right-0.5 grid h-2.5 w-2.5 place-items-center rounded-full bg-emerald-500 text-[7px] text-white ring-2 ring-card"
-          title="Image ready"
-        >
-          ✓
-        </span>
-      </span>
-    );
-  }
-  return (
-    <span
-      className="grid h-5 w-5 shrink-0 place-items-center rounded-full transition-transform duration-200 group-hover:scale-110"
-      style={{ background: `${color}22`, boxShadow: `inset 0 0 0 1px ${color}26` }}
-    >
-      <Icon className="h-2.5 w-2.5" strokeWidth={2.25} style={{ color }} />
-    </span>
+  const format = STUDIO_FORMATS[job.type];
+  const active = isActiveJob(job);
+  const stage = format.stages.find((s) => s.id === job.stage);
+  const index = Math.max(
+    0,
+    format.stages.findIndex((s) => s.id === job.stage),
   );
-}
+  const [cancelling, setCancelling] = useState(false);
 
-function Thumbnail({
-  type,
-  color,
-  postId,
-  imageUrl,
-}: {
-  type: CanvasType;
-  color: string;
-  postId?: string;
-  imageUrl?: string | null;
-}) {
-  const base = "relative h-[60px] w-[60px] shrink-0 overflow-hidden rounded-xl";
-  const bg = {
-    background: `linear-gradient(135deg, ${color}30, ${color}08)`,
-    boxShadow: `inset 0 0 0 1px ${color}1f`,
+  const cancel = async () => {
+    setCancelling(true);
+    const session = getStudioState().sessions.find((s) => s.job?.id === job.id);
+    try {
+      if (session) await cancelSession(session.id);
+      else await studioApi.cancelJob(job.workspace_id, job.id);
+      emitAppEvent("content:changed");
+    } catch (e) {
+      toast.error("Couldn't cancel", { description: e instanceof Error ? e.message : undefined });
+    } finally {
+      setCancelling(false);
+    }
   };
 
-  const [cachedImg, setCachedImg] = useState<string | null>(
-    () => imageUrl || getAnyCachedImage(postId),
-  );
-  useEffect(() => {
-    if (!postId) return;
-    const on = (e: Event) => {
-      const d = (e as CustomEvent).detail as { postId?: string } | undefined;
-      if (!d?.postId || d.postId === postId) setCachedImg(getAnyCachedImage(postId));
-    };
-    setCachedImg(imageUrl || getAnyCachedImage(postId));
-    addAppEventListener("post-image:cached", on);
-    return () => removeAppEventListener("post-image:cached", on);
-  }, [imageUrl, postId]);
-
-  if (cachedImg) {
-    return (
-      <div className={base} style={bg}>
-        <img src={cachedImg} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        <span
-          className="absolute bottom-1.5 right-1.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-emerald-500 text-[8px] text-white ring-2 ring-card"
-          title="Image ready"
-        >
-          ✓
-        </span>
-      </div>
-    );
-  }
-
-  if (type === "social-post") {
-    return (
-      <div className={base} style={bg}>
-        <div
-          className="absolute left-1.5 top-1.5 h-2 w-2 rounded-full"
-          style={{ background: color }}
-        />
-        <div className="absolute left-4 top-1.5 h-1 w-6 rounded bg-foreground/20" />
-        <div className="absolute left-1.5 right-1.5 top-5 space-y-1">
-          <div className="h-1 w-full rounded bg-foreground/15" />
-          <div className="h-1 w-4/5 rounded bg-foreground/15" />
-          <div className="h-1 w-3/5 rounded bg-foreground/15" />
-        </div>
-        <div
-          className="absolute inset-x-1.5 bottom-1.5 h-3 rounded"
-          style={{ background: `${color}40` }}
-        />
-      </div>
-    );
-  }
-  if (type === "email") {
-    return (
-      <div className={base} style={bg}>
-        <Mail
-          className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2"
-          style={{ color }}
-        />
-      </div>
-    );
-  }
-  if (type === "seo-brief" || type === "article") {
-    return (
-      <div className={base} style={bg}>
-        <div className="absolute inset-2 space-y-1">
-          <div className="h-1.5 w-3/4 rounded" style={{ background: color }} />
-          <div className="h-1 w-full rounded bg-foreground/15" />
-          <div className="h-1 w-5/6 rounded bg-foreground/15" />
-          <div className="h-1 w-2/3 rounded bg-foreground/15" />
-        </div>
-      </div>
-    );
-  }
-  // landing-page, design-asset, fallback
-  const Icon = TILE_BY_ID[type].icon;
   return (
-    <div className={base} style={bg}>
-      <Icon
-        className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2"
-        style={{ color }}
-        strokeWidth={1.75}
-      />
-    </div>
+    <motion.li
+      layoutId={job.parent_job_id ? undefined : `group-${job.group_id}`}
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, transition: { duration: duration.fast } }}
+      transition={{ duration: duration.medium, ease: ease.emphasized }}
+      className={cn(
+        "relative overflow-hidden rounded-xl border bg-surface-3",
+        active ? "border-primary-border" : "border-danger-border",
+      )}
+    >
+      {active ? <span className="studio-weave absolute inset-0" aria-hidden /> : null}
+      <div className="relative flex items-center gap-2.5 p-2.5">
+        <TypeGlyph type={job.type} size="sm" />
+        <button
+          type="button"
+          onClick={() => void openJob(job.id, job.workspace_id)}
+          className="min-w-0 flex-1 text-left"
+        >
+          <span className="block truncate text-sm font-medium text-foreground">
+            {job.title || format.label}
+          </span>
+          <span
+            className={cn(
+              "flex items-center gap-1.5 truncate text-xs",
+              active ? "text-muted-foreground" : "text-danger",
+            )}
+          >
+            {active ? (
+              <>
+                <span className="tabular-nums">
+                  {index + 1}/{format.stages.length}
+                </span>
+                · {stage?.label ?? "Starting"}
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="size-3" /> {job.error?.message ?? "Couldn't finish"}
+              </>
+            )}
+          </span>
+        </button>
+        {active ? (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => void cancel()}
+            disabled={cancelling}
+            aria-label={`Cancel ${job.title ?? format.noun}`}
+            title="Cancel"
+          >
+            <X />
+          </Button>
+        ) : (
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void openJob(job.id, job.workspace_id)}
+            >
+              Retry
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              onClick={onDismiss}
+              aria-label="Dismiss"
+              title="Dismiss"
+            >
+              <X />
+            </Button>
+          </>
+        )}
+      </div>
+      {active && !tracked ? null : null}
+    </motion.li>
   );
 }
 
-function Section({
-  title,
-  items,
-  empty,
-  muted,
-  accent,
+/* ───────────────────────── Needs approval ───────────────────────── */
+
+function ApprovalSection({
+  groups,
+  loading,
+  error,
+  thumbs,
+  jobs,
+  onChanged,
 }: {
-  title: string;
-  items: Row[];
-  empty: string;
-  muted?: boolean;
-  accent?: boolean;
+  groups: Group[];
+  loading: boolean;
+  error: string | null;
+  thumbs: Record<string, string>;
+  jobs: StudioJob[];
+  onChanged: () => void;
 }) {
+  const justFinished = useMemo(
+    () =>
+      new Set(
+        jobs
+          .filter(
+            (j) =>
+              j.status === "succeeded" &&
+              j.completed_at &&
+              Date.now() - Date.parse(j.completed_at) < 8000,
+          )
+          .map((j) => j.group_id),
+      ),
+    [jobs],
+  );
+
   return (
-    <section className="ui-section-gap">
-      <div className="mb-1.5 flex items-center justify-between px-1">
-        <h3 className="ui-eyebrow">{title}</h3>
-        {items.length > 0 && (
-          <motion.span
-            key={items.length}
-            initial={{ scale: 0.6, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            className={cn(
-              "ui-count-pill",
-              accent && "!bg-[hsl(var(--brand-blue))]/15 !text-[hsl(var(--brand-blue))]",
-            )}
-          >
-            {items.length}
-          </motion.span>
-        )}
+    <section data-no-rhythm aria-labelledby="rail-approval" aria-busy={loading}>
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <h3 id="rail-approval" className="ui-eyebrow">
+          Needs approval
+        </h3>
+        {groups.length ? (
+          <span className="ui-count-pill !bg-warning-surface !text-warning ring-1 ring-warning-border">
+            {groups.length}
+          </span>
+        ) : null}
       </div>
-      {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/50 bg-card/20 px-3 py-3">
-          <p className="ui-empty-body px-0">{empty}</p>
+
+      {loading ? (
+        <div className="space-y-1.5">
+          {[0, 1].map((k) => (
+            <div
+              key={k}
+              className="flex gap-2.5 rounded-xl border border-border bg-surface-3 p-2.5"
+            >
+              <div className="size-14 animate-pulse rounded-lg bg-surface-2" />
+              <div className="flex-1 space-y-2 py-1">
+                <div className="h-2.5 w-2/5 animate-pulse rounded bg-surface-2" />
+                <div className="h-3 w-4/5 animate-pulse rounded bg-surface-2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-danger-border bg-danger-surface px-3 py-2.5 text-xs text-foreground">
+          {error}
+          <Button size="sm" variant="ghost" onClick={onChanged}>
+            Retry
+          </Button>
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border">
+          <EmptyState
+            size="sm"
+            icon={Check}
+            title="You're all caught up"
+            description="Anything you create in Studio waits here for your approval before it goes anywhere."
+            action={
+              <Button size="sm" onClick={() => openComposer({ type: "social" })}>
+                <Wand2 />
+                Create a post
+              </Button>
+            }
+          />
         </div>
       ) : (
-        <ul className="flex flex-col gap-0.5">
-          {items.map((it, idx) => {
-            const tile = TILE_BY_ID[it.canvas];
-            const color = TINT_HEX[tile.tint];
+        <ul className="space-y-1.5">
+          <AnimatePresence initial={false}>
+            {groups.map((g) => (
+              <ApprovalCard
+                key={g.key}
+                group={g}
+                thumb={g.storagePath ? thumbs[g.storagePath] : undefined}
+                highlight={justFinished.has(g.key)}
+                onChanged={onChanged}
+              />
+            ))}
+          </AnimatePresence>
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function ApprovalCard({
+  group,
+  thumb,
+  highlight,
+  onChanged,
+}: {
+  group: Group;
+  thumb?: string;
+  highlight: boolean;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const legacy = group.type === "legacy";
+  const isApprovalRow = group.key.startsWith("approval-");
+  const label = legacy
+    ? (group.legacyLabel ?? "Legacy")
+    : STUDIO_FORMATS[group.type as StudioType].label;
+
+  const open = () => {
+    if (isApprovalRow) return emitAppEvent("open:operations", { tab: "approvals" });
+    if (group.jobId) return void openJob(group.jobId);
+    return void openItemOrJob(group.ids[0]);
+  };
+
+  const decide = async (status: "approved" | "rejected") => {
+    setBusy(true);
+    try {
+      await Promise.all(
+        group.ids.map((id) => updateContentItem({ data: { id, patch: { status } } })),
+      );
+      emitAppEvent("content:changed");
+      toast.success(status === "approved" ? "Approved" : "Discarded", {
+        description: status === "approved" ? "Open it to schedule or publish." : undefined,
+        action: status === "approved" ? { label: "Open", onClick: open } : undefined,
+      });
+    } catch (e) {
+      toast.error("Couldn't update", { description: e instanceof Error ? e.message : undefined });
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <motion.li
+      layout
+      layoutId={`group-${group.key}`}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -8, transition: { duration: duration.fast } }}
+      transition={{ duration: duration.medium, ease: ease.emphasized }}
+      className={cn(
+        "group overflow-hidden rounded-xl border bg-surface-3 transition-[border-color,box-shadow] duration-[--motion-duration-slow]",
+        highlight
+          ? "border-primary shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]"
+          : "border-border hover:border-border-strong",
+      )}
+    >
+      <button
+        type="button"
+        onClick={open}
+        className="flex w-full items-start gap-2.5 p-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/55"
+      >
+        <span className="relative grid size-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border">
+          {thumb && group.mediaType === "image" ? (
+            <img src={thumb} alt="" className="size-full object-cover" />
+          ) : thumb && group.mediaType === "video" ? (
+            <video
+              src={thumb}
+              muted
+              playsInline
+              preload="metadata"
+              className="size-full object-cover"
+            />
+          ) : legacy ? (
+            <FileText className="size-5 text-muted-foreground" />
+          ) : (
+            <TypeGlyph type={group.type as StudioType} className="bg-transparent ring-0" />
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="truncate">{label}</span>
+            {group.platforms.slice(0, 4).map((p) => {
+              const Icon = PLATFORMS[p].icon;
+              return <Icon key={p} className="size-3 shrink-0" aria-label={PLATFORMS[p].label} />;
+            })}
+            <span className="ml-auto shrink-0">{ago(group.createdAt)}</span>
+          </span>
+          <span className="mt-0.5 line-clamp-2 block text-sm font-medium leading-snug text-foreground">
+            {group.title}
+          </span>
+          {group.excerpt && group.excerpt !== group.title ? (
+            <span className="mt-0.5 line-clamp-1 block text-xs text-muted-foreground">
+              {group.excerpt}
+            </span>
+          ) : null}
+        </span>
+      </button>
+      {!isApprovalRow ? (
+        <div className="flex items-center gap-1 border-t border-border px-2 py-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-muted-foreground"
+            onClick={() => void decide("rejected")}
+            disabled={busy}
+            aria-label={`Discard ${group.title}`}
+          >
+            Discard
+          </Button>
+          <div className="ml-auto flex items-center gap-1">
+            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={open}>
+              Review
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 px-2.5"
+              onClick={() => void decide("approved")}
+              disabled={busy}
+              aria-label={`Approve ${group.title}`}
+            >
+              <Check />
+              Approve
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </motion.li>
+  );
+}
+
+/* ───────────────────────── Scheduled / recent ───────────────────────── */
+
+function CompactList({
+  title,
+  rows,
+  empty,
+  meta,
+}: {
+  title: string;
+  rows: ContentRow[];
+  empty: string;
+  meta: (r: ContentRow) => string;
+}) {
+  return (
+    <section data-no-rhythm>
+      <div className="mb-1.5 flex items-center gap-2 px-1">
+        <h3 className="ui-eyebrow">{title}</h3>
+        {rows.length ? <span className="ui-count-pill">{rows.length}</span> : null}
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-1 text-xs text-muted-foreground">{empty}</p>
+      ) : (
+        <ul className="flex flex-col">
+          {rows.map((r) => {
+            const type = studioTypeFromContent(r.kind, r.meta);
+            const platform =
+              typeof r.meta?.platform === "string" && r.meta.platform in PLATFORMS
+                ? PLATFORMS[r.meta.platform as PlatformId]
+                : null;
+            const Icon = platform?.icon;
             return (
-              <motion.li
-                key={it.id}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.03, duration: 0.25, ease: EASE }}
-              >
-                <motion.button
-                  whileHover={{ x: 2 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => openCanvas(it.canvas, it.id, it.mode)}
-                  className={cn(
-                    "group relative flex w-full items-center gap-2.5 rounded-full px-2 py-1.5 text-left text-[12px] transition-all duration-200 hover:bg-secondary/70",
-                    muted
-                      ? "text-muted-foreground hover:text-foreground"
-                      : "text-foreground/85 hover:text-foreground",
-                  )}
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => void openItemOrJob(r.id)}
+                  className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-sm text-foreground/85 transition-colors hover:bg-surface-2 hover:text-foreground"
                 >
-                  <RowLeadingVisual
-                    canvas={it.canvas}
-                    postId={it.id}
-                    color={color}
-                    Icon={tile.icon}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{it.title}</span>
-                  {it.meta === "needs approval" ? (
-                    <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                      approve
-                    </span>
+                  {type === "legacy" ? (
+                    <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                  ) : Icon ? (
+                    <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                   ) : (
-                    <span className="shrink-0 rounded-full px-1.5 text-[10.5px] text-muted-foreground/60">
-                      {it.meta}
-                    </span>
+                    <TypeGlyph type={type} size="sm" className="size-5 bg-transparent ring-0" />
                   )}
-                </motion.button>
-              </motion.li>
+                  <span className="min-w-0 flex-1 truncate">
+                    {cleanText(r.title) || cleanText(r.body).slice(0, 60) || "Untitled"}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{meta(r)}</span>
+                </button>
+              </li>
             );
           })}
         </ul>
@@ -1127,47 +861,10 @@ function Section({
   );
 }
 
-const SUGGESTION_ACCENT: Record<
-  StudioSuggestionAccent,
-  { fg: string; bg: string; ring: string; dot: string }
-> = {
-  indigo: {
-    fg: "text-indigo-600 dark:text-indigo-300",
-    bg: "bg-indigo-500/10",
-    ring: "ring-indigo-500/25",
-    dot: "bg-indigo-500",
-  },
-  blue: {
-    fg: "text-sky-600 dark:text-sky-300",
-    bg: "bg-sky-500/10",
-    ring: "ring-sky-500/25",
-    dot: "bg-sky-500",
-  },
-  green: {
-    fg: "text-emerald-600 dark:text-emerald-300",
-    bg: "bg-emerald-500/10",
-    ring: "ring-emerald-500/25",
-    dot: "bg-emerald-500",
-  },
-  violet: {
-    fg: "text-violet-600 dark:text-violet-300",
-    bg: "bg-violet-500/10",
-    ring: "ring-violet-500/25",
-    dot: "bg-violet-500",
-  },
-  rose: {
-    fg: "text-rose-600 dark:text-rose-300",
-    bg: "bg-rose-500/10",
-    ring: "ring-rose-500/25",
-    dot: "bg-rose-500",
-  },
-  amber: {
-    fg: "text-amber-600 dark:text-amber-300",
-    bg: "bg-amber-500/10",
-    ring: "ring-amber-500/25",
-    dot: "bg-amber-500",
-  },
-};
+/* ───────────────────────── Suggestions ─────────────────────────
+ * Operational nudges (Brand DNA, audit, planning). Creative ideas live in the
+ * composer, where they're specific to the chosen format. The card DOM and ARIA
+ * contract is covered by tests/integration/studio-suggestions-*.spec.ts. */
 
 const SUGGESTION_ICON = {
   Sparkles,
@@ -1180,20 +877,6 @@ const SUGGESTION_ICON = {
   FileText,
 } as const;
 
-/**
- * Shared clamp + overflow rules for the suggestion card text spans.
- *
- * Both label and hint use the same base rules so their behaviour scales
- * identically as the grid column (`minmax(0, 1fr)`) shrinks and grows:
- *   - `min-w-0` + `max-w-full` + `w-full` — the span never forces the grid
- *     column to grow past its computed width, and always fills that column.
- *   - `overflow-hidden` + `break-words` + `[overflow-wrap:anywhere]` — an
- *     unbroken URL/token wraps instead of pushing the card wider.
- *   - Inline `display: -webkit-box` + `WebkitBoxOrient: vertical` — line
- *     clamping needs this explicitly; Tailwind's `line-clamp-*` utility
- *     doesn't always emit `display:-webkit-box` in v4 (WebKit bit us here).
- * Only the line count (2 for label, 1 for hint) and typography differ.
- */
 const SUGGESTION_TEXT_BASE =
   "block w-full min-w-0 max-w-full overflow-hidden break-words [hyphens:auto] [overflow-wrap:anywhere]";
 
@@ -1202,6 +885,8 @@ const clampStyle = (lines: number): React.CSSProperties => ({
   WebkitBoxOrient: "vertical",
   WebkitLineClamp: lines,
 });
+
+const _accentUnused: StudioSuggestionAccent | null = null;
 
 function SuggestionsSection() {
   const { items, loading } = useStudioSuggestions();
@@ -1214,7 +899,8 @@ function SuggestionsSection() {
       return new Set<string>();
     }
   });
-  const visible = items.filter((s) => !dismissed.has(s.id));
+  const visible = items.filter((s: StudioSuggestion) => !dismissed.has(s.id));
+  void _accentUnused;
 
   const dismiss = (id: string) => {
     setDismissed((prev) => {
@@ -1222,28 +908,27 @@ function SuggestionsSection() {
       next.add(id);
       try {
         localStorage.setItem("studio:suggest-dismissed", JSON.stringify([...next]));
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       return next;
     });
   };
 
-  if (loading && items.length === 0) return null;
-  if (visible.length === 0) return null;
+  if ((loading && items.length === 0) || visible.length === 0) return null;
 
   return (
-    <section className="ui-section-gap">
+    <section data-no-rhythm>
       <div className="mb-1.5 flex items-center justify-between px-0.5">
         <h3 className="ui-eyebrow">
-          <Sparkles className="h-2.5 w-2.5 text-indigo-500" strokeWidth={2.5} />
+          <Sparkles className="h-2.5 w-2.5 text-primary" strokeWidth={2.5} />
           Suggestions for you
         </h3>
         <span className="ui-count-pill">{visible.length}</span>
       </div>
-
       <ul className="flex flex-col gap-1.5">
         <AnimatePresence initial={false}>
           {visible.map((s, idx) => {
-            const accent = SUGGESTION_ACCENT[s.accent];
             const Icon = SUGGESTION_ICON[s.icon];
             return (
               <motion.li
@@ -1252,21 +937,11 @@ function SuggestionsSection() {
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: -8, transition: { duration: 0.18 } }}
-                transition={{ delay: idx * 0.04, duration: 0.25, ease: EASE }}
+                transition={{ delay: idx * 0.04, duration: 0.25, ease: ease.emphasized }}
               >
-                <div
-                  className={cn(
-                    "group relative grid min-h-[64px] grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-2 overflow-hidden rounded-xl border border-border/50 bg-card/60 px-2.5 py-2 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-px hover:border-border hover:bg-card",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-xl ring-1",
-                      accent.bg,
-                      accent.ring,
-                    )}
-                  >
-                    <Icon className={cn("h-3.5 w-3.5", accent.fg)} strokeWidth={2.25} />
+                <div className="group relative grid min-h-[64px] grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-2 overflow-hidden rounded-xl border border-border bg-surface-3 px-2.5 py-2 transition-colors hover:border-border-strong">
+                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-surface-2 ring-1 ring-border">
+                    <Icon className="h-3.5 w-3.5 text-foreground/75" strokeWidth={2.25} />
                   </span>
                   <button
                     onClick={s.run}
@@ -1288,23 +963,17 @@ function SuggestionsSection() {
                       style={clampStyle(1)}
                       className={cn(
                         SUGGESTION_TEXT_BASE,
-                        "mt-0.5 text-[10.5px] leading-snug text-muted-foreground/85",
+                        "mt-0.5 text-[10.5px] leading-snug text-muted-foreground",
                       )}
                     >
                       {s.hint}
                     </span>
                   </button>
-
                   <div className="flex min-w-0 shrink-0 items-center gap-1 self-center">
                     <button
                       onClick={s.run}
                       aria-label={`Run suggestion: ${s.label}`}
-                      className={cn(
-                        "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition",
-                        accent.bg,
-                        accent.fg,
-                        "hover:brightness-110",
-                      )}
+                      className="rounded-full bg-primary-surface px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground ring-1 ring-primary-border transition hover:border-primary"
                     >
                       Try
                     </button>
@@ -1312,9 +981,9 @@ function SuggestionsSection() {
                       onClick={() => dismiss(s.id)}
                       title="Dismiss"
                       aria-label="Dismiss suggestion"
-                      className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground/60 opacity-0 transition hover:bg-secondary hover:text-foreground group-hover:opacity-100"
+                      className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground opacity-0 transition hover:bg-surface-2 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
                     >
-                      <span className="text-[12px] leading-none">×</span>
+                      <X className="size-3" />
                     </button>
                   </div>
                 </div>

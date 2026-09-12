@@ -372,7 +372,7 @@ const DraftInput = z.object({
   title: z.string().min(1).max(280),
   body: z.string().max(8000).default(""),
   channel: z.string().max(40).optional(),
-  kind: z.enum(["post", "brief", "email", "landing", "blog"]).default("post"),
+  kind: z.enum(["post", "carousel", "image", "video", "ad", "script", "blog"]).default("post"),
   proposedAt: z.string().datetime().optional(),
 });
 

@@ -1197,7 +1197,7 @@ function ContentPanel() {
                   </div>
                 </div>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[10.5px] capitalize ${d.status === "approved" ? "bg-success/20 text-success" : d.status === "scheduled" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                  className={`rounded-full px-2 py-0.5 text-[10.5px] capitalize ${d.status === "approved" ? "bg-success/20 text-success" : d.status === "scheduled" ? "bg-primary-surface text-primary" : "bg-muted text-muted-foreground"}`}
                 >
                   {d.status.replace("_", " ")}
                 </span>

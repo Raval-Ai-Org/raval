@@ -573,10 +573,8 @@ function ActionButton({
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1.5 text-[12px] font-medium transition disabled:opacity-50",
         "border-border/70 hover:border-foreground/30 hover:bg-card",
-        variant === "success" &&
-          "hover:border-emerald-500/50 hover:text-emerald-700 dark:hover:text-emerald-400",
-        variant === "danger" &&
-          "hover:border-red-500/50 hover:text-red-700 dark:hover:text-red-400",
+        variant === "success" && "hover:border-success-border hover:text-success",
+        variant === "danger" && "hover:border-danger-border hover:text-danger",
       )}
     >
       <Icon className="h-3.5 w-3.5" />

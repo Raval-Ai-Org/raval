@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
  *   3. Assert the run reports work AND a matching content_items row was written
  *      (kind='blog', meta.scheduled_job_id = the seeded job).
  *   4. Open /app with that workspace selected and confirm the Studio suggestion
- *      rail reflects the new content: the "Draft your first SEO brief" card
+ *      rail reflects the new content: the "Write your first article" card
  *      disappears once a blog/brief content_item exists.
  */
 
@@ -136,10 +136,10 @@ test.describe("Schedules → content_items → Studio suggestions", () => {
 
     await page.goto("/app", { waitUntil: "domcontentloaded" });
 
-    // Baseline suggestion set — no blog/brief content yet, so the SEO brief
+    // Baseline suggestion set — no blog/brief content yet, so the article
     // suggestion should surface for this fresh workspace.
     await expect(
-      page.getByRole("button", { name: /Run suggestion: Draft your first SEO brief/i }),
+      page.getByRole("button", { name: /Run suggestion: Write your first article/i }),
     ).toBeVisible({ timeout: 15_000 });
 
     // ---- Seed a due scheduled_job and invoke the cron hook ----
@@ -194,7 +194,7 @@ test.describe("Schedules → content_items → Studio suggestions", () => {
     // The hook listens for `content:changed`, so we nudge it instead of a full reload.
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("content:changed")));
     await expect(
-      page.getByRole("button", { name: /Run suggestion: Draft your first SEO brief/i }),
+      page.getByRole("button", { name: /Run suggestion: Write your first article/i }),
     ).toHaveCount(0, { timeout: 10_000 });
 
     // Sanity: the suggestion rail is still rendering other cards, i.e. it did

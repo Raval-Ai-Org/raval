@@ -1,33 +1,40 @@
 "use client";
 
-import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
-import { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+/**
+ * Pending approvals.
+ *
+ * This dialog was written for a website builder, not a marketing platform: it
+ * was titled "Publish your app", described itself as pushing changes "to your
+ * live deployment" over an "edge network", labelled the approvals queue
+ * "Pending changes" behind a git-commit icon, and derived a production URL by
+ * running `window.location.hostname.replace("id-preview--", "")` — string
+ * surgery on a preview-host convention from another product, which produced a
+ * made-up domain in every real deployment. None of that described the actual
+ * job: signing off on actions Mellox's agents want to take.
+ *
+ * It also carried a gutted state machine (a one-member `Phase` union with no
+ * setter, a permanently-true conditional, a no-op `reset` still called on
+ * close) and — the real defect — approved optimistically without ever checking
+ * the Supabase response, so a failed approval rendered as approved and showed
+ * a success toast.
+ */
+
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import {
-  Rocket,
-  Check,
-  Loader2,
-  Globe,
-  ExternalLink,
-  ShieldCheck,
-  Clock,
-  GitCommit,
-  CircleDot,
-  Sparkles,
-  Copy,
-} from "@/components/ui/gemini-icons";
+import { Check, CheckCircle, Clock, ListChecks, ShieldCheck } from "@/components/icons";
 
 interface Approval {
   id: string;
   action: string;
   status: string;
-  payload: any;
+  payload: unknown;
   created_at: string;
 }
 
@@ -36,14 +43,18 @@ interface Props {
   children: React.ReactNode;
 }
 
-type Phase = "idle";
+/** Turns `generate_post_image` into "Generate post image". */
+function readableAction(action: string) {
+  const words = action.replace(/[_-]+/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Agent action";
+}
 
 export function PublishDialog({ workspaceId, children }: Props) {
   const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState<Approval[]>([]);
+  const [items, setItems] = useState<Approval[]>([]);
   const [loading, setLoading] = useState(false);
-  const [phase] = useState<Phase>("idle");
-  const [publishedUrl, setPublishedUrl] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+  const [busyIds, setBusyIds] = useState<string[]>([]);
 
   useEffect(() => {
     const h = () => setOpen(true);
@@ -51,219 +62,190 @@ export function PublishDialog({ workspaceId, children }: Props) {
     return () => removeAppEventListener("open:publish", h);
   }, []);
 
-  // Load pending approvals
-  useEffect(() => {
-    if (!open || !workspaceId) return;
+  const load = useCallback(async () => {
+    if (!workspaceId) return;
     setLoading(true);
-    supabase
+    setError(null);
+    const { data, error: cause } = await supabase
       .from("approvals")
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        setPending((data as Approval[]) ?? []);
-        setLoading(false);
-      });
-  }, [open, workspaceId]);
+      .limit(20);
+    if (cause) setError(cause.message);
+    else setItems((data as Approval[] | null) ?? []);
+    setLoading(false);
+  }, [workspaceId]);
 
-  // Set published URL from current origin
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const host = window.location.hostname.replace("id-preview--", "");
-      setPublishedUrl(`https://${host.replace(/-dev\./, ".")}`);
-    }
-  }, []);
+    if (open) void load();
+  }, [open, load]);
 
-  const pendingCount = useMemo(
-    () => pending.filter((p) => p.status === "pending").length,
-    [pending],
+  const pendingIds = useMemo(
+    () => items.filter((item) => item.status === "pending").map((item) => item.id),
+    [items],
   );
 
-  const approveOne = async (id: string) => {
-    setPending((prev) => prev.map((p) => (p.id === id ? { ...p, status: "approved" } : p)));
-    await supabase
+  /**
+   * Approve, then reconcile against what the server actually did. The previous
+   * version flipped the row to "approved" in local state and fired the request
+   * without awaiting its error, so a rejected write left the UI claiming
+   * success.
+   */
+  const approve = async (ids: string[]) => {
+    if (!ids.length || !workspaceId) return;
+    setBusyIds((prev) => [...prev, ...ids]);
+    const { error: cause } = await supabase
       .from("approvals")
       .update({ status: "approved", decided_at: new Date().toISOString() })
-      .eq("id", id);
+      .in("id", ids)
+      .eq("workspace_id", workspaceId);
+    setBusyIds((prev) => prev.filter((id) => !ids.includes(id)));
+
+    if (cause) {
+      toast.error(
+        ids.length > 1 ? "Couldn't approve those actions" : "Couldn't approve that action",
+        {
+          description: cause.message,
+        },
+      );
+      // Re-read rather than guess: some of a batch may have gone through.
+      await load();
+      return;
+    }
+
+    setItems((prev) =>
+      prev.map((item) =>
+        ids.includes(item.id)
+          ? { ...item, status: "approved", decided_at: new Date().toISOString() }
+          : item,
+      ),
+    );
+    toast.success(ids.length > 1 ? `${ids.length} actions approved` : "Action approved");
+    emitAppEvent("approvals:changed");
   };
 
-  const approveAll = async () => {
-    const ids = pending.filter((p) => p.status === "pending").map((p) => p.id);
-    if (!ids.length) return;
-    setPending((prev) => prev.map((p) => ({ ...p, status: "approved" })));
-    await supabase
-      .from("approvals")
-      .update({ status: "approved", decided_at: new Date().toISOString() })
-      .in("id", ids);
-    toast.success(`${ids.length} change${ids.length > 1 ? "s" : ""} approved`);
-  };
-
-  const reset = () => {
-    /* no-op */
-  };
+  const approvingAll = pendingIds.length > 0 && pendingIds.every((id) => busyIds.includes(id));
 
   return (
     <>
-      <Slot onClick={() => setOpen(true)}>{children as any}</Slot>
+      <Slot onClick={() => setOpen(true)}>{children as React.ReactElement}</Slot>
       <AppModalShell
         open={open}
-        onOpenChange={(v) => {
-          setOpen(v);
-          if (!v) setTimeout(reset, 200);
-        }}
+        onOpenChange={setOpen}
         size="sm"
-        Icon={Rocket}
-        eyebrow="Deploy"
-        title="Publish your app"
-        description="Review pending changes and push them to your live deployment."
-        srDescription="Publish workspace to live"
-        bodyClassName="px-6 py-5"
+        Icon={ListChecks}
+        eyebrow="Approvals"
+        title="Waiting on you"
+        description="Actions Mellox wants to take on your behalf."
+        srDescription="Review and approve pending agent actions"
+        bodyClassName="px-5 py-4 sm:px-6"
       >
-        <AnimatePresence mode="wait">
-          {phase === "idle" ? (
-            <motion.div
-              key="review"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.25 }}
-              className="space-y-4"
-            >
-              {/* Domain row */}
-              <div className="flex items-center justify-between rounded-xl border border-border/60 bg-surface/50 px-3.5 py-2.5">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <div className="truncate text-[13px] font-medium">
-                      {publishedUrl.replace("https://", "")}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                      Production · edge network
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(publishedUrl);
-                    toast("URL copied");
-                  }}
-                  className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-surface hover:text-foreground"
-                  aria-label="Copy URL"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border">
+            <div className="flex items-center justify-between gap-3 border-b border-border px-3.5 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Pending</span>
+                {pendingIds.length > 0 ? (
+                  <Badge variant="secondary">{pendingIds.length}</Badge>
+                ) : null}
               </div>
-
-              {/* Pending changes */}
-              <div className="rounded-xl border border-border/60">
-                <div className="flex items-center justify-between border-b border-border/60 px-3.5 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <GitCommit className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-[12.5px] font-medium">Pending changes</span>
-                    {pendingCount > 0 && (
-                      <Badge variant="secondary" className="h-5 rounded-full px-2 text-[10px]">
-                        {pendingCount}
-                      </Badge>
-                    )}
-                  </div>
-                  {pendingCount > 0 && (
-                    <button
-                      onClick={approveAll}
-                      className="text-[11.5px] font-medium text-foreground/80 hover:text-foreground"
-                    >
-                      Approve all
-                    </button>
-                  )}
-                </div>
-
-                <div className="max-h-[220px] overflow-auto">
-                  {loading ? (
-                    <div className="flex items-center gap-2 px-3.5 py-6 text-[12px] text-muted-foreground">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading changes…
-                    </div>
-                  ) : pending.length === 0 ? (
-                    <div className="flex flex-col items-center gap-1.5 px-4 py-7 text-center">
-                      <Sparkles className="h-4 w-4 text-muted-foreground" />
-                      <p className="text-[12.5px] font-medium">Everything's up to date</p>
-                      <p className="text-[11.5px] text-muted-foreground">
-                        No pending agent actions waiting on approval.
-                      </p>
-                    </div>
-                  ) : (
-                    <ul className="divide-y divide-border/60">
-                      {pending.map((p) => (
-                        <li key={p.id} className="flex items-start gap-2.5 px-3.5 py-2.5">
-                          <CircleDot
-                            className="mt-0.5 h-3.5 w-3.5 shrink-0"
-                            style={{
-                              color:
-                                p.status === "approved"
-                                  ? "hsl(var(--success))"
-                                  : "hsl(var(--aura-purple))",
-                            }}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[12.5px] font-medium">{p.action}</div>
-                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                              <Clock className="h-3 w-3" />
-                              {new Date(p.created_at).toLocaleString()}
-                            </div>
-                          </div>
-                          {p.status === "pending" ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 rounded-md px-2.5 text-[11px]"
-                              onClick={() => approveOne(p.id)}
-                            >
-                              Approve
-                            </Button>
-                          ) : (
-                            <span className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-[hsl(var(--success))]">
-                              <Check className="h-3 w-3" /> Approved
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2 rounded-lg border border-border/60 bg-surface/60 px-3 py-2.5 text-[11.5px] text-muted-foreground">
-                <div className="flex items-start gap-2">
-                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[hsl(var(--success))]" />
-                  <span>
-                    Your live URL is always up to date with your latest <b>approved</b> changes —
-                    approvals above are the only thing you control here.
-                  </span>
-                </div>
-                <div>
-                  Want a custom domain or to roll back? Email{" "}
-                  <a className="underline" href="mailto:hello@raval.ai">
-                    hello@raval.ai
-                  </a>
-                  .
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-1">
-                <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                  Close
-                </Button>
+              {pendingIds.length > 1 ? (
                 <Button
+                  variant="ghost"
                   size="sm"
-                  className="btn-aura h-9 gap-1.5 rounded-full px-4"
-                  onClick={() => window.open(publishedUrl, "_blank")}
+                  onClick={() => void approve(pendingIds)}
+                  loading={approvingAll}
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Visit live site
+                  Approve all
                 </Button>
-              </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+              ) : null}
+            </div>
+
+            <div className="max-h-[260px] overflow-y-auto scrollbar-thin">
+              {loading ? (
+                <ul className="divide-y divide-border" aria-label="Loading approvals">
+                  {[0, 1, 2].map((i) => (
+                    <li key={i} className="flex items-center gap-3 px-3.5 py-3">
+                      <div className="size-4 shrink-0 animate-pulse rounded-full bg-surface-2" />
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="h-3.5 w-2/5 animate-pulse rounded bg-surface-2" />
+                        <div className="h-3 w-1/4 animate-pulse rounded bg-surface-2" />
+                      </div>
+                      <div className="h-8 w-20 shrink-0 animate-pulse rounded-md bg-surface-2" />
+                    </li>
+                  ))}
+                </ul>
+              ) : error ? (
+                <ErrorState
+                  size="sm"
+                  title="Couldn't load approvals"
+                  detail={error}
+                  onRetry={() => void load()}
+                />
+              ) : items.length === 0 ? (
+                <EmptyState
+                  size="sm"
+                  icon={CheckCircle}
+                  title="Nothing waiting"
+                  description="When an agent wants to publish, schedule or spend, it will ask here first."
+                />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {items.map((item) => {
+                    const isPending = item.status === "pending";
+                    const busy = busyIds.includes(item.id);
+                    return (
+                      <li key={item.id} className="flex items-start gap-3 px-3.5 py-3">
+                        <span
+                          aria-hidden
+                          className={
+                            isPending
+                              ? "mt-1.5 size-2 shrink-0 rounded-full bg-warning"
+                              : "mt-1.5 size-2 shrink-0 rounded-full bg-success"
+                          }
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {readableAction(item.action)}
+                          </p>
+                          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Clock className="size-3" aria-hidden />
+                            {new Date(item.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                        {isPending ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0"
+                            loading={busy}
+                            onClick={() => void approve([item.id])}
+                          >
+                            Approve
+                          </Button>
+                        ) : (
+                          <span className="inline-flex shrink-0 items-center gap-1 px-1 text-xs font-medium text-success">
+                            <Check className="size-3.5" aria-hidden />
+                            {item.status === "approved" ? "Approved" : item.status}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <p className="flex items-start gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden />
+            <span>
+              Nothing here runs until you approve it. Agents can draft and analyse freely;
+              publishing, scheduling and anything that spends credits waits for a decision.
+            </span>
+          </p>
+        </div>
       </AppModalShell>
     </>
   );

@@ -9,35 +9,42 @@
 // (R2d). Empty state = the item has no SDR delivery rows (not distributed).
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  Twitter,
-  Linkedin,
-  Facebook,
-  Instagram,
+  ExternalLink,
+  FacebookIcon,
+  InstagramIcon,
+  LinkedinIcon,
+  Loader2,
+  XIcon,
   type LucideIcon,
-} from "@/components/ui/gemini-icons";
+} from "@/components/icons";
 import { getPublications, type PublicationRow } from "@/lib/sdr.functions";
 import { cn } from "@/lib/utils";
 
-/** SDR wire-id → display label + icon (matches ConnectionsPanel). */
-const PLATFORM_META: Record<string, { label: string; icon: LucideIcon; tint: string }> = {
-  twitter: { label: "X", icon: Twitter, tint: "#0F1419" },
-  linkedin: { label: "LinkedIn", icon: Linkedin, tint: "#0A66C2" },
-  facebook: { label: "Facebook", icon: Facebook, tint: "#1877F2" },
-  instagram: { label: "Instagram", icon: Instagram, tint: "#E1306C" },
+/**
+ * SDR wire-id → display label + mark.
+ *
+ * X has no tint: its mark is monochrome by specification, so it inherits the
+ * surrounding text colour. Pinning it to near-black made it invisible on the
+ * dark theme.
+ */
+const PLATFORM_META: Record<string, { label: string; icon: LucideIcon; tint?: string }> = {
+  twitter: { label: "X", icon: XIcon },
+  linkedin: { label: "LinkedIn", icon: LinkedinIcon, tint: "#0A66C2" },
+  facebook: { label: "Facebook", icon: FacebookIcon, tint: "#1877F2" },
+  instagram: { label: "Instagram", icon: InstagramIcon, tint: "#E1306C" },
 };
 
 /** Status → chip styling. Mirrors the content_publications status set. */
 const STATUS_STYLE: Record<string, string> = {
-  published: "bg-emerald-500/10 text-emerald-600 ring-emerald-500/25 dark:text-emerald-400",
-  retrying: "bg-amber-500/10 text-amber-600 ring-amber-500/25 dark:text-amber-400",
-  failed: "bg-rose-500/10 text-rose-600 ring-rose-500/25 dark:text-rose-400",
-  partial_failed: "bg-amber-500/10 text-amber-600 ring-amber-500/25 dark:text-amber-400",
-  publishing: "bg-sky-500/10 text-sky-600 ring-sky-500/25 dark:text-sky-400",
-  pending: "bg-secondary text-muted-foreground ring-border",
-  cancelled: "bg-secondary text-muted-foreground ring-border",
+  published: "bg-success-surface text-success ring-success-border",
+  retrying: "bg-warning-surface text-warning ring-warning-border",
+  failed: "bg-danger-surface text-danger ring-danger-border",
+  partial_failed: "bg-warning-surface text-warning ring-warning-border",
+  publishing: "bg-info-surface text-info ring-info-border",
+  pending: "bg-surface-2 text-muted-foreground ring-border",
+  cancelled: "bg-surface-2 text-muted-foreground ring-border",
 };
 
 function PlatformIcon({ platform, className }: { platform: string; className?: string }) {
@@ -47,7 +54,11 @@ function PlatformIcon({ platform, className }: { platform: string; className?: s
     return <span className={cn("h-5 w-5 shrink-0 rounded-md bg-muted", className)} aria-hidden />;
   }
   return (
-    <Icon className={cn("h-4 w-4 shrink-0", className)} aria-hidden style={{ color: meta.tint }} />
+    <Icon
+      className={cn("h-4 w-4 shrink-0", className)}
+      aria-hidden
+      style={meta.tint ? { color: meta.tint } : undefined}
+    />
   );
 }
 

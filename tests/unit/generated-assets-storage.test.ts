@@ -7,7 +7,10 @@ const migration = readFileSync(
   path.join(root, "supabase/migrations/20260910020000_harden_generated_asset_storage.sql"),
   "utf8",
 );
-const persistRoute = readFileSync(path.join(root, "src/app/api/assets/persist/route.ts"), "utf8");
+// Persistence logic lives in a shared server module; the route is a thin adapter.
+const persistRoute = ["src/app/api/assets/persist/route.ts", "src/server/assets/persist.server.ts"]
+  .map((file) => readFileSync(path.join(root, file), "utf8"))
+  .join("\n");
 const libraryRoute = readFileSync(path.join(root, "src/app/api/assets/library/route.ts"), "utf8");
 const shareMigration = readFileSync(
   path.join(root, "supabase/migrations/20260910030000_harden_client_share_secrets.sql"),
@@ -49,7 +52,7 @@ describe("generated asset storage security posture", () => {
     expect(libraryRoute).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|supabaseAdmin/);
     expect(libraryRoute).toMatch(/ctx\.supabase/);
     expect(persistRoute).toMatch(/media_url: null/);
-    expect(persistRoute).toMatch(/asset_storage_path: path/);
+    expect(persistRoute).toMatch(/asset_storage_path: (asset\.)?path/);
     expect(contentFn).toMatch(/createSignedUrls\(paths, 3600\)/);
     expect(sdrHandlers).toMatch(/resolveMediaUrl/);
   });
