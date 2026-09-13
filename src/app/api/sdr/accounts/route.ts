@@ -1,12 +1,14 @@
-// GET /api/sdr/accounts — list the workspace's connected accounts (FR-002).
-// Tokens are never exposed. Provisions on first use (G3rd-7) so a fresh
-// workspace returns a clean empty list rather than an error.
+// GET /api/sdr/accounts — list the workspace's connected accounts from the
+// active distribution provider. Tokens are never exposed. SocialAPI.ai lists
+// only accounts under this workspace's brand; the SDR provisions on first use.
 import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import { listAccountsHandler } from "@/lib/sdr.handlers";
-import { isSdrEnabledForWorkspace } from "@/lib/feature-flags";
+import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
+import { listAccountsHandler as listSocialAccounts } from "@/lib/socialapi/handlers";
+import { withSocialApi } from "@/lib/socialapi/route.server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +18,12 @@ export const GET = defineRoute({
   query: z.object({ workspaceId: z.string().optional() }),
   workspaceId: ({ query }) => query.workspaceId,
   handler: async ({ workspaceId }) => {
-    // Distribution off → no SDR exists to provision against; an empty list is the truth.
-    if (!isSdrEnabledForWorkspace(workspaceId)) return Response.json([]);
+    const provider = getDistributionProviderForWorkspace(workspaceId);
+    // Distribution off → no provider to ask; an empty list is the truth.
+    if (!provider) return Response.json([]);
+    if (provider === "socialapi") {
+      return withSocialApi(workspaceId, (deps) => listSocialAccounts(workspaceId, deps));
+    }
     try {
       const { token, baseUrl } = await getWorkspaceSdrConfig(workspaceId);
       const out = await listAccountsHandler({ sdrBaseUrl: baseUrl, token });

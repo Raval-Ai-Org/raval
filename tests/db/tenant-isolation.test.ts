@@ -137,6 +137,25 @@ async function seedWorkspace(ws: string, owner: string, tag: string) {
   await q(`insert into public.sdr_webhook_events (workspace_id, outcome) values ($1, 'verified')`, [
     ws,
   ]);
+  await q(
+    `insert into public.workspace_socialapi (workspace_id, brand_id, status) values ($1, $2, 'active')`,
+    [ws, `brand-${tag}`],
+  );
+  await q(
+    `insert into public.social_accounts (workspace_id, provider_account_id, brand_id, platform, username)
+     values ($1, $2, $3, 'linkedin', 'handle')`,
+    [ws, `acc_${tag}`, `brand-${tag}`],
+  );
+  await q(
+    `insert into public.social_oauth_states (state_hash, workspace_id, user_id, platform, expires_at)
+     values ($1, $2, $3, 'linkedin', now() + interval '30 minutes')`,
+    [`hash-${tag}`, ws, owner],
+  );
+  await q(
+    `insert into public.social_usage_events (workspace_id, operation, provider_post_id, user_id)
+     values ($1, 'publish', $2, $3)`,
+    [ws, `post-${tag}`, owner],
+  );
 }
 
 // Tables a workspace member may read (their own rows only).
@@ -158,9 +177,17 @@ const MEMBER_READABLE = [
   "agent_action_requests",
   "workspace_agent_settings",
   "sdr_webhook_events",
+  "social_accounts",
+  "social_usage_events",
 ];
 // Every workspace-scoped table, including service-role-only ones.
-const ALL_SCOPED = [...MEMBER_READABLE, "client_shares", "workspace_sdr"];
+const ALL_SCOPED = [
+  ...MEMBER_READABLE,
+  "client_shares",
+  "workspace_sdr",
+  "workspace_socialapi",
+  "social_oauth_states",
+];
 
 beforeAll(async () => {
   db = await createMigratedDb();
@@ -218,6 +245,30 @@ describe("tenant isolation — reads", () => {
 
   it("workspace_sdr (encrypted SDR keys) is unreadable even by the owning workspace", async () => {
     expect(await visible(ALICE, "workspace_sdr", wsA)).toSatisfy((n) => n === 0 || n === "denied");
+  });
+
+  it.each(["workspace_socialapi", "social_oauth_states"])(
+    "%s (provider brand mapping / connect state) is server-only even for the owner",
+    async (table) => {
+      expect(await visible(ALICE, table, wsA)).toSatisfy((n) => n === 0 || n === "denied");
+    },
+  );
+
+  it("social accounts and publishing credits cannot be written by the browser", async () => {
+    for (const sql of [
+      `insert into public.social_accounts (workspace_id, provider_account_id, platform) values ($1, 'acc_forged', 'linkedin')`,
+      `insert into public.social_usage_events (workspace_id, operation) values ($1, 'publish')`,
+    ]) {
+      const denied = await as(ALICE, async (tx) => {
+        try {
+          await tx.query(sql, [wsA]);
+          return false;
+        } catch (e) {
+          return /permission denied|row-level security/i.test(String(e));
+        }
+      });
+      expect(denied).toBe(true);
+    }
   });
 
   it("a member cannot read another workspace's share token hashes", async () => {

@@ -84,6 +84,12 @@ export type ConnectedAccount = {
   platformUsername: string;
   status: "active" | "expired" | "disconnected";
   tokenExpiresAt: string | null;
+  /** Provider-specific extras (SocialAPI.ai). Absent for the SDR. */
+  provider?: "socialapi" | "sdr";
+  displayName?: string | null;
+  avatarUrl?: string | null;
+  /** Why the provider needs the account reconnected, when it says. */
+  reconnectReason?: string | null;
 };
 
 /** Map a raw SDR AccountResponse into the ConnectedAccount shape (no tokens). */
@@ -188,7 +194,8 @@ async function resolveMediaUrl(db: any, item: any): Promise<string | null> {
 
 export type PublishOutcome = {
   contentItemId: string;
-  status: "publishing" | "already" | "skipped";
+  /** `failed` = the provider accepted the post but every destination rejected it. */
+  status: "publishing" | "already" | "skipped" | "failed";
   sdrJobId?: string;
   targets?: number;
   reason?: string;

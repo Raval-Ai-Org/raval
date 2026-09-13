@@ -21,7 +21,7 @@ export const GET = defineRoute({
     const { data, error } = await supabase
       .from("content_publications")
       .select(
-        "id, platform, account_id, status, platform_post_url, platform_post_id, error_category, last_error, delivered_at",
+        "id, provider, platform, account_id, status, platform_post_url, platform_post_id, error_category, error_code, last_error, delivered_at, attempt, metrics, metrics_synced_at",
       )
       .eq("workspace_id", query.workspaceId)
       .eq("content_item_id", query.contentItemId)

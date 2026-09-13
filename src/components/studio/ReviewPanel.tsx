@@ -69,7 +69,8 @@ export type ReviewRow = {
   scheduled_at: string | null;
 };
 
-const SDR_DELIVERABLE: PlatformId[] = ["linkedin", "twitter", "facebook", "instagram"];
+/** Used only until the workspace's distribution status has loaded (and in fixtures). */
+const FALLBACK_DELIVERABLE: PlatformId[] = ["linkedin", "twitter", "facebook", "instagram"];
 const SHIPPABLE_TYPES = ["social", "image", "video", "carousel"];
 
 type Tone = "warn" | "ok" | "muted" | "danger";
@@ -217,6 +218,7 @@ export function ReviewPanel({
   const [custom, setCustom] = useState("");
   const [scheduleAt, setScheduleAt] = useState(defaultScheduleTime);
   const [selection, setSelection] = useState<PublishSelection>({ type: "all" });
+  const [tiktokPrivacy, setTiktokPrivacy] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [justApproved, setJustApproved] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -282,7 +284,11 @@ export function ReviewPanel({
     ["scheduled", "publishing", "published", "partial_failed"].includes(r.status),
   );
   const approvable = rows.some((r) => r.status === "pending" || r.status === "draft");
-  const deliverable = rows.filter((r) => SDR_DELIVERABLE.includes(r.meta?.platform as PlatformId));
+  const deliverablePlatforms: readonly string[] = sdr?.platforms?.length
+    ? sdr.platforms
+    : FALLBACK_DELIVERABLE;
+  const deliverable = rows.filter((r) => deliverablePlatforms.includes(String(r.meta?.platform)));
+  const sendsTiktok = deliverable.some((r) => r.meta?.platform === "tiktok");
   const shippableType = SHIPPABLE_TYPES.includes(session.type);
   const canShip = distributionReady && deliverable.length > 0 && shippableType;
   const multi = platforms.length > 1;
@@ -379,9 +385,10 @@ export function ReviewPanel({
     setBusy(kind);
     try {
       const ids = deliverable.map((r) => r.id);
+      const options = { tiktokPrivacyLevel: sendsTiktok ? tiktokPrivacy : null };
       const res =
         kind === "publish"
-          ? await publishContentItems(session.workspaceId, ids, selection)
+          ? await publishContentItems(session.workspaceId, ids, selection, options)
           : await scheduleContentItems(
               session.workspaceId,
               ids.map((id, i) => ({
@@ -391,9 +398,11 @@ export function ReviewPanel({
                 ).toISOString(),
               })),
               selection,
+              options,
             );
       const sent = res.results.filter((r) => r.status === "publishing" || r.status === "already");
-      const skipped = res.results.filter((r) => r.status === "skipped");
+      // `failed` = accepted by the provider but rejected by every destination.
+      const skipped = res.results.filter((r) => r.status === "skipped" || r.status === "failed");
       if (sent.length) {
         toast.success(
           kind === "publish"
@@ -1281,6 +1290,9 @@ export function ReviewPanel({
                     workspaceId={session.workspaceId}
                     value={selection}
                     onChange={setSelection}
+                    tiktok={
+                      sendsTiktok ? { value: tiktokPrivacy, onChange: setTiktokPrivacy } : undefined
+                    }
                   />
                 </div>
               </details>

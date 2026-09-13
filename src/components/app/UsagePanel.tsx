@@ -21,7 +21,12 @@ type Usage = {
     dailyUsed: number;
     monthlyUsed: number;
   };
-  quotas: { images: { used: number; limit: number }; videos: { used: number; limit: number } };
+  quotas: {
+    images: { used: number; limit: number };
+    videos: { used: number; limit: number };
+    /** Social publishing credits; null when the ledger isn't available. */
+    posts?: { used: number; limit: number } | null;
+  };
   cache: {
     monthCalls: number;
     monthCachedCalls: number;
@@ -187,6 +192,14 @@ export function UsagePanel() {
               limit={data.quotas.videos.limit}
               format={count}
             />
+            {data.quotas.posts ? (
+              <Meter
+                label="Social publishing credits this month"
+                used={data.quotas.posts.used}
+                limit={data.quotas.posts.limit}
+                format={count}
+              />
+            ) : null}
             <div className="rounded-xl border border-border px-3 py-2 text-[12.5px]">
               <div className="flex justify-between">
                 <span>Answers served from cache (this month)</span>

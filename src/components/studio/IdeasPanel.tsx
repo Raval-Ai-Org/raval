@@ -69,7 +69,8 @@ export function IdeasPanel({
   limit?: number;
   /** Preview/testing: render these instead of calling the API. */
   fixtureIdeas?: StudioIdea[];
-  title?: string;
+  /** Heading text; null hides it when the surrounding UI already names the list. */
+  title?: string | null;
 }) {
   const [ideas, setIdeas] = useState<StudioIdea[]>(fixtureIdeas ?? []);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
@@ -123,23 +124,34 @@ export function IdeasPanel({
     setIdeas((list) => list.filter((i) => i.id !== idea.id));
   };
 
-  const heading = title ?? (type ? `Ideas for ${STUDIO_FORMATS[type].noun}s` : "Suggested for you");
+  const heading =
+    title === null
+      ? null
+      : (title ?? (type ? `Ideas for ${STUDIO_FORMATS[type].noun}s` : "Suggested for you"));
   const grid = variant === "grid";
 
   return (
     <section
       data-no-rhythm
-      aria-labelledby="studio-ideas-heading"
+      aria-labelledby={heading === null ? undefined : "studio-ideas-heading"}
+      aria-label={heading === null ? "Ideas" : undefined}
       aria-busy={status === "loading" || refreshing}
     >
-      <div className="mb-2.5 flex items-center justify-between gap-2">
-        <h3
-          id="studio-ideas-heading"
-          className="flex items-center gap-1.5 text-sm font-medium text-foreground"
-        >
-          <Sparkles className="size-4 text-primary" />
-          {heading}
-        </h3>
+      <div
+        className={cn(
+          "mb-2.5 flex items-center gap-2",
+          heading === null ? "justify-end" : "justify-between",
+        )}
+      >
+        {heading === null ? null : (
+          <h3
+            id="studio-ideas-heading"
+            className="flex items-center gap-1.5 text-sm font-medium text-foreground"
+          >
+            <Sparkles className="size-4 text-primary" />
+            {heading}
+          </h3>
+        )}
         <button
           type="button"
           onClick={() => void load(true)}
@@ -212,6 +224,7 @@ export function IdeasPanel({
                     aria-pressed={selected}
                     className={cn(
                       "flex h-full w-full flex-col rounded-2xl border p-3.5 pr-10 text-left transition-[border-color,background-color,box-shadow,translate] duration-[--motion-duration-base] ease-[--motion-ease-emphasized]",
+                      onGenerate && "pb-12",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
                       selected
                         ? "border-primary-border bg-primary-surface"
@@ -244,10 +257,11 @@ export function IdeasPanel({
                         {idea.why}
                       </span>
                     ) : null}
-                    <span className="mt-auto flex items-center gap-1 pt-2 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                      {onGenerate ? "Edit first" : "Use this idea"}{" "}
-                      <ArrowRight className="size-3.5" />
-                    </span>
+                    {onGenerate ? null : (
+                      <span className="mt-auto flex items-center gap-1 pt-2 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                        Use this idea <ArrowRight className="size-3.5" />
+                      </span>
+                    )}
                   </button>
                   <button
                     type="button"

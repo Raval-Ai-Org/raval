@@ -1046,7 +1046,8 @@ function WorkspaceSurface({
             description="A workspace holds one brand: its Brand DNA, content, calendar and connected accounts. Create one to get started."
             action={
               <Button asChild>
-                <Link to="/onboarding">
+                {/* /onboarding needs an existing workspace and redirects here anyway. */}
+                <Link to="/projects">
                   <Plus className="size-4" />
                   Create a workspace
                 </Link>

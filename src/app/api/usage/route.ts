@@ -16,7 +16,9 @@ export const GET = defineRoute({
   query: z.object({ workspaceId: z.string().optional() }),
   workspaceId: ({ query }) => query.workspaceId,
   handler: async ({ workspaceId, supabase }) => {
-    const [decision, cacheStats, recent] = await Promise.all([
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    const [decision, cacheStats, recent, socialPosts] = await Promise.all([
       checkBudget("text", { workspaceId }),
       getCacheStats(["ai", "image"]),
       // RLS-bound read: members see only their own workspace's events.
@@ -26,6 +28,12 @@ export const GET = defineRoute({
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: false })
         .limit(25),
+      // Social publishing credits (publish / schedule / retry), same RLS scope.
+      supabase
+        .from("social_usage_events")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .gte("created_at", monthStart),
     ]);
     const limits = decision.limits ?? { ...getPlanLimits(null), plan: "starter" };
     const usage = decision.usage;
@@ -45,6 +53,9 @@ export const GET = defineRoute({
       quotas: {
         images: { used: usage?.monthImages ?? 0, limit: limits.monthlyImages },
         videos: { used: usage?.monthVideos ?? 0, limit: limits.monthlyVideos },
+        posts: socialPosts.error
+          ? null
+          : { used: socialPosts.count ?? 0, limit: getPlanLimits(limits.plan).monthlyPosts },
       },
       cache: {
         monthCalls: usage?.monthCalls ?? 0,

@@ -703,6 +703,12 @@ function upsertJobs(jobs: StudioJob[]) {
   setState({ jobs: merged }, false);
 }
 
+/** Watch a job started outside a composer (approving a draft) so it advances and shows in the pipeline. */
+export function trackJob(job: StudioJob) {
+  hydrate();
+  upsertJobs([job]);
+}
+
 export async function refreshWorkspaceJobs(workspaceId?: string | null) {
   const ws = workspaceId ?? getActiveWorkspaceId();
   if (!ws) return;

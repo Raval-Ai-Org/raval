@@ -259,12 +259,21 @@ export function useBrandDna(workspaceId: string | null) {
     persist(merged);
   };
 
-  const filled =
-    TEXT_FIELDS.filter((f) => (dna[f] as string | undefined)?.toString().trim()).length +
-    (dna.colors.length > 0 ? 1 : 0) +
-    (dna.logoUrl ? 1 : 0) +
-    (dna.audienceTags.length > 0 ? 1 : 0);
-  const total = TEXT_FIELDS.length + 3;
+  const { filled, total } = countBrandDnaFilled(dna);
 
   return { dna, save, replace, filledCount: filled, total };
+}
+
+/** How many of the essential Brand DNA fields hold a value. */
+export function countBrandDnaFilled(
+  dna: Partial<Pick<BrandDna, "colors" | "logoUrl" | "audienceTags">> & {
+    [K in (typeof TEXT_FIELDS)[number]]?: unknown;
+  },
+): { filled: number; total: number } {
+  const filled =
+    TEXT_FIELDS.filter((f) => String(dna[f] ?? "").trim()).length +
+    ((dna.colors?.length ?? 0) > 0 ? 1 : 0) +
+    (dna.logoUrl ? 1 : 0) +
+    ((dna.audienceTags?.length ?? 0) > 0 ? 1 : 0);
+  return { filled, total: TEXT_FIELDS.length + 3 };
 }

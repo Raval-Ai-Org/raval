@@ -1,6 +1,7 @@
 // POST /api/sdr/schedule — schedule approved content for on-time publishing
-// (FR-008/FR-025). Validates the absolute UTC instant + ≤1yr window server-side;
-// the SDR beat fires at the scheduled time and webhooks confirm (US4).
+// through the active distribution provider. Validates the absolute UTC instant
+// and ≤1 year window server-side; the provider fires at the scheduled time and
+// webhooks / the reconcile sweep confirm delivery.
 import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
@@ -12,7 +13,10 @@ import {
   type ScheduleItem,
 } from "@/lib/sdr.handlers";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { isSdrEnabledForWorkspace } from "@/lib/feature-flags";
+import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
+import { scheduleHandler } from "@/lib/socialapi/handlers";
+import { withSocialApi } from "@/lib/socialapi/route.server";
+import { readDistributionOptions } from "@/app/api/sdr/publish/route";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +36,7 @@ export const POST = defineRoute({
   body: BodySchema,
   workspaceId: ({ body }) => body.workspaceId,
   minRole: "editor",
-  handler: async ({ body, workspaceId }) => {
+  handler: async ({ body, workspaceId, userId }) => {
     const items: ScheduleItem[] = Array.isArray(body.items)
       ? body.items.filter(isScheduleItem)
       : [];
@@ -44,14 +48,22 @@ export const POST = defineRoute({
       return jsonError(400, "Invalid destination selection");
     }
 
-    // US5 (FR-017): flag off → refuse honestly; nothing is marked scheduled.
-    if (!isSdrEnabledForWorkspace(workspaceId)) {
+    const provider = getDistributionProviderForWorkspace(workspaceId);
+    // Distribution off → refuse honestly; nothing is marked scheduled.
+    if (!provider) {
       const out = await handleSdrDisabled({
         workspaceId,
         contentItemIds: items.map((i) => i.contentItemId),
         kind: "schedule",
       });
       return Response.json(out.body, { status: out.status });
+    }
+
+    if (provider === "socialapi") {
+      const { tiktokPrivacyLevel } = readDistributionOptions(body.options);
+      return withSocialApi(workspaceId, (deps) =>
+        scheduleHandler({ workspaceId, userId, items, selection, tiktokPrivacyLevel }, deps),
+      );
     }
 
     try {

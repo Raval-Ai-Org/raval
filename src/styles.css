@@ -3820,13 +3820,27 @@ pre {
   --tone-script: 166 72% 55%;
   --tone-article: 198 92% 64%;
 }
-.studio-tone-social { --tone: var(--tone-social); }
-.studio-tone-carousel { --tone: var(--tone-carousel); }
-.studio-tone-image { --tone: var(--tone-image); }
-.studio-tone-ad { --tone: var(--tone-ad); }
-.studio-tone-video { --tone: var(--tone-video); }
-.studio-tone-script { --tone: var(--tone-script); }
-.studio-tone-article { --tone: var(--tone-article); }
+.studio-tone-social {
+  --tone: var(--tone-social);
+}
+.studio-tone-carousel {
+  --tone: var(--tone-carousel);
+}
+.studio-tone-image {
+  --tone: var(--tone-image);
+}
+.studio-tone-ad {
+  --tone: var(--tone-ad);
+}
+.studio-tone-video {
+  --tone: var(--tone-video);
+}
+.studio-tone-script {
+  --tone: var(--tone-script);
+}
+.studio-tone-article {
+  --tone: var(--tone-article);
+}
 
 @layer components {
   .studio-glyph {
@@ -3849,7 +3863,12 @@ pre {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.38) 50%, transparent 70%);
+    background: linear-gradient(
+      110deg,
+      transparent 30%,
+      rgb(255 255 255 / 0.38) 50%,
+      transparent 70%
+    );
     transform: translateX(-130%);
     transition: transform 800ms var(--motion-ease-emphasized);
     pointer-events: none;
@@ -3861,8 +3880,12 @@ pre {
 
 /* A sheen that passes once on arrival. */
 @keyframes studio-shine {
-  from { transform: translateX(-130%); }
-  to { transform: translateX(130%); }
+  from {
+    transform: translateX(-130%);
+  }
+  to {
+    transform: translateX(130%);
+  }
 }
 .studio-shine::after {
   animation: studio-shine 1.2s 0.35s var(--motion-ease-emphasized) both;
@@ -3870,8 +3893,12 @@ pre {
 
 /* Gradient ink for a key word. */
 @keyframes studio-ink {
-  from { background-position: 0% 50%; }
-  to { background-position: 100% 50%; }
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
 }
 .studio-gradient-text {
   background-image: linear-gradient(
@@ -3889,12 +3916,22 @@ pre {
 
 /* Aurora: two soft light sources drifting behind a canvas. */
 @keyframes studio-drift-a {
-  0%, 100% { transform: translate(-8%, -6%) scale(1); }
-  50% { transform: translate(10%, 8%) scale(1.18); }
+  0%,
+  100% {
+    transform: translate(-8%, -6%) scale(1);
+  }
+  50% {
+    transform: translate(10%, 8%) scale(1.18);
+  }
 }
 @keyframes studio-drift-b {
-  0%, 100% { transform: translate(8%, 6%) scale(1.1); }
-  50% { transform: translate(-10%, -8%) scale(0.92); }
+  0%,
+  100% {
+    transform: translate(8%, 6%) scale(1.1);
+  }
+  50% {
+    transform: translate(-10%, -8%) scale(0.92);
+  }
 }
 .studio-aurora {
   position: absolute;
@@ -3943,7 +3980,9 @@ pre {
   inherits: false;
 }
 @keyframes studio-orbit {
-  to { --studio-angle: 360deg; }
+  to {
+    --studio-angle: 360deg;
+  }
 }
 .studio-ring::before {
   content: "";
@@ -3973,8 +4012,12 @@ pre {
 
 /* Progress that feels alive: brand-to-format gradient with a moving glint. */
 @keyframes studio-glint {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(100%); }
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
 }
 .studio-progress-fill {
   overflow: hidden;
@@ -3990,8 +4033,13 @@ pre {
 
 /* Waiting-on-you halo. */
 @keyframes studio-halo {
-  0% { box-shadow: 0 0 0 0 hsl(var(--warning) / 0.4); }
-  70%, 100% { box-shadow: 0 0 0 10px hsl(var(--warning) / 0); }
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--warning) / 0.4);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 10px hsl(var(--warning) / 0);
+  }
 }
 .studio-halo::after {
   content: "";
@@ -4004,8 +4052,13 @@ pre {
 
 /* Gentle float for work in progress. */
 @keyframes studio-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-7px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
 }
 .studio-float {
   animation: studio-float 6s ease-in-out infinite;
@@ -4013,18 +4066,36 @@ pre {
 
 /* Staggered rise for panels of content. */
 @keyframes studio-rise {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .studio-stagger > * {
   animation: studio-rise 520ms var(--motion-ease-emphasized) both;
 }
-.studio-stagger > :nth-child(2) { animation-delay: 60ms; }
-.studio-stagger > :nth-child(3) { animation-delay: 120ms; }
-.studio-stagger > :nth-child(4) { animation-delay: 180ms; }
-.studio-stagger > :nth-child(5) { animation-delay: 240ms; }
-.studio-stagger > :nth-child(6) { animation-delay: 300ms; }
-.studio-stagger > :nth-child(n + 7) { animation-delay: 360ms; }
+.studio-stagger > :nth-child(2) {
+  animation-delay: 60ms;
+}
+.studio-stagger > :nth-child(3) {
+  animation-delay: 120ms;
+}
+.studio-stagger > :nth-child(4) {
+  animation-delay: 180ms;
+}
+.studio-stagger > :nth-child(5) {
+  animation-delay: 240ms;
+}
+.studio-stagger > :nth-child(6) {
+  animation-delay: 300ms;
+}
+.studio-stagger > :nth-child(n + 7) {
+  animation-delay: 360ms;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .studio-aurora::before,
@@ -4056,15 +4127,29 @@ pre {
 /* Studio: text and headings that arrive. CSS keyframes rather than JS so they
    still finish when the main thread is busy or frames are throttled. */
 @keyframes studio-reveal {
-  from { clip-path: inset(0 100% 0 0); opacity: 0.2; }
-  to { clip-path: inset(0 0 0 0); opacity: 1; }
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.2;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
 }
 .studio-reveal {
   animation: studio-reveal var(--reveal-duration, 1s) ease-out both;
 }
 @keyframes studio-enter-blur {
-  from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
-  to { opacity: 1; transform: none; filter: none; }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
 }
 .studio-enter-blur {
   animation: studio-enter-blur 360ms var(--motion-ease-emphasized) both;
@@ -4073,5 +4158,108 @@ pre {
   .studio-reveal,
   .studio-enter-blur {
     animation: none;
+  }
+}
+
+/* Studio pipeline: work flowing along the stage connector while something is being made. */
+@keyframes studio-flow {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+.studio-flow {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsl(var(--primary)) 45%,
+    hsl(var(--tone-video)) 60%,
+    transparent 100%
+  );
+  background-size: 45% 100%;
+  background-repeat: no-repeat;
+  animation: studio-flow 1.9s var(--motion-ease-standard, ease) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-flow {
+    animation: none;
+    background-image: none;
+    background-color: hsl(var(--primary) / 0.5);
+  }
+}
+
+/* ── Onboarding · Brand DNA helix ─────────────────────────────────────────
+   Each dot is two nested elements so its position (a sine) and its depth (a
+   cosine) can each use the right easing per segment. Transform and opacity
+   only; rows are phase-shifted with negative animation-delay so the strands
+   twist. Reduced motion renders a static helix from the component instead. */
+@keyframes dna-x {
+  0% {
+    transform: translateX(0);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  25% {
+    transform: translateX(var(--dna-amp));
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  50% {
+    transform: translateX(0);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  75% {
+    transform: translateX(calc(var(--dna-amp) * -1));
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+@keyframes dna-depth {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  25% {
+    transform: scale(0.75);
+    opacity: 0.65;
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  50% {
+    transform: scale(0.5);
+    opacity: 0.3;
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  75% {
+    transform: scale(0.75);
+    opacity: 0.65;
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes dna-rung {
+  0% {
+    transform: scaleX(0);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  25% {
+    transform: scaleX(1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  50% {
+    transform: scaleX(0);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  75% {
+    transform: scaleX(1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  100% {
+    transform: scaleX(0);
   }
 }

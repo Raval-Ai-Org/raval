@@ -46,6 +46,7 @@ import {
   type DrilldownItem,
 } from "@/lib/analytics.functions";
 import { AnalyticsTabs, type AnalyticsTab } from "@/components/app/AnalyticsTabs";
+import { SocialPerformance } from "@/components/app/SocialPerformance";
 import { AgentManagementPanel } from "@/components/app/AgentManagementPanel";
 import {
   Dialog,
@@ -1086,6 +1087,8 @@ function SocialPanel() {
           </div>
         ))}
       </div>
+
+      <SocialPerformance workspaceId={workspaceId} days={days} />
 
       <Section title="Upcoming runs" subtitle="Next scheduled posts and automations">
         {upcoming.length ? (

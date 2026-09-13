@@ -38,6 +38,7 @@ import {
   groupRows,
   type ContentRow,
   type Group,
+  type Stage,
 } from "@/lib/studio/content-groups";
 import {
   STUDIO_FORMATS,
@@ -76,17 +77,6 @@ const TONE_BADGE = {
   danger: "bg-danger-surface text-danger ring-danger-border",
   muted: "bg-surface-2 text-muted-foreground ring-border",
 } as const;
-
-const STATUS_GROUP: Record<string, StatusFilter> = {
-  draft: "review",
-  pending: "review",
-  failed: "review",
-  approved: "ready",
-  scheduled: "scheduled",
-  publishing: "published",
-  published: "published",
-  partial_failed: "published",
-};
 
 const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
   { id: "all", label: "Any status" },
@@ -137,6 +127,7 @@ function useWorkspaceId(): string | null {
  */
 export function LibraryPage({
   initialTab = "all",
+  initialStatus,
   onClose,
   backRef,
   fixtureGroups,
@@ -144,6 +135,8 @@ export function LibraryPage({
   fixtureAssets,
 }: {
   initialTab?: LibraryTab;
+  /** Preselect a pipeline stage (from the Studio rail). */
+  initialStatus?: Stage;
   /** Close the surrounding pop-up. */
   onClose?: () => void;
   /** Lets the pop-up ask "go back one level?" on Escape; returns true when handled. */
@@ -164,13 +157,14 @@ export function LibraryPage({
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [format, setFormat] = useState<StudioType | "all">("all");
-  const [status, setStatus] = useState<StatusFilter>("all");
+  const [status, setStatus] = useState<StatusFilter>(initialStatus ?? "all");
   const [sort, setSort] = useState<Sort>("newest");
   const [view, setView] = useState<View>("grid");
   const [selected, setSelected] = useState<Item | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setTab(initialTab), [initialTab]);
+  useEffect(() => setStatus(initialStatus ?? "all"), [initialStatus]);
 
   useEffect(() => {
     try {
@@ -312,7 +306,7 @@ export function LibraryPage({
         ? []
         : groups
             .filter((g) => format === "all" || g.type === format)
-            .filter((g) => status === "all" || STATUS_GROUP[g.status] === status)
+            .filter((g) => status === "all" || g.stage === status)
             .filter(
               (g) => !q || g.title.toLowerCase().includes(q) || g.excerpt.toLowerCase().includes(q),
             )

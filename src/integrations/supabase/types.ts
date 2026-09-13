@@ -1130,11 +1130,15 @@ export type Database = {
           created_at: string;
           delivered_at: string | null;
           error_category: string | null;
+          error_code: string | null;
           id: string;
           last_error: string | null;
+          metrics: Json | null;
+          metrics_synced_at: string | null;
           platform: string;
           platform_post_id: string | null;
           platform_post_url: string | null;
+          provider: string;
           sdr_post_id: string;
           sdr_target_id: string;
           status: string;
@@ -1148,11 +1152,15 @@ export type Database = {
           created_at?: string;
           delivered_at?: string | null;
           error_category?: string | null;
+          error_code?: string | null;
           id?: string;
           last_error?: string | null;
+          metrics?: Json | null;
+          metrics_synced_at?: string | null;
           platform: string;
           platform_post_id?: string | null;
           platform_post_url?: string | null;
+          provider?: string;
           sdr_post_id: string;
           sdr_target_id: string;
           status?: string;
@@ -1166,11 +1174,15 @@ export type Database = {
           created_at?: string;
           delivered_at?: string | null;
           error_category?: string | null;
+          error_code?: string | null;
           id?: string;
           last_error?: string | null;
+          metrics?: Json | null;
+          metrics_synced_at?: string | null;
           platform?: string;
           platform_post_id?: string | null;
           platform_post_url?: string | null;
+          provider?: string;
           sdr_post_id?: string;
           sdr_target_id?: string;
           status?: string;
@@ -1653,9 +1665,11 @@ export type Database = {
       sdr_webhook_events: {
         Row: {
           account_id: string | null;
+          delivery_id: string | null;
           event: string | null;
           id: number;
           outcome: string;
+          provider: string;
           reason: string;
           received_at: string;
           sdr_post_id: string | null;
@@ -1664,9 +1678,11 @@ export type Database = {
         };
         Insert: {
           account_id?: string | null;
+          delivery_id?: string | null;
           event?: string | null;
           id?: number;
           outcome: string;
+          provider?: string;
           reason?: string;
           received_at?: string;
           sdr_post_id?: string | null;
@@ -1675,9 +1691,11 @@ export type Database = {
         };
         Update: {
           account_id?: string | null;
+          delivery_id?: string | null;
           event?: string | null;
           id?: number;
           outcome?: string;
+          provider?: string;
           reason?: string;
           received_at?: string;
           sdr_post_id?: string | null;
@@ -1687,6 +1705,165 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sdr_webhook_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      social_accounts: {
+        Row: {
+          avatar_url: string | null;
+          brand_id: string | null;
+          connected_at: string;
+          connected_by: string | null;
+          created_at: string;
+          disconnected_at: string | null;
+          display_name: string | null;
+          id: string;
+          last_synced_at: string;
+          platform: string;
+          provider: string;
+          provider_account_id: string;
+          reconnect_reason: string | null;
+          status: string;
+          updated_at: string;
+          username: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          avatar_url?: string | null;
+          brand_id?: string | null;
+          connected_at?: string;
+          connected_by?: string | null;
+          created_at?: string;
+          disconnected_at?: string | null;
+          display_name?: string | null;
+          id?: string;
+          last_synced_at?: string;
+          platform: string;
+          provider?: string;
+          provider_account_id: string;
+          reconnect_reason?: string | null;
+          status?: string;
+          updated_at?: string;
+          username?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          avatar_url?: string | null;
+          brand_id?: string | null;
+          connected_at?: string;
+          connected_by?: string | null;
+          created_at?: string;
+          disconnected_at?: string | null;
+          display_name?: string | null;
+          id?: string;
+          last_synced_at?: string;
+          platform?: string;
+          provider?: string;
+          provider_account_id?: string;
+          reconnect_reason?: string | null;
+          status?: string;
+          updated_at?: string;
+          username?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "social_accounts_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      social_oauth_states: {
+        Row: {
+          connection_id: string | null;
+          consumed_at: string | null;
+          created_at: string;
+          expires_at: string;
+          id: string;
+          platform: string;
+          provider: string;
+          state_hash: string;
+          user_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          connection_id?: string | null;
+          consumed_at?: string | null;
+          created_at?: string;
+          expires_at: string;
+          id?: string;
+          platform: string;
+          provider?: string;
+          state_hash: string;
+          user_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          connection_id?: string | null;
+          consumed_at?: string | null;
+          created_at?: string;
+          expires_at?: string;
+          id?: string;
+          platform?: string;
+          provider?: string;
+          state_hash?: string;
+          user_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "social_oauth_states_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      social_usage_events: {
+        Row: {
+          content_item_id: string | null;
+          created_at: string;
+          id: number;
+          operation: string;
+          provider: string;
+          provider_post_id: string | null;
+          targets: number;
+          user_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          content_item_id?: string | null;
+          created_at?: string;
+          id?: number;
+          operation: string;
+          provider?: string;
+          provider_post_id?: string | null;
+          targets?: number;
+          user_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          content_item_id?: string | null;
+          created_at?: string;
+          id?: number;
+          operation?: string;
+          provider?: string;
+          provider_post_id?: string | null;
+          targets?: number;
+          user_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "social_usage_events_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -1839,6 +2016,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "workspace_sdr_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_socialapi: {
+        Row: {
+          brand_id: string | null;
+          created_at: string;
+          id: string;
+          last_error: string | null;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          brand_id?: string | null;
+          created_at?: string;
+          id?: string;
+          last_error?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          brand_id?: string | null;
+          created_at?: string;
+          id?: string;
+          last_error?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_socialapi_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: true;
             referencedRelation: "workspaces";

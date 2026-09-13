@@ -439,8 +439,11 @@ async function writeDrafts(
   return ids;
 }
 
-/** Surface a finished group in Needs Approval. */
-async function revealDrafts(client: Db, workspaceId: string, ids: string[]) {
+/**
+ * Surface a finished group in the pipeline: in Review, or straight in Ready when
+ * the user approved the draft it was made from.
+ */
+async function revealDrafts(client: Db, workspaceId: string, ids: string[], approve = false) {
   if (!ids.length) return;
   const { data } = await client
     .from("content_items")
@@ -451,10 +454,46 @@ async function revealDrafts(client: Db, workspaceId: string, ids: string[]) {
     const meta = mergeMeta(row.meta, { studio_state: "ready" });
     const { error } = await client
       .from("content_items")
-      .update({ meta, ...(row.status === "draft" ? { status: "pending" } : {}) })
+      .update({
+        meta,
+        ...(approve && (row.status === "draft" || row.status === "pending")
+          ? { status: "approved" }
+          : row.status === "draft"
+            ? { status: "pending" }
+            : {}),
+      })
       .eq("id", row.id);
     if (error) console.warn("[studio] reveal failed", row.id, error.message);
   }
+}
+
+/** The text draft this post was made from: retire it now that the post exists. */
+async function retireSourceDraft(
+  client: Db,
+  workspaceId: string,
+  contentId: string | undefined,
+  jobId: string,
+) {
+  if (!contentId) return;
+  const { data } = await client
+    .from("content_items")
+    .select("id, status, meta")
+    .eq("id", contentId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  const row = data as { id: string; status: string; meta: unknown } | null;
+  if (!row) return;
+  const meta = mergeMeta(row.meta, { converted_to_job: jobId, converting_job: null });
+  // Lifecycle: draft → pending → rejected.
+  if (row.status === "draft") {
+    await client.from("content_items").update({ status: "pending" }).eq("id", row.id);
+  }
+  const retire = row.status === "draft" || row.status === "pending";
+  const { error } = await client
+    .from("content_items")
+    .update({ meta, ...(retire ? { status: "rejected" } : {}) })
+    .eq("id", row.id);
+  if (error) console.warn("[studio] retire source draft failed", row.id, error.message);
 }
 
 async function markDraftsFailed(client: Db, workspaceId: string, ids: string[]) {
@@ -796,6 +835,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       intent_goal: input.intent.goal ?? null,
       idea_id: input.intent.ideaId ?? null,
       template: input.intent.template ?? null,
+      // The job's headline, so every surface titles the piece consistently.
+      job_title: title,
       brand_version: brandVersion(input.brand),
       ...(needsMedia(type, input) ? { aspect_ratio: mediaRatio(type, input, platforms) } : {}),
     });
@@ -849,7 +890,10 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     title,
     completed_at: new Date().toISOString(),
   });
-  if (!mediaOnly) await revealDrafts(client, job.workspace_id, job.content_item_ids);
+  if (!mediaOnly) {
+    await revealDrafts(client, job.workspace_id, job.content_item_ids, !!input.approve);
+    await retireSourceDraft(client, job.workspace_id, input.fromContentId, job.id);
+  }
 }
 
 function ANGLE_ID(label: string | null): string | undefined {
@@ -1134,7 +1178,8 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           ].filter(Boolean),
         },
       });
-      await revealDrafts(c, row.workspace_id, row.content_item_ids);
+      await revealDrafts(c, row.workspace_id, row.content_item_ids, !!row.input?.approve);
+      await retireSourceDraft(c, row.workspace_id, row.input?.fromContentId, row.id);
     }
   }
 

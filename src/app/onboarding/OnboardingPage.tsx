@@ -1,65 +1,88 @@
 "use client";
 
-import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Globe,
-  Loader2,
-  RefreshCw,
-  Sparkles,
-} from "@/components/ui/gemini-icons";
-import { useNavigate } from "@/lib/navigation";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { toast } from "sonner";
+import { Check } from "@/components/icons";
+import { Logo } from "@/components/brand/Logo";
+import { BrandReveal, type BrandEdits } from "@/components/onboarding/BrandReveal";
+import { SCAN_PHASES, advancePhase } from "@/components/onboarding/phases";
+import { ScanStage, type ScanProgress, type ScanStatus } from "@/components/onboarding/ScanStage";
+import { SuccessMoment } from "@/components/onboarding/SuccessMoment";
+import { AmbientCanvas } from "@/components/onboarding/ui";
+import { UrlStep } from "@/components/onboarding/UrlStep";
+import { normalizeUrl, validUrl } from "@/components/onboarding/url";
+import { emptyDna, type BrandDna } from "@/hooks/use-brand-dna";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
-import { emptyDna, type BrandDna } from "@/hooks/use-brand-dna";
+import { mergeExtractionIntoDna } from "@/lib/brand-dna-merge";
+import type { BrandExtractResult, Discoveries } from "@/lib/brand-extract-events";
+import { readBrandExtractStream } from "@/lib/brand-extract-stream";
 import { buildDesignMd, saveDesignMd } from "@/lib/design-md";
-import { Logo } from "@/components/brand/Logo";
-import { toast } from "sonner";
+import { duration, ease } from "@/lib/motion";
+import { useNavigate } from "@/lib/navigation";
 
 type Step = "website" | "scan" | "review" | "done";
-type ScanStatus = "idle" | "loading" | "ok" | "error";
-type Progress = { stage: string; message: string; pct: number };
-const SCAN_SYMBOLS = ["1Sym.svg", "2Sym.svg", "3Sym.svg", "4Sym.svg"];
 
-function normalizeUrl(raw: string) {
-  const value = raw.trim();
-  return value ? (/^https?:\/\//i.test(value) ? value : `https://${value}`) : "";
-}
+const STEPS: { id: Exclude<Step, "done">; label: string }[] = [
+  { id: "website", label: "Website" },
+  { id: "scan", label: "Scan" },
+  { id: "review", label: "Brand DNA" },
+];
 
-function validUrl(raw: string) {
-  try {
-    const url = new URL(normalizeUrl(raw));
-    return url.protocol === "https:" && url.hostname.includes(".");
-  } catch {
-    return false;
-  }
-}
-
-const enterProps = {
-  initial: { opacity: 0, y: 10 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
-  transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const },
+const STEP_WIDTH: Record<Step, string> = {
+  website: "max-w-2xl",
+  scan: "max-w-[460px]",
+  review: "max-w-6xl",
+  done: "max-w-xl",
 };
+
+/** Hold on the completed scan so the final phase visibly lands before the reveal. */
+const COMPLETE_BEAT_MS = 700;
+
+const IDLE_PROGRESS: ScanProgress = { stage: "idle", message: "", pct: 0 };
+
+/**
+ * Brand DNA for storage: the extraction result mapped through the shared
+ * merge (so `customerSignals`, `insights` and competitor ids land where the
+ * app expects them), with the user's review edits on top.
+ */
+function buildBrandDna(
+  result: BrandExtractResult | null,
+  edits: BrandEdits,
+  url: string | null,
+): BrandDna {
+  const base = result && url ? mergeExtractionIntoDna(emptyDna, result, url).dna : emptyDna;
+  const cleanEdits = Object.fromEntries(
+    Object.entries(edits).map(([key, value]) => [key, (value ?? "").trim()]),
+  );
+  return { ...base, ...cleanEdits, websiteUrl: url };
+}
 
 function Onboarding() {
   const navigate = useNavigate();
+  const reduce = useReducedMotionSafe();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("website");
   const [websiteUrl, setWebsiteUrl] = useState("");
-  const [brand, setBrand] = useState<Partial<BrandDna>>({});
+  const [result, setResult] = useState<BrandExtractResult | null>(null);
+  const [edits, setEdits] = useState<BrandEdits>({});
+  const [discoveries, setDiscoveries] = useState<Discoveries>({});
+  const [phase, setPhase] = useState(0);
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
   const [scanError, setScanError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<Progress>({ stage: "idle", message: "", pct: 0 });
+  const [progress, setProgress] = useState<ScanProgress>(IDLE_PROGRESS);
   const [saving, setSaving] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const scanFor = useRef<string | null>(null);
+  const resultFor = useRef<string | null>(null);
   const scanAbort = useRef<AbortController | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const firstStep = useRef(true);
 
   const urlKey = (id: string) => `onboarding:website:${id}`;
+  const brand: BrandExtractResult = { ...result, ...edits };
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +120,18 @@ function Onboarding() {
     };
   }, [navigate]);
 
+  // Each new step moves focus to its heading, so keyboard and screen-reader
+  // users land on the new content instead of a control that no longer exists.
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false;
+      return;
+    }
+    if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    const timer = window.setTimeout(() => headingRef.current?.focus({ preventScroll: true }), 60);
+    return () => window.clearTimeout(timer);
+  }, [step, reduce]);
+
   const runScan = async (rawUrl: string, attempt = 0) => {
     const url = normalizeUrl(rawUrl);
     if (!workspaceId || !validUrl(url) || (scanStatus === "loading" && attempt === 0)) return;
@@ -114,6 +149,11 @@ function Onboarding() {
     setStep("scan");
     setScanStatus("loading");
     setScanError(null);
+    if (attempt === 0) {
+      // A retry keeps what was already discovered on screen; a new scan starts clean.
+      setDiscoveries({});
+      setPhase(0);
+    }
     setProgress({ stage: "fetch_home", message: "Connecting to your website", pct: 3 });
     let latestPct = 3;
 
@@ -131,68 +171,44 @@ function Onboarding() {
         throw new Error(json.error || "We couldn't read that website.");
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let result: Partial<BrandDna> | null = null;
-      let streamError: string | null = null;
-      let malformedEvents = 0;
+      const outcome = await readBrandExtractStream(response.body, {
+        onProgress: (event) => {
+          if (controller.signal.aborted) return;
+          latestPct = Math.max(latestPct, event.pct);
+          setProgress({
+            stage: event.stage,
+            message: event.message || "Understanding your brand",
+            pct: latestPct,
+          });
+          setPhase((current) => advancePhase(current, event.stage));
+        },
+        onDiscovery: (event) => {
+          if (controller.signal.aborted) return;
+          setDiscoveries((current) => ({ ...current, [event.kind]: event.data }));
+        },
+      });
 
-      const processLine = (line: string) => {
-        if (!line.trim()) return;
-        try {
-          const event = JSON.parse(line) as {
-            type?: string;
-            stage?: string;
-            message?: string;
-            pct?: number;
-            data?: Partial<BrandDna>;
-            error?: string;
-          };
-          if (event.type === "progress") {
-            latestPct = Math.max(latestPct, event.pct ?? latestPct);
-            setProgress({
-              stage: event.stage || "working",
-              message: event.message || "Understanding your brand",
-              pct: latestPct,
-            });
-          } else if (event.type === "result") {
-            result = event.data || null;
-          } else if (event.type === "error") {
-            streamError = event.error || "We couldn't complete the scan.";
-          }
-        } catch {
-          malformedEvents += 1;
-        }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          buffer += decoder.decode();
-          processLine(buffer);
-          break;
-        }
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) processLine(line);
-      }
-
-      if (streamError) throw new Error(streamError);
-      if (malformedEvents > 0)
+      if (controller.signal.aborted) return;
+      if (outcome.error) throw new Error(outcome.error);
+      if (outcome.malformed > 0)
         throw new Error("The scan response was incomplete. Please try again.");
-      if (!result) throw new Error("We couldn't build Brand DNA from that site.");
-      setBrand(Object.assign({}, result, { websiteUrl: url }));
+      if (!outcome.result) throw new Error("We couldn't build Brand DNA from that site.");
+
+      // Edits survive "Scan again" on the same site, not a different one.
+      if (resultFor.current !== url) setEdits({});
+      resultFor.current = url;
+      setResult(outcome.result);
       setProgress({ stage: "done", message: "Brand DNA is ready to review", pct: 100 });
+      setPhase(SCAN_PHASES.length - 1);
       setScanStatus("ok");
-      setStep("review");
+      if (!reduce) await new Promise((resolve) => window.setTimeout(resolve, COMPLETE_BEAT_MS));
+      if (!controller.signal.aborted) setStep("review");
     } catch (error) {
       if (controller.signal.aborted) return;
       if (attempt < 2) {
         setProgress({
           stage: "retry",
-          message: `The connection took longer than expected. Retrying scan (${attempt + 2}/3)...`,
+          message: `The connection took longer than expected. Retrying scan (${attempt + 2}/3)…`,
           pct: Math.max(latestPct, 8),
         });
         await new Promise((resolve) => window.setTimeout(resolve, 900 * (attempt + 1)));
@@ -215,16 +231,22 @@ function Onboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, workspaceId, websiteUrl, scanStatus]);
 
+  const rescan = () => {
+    scanFor.current = null;
+    void runScan(websiteUrl);
+  };
+
   const finish = async () => {
     if (!workspaceId || saving) return;
     setSaving(true);
     const finalUrl = normalizeUrl(websiteUrl);
+    const dna = buildBrandDna(result, edits, finalUrl);
     const { error } = await supabase
       .from("workspaces")
       .update({
         website_url: finalUrl,
-        industry: brand.industry?.trim() || null,
-        audience: brand.audience?.trim() || null,
+        industry: dna.industry.trim() || null,
+        audience: dna.audience.trim() || null,
         onboarded_at: new Date().toISOString(),
       })
       .eq("id", workspaceId);
@@ -237,9 +259,7 @@ function Onboarding() {
     }
 
     const merged: BrandDna = {
-      ...emptyDna,
-      ...brand,
-      websiteUrl: finalUrl,
+      ...dna,
       status: scanStatus === "ok" ? "ok" : "idle",
       extractedAt: scanStatus === "ok" ? Date.now() : null,
       updatedAt: Date.now(),
@@ -271,9 +291,7 @@ function Onboarding() {
       return;
     }
     const partial: BrandDna = {
-      ...emptyDna,
-      ...brand,
-      websiteUrl: finalUrl || null,
+      ...buildBrandDna(result, edits, finalUrl || null),
       status: "idle",
       extractedAt: null,
       updatedAt: Date.now(),
@@ -284,347 +302,155 @@ function Onboarding() {
     navigate({ to: "/app" });
   };
 
-  const stepIndex = ["website", "scan", "review", "done"].indexOf(step);
-  const progressWidth = `${((stepIndex + 1) / 4) * 100}%`;
+  const enterApp = () => {
+    if (leaving) return;
+    setLeaving(true);
+    window.setTimeout(() => navigate({ to: "/app" }), reduce ? 0 : duration.slow * 1000);
+  };
+
+  const stepMotion = {
+    initial: reduce ? { opacity: 0 } : { opacity: 0, y: 14 },
+    animate: { opacity: 1, y: 0, transition: { duration: duration.xslow, ease: ease.emphasized } },
+    exit: { opacity: 0, transition: { duration: duration.base, ease: ease.accelerate } },
+  };
+  const centered = step !== "review";
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-background text-foreground">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4 sm:px-6">
-        <Logo height={32} />
-        {step !== "done" && (
-          <button
-            type="button"
-            onClick={() => void skip()}
-            disabled={saving}
-            className="inline-flex h-8 items-center rounded-lg px-3 text-[12px] font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Skip for now"}
-          </button>
-        )}
+    <motion.div
+      className="relative flex min-h-[100dvh] flex-col overflow-x-clip bg-background text-foreground"
+      animate={{ opacity: leaving ? 0 : 1 }}
+      transition={{ duration: duration.slow, ease: ease.accelerate }}
+    >
+      <AmbientCanvas />
+      <header className="relative z-10 grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-border/70 px-4 sm:px-6">
+        <span className="sm:hidden">
+          <Logo markOnly height={28} />
+        </span>
+        <span className="hidden sm:block">
+          <Logo height={30} />
+        </span>
+        <StepIndicator step={step} />
+        <div className="justify-self-end">
+          {step !== "done" && (
+            <button
+              type="button"
+              onClick={() => void skip()}
+              disabled={saving}
+              className="inline-flex h-8 items-center rounded-lg px-3 text-[12px] font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Skip for now"}
+            </button>
+          )}
+        </div>
       </header>
-      <div className="h-0.5 w-full bg-border">
-        <motion.div className="h-full bg-primary" animate={{ width: progressWidth }} />
-      </div>
 
-      <main className="flex flex-1 items-center justify-center px-4 py-10 sm:py-16">
-        <div className="w-full max-w-2xl">
-          <AnimatePresence mode="wait" initial={false}>
-            {step === "website" && (
-              <motion.div key="website" {...enterProps}>
-                <StepHeader
-                  icon={<Globe />}
-                  eyebrow="Start with your website"
-                  title="We'll understand your brand for you."
-                  subtitle="Give Mellox your website once. We'll use it to build your Brand DNA and prepare your workspace."
-                />
-                <form
-                  className="mt-8"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    if (validUrl(websiteUrl)) void runScan(websiteUrl);
-                  }}
-                >
-                  <div className="focus-glow flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-4 shadow-[0_12px_40px_-28px_hsl(var(--foreground)/0.5)]">
-                    <Globe className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-                    <input
-                      autoFocus
-                      required
-                      type="url"
-                      value={websiteUrl}
-                      onChange={(event) => setWebsiteUrl(event.target.value)}
-                      placeholder="https://yourcompany.com"
-                      aria-label="Website URL"
-                      className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!validUrl(websiteUrl)}
-                      className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground transition hover:-translate-y-px disabled:pointer-events-none disabled:opacity-40"
-                    >
-                      Scan my brand <ArrowRight className="h-4 w-4" aria-hidden />
-                    </button>
-                  </div>
-                  <p className="mt-3 text-center text-[12px] text-muted-foreground">
-                    We'll scan public pages only. You can review every result before entering
-                    Mellox.
-                  </p>
-                </form>
+      <main
+        className={`relative z-10 flex flex-1 justify-center px-4 py-8 sm:px-6 sm:py-12 ${centered ? "items-center" : "items-start"}`}
+      >
+        {/* One child: the global `main > * + *` rhythm would offset the entering step. */}
+        <div className="relative flex w-full justify-center">
+          <LayoutGroup>
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.div key={step} {...stepMotion} className={`w-full ${STEP_WIDTH[step]}`}>
+                {step === "website" && (
+                  <UrlStep
+                    value={websiteUrl}
+                    reduce={reduce}
+                    headingRef={headingRef}
+                    onChange={setWebsiteUrl}
+                    onSubmit={() => void runScan(websiteUrl)}
+                  />
+                )}
+                {step === "scan" && (
+                  <ScanStage
+                    url={websiteUrl}
+                    status={scanStatus}
+                    progress={progress}
+                    phase={phase}
+                    discoveries={discoveries}
+                    error={scanError}
+                    reduce={reduce}
+                    headingRef={headingRef}
+                    onRetry={() => void runScan(websiteUrl)}
+                    onEdit={() => setStep("website")}
+                    onSkip={() => void skip()}
+                  />
+                )}
+                {step === "review" && (
+                  <BrandReveal
+                    brand={brand}
+                    url={websiteUrl}
+                    saving={saving}
+                    reduce={reduce}
+                    headingRef={headingRef}
+                    onChange={(patch) => setEdits((current) => ({ ...current, ...patch }))}
+                    onContinue={() => void finish()}
+                    onRescan={rescan}
+                    onChangeUrl={() => setStep("website")}
+                  />
+                )}
+                {step === "done" && (
+                  <SuccessMoment
+                    brand={brand}
+                    url={websiteUrl}
+                    reduce={reduce}
+                    leaving={leaving}
+                    headingRef={headingRef}
+                    onEnter={enterApp}
+                  />
+                )}
               </motion.div>
-            )}
-            {step === "scan" && (
-              <motion.div key="scan" {...enterProps}>
-                <ScanView
-                  url={websiteUrl}
-                  status={scanStatus}
-                  progress={progress}
-                  error={scanError}
-                  onRetry={() => void runScan(websiteUrl)}
-                  onEdit={() => setStep("website")}
-                  onSkip={() => void skip()}
-                />
-              </motion.div>
-            )}
-            {step === "review" && (
-              <motion.div key="review" {...enterProps}>
-                <ReviewView
-                  brand={brand}
-                  onChange={(patch) => setBrand((current) => ({ ...current, ...patch }))}
-                  onBack={() => setStep("scan")}
-                  onContinue={() => void finish()}
-                  saving={saving}
-                />
-              </motion.div>
-            )}
-            {step === "done" && (
-              <motion.div key="done" {...enterProps} className="text-center">
-                <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_12px_32px_-12px_hsl(var(--primary)/0.7)]">
-                  <Check className="h-8 w-8" strokeWidth={2.5} />
-                </div>
-                <h1 className="mt-6 text-3xl font-semibold tracking-tight">
-                  Your workspace is ready.
-                </h1>
-                <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-muted-foreground">
-                  Mellox now has the context to make every draft, insight, and recommendation feel
-                  like your brand.
-                </p>
-                <button
-                  onClick={() => navigate({ to: "/app" })}
-                  className="mt-7 inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-5 text-[14px] font-semibold text-primary-foreground transition hover:-translate-y-px"
-                >
-                  Enter Mellox <ArrowRight className="h-4 w-4" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+            </AnimatePresence>
+          </LayoutGroup>
         </div>
       </main>
-    </div>
+    </motion.div>
   );
 }
 
-function StepHeader({
-  icon,
-  eyebrow,
-  title,
-  subtitle,
-}: {
-  icon: React.ReactNode;
-  eyebrow: string;
-  title: string;
-  subtitle: string;
-}) {
+function StepIndicator({ step }: { step: Step }) {
+  const current = step === "done" ? STEPS.length : STEPS.findIndex((s) => s.id === step);
   return (
-    <div>
-      <div className="mb-5 flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-card text-primary">
-          {icon}
-        </span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          {eyebrow}
-        </span>
-      </div>
-      <h1 className="max-w-xl text-[clamp(2rem,5vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.035em]">
-        {title}
-      </h1>
-      <p className="mt-3 max-w-lg text-[14px] leading-relaxed text-muted-foreground">{subtitle}</p>
-    </div>
-  );
-}
-
-function ScanView({
-  url,
-  status,
-  progress,
-  error,
-  onRetry,
-  onEdit,
-  onSkip,
-}: {
-  url: string;
-  status: ScanStatus;
-  progress: Progress;
-  error: string | null;
-  onRetry: () => void;
-  onEdit: () => void;
-  onSkip: () => void;
-}) {
-  const failed = status === "error";
-  const Icon = failed ? RefreshCw : status === "ok" ? Check : Loader2;
-  return (
-    <div className="text-center">
-      {status === "loading" ? (
-        <ScanSymbols />
-      ) : (
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-border bg-card text-primary shadow-sm">
-          <Icon className="h-7 w-7" />
-        </div>
-      )}
-      <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        DNA Scan
-      </p>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-        {failed
-          ? "We couldn't read that site"
-          : status === "ok"
-            ? "Brand DNA is ready"
-            : "Understanding your brand"}
-      </h1>
-      <p className="mx-auto mt-2 max-w-lg truncate text-[13px] text-muted-foreground">{url}</p>
-      <div className="mx-auto mt-8 max-w-md text-left">
-        <div className="h-2 overflow-hidden rounded-full bg-border">
-          <motion.div
-            className="h-full bg-primary"
-            animate={{ width: `${status === "ok" ? 100 : progress.pct}%` }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-          />
-        </div>
-        <p aria-live="polite" className="mt-3 text-center text-[13px] text-muted-foreground">
-          {failed
-            ? error
-            : status === "ok"
-              ? "Scan complete. Preparing your review..."
-              : progress.message || "Connecting to your website"}
-        </p>
-      </div>
-      {failed && (
-        <div className="mt-7 flex justify-center gap-2">
-          <button
-            onClick={onEdit}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+    <ol aria-label="Setup progress" className="flex items-center">
+      {STEPS.map((item, index) => {
+        const state = index < current ? "done" : index === current ? "active" : "pending";
+        return (
+          <li
+            key={item.id}
+            aria-current={state === "active" ? "step" : undefined}
+            className="flex items-center"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Edit URL
-          </button>
-          <button
-            onClick={onRetry}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground hover:opacity-90"
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Try again
-          </button>
-        </div>
-      )}
-      {status === "loading" && (
-        <button
-          type="button"
-          onClick={onSkip}
-          className="mt-5 text-[12px] text-muted-foreground underline-offset-4 transition hover:text-foreground hover:underline"
-        >
-          Skip for now and enter Mellox
-        </button>
-      )}
-    </div>
-  );
-}
-
-function ScanSymbols() {
-  const [active, setActive] = useState(0);
-
-  useEffect(() => {
-    const timer = window.setInterval(
-      () => setActive((value) => (value + 1) % SCAN_SYMBOLS.length),
-      900,
-    );
-    return () => window.clearInterval(timer);
-  }, []);
-
-  return (
-    <div
-      className="relative mx-auto grid h-20 w-20 place-items-center rounded-[1.4rem] border border-border/70 bg-card shadow-[0_16px_42px_-18px_hsl(var(--foreground)/0.55)]"
-      aria-label="Scanning your brand"
-      role="status"
-    >
-      <span className="absolute inset-1 rounded-[1.1rem] border border-primary/15" aria-hidden />
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.img
-          key={SCAN_SYMBOLS[active]}
-          src={`/assets/stars/${SCAN_SYMBOLS[active]}`}
-          alt=""
-          className="h-11 w-11 object-contain"
-          initial={{ opacity: 0, scale: 0.72, rotate: -8 }}
-          animate={{ opacity: 1, scale: 1, rotate: 0 }}
-          exit={{ opacity: 0, scale: 1.12, rotate: 8 }}
-          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-        />
-      </AnimatePresence>
-      <motion.span
-        aria-hidden
-        className="absolute -inset-2 -z-10 rounded-[1.8rem] border border-primary/10"
-        animate={{ opacity: [0.25, 0.65, 0.25], scale: [0.96, 1.04, 0.96] }}
-        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-      />
-    </div>
-  );
-}
-
-function ReviewView({
-  brand,
-  onChange,
-  onBack,
-  onContinue,
-  saving,
-}: {
-  brand: Partial<BrandDna>;
-  onChange: (patch: Partial<BrandDna>) => void;
-  onBack: () => void;
-  onContinue: () => void;
-  saving: boolean;
-}) {
-  const fields = [
-    ["brandName", "Brand name", "Your company name"],
-    ["oneLiner", "Positioning", "What you do, for whom, and why it matters"],
-    ["industry", "Industry", "e.g. B2B SaaS"],
-    ["audience", "Audience", "Who you serve"],
-    ["voice", "Brand voice", "How you sound"],
-    ["products", "Products or services", "What you sell"],
-  ] as const;
-  const filled = fields.filter(([key]) => String(brand[key] || "").trim()).length;
-  return (
-    <div>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-            Scan complete
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Review your Brand DNA.</h1>
-          <p className="mt-2 text-[13.5px] text-muted-foreground">
-            {filled} of {fields.length} essentials found. Keep what's right and adjust anything that
-            needs your voice.
-          </p>
-        </div>
-        <Sparkles className="mt-1 h-6 w-6 shrink-0 text-primary" />
-      </div>
-      <div className="mt-7 grid gap-3 sm:grid-cols-2">
-        {fields.map(([key, label, placeholder]) => (
-          <label key={key} className="block">
-            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              {label}
+            {index > 0 && (
+              <span
+                aria-hidden
+                className={`mx-1.5 h-px w-4 transition-colors duration-500 sm:mx-2.5 sm:w-8 ${index <= current ? "bg-primary" : "bg-border"}`}
+              />
+            )}
+            <span
+              className={`inline-flex items-center gap-1.5 text-[12px] transition-colors ${state === "pending" ? "text-muted-foreground" : "text-foreground"}`}
+            >
+              <span
+                className={`grid h-5 w-5 place-items-center rounded-full text-[10px] font-semibold transition-colors duration-300 ${
+                  state === "done"
+                    ? "bg-primary text-primary-foreground"
+                    : state === "active"
+                      ? "border border-primary text-primary"
+                      : "border border-border text-muted-foreground"
+                }`}
+              >
+                {state === "done" ? (
+                  <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
+                ) : (
+                  index + 1
+                )}
+              </span>
+              <span className="hidden sm:inline">{item.label}</span>
+              {state === "done" && <span className="sr-only">(complete)</span>}
             </span>
-            <input
-              value={String(brand[key] || "")}
-              onChange={(event) => onChange({ [key]: event.target.value })}
-              placeholder={placeholder}
-              className="h-11 w-full rounded-xl border border-border bg-card px-3.5 text-[13.5px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-border"
-            />
-          </label>
-        ))}
-      </div>
-      <div className="mt-8 flex items-center justify-between">
-        <button
-          onClick={onBack}
-          className="inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[13px] text-muted-foreground hover:bg-secondary hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to scan
-        </button>
-        <button
-          onClick={onContinue}
-          disabled={saving}
-          className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground transition hover:-translate-y-px disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{" "}
-          {saving ? "Saving Brand DNA..." : "Enter Mellox"}
-          <ArrowRight className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ApprovalCard, JobRow, type Group } from "@/components/app/StudioRail";
+import { PipelineSection } from "@/components/app/StudioRail";
+import { groupRows, type ContentRow } from "@/lib/studio/content-groups";
 import { LibraryPage } from "@/components/app/LibraryPage";
 import { LibraryDialog } from "@/components/app/LibraryDialog";
 import { emitAppEvent } from "@/lib/app-events";
@@ -684,48 +685,133 @@ function LiveComposer({ type, isMobile }: { type: StudioType; isMobile: boolean 
   );
 }
 
-const RAIL_GROUPS: Group[] = [
+const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+
+/** Raw rows as the database returns them, so the lab exercises the real grouping. */
+const RAIL_ROWS: ContentRow[] = [
   {
-    key: "g-image",
-    ids: ["x1"],
-    type: "image",
-    title: "Harvest morning in Huila",
-    excerpt: "5:40am in Huila. The cherries only get picked when they're this red.",
-    platforms: ["instagram", "tiktok"],
-    storagePath: "thumb-1",
-    mediaType: "image",
-    createdAt: new Date(Date.now() - 4 * 60_000).toISOString(),
-    jobId: null,
+    id: "x1",
+    title: "Harvest",
+    body: "5:40am in Huila. The cherries only get picked when they're this red. 🍒\n\n#specialtycoffee #huila",
+    kind: "image",
+    channel: "instagram",
     status: "pending",
+    meta: {
+      source: "studio",
+      studio_type: "image",
+      group_id: "g-image",
+      job_id: "job-image",
+      job_title: "Harvest morning in Huila",
+      platform: "instagram",
+      asset_storage_path: "thumb-1",
+      media_type: "image",
+    },
+    created_at: minutesAgo(4),
+    updated_at: minutesAgo(4),
+    scheduled_at: null,
   },
   {
-    key: "g-social",
-    ids: ["x2"],
-    type: "social",
+    id: "x1b",
+    title: "Harvest",
+    body: "POV: you only pick the red ones 🍒 #coffeetok",
+    kind: "image",
+    channel: "tiktok",
+    status: "pending",
+    meta: {
+      source: "studio",
+      studio_type: "image",
+      group_id: "g-image",
+      job_id: "job-image",
+      job_title: "Harvest morning in Huila",
+      platform: "tiktok",
+      asset_storage_path: "thumb-1",
+      media_type: "image",
+    },
+    created_at: minutesAgo(4),
+    updated_at: minutesAgo(4),
+    scheduled_at: null,
+  },
+  {
+    id: "x2",
+    title: null,
+    body: "Cold brew tips for summer: steep 18 hours, then dilute 1:1. Save this for your next batch.",
+    kind: "post",
+    channel: "linkedin",
+    status: "pending",
+    meta: { source: "chat" },
+    created_at: minutesAgo(30),
+    updated_at: minutesAgo(30),
+    scheduled_at: null,
+  },
+  {
+    id: "x3",
     title: "Pay the farmer, taste the difference",
-    excerpt:
-      "We pay the Huila co-op 30% above fair-trade minimums. Not as charity — as quality control.",
-    platforms: ["linkedin", "instagram"],
-    storagePath: null,
-    mediaType: null,
-    createdAt: new Date(Date.now() - 42 * 60_000).toISOString(),
-    jobId: null,
-    status: "pending",
+    body: "We pay the Huila co-op 30% above fair-trade minimums. Not as charity, as quality control.",
+    kind: "post",
+    channel: "linkedin",
+    status: "failed",
+    meta: {
+      source: "studio",
+      studio_type: "social",
+      group_id: "g-social",
+      job_id: "job-social",
+      platform: "linkedin",
+    },
+    created_at: minutesAgo(90),
+    updated_at: minutesAgo(20),
+    scheduled_at: null,
   },
   {
-    key: "g-article",
-    ids: ["x3"],
-    type: "article",
+    id: "x4",
     title: "Decaf that doesn't taste like decaf: a buyer's guide",
-    excerpt: "How modern decaffeination works, and the three things to check before you buy.",
-    platforms: [],
-    storagePath: null,
-    mediaType: null,
-    createdAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
-    jobId: null,
+    body: "How modern decaffeination works, and the three things to check before you buy.",
+    kind: "blog",
+    channel: null,
     status: "approved",
+    meta: {
+      source: "studio",
+      studio_type: "article",
+      group_id: "g-article",
+      job_id: "job-article",
+    },
+    created_at: minutesAgo(180),
+    updated_at: minutesAgo(60),
+    scheduled_at: null,
+  },
+  {
+    id: "x5",
+    title: "Is your cold brew under-extracted?",
+    body: "Sour cold brew? Swipe for the 5 signs and how to fix each.",
+    kind: "carousel",
+    channel: "instagram",
+    status: "scheduled",
+    meta: {
+      source: "studio",
+      studio_type: "carousel",
+      group_id: "g-carousel",
+      job_id: "job-carousel",
+      platform: "instagram",
+    },
+    created_at: minutesAgo(300),
+    updated_at: minutesAgo(40),
+    scheduled_at: new Date(Date.now() + 20 * 3_600_000).toISOString(),
+  },
+  {
+    // An empty calendar placeholder: must not appear anywhere.
+    id: "x6",
+    title: "Untitled post",
+    body: null,
+    kind: "post",
+    channel: "instagram",
+    status: "draft",
+    meta: { source: "calendar" },
+    created_at: minutesAgo(10),
+    updated_at: minutesAgo(10),
+    scheduled_at: null,
   },
 ];
+
+const RAIL_GROUPS = groupRows(RAIL_ROWS);
 
 function RailScene() {
   const carousel = session("carousel", "generating");
@@ -750,22 +836,17 @@ function RailScene() {
   return (
     <div className="flex flex-wrap items-start justify-center gap-10">
       <div className="w-[340px] space-y-6 rounded-2xl bg-surface-1 p-3.5 ring-1 ring-border">
-        <ul className="space-y-2.5">
-          <JobRow job={running.job!} tracked onDismiss={() => {}} />
-          <JobRow job={failed} tracked={false} onDismiss={() => {}} />
-        </ul>
-        <ul className="space-y-2.5">
-          {RAIL_GROUPS.map((g) => (
-            <ApprovalCard
-              key={g.key}
-              group={g}
-              thumb={g.storagePath ? art(1280, 720, "#223012", "#b5d84a", "Harvest") : undefined}
-              highlight={g.key === "g-image"}
-              onChanged={() => {}}
-              fixture
-            />
-          ))}
-        </ul>
+        <PipelineSection
+          groups={RAIL_GROUPS}
+          loading={false}
+          error={null}
+          thumbs={{ "thumb-1": art(1280, 720, "#223012", "#b5d84a", "Harvest") }}
+          jobs={[running.job!, failed]}
+          agentActions={2}
+          publishedThisWeek={4}
+          onRefresh={() => {}}
+          fixture
+        />
       </div>
       <div className="flex w-[340px] flex-col items-end gap-2">
         {docked.map((d) => (

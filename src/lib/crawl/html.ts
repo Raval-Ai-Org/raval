@@ -96,6 +96,7 @@ export function extractFonts(html: string): string[] {
     const first = m[1].split(",")[0].replace(/['"]/g, "").trim();
     if (
       first &&
+      !first.startsWith("var(") &&
       !/^(inherit|initial|unset|sans-serif|serif|monospace|system-ui|-apple-system)$/i.test(first)
     ) {
       fonts.add(first);

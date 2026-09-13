@@ -71,7 +71,13 @@ export type AppEventMap = {
   /** Review a single content item outside a Studio job (legacy or chat-created). */
   "open:content-item": { id: string };
   /** Open the Library pop-up, optionally on a tab. */
-  "open:library": { tab?: "all" | "posts" | "media" } | undefined;
+  "open:library":
+    | {
+        tab?: "all" | "posts" | "media";
+        /** Preselect a pipeline stage filter. */
+        status?: "review" | "ready" | "scheduled" | "published";
+      }
+    | undefined;
   "open:ai-visibility": undefined;
   "open:autopilot": undefined;
   "open:client-portal": undefined;

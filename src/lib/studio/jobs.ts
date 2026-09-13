@@ -122,6 +122,10 @@ export const CreateJobSchema = z.object({
   refine: RefineSchema.optional(),
   /** Regenerate: same brief, a new take. */
   regenerate: z.boolean().optional(),
+  /** The user already approved the draft this comes from: land the result in Ready. */
+  approve: z.boolean().optional(),
+  /** A text draft being turned into this post; retired once the post is ready. */
+  fromContentId: z.string().uuid().optional(),
 });
 
 export type CreateJobInput = z.infer<typeof CreateJobSchema>;

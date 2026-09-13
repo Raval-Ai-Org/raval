@@ -16,8 +16,9 @@
  * infinite animation, and it reads as Mellox in both themes.
  */
 
-import { motion, useReducedMotion } from "framer-motion";
-import { useEffect, useState, type ReactNode } from "react";
+import { motion } from "framer-motion";
+import type { ReactNode } from "react";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { Logo } from "@/components/brand/Logo";
 import { duration, ease } from "@/lib/motion";
 
@@ -33,13 +34,7 @@ export function AuthShell({
   children: ReactNode;
   footer: ReactNode;
 }) {
-  // useReducedMotion returns null on the server and a boolean on the client,
-  // so start at false to match the server render and update after mount.
-  const prefersReduced = useReducedMotion();
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    setReduce(!!prefersReduced);
-  }, [prefersReduced]);
+  const reduce = useReducedMotionSafe();
 
   return (
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">

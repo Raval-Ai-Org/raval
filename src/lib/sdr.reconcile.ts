@@ -43,6 +43,8 @@ export async function reconcileStalePublications(deps: ReconcileDeps) {
   const touchedItems = new Set<string>();
   let unreachable = 0;
   for (const row of stale ?? []) {
+    // SocialAPI.ai deliveries share this table; they reconcile via src/lib/socialapi/reconcile.ts.
+    if (row.provider && row.provider !== "sdr") continue;
     try {
       const { token, baseUrl } = await configFor(deps, row.workspace_id);
       const res = await (deps.callSdrFn ?? callSdr)({

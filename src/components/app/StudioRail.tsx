@@ -3,33 +3,37 @@
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  ArrowRight,
   Brain,
   Calendar,
   CalendarClock,
   Check,
+  Eye,
   FileText,
+  Inbox,
   Plus,
+  RefreshCw,
   RotateCcw,
   Search,
   Share2,
   Sparkles,
+  Spinner,
   Wand2,
   X,
   Mail,
+  type LucideIcon,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { supabase } from "@/integrations/supabase/client";
 import { getActiveWorkspaceId } from "@/lib/authed-fetch";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { updateContentItem } from "@/lib/content.functions";
-import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
-import { STUDIO_FORMATS, studioTypeFromContent, type StudioType } from "@/lib/studio/formats";
+import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { isActiveJob, type StudioJob } from "@/lib/studio/jobs";
 import {
   cancelSession,
@@ -47,13 +51,17 @@ import {
 } from "@/hooks/use-studio-suggestions";
 import { Burst, DrawCheck, PlatformStack, TypeGlyph } from "@/components/studio/studio-ui";
 import { studioApi } from "@/lib/studio/client";
+import { createPostFromDraft } from "@/lib/studio/convert";
 import {
   CONTENT_COLUMNS,
+  PIPELINE_STATUSES,
+  SOURCE_LABEL,
   ago,
-  cleanText,
   groupRows,
+  stageCounts,
   type ContentRow,
   type Group,
+  type Stage,
 } from "@/lib/studio/content-groups";
 
 export type { Group } from "@/lib/studio/content-groups";
@@ -88,83 +96,53 @@ function useWorkspaceId(): string | null {
 
 export function StudioRail(_props: { embedded?: boolean } = {}) {
   const workspaceId = useWorkspaceId();
-  const [pending, setPending] = useState<ContentRow[] | null>(null);
-  const [legacyApprovals, setLegacyApprovals] = useState<Group[]>([]);
-  const [scheduled, setScheduled] = useState<ContentRow[]>([]);
-  const [recent, setRecent] = useState<ContentRow[]>([]);
+  const [rows, setRows] = useState<ContentRow[] | null>(null);
+  const [agentActions, setAgentActions] = useState(0);
+  const [publishedThisWeek, setPublishedThisWeek] = useState(0);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     const ws = workspaceId;
     if (!ws) {
-      setPending([]);
+      setRows([]);
       return;
     }
-    const cols = CONTENT_COLUMNS;
-    const [queue, legacy, sched, rec] = await Promise.all([
+    setRefreshing(true);
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const [queue, approvals, published] = await Promise.all([
+      // Everything still on its way out: not published, not discarded.
       supabase
         .from("content_items")
-        .select(cols)
+        .select(CONTENT_COLUMNS)
         .eq("workspace_id", ws)
-        .in("status", ["pending", "draft", "approved"])
+        .in("status", [...PIPELINE_STATUSES])
         .order("created_at", { ascending: false })
-        .limit(40),
+        .limit(80),
       supabase
         .from("approvals")
-        .select("id, action, payload, created_at")
+        .select("id", { count: "exact", head: true })
         .eq("workspace_id", ws)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false })
-        .limit(10),
+        .eq("status", "pending"),
       supabase
         .from("content_items")
-        .select(cols)
+        .select("id", { count: "exact", head: true })
         .eq("workspace_id", ws)
-        .eq("status", "scheduled")
-        .order("scheduled_at", { ascending: true, nullsFirst: false })
-        .limit(6),
-      supabase
-        .from("content_items")
-        .select(cols)
-        .eq("workspace_id", ws)
-        .in("status", ["published", "publishing"])
-        .order("updated_at", { ascending: false })
-        .limit(6),
+        .eq("status", "published")
+        .gte("updated_at", weekAgo),
     ]);
+    setRefreshing(false);
     if (queue.error) {
-      setLoadError("Couldn't load your queue.");
-      setPending((p) => p ?? []);
+      setLoadError("Couldn't load your content.");
+      setRows((r) => r ?? []);
       return;
     }
     setLoadError(null);
     const queueRows = (queue.data ?? []) as ContentRow[];
-    setPending(queueRows);
-    setLegacyApprovals(
-      (
-        (legacy.data ?? []) as Array<{
-          id: string;
-          action: string | null;
-          payload: Record<string, unknown> | null;
-          created_at: string;
-        }>
-      ).map((a) => ({
-        key: `approval-${a.id}`,
-        ids: [a.id],
-        type: "legacy" as const,
-        legacyLabel: "Approval",
-        title: cleanText(a.action) || "Pending approval",
-        excerpt: typeof a.payload?.body === "string" ? cleanText(a.payload.body).slice(0, 140) : "",
-        platforms: [],
-        storagePath: null,
-        mediaType: null,
-        createdAt: a.created_at,
-        jobId: null,
-        status: "pending",
-      })),
-    );
-    setScheduled((sched.data ?? []) as ContentRow[]);
-    setRecent((rec.data ?? []) as ContentRow[]);
+    setRows(queueRows);
+    setAgentActions(approvals.count ?? 0);
+    setPublishedThisWeek(published.count ?? 0);
 
     const paths = [
       ...new Set(
@@ -184,7 +162,7 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
   }, [workspaceId]);
 
   useEffect(() => {
-    setPending(null);
+    setRows(null);
     void load();
     const on = () => void load();
     addAppEventListener("content:changed", on);
@@ -197,11 +175,7 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
   useVisibleInterval(() => void load(), 60_000);
 
   const jobs = useStudioStore((s) => s.jobs);
-  const sessions = useStudioStore((s) => s.sessions);
-  const groups = useMemo(
-    () => [...groupRows(pending ?? []), ...legacyApprovals],
-    [pending, legacyApprovals],
-  );
+  const groups = useMemo(() => groupRows(rows ?? []), [rows]);
 
   return (
     <aside aria-label="Studio" className="flex h-full w-full min-w-0 flex-col">
@@ -209,34 +183,19 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
         <CreateButton />
         <BrandDnaCta />
         <LayoutGroup id="studio-rail">
-          <InProgressSection
-            jobs={jobs}
-            sessionsJobIds={
-              new Set(sessions.flatMap((s) => [s.job?.id]).filter(Boolean) as string[])
-            }
-          />
-          <ApprovalSection
+          <PipelineSection
             groups={groups}
-            loading={pending === null}
+            loading={rows === null}
+            refreshing={refreshing}
             error={loadError}
             thumbs={thumbs}
             jobs={jobs}
-            onChanged={() => void load()}
+            agentActions={agentActions}
+            publishedThisWeek={publishedThisWeek}
+            onRefresh={() => void load()}
           />
         </LayoutGroup>
         <SuggestionsSection />
-        <CompactList
-          title="Scheduled"
-          rows={scheduled}
-          empty="Nothing scheduled yet."
-          meta={(r) => when(r.scheduled_at)}
-        />
-        <CompactList
-          title="Recent"
-          rows={recent}
-          empty="Published work shows here."
-          meta={(r) => ago(r.updated_at)}
-        />
       </div>
     </aside>
   );
@@ -318,72 +277,7 @@ function BrandDnaCta() {
   );
 }
 
-/* ───────────────────────── In progress ───────────────────────── */
-
-const DISMISSED_JOBS = "studio:rail-dismissed-jobs";
-
-function readDismissedJobs(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(DISMISSED_JOBS) ?? "[]") as string[];
-  } catch {
-    return [];
-  }
-}
-
-function InProgressSection({
-  jobs,
-  sessionsJobIds,
-}: {
-  jobs: StudioJob[];
-  sessionsJobIds: Set<string>;
-}) {
-  const [dismissed, setDismissed] = useState<string[]>([]);
-  useEffect(() => setDismissed(readDismissedJobs()), []);
-  const visible = jobs.filter(
-    (j) =>
-      isActiveJob(j) ||
-      (j.status === "failed" &&
-        !j.parent_job_id &&
-        !dismissed.includes(j.id) &&
-        Date.now() - Date.parse(j.updated_at) < 6 * 3_600_000),
-  );
-  if (!visible.length) return null;
-
-  const dismiss = (id: string) => {
-    const next = [...dismissed, id].slice(-50);
-    setDismissed(next);
-    try {
-      localStorage.setItem(DISMISSED_JOBS, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-  };
-
-  return (
-    <section data-no-rhythm aria-labelledby="rail-progress">
-      <div className="mb-2 flex items-center gap-2 px-1">
-        <h3 id="rail-progress" className="ui-eyebrow">
-          In progress
-        </h3>
-        <span className="ui-count-pill">
-          {visible.filter(isActiveJob).length || visible.length}
-        </span>
-      </div>
-      <ul className="space-y-2.5">
-        <AnimatePresence initial={false}>
-          {visible.map((job) => (
-            <JobRow
-              key={job.id}
-              job={job}
-              tracked={sessionsJobIds.has(job.id)}
-              onDismiss={() => dismiss(job.id)}
-            />
-          ))}
-        </AnimatePresence>
-      </ul>
-    </section>
-  );
-}
+/* ───────────────────────── Generating jobs ───────────────────────── */
 
 export function JobRow({
   job,
@@ -524,23 +418,119 @@ export function JobRow({
   );
 }
 
-/* ───────────────────────── Needs approval ───────────────────────── */
+/* ───────────────────────── Content pipeline ─────────────────────────
+ * The whole life of a post in one place: Creating → Review → Ready →
+ * Scheduled. Approving a finished Studio post moves it to Ready; approving a
+ * text-only draft creates the finished post (visual + captions), which shows
+ * under Creating and lands in Ready by itself. */
 
-function ApprovalSection({
+type PipelineStage = "generating" | Exclude<Stage, "published">;
+
+const PIPELINE_STEPS: { id: PipelineStage; label: string; icon: LucideIcon }[] = [
+  { id: "generating", label: "Creating", icon: Sparkles },
+  { id: "review", label: "Review", icon: Eye },
+  { id: "ready", label: "Ready", icon: Check },
+  { id: "scheduled", label: "Scheduled", icon: CalendarClock },
+];
+
+const PIPELINE_TAB_KEY = "studio:pipeline-tab";
+const PIPELINE_VISIBLE = 5;
+const DISMISSED_JOBS = "studio:rail-dismissed-jobs";
+
+function rememberTab(id: PipelineStage) {
+  try {
+    sessionStorage.setItem(PIPELINE_TAB_KEY, id);
+  } catch {
+    /* ignore */
+  }
+}
+
+function readDismissedJobs(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(DISMISSED_JOBS) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
+type Creating = { key: string; title: string; type: StudioType | "legacy" };
+
+export function PipelineSection({
   groups,
   loading,
+  refreshing = false,
   error,
   thumbs,
   jobs,
-  onChanged,
+  agentActions = 0,
+  publishedThisWeek = 0,
+  onRefresh,
+  fixture,
 }: {
   groups: Group[];
   loading: boolean;
+  refreshing?: boolean;
   error: string | null;
   thumbs: Record<string, string>;
   jobs: StudioJob[];
-  onChanged: () => void;
+  /** Pending Operations approvals (agent actions), shown as one row. */
+  agentActions?: number;
+  publishedThisWeek?: number;
+  onRefresh: () => void;
+  /** Preview/testing: decisions and creation don't write. */
+  fixture?: boolean;
 }) {
+  const reduce = useReducedMotion();
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const [creating, setCreating] = useState<Creating[]>([]);
+  const [followJob, setFollowJob] = useState<string | null>(null);
+  /** Draft key → the job making its post; keeps the draft out of Review until the list refreshes. */
+  const [handedOff, setHandedOff] = useState<Record<string, string>>({});
+  /** Lab only: drafts whose simulated post has finished. */
+  const [simulatedReady, setSimulatedReady] = useState<string[]>([]);
+  const [picked, setPicked] = useState<PipelineStage | null>(null);
+
+  useEffect(() => {
+    setDismissed(readDismissedJobs());
+    try {
+      const v = sessionStorage.getItem(PIPELINE_TAB_KEY);
+      if (v === "generating" || v === "review" || v === "ready" || v === "scheduled") setPicked(v);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const activeJobs = jobs.filter(isActiveJob);
+  const failedJobs = jobs.filter(
+    (j) =>
+      j.status === "failed" &&
+      !j.parent_job_id &&
+      !dismissed.includes(j.id) &&
+      Date.now() - Date.parse(j.updated_at) < 6 * 3_600_000,
+  );
+  const makingCount = activeJobs.length + creating.length;
+  const generatingCount = makingCount + failedJobs.length;
+
+  // A draft being turned into a post lives under Creating until the post exists.
+  const visibleGroups = useMemo(() => {
+    const hidden = new Set(creating.map((c) => c.key));
+    const stillMaking = (jobId: string | null | undefined) => {
+      if (!jobId) return false;
+      const job = jobs.find((j) => j.id === jobId);
+      return !!job && job.status !== "failed" && job.status !== "cancelled";
+    };
+    return groups
+      .filter(
+        (g) =>
+          !hidden.has(g.key) && !stillMaking(g.convertingJobId) && !stillMaking(handedOff[g.key]),
+      )
+      .map((g) =>
+        simulatedReady.includes(g.key)
+          ? { ...g, status: "approved", stage: "ready" as const, source: "studio" as const }
+          : g,
+      );
+  }, [groups, creating, jobs, handedOff, simulatedReady]);
+
   const justFinished = useMemo(
     () =>
       new Set(
@@ -555,42 +545,249 @@ function ApprovalSection({
       ),
     [jobs],
   );
+  const counts = useMemo(() => stageCounts(visibleGroups), [visibleGroups]);
+  const countOf = (id: PipelineStage) => (id === "generating" ? generatingCount : counts[id]);
 
-  const review = groups.filter((g) => g.status !== "approved");
-  const ready = groups.filter((g) => g.status === "approved");
-  const card = (g: Group) => (
-    <ApprovalCard
-      key={g.key}
-      group={g}
-      thumb={g.storagePath ? thumbs[g.storagePath] : undefined}
-      highlight={justFinished.has(g.key)}
-      onChanged={onChanged}
-    />
-  );
+  // Until someone picks a stage, open where there's something to do.
+  const active: PipelineStage =
+    picked ??
+    (makingCount
+      ? "generating"
+      : (PIPELINE_STEPS.find((st) => st.id !== "generating" && counts[st.id] > 0)?.id ?? "review"));
+
+  const choose = (id: PipelineStage) => {
+    setPicked(id);
+    rememberTab(id);
+  };
+
+  // When a post someone just approved finishes, follow it into Ready.
+  useEffect(() => {
+    if (!followJob) return;
+    const job = jobs.find((j) => j.id === followJob);
+    if (!job || isActiveJob(job)) return;
+    setFollowJob(null);
+    if (job.status === "succeeded") {
+      setPicked("ready");
+      rememberTab("ready");
+      emitAppEvent("content:changed");
+      toast.success("Your post is ready", { description: "It's waiting under Ready." });
+    }
+  }, [jobs, followJob]);
+
+  const list = useMemo(() => {
+    if (active === "generating") return [];
+    const inStage = visibleGroups.filter((g) => g.stage === active);
+    return active === "scheduled"
+      ? inStage.sort((a, b) => (a.scheduledAt ?? "").localeCompare(b.scheduledAt ?? ""))
+      : inStage.sort(
+          (a, b) => Number(b.problem) - Number(a.problem) || b.createdAt.localeCompare(a.createdAt),
+        );
+  }, [visibleGroups, active]);
+  const visible = list.slice(0, PIPELINE_VISIBLE);
+  const openLibrary = (status?: Stage) => emitAppEvent("open:library", { tab: "posts", status });
+
+  const dismissJob = (id: string) => {
+    const next = [...dismissed, id].slice(-50);
+    setDismissed(next);
+    try {
+      localStorage.setItem(DISMISSED_JOBS, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const approveAndCreate = async (group: Group) => {
+    const entry: Creating = { key: group.key, title: group.title, type: group.type };
+    setCreating((c) => [...c.filter((x) => x.key !== entry.key), entry]);
+    choose("generating");
+    if (fixture) {
+      window.setTimeout(() => {
+        setCreating((c) => c.filter((x) => x.key !== entry.key));
+        setSimulatedReady((r) => [...r, entry.key]);
+        choose("ready");
+        toast.success("Your post is ready", { description: "It's waiting under Ready." });
+      }, 4000);
+      return;
+    }
+    const ws = getActiveWorkspaceId();
+    try {
+      if (!ws) throw new Error("Choose a workspace first.");
+      const job = await createPostFromDraft(ws, group.ids[0]);
+      setHandedOff((h) => ({ ...h, [entry.key]: job.id }));
+      if (isActiveJob(job)) {
+        setFollowJob(job.id);
+        toast.success("Creating your post", {
+          description: "Mellox is making the visual. It lands in Ready when it's done.",
+        });
+      } else if (job.status === "succeeded") {
+        choose("ready");
+        toast.success("Your post is ready", { description: "It's waiting under Ready." });
+      }
+    } catch (e) {
+      toast.error("Couldn't create the post", {
+        description: e instanceof Error ? e.message : undefined,
+      });
+    } finally {
+      setCreating((c) => c.filter((x) => x.key !== entry.key));
+      emitAppEvent("content:changed");
+      onRefresh();
+    }
+  };
+
+  const nextScheduled = counts.scheduled
+    ? visibleGroups
+        .filter((g) => g.stage === "scheduled" && g.scheduledAt)
+        .map((g) => g.scheduledAt as string)
+        .sort()[0]
+    : null;
+  const summary =
+    active === "generating"
+      ? makingCount
+        ? `Creating ${makingCount} post${makingCount === 1 ? "" : "s"}. They move on by themselves.`
+        : failedJobs.length
+          ? `${failedJobs.length} couldn't finish. Retry or dismiss.`
+          : "Nothing is being created right now."
+      : active === "review"
+        ? counts.review
+          ? `${counts.review} waiting for your approval`
+          : "Nothing waiting for you."
+        : active === "ready"
+          ? counts.ready
+            ? `${counts.ready} approved, not posted yet`
+            : "Approve a draft and it's ready to post here."
+          : nextScheduled
+            ? `Next one goes out ${when(nextScheduled)}`
+            : "Nothing scheduled yet.";
 
   return (
-    <section data-no-rhythm aria-labelledby="rail-approval" aria-busy={loading}>
-      <div className="mb-2.5 flex items-center gap-2 px-1">
-        <h3 id="rail-approval" className="ui-eyebrow">
-          Needs approval
+    <section data-no-rhythm aria-labelledby="rail-pipeline" aria-busy={loading}>
+      <div className="mb-3 flex items-center gap-2 px-1">
+        <h3 id="rail-pipeline" className="ui-eyebrow">
+          Content pipeline
         </h3>
-        {review.length ? (
-          <span
-            className="ui-count-pill !bg-warning-surface !text-warning ring-1 ring-warning-border"
-            title={`${review.length} to review`}
-          >
-            {review.length}
-          </span>
-        ) : null}
-        {ready.length ? (
-          <span
-            className="ui-count-pill !bg-success-surface !text-success ring-1 ring-success-border"
-            title={`${ready.length} approved, not posted yet`}
-          >
-            {ready.length} ready
-          </span>
-        ) : null}
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={refreshing || loading}
+          aria-label="Refresh content pipeline"
+          title="Refresh"
+          className="ml-auto grid size-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
+        >
+          <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
+        </button>
       </div>
+
+      {agentActions > 0 ? (
+        <button
+          type="button"
+          onClick={() => emitAppEvent("open:operations", { tab: "approvals" })}
+          className="mb-3 flex w-full items-center gap-2 rounded-xl bg-warning-surface px-3 py-2 text-left text-xs text-foreground ring-1 ring-warning-border transition-[filter] hover:brightness-[0.97]"
+        >
+          <Inbox className="size-3.5 shrink-0 text-warning" />
+          <span className="min-w-0 flex-1 truncate">
+            {agentActions} agent action{agentActions === 1 ? " needs" : "s need"} a decision
+          </span>
+          <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+        </button>
+      ) : null}
+
+      {/* ── The pipeline: four connected stages ── */}
+      <div role="tablist" aria-label="Pipeline stage" className="relative grid grid-cols-4">
+        <span
+          aria-hidden
+          className="absolute left-[12.5%] right-[12.5%] top-[18px] h-0.5 rounded-full bg-border"
+        />
+        <span
+          aria-hidden
+          className={cn(
+            "absolute left-[12.5%] right-[12.5%] top-[18px] h-0.5 rounded-full transition-opacity duration-[--motion-duration-slow]",
+            makingCount ? "studio-flow opacity-100" : "opacity-0",
+          )}
+        />
+        {PIPELINE_STEPS.map((step) => {
+          const on = active === step.id;
+          const count = countOf(step.id);
+          const Icon = step.icon;
+          const busy = step.id === "generating" && makingCount > 0;
+          const attention =
+            (step.id === "review" && count > 0) ||
+            (step.id === "generating" && failedJobs.length > 0 && !makingCount);
+          return (
+            <button
+              key={step.id}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              aria-label={`${step.label}: ${loading ? "loading" : count}`}
+              onClick={() => choose(step.id)}
+              className="group relative flex flex-col items-center gap-1 rounded-xl pb-2 pt-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+            >
+              <motion.span
+                whileHover={reduce ? undefined : { y: -2 }}
+                whileTap={reduce ? undefined : { scale: 0.92 }}
+                className={cn(
+                  "relative grid size-9 place-items-center rounded-full ring-1 transition-[background-color,box-shadow,color] duration-[--motion-duration-base]",
+                  on
+                    ? "bg-primary text-primary-foreground shadow-[0_8px_20px_-8px_hsl(var(--primary)/0.75)] ring-primary"
+                    : count
+                      ? "bg-surface-3 text-foreground ring-border-strong group-hover:ring-primary-border"
+                      : "bg-surface-2 text-muted-foreground ring-border/70 group-hover:text-foreground",
+                )}
+              >
+                {busy ? (
+                  <span aria-hidden className="studio-ring absolute inset-0 rounded-full" />
+                ) : null}
+                {busy && !on ? (
+                  <Spinner className="size-4 animate-spin text-primary" />
+                ) : (
+                  <Icon className="size-4" />
+                )}
+                {!loading && count ? (
+                  <motion.span
+                    key={count}
+                    initial={reduce ? false : { scale: 0.3, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 520, damping: 20 }}
+                    className={cn(
+                      "absolute -right-1.5 -top-1 min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold leading-[18px] tabular-nums ring-2 ring-surface-1",
+                      attention
+                        ? "bg-warning text-white"
+                        : on
+                          ? "bg-foreground text-background"
+                          : "bg-surface-4 text-foreground",
+                    )}
+                  >
+                    {count}
+                  </motion.span>
+                ) : null}
+              </motion.span>
+              <span
+                className={cn(
+                  "text-[11px] font-medium transition-colors",
+                  on ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
+                )}
+              >
+                {step.label}
+              </span>
+              {on ? (
+                <motion.span
+                  layoutId="pipeline-marker"
+                  className="absolute bottom-0 h-0.5 w-7 rounded-full bg-primary"
+                  transition={{ duration: duration.medium, ease: ease.emphasized }}
+                />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      <p
+        key={`${active}-${summary}`}
+        aria-live="polite"
+        className="studio-enter-blur mb-2.5 mt-1.5 px-1 text-[11.5px] leading-snug text-muted-foreground"
+      >
+        {loading ? "Loading your content…" : summary}
+      </p>
 
       {loading ? (
         <div className="space-y-2.5">
@@ -614,47 +811,173 @@ function ApprovalSection({
       ) : error ? (
         <div className="flex items-center justify-between gap-2 rounded-2xl bg-danger-surface px-3 py-2.5 text-xs text-foreground ring-1 ring-danger-border">
           {error}
-          <Button size="sm" variant="ghost" onClick={onChanged}>
+          <Button size="sm" variant="ghost" onClick={onRefresh}>
             Retry
           </Button>
         </div>
-      ) : groups.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-surface-3/60">
-          <EmptyState
-            size="sm"
-            icon={Check}
-            title="You're all caught up"
-            description="Everything you create waits here until you approve and post it."
+      ) : active === "generating" ? (
+        generatingCount === 0 ? (
+          <EmptyStage
+            icon={Sparkles}
+            text="Approve a draft or create something new, and it shows here while Mellox makes it."
             action={
+              <Button size="sm" onClick={() => openComposer()}>
+                <Wand2 />
+                Create
+              </Button>
+            }
+          />
+        ) : (
+          <ul key="generating" className="space-y-2.5">
+            <AnimatePresence initial={false}>
+              {creating.map((c) => (
+                <CreatingRow key={`creating-${c.key}`} title={c.title} type={c.type} />
+              ))}
+              {activeJobs.map((job) => (
+                <JobRow key={job.id} job={job} tracked onDismiss={() => {}} />
+              ))}
+              {failedJobs.map((job) => (
+                <JobRow
+                  key={job.id}
+                  job={job}
+                  tracked={false}
+                  onDismiss={() => dismissJob(job.id)}
+                />
+              ))}
+            </AnimatePresence>
+          </ul>
+        )
+      ) : list.length === 0 ? (
+        <EmptyStage
+          icon={PIPELINE_STEPS.find((st) => st.id === active)?.icon ?? Check}
+          text={
+            active === "review"
+              ? "Nothing waiting for you. New drafts land here."
+              : active === "ready"
+                ? "Approved posts wait here until you schedule or publish them."
+                : "Schedule a ready post and it shows here with its time."
+          }
+          action={
+            active === "review" ? (
               <Button size="sm" onClick={() => openComposer()}>
                 <Wand2 />
                 Create something
               </Button>
-            }
-          />
-        </div>
+            ) : active === "scheduled" && counts.ready ? (
+              <Button size="sm" variant="outline" onClick={() => choose("ready")}>
+                See {counts.ready} ready
+              </Button>
+            ) : null
+          }
+        />
       ) : (
-        <div className="space-y-3">
-          {review.length ? (
-            <ul className="space-y-2.5">
-              <AnimatePresence initial={false}>{review.map(card)}</AnimatePresence>
-            </ul>
-          ) : null}
-          {ready.length ? (
-            <div>
-              <p className="mb-2 flex items-center gap-2 px-1 text-[11px] font-medium text-muted-foreground">
-                <span aria-hidden className="h-px flex-1 bg-border/70" />
-                Ready to post
-                <span aria-hidden className="h-px flex-1 bg-border/70" />
-              </p>
-              <ul className="space-y-2.5">
-                <AnimatePresence initial={false}>{ready.map(card)}</AnimatePresence>
-              </ul>
-            </div>
-          ) : null}
-        </div>
+        <ul key={active} className="space-y-2.5">
+          <AnimatePresence initial={false}>
+            {visible.map((g, i) => (
+              <ApprovalCard
+                key={g.key}
+                group={g}
+                index={i}
+                thumb={g.storagePath ? thumbs[g.storagePath] : undefined}
+                highlight={justFinished.has(g.key)}
+                onChanged={onRefresh}
+                onCreate={(group) => void approveAndCreate(group)}
+                fixture={fixture}
+              />
+            ))}
+          </AnimatePresence>
+        </ul>
       )}
+
+      {!loading && active !== "generating" && list.length > PIPELINE_VISIBLE ? (
+        <button
+          type="button"
+          onClick={() => openLibrary(active)}
+          className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+        >
+          View all {list.length} in Library
+          <ArrowRight className="size-3.5" />
+        </button>
+      ) : null}
+
+      {!loading ? (
+        <button
+          type="button"
+          onClick={() => openLibrary(publishedThisWeek ? "published" : undefined)}
+          className="group mt-3 flex w-full items-center gap-2 rounded-xl bg-surface-2/60 px-3 py-2 text-left text-[11px] text-muted-foreground ring-1 ring-border/50 transition-colors hover:bg-surface-2 hover:text-foreground"
+        >
+          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary-surface text-primary ring-1 ring-primary-border">
+            <Check className="size-3" strokeWidth={3} />
+          </span>
+          <span className="min-w-0 flex-1 truncate">
+            {publishedThisWeek
+              ? `${publishedThisWeek} published this week`
+              : "Everything you make is saved in Library"}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-0.5 font-medium">
+            Library
+            <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </button>
+      ) : null}
     </section>
+  );
+}
+
+function EmptyStage({
+  icon: Icon,
+  text,
+  action,
+}: {
+  icon: LucideIcon;
+  text: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="studio-enter-blur flex flex-col items-center rounded-2xl border border-dashed border-border bg-surface-3/50 px-4 py-6 text-center">
+      <span className="grid size-10 place-items-center rounded-full bg-surface-2 text-muted-foreground ring-1 ring-border">
+        <Icon className="size-4" />
+      </span>
+      <p className="mt-2.5 max-w-[230px] text-xs leading-relaxed text-muted-foreground">{text}</p>
+      {action ? <div className="mt-3">{action}</div> : null}
+    </div>
+  );
+}
+
+/** A draft that was just approved, while its post is being written (before the job exists). */
+function CreatingRow({ title, type }: { title: string; type: StudioType | "legacy" }) {
+  const t = (type === "legacy" ? "article" : type) as StudioType;
+  return (
+    <motion.li
+      layout
+      initial={{ opacity: 0, x: -18 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, transition: { duration: duration.fast } }}
+      transition={{ duration: duration.slow, ease: ease.emphasized }}
+      className={`studio-tone-${t} studio-ring relative overflow-hidden rounded-2xl bg-surface-3 shadow-1 ring-1 ring-primary-border/50`}
+    >
+      <span className="studio-weave absolute inset-0 opacity-70" aria-hidden />
+      <div className="relative flex items-center gap-3 p-3 pb-2.5">
+        <TypeGlyph type={t} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-foreground">{title}</span>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Spinner className="size-3 animate-spin" />
+            Writing captions and planning the visual
+          </span>
+        </span>
+      </div>
+      <div className="relative px-3 pb-3">
+        <span className="block h-1 overflow-hidden rounded-full bg-foreground/[0.08]">
+          <motion.span
+            className="studio-progress-fill relative block h-full rounded-full"
+            initial={{ width: "6%" }}
+            animate={{ width: "72%" }}
+            transition={{ duration: 20, ease: [0.1, 0.6, 0.3, 1] }}
+          />
+        </span>
+      </div>
+    </motion.li>
   );
 }
 
@@ -663,28 +986,34 @@ export function ApprovalCard({
   thumb,
   highlight,
   onChanged,
+  onCreate,
+  index = 0,
   fixture,
 }: {
   group: Group;
   thumb?: string;
   highlight: boolean;
   onChanged: () => void;
+  /** Approve a text-only draft by creating the finished post from it. */
+  onCreate?: (group: Group) => void;
+  /** Position in the list, for a gentle stagger on arrival. */
+  index?: number;
   /** Preview/testing: decide locally without writing. */
   fixture?: boolean;
 }) {
+  const reduce = useReducedMotion();
   const [busy, setBusy] = useState(false);
   const [decided, setDecided] = useState<null | "approved" | "rejected" | "draft">(null);
   const legacy = group.type === "legacy";
-  const isApprovalRow = group.key.startsWith("approval-");
-  // Approved but not posted yet: the next step is scheduling or publishing.
-  const approved = group.status === "approved";
+  const stage = group.stage;
   const label = legacy
     ? (group.legacyLabel ?? "Legacy")
     : STUDIO_FORMATS[group.type as StudioType].label;
   const media = thumb && group.mediaType ? group.mediaType : null;
+  // Drafts from chat, agents or the calendar are text only: approving creates the real post.
+  const needsPost = !!onCreate && !legacy && group.source !== "studio" && !media;
 
   const open = () => {
-    if (isApprovalRow) return emitAppEvent("open:operations", { tab: "approvals" });
     if (group.jobId) return void openJob(group.jobId);
     return void openItemOrJob(group.ids[0]);
   };
@@ -693,11 +1022,19 @@ export function ApprovalCard({
     setBusy(true);
     try {
       if (!fixture) {
+        // A draft can't be discarded directly: the lifecycle is draft → pending → rejected.
+        if (status === "rejected" && group.status === "draft") {
+          await Promise.all(
+            group.ids.map((id) =>
+              updateContentItem({ data: { id, patch: { status: "pending" } } }),
+            ),
+          );
+        }
         await Promise.all(
           group.ids.map((id) => updateContentItem({ data: { id, patch: { status } } })),
         );
       }
-      // Let the decision register before the card leaves the queue.
+      // Let the decision register before the card moves on.
       setDecided(status);
       await new Promise((r) => window.setTimeout(r, 750));
       if (fixture) {
@@ -708,7 +1045,7 @@ export function ApprovalCard({
       toast.success(
         status === "approved" ? "Approved" : status === "draft" ? "Back in review" : "Discarded",
         {
-          description: status === "approved" ? "Open it to schedule or publish." : undefined,
+          description: status === "approved" ? "It's under Ready. Schedule or post it." : undefined,
           action: status === "approved" ? { label: "Open", onClick: open } : undefined,
         },
       );
@@ -721,24 +1058,47 @@ export function ApprovalCard({
     }
   };
 
+  const iconButton =
+    "grid size-7 place-items-center rounded-full text-muted-foreground transition-colors disabled:opacity-50";
+
   return (
     <motion.li
       layout
       layoutId={`group-${group.key}`}
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97, transition: { duration: duration.base } }}
-      transition={{ duration: duration.medium, ease: ease.emphasized }}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={
+        reduce
+          ? { opacity: 0 }
+          : {
+              opacity: 0,
+              x: 36,
+              scale: 0.96,
+              transition: { duration: duration.base, ease: ease.accelerate },
+            }
+      }
+      transition={{
+        delay: Math.min(index, 5) * 0.04,
+        duration: duration.medium,
+        ease: ease.emphasized,
+      }}
       className={cn(
-        `studio-tone-${group.type === "legacy" ? "article" : group.type} group relative overflow-hidden rounded-2xl bg-surface-3 shadow-1 ring-1 transition-[box-shadow,translate] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized] hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-18px_hsl(var(--tone)/0.5)]`,
+        `studio-tone-${legacy ? "article" : group.type} group relative overflow-hidden rounded-2xl bg-surface-3 shadow-1 ring-1 transition-[box-shadow,translate] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized] hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-18px_hsl(var(--tone)/0.5)]`,
         highlight
           ? "shadow-[0_0_0_4px_hsl(var(--primary)/0.14)] ring-primary"
-          : "ring-border/70 hover:ring-border-strong",
+          : group.problem
+            ? "ring-danger-border"
+            : "ring-border/70 hover:ring-border-strong",
       )}
     >
       <span
         aria-hidden
-        className="absolute inset-x-0 top-0 z-10 h-[3px] bg-gradient-to-r from-[hsl(var(--tone))] via-[hsl(var(--tone)/0.45)] to-transparent"
+        className={cn(
+          "absolute inset-x-0 top-0 z-10 h-[3px]",
+          group.problem
+            ? "bg-danger"
+            : "bg-gradient-to-r from-[hsl(var(--tone))] via-[hsl(var(--tone)/0.45)] to-transparent",
+        )}
       />
       {media ? (
         <button
@@ -752,7 +1112,7 @@ export function ApprovalCard({
             <img
               src={thumb}
               alt=""
-              className="size-full object-cover transition-transform duration-[--motion-duration-xslow] ease-[--motion-ease-emphasized] group-hover:scale-[1.03]"
+              className="size-full object-cover transition-transform duration-[--motion-duration-xslow] ease-[--motion-ease-emphasized] group-hover:scale-[1.04]"
             />
           ) : (
             <video
@@ -763,7 +1123,7 @@ export function ApprovalCard({
               className="size-full object-cover"
             />
           )}
-          <span className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/45 to-transparent" />
+          <span className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/50 to-transparent" />
           {group.platforms.length ? (
             <PlatformStack
               platforms={group.platforms}
@@ -795,6 +1155,11 @@ export function ApprovalCard({
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="truncate">{label}</span>
+            {group.source !== "studio" && group.source !== "other" ? (
+              <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                {SOURCE_LABEL[group.source]}
+              </span>
+            ) : null}
             {!media && group.platforms.length ? (
               <PlatformStack platforms={group.platforms} size={16} />
             ) : null}
@@ -810,9 +1175,23 @@ export function ApprovalCard({
           ) : null}
         </span>
       </button>
-      {isApprovalRow ? (
-        <p className="px-3 pb-3 text-[11px] text-muted-foreground">Open Operations to decide</p>
-      ) : approved ? (
+
+      {stage === "scheduled" ? (
+        <div className="flex items-center gap-1 px-3 pb-3 pt-1">
+          <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-success-surface px-2 py-0.5 text-[10px] font-semibold text-success ring-1 ring-success-border">
+            <CalendarClock className="size-3 shrink-0" />
+            <span className="truncate">{when(group.scheduledAt)}</span>
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto h-7 rounded-full px-2.5"
+            onClick={open}
+          >
+            Open
+          </Button>
+        </div>
+      ) : stage === "ready" ? (
         <div className="flex items-center gap-1 px-3 pb-3 pt-1">
           <span className="inline-flex items-center gap-1 rounded-full bg-success-surface px-2 py-0.5 text-[10px] font-semibold text-success ring-1 ring-success-border">
             <Check className="size-3" strokeWidth={3} />
@@ -825,18 +1204,37 @@ export function ApprovalCard({
               disabled={busy}
               aria-label={`Move ${group.title} back to review`}
               title="Back to review"
-              className="grid size-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
+              className={cn(iconButton, "hover:bg-surface-2 hover:text-foreground")}
             >
               <RotateCcw className="size-3.5" />
             </button>
-            <Button size="sm" className="h-7 rounded-full px-3" onClick={open}>
+            <Button size="sm" className="studio-cta h-7 rounded-full px-3" onClick={open}>
               <CalendarClock />
               Schedule or post
             </Button>
           </div>
         </div>
+      ) : group.problem ? (
+        <div className="flex items-center gap-1 px-3 pb-3 pt-1">
+          <span className="inline-flex items-center gap-1 rounded-full bg-danger-surface px-2 py-0.5 text-[10px] font-semibold text-danger ring-1 ring-danger-border">
+            <AlertTriangle className="size-3" />
+            {group.status === "partial_failed" ? "Didn't fully publish" : "Didn't publish"}
+          </span>
+          <Button size="sm" className="ml-auto h-7 rounded-full px-3" onClick={open}>
+            Fix and retry
+          </Button>
+        </div>
       ) : (
         <div className="flex items-center gap-1 px-3 pb-3 pt-1">
+          {needsPost ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+              title="Approving creates the visual and captions for you"
+            >
+              <FileText className="size-3" />
+              Text draft
+            </span>
+          ) : null}
           <div className="ml-auto flex items-center gap-1">
             <button
               type="button"
@@ -844,26 +1242,32 @@ export function ApprovalCard({
               disabled={busy}
               aria-label={`Discard ${group.title}`}
               title="Discard"
-              className="grid size-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-danger-surface hover:text-danger disabled:opacity-50"
+              className={cn(iconButton, "hover:bg-danger-surface hover:text-danger")}
             >
               <X className="size-3.5" />
             </button>
-            <Button size="sm" variant="ghost" className="h-7 rounded-full px-2.5" onClick={open}>
-              Review
-            </Button>
+            {needsPost ? null : (
+              <Button size="sm" variant="ghost" className="h-7 rounded-full px-2.5" onClick={open}>
+                Review
+              </Button>
+            )}
             <Button
               size="sm"
-              className="h-7 rounded-full px-3"
-              onClick={() => void decide("approved")}
+              className="studio-cta h-7 rounded-full px-3"
+              onClick={() => (needsPost && onCreate ? onCreate(group) : void decide("approved"))}
               disabled={busy}
-              aria-label={`Approve ${group.title}`}
+              aria-label={
+                needsPost ? `Approve and create ${group.title}` : `Approve ${group.title}`
+              }
+              title={needsPost ? "Approve and create the finished post" : undefined}
             >
-              <Check />
-              Approve
+              {needsPost ? <Wand2 /> : <Check />}
+              {needsPost ? "Approve & create" : "Approve"}
             </Button>
           </div>
         </div>
       )}
+
       <AnimatePresence>
         {decided ? (
           <motion.div
@@ -891,13 +1295,15 @@ export function ApprovalCard({
                     <DrawCheck className="size-5" delay={0.1} />
                     <Burst />
                   </>
+                ) : decided === "draft" ? (
+                  <RotateCcw className="size-4" />
                 ) : (
                   <X className="size-4" />
                 )}
               </motion.span>
               <span className="text-sm font-medium text-foreground">
                 {decided === "approved"
-                  ? "Approved"
+                  ? "Approved · moving to Ready"
                   : decided === "draft"
                     ? "Back in review"
                     : "Discarded"}
@@ -907,64 +1313,6 @@ export function ApprovalCard({
         ) : null}
       </AnimatePresence>
     </motion.li>
-  );
-}
-
-/* ───────────────────────── Scheduled / recent ───────────────────────── */
-
-function CompactList({
-  title,
-  rows,
-  empty,
-  meta,
-}: {
-  title: string;
-  rows: ContentRow[];
-  empty: string;
-  meta: (r: ContentRow) => string;
-}) {
-  return (
-    <section data-no-rhythm>
-      <div className="mb-1.5 flex items-center gap-2 px-1">
-        <h3 className="ui-eyebrow">{title}</h3>
-        {rows.length ? <span className="ui-count-pill">{rows.length}</span> : null}
-      </div>
-      {rows.length === 0 ? (
-        <p className="px-1 text-xs text-muted-foreground">{empty}</p>
-      ) : (
-        <ul className="flex flex-col">
-          {rows.map((r) => {
-            const type = studioTypeFromContent(r.kind, r.meta);
-            const platform =
-              typeof r.meta?.platform === "string" && r.meta.platform in PLATFORMS
-                ? PLATFORMS[r.meta.platform as PlatformId]
-                : null;
-            const Icon = platform?.icon;
-            return (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => void openItemOrJob(r.id)}
-                  className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-sm text-foreground/85 transition-colors hover:bg-surface-2 hover:text-foreground"
-                >
-                  {type === "legacy" ? (
-                    <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                  ) : Icon ? (
-                    <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <TypeGlyph type={type} size="sm" className="size-5 bg-transparent ring-0" />
-                  )}
-                  <span className="min-w-0 flex-1 truncate">
-                    {cleanText(r.title) || cleanText(r.body).slice(0, 60) || "Untitled"}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{meta(r)}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
   );
 }
 

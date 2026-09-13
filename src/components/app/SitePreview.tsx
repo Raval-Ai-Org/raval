@@ -23,6 +23,7 @@ import starScout from "@/assets/stars/star-atlas.png.asset.json";
 import starSpark from "@/assets/stars/star-spark.png.asset.json";
 import { usePreviewStage, setPreviewContext } from "@/lib/preview-stages";
 import { PreviewStage } from "@/components/app/PreviewStage";
+import { faviconFor, screenshotProviders } from "@/lib/site-screenshot";
 
 const STAR_AGENTS = [
   { name: "Scout", src: starScout.url, hue: 217, mood: "scanning your visibility" },
@@ -88,14 +89,7 @@ export function SitePreview({ workspaceId }: { workspaceId: string | null }) {
   // Ordered screenshot providers — fall through on error.
   const providers = useMemo(() => {
     if (!siteUrl) return [] as string[];
-    const enc = encodeURIComponent(siteUrl);
-    const bare = siteUrl.replace(/^https?:\/\//i, "");
-    return [
-      `https://api.microlink.io/?url=${enc}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1280&viewport.height=800&waitUntil=networkidle0`,
-      `https://image.thum.io/get/width/1280/crop/800/noanimate/${siteUrl}`,
-      `https://s.wordpress.com/mshots/v1/${enc}?w=1280&h=800`,
-      `https://www.google.com/s2/favicons?domain=${bare}&sz=256`,
-    ];
+    return [...screenshotProviders(siteUrl), faviconFor(siteUrl)];
   }, [siteUrl]);
 
   const currentShot = providers[providerIdx];

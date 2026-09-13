@@ -34,6 +34,14 @@ const Schema = z.object({
   SDR_SECRET_ENCRYPTION_KEY: z.string().optional(),
   SDR_WEBHOOK_BASE_URL: optionalUrl,
   SDR_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(60).optional(),
+  // Distribution provider — socialapi | sdr | none. Default: SocialAPI.ai when its key is set.
+  DISTRIBUTION_PROVIDER: z.enum(["socialapi", "sdr", "none", "off", ""]).optional(),
+  // SocialAPI.ai — server-only. Never expose as NEXT_PUBLIC_*.
+  SOCIALAPI_API_KEY: z.string().startsWith("sapi_key_").optional().or(z.literal("")),
+  SOCIALAPI_BASE_URL: optionalUrl,
+  SOCIALAPI_WEBHOOK_SECRET: z.string().optional(),
+  SOCIALAPI_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(60).optional(),
+  FEATURE_FLAG_SOCIALAPI_ENABLED: z.string().optional(),
   // Operations — optional.
   REDIS_URL: z.string().optional(),
   SENTRY_DSN: optionalUrl,
@@ -90,6 +98,20 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
       "SDR_WEBHOOK_BASE_URL",
     ]) {
       if (!env[name]) errors.push(`${name} is required when FEATURE_FLAG_SDR_ENABLED is on`);
+    }
+  }
+  if ((env.DISTRIBUTION_PROVIDER ?? "").toLowerCase() === "socialapi" && !env.SOCIALAPI_API_KEY) {
+    errors.push("SOCIALAPI_API_KEY is required when DISTRIBUTION_PROVIDER is socialapi");
+  }
+  if (env.SOCIALAPI_API_KEY && !env.SOCIALAPI_WEBHOOK_SECRET) {
+    warnings.push(
+      "SOCIALAPI_WEBHOOK_SECRET is not set (delivery status relies on the 5-minute reconcile sweep)",
+    );
+  }
+  // A provider secret in a NEXT_PUBLIC_* variable is inlined into the browser bundle.
+  for (const name of Object.keys(env)) {
+    if (/^NEXT_PUBLIC_.*(SOCIALAPI|SDR_ADMIN|SERVICE_ROLE)/i.test(name) && env[name]) {
+      errors.push(`${name} exposes a server-only secret to the browser — remove it`);
     }
   }
   if (env.APP_URL && env.NEXT_PUBLIC_APP_URL && env.APP_URL !== env.NEXT_PUBLIC_APP_URL) {

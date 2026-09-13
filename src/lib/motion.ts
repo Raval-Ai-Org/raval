@@ -28,6 +28,8 @@ export const duration = {
   slow: 0.32,
   /** 480ms — page and route reveals. */
   xslow: 0.48,
+  /** 2.4s — one cycle of an ambient loop (a scan sweep). Pause under reduced motion. */
+  ambient: 2.4,
 } as const;
 
 /** Cubic-bezier control points. Mirrors `--motion-ease-*`. */

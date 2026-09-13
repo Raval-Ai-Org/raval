@@ -20,6 +20,8 @@ import {
   stripHtml,
 } from "@/lib/crawl/html";
 import { fetchPublicText } from "@/server/safe-fetch";
+import type { BrandExtractEvent } from "@/lib/brand-extract-events";
+import { normalizeHex } from "@/lib/color";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 
 export type Brand = {
@@ -68,10 +70,7 @@ export type Brand = {
   insights: { title: string; body: string }[];
 };
 
-export type BrandExtractEvent =
-  | { type: "progress"; stage: string; message: string; pct: number }
-  | { type: "error"; stage: string; code: string | undefined; error: string }
-  | { type: "result"; data: unknown };
+export type { BrandExtractEvent };
 
 const USER_AGENT = "Mozilla/5.0 MelloxBrandBot";
 // Brand pages are HTML; anything past this is assets or a runaway response.
@@ -176,6 +175,18 @@ async function ddgSearch(
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function socialPlatform(url: string): string {
+  return (
+    url
+      .match(
+        /(linkedin|twitter|x\.com|instagram|facebook|youtube|tiktok|github|pinterest|medium|discord|t\.me|reddit)/i,
+      )?.[1]
+      ?.toLowerCase()
+      .replace("x.com", "x")
+      .replace("t.me", "telegram") || "web"
+  );
+}
+
 /**
  * Run the full extraction for an already-validated public URL. Never throws:
  * every failure is reported as an `error` event, success as a `result` event.
@@ -195,6 +206,46 @@ export async function runBrandExtraction(
     if (!homeHtml) progress("fetch_home", "Homepage returned no content — continuing anyway", 10);
     else progress("fetch_home", `Loaded homepage (${Math.round(homeHtml.length / 1024)} KB)`, 12);
 
+    // Homepage-only identity signals are resolved up front so the client can
+    // show the real logo, favicon and meta while the rest of the crawl runs.
+    const meta = extractMeta(homeHtml);
+    const iconHref =
+      pickAll(
+        homeHtml,
+        /<link[^>]+rel=["'](?:apple-touch-icon|icon|shortcut icon|mask-icon)["'][^>]+href=["']([^"']+)["']/gi,
+      )[0] ||
+      pickAll(
+        homeHtml,
+        /<link[^>]+href=["']([^"']+)["'][^>]+rel=["'](?:apple-touch-icon|icon|shortcut icon)["']/gi,
+      )[0];
+    const favicon = absoluteUrl(iconHref || "/favicon.ico", safeUrl);
+    const ogImage = absoluteUrl(meta["og:image"] || meta["twitter:image"], safeUrl);
+
+    let logoFromImg: string | null = null;
+    const logoMatch = homeHtml.match(/<img[^>]+(?:alt|src|class)=["'][^"']*logo[^"']*["'][^>]*>/i);
+    if (logoMatch) {
+      const src = logoMatch[0].match(/src=["']([^"']+)["']/i)?.[1];
+      if (src) logoFromImg = absoluteUrl(src, safeUrl);
+    }
+
+    if (homeHtml) {
+      const pageTitle = homeHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "";
+      send({
+        type: "discovery",
+        kind: "site",
+        data: {
+          hostname: safeUrl.hostname.replace(/^www\./, ""),
+          siteName: stripHtml(meta["og:site_name"] || "", 80),
+          title: stripHtml(meta["og:title"] || pageTitle, 160),
+          description: stripHtml(meta["description"] || meta["og:description"] || "", 240),
+          themeColor: normalizeHex(meta["theme-color"]),
+          faviconUrl: iconHref ? favicon : null,
+          logoUrl: logoFromImg,
+          ogImageUrl: ogImage,
+        },
+      });
+    }
+
     // 2. Discover and fetch sub-pages in parallel
     progress("discover", "Discovering internal pages", 18);
     const internalLinks = homeHtml ? extractInternalLinks(homeHtml, safeUrl) : [];
@@ -211,6 +262,11 @@ export async function runBrandExtraction(
       for (const u of extra) if (!have.has(u)) subUrls.push(u);
     }
     subUrls = subUrls.slice(0, 8);
+    send({
+      type: "discovery",
+      kind: "pages",
+      data: { paths: subUrls.map((u) => new URL(u).pathname), sitemapUrls: sitemapUrls.length },
+    });
 
     progress(
       "crawl",
@@ -238,7 +294,6 @@ export async function runBrandExtraction(
       });
       return;
     }
-    const meta = extractMeta(homeHtml);
     const jsonLd = allHtml.flatMap(extractJsonLd);
     const colors = extractColors(allHtml.join("\n"));
     const fonts = extractFonts(allHtml.join("\n"));
@@ -247,26 +302,6 @@ export async function runBrandExtraction(
       `Found ${colors.length} colors · ${fonts.length} fonts · ${jsonLd.length} structured data block${jsonLd.length === 1 ? "" : "s"}`,
       56,
     );
-
-    // Logo / favicon
-    const iconHref =
-      pickAll(
-        homeHtml,
-        /<link[^>]+rel=["'](?:apple-touch-icon|icon|shortcut icon|mask-icon)["'][^>]+href=["']([^"']+)["']/gi,
-      )[0] ||
-      pickAll(
-        homeHtml,
-        /<link[^>]+href=["']([^"']+)["'][^>]+rel=["'](?:apple-touch-icon|icon|shortcut icon)["']/gi,
-      )[0];
-    const favicon = absoluteUrl(iconHref || "/favicon.ico", safeUrl);
-    const ogImage = absoluteUrl(meta["og:image"] || meta["twitter:image"], safeUrl);
-
-    let logoFromImg: string | null = null;
-    const logoMatch = homeHtml.match(/<img[^>]+(?:alt|src|class)=["'][^"']*logo[^"']*["'][^>]*>/i);
-    if (logoMatch) {
-      const src = logoMatch[0].match(/src=["']([^"']+)["']/i)?.[1];
-      if (src) logoFromImg = absoluteUrl(src, safeUrl);
-    }
 
     const socials = new Set<string>();
     const socialRe =
@@ -296,6 +331,20 @@ export async function runBrandExtraction(
         if (t && t.length > 3 && t.length < 200) headings.push(t);
       }
     }
+
+    send({
+      type: "discovery",
+      kind: "identity",
+      data: {
+        colors,
+        fonts,
+        structuredData: jsonLd.length,
+        headings: headings.length,
+        socialPlatforms: Array.from(new Set(Array.from(socials).map(socialPlatform))).filter(
+          (platform) => platform !== "web",
+        ),
+      },
+    });
 
     const labeledText = [
       `[HOMEPAGE ${safeUrl.toString()}]\n${stripHtml(homeHtml, 5000)}`,
@@ -327,6 +376,16 @@ export async function runBrandExtraction(
       `Collected ${externalSnippets.length} external snippet${externalSnippets.length === 1 ? "" : "s"}`,
       72,
     );
+    send({
+      type: "discovery",
+      kind: "market",
+      data: {
+        mentions: externalSnippets.length,
+        about: extResAbout.length,
+        competitors: extResCompetitors.length,
+        reviews: extResReviews.length,
+      },
+    });
 
     const sys = `You are a senior brand strategist + market researcher. From the multi-page website crawl AND external web mentions, extract a deep, accurate brand profile, competitors, customer signals, and durable insights.
 Return STRICT JSON only matching the schema. Do NOT invent facts not supported by the provided text.
@@ -520,17 +579,7 @@ ${schemaHint}`;
       faviconUrl: favicon,
       socials: Array.from(socials)
         .slice(0, 12)
-        .map((url) => {
-          const platform =
-            url
-              .match(
-                /(linkedin|twitter|x\.com|instagram|facebook|youtube|tiktok|github|pinterest|medium|discord|t\.me|reddit)/i,
-              )?.[1]
-              ?.toLowerCase()
-              .replace("x.com", "x")
-              .replace("t.me", "telegram") || "web";
-          return { platform, url };
-        }),
+        .map((url) => ({ platform: socialPlatform(url), url })),
       missing: Array.isArray(extracted.missing) ? extracted.missing : [],
       mission: extracted.mission || "",
       vision: extracted.vision || "",

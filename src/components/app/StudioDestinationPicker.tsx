@@ -1,59 +1,98 @@
 "use client";
 
-// StudioDestinationPicker.tsx — US2 publish destination selector. Lets the user
-// pick a specific account, a platform, or all connected accounts (spec FR-005/
-// FR-007/FR-028). Unconnected platforms offer inline Connect; undeliverable
-// platforms (Threads/TikTok/YouTube) render "Not available" and are never offered.
+// StudioDestinationPicker.tsx — publish destination selector. Pick a specific
+// account, a platform, or all connected accounts. Platforms come from the
+// active distribution provider; unconnected ones offer inline Connect. When a
+// TikTok post is going out, the creator's allowed audiences are loaded and one
+// must be chosen (TikTok forbids a default).
 import { useCallback, useEffect, useState } from "react";
-import { Linkedin, Twitter, Instagram, Facebook } from "@/components/ui/gemini-icons";
-import { cn } from "@/lib/utils";
-import { getConnections, oauthStart } from "@/lib/sdr.functions";
+import { BrandLogo } from "@/components/brand/BrandLogo";
+import { useSdrStatus } from "@/hooks/use-sdr-status";
+import {
+  getConnections,
+  getCreatorInfo,
+  oauthStart,
+  subscribeSocialConnect,
+  type CreatorInfo,
+} from "@/lib/sdr.functions";
 import type { ConnectedAccount, PublishSelection } from "@/lib/sdr.handlers";
+import { DISTRIBUTION_PLATFORMS } from "@/lib/distribution-platforms";
 
-const CONNECTABLE = [
-  { id: "twitter", label: "X", icon: Twitter, tint: "#0F1419" },
-  { id: "linkedin", label: "LinkedIn", icon: Linkedin, tint: "#0A66C2" },
-  { id: "facebook", label: "Facebook", icon: Facebook, tint: "#1877F2" },
-  { id: "instagram", label: "Instagram", icon: Instagram, tint: "#E1306C" },
-] as const;
-
-const UNDELIVERABLE = [
-  { id: "threads", label: "Threads" },
-  { id: "tiktok", label: "TikTok" },
-  { id: "youtube", label: "YouTube" },
-] as const;
+const TIKTOK_AUDIENCE: Record<string, string> = {
+  PUBLIC_TO_EVERYONE: "Everyone",
+  MUTUAL_FOLLOW_FRIENDS: "Friends",
+  FOLLOWER_OF_CREATOR: "Followers",
+  SELF_ONLY: "Only me",
+};
 
 export function StudioDestinationPicker({
   workspaceId,
   value,
   onChange,
+  tiktok,
 }: {
   workspaceId: string | null | undefined;
   value: PublishSelection;
   onChange: (sel: PublishSelection) => void;
+  /** Present when a TikTok version is being sent. */
+  tiktok?: { value: string | null; onChange: (level: string | null) => void };
 }) {
+  const status = useSdrStatus(workspaceId);
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [pendingPlatform, setPendingPlatform] = useState<string | null>(null);
+  const [creator, setCreator] = useState<CreatorInfo | null>(null);
+  const [creatorError, setCreatorError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
     setError(null);
+    setLoading(true);
     try {
       setAccounts(await getConnections(workspaceId));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load connected accounts");
+    } finally {
+      setLoading(false);
     }
   }, [workspaceId]);
 
   useEffect(() => {
     void refresh();
+    return subscribeSocialConnect(() => void refresh());
   }, [refresh]);
+
+  const tiktokAccount = accounts.find((a) => a.platform === "tiktok" && a.status === "active");
+  const wantsTiktok = Boolean(tiktok && tiktokAccount);
+  const onTiktokChange = tiktok?.onChange;
+
+  useEffect(() => {
+    if (!wantsTiktok || !workspaceId || !tiktokAccount) return;
+    let alive = true;
+    setCreatorError(null);
+    getCreatorInfo(workspaceId, tiktokAccount.accountId)
+      .then((info) => {
+        if (!alive) return;
+        setCreator(info);
+        // Drop a stale choice the creator no longer allows.
+        if (tiktok?.value && !info.privacyLevels.includes(tiktok.value)) onTiktokChange?.(null);
+      })
+      .catch(
+        (e) =>
+          alive &&
+          setCreatorError(e instanceof Error ? e.message : "Couldn't load TikTok settings"),
+      );
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsTiktok, workspaceId, tiktokAccount?.accountId]);
 
   const connect = async (platform: string) => {
     if (!workspaceId) return;
-    const oauthWindow = window.open("about:blank", "_blank", "width=600,height=700");
+    const oauthWindow = window.open("about:blank", "_blank", "width=600,height=760");
     if (!oauthWindow) {
       setError(
         "Your browser blocked the social account window. Allow popups for this app and try again.",
@@ -62,9 +101,14 @@ export function StudioDestinationPicker({
     }
     setConnecting(platform);
     try {
-      const { authorizationUrl } = await oauthStart(workspaceId, platform);
-      oauthWindow.location.href = authorizationUrl;
-      oauthWindow.focus();
+      const result = await oauthStart(workspaceId, platform);
+      if (result.authorizationUrl) {
+        oauthWindow.location.href = result.authorizationUrl;
+        oauthWindow.focus();
+      } else {
+        oauthWindow.close();
+        await refresh();
+      }
     } catch (e) {
       oauthWindow.close();
       setError(e instanceof Error ? e.message : "Failed to start connect");
@@ -73,15 +117,9 @@ export function StudioDestinationPicker({
     }
   };
 
-  const requestConnect = (platform: string) => {
-    setError(null);
-    setPendingPlatform(platform);
-  };
-
-  const connectedPlatforms = new Set(
-    accounts.filter((a) => a.status !== "disconnected").map((a) => a.platform),
-  );
-  const pendingLabel = CONNECTABLE.find((p) => p.id === pendingPlatform)?.label ?? pendingPlatform;
+  const platforms = (status?.platforms ?? []).map((id) => DISTRIBUTION_PLATFORMS[id]);
+  const active = accounts.filter((a) => a.status === "active");
+  const pendingMeta = platforms.find((p) => p.id === pendingPlatform) ?? null;
 
   return (
     <div className="space-y-2 rounded-xl border border-border/60 bg-card/50 p-2.5">
@@ -90,6 +128,7 @@ export function StudioDestinationPicker({
           Publish to
         </span>
         <button
+          type="button"
           onClick={() => void refresh()}
           className="text-[10px] text-muted-foreground hover:text-foreground"
           aria-label="Refresh connections"
@@ -98,9 +137,13 @@ export function StudioDestinationPicker({
         </button>
       </div>
 
-      {error && <p className="text-[11px] text-destructive">{error}</p>}
+      {error && (
+        <p className="text-[11px] text-destructive" role="alert">
+          {error}
+        </p>
+      )}
 
-      {pendingPlatform && (
+      {pendingMeta && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
           role="presentation"
@@ -112,52 +155,66 @@ export function StudioDestinationPicker({
             className="w-full max-w-sm rounded-xl border border-border bg-background p-5 shadow-2xl"
           >
             <h4 id="destination-connect-title" className="text-sm font-semibold text-foreground">
-              Connect {pendingLabel}
+              Connect {pendingMeta.label}
             </h4>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Mellox AI wants permission to access your {pendingLabel} account so it can post and
-              schedule content on your behalf.
+              A window opens on {pendingMeta.label}&rsquo;s official authorization page so Mellox
+              can post and schedule on your behalf.
             </p>
+            {pendingMeta.connectNote ? (
+              <p className="mt-2 rounded-lg bg-secondary/60 px-3 py-2 text-xs text-muted-foreground">
+                {pendingMeta.connectNote}
+              </p>
+            ) : null}
             <div className="mt-4 flex justify-end gap-2">
               <button
+                type="button"
                 onClick={() => setPendingPlatform(null)}
                 className="rounded-md border border-border/60 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => {
-                  const platform = pendingPlatform;
+                  const platform = pendingMeta.id;
                   setPendingPlatform(null);
                   void connect(platform);
                 }}
                 className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
               >
-                Continue to {pendingLabel}
+                Continue to {pendingMeta.label}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {accounts.filter((a) => a.status === "active").length === 0 ? (
-        <p className="text-[11px] text-muted-foreground">Connect a brand account to publish.</p>
+      {loading && accounts.length === 0 ? (
+        <div className="space-y-1.5" aria-label="Loading destinations">
+          <div className="h-6 animate-pulse rounded-md bg-secondary/60" />
+          <div className="h-6 animate-pulse rounded-md bg-secondary/40" />
+        </div>
       ) : (
         <>
-          <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-[12px] hover:bg-muted/40">
-            <input
-              type="radio"
-              name="sdr-dest"
-              checked={value.type === "all"}
-              onChange={() => onChange({ type: "all" })}
-            />
-            All connected accounts
-          </label>
-          {CONNECTABLE.map((p) => {
-            const platformAccounts = accounts.filter(
-              (a) => a.platform === p.id && a.status === "active",
+          {active.length === 0 ? (
+            <p className="px-2 text-[11px] text-muted-foreground">Connect an account to publish.</p>
+          ) : (
+            <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-[12px] hover:bg-muted/40">
+              <input
+                type="radio"
+                name="sdr-dest"
+                checked={value.type === "all"}
+                onChange={() => onChange({ type: "all" })}
+              />
+              All connected accounts
+            </label>
+          )}
+          {platforms.map((p) => {
+            const platformAccounts = active.filter((a) => a.platform === p.id);
+            const needsReconnect = accounts.some(
+              (a) => a.platform === p.id && a.status === "expired",
             );
-            const Icon = p.icon;
             return (
               <div key={p.id} className="space-y-0.5">
                 <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-[12px] hover:bg-muted/40">
@@ -168,18 +225,22 @@ export function StudioDestinationPicker({
                     onChange={() => onChange({ type: "platform", platform: p.id })}
                     disabled={platformAccounts.length === 0}
                   />
-                  <Icon className="h-3.5 w-3.5" style={{ color: p.tint }} />
+                  <span style={{ color: p.tint }} className="grid place-items-center">
+                    <BrandLogo name={p.logo} brand size={14} />
+                  </span>
                   {p.label}
                   {platformAccounts.length === 0 && (
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.preventDefault();
-                        requestConnect(p.id);
+                        setError(null);
+                        setPendingPlatform(p.id);
                       }}
-                      disabled={connecting === p.id}
-                      className="ml-auto rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                      disabled={connecting === p.id || !status?.canPublish}
+                      className="ml-auto rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
-                      {connecting === p.id ? "…" : "Connect"}
+                      {connecting === p.id ? "…" : needsReconnect ? "Reconnect" : "Connect"}
                     </button>
                   )}
                 </label>
@@ -194,7 +255,9 @@ export function StudioDestinationPicker({
                       checked={value.type === "account" && value.accountId === a.accountId}
                       onChange={() => onChange({ type: "account", accountId: a.accountId })}
                     />
-                    <span className="truncate">{a.platformUsername || a.accountId}</span>
+                    <span className="truncate">
+                      {a.displayName || a.platformUsername || a.accountId}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -203,18 +266,36 @@ export function StudioDestinationPicker({
         </>
       )}
 
-      <div className="flex flex-wrap gap-1 pt-1">
-        {UNDELIVERABLE.map((p) => (
-          <span
-            key={p.id}
-            className={cn(
-              "rounded-md border border-border/50 px-2 py-0.5 text-[10px] text-muted-foreground/60",
-            )}
-          >
-            {p.label} · not available
-          </span>
-        ))}
-      </div>
+      {wantsTiktok && tiktok ? (
+        <div className="mt-1 space-y-1 border-t border-border/60 px-2 pt-2">
+          <label htmlFor="tiktok-audience" className="text-[11px] font-medium text-foreground">
+            Who can watch the TikTok post?
+          </label>
+          {creatorError ? (
+            <p className="text-[11px] text-destructive">{creatorError}</p>
+          ) : !creator ? (
+            <div className="h-8 animate-pulse rounded-md bg-secondary/60" />
+          ) : !creator.canPost || creator.privacyLevels.length === 0 ? (
+            <p className="text-[11px] text-warning">
+              TikTok isn&apos;t accepting posts from this account right now (daily posting limit).
+            </p>
+          ) : (
+            <select
+              id="tiktok-audience"
+              value={tiktok.value ?? ""}
+              onChange={(e) => tiktok.onChange(e.target.value || null)}
+              className="h-8 w-full rounded-md bg-surface-2 px-2 text-[12px] text-foreground ring-1 ring-border"
+            >
+              <option value="">Choose an audience…</option>
+              {creator.privacyLevels.map((level) => (
+                <option key={level} value={level}>
+                  {TIKTOK_AUDIENCE[level] ?? level}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

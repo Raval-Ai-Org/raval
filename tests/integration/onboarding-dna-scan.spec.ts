@@ -88,6 +88,36 @@ test.describe("Onboarding URL to Brand DNA", () => {
       }
       const events = [
         { type: "progress", stage: "fetch_home", message: "Connecting to your website", pct: 8 },
+        {
+          type: "discovery",
+          kind: "site",
+          data: {
+            hostname: "example.com",
+            siteName: "Example",
+            title: "Example — useful software",
+            description: "A useful example brand",
+            themeColor: "#112233",
+            faviconUrl: null,
+            logoUrl: null,
+            ogImageUrl: null,
+          },
+        },
+        {
+          type: "discovery",
+          kind: "pages",
+          data: { paths: ["/about", "/pricing"], sitemapUrls: 3 },
+        },
+        {
+          type: "discovery",
+          kind: "identity",
+          data: {
+            colors: ["#112233", "#ffaa00"],
+            fonts: ["Inter"],
+            structuredData: 1,
+            headings: 6,
+            socialPlatforms: ["linkedin"],
+          },
+        },
         { type: "progress", stage: "analyze", message: "Analyzing with AI", pct: 80 },
         {
           type: "result",
@@ -98,6 +128,13 @@ test.describe("Onboarding URL to Brand DNA", () => {
             audience: "Teams",
             voice: "Clear",
             products: "Software",
+            doRules: "Lead with outcomes; Use plain language",
+            colors: [{ name: "Primary", hex: "#112233" }],
+            fonts: ["Inter"],
+            competitors: [{ name: "Globex", positioning: "Enterprise suite" }],
+            customerSignals: { painPoints: "Manual reporting" },
+            insights: [{ title: "Targets small teams", body: "Not enterprise" }],
+            extras: { pagesCrawled: ["https://example.com", "https://example.com/about"] },
             missing: [],
           },
         },
@@ -130,13 +167,29 @@ test.describe("Onboarding URL to Brand DNA", () => {
     expect(JSON.parse(scanBodies[0]).url).toBe(URL);
     expect(workspaceWrites.join(" ")).toContain(URL);
     await expect(page.locator('input[value="Example"]')).toBeVisible();
+    // The reveal renders the real extracted fields.
+    await expect(page.getByRole("button", { name: "Copy Primary #112233" })).toBeVisible();
+    await expect(page.getByText("Lead with outcomes")).toBeVisible();
+    await expect(page.getByText("Globex")).toBeVisible();
+    await expect(page.getByText("Targets small teams")).toBeVisible();
+    await page.getByLabel("Industry").fill("Developer tools");
     await page.getByRole("button", { name: /Enter Mellox/ }).click();
     await expect(page.getByText("Your workspace is ready.")).toBeVisible();
+    await expect(page.getByText("Mellox now understands Example")).toBeVisible();
 
-    const persistedUrl = await page.evaluate(
-      (id) => localStorage.getItem(`onboarding:website:${id}`),
+    const stored = await page.evaluate(
+      (id) => ({
+        url: localStorage.getItem(`onboarding:website:${id}`),
+        dna: JSON.parse(localStorage.getItem(`brand-dna:v3:${id}`) || "{}"),
+      }),
       WS_ID,
     );
-    expect(persistedUrl).toBeNull();
+    expect(stored.url).toBeNull();
+    expect(stored.dna.industry).toBe("Developer tools");
+    expect(stored.dna.customer.painPoints).toBe("Manual reporting");
+    expect(stored.dna.competitors[0]).toMatchObject({ name: "Globex", id: expect.any(String) });
+    expect(stored.dna).not.toHaveProperty("customerSignals");
+    expect(stored.dna).not.toHaveProperty("insights");
+    expect(workspaceWrites.join(" ")).toContain("Developer tools");
   });
 });

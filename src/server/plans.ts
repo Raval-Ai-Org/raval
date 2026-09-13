@@ -4,7 +4,11 @@
 // Each plan carries AI spend ceilings (daily + monthly USD, measured by
 // src/server/ai/metering.ts) and monthly generation quotas. Every number is
 // env-overridable — PLAN_<ID>_DAILY_USD, _MONTHLY_USD, _MONTHLY_IMAGES,
-// _MONTHLY_VIDEOS — so pricing experiments need no deploy.
+// _MONTHLY_VIDEOS, _MONTHLY_POSTS — so pricing experiments need no deploy.
+//
+// monthlyPosts is the social publishing credit: each post created at the
+// distribution provider (publish, schedule, retry) uses one, mirroring how
+// SocialAPI.ai bills post operations (src/lib/socialapi/workspace.server.ts).
 import "server-only";
 
 export type PlanId = "starter" | "growth" | "agency";
@@ -16,6 +20,7 @@ export type PlanLimits = {
   monthlyUsd: number;
   monthlyImages: number;
   monthlyVideos: number;
+  monthlyPosts: number;
 };
 
 const PLANS: Record<PlanId, PlanLimits> = {
@@ -26,6 +31,7 @@ const PLANS: Record<PlanId, PlanLimits> = {
     monthlyUsd: 40,
     monthlyImages: 150,
     monthlyVideos: 10,
+    monthlyPosts: 60,
   },
   growth: {
     id: "growth",
@@ -34,6 +40,7 @@ const PLANS: Record<PlanId, PlanLimits> = {
     monthlyUsd: 150,
     monthlyImages: 600,
     monthlyVideos: 40,
+    monthlyPosts: 300,
   },
   agency: {
     id: "agency",
@@ -42,6 +49,7 @@ const PLANS: Record<PlanId, PlanLimits> = {
     monthlyUsd: 600,
     monthlyImages: 2_500,
     monthlyVideos: 150,
+    monthlyPosts: 2_000,
   },
 };
 
@@ -77,5 +85,6 @@ export function getPlanLimits(plan: string | null | undefined): PlanLimits {
     monthlyUsd: envNumber(`PLAN_${key}_MONTHLY_USD`) ?? base.monthlyUsd,
     monthlyImages: envNumber(`PLAN_${key}_MONTHLY_IMAGES`) ?? base.monthlyImages,
     monthlyVideos: envNumber(`PLAN_${key}_MONTHLY_VIDEOS`) ?? base.monthlyVideos,
+    monthlyPosts: envNumber(`PLAN_${key}_MONTHLY_POSTS`) ?? base.monthlyPosts,
   };
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { LayoutTemplate, SlidersHorizontal, Sparkles, Wand2, X, Zap } from "@/components/icons";
+import { LayoutTemplate, SlidersHorizontal, Sparkles, Wand2, X } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
@@ -13,7 +13,6 @@ import { detectStudioType } from "@/lib/studio/detect";
 import { STUDIO_FORMATS, STUDIO_TYPE_ORDER, type StudioType } from "@/lib/studio/formats";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import type { StudioControls } from "@/lib/studio/jobs";
-import { QUICK_STARTS, type QuickStart } from "@/lib/studio/quick-starts";
 import { studioDefaultControls } from "@/lib/studio/session-store";
 import {
   POPULAR_TEMPLATE_IDS,
@@ -54,7 +53,7 @@ export type QuickGenerateOptions = {
  * The first — and usually only — screen before generation. One prompt box:
  * describe it, press Enter. Mellox picks the format from the words, uses your
  * last platforms and size (adjustable in Settings without leaving the box),
- * and starts. Quick starts, ideas and templates only ever fill the box.
+ * and starts. Ideas and templates only ever fill the box.
  */
 export function StartStep({
   workspaceId,
@@ -78,7 +77,6 @@ export function StartStep({
   const [pinned, setPinned] = useState(false);
   const [detected, setDetected] = useState(false);
   const [templateId, setTemplateId] = useState<string | null>(null);
-  const [quickId, setQuickId] = useState<string | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const chips = useRef<HTMLDivElement>(null);
@@ -139,28 +137,10 @@ export function StartStep({
     setDetected(!!guess);
   };
 
-  const pickQuickStart = (q: QuickStart) => {
-    selectType(q.type, {
-      ...(q.platforms.length ? { platforms: q.platforms } : {}),
-      ...q.controls,
-    });
-    setPinned(true);
-    setDetected(false);
-    setQuickId(q.id);
-    setTemplateId(null);
-    const current = text.trim();
-    const isLeadIn =
-      !current ||
-      QUICK_STARTS.some((x) => x.prompt.trim() === current) ||
-      (template && template.starter === current);
-    fill(isLeadIn ? q.prompt : text);
-  };
-
   const pickTemplate = (t: StudioTemplate) => {
     selectType(t.types[0], t.controls ?? {});
     setPinned(true);
     setDetected(false);
-    setQuickId(null);
     setTemplateId(t.id);
     fill(t.starter, firstBlank(t.starter));
   };
@@ -169,7 +149,6 @@ export function StartStep({
     selectType(idea.type, idea.platforms.length ? { platforms: idea.platforms } : {});
     setPinned(true);
     setDetected(false);
-    setQuickId(null);
     setTemplateId(null);
     fill(idea.brief);
   };
@@ -183,7 +162,6 @@ export function StartStep({
   };
 
   const setControl = (patch: Partial<StudioControls>) => {
-    setQuickId(null);
     setOverrides((o) => ({ ...o, ...patch }));
   };
 
@@ -269,7 +247,6 @@ export function StartStep({
                       if (t !== type) selectType(t);
                       setPinned(true);
                       setDetected(false);
-                      setQuickId(null);
                       input.current?.focus();
                     }}
                     className={cn(
@@ -420,50 +397,6 @@ export function StartStep({
           </div>
         </motion.div>
 
-        {/* ── Quick starts: one tap sets format and platforms, you add the topic ── */}
-        <motion.section
-          data-no-rhythm
-          aria-labelledby="quick-starts"
-          className="mt-6"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.16, duration: duration.slow, ease: ease.emphasized }}
-        >
-          <div className="mb-2.5 flex items-center gap-2 px-0.5">
-            <h3 id="quick-starts" className="ui-eyebrow">
-              <Zap className="size-3 text-primary" />
-              Quick start
-            </h3>
-            <span className="text-[11px] text-muted-foreground">Captions included</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2 @3xl/composer:grid-cols-4">
-            {QUICK_STARTS.map((q) => {
-              const on = quickId === q.id;
-              return (
-                <button
-                  key={q.id}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => pickQuickStart(q)}
-                  className={cn(
-                    `studio-tone-${q.type} group flex min-h-11 items-center gap-2 rounded-xl bg-surface-3 px-2.5 text-left text-xs font-medium shadow-1 ring-1 transition-[box-shadow,translate] duration-[--motion-duration-base]`,
-                    "hover:-translate-y-px hover:shadow-[0_12px_28px_-16px_hsl(var(--tone)/0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--tone))]",
-                    on
-                      ? "text-foreground ring-[hsl(var(--tone)/0.6)]"
-                      : "text-foreground/85 ring-border/70 hover:ring-[hsl(var(--tone)/0.4)]",
-                  )}
-                >
-                  <TypeGlyph type={q.type} size="sm" />
-                  <span className="min-w-0 flex-1 truncate">{q.label}</span>
-                  {q.platforms.length ? (
-                    <PlatformStack platforms={q.platforms} size={16} max={2} />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        </motion.section>
-
         {/* ── Not sure? Ideas and templates fill the box too ── */}
         <motion.section
           data-no-rhythm
@@ -524,7 +457,7 @@ export function StartStep({
                 variant="grid"
                 limit={4}
                 fixtureIdeas={fixtureIdeas}
-                title="Picked for your brand"
+                title={null}
               />
             ) : (
               <div

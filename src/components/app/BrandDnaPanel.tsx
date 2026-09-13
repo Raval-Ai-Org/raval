@@ -1,6 +1,7 @@
 "use client";
 
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
+import { mergeExtractionIntoDna } from "@/lib/brand-dna-merge";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -45,7 +46,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   useBrandDna,
-  emptyDna,
   type BrandDna,
   type BrandColor,
   type BrandSource,
@@ -280,170 +280,12 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
       if (streamError) throw new Error(streamError);
       if (!data) throw new Error("No data returned");
 
-      const existingCompByName = new Map(
-        dna.competitors.map((c) => [c.name.toLowerCase().trim(), c]),
-      );
-      const mergedCompetitors = [
-        ...dna.competitors,
-        ...(
-          (data.competitors ?? []) as Array<{
-            name: string;
-            url?: string;
-            positioning?: string;
-            strengths?: string;
-            weaknesses?: string;
-            notes?: string;
-          }>
-        )
-          .filter((c) => c?.name && !existingCompByName.has(c.name.toLowerCase().trim()))
-          .map((c) => ({
-            id: crypto.randomUUID(),
-            name: c.name,
-            url: c.url,
-            positioning: c.positioning,
-            strengths: c.strengths,
-            weaknesses: c.weaknesses,
-            notes: c.notes,
-          })),
-      ].slice(0, 12);
-
-      const cs = data.customerSignals ?? {};
-      const mergedCustomer = {
-        ...dna.customer,
-        jobsToBeDone: dna.customer.jobsToBeDone || cs.jobsToBeDone || "",
-        painPoints: dna.customer.painPoints || cs.painPoints || "",
-        objections: dna.customer.objections || cs.objections || "",
-        buyingTriggers: dna.customer.buyingTriggers || cs.buyingTriggers || "",
-        decisionCriteria: dna.customer.decisionCriteria || cs.decisionCriteria || "",
-        channels: dna.customer.channels || cs.channels || "",
-        feedback: dna.customer.feedback || cs.feedback || "",
-      };
-
-      const existingTitles = new Set(dna.userInsights.map((i) => i.title.toLowerCase().trim()));
-      const newInsights = ((data.insights ?? []) as Array<{ title: string; body: string }>)
-        .filter((i) => i?.title && !existingTitles.has(i.title.toLowerCase().trim()))
-        .map((i) => ({
-          id: crypto.randomUUID(),
-          title: i.title,
-          body: i.body || "",
-          createdAt: Date.now(),
-          source: "user" as const,
-        }));
-
-      const kwSet = new Set([
-        ...dna.keywords.map((k) => k.toLowerCase()),
-        ...((data.keywords ?? []) as string[]).map((k) => k.toLowerCase()),
-      ]);
-      const mergedKeywords = Array.from(kwSet).filter(Boolean).slice(0, 20);
-
-      const fill = (current: string, incoming: unknown) =>
-        current && current.trim() ? current : (typeof incoming === "string" ? incoming : "") || "";
-
-      const existingAssetUrls = new Set(dna.assets.map((a) => a.url));
-      const extras = (data.extras ?? {}) as {
-        emails?: string[];
-        phones?: string[];
-        headings?: string[];
-        pagesCrawled?: string[];
-        externalMentions?: { bucket: string; title: string; url: string; snippet: string }[];
-      };
-      const newAssets: typeof dna.assets = [];
-      const pushAsset = (
-        label: string,
-        url: string | null | undefined,
-        kind: "logo" | "image" | "link",
-      ) => {
-        if (!url || existingAssetUrls.has(url)) return;
-        existingAssetUrls.add(url);
-        newAssets.push({ id: crypto.randomUUID(), label, url, kind });
-      };
-      pushAsset("Logo", data.logoUrl, "logo");
-      pushAsset("Favicon", data.faviconUrl, "image");
-      for (const s of (data.socials ?? []) as Array<{ platform: string; url: string }>) {
-        pushAsset(s.platform || "Social", s.url, "link");
-      }
-
-      const summaryBits: string[] = [];
-      if (extras.pagesCrawled?.length)
-        summaryBits.push(`Crawled ${extras.pagesCrawled.length} pages.`);
-      if (extras.emails?.length)
-        summaryBits.push(`Emails: ${extras.emails.slice(0, 3).join(", ")}.`);
-      if (extras.phones?.length)
-        summaryBits.push(`Phones: ${extras.phones.slice(0, 2).join(", ")}.`);
-      if (extras.externalMentions?.length)
-        summaryBits.push(`${extras.externalMentions.length} external mentions captured.`);
-      const summaryNote = summaryBits.length
-        ? [
-            {
-              id: crypto.randomUUID(),
-              title: `Website extraction — ${new Date().toLocaleDateString()}`,
-              body: summaryBits.join(" "),
-              createdAt: Date.now(),
-              source: "manual" as const,
-            },
-          ]
-        : [];
-
-      const existingFb = new Set(
-        dna.customer.feedbackSources.map((s) => s.text.toLowerCase().trim()),
-      );
-      const newFeedbackSources = (extras.externalMentions ?? [])
-        .filter((m) => m.bucket === "Reviews/Feedback" && m.snippet)
-        .filter((m) => !existingFb.has(m.snippet.toLowerCase().trim()))
-        .slice(0, 8)
-        .map((m) => ({
-          id: crypto.randomUUID(),
-          text: m.snippet,
-          sourceLabel: m.title || "Web mention",
-          sourceUrl: m.url,
-          capturedAt: Date.now(),
-        }));
-
-      replace({
-        ...emptyDna,
-        ...dna,
-        websiteUrl: url,
-        brandName: fill(dna.brandName, data.brandName),
-        oneLiner: fill(dna.oneLiner, data.oneLiner),
-        about: fill(dna.about, data.about),
-        industry: fill(dna.industry, data.industry),
-        businessModel: fill(dna.businessModel, data.businessModel),
-        audience: fill(dna.audience, data.audience),
-        voice: fill(dna.voice, data.voice),
-        values: fill(dna.values, data.values),
-        products: fill(dna.products, data.products),
-        doRules: fill(dna.doRules, data.doRules),
-        dontRules: fill(dna.dontRules, data.dontRules),
-        mission: fill(dna.mission, data.mission),
-        vision: fill(dna.vision, data.vision),
-        positioning: fill(dna.positioning, data.positioning),
-        uniqueValueProp: fill(dna.uniqueValueProp, data.uniqueValueProp),
-        colors: (data.colors?.length ? data.colors : dna.colors) as BrandColor[],
-        fonts: data.fonts?.length ? data.fonts : dna.fonts,
-        logoUrl: data.logoUrl ?? dna.logoUrl,
-        faviconUrl: data.faviconUrl ?? dna.faviconUrl,
-        audienceTags: data.audienceTags?.length ? data.audienceTags : dna.audienceTags,
-        valueTags: data.valueTags?.length ? data.valueTags : dna.valueTags,
-        socials: data.socials?.length ? data.socials : dna.socials,
-        keywords: mergedKeywords,
-        competitors: mergedCompetitors,
-        customer: {
-          ...mergedCustomer,
-          feedbackSources: [...dna.customer.feedbackSources, ...newFeedbackSources],
-        },
-        assets: [...dna.assets, ...newAssets].slice(0, 60),
-        notes: [...summaryNote, ...dna.notes].slice(0, 50),
-        userInsights: [...newInsights, ...dna.userInsights].slice(0, 80),
-        sources: { ...(dna.sources ?? {}), ...(data.sources ?? {}) },
-        missing: Array.isArray(data.missing) ? data.missing : dna.missing,
-        status: "ok",
-        lastError: null,
-        extractedAt: Date.now(),
-      });
+      const { dna: merged, stats } = mergeExtractionIntoDna(dna, data, url);
+      replace(merged);
 
       setStatus("ok");
       toast.success("Brand DNA synced", {
-        description: `${extras.pagesCrawled?.length ?? 1} pages • ${mergedCompetitors.length} competitors • ${newInsights.length} insights`,
+        description: `${stats.pages} pages • ${stats.competitors} competitors • ${stats.newInsights} insights`,
       });
     } catch (e: any) {
       const msg = e?.message ?? "Try again later";

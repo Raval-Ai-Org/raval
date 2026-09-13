@@ -16,6 +16,7 @@ import type { PlatformId } from "@/lib/social-platforms";
 import { PLATFORMS } from "@/lib/social-platforms";
 import { deriveCreativeBrief, validateCreativeBrief } from "./creative-brief";
 import { deriveCreativeStrategy, strategyPromptLines } from "./creative-strategy";
+import { hexToRgb, normalizeHex, pickTextOn, relLuminance } from "@/lib/color";
 
 export type ImgSize = "1024x1024" | "1792x1024" | "1024x1792";
 
@@ -247,40 +248,6 @@ export function getStyleSeed(
   // identity once it exists. Only (brand identity + post id) drives it.
   const h = fnv1a(`${brandName}::${seedKey}`);
   return `sty-${h.toString(36).padStart(7, "0").slice(0, 7)}`;
-}
-
-/** Normalize a hex like "#abc" → "#aabbcc". Returns null for invalid input. */
-function normalizeHex(input?: string | null): string | null {
-  if (!input) return null;
-  const s = input.trim().replace(/^#/, "");
-  if (/^[0-9a-f]{3}$/i.test(s))
-    return (
-      "#" +
-      s
-        .split("")
-        .map((c) => c + c)
-        .join("")
-        .toLowerCase()
-    );
-  if (/^[0-9a-f]{6}$/i.test(s)) return "#" + s.toLowerCase();
-  return null;
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  const s = hex.replace("#", "");
-  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
-}
-
-function relLuminance(hex: string): number {
-  const [r, g, b] = hexToRgb(hex).map((v) => {
-    const c = v / 255;
-    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-function pickTextOn(bg: string): string {
-  return relLuminance(bg) > 0.55 ? "#0A0A0A" : "#FAFAF7";
 }
 
 /** Build a palette from the user's real brand colors when available.

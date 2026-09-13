@@ -22,7 +22,13 @@ export function useSdrStatus(workspaceId?: string | null): SdrStatus | null {
     let alive = true;
     let pending = cache.get(wsId);
     if (!pending) {
-      pending = getSdrStatus(wsId).catch(() => ({ enabled: false, canPublish: false, role: null }));
+      pending = getSdrStatus(wsId).catch((): SdrStatus => ({
+        enabled: false,
+        canPublish: false,
+        role: null,
+        provider: null,
+        platforms: [],
+      }));
       cache.set(wsId, pending);
       // Re-check after a minute: the flag or the caller's role can change.
       setTimeout(() => cache.delete(wsId), 60_000);
