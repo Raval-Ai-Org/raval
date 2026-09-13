@@ -3,6 +3,8 @@
 // Small, shared building blocks for Studio surfaces. Everything reads from the
 // design tokens: neutral surfaces, one lime accent, no per-type rainbow.
 import type * as React from "react";
+import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Clapperboard } from "lucide-react";
 import {
   Check,
@@ -15,6 +17,7 @@ import {
   type LucideIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { duration, ease } from "@/lib/motion";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { RATIOS, type AspectRatio } from "@/lib/studio/aspect";
 import type { StudioType } from "@/lib/studio/formats";
@@ -43,7 +46,7 @@ export function TypeGlyph({
     <span
       aria-hidden
       className={cn(
-        "grid shrink-0 place-items-center rounded-lg bg-surface-2 text-foreground/80 ring-1 ring-border",
+        `studio-glyph studio-tone-${type} grid shrink-0 place-items-center rounded-lg`,
         size === "sm"
           ? "size-6 [&_svg]:size-3.5"
           : size === "lg"
@@ -282,5 +285,128 @@ export function Weave({ className }: { className?: string }) {
       aria-hidden
       className={cn("studio-weave pointer-events-none absolute inset-0", className)}
     />
+  );
+}
+
+/** Seconds since `startedAt`, ticking once a second. */
+export function useElapsed(startedAt: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  return Math.max(0, Math.floor((now - startedAt) / 1000));
+}
+
+export function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  return `${m}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** A check mark that draws itself — the one completion gesture Studio uses. */
+export function DrawCheck({
+  className,
+  delay = 0,
+  strokeWidth = 2.5,
+}: {
+  className?: string;
+  delay?: number;
+  strokeWidth?: number;
+}) {
+  const reduce = useReducedMotion();
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden className={cn("size-4", className)}>
+      <motion.path
+        d="M5 12.5l4.2 4.2L19 7"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={reduce ? false : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ delay, duration: duration.xslow, ease: ease.emphasized }}
+      />
+    </svg>
+  );
+}
+
+const BURST_TONES = [
+  "var(--primary)",
+  "var(--tone-carousel)",
+  "var(--tone-image)",
+  "var(--tone-video)",
+  "var(--tone-script)",
+  "var(--tone-article)",
+];
+
+/** A small, once-only burst of brand colour for a real moment of completion. */
+export function Burst({ count = 14, radius = 36 }: { count?: number; radius?: number }) {
+  const reduce = useReducedMotion();
+  if (reduce) return null;
+  return (
+    <span aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 z-20">
+      {Array.from({ length: count }).map((_, i) => {
+        const angle = (i / count) * Math.PI * 2 + (i % 2 ? 0.22 : 0);
+        const r = radius * (i % 3 === 0 ? 1.2 : i % 3 === 1 ? 0.8 : 1);
+        return (
+          <motion.span
+            key={i}
+            className={cn(
+              "absolute block rounded-full",
+              i % 4 === 0 ? "-ml-px -mt-1 h-2 w-0.5" : "-ml-[3px] -mt-[3px] size-1.5",
+            )}
+            style={{
+              background: `hsl(${BURST_TONES[i % BURST_TONES.length]})`,
+              rotate: `${(angle * 180) / Math.PI + 90}deg`,
+            }}
+            initial={{ x: 0, y: 0, scale: 0.3, opacity: 1 }}
+            animate={{
+              x: Math.cos(angle) * r,
+              y: Math.sin(angle) * r,
+              scale: [0.3, 1.15, 0],
+              opacity: [1, 1, 0],
+            }}
+            transition={{ duration: 0.95, ease: ease.emphasized, delay: 0.08 }}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+/** Overlapping platform marks — compact "where this goes". */
+export function PlatformStack({
+  platforms,
+  size = 20,
+  max = 4,
+  className,
+}: {
+  platforms: PlatformId[];
+  size?: number;
+  max?: number;
+  className?: string;
+}) {
+  const shown = platforms.slice(0, max);
+  return (
+    <span className={cn("inline-flex items-center", className)}>
+      {shown.map((p, i) => {
+        const Icon = PLATFORMS[p].icon;
+        return (
+          <span
+            key={p}
+            title={PLATFORMS[p].label}
+            className="grid shrink-0 place-items-center rounded-full bg-surface-3 ring-2 ring-surface-3"
+            style={{ width: size, height: size, marginLeft: i ? -size * 0.28 : 0, zIndex: max - i }}
+          >
+            <Icon style={{ width: size * 0.58, height: size * 0.58 }} />
+          </span>
+        );
+      })}
+      {platforms.length > max ? (
+        <span className="ml-1 text-[11px] tabular-nums text-muted-foreground">
+          +{platforms.length - max}
+        </span>
+      ) : null}
+    </span>
   );
 }

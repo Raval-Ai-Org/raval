@@ -1,7 +1,7 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Check, X } from "@/components/icons";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AlertTriangle, X } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
@@ -12,13 +12,11 @@ import {
   useStudioStore,
   type StudioSession,
 } from "@/lib/studio/session-store";
-import { TypeGlyph } from "./studio-ui";
+import { Burst, DrawCheck, formatElapsed, TypeGlyph, useElapsed, Weave } from "./studio-ui";
 
-function describe(s: StudioSession): {
-  label: string;
-  state: "working" | "ready" | "failed" | "draft";
-  progress: number;
-} {
+type DockState = "working" | "ready" | "failed" | "draft";
+
+function describe(s: StudioSession): { label: string; state: DockState; progress: number } {
   const format = STUDIO_FORMATS[s.type];
   const active = !!s.pendingKey || (s.job && isActiveJob(s.job));
   if (active) {
@@ -38,42 +36,13 @@ function describe(s: StudioSession): {
   return { label: "Brief in progress", state: "draft", progress: 0 };
 }
 
-function Ring({ progress, state }: { progress: number; state: string }) {
-  const r = 9;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg viewBox="0 0 24 24" className="absolute -inset-1 size-10 -rotate-90" aria-hidden>
-      <circle cx="12" cy="12" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="1.5" />
-      {state !== "draft" ? (
-        <motion.circle
-          cx="12"
-          cy="12"
-          r={r}
-          fill="none"
-          stroke={state === "failed" ? "hsl(var(--danger))" : "hsl(var(--primary))"}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeDasharray={c}
-          initial={false}
-          animate={{ strokeDashoffset: c * (1 - progress) }}
-          transition={{ duration: duration.slow, ease: ease.emphasized }}
-        />
-      ) : null}
-    </svg>
-  );
-}
-
 /** Minimized Studio work, pinned bottom-right. Generation continues while here. */
 export function StudioDock() {
   // Select stable references; derive the list here (a filtered array from the
   // selector would be a new snapshot on every read).
   const sessions = useStudioStore((s) => s.sessions);
   const activeId = useStudioStore((s) => s.activeId);
-  const visible = sessions
-    .filter((s) => s.window === "minimized" || s.id !== activeId)
-    .filter((s) => s.id !== activeId)
-    .slice(0, 4);
-  if (!visible.length) return null;
+  const visible = sessions.filter((s) => s.id !== activeId).slice(0, 4);
 
   return (
     <div
@@ -81,69 +50,128 @@ export function StudioDock() {
       aria-label="Minimized Studio work"
     >
       <AnimatePresence initial={false}>
-        {visible.map((s) => {
-          const d = describe(s);
-          const title =
-            s.lastGood?.title ??
-            s.job?.title ??
-            (s.brief.trim() ? s.brief.slice(0, 60) : `New ${STUDIO_FORMATS[s.type].noun}`);
-          return (
-            <motion.div
-              key={s.id}
-              layout
-              initial={{ opacity: 0, y: 12, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.96, transition: { duration: duration.fast } }}
-              transition={{ duration: duration.medium, ease: ease.emphasized }}
-              className="pointer-events-auto flex w-[300px] max-w-full items-center gap-3 rounded-xl border border-border bg-surface-4 p-2 pr-1.5 shadow-3"
-            >
+        {visible.map((s) => (
+          <DockCard key={s.id} session={s} />
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+export function DockCard({ session: s }: { session: StudioSession }) {
+  const reduce = useReducedMotion();
+  const d = describe(s);
+  const format = STUDIO_FORMATS[s.type];
+  const startedAt = s.job ? Date.parse(s.job.created_at) : s.updatedAt;
+  const elapsed = useElapsed(startedAt);
+  const title =
+    s.lastGood?.title ??
+    s.job?.title ??
+    (s.brief.trim() ? s.brief.slice(0, 60) : `New ${format.noun}`);
+
+  return (
+    <motion.div
+      layout
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.94 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 8, scale: 0.96, transition: { duration: duration.fast } }}
+      transition={{ duration: duration.slow, ease: ease.emphasized }}
+      className={cn(
+        "group pointer-events-auto relative w-[320px] max-w-full overflow-hidden rounded-2xl bg-surface-4/95 shadow-4 ring-1 backdrop-blur transition-shadow duration-[--motion-duration-slow]",
+        `studio-tone-${s.type}`,
+        d.state === "ready"
+          ? "ring-primary-border shadow-[0_20px_44px_-20px_hsl(var(--primary)/0.6)]"
+          : d.state === "failed"
+            ? "ring-danger-border"
+            : d.state === "working"
+              ? "studio-ring ring-border/40"
+              : "ring-border/70",
+      )}
+    >
+      {d.state === "working" ? <Weave className="opacity-60" /> : null}
+      <div className="relative flex items-center gap-3 p-2.5 pr-2">
+        <button
+          type="button"
+          onClick={() => focusSession(s.id)}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+          aria-label={`Restore: ${title}`}
+        >
+          <span
+            className={cn(
+              "relative grid size-10 shrink-0 place-items-center rounded-xl transition-colors duration-[--motion-duration-slow]",
+              d.state === "ready" &&
+                "studio-cta !overflow-visible bg-primary text-primary-foreground",
+              d.state === "failed" && "bg-danger-surface text-danger ring-1 ring-danger-border",
+              (d.state === "working" || d.state === "draft") && "bg-surface-2 ring-1 ring-border",
+            )}
+          >
+            {d.state === "ready" ? (
+              <>
+                <DrawCheck className="size-5" delay={0.15} />
+                <Burst radius={30} count={10} />
+              </>
+            ) : d.state === "failed" ? (
+              <AlertTriangle className="size-4" />
+            ) : (
+              <TypeGlyph type={s.type} className="bg-transparent ring-0" />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-foreground">{title}</span>
+            <>
+              <motion.span
+                key={d.label}
+                initial={{ opacity: 0, y: 3 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -3 }}
+                transition={{ duration: duration.base }}
+                className={cn(
+                  "block truncate text-xs",
+                  d.state === "failed" ? "text-danger" : "text-muted-foreground",
+                )}
+              >
+                {d.label}
+              </motion.span>
+            </>
+          </span>
+        </button>
+        {d.state === "working" ? (
+          <span className="shrink-0 pr-1.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+            {formatElapsed(elapsed)}
+          </span>
+        ) : (
+          <>
+            {d.state === "ready" ? (
               <button
                 type="button"
                 onClick={() => focusSession(s.id)}
-                className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
-                aria-label={`Restore: ${title}`}
+                className="shrink-0 rounded-full bg-primary-surface px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-primary-border transition-colors hover:bg-primary hover:text-primary-foreground"
               >
-                <span className="relative grid size-8 shrink-0 place-items-center">
-                  <Ring progress={d.progress} state={d.state} />
-                  {d.state === "ready" ? (
-                    <span className="grid size-6 place-items-center rounded-full bg-primary text-primary-foreground">
-                      <Check className="size-3.5" strokeWidth={3} />
-                    </span>
-                  ) : d.state === "failed" ? (
-                    <AlertTriangle className="size-4 text-danger" />
-                  ) : (
-                    <TypeGlyph type={s.type} size="sm" className="bg-transparent ring-0" />
-                  )}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-foreground">
-                    {title}
-                  </span>
-                  <span
-                    className={cn(
-                      "block truncate text-xs",
-                      d.state === "failed" ? "text-danger" : "text-muted-foreground",
-                    )}
-                  >
-                    {d.label}
-                  </span>
-                </span>
+                Review
               </button>
-              {d.state !== "working" ? (
-                <button
-                  type="button"
-                  onClick={() => discardSession(s.id)}
-                  aria-label={`Dismiss: ${title}`}
-                  title={d.state === "ready" ? "Dismiss — it stays in Needs Approval" : "Dismiss"}
-                  className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-                >
-                  <X className="size-3.5" />
-                </button>
-              ) : null}
-            </motion.div>
-          );
-        })}
-      </AnimatePresence>
-    </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => discardSession(s.id)}
+              aria-label={`Dismiss: ${title}`}
+              title={d.state === "ready" ? "Dismiss — it stays in Needs Approval" : "Dismiss"}
+              className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          </>
+        )}
+      </div>
+      {d.state === "working" ? (
+        <span className="absolute inset-x-0 bottom-0 h-0.5 bg-foreground/[0.06]">
+          <motion.span
+            className="absolute inset-y-0 left-0 bg-primary"
+            initial={false}
+            animate={{ width: `${Math.round(d.progress * 100)}%` }}
+            transition={{ duration: duration.xslow, ease: ease.emphasized }}
+          />
+        </span>
+      ) : null}
+    </motion.div>
   );
 }

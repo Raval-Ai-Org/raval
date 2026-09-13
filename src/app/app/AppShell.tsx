@@ -54,6 +54,9 @@ const StudioComposer = lazy(() =>
 const ContentItemDialog = lazy(() =>
   import("@/components/studio/ContentItemDialog").then((m) => ({ default: m.ContentItemDialog })),
 );
+const LibraryDialog = lazy(() =>
+  import("@/components/app/LibraryDialog").then((m) => ({ default: m.LibraryDialog })),
+);
 const ContentCalendar = lazy(() =>
   import("@/components/app/ContentCalendar").then((m) => ({ default: m.ContentCalendar })),
 );
@@ -460,16 +463,19 @@ function AppShell() {
         </SidebarSection>
 
         <div className="pt-1">
-          <Link
-            to="/app/library"
-            onClick={() => setNavOpen(false)}
+          <button
+            type="button"
+            onClick={() => {
+              setNavOpen(false);
+              emitAppEvent("open:library");
+            }}
             className="group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-secondary/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-secondary/40 text-muted-foreground transition-colors group-hover:bg-secondary group-hover:text-foreground">
               <BookOpen className="h-4 w-4" aria-hidden />
             </span>
             <span className="flex-1 truncate leading-none">Library</span>
-          </Link>
+          </button>
         </div>
 
         <div className="h-px bg-border/50" />
@@ -949,6 +955,7 @@ function AppShell() {
 
         {studioInUse && <StudioComposer />}
         <ContentItemDialog />
+        <LibraryDialog />
         <WorkspaceDialogs
           workspaceId={workspaceId}
           workspaceName={workspaceName}

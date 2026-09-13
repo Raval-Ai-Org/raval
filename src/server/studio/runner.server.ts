@@ -7,6 +7,7 @@
 // so no request waits on a render and the job survives navigation. Every write
 // goes through the caller's RLS client except asset storage (service role, in
 // persist.server.ts).
+import { humanizeOutput } from "@/lib/studio/humanize";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { runStructuredPrompt, AiOutputError, AiGatewayError } from "@/lib/ai";
@@ -742,6 +743,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
 
   if (!mediaOnly) {
     await setStage(client, job.id, firstStage);
+    // Surface the chosen angle right away so the composer can show the decision.
+    await patchJob(client, job.id, { output: { ...output, angle: angle.label } });
     const built = buildTextPrompt(type, {
       ctx,
       intent: input.intent,
@@ -775,7 +778,12 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     });
   }
 
-  output = { ...output, angle: angle.label, partial: partial.length ? partial : undefined };
+  // Copy must read human: no em dashes anywhere, whatever the model returned.
+  output = humanizeOutput({
+    ...output,
+    angle: angle.label,
+    partial: partial.length ? partial : undefined,
+  });
   const title = (output.title || input.intent.brief).slice(0, 120);
 
   // Drafts before rendering so the asset can link to them.
@@ -787,6 +795,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       angle: angle.id,
       intent_goal: input.intent.goal ?? null,
       idea_id: input.intent.ideaId ?? null,
+      template: input.intent.template ?? null,
       brand_version: brandVersion(input.brand),
       ...(needsMedia(type, input) ? { aspect_ratio: mediaRatio(type, input, platforms) } : {}),
     });

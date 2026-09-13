@@ -9,9 +9,11 @@ import {
   AlertTriangle,
   Brain,
   Calendar,
+  CalendarClock,
   Check,
   FileText,
   Plus,
+  RotateCcw,
   Search,
   Share2,
   Sparkles,
@@ -27,12 +29,7 @@ import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { updateContentItem } from "@/lib/content.functions";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
-import {
-  STUDIO_FORMATS,
-  LEGACY_KINDS,
-  studioTypeFromContent,
-  type StudioType,
-} from "@/lib/studio/formats";
+import { STUDIO_FORMATS, studioTypeFromContent, type StudioType } from "@/lib/studio/formats";
 import { isActiveJob, type StudioJob } from "@/lib/studio/jobs";
 import {
   cancelSession,
@@ -48,53 +45,18 @@ import {
   type StudioSuggestion,
   type StudioSuggestionAccent,
 } from "@/hooks/use-studio-suggestions";
-import { TypeGlyph } from "@/components/studio/studio-ui";
+import { Burst, DrawCheck, PlatformStack, TypeGlyph } from "@/components/studio/studio-ui";
 import { studioApi } from "@/lib/studio/client";
+import {
+  CONTENT_COLUMNS,
+  ago,
+  cleanText,
+  groupRows,
+  type ContentRow,
+  type Group,
+} from "@/lib/studio/content-groups";
 
-type ContentRow = {
-  id: string;
-  title: string | null;
-  body: string | null;
-  kind: string;
-  channel: string | null;
-  status: string;
-  meta: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-  scheduled_at: string | null;
-};
-
-type Group = {
-  key: string;
-  ids: string[];
-  type: StudioType | "legacy";
-  legacyLabel?: string;
-  title: string;
-  excerpt: string;
-  platforms: PlatformId[];
-  storagePath: string | null;
-  mediaType: "image" | "video" | null;
-  createdAt: string;
-  jobId: string | null;
-};
-
-function cleanText(value: string | null | undefined): string {
-  return (value ?? "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/[*_`#>]/g, "")
-    .replace(/^\s*[-•]\s+/gm, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function ago(iso: string): string {
-  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
+export type { Group } from "@/lib/studio/content-groups";
 
 function when(iso: string | null): string {
   if (!iso) return "Scheduled";
@@ -106,41 +68,6 @@ function when(iso: string | null): string {
   if (d.toDateString() === today.toDateString()) return `Today · ${time}`;
   if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow · ${time}`;
   return `${d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · ${time}`;
-}
-
-function groupRows(rows: ContentRow[]): Group[] {
-  const map = new Map<string, Group>();
-  for (const r of rows) {
-    const meta = r.meta ?? {};
-    const state = meta.studio_state;
-    if (state === "generating" || state === "failed") continue;
-    const key = typeof meta.group_id === "string" ? meta.group_id : r.id;
-    const platform =
-      typeof meta.platform === "string" && meta.platform in PLATFORMS
-        ? (meta.platform as PlatformId)
-        : null;
-    const existing = map.get(key);
-    if (existing) {
-      existing.ids.push(r.id);
-      if (platform && !existing.platforms.includes(platform)) existing.platforms.push(platform);
-      continue;
-    }
-    const type = studioTypeFromContent(r.kind, meta);
-    map.set(key, {
-      key,
-      ids: [r.id],
-      type,
-      legacyLabel: type === "legacy" ? LEGACY_KINDS[r.kind] : undefined,
-      title: cleanText(r.title) || cleanText(r.body).slice(0, 80) || "Untitled",
-      excerpt: cleanText(r.body).slice(0, 140),
-      platforms: platform ? [platform] : [],
-      storagePath: typeof meta.asset_storage_path === "string" ? meta.asset_storage_path : null,
-      mediaType: meta.media_type === "video" ? "video" : meta.asset_storage_path ? "image" : null,
-      createdAt: r.created_at,
-      jobId: typeof meta.job_id === "string" ? meta.job_id : null,
-    });
-  }
-  return [...map.values()];
 }
 
 /** Workspace id that follows the switcher. */
@@ -174,14 +101,13 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
       setPending([]);
       return;
     }
-    const cols =
-      "id, title, body, kind, channel, status, meta, created_at, updated_at, scheduled_at";
+    const cols = CONTENT_COLUMNS;
     const [queue, legacy, sched, rec] = await Promise.all([
       supabase
         .from("content_items")
         .select(cols)
         .eq("workspace_id", ws)
-        .in("status", ["pending", "draft"])
+        .in("status", ["pending", "draft", "approved"])
         .order("created_at", { ascending: false })
         .limit(40),
       supabase
@@ -202,7 +128,7 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
         .from("content_items")
         .select(cols)
         .eq("workspace_id", ws)
-        .in("status", ["approved", "published", "publishing"])
+        .in("status", ["published", "publishing"])
         .order("updated_at", { ascending: false })
         .limit(6),
     ]);
@@ -234,6 +160,7 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
         mediaType: null,
         createdAt: a.created_at,
         jobId: null,
+        status: "pending",
       })),
     );
     setScheduled((sched.data ?? []) as ContentRow[]);
@@ -307,7 +234,7 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
         <CompactList
           title="Recent"
           rows={recent}
-          empty="Approved and published work shows here."
+          empty="Published work shows here."
           meta={(r) => ago(r.updated_at)}
         />
       </div>
@@ -324,9 +251,9 @@ function CreateButton() {
       type="button"
       onClick={() => openComposer()}
       aria-label="Create something new"
-      className="group flex min-h-14 w-full items-center gap-3 rounded-xl border border-border bg-surface-3 px-3 text-left shadow-1 transition-colors duration-[--motion-duration-fast] hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+      className="group flex min-h-14 w-full items-center gap-3 rounded-xl border border-border bg-surface-3 px-3 text-left shadow-1 relative overflow-hidden transition-[border-color,box-shadow,translate] duration-[--motion-duration-base] hover:-translate-y-px hover:border-primary-border hover:shadow-[0_14px_34px_-18px_hsl(var(--primary)/0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
     >
-      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-transform duration-[--motion-duration-fast] group-hover:scale-105">
+      <span className="studio-cta relative grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-transform duration-[--motion-duration-slow] ease-[--motion-ease-spring] group-hover:rotate-90 group-hover:scale-110">
         <Plus className="size-4" strokeWidth={2.5} />
       </span>
       <span className="min-w-0 flex-1">
@@ -442,7 +369,7 @@ function InProgressSection({
           {visible.filter(isActiveJob).length || visible.length}
         </span>
       </div>
-      <ul className="space-y-1.5">
+      <ul className="space-y-2.5">
         <AnimatePresence initial={false}>
           {visible.map((job) => (
             <JobRow
@@ -458,9 +385,9 @@ function InProgressSection({
   );
 }
 
-function JobRow({
+export function JobRow({
   job,
-  tracked,
+  tracked: _tracked,
   onDismiss,
 }: {
   job: StudioJob;
@@ -498,13 +425,13 @@ function JobRow({
       exit={{ opacity: 0, transition: { duration: duration.fast } }}
       transition={{ duration: duration.medium, ease: ease.emphasized }}
       className={cn(
-        "relative overflow-hidden rounded-xl border bg-surface-3",
-        active ? "border-primary-border" : "border-danger-border",
+        `studio-tone-${job.type} relative overflow-hidden rounded-2xl bg-surface-3 shadow-1 ring-1`,
+        active ? "studio-ring ring-primary-border/50" : "ring-danger-border",
       )}
     >
-      {active ? <span className="studio-weave absolute inset-0" aria-hidden /> : null}
-      <div className="relative flex items-center gap-2.5 p-2.5">
-        <TypeGlyph type={job.type} size="sm" />
+      {active ? <span className="studio-weave absolute inset-0 opacity-70" aria-hidden /> : null}
+      <div className={cn("relative flex items-center gap-3 p-3", active && "pb-2.5")}>
+        <TypeGlyph type={job.type} />
         <button
           type="button"
           onClick={() => void openJob(job.id, job.workspace_id)}
@@ -513,30 +440,34 @@ function JobRow({
           <span className="block truncate text-sm font-medium text-foreground">
             {job.title || format.label}
           </span>
-          <span
-            className={cn(
-              "flex items-center gap-1.5 truncate text-xs",
-              active ? "text-muted-foreground" : "text-danger",
-            )}
-          >
-            {active ? (
-              <>
-                <span className="tabular-nums">
-                  {index + 1}/{format.stages.length}
-                </span>
-                · {stage?.label ?? "Starting"}
-              </>
-            ) : (
-              <>
-                <AlertTriangle className="size-3" /> {job.error?.message ?? "Couldn't finish"}
-              </>
-            )}
-          </span>
+          <>
+            <motion.span
+              key={active ? job.stage : "failed"}
+              initial={{ opacity: 0, y: 3 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -3 }}
+              transition={{ duration: duration.base }}
+              className={cn(
+                "flex items-center gap-1.5 truncate text-xs",
+                active ? "text-muted-foreground" : "text-danger",
+              )}
+            >
+              {active ? (
+                (stage?.label ?? "Starting")
+              ) : (
+                <>
+                  <AlertTriangle className="size-3 shrink-0" />
+                  <span className="truncate">{job.error?.message ?? "Couldn't finish"}</span>
+                </>
+              )}
+            </motion.span>
+          </>
         </button>
         {active ? (
           <Button
             size="icon-sm"
             variant="ghost"
+            className="size-7 rounded-full"
             onClick={() => void cancel()}
             disabled={cancelling}
             aria-label={`Cancel ${job.title ?? format.noun}`}
@@ -548,7 +479,8 @@ function JobRow({
           <>
             <Button
               size="sm"
-              variant="ghost"
+              variant="outline"
+              className="h-7 rounded-full px-2.5"
               onClick={() => void openJob(job.id, job.workspace_id)}
             >
               Retry
@@ -556,6 +488,7 @@ function JobRow({
             <Button
               size="icon-sm"
               variant="ghost"
+              className="size-7 rounded-full"
               onClick={onDismiss}
               aria-label="Dismiss"
               title="Dismiss"
@@ -565,7 +498,28 @@ function JobRow({
           </>
         )}
       </div>
-      {active && !tracked ? null : null}
+      {active ? (
+        <div className="relative flex gap-1 px-3 pb-3" aria-hidden>
+          {format.stages.map((s, i) => (
+            <span
+              key={s.id}
+              className="relative h-1 flex-1 overflow-hidden rounded-full bg-foreground/[0.08]"
+            >
+              {i < index ? (
+                <span className="absolute inset-0 rounded-full bg-primary" />
+              ) : i === index ? (
+                <motion.span
+                  key={s.id}
+                  className="studio-progress-fill absolute inset-y-0 left-0 rounded-full"
+                  initial={{ width: "8%" }}
+                  animate={{ width: "82%" }}
+                  transition={{ duration: 14, ease: [0.1, 0.6, 0.3, 1] }}
+                />
+              ) : null}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </motion.li>
   );
 }
@@ -602,92 +556,132 @@ function ApprovalSection({
     [jobs],
   );
 
+  const review = groups.filter((g) => g.status !== "approved");
+  const ready = groups.filter((g) => g.status === "approved");
+  const card = (g: Group) => (
+    <ApprovalCard
+      key={g.key}
+      group={g}
+      thumb={g.storagePath ? thumbs[g.storagePath] : undefined}
+      highlight={justFinished.has(g.key)}
+      onChanged={onChanged}
+    />
+  );
+
   return (
     <section data-no-rhythm aria-labelledby="rail-approval" aria-busy={loading}>
-      <div className="mb-2 flex items-center gap-2 px-1">
+      <div className="mb-2.5 flex items-center gap-2 px-1">
         <h3 id="rail-approval" className="ui-eyebrow">
           Needs approval
         </h3>
-        {groups.length ? (
-          <span className="ui-count-pill !bg-warning-surface !text-warning ring-1 ring-warning-border">
-            {groups.length}
+        {review.length ? (
+          <span
+            className="ui-count-pill !bg-warning-surface !text-warning ring-1 ring-warning-border"
+            title={`${review.length} to review`}
+          >
+            {review.length}
+          </span>
+        ) : null}
+        {ready.length ? (
+          <span
+            className="ui-count-pill !bg-success-surface !text-success ring-1 ring-success-border"
+            title={`${ready.length} approved, not posted yet`}
+          >
+            {ready.length} ready
           </span>
         ) : null}
       </div>
 
       {loading ? (
-        <div className="space-y-1.5">
+        <div className="space-y-2.5">
           {[0, 1].map((k) => (
             <div
               key={k}
-              className="flex gap-2.5 rounded-xl border border-border bg-surface-3 p-2.5"
+              className="relative overflow-hidden rounded-2xl bg-surface-3 p-3 ring-1 ring-border/70"
             >
-              <div className="size-14 animate-pulse rounded-lg bg-surface-2" />
-              <div className="flex-1 space-y-2 py-1">
-                <div className="h-2.5 w-2/5 animate-pulse rounded bg-surface-2" />
-                <div className="h-3 w-4/5 animate-pulse rounded bg-surface-2" />
+              <span className="studio-weave absolute inset-0" aria-hidden />
+              <div className="flex gap-3">
+                <div className="size-8 rounded-lg bg-surface-2" />
+                <div className="flex-1 space-y-2 py-0.5">
+                  <div className="h-2 w-2/5 rounded-full bg-surface-2" />
+                  <div className="h-2.5 w-4/5 rounded-full bg-surface-2" />
+                  <div className="h-2 w-3/5 rounded-full bg-surface-2" />
+                </div>
               </div>
             </div>
           ))}
         </div>
       ) : error ? (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-danger-border bg-danger-surface px-3 py-2.5 text-xs text-foreground">
+        <div className="flex items-center justify-between gap-2 rounded-2xl bg-danger-surface px-3 py-2.5 text-xs text-foreground ring-1 ring-danger-border">
           {error}
           <Button size="sm" variant="ghost" onClick={onChanged}>
             Retry
           </Button>
         </div>
       ) : groups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border">
+        <div className="rounded-2xl border border-dashed border-border bg-surface-3/60">
           <EmptyState
             size="sm"
             icon={Check}
             title="You're all caught up"
-            description="Anything you create in Studio waits here for your approval before it goes anywhere."
+            description="Everything you create waits here until you approve and post it."
             action={
-              <Button size="sm" onClick={() => openComposer({ type: "social" })}>
+              <Button size="sm" onClick={() => openComposer()}>
                 <Wand2 />
-                Create a post
+                Create something
               </Button>
             }
           />
         </div>
       ) : (
-        <ul className="space-y-1.5">
-          <AnimatePresence initial={false}>
-            {groups.map((g) => (
-              <ApprovalCard
-                key={g.key}
-                group={g}
-                thumb={g.storagePath ? thumbs[g.storagePath] : undefined}
-                highlight={justFinished.has(g.key)}
-                onChanged={onChanged}
-              />
-            ))}
-          </AnimatePresence>
-        </ul>
+        <div className="space-y-3">
+          {review.length ? (
+            <ul className="space-y-2.5">
+              <AnimatePresence initial={false}>{review.map(card)}</AnimatePresence>
+            </ul>
+          ) : null}
+          {ready.length ? (
+            <div>
+              <p className="mb-2 flex items-center gap-2 px-1 text-[11px] font-medium text-muted-foreground">
+                <span aria-hidden className="h-px flex-1 bg-border/70" />
+                Ready to post
+                <span aria-hidden className="h-px flex-1 bg-border/70" />
+              </p>
+              <ul className="space-y-2.5">
+                <AnimatePresence initial={false}>{ready.map(card)}</AnimatePresence>
+              </ul>
+            </div>
+          ) : null}
+        </div>
       )}
     </section>
   );
 }
 
-function ApprovalCard({
+export function ApprovalCard({
   group,
   thumb,
   highlight,
   onChanged,
+  fixture,
 }: {
   group: Group;
   thumb?: string;
   highlight: boolean;
   onChanged: () => void;
+  /** Preview/testing: decide locally without writing. */
+  fixture?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [decided, setDecided] = useState<null | "approved" | "rejected" | "draft">(null);
   const legacy = group.type === "legacy";
   const isApprovalRow = group.key.startsWith("approval-");
+  // Approved but not posted yet: the next step is scheduling or publishing.
+  const approved = group.status === "approved";
   const label = legacy
     ? (group.legacyLabel ?? "Legacy")
     : STUDIO_FORMATS[group.type as StudioType].label;
+  const media = thumb && group.mediaType ? group.mediaType : null;
 
   const open = () => {
     if (isApprovalRow) return emitAppEvent("open:operations", { tab: "approvals" });
@@ -695,18 +689,31 @@ function ApprovalCard({
     return void openItemOrJob(group.ids[0]);
   };
 
-  const decide = async (status: "approved" | "rejected") => {
+  const decide = async (status: "approved" | "rejected" | "draft") => {
     setBusy(true);
     try {
-      await Promise.all(
-        group.ids.map((id) => updateContentItem({ data: { id, patch: { status } } })),
-      );
+      if (!fixture) {
+        await Promise.all(
+          group.ids.map((id) => updateContentItem({ data: { id, patch: { status } } })),
+        );
+      }
+      // Let the decision register before the card leaves the queue.
+      setDecided(status);
+      await new Promise((r) => window.setTimeout(r, 750));
+      if (fixture) {
+        window.setTimeout(() => setDecided(null), 900);
+        return;
+      }
       emitAppEvent("content:changed");
-      toast.success(status === "approved" ? "Approved" : "Discarded", {
-        description: status === "approved" ? "Open it to schedule or publish." : undefined,
-        action: status === "approved" ? { label: "Open", onClick: open } : undefined,
-      });
+      toast.success(
+        status === "approved" ? "Approved" : status === "draft" ? "Back in review" : "Discarded",
+        {
+          description: status === "approved" ? "Open it to schedule or publish." : undefined,
+          action: status === "approved" ? { label: "Open", onClick: open } : undefined,
+        },
+      );
     } catch (e) {
+      setDecided(null);
       toast.error("Couldn't update", { description: e instanceof Error ? e.message : undefined });
       onChanged();
     } finally {
@@ -720,24 +727,34 @@ function ApprovalCard({
       layoutId={`group-${group.key}`}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -8, transition: { duration: duration.fast } }}
+      exit={{ opacity: 0, scale: 0.97, transition: { duration: duration.base } }}
       transition={{ duration: duration.medium, ease: ease.emphasized }}
       className={cn(
-        "group overflow-hidden rounded-xl border bg-surface-3 transition-[border-color,box-shadow] duration-[--motion-duration-slow]",
+        `studio-tone-${group.type === "legacy" ? "article" : group.type} group relative overflow-hidden rounded-2xl bg-surface-3 shadow-1 ring-1 transition-[box-shadow,translate] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized] hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-18px_hsl(var(--tone)/0.5)]`,
         highlight
-          ? "border-primary shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]"
-          : "border-border hover:border-border-strong",
+          ? "shadow-[0_0_0_4px_hsl(var(--primary)/0.14)] ring-primary"
+          : "ring-border/70 hover:ring-border-strong",
       )}
     >
-      <button
-        type="button"
-        onClick={open}
-        className="flex w-full items-start gap-2.5 p-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/55"
-      >
-        <span className="relative grid size-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border">
-          {thumb && group.mediaType === "image" ? (
-            <img src={thumb} alt="" className="size-full object-cover" />
-          ) : thumb && group.mediaType === "video" ? (
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 z-10 h-[3px] bg-gradient-to-r from-[hsl(var(--tone))] via-[hsl(var(--tone)/0.45)] to-transparent"
+      />
+      {media ? (
+        <button
+          type="button"
+          onClick={open}
+          tabIndex={-1}
+          aria-hidden
+          className="relative block aspect-[16/9] w-full overflow-hidden bg-surface-2"
+        >
+          {media === "image" ? (
+            <img
+              src={thumb}
+              alt=""
+              className="size-full object-cover transition-transform duration-[--motion-duration-xslow] ease-[--motion-ease-emphasized] group-hover:scale-[1.03]"
+            />
+          ) : (
             <video
               src={thumb}
               muted
@@ -745,50 +762,98 @@ function ApprovalCard({
               preload="metadata"
               className="size-full object-cover"
             />
-          ) : legacy ? (
-            <FileText className="size-5 text-muted-foreground" />
-          ) : (
-            <TypeGlyph type={group.type as StudioType} className="bg-transparent ring-0" />
           )}
-        </span>
+          <span className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/45 to-transparent" />
+          {group.platforms.length ? (
+            <PlatformStack
+              platforms={group.platforms}
+              size={20}
+              className="absolute bottom-2 left-2"
+            />
+          ) : null}
+          {media === "video" ? (
+            <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+              Video
+            </span>
+          ) : null}
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={open}
+        className="flex w-full items-start gap-3 px-3 pb-2 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/55"
+      >
+        {!media ? (
+          legacy ? (
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-2 ring-1 ring-border">
+              <FileText className="size-4 text-muted-foreground" />
+            </span>
+          ) : (
+            <TypeGlyph type={group.type as StudioType} />
+          )
+        ) : null}
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="truncate">{label}</span>
-            {group.platforms.slice(0, 4).map((p) => {
-              const Icon = PLATFORMS[p].icon;
-              return <Icon key={p} className="size-3 shrink-0" aria-label={PLATFORMS[p].label} />;
-            })}
-            <span className="ml-auto shrink-0">{ago(group.createdAt)}</span>
+            {!media && group.platforms.length ? (
+              <PlatformStack platforms={group.platforms} size={16} />
+            ) : null}
+            <span className="ml-auto shrink-0 tabular-nums">{ago(group.createdAt)}</span>
           </span>
-          <span className="mt-0.5 line-clamp-2 block text-sm font-medium leading-snug text-foreground">
+          <span className="mt-1 line-clamp-2 block text-sm font-medium leading-snug text-foreground">
             {group.title}
           </span>
           {group.excerpt && group.excerpt !== group.title ? (
-            <span className="mt-0.5 line-clamp-1 block text-xs text-muted-foreground">
+            <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-muted-foreground">
               {group.excerpt}
             </span>
           ) : null}
         </span>
       </button>
-      {!isApprovalRow ? (
-        <div className="flex items-center gap-1 border-t border-border px-2 py-1.5">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-muted-foreground"
-            onClick={() => void decide("rejected")}
-            disabled={busy}
-            aria-label={`Discard ${group.title}`}
-          >
-            Discard
-          </Button>
+      {isApprovalRow ? (
+        <p className="px-3 pb-3 text-[11px] text-muted-foreground">Open Operations to decide</p>
+      ) : approved ? (
+        <div className="flex items-center gap-1 px-3 pb-3 pt-1">
+          <span className="inline-flex items-center gap-1 rounded-full bg-success-surface px-2 py-0.5 text-[10px] font-semibold text-success ring-1 ring-success-border">
+            <Check className="size-3" strokeWidth={3} />
+            Not posted yet
+          </span>
           <div className="ml-auto flex items-center gap-1">
-            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={open}>
+            <button
+              type="button"
+              onClick={() => void decide("draft")}
+              disabled={busy}
+              aria-label={`Move ${group.title} back to review`}
+              title="Back to review"
+              className="grid size-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
+            >
+              <RotateCcw className="size-3.5" />
+            </button>
+            <Button size="sm" className="h-7 rounded-full px-3" onClick={open}>
+              <CalendarClock />
+              Schedule or post
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 px-3 pb-3 pt-1">
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => void decide("rejected")}
+              disabled={busy}
+              aria-label={`Discard ${group.title}`}
+              title="Discard"
+              className="grid size-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-danger-surface hover:text-danger disabled:opacity-50"
+            >
+              <X className="size-3.5" />
+            </button>
+            <Button size="sm" variant="ghost" className="h-7 rounded-full px-2.5" onClick={open}>
               Review
             </Button>
             <Button
               size="sm"
-              className="h-7 px-2.5"
+              className="h-7 rounded-full px-3"
               onClick={() => void decide("approved")}
               disabled={busy}
               aria-label={`Approve ${group.title}`}
@@ -798,7 +863,49 @@ function ApprovalCard({
             </Button>
           </div>
         </div>
-      ) : null}
+      )}
+      <AnimatePresence>
+        {decided ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: duration.base }}
+            className="absolute inset-0 z-10 grid place-items-center bg-surface-3/90 backdrop-blur-[2px]"
+            role="status"
+          >
+            <span className="flex flex-col items-center gap-2">
+              <motion.span
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: duration.medium, ease: ease.emphasized }}
+                className={cn(
+                  "relative grid size-10 place-items-center rounded-full",
+                  decided === "approved"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-surface-2 text-muted-foreground ring-1 ring-border",
+                )}
+              >
+                {decided === "approved" ? (
+                  <>
+                    <DrawCheck className="size-5" delay={0.1} />
+                    <Burst />
+                  </>
+                ) : (
+                  <X className="size-4" />
+                )}
+              </motion.span>
+              <span className="text-sm font-medium text-foreground">
+                {decided === "approved"
+                  ? "Approved"
+                  : decided === "draft"
+                    ? "Back in review"
+                    : "Discarded"}
+              </span>
+            </span>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </motion.li>
   );
 }

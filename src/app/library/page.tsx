@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function LibraryRedirect() {
-  redirect("/app/library");
+  redirect("/app?library=1");
 }

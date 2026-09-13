@@ -70,6 +70,8 @@ export type AppEventMap = {
     | undefined;
   /** Review a single content item outside a Studio job (legacy or chat-created). */
   "open:content-item": { id: string };
+  /** Open the Library pop-up, optionally on a tab. */
+  "open:library": { tab?: "all" | "posts" | "media" } | undefined;
   "open:ai-visibility": undefined;
   "open:autopilot": undefined;
   "open:client-portal": undefined;

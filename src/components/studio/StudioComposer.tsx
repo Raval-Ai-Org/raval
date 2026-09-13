@@ -9,8 +9,8 @@ import {
   Check,
   ChevronDown,
   Clock,
-  FileText,
   Inbox,
+  LayoutTemplate,
   Minus,
   Sparkles,
   Wand2,
@@ -23,13 +23,16 @@ import { rememberStudioType } from "@/hooks/use-studio";
 import { emitAppEvent } from "@/lib/app-events";
 import { cn } from "@/lib/utils";
 import { duration, ease, spring } from "@/lib/motion";
-import { PLATFORMS } from "@/lib/social-platforms";
+import { isActiveJob } from "@/lib/studio/jobs";
 import { RATIOS } from "@/lib/studio/aspect";
 import { readBrandPayload } from "@/lib/studio/client";
-import { isStudioType, STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
+import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import { GOALS } from "@/lib/studio/jobs";
+import { PLATFORMS } from "@/lib/social-platforms";
+import { countBlanks, getTemplate } from "@/lib/studio/templates";
 import {
+  applyTemplate,
   backToBrief,
   backToStart,
   cancelSession,
@@ -42,32 +45,24 @@ import {
   useStudioStore,
   type StudioSession,
 } from "@/lib/studio/session-store";
-import { ControlsPanel, describeControls } from "./ControlsPanel";
+import { ControlsPanel } from "./ControlsPanel";
 import { GenerationProgress } from "./GenerationProgress";
 import { IdeasPanel } from "./IdeasPanel";
 import { ReviewPanel, type ReviewRow } from "./ReviewPanel";
+import { PreviewSkeleton } from "./previews/PreviewSkeleton";
 import { StartStep } from "./StartStep";
-import { ChipButton, RatioFrame, TypeGlyph } from "./studio-ui";
+import { BeatPills, TemplateGallery } from "./TemplateGallery";
+import { ChipButton, TypeGlyph } from "./studio-ui";
 import { TypePicker } from "./TypePicker";
 
 const STEPS = [
-  { id: "start", label: "Format" },
-  { id: "intent", label: "Brief" },
+  { id: "start", label: "Describe" },
   { id: "generating", label: "Create" },
   { id: "review", label: "Review" },
 ] as const;
 
 /** Preview/testing data so the composer can render without a signed-in workspace. */
 export type ComposerFixtures = { ideas?: StudioIdea[]; rows?: ReviewRow[]; distribution?: boolean };
-
-function lastUsedType(): StudioType | null {
-  try {
-    const v = localStorage.getItem("studio:last-type");
-    return isStudioType(v) ? v : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * The Studio composer: one surface that carries a piece of work from format to
@@ -79,59 +74,103 @@ export function StudioComposer() {
     (s) => s.sessions.find((x) => x.id === s.activeId && x.window !== "minimized") ?? null,
   );
   const isMobile = useIsMobile();
+  // Where the window goes when it leaves: into the dock (work continues) or away.
+  const [exitTo, setExitTo] = useState<"dock" | "close">("close");
+  const sessionId = session?.id;
+  useEffect(() => {
+    if (sessionId) setExitTo("close");
+  }, [sessionId]);
+
+  const toDock = (id: string) => {
+    setExitTo("dock");
+    minimizeSession(id);
+  };
 
   return (
     <DialogPrimitive.Root
       open={!!session}
       onOpenChange={(v) => {
-        if (!v && session) closeSession(session.id);
+        if (v || !session) return;
+        const keeps =
+          !!session.pendingKey ||
+          !!(session.job && isActiveJob(session.job)) ||
+          (session.step === "intent" && session.brief.trim().length > 0 && !session.lastGood);
+        setExitTo(keeps ? "dock" : "close");
+        closeSession(session.id);
       }}
     >
-      <AnimatePresence>
+      <AnimatePresence custom={exitTo}>
         {session ? (
           <DialogPrimitive.Portal forceMount>
             <DialogPrimitive.Overlay asChild>
               <motion.div
-                className="fixed inset-0 z-50 bg-background/70 backdrop-blur-[2px]"
+                className="fixed inset-0 z-50 bg-background/60 backdrop-blur-[3px]"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+                exit={{ opacity: 0, transition: { duration: duration.slow } }}
                 transition={{ duration: duration.base }}
               />
             </DialogPrimitive.Overlay>
-            <DialogPrimitive.Content
-              asChild
-              aria-describedby={undefined}
-              onPointerDownOutside={(e) => e.preventDefault()}
-              onEscapeKeyDown={(e) => {
-                // Escape inside a field shouldn't close the whole composer.
-                const t = e.target as HTMLElement | null;
-                if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) e.preventDefault();
-              }}
+            <div
+              className={cn(
+                "pointer-events-none fixed inset-0 z-50 grid place-items-center",
+                !isMobile && "p-3",
+              )}
             >
-              <motion.div
-                key={session.id}
-                initial={{ opacity: 0, y: 12, scale: 0.985 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{
-                  opacity: 0,
-                  y: 24,
-                  scale: 0.97,
-                  transition: { duration: duration.base, ease: ease.accelerate },
+              <DialogPrimitive.Content
+                asChild
+                aria-describedby={undefined}
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => {
+                  // Escape inside a field shouldn't close the whole composer.
+                  const t = e.target as HTMLElement | null;
+                  if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) e.preventDefault();
                 }}
-                transition={spring.surface}
-                className={cn(
-                  "fixed z-50 flex flex-col overflow-hidden bg-surface-3 shadow-4 outline-none",
-                  isMobile
-                    ? "inset-0"
-                    : session.window === "maximized"
-                      ? "inset-3 rounded-2xl border border-border"
-                      : "left-1/2 top-1/2 h-[min(90vh,880px)] w-[min(95vw,1240px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border",
-                )}
               >
-                <ComposerBody session={session} isMobile={isMobile} />
-              </motion.div>
-            </DialogPrimitive.Content>
+                <motion.div
+                  key={session.id}
+                  custom={exitTo}
+                  variants={{
+                    initial: { opacity: 0, y: 14, scale: 0.985 },
+                    open: { opacity: 1, y: 0, scale: 1 },
+                    exit: (to: "dock" | "close") =>
+                      to === "dock"
+                        ? {
+                            opacity: 0,
+                            scale: 0.3,
+                            x: isMobile ? 0 : "36vw",
+                            y: "42vh",
+                            transition: { duration: duration.slow + 0.06, ease: ease.accelerate },
+                          }
+                        : {
+                            opacity: 0,
+                            y: 20,
+                            scale: 0.975,
+                            transition: { duration: duration.base, ease: ease.accelerate },
+                          },
+                  }}
+                  initial="initial"
+                  animate="open"
+                  exit="exit"
+                  transition={spring.surface}
+                  className={cn(
+                    "pointer-events-auto relative flex flex-col overflow-hidden bg-surface-3 shadow-4 outline-none",
+                    "transition-[width,height,border-radius] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
+                    isMobile
+                      ? "h-dvh w-screen"
+                      : session.window === "maximized"
+                        ? "h-full w-full rounded-2xl ring-1 ring-border/80"
+                        : "h-[min(90vh,880px)] w-[min(95vw,1240px)] rounded-[20px] ring-1 ring-border/80",
+                  )}
+                >
+                  <ComposerBody
+                    session={session}
+                    isMobile={isMobile}
+                    onMinimize={() => toDock(session.id)}
+                  />
+                </motion.div>
+              </DialogPrimitive.Content>
+            </div>
           </DialogPrimitive.Portal>
         ) : null}
       </AnimatePresence>
@@ -143,14 +182,31 @@ export function ComposerBody({
   session,
   isMobile,
   fixtures,
+  onMinimize,
 }: {
   session: StudioSession;
   isMobile: boolean;
   fixtures?: ComposerFixtures;
+  onMinimize?: () => void;
 }) {
   const format = STUDIO_FORMATS[session.type];
   const [cancelling, setCancelling] = useState(false);
-  const stepIndex = STEPS.findIndex((s) => s.id === session.step);
+  // Editing a brief is part of "Describe".
+  const stepIndex = Math.max(
+    0,
+    STEPS.findIndex((s) => s.id === (session.step === "intent" ? "start" : session.step)),
+  );
+  const working = !!session.pendingKey || !!(session.job && isActiveJob(session.job));
+  const minimize = onMinimize ?? (() => minimizeSession(session.id));
+  // Maximize/restore animates the window size; soften the content while the
+  // layout reflows so container-query changes don't visibly jump.
+  const [resizing, setResizing] = useState(false);
+  const resize = () => {
+    if (isMobile) return;
+    setResizing(true);
+    toggleMaximize(session.id);
+    window.setTimeout(() => setResizing(false), 340);
+  };
   const title =
     session.step === "start"
       ? "New creation"
@@ -171,12 +227,20 @@ export function ComposerBody({
   };
 
   return (
-    <>
-      <header className="flex min-h-14 items-center gap-2 border-b border-border px-3 md:px-4">
+    <div className="@container/composer flex h-full min-h-0 flex-col">
+      <header
+        className="relative flex h-14 shrink-0 select-none items-center gap-2 border-b border-border/70 px-3 @3xl/composer:px-4"
+        onDoubleClick={(e) => {
+          // Standard window behaviour: double-click empty header space to maximize.
+          if ((e.target as HTMLElement).closest("button, a, input, textarea, [role='tab']")) return;
+          resize();
+        }}
+      >
         {session.step === "review" && !session.pendingKey ? (
           <Button
             size="icon-sm"
             variant="ghost"
+            className="rounded-full"
             onClick={() => backToBrief(session.id)}
             aria-label="Back to brief"
             title="Back to brief"
@@ -185,7 +249,7 @@ export function ComposerBody({
           </Button>
         ) : null}
         {session.step === "start" ? (
-          <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
+          <span className="grid size-8 place-items-center studio-cta relative rounded-[10px] bg-primary text-primary-foreground">
             <Sparkles className="size-4" />
           </span>
         ) : session.step === "intent" ? (
@@ -194,85 +258,169 @@ export function ComposerBody({
           <div className="flex min-w-0 items-center gap-2">
             <TypeGlyph type={session.type} size="sm" />
             <span className="hidden text-xs text-muted-foreground sm:inline">{format.label}</span>
+            <span aria-hidden className="hidden text-muted-foreground/50 sm:inline">
+              /
+            </span>
           </div>
         )}
-        <DialogPrimitive.Title className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-foreground">
-          {title}
-        </DialogPrimitive.Title>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={title}
+            className="min-w-0 flex-1"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: duration.base, ease: ease.standard }}
+          >
+            <DialogPrimitive.Title className="truncate text-sm font-semibold tracking-tight text-foreground">
+              {title}
+            </DialogPrimitive.Title>
+          </motion.div>
+        </AnimatePresence>
 
-        <ol className="mr-2 hidden items-center gap-1 lg:flex" aria-label="Steps">
-          {STEPS.map((s, i) => (
-            <li
-              key={s.id}
-              className="flex items-center gap-1"
-              aria-current={i === stepIndex ? "step" : undefined}
-            >
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors",
-                  i === stepIndex
-                    ? "bg-primary-surface font-medium text-foreground ring-1 ring-primary-border"
-                    : i < stepIndex
-                      ? "text-foreground/70"
-                      : "text-muted-foreground/60",
-                )}
+        <ol className="mr-3 hidden items-center gap-2 @5xl/composer:flex" aria-label="Steps">
+          {STEPS.map((s, i) => {
+            const state = i < stepIndex ? "done" : i === stepIndex ? "current" : "todo";
+            return (
+              <li
+                key={s.id}
+                className="flex items-center gap-2"
+                aria-current={state === "current" ? "step" : undefined}
               >
-                {i < stepIndex ? <Check className="size-3 text-primary" strokeWidth={3} /> : null}
-                {s.label}
-              </span>
-              {i < STEPS.length - 1 ? <span aria-hidden className="h-px w-3 bg-border" /> : null}
-            </li>
-          ))}
+                <span className="flex items-center gap-1.5 text-xs">
+                  <span
+                    className={cn(
+                      "grid size-4 place-items-center rounded-full transition-colors duration-[--motion-duration-slow]",
+                      state === "done" && "bg-primary text-primary-foreground",
+                      state === "current" && "ring-[1.5px] ring-primary",
+                      state === "todo" && "ring-1 ring-border-strong",
+                    )}
+                  >
+                    {state === "done" ? (
+                      <Check className="size-2.5" strokeWidth={3.5} />
+                    ) : state === "current" ? (
+                      <span
+                        className={cn(
+                          "size-1.5 rounded-full bg-primary",
+                          working && s.id === "generating" && "animate-pulse",
+                        )}
+                      />
+                    ) : null}
+                  </span>
+                  <span
+                    className={cn(
+                      "transition-colors",
+                      state === "current"
+                        ? "font-medium text-foreground"
+                        : state === "done"
+                          ? "text-muted-foreground"
+                          : "text-muted-foreground/60",
+                    )}
+                  >
+                    {s.label}
+                  </span>
+                </span>
+                {i < STEPS.length - 1 ? (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "h-px w-4 transition-colors duration-[--motion-duration-slow]",
+                      i < stepIndex ? "bg-primary/60" : "bg-border",
+                    )}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
         </ol>
 
-        <div className="flex items-center gap-0.5">
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            onClick={() => minimizeSession(session.id)}
-            aria-label="Minimize"
-            title="Minimize — keeps working"
-          >
+        <div className="flex items-center gap-0.5 rounded-full bg-surface-2/70 p-0.5">
+          <WindowButton onClick={minimize} label="Minimize — keeps working">
             <Minus />
-          </Button>
+          </WindowButton>
           {!isMobile ? (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              onClick={() => toggleMaximize(session.id)}
-              aria-label={session.window === "maximized" ? "Restore size" : "Maximize"}
-              title={session.window === "maximized" ? "Restore size" : "Maximize"}
+            <WindowButton
+              onClick={resize}
+              label={session.window === "maximized" ? "Restore size" : "Maximize"}
             >
               {session.window === "maximized" ? <Minimize2 /> : <Maximize2 />}
-            </Button>
+            </WindowButton>
           ) : null}
           <DialogPrimitive.Close asChild>
-            <Button size="icon-sm" variant="ghost" aria-label="Close" title="Close">
+            <button
+              type="button"
+              aria-label="Close"
+              title={working ? "Close — keeps working in the dock" : "Close"}
+              className={WINDOW_BUTTON}
+            >
               <X />
-            </Button>
+            </button>
           </DialogPrimitive.Close>
         </div>
+
+        {/* A hairline of motion under the header whenever Mellox is working. */}
+        <AnimatePresence>
+          {working ? (
+            <motion.span
+              key="working"
+              aria-hidden
+              className="absolute inset-x-0 -bottom-px h-px overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.span
+                className="absolute inset-y-0 w-1/4 bg-gradient-to-r from-transparent via-primary to-[hsl(var(--tone-video))]"
+                animate={{ x: ["-100%", "500%"] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </motion.span>
+          ) : null}
+        </AnimatePresence>
       </header>
 
-      <div className="relative min-h-0 flex-1">
-        <AnimatePresence mode="wait" initial={false}>
+      <div
+        className={cn(
+          "relative min-h-0 flex-1 transition-opacity duration-150",
+          resizing && "opacity-60",
+        )}
+      >
+        {/* Enter-only: generating re-renders every second, which can strand an exit and blank the window. */}
+        <>
           <motion.div
             key={session.step}
             className="absolute inset-0 overflow-hidden"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
+            initial={{
+              opacity: 0,
+              y: session.step === "review" ? 12 : 8,
+              scale: session.step === "review" ? 0.99 : 1,
+            }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{
+              opacity: 0,
+              y: session.step === "generating" ? 0 : -6,
+              scale: session.step === "generating" ? 1.01 : 1,
+            }}
             transition={{ duration: duration.medium, ease: ease.emphasized }}
           >
             {session.step === "start" ? (
               <StartStep
                 workspaceId={session.workspaceId}
-                lastType={typeof window !== "undefined" ? lastUsedType() : null}
+                initialType={session.type}
                 fixtureIdeas={fixtures?.ideas}
-                onPickIdea={pickIdea}
-                onPickType={(type) => {
+                onQuickGenerate={(type, brief, { controls, template }) => {
                   rememberStudioType(type);
-                  chooseType(session.id, type);
+                  chooseType(session.id, type, {
+                    brief,
+                    template,
+                    goal: getTemplate(template)?.goal,
+                    controls,
+                  });
+                  void generate(session.id, { kind: "generate" });
+                }}
+                onGenerateIdea={(idea) => {
+                  pickIdea(idea);
+                  void generate(session.id, { kind: "generate" });
                 }}
               />
             ) : session.step === "intent" ? (
@@ -287,7 +435,7 @@ export function ComposerBody({
                 <GenerationProgress
                   session={session}
                   cancelling={cancelling}
-                  onMinimize={() => minimizeSession(session.id)}
+                  onMinimize={minimize}
                   onCancel={async () => {
                     setCancelling(true);
                     await cancelSession(session.id);
@@ -303,9 +451,34 @@ export function ComposerBody({
               />
             ) : null}
           </motion.div>
-        </AnimatePresence>
+        </>
       </div>
-    </>
+    </div>
+  );
+}
+
+const WINDOW_BUTTON =
+  "grid size-7 place-items-center rounded-full text-muted-foreground transition-colors duration-[--motion-duration-fast] hover:bg-surface-3 hover:text-foreground hover:shadow-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 [&_svg]:size-3.5";
+
+function WindowButton({
+  onClick,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={WINDOW_BUTTON}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -344,91 +517,150 @@ function TypeSwitcher({ session }: { session: StudioSession }) {
   );
 }
 
-/** What the brief will produce — so settings never feel abstract. */
-function OutputSummary({ session }: { session: StudioSession }) {
+/** What the brief will produce: a live blueprint that follows every setting. */
+function WhatYoullGet({ session, compact }: { session: StudioSession; compact?: boolean }) {
   const format = STUDIO_FORMATS[session.type];
   const c = session.controls;
+  const template = getTemplate(session.template);
+  const count = c.platforms.length;
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (count < 2 || paused) return;
+    const t = window.setInterval(() => setIndex((i) => (i + 1) % count), 3200);
+    return () => window.clearInterval(t);
+  }, [count, paused]);
+  const active = count ? index % count : 0;
+  const platform = c.platforms[active];
   const showsMedia =
     format.media === "image" ||
     format.media === "video" ||
     (format.media === "optional-image" && c.includeImage) ||
     session.type === "carousel";
   const ratio = c.ratio ?? format.ratios[0];
+  const rows: { key: string; icon: React.ReactNode; text: string }[] = [
+    ...(template
+      ? [
+          {
+            key: `t-${template.id}`,
+            icon: <LayoutTemplate className="size-3.5 shrink-0 text-[hsl(var(--tone))]" />,
+            text: template.beats.join(" → "),
+          },
+        ]
+      : []),
+    ...(count > 1
+      ? [
+          {
+            key: `p-${count}`,
+            icon: <Check className="size-3.5 shrink-0 text-primary" />,
+            text: `${count} native versions, one per platform`,
+          },
+        ]
+      : []),
+    ...(showsMedia && ratio && format.media !== "none"
+      ? [
+          {
+            key: `m-${ratio}`,
+            icon: <Check className="size-3.5 shrink-0 text-primary" />,
+            text: `${session.type === "video" ? "Video" : session.type === "carousel" ? "Designed slides" : "Visual"} sized ${RATIOS[ratio].label.toLowerCase()} ${ratio}`,
+          },
+        ]
+      : []),
+    { key: "time", icon: <Clock className="size-3.5 shrink-0" />, text: format.estimate },
+    {
+      key: "inbox",
+      icon: <Inbox className="size-3.5 shrink-0" />,
+      text: "Waits in Needs Approval",
+    },
+  ];
 
   return (
     <section
       data-no-rhythm
       aria-label="What you'll get"
-      className="rounded-2xl border border-border bg-surface-3 p-4"
+      className={`studio-tone-${session.type} shrink-0 overflow-hidden rounded-2xl bg-surface-3 shadow-1 ring-1 ring-border/70`}
     >
-      <p className="ui-eyebrow">You'll get</p>
-      <div className="mt-3 flex items-start gap-3">
-        <div className="w-24 shrink-0">
-          {showsMedia && ratio ? (
-            <RatioFrame
-              ratio={ratio}
-              maxHeight={120}
-              className="rounded-lg bg-surface-2 ring-1 ring-border"
-            >
-              <span className="absolute inset-0 grid place-items-center text-[10px] font-medium text-muted-foreground">
-                {ratio}
-              </span>
-            </RatioFrame>
-          ) : (
-            <div className="grid aspect-[3/4] place-items-center rounded-lg bg-surface-2 ring-1 ring-border">
-              <FileText className="size-5 text-muted-foreground" />
-            </div>
+      <div className="flex items-center justify-between gap-2 px-4 pt-3.5">
+        <p className="ui-eyebrow">You'll get</p>
+        <motion.span
+          key={template?.id ?? session.type}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="truncate text-[11px] font-medium text-[hsl(var(--tone))]"
+        >
+          {template ? template.label : format.label}
+        </motion.span>
+      </div>
+      <div
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        className={cn(
+          "studio-canvas relative mx-3 mt-3 flex items-center justify-center overflow-hidden rounded-xl ring-1 ring-border/60",
+          compact ? "h-[260px]" : "h-[360px]",
+        )}
+      >
+        <div aria-hidden className="studio-aurora studio-aurora-soft" />
+        <div
+          className={cn(
+            "relative flex w-[520px] shrink-0 origin-center justify-center",
+            compact ? "scale-[0.48]" : "scale-[0.62]",
           )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-foreground">{format.label}</p>
-          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-            {describeControls(session)}
-          </p>
-          {c.platforms.length ? (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {c.platforms.map((p) => {
-                const Icon = PLATFORMS[p].icon;
-                return (
-                  <span
-                    key={p}
-                    title={PLATFORMS[p].label}
-                    className="grid size-6 place-items-center rounded-md bg-surface-2 ring-1 ring-border"
-                  >
-                    <Icon className="size-3.5" />
-                  </span>
-                );
-              })}
-            </div>
-          ) : null}
+        >
+          <PreviewSkeleton
+            session={session}
+            stageIndex={-1}
+            platform={platform}
+            template={template}
+          />
         </div>
       </div>
-      <ul className="mt-4 space-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground [&_li]:text-xs [&_li]:leading-5">
-        {c.platforms.length > 1 ? (
-          <li className="flex items-center gap-2">
-            <Check className="size-3.5 text-primary" />
-            {c.platforms.length} native versions, one per platform
-          </li>
-        ) : null}
-        {showsMedia && ratio && format.media !== "none" ? (
-          <li className="flex items-center gap-2">
-            <Check className="size-3.5 text-primary" />
-            {session.type === "video"
-              ? "Video"
-              : session.type === "carousel"
-                ? "Designed slides"
-                : "Visual"}{" "}
-            sized {RATIOS[ratio].label.toLowerCase()} {ratio}
-          </li>
-        ) : null}
-        <li className="flex items-center gap-2">
-          <Clock className="size-3.5" />
-          {format.estimate}
-        </li>
-        <li className="flex items-center gap-2">
-          <Inbox className="size-3.5" />
-          Waits in Needs Approval
-        </li>
+      {count > 1 ? (
+        <div
+          className="mt-2.5 flex justify-center gap-1.5"
+          role="tablist"
+          aria-label="Preview platform"
+        >
+          {c.platforms.map((p, i) => {
+            const Icon = PLATFORMS[p].icon;
+            const on = i === active;
+            return (
+              <button
+                key={p}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                aria-label={PLATFORMS[p].label}
+                title={PLATFORMS[p].label}
+                onClick={() => {
+                  setIndex(i);
+                  setPaused(true);
+                }}
+                className={cn(
+                  "grid size-7 place-items-center rounded-full ring-1 transition-colors duration-[--motion-duration-fast]",
+                  on
+                    ? "bg-[hsl(var(--tone)/0.14)] text-foreground ring-[hsl(var(--tone)/0.5)]"
+                    : "text-muted-foreground ring-border/60 hover:text-foreground",
+                )}
+              >
+                <Icon className="size-3.5" />
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <ul className="m-3 space-y-1.5 rounded-xl bg-surface-2/60 px-3 py-2.5 text-xs text-muted-foreground [&_li]:text-xs [&_li]:leading-5">
+        {rows.map((r, i) => (
+          <motion.li
+            key={r.key}
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.04, duration: duration.medium, ease: ease.emphasized }}
+            className="flex items-center gap-2"
+          >
+            {r.icon}
+            <span className="min-w-0 truncate">{r.text}</span>
+          </motion.li>
+        ))}
       </ul>
     </section>
   );
@@ -449,6 +681,8 @@ export function IntentStep({
   const textarea = useRef<HTMLTextAreaElement>(null);
   const ready = session.brief.trim().length >= 3;
   const busy = !!session.pendingKey;
+  const template = getTemplate(session.template);
+  const blanks = countBlanks(session.brief);
   const hasBrand = useMemo(() => !!readBrandPayload(session.workspaceId), [session.workspaceId]);
   const [isMac, setIsMac] = useState(true);
 
@@ -466,28 +700,52 @@ export function IntentStep({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] lg:overflow-hidden">
-        <div className="p-5 md:p-8 lg:overflow-y-auto">
-          <div className="mx-auto max-w-2xl space-y-6">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto @5xl/composer:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] @5xl/composer:overflow-hidden">
+        <div className="min-w-0 p-5 @3xl/composer:p-8 @5xl/composer:overflow-y-auto">
+          <div className="mx-auto min-w-0 max-w-2xl space-y-6">
             <div>
               <label
                 htmlFor="studio-brief"
                 className="block text-xl font-semibold tracking-tight text-foreground"
               >
-                What should this {format.noun} achieve?
+                What should this{" "}
+                <span className={`studio-gradient-text studio-tone-${session.type}`}>
+                  {format.noun}
+                </span>{" "}
+                achieve?
               </label>
               <p className="mt-1 text-sm text-muted-foreground">
                 One or two sentences is enough — Mellox brings your brand, audience and what you've
                 posted recently.
               </p>
 
+              <TemplateGallery session={session} textareaRef={textarea} className="mt-5" />
+
               <div
                 className={cn(
                   "mt-4 rounded-2xl border bg-surface-3 shadow-1 transition-[border-color,box-shadow]",
-                  "focus-within:border-primary-border focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]",
+                  "focus-within:border-primary-border focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12),0_22px_50px_-22px_hsl(var(--primary)/0.5)]",
                   session.error ? "border-danger-border" : "border-input",
                 )}
               >
+                {template ? (
+                  <div
+                    className={`studio-tone-${session.type} flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground`}
+                  >
+                    <LayoutTemplate className="size-3.5 text-[hsl(var(--tone))]" />
+                    <span className="font-medium text-foreground">{template.label}</span>
+                    <span className="hidden min-w-0 flex-1 truncate sm:inline">
+                      · replace the [brackets] with your details
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => applyTemplate(session.id, null)}
+                      className="ml-auto rounded px-1.5 py-0.5 hover:bg-surface-2 hover:text-foreground"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : null}
                 {session.ideaId ? (
                   <div className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground">
                     <Sparkles className="size-3.5 text-primary" />
@@ -524,8 +782,13 @@ export function IntentStep({
                   rows={isMobile ? 4 : 5}
                   maxLength={4000}
                   aria-describedby={session.error ? "studio-brief-error" : undefined}
-                  className="block w-full resize-none !border-0 !bg-transparent px-3.5 pt-3 text-base leading-relaxed text-foreground !shadow-none outline-none placeholder:text-muted-foreground focus-visible:!ring-0 md:text-[15px]"
+                  className="block w-full resize-none !border-0 !bg-transparent px-3.5 pt-3 text-base leading-relaxed text-foreground !shadow-none outline-none placeholder:text-muted-foreground focus-visible:!ring-0 @3xl/composer:text-[15px]"
                 />
+                {template ? (
+                  <div className={`studio-tone-${session.type} px-3.5 pb-1 pt-1`}>
+                    <BeatPills beats={template.beats} />
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs">
                   {hasBrand ? (
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -543,7 +806,15 @@ export function IntentStep({
                     </button>
                   )}
                   <span className="ml-auto tabular-nums text-muted-foreground/70">
-                    {session.brief.length > 3500 ? `${session.brief.length}/4000` : null}
+                    {blanks ? (
+                      <span
+                        className={`studio-tone-${session.type} font-medium text-[hsl(var(--tone))]`}
+                      >
+                        {blanks} blank{blanks === 1 ? "" : "s"} · optional
+                      </span>
+                    ) : session.brief.length > 3500 ? (
+                      `${session.brief.length}/4000`
+                    ) : null}
                   </span>
                 </div>
               </div>
@@ -576,9 +847,13 @@ export function IntentStep({
               </div>
             </div>
 
+            <div className="@5xl/composer:hidden">
+              <WhatYoullGet session={session} compact />
+            </div>
+
             <ControlsPanel session={session} disabled={busy} />
 
-            <div className="lg:hidden">
+            <div className="@5xl/composer:hidden">
               <IdeasPanel
                 workspaceId={session.workspaceId}
                 type={session.type}
@@ -591,8 +866,8 @@ export function IntentStep({
           </div>
         </div>
 
-        <aside className="hidden flex-col gap-6 border-l border-border bg-surface-1 p-5 lg:flex lg:overflow-y-auto">
-          <OutputSummary session={session} />
+        <aside className="hidden flex-col gap-6 border-l border-border bg-surface-1 p-5 @5xl/composer:flex @5xl/composer:overflow-y-auto">
+          <WhatYoullGet session={session} />
           <IdeasPanel
             workspaceId={session.workspaceId}
             type={session.type}
@@ -603,21 +878,21 @@ export function IntentStep({
         </aside>
       </div>
 
-      <footer className="flex items-center gap-3 border-t border-border bg-surface-3 px-4 py-3 md:px-6">
+      <footer className="flex items-center gap-3 border-t border-border bg-surface-3 px-4 py-3 @3xl/composer:px-6">
         {!session.job && !session.lastGood ? (
           <Button variant="ghost" size="sm" onClick={() => backToStart(session.id)}>
             <ArrowLeft />
             <span className="hidden sm:inline">Formats</span>
           </Button>
         ) : null}
-        <p className="hidden min-w-0 flex-1 truncate text-xs text-muted-foreground md:block">
+        <p className="hidden min-w-0 flex-1 truncate text-xs text-muted-foreground @3xl/composer:block">
           Nothing is published without your approval.
         </p>
         <div className="ml-auto flex items-center gap-3">
-          <kbd className="hidden items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground ring-1 ring-border md:inline-flex">
+          <kbd className="hidden items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground ring-1 ring-border @3xl/composer:inline-flex">
             {isMac ? "⌘" : "Ctrl"} ↵
           </kbd>
-          <Button onClick={submit} disabled={!ready || busy} size="lg">
+          <Button onClick={submit} disabled={!ready || busy} size="lg" className="studio-cta">
             <Wand2 />
             {busy
               ? "Starting…"

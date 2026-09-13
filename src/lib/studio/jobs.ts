@@ -58,6 +58,8 @@ export const IntentSchema = z.object({
   goal: z.enum(["awareness", "engagement", "leads", "launch", "education", "offer"]).optional(),
   ideaId: z.string().max(80).optional(),
   ideaSource: z.string().max(40).optional(),
+  /** A StudioTemplate id; the prompt follows its structure. */
+  template: z.string().max(40).optional(),
 });
 
 export type StudioIntent = z.infer<typeof IntentSchema>;

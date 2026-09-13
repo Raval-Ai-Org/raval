@@ -6,7 +6,8 @@
 import { useEffect } from "react";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { isStudioType, normalizeStudioType, type StudioType } from "@/lib/studio/formats";
-import { openComposer, openJob, refreshWorkspaceJobs } from "@/lib/studio/session-store";
+import { detectStudioType } from "@/lib/studio/detect";
+import { generate, openComposer, openJob, refreshWorkspaceJobs } from "@/lib/studio/session-store";
 import type { GoalId } from "@/lib/studio/jobs";
 import type { PlatformId } from "@/lib/social-platforms";
 
@@ -54,12 +55,16 @@ export function useStudioEntry(workspaceId: string | null) {
         void openItemOrJob(id);
         return;
       }
-      // A known format opens its brief; anything else opens the start screen.
-      const type = normalizeStudioType(detail.type) ?? undefined;
+      // With a brief, generate straight away: the user already said what they want.
+      // Without one, open the prompt box with the format pre-selected.
+      const brief = typeof detail.brief === "string" ? detail.brief.trim().slice(0, 4000) : "";
+      const type =
+        normalizeStudioType(detail.type) ??
+        (brief ? (detectStudioType(brief) ?? lastType()) : undefined);
       if (type) rememberStudioType(type);
-      openComposer({
-        type: type ?? (typeof detail.brief === "string" && detail.brief ? lastType() : undefined),
-        brief: typeof detail.brief === "string" ? detail.brief.slice(0, 4000) : undefined,
+      const sessionId = openComposer({
+        type,
+        brief: brief || undefined,
         goal: GOALS.includes(detail.goal as GoalId) ? (detail.goal as GoalId) : undefined,
         ideaId: typeof detail.ideaId === "string" ? detail.ideaId : undefined,
         ideaSource: typeof detail.ideaSource === "string" ? detail.ideaSource : undefined,
@@ -67,6 +72,7 @@ export function useStudioEntry(workspaceId: string | null) {
           ? (detail.platforms.filter((p) => PLATFORM_IDS.includes(p as PlatformId)) as PlatformId[])
           : undefined,
       });
+      if (sessionId && brief.length >= 3) void generate(sessionId, { kind: "generate" });
     };
 
     const onKey = (e: KeyboardEvent) => {

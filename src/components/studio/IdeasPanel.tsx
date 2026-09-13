@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, RefreshCw, Sparkles, X } from "@/components/icons";
+import { ArrowRight, RefreshCw, Sparkles, Wand2, X } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { readBrandPayload, studioApi } from "@/lib/studio/client";
@@ -11,6 +11,16 @@ import { IDEA_SOURCE_LABEL, type StudioIdea } from "@/lib/studio/ideas";
 import { TypeGlyph } from "./studio-ui";
 
 type Dismissed = { id: string; title: string };
+
+/** Each signal source borrows a format tone so ideas scan by why they exist. */
+const SOURCE_TONE: Record<string, StudioType> = {
+  trend: "image",
+  season: "carousel",
+  pillar: "social",
+  competitor: "video",
+  gap: "article",
+  momentum: "ad",
+};
 
 function dismissedKey(workspaceId: string) {
   return `studio:ideas-dismissed:${workspaceId}`;
@@ -42,6 +52,7 @@ export function IdeasPanel({
   workspaceId,
   type,
   onPick,
+  onGenerate,
   selectedId,
   variant = "list",
   limit = 4,
@@ -51,6 +62,8 @@ export function IdeasPanel({
   workspaceId: string;
   type?: StudioType;
   onPick: (idea: StudioIdea) => void;
+  /** Skip the brief: generate this idea straight away. */
+  onGenerate?: (idea: StudioIdea) => void;
   selectedId?: string;
   variant?: "list" | "grid";
   limit?: number;
@@ -198,11 +211,11 @@ export function IdeasPanel({
                     onClick={() => onPick(idea)}
                     aria-pressed={selected}
                     className={cn(
-                      "flex h-full w-full flex-col rounded-xl border p-3 pr-10 text-left transition-[border-color,background-color,box-shadow] duration-[--motion-duration-fast]",
+                      "flex h-full w-full flex-col rounded-2xl border p-3.5 pr-10 text-left transition-[border-color,background-color,box-shadow,translate] duration-[--motion-duration-base] ease-[--motion-ease-emphasized]",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
                       selected
                         ? "border-primary-border bg-primary-surface"
-                        : "border-border bg-surface-3 hover:border-border-strong hover:shadow-1",
+                        : "border-border/70 bg-surface-3 hover:-translate-y-0.5 hover:border-primary-border hover:shadow-[0_16px_34px_-20px_hsl(var(--primary)/0.55)]",
                     )}
                   >
                     <span className="flex flex-wrap items-center gap-1.5">
@@ -212,7 +225,14 @@ export function IdeasPanel({
                           {STUDIO_FORMATS[idea.type].label}
                         </span>
                       ) : null}
-                      <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground ring-1 ring-border">
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1",
+                          SOURCE_TONE[idea.source]
+                            ? `studio-tone-${SOURCE_TONE[idea.source]} bg-[hsl(var(--tone)/0.12)] text-[hsl(var(--tone))] ring-[hsl(var(--tone)/0.28)]`
+                            : "bg-surface-2 text-muted-foreground ring-border",
+                        )}
+                      >
                         {IDEA_SOURCE_LABEL[idea.source]}
                       </span>
                     </span>
@@ -225,7 +245,8 @@ export function IdeasPanel({
                       </span>
                     ) : null}
                     <span className="mt-auto flex items-center gap-1 pt-2 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                      Use this idea <ArrowRight className="size-3.5" />
+                      {onGenerate ? "Edit first" : "Use this idea"}{" "}
+                      <ArrowRight className="size-3.5" />
                     </span>
                   </button>
                   <button
@@ -237,6 +258,17 @@ export function IdeasPanel({
                   >
                     <X className="size-3.5" />
                   </button>
+                  {onGenerate ? (
+                    <button
+                      type="button"
+                      onClick={() => onGenerate(idea)}
+                      aria-label={`Generate: ${idea.title}`}
+                      className="studio-cta absolute bottom-3 right-3 inline-flex h-7 items-center gap-1 rounded-full bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition-transform duration-[--motion-duration-fast] hover:scale-[1.04] active:scale-95"
+                    >
+                      <Wand2 className="size-3" />
+                      Generate
+                    </button>
+                  ) : null}
                 </motion.li>
               );
             })}

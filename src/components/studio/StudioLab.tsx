@@ -1,14 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ApprovalCard, JobRow, type Group } from "@/components/app/StudioRail";
+import { LibraryPage } from "@/components/app/LibraryPage";
+import { LibraryDialog } from "@/components/app/LibraryDialog";
+import { emitAppEvent } from "@/lib/app-events";
+import { normalizeLibraryAsset } from "@/lib/library";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
-import type { StudioType } from "@/lib/studio/formats";
+import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
+import { getTemplate, templatesFor } from "@/lib/studio/templates";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import type { MediaOutput, StudioJob, StudioJobOutput } from "@/lib/studio/jobs";
 import type { SessionStep, StudioSession } from "@/lib/studio/session-store";
 import { ComposerBody } from "./StudioComposer";
+import { DockCard } from "./StudioDock";
 import type { ReviewRow } from "./ReviewPanel";
 
 /* Sample data — deliberately realistic so layout problems show up. */
@@ -192,6 +199,41 @@ const OUTPUTS: Partial<Record<StudioType, StudioJobOutput>> = {
       durationSec: 30,
     },
   },
+  image: {
+    title: "Harvest morning in Huila",
+    angle: "Origin story",
+    variants: [
+      {
+        platform: "instagram",
+        title: "Harvest",
+        body: "5:40am in Huila. The cherries only get picked when they're this red. 🍒\n\nThis month's roast starts here → link in bio.\n\n#specialtycoffee #coffeefarm #huila",
+        hashtags: [],
+        chars: 150,
+      },
+      {
+        platform: "tiktok",
+        title: "Harvest",
+        body: "POV: you only pick the red ones 🍒 #coffeetok #specialtycoffee",
+        hashtags: [],
+        chars: 60,
+      },
+    ],
+    media: [ready(art(1080, 1920, "#223012", "#b5d84a", "Harvest morning"), "9:16")],
+  },
+  video: {
+    title: "Roastery pan",
+    angle: "Behind the scenes",
+    variants: [
+      {
+        platform: "instagram",
+        title: "Roastery",
+        body: "Inside the roastery at 6am. Batch 214 is our darkest yet. ☕️ #roastery #specialtycoffee",
+        hashtags: [],
+        chars: 90,
+      },
+    ],
+    media: [{ slot: "main", kind: "video", ratio: "9:16", status: "pending" }],
+  },
   ad: {
     title: "Holiday gift subscription",
     angle: "Proof and results",
@@ -255,6 +297,34 @@ const ROWS: Partial<Record<StudioType, ReviewRow[]>> = {
   ],
   article: [
     { id: "r4", status: "pending", title: "Decaf", body: "", meta: {}, scheduled_at: null },
+  ],
+  image: [
+    {
+      id: "r8",
+      status: "pending",
+      title: "Harvest",
+      body: "",
+      meta: { platform: "instagram" },
+      scheduled_at: null,
+    },
+    {
+      id: "r9",
+      status: "pending",
+      title: "Harvest",
+      body: "",
+      meta: { platform: "tiktok" },
+      scheduled_at: null,
+    },
+  ],
+  video: [
+    {
+      id: "r10",
+      status: "pending",
+      title: "Roastery",
+      body: "",
+      meta: { platform: "instagram" },
+      scheduled_at: null,
+    },
   ],
   script: [
     {
@@ -348,12 +418,27 @@ function session(
   };
 }
 
-const SCENES: {
+type Scene = {
   id: string;
   label: string;
-  make: () => StudioSession;
+  make?: () => StudioSession;
   fixtures?: { rows?: ReviewRow[]; distribution?: boolean };
-}[] = [
+  /** Simulate a full run: every stage in turn, then the finished review. */
+  live?: StudioType;
+  rail?: boolean;
+  library?: boolean;
+};
+
+const approvedRows = (type: StudioType, status = "approved", scheduledAt: string | null = null) =>
+  (ROWS[type] ?? []).map((r) => ({ ...r, status, scheduled_at: scheduledAt }));
+
+const SCENES: Scene[] = [
+  { id: "live-social", label: "Live run · Social", live: "social" },
+  { id: "live-image", label: "Live run · Image", live: "image" },
+  { id: "live-article", label: "Live run · Article", live: "article" },
+  { id: "live-carousel", label: "Live run · Carousel", live: "carousel" },
+  { id: "live-script", label: "Live run · Script", live: "script" },
+  { id: "live-video", label: "Live run · Video", live: "video" },
   { id: "start", label: "Start", make: () => session("social", "start") },
   {
     id: "brief-social",
@@ -367,6 +452,35 @@ const SCENES: {
   },
   { id: "brief-article", label: "Brief · Article", make: () => session("article", "intent") },
   {
+    id: "brief-template",
+    label: "Brief · Template picked",
+    make: () =>
+      session("carousel", "intent", {
+        brief: getTemplate("carousel-myth-fact")!.starter,
+        template: "carousel-myth-fact",
+        goal: "education",
+      }),
+  },
+  {
+    id: "brief-blueprint",
+    label: "Brief · Blueprint, 3 platforms",
+    make: () => {
+      const s = session("social", "intent", {
+        brief: "Tell the story of our Huila co-op sourcing.",
+        template: "social-behind-scenes",
+      });
+      return {
+        ...s,
+        controls: {
+          ...s.controls,
+          platforms: ["linkedin", "instagram", "twitter"],
+          includeImage: true,
+          ratio: "4:5",
+        },
+      };
+    },
+  },
+  {
     id: "brief-error",
     label: "Brief · Error",
     make: () =>
@@ -375,13 +489,25 @@ const SCENES: {
         error: "You've hit the video generation limit for now. Try again in a little while.",
       }),
   },
-  { id: "gen-image", label: "Generating · Image", make: () => session("image", "generating") },
+  {
+    id: "gen-image",
+    label: "Generating · Image render",
+    make: () => session("image", "generating"),
+  },
   {
     id: "gen-article",
-    label: "Generating · Article",
+    label: "Generating · Article writing",
     make: () => ({
       ...session("article", "generating"),
       job: { ...session("article", "generating").job!, stage: "writing" },
+    }),
+  },
+  {
+    id: "gen-social-context",
+    label: "Generating · Social context",
+    make: () => ({
+      ...session("social", "generating", { goal: "awareness" }),
+      job: { ...session("social", "generating").job!, stage: "context" },
     }),
   },
   {
@@ -391,8 +517,20 @@ const SCENES: {
     fixtures: { rows: ROWS.social, distribution: true },
   },
   {
+    id: "review-image",
+    label: "Review · Image 9:16",
+    make: () => session("image", "review"),
+    fixtures: { rows: ROWS.image, distribution: true },
+  },
+  {
+    id: "review-video-rendering",
+    label: "Review · Video rendering",
+    make: () => session("video", "review"),
+    fixtures: { rows: ROWS.video, distribution: true },
+  },
+  {
     id: "review-carousel",
-    label: "Review · Carousel",
+    label: "Review · Carousel (approved)",
     make: () => session("carousel", "review"),
     fixtures: { rows: ROWS.carousel, distribution: true },
   },
@@ -413,6 +551,39 @@ const SCENES: {
     label: "Review · Ad",
     make: () => session("ad", "review"),
     fixtures: { rows: ROWS.ad },
+  },
+  {
+    id: "review-revising",
+    label: "Review · Revising",
+    make: () => {
+      const base = session("social", "review");
+      return {
+        ...base,
+        pendingKind: "refine" as const,
+        job: {
+          ...base.job!,
+          id: "job-refine",
+          status: "running" as const,
+          stage: "writing" as const,
+        },
+      };
+    },
+    fixtures: { rows: ROWS.social, distribution: true },
+  },
+  {
+    id: "review-approved",
+    label: "Review · Approved, ready to ship",
+    make: () => session("social", "review"),
+    fixtures: { rows: approvedRows("social"), distribution: true },
+  },
+  {
+    id: "review-scheduled",
+    label: "Review · Scheduled",
+    make: () => session("social", "review"),
+    fixtures: {
+      rows: approvedRows("social", "scheduled", new Date(Date.now() + 86_400_000).toISOString()),
+      distribution: true,
+    },
   },
   {
     id: "review-partial",
@@ -438,18 +609,212 @@ const SCENES: {
     }),
     fixtures: { rows: ROWS.social, distribution: true },
   },
+  { id: "rail", label: "Rail · Queue, progress, dock", rail: true },
+  { id: "library", label: "Library · Posts and media", library: true },
 ];
+
+/** What a real job has saved by each stage, so the feed and live preview can be seen. */
+function progressiveOutput(type: StudioType, stageIndex: number): StudioJobOutput {
+  const full = OUTPUTS[type] ?? {};
+  const ids = STUDIO_FORMATS[type].stages.map((s) => s.id);
+  const out: StudioJobOutput = {};
+  if (stageIndex >= 1) out.angle = full.angle;
+  const writeAt = Math.max(ids.indexOf("writing"), ids.indexOf("captions"));
+  if (writeAt >= 0 && stageIndex > writeAt) {
+    Object.assign(out, {
+      title: full.title,
+      variants: full.variants,
+      slides: full.slides,
+      article: full.article,
+      script: full.script,
+      ads: full.ads,
+    });
+  }
+  const renderAt = ids.indexOf("render");
+  if (renderAt >= 0 && stageIndex >= renderAt) {
+    out.concept =
+      "Early light over ripe red coffee cherries on the branch, shallow depth of field, deep brand greens.";
+  }
+  return out;
+}
+
+function LiveComposer({ type, isMobile }: { type: StudioType; isMobile: boolean }) {
+  const stages = STUDIO_FORMATS[type].stages;
+  const [s, setS] = useState<StudioSession>(() => {
+    const base = session(type, "generating", {
+      goal: "awareness",
+      template: templatesFor(type)[0]?.id,
+    });
+    return {
+      ...base,
+      job: { ...base.job!, stage: stages[0].id, created_at: new Date().toISOString() },
+    };
+  });
+
+  useEffect(() => {
+    const started = Date.now();
+    let i = 0;
+    const t = window.setInterval(() => {
+      i += 1;
+      if (i < stages.length) {
+        setS((prev) => ({
+          ...prev,
+          job: { ...prev.job!, stage: stages[i].id, output: progressiveOutput(type, i) },
+        }));
+        return;
+      }
+      window.clearInterval(t);
+      const done = session(type, "review", { template: templatesFor(type)[0]?.id });
+      const finished = {
+        ...done.job!,
+        created_at: new Date(started).toISOString(),
+        completed_at: new Date().toISOString(),
+      };
+      setS({ ...done, job: finished, lastGood: finished });
+    }, 3200);
+    return () => window.clearInterval(t);
+  }, [type, stages]);
+
+  return (
+    <ComposerBody
+      session={s}
+      isMobile={isMobile}
+      fixtures={{ ideas: IDEAS, rows: ROWS[type], distribution: true }}
+    />
+  );
+}
+
+const RAIL_GROUPS: Group[] = [
+  {
+    key: "g-image",
+    ids: ["x1"],
+    type: "image",
+    title: "Harvest morning in Huila",
+    excerpt: "5:40am in Huila. The cherries only get picked when they're this red.",
+    platforms: ["instagram", "tiktok"],
+    storagePath: "thumb-1",
+    mediaType: "image",
+    createdAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+    jobId: null,
+    status: "pending",
+  },
+  {
+    key: "g-social",
+    ids: ["x2"],
+    type: "social",
+    title: "Pay the farmer, taste the difference",
+    excerpt:
+      "We pay the Huila co-op 30% above fair-trade minimums. Not as charity — as quality control.",
+    platforms: ["linkedin", "instagram"],
+    storagePath: null,
+    mediaType: null,
+    createdAt: new Date(Date.now() - 42 * 60_000).toISOString(),
+    jobId: null,
+    status: "pending",
+  },
+  {
+    key: "g-article",
+    ids: ["x3"],
+    type: "article",
+    title: "Decaf that doesn't taste like decaf: a buyer's guide",
+    excerpt: "How modern decaffeination works, and the three things to check before you buy.",
+    platforms: [],
+    storagePath: null,
+    mediaType: null,
+    createdAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+    jobId: null,
+    status: "approved",
+  },
+];
+
+function RailScene() {
+  const carousel = session("carousel", "generating");
+  const running: StudioSession = {
+    ...carousel,
+    job: { ...carousel.job!, stage: "writing", title: "Is your cold brew under-extracted?" },
+  };
+  const video = session("video", "generating");
+  const failed: StudioJob = {
+    ...video.job!,
+    id: "job-failed",
+    group_id: "g-failed",
+    status: "failed",
+    title: "Roastery pan",
+    error: { category: "provider", message: "The video provider timed out.", retryable: true },
+  };
+  const docked: StudioSession[] = [
+    running,
+    session("social", "review"),
+    { ...video, id: "lab-video-docked", job: { ...video.job!, stage: "render" } },
+  ];
+  return (
+    <div className="flex flex-wrap items-start justify-center gap-10">
+      <div className="w-[340px] space-y-6 rounded-2xl bg-surface-1 p-3.5 ring-1 ring-border">
+        <ul className="space-y-2.5">
+          <JobRow job={running.job!} tracked onDismiss={() => {}} />
+          <JobRow job={failed} tracked={false} onDismiss={() => {}} />
+        </ul>
+        <ul className="space-y-2.5">
+          {RAIL_GROUPS.map((g) => (
+            <ApprovalCard
+              key={g.key}
+              group={g}
+              thumb={g.storagePath ? art(1280, 720, "#223012", "#b5d84a", "Harvest") : undefined}
+              highlight={g.key === "g-image"}
+              onChanged={() => {}}
+              fixture
+            />
+          ))}
+        </ul>
+      </div>
+      <div className="flex w-[340px] flex-col items-end gap-2">
+        {docked.map((d) => (
+          <DockCard key={d.id} session={d} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function libraryFixtures() {
+  return {
+    fixtureGroups: RAIL_GROUPS,
+    fixtureThumbs: { "thumb-1": art(1280, 960, "#223012", "#b5d84a", "Harvest") },
+    fixtureAssets: [
+      normalizeLibraryAsset({
+        id: "asset-1",
+        title: "Harvest morning",
+        media_url: art(1080, 1350, "#1f2a12", "#8ab734", "Gift the good stuff"),
+        kind: "image",
+        created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
+        source: "generated",
+      }),
+    ],
+  };
+}
+
+type Device = "phone" | "tablet" | "window" | "wide";
+
+/** Frame sizes that match how the composer window really appears. */
+const FRAME: Record<Device, string> = {
+  phone: "h-[844px] w-[390px] rounded-[28px]",
+  tablet: "h-[900px] w-[820px] rounded-2xl",
+  window: "h-[860px] w-[1240px] rounded-2xl",
+  wide: "h-[960px] w-[1680px] rounded-2xl",
+};
 
 export function StudioLab() {
   const [scene, setScene] = useState(SCENES[0].id);
-  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [device, setDevice] = useState<Device>("window");
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
     const s = url.searchParams.get("scene");
     if (s && SCENES.some((x) => x.id === s)) setScene(s);
-    if (url.searchParams.get("device") === "mobile") setDevice("mobile");
+    const d = url.searchParams.get("device");
+    if (d === "mobile" || d === "phone") setDevice("phone");
+    else if (d === "tablet" || d === "wide") setDevice(d);
     if (url.searchParams.get("theme") === "dark") setDark(true);
   }, []);
 
@@ -461,7 +826,8 @@ export function StudioLab() {
   }, [dark, setPreference]);
 
   const current = SCENES.find((s) => s.id === scene) ?? SCENES[0];
-  const sessionData = useMemo(() => current.make(), [current]);
+  const sessionData = useMemo(() => current.make?.() ?? null, [current]);
+  const [runKey, setRunKey] = useState(0);
 
   return (
     <div className="min-h-dvh bg-surface-1 text-foreground">
@@ -478,13 +844,17 @@ export function StudioLab() {
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={() => setDevice((d) => (d === "desktop" ? "mobile" : "desktop"))}
-          className="h-8 rounded-md border border-input px-3 text-sm"
+        <select
+          value={device}
+          onChange={(e) => setDevice(e.target.value as Device)}
+          aria-label="Window size"
+          className="h-8 rounded-md border border-input bg-surface-3 px-2 text-sm"
         >
-          {device === "desktop" ? "Desktop" : "Mobile"}
-        </button>
+          <option value="phone">Phone · 390</option>
+          <option value="tablet">Tablet · 820</option>
+          <option value="window">Window · 1240</option>
+          <option value="wide">Maximized · 1680</option>
+        </select>
         <button
           type="button"
           onClick={() => setDark((d) => !d)}
@@ -492,27 +862,60 @@ export function StudioLab() {
         >
           {dark ? "Dark" : "Light"}
         </button>
+        {current.live ? (
+          <button
+            type="button"
+            onClick={() => setRunKey((k) => k + 1)}
+            className="h-8 rounded-md border border-input px-3 text-sm"
+          >
+            Replay
+          </button>
+        ) : null}
         <span className="text-xs text-muted-foreground">Sample data · dev only</span>
       </div>
-      <div className="flex justify-center p-6">
-        <div
-          key={`${scene}-${device}`}
-          className={cn(
-            "flex flex-col overflow-hidden border border-border bg-surface-3 shadow-4",
-            device === "desktop"
-              ? "h-[860px] w-[min(100%,1240px)] rounded-2xl"
-              : "h-[844px] w-[390px] rounded-[28px]",
-          )}
-        >
-          <DialogPrimitive.Root open modal={false}>
-            <ComposerBody
-              session={sessionData}
-              isMobile={device === "mobile"}
-              fixtures={{ ideas: IDEAS, ...current.fixtures }}
-            />
-          </DialogPrimitive.Root>
+      {current.library ? (
+        <div className="p-6">
+          <div className="mx-auto mb-4 flex max-w-[1240px] justify-end">
+            <button
+              type="button"
+              onClick={() => emitAppEvent("open:library")}
+              className="h-8 rounded-md border border-input px-3 text-sm"
+            >
+              Open as pop-up
+            </button>
+            <LibraryDialog {...libraryFixtures()} />
+          </div>
+          <div className="mx-auto h-[860px] max-w-[1240px] overflow-hidden rounded-2xl border border-border shadow-4">
+            <LibraryPage {...libraryFixtures()} />
+          </div>
         </div>
-      </div>
+      ) : current.rail ? (
+        <div className="p-6">
+          <RailScene />
+        </div>
+      ) : (
+        <div className="flex justify-center overflow-x-auto p-6">
+          <div
+            key={`${scene}-${device}-${runKey}`}
+            className={cn(
+              "flex flex-col overflow-hidden border border-border bg-surface-3 shadow-4",
+              FRAME[device],
+            )}
+          >
+            <DialogPrimitive.Root open modal={false}>
+              {current.live ? (
+                <LiveComposer type={current.live} isMobile={device === "phone"} />
+              ) : sessionData ? (
+                <ComposerBody
+                  session={sessionData}
+                  isMobile={device === "phone"}
+                  fixtures={{ ideas: IDEAS, ...current.fixtures }}
+                />
+              ) : null}
+            </DialogPrimitive.Root>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

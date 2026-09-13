@@ -107,7 +107,7 @@ export function ContentItemDialog() {
               <div className="h-3 w-2/3 animate-pulse rounded bg-surface-2" />
             </div>
           ) : (
-            <div className="prose prose-sm max-w-none dark:prose-invert">
+            <div className="studio-article !text-[15px]">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {item.body || "_No content_"}
               </ReactMarkdown>

@@ -14,6 +14,7 @@ import type { PlatformId } from "@/lib/social-platforms";
 import { recommendedRatio } from "./aspect";
 import { studioApi, readBrandPayload, StudioApiError } from "./client";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
+import { getTemplate, templateFits } from "./templates";
 import {
   isActiveJob,
   newIdempotencyKey,
@@ -36,6 +37,8 @@ export type StudioSession = {
   goal?: GoalId;
   ideaId?: string;
   ideaSource?: string;
+  /** StudioTemplate id — structure the generator follows. */
+  template?: string;
   controls: StudioControls;
   /** Current job (latest generate / regenerate / refine). */
   job: StudioJob | null;
@@ -145,9 +148,40 @@ export function getStudioState(): State {
 
 /* ───────────────────────── session actions ───────────────────────── */
 
+const CONTROLS_KEY = "studio:last-controls:";
+
+type RememberedControls = Pick<StudioControls, "platforms" | "ratio" | "includeImage">;
+
+/** The platforms and size last used for a format, so the next one starts there. */
+function rememberedControls(type: StudioType): Partial<RememberedControls> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CONTROLS_KEY + type);
+    return raw ? (JSON.parse(raw) as Partial<RememberedControls>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberControls(type: StudioType, controls: StudioControls) {
+  try {
+    const value: RememberedControls = {
+      platforms: controls.platforms,
+      ratio: controls.ratio,
+      includeImage: controls.includeImage,
+    };
+    localStorage.setItem(CONTROLS_KEY + type, JSON.stringify(value));
+  } catch {
+    /* private mode or quota — defaults still work */
+  }
+}
+
 function defaultControls(type: StudioType, platforms?: PlatformId[]): StudioControls {
   const format = STUDIO_FORMATS[type];
-  const picked = (platforms ?? []).filter((p) => format.platforms.includes(p));
+  const remembered = platforms?.length ? null : rememberedControls(type);
+  const picked = (platforms?.length ? platforms : (remembered?.platforms ?? [])).filter((p) =>
+    format.platforms.includes(p),
+  );
   const chosen = picked.length ? picked : format.defaultPlatforms;
   const controls: StudioControls = {
     platforms: format.multiPlatform ? chosen : chosen.slice(0, 1),
@@ -158,12 +192,30 @@ function defaultControls(type: StudioType, platforms?: PlatformId[]): StudioCont
         ? "4:5"
         : recommendedRatio(controls.platforms, type === "video" ? "video" : "image", format.ratios);
   }
+  if (remembered?.ratio && format.ratios.includes(remembered.ratio))
+    controls.ratio = remembered.ratio;
+  if (format.media === "optional-image" && typeof remembered?.includeImage === "boolean")
+    controls.includeImage = remembered.includeImage;
   if (type === "carousel") controls.slideCount = 6;
   if (type === "article") controls.length = "standard";
   if (type === "script") controls.durationSec = 30;
   if (type === "video")
     Object.assign(controls, { durationSec: 6, videoResolution: "720P", audio: true });
   return controls;
+}
+
+/** Starting settings for a format: remembered platforms and size, else sensible defaults. */
+export function studioDefaultControls(type: StudioType): StudioControls {
+  return defaultControls(type);
+}
+
+function storedLastType(): StudioType | null {
+  try {
+    const v = localStorage.getItem("studio:last-type");
+    return v && v in STUDIO_FORMATS ? (v as StudioType) : null;
+  } catch {
+    return null;
+  }
 }
 
 function patchSession(
@@ -189,6 +241,7 @@ export function openComposer(
     goal?: GoalId;
     ideaId?: string;
     ideaSource?: string;
+    template?: string;
     platforms?: PlatformId[];
   } = {},
 ): string | null {
@@ -202,8 +255,10 @@ export function openComposer(
   }
   // Without a format (⌘J, the rail's Create button) Studio opens on the start
   // screen so the choice of format and idea comes first.
-  const type = opts.type ?? "social";
-  const step: SessionStep = opts.type || opts.brief ? "intent" : "start";
+  const type = opts.type ?? storedLastType() ?? "social";
+  // With a brief there's work to do: callers generate straight away. Without
+  // one, Studio opens on the prompt box with the format pre-selected.
+  const step: SessionStep = opts.brief ? "intent" : "start";
 
   // Reuse an untouched session instead of stacking empty ones.
   const reusable = state.sessions.find(
@@ -221,7 +276,12 @@ export function openComposer(
         goal: opts.goal ?? reusable.goal,
         ideaId: opts.ideaId,
         ideaSource: opts.ideaSource,
-        controls: opts.platforms ? defaultControls(type, opts.platforms) : reusable.controls,
+        template: opts.template,
+        type,
+        controls:
+          opts.platforms || reusable.type !== type
+            ? defaultControls(type, opts.platforms)
+            : reusable.controls,
         step,
         window: "open",
         updatedAt: now,
@@ -235,6 +295,7 @@ export function openComposer(
         goal: opts.goal,
         ideaId: opts.ideaId,
         ideaSource: opts.ideaSource,
+        template: opts.template,
         controls: defaultControls(type, opts.platforms),
         job: null,
         lastGood: null,
@@ -305,7 +366,10 @@ export async function openJob(jobId: string, workspaceId?: string | null): Promi
 export function updateSession(
   id: string,
   patch: Partial<
-    Pick<StudioSession, "brief" | "goal" | "ideaId" | "ideaSource" | "controls" | "type" | "error">
+    Pick<
+      StudioSession,
+      "brief" | "goal" | "ideaId" | "ideaSource" | "template" | "controls" | "type" | "error"
+    >
   >,
 ) {
   patchSession(id, (s) => {
@@ -315,6 +379,7 @@ export function updateSession(
         controls: defaultControls(patch.type, s.controls.platforms),
         ideaId: undefined,
         ideaSource: undefined,
+        template: patch.template ?? (templateFits(s.template, patch.type) ? s.template : undefined),
       };
     }
     return patch;
@@ -390,20 +455,28 @@ export function chooseType(
     goal?: GoalId;
     ideaId?: string;
     ideaSource?: string;
+    template?: string;
     platforms?: PlatformId[];
+    controls?: Partial<StudioControls>;
   } = {},
 ) {
   patchSession(id, (s) => ({
     type,
     step: "intent",
-    controls: defaultControls(
-      type,
-      seed.platforms ?? (s.type === type ? s.controls.platforms : undefined),
-    ),
+    controls: {
+      ...defaultControls(
+        type,
+        seed.platforms ?? (s.type === type ? s.controls.platforms : undefined),
+      ),
+      ...(getTemplate(seed.template)?.controls ?? {}),
+      ...(seed.controls ?? {}),
+    },
     brief: seed.brief ?? s.brief,
     goal: seed.goal ?? s.goal,
     ideaId: seed.ideaId,
     ideaSource: seed.ideaSource,
+    template:
+      seed.template ?? (s.type === type && templateFits(s.template, type) ? s.template : undefined),
     error: null,
   }));
 }
@@ -415,6 +488,42 @@ export function backToStart(id: string) {
 
 export function backToBrief(id: string) {
   patchSession(id, { step: "intent", error: null });
+}
+
+type TemplateState = Pick<StudioSession, "brief" | "goal" | "controls" | "template">;
+
+/**
+ * Apply a template to a brief: its starter text, goal and settings. Pass null
+ * to detach the template and keep the brief. Returns what it replaced, so the
+ * UI can offer Undo.
+ */
+export function applyTemplate(id: string, templateId: string | null): TemplateState | null {
+  const s = getSession(id);
+  if (!s) return null;
+  const prev: TemplateState = {
+    brief: s.brief,
+    goal: s.goal,
+    controls: s.controls,
+    template: s.template,
+  };
+  if (!templateId) {
+    patchSession(id, { template: undefined });
+    return prev;
+  }
+  const t = getTemplate(templateId);
+  if (!t || !t.types.includes(s.type)) return null;
+  patchSession(id, {
+    template: t.id,
+    brief: t.starter,
+    goal: t.goal ?? s.goal,
+    controls: { ...s.controls, ...t.controls },
+    error: null,
+  });
+  return prev;
+}
+
+export function restoreTemplateState(id: string, prev: TemplateState) {
+  patchSession(id, prev);
 }
 
 /* ───────────────────────── generation ───────────────────────── */
@@ -432,6 +541,7 @@ export async function generate(
     patchSession(id, { error: "Tell Mellox what this should achieve first." });
     return;
   }
+  if (kind === "generate") rememberControls(s.type, s.controls);
   const parent = kind === "generate" ? null : (s.lastGood ?? s.job);
   const key = newIdempotencyKey();
   patchSession(id, {
@@ -457,7 +567,13 @@ async function submit(
       workspaceId: s.workspaceId,
       type: s.type,
       idempotencyKey: key,
-      intent: { brief: s.brief.trim(), goal: s.goal, ideaId: s.ideaId, ideaSource: s.ideaSource },
+      intent: {
+        brief: s.brief.trim(),
+        goal: s.goal,
+        ideaId: s.ideaId,
+        ideaSource: s.ideaSource,
+        template: s.template,
+      },
       controls: s.controls,
       brand: readBrandPayload(s.workspaceId),
       parentJobId,
