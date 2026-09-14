@@ -48,6 +48,23 @@ export function getDistributionProviderForWorkspace(
   return isSdrEnabledForWorkspace(workspaceId) ? "sdr" : null;
 }
 
+/**
+ * AI answer-engine probes for AI Visibility scans: each full scan asks a few
+ * questions of the models in GEO_PROBE_MODELS through OpenRouter (metered and
+ * budget-checked). Paid per scan, so OFF unless FEATURE_FLAG_GEO_AI_PROBES_ENABLED
+ * is set; FEATURE_FLAG_GEO_AI_PROBES_ENABLED_WS_<id> overrides per workspace.
+ */
+export function isGeoProbesEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_GEO_AI_PROBES_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return isTruthy(perWs);
+  }
+  if (!process.env.OPENROUTER_API_KEY) return false;
+  return isTruthy((process.env.FEATURE_FLAG_GEO_AI_PROBES_ENABLED ?? "").trim().toLowerCase());
+}
+
 /** Is the real SDR distribution path enabled? Off by default. */
 export function isSdrEnabled(): boolean {
   const v = process.env[ENV_FEATURE_SDR];

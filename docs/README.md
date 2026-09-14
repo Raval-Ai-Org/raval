@@ -55,6 +55,8 @@ docs/
 | Handle an incident / rotate a secret       | [OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md)                                                             |
 | Understand agents, approvals and workers   | [adr/0007-agent-control-plane.md](adr/0007-agent-control-plane.md)                                         |
 | Understand AI spend limits and guardrails  | [adr/0008-ai-metering-budgets-guardrails.md](adr/0008-ai-metering-budgets-guardrails.md)                   |
+| Connect GitHub / website source connectors | [github-connector.md](github-connector.md) · [adr/0011](adr/0011-github-app-website-connector.md)          |
+| Understand AI Visibility (GEO / AEO scans) | [geo-intelligence.md](geo-intelligence.md) · [adr/0010](adr/0010-ai-visibility-geo-intelligence.md)        |
 
 ## 🆕 Adding new docs
 

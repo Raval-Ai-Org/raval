@@ -32,6 +32,7 @@ import {
   rateLimitResponse,
   type RateLimitTier,
 } from "./rate-limit";
+import { HttpError } from "./http-error";
 import { SsrfBlockedError } from "./safe-fetch";
 import { UpstreamError } from "./upstream";
 
@@ -98,6 +99,7 @@ export function knownErrorResponse(error: unknown): Response | null {
     return res;
   }
   if (error instanceof UpstreamError) return jsonError(error.status, error.message);
+  if (error instanceof HttpError) return jsonError(error.status, error.message);
   if (error instanceof SsrfBlockedError) return jsonError(400, "URL is not allowed");
   if (error instanceof ZodError) return jsonError(400, "Invalid request");
   if (error instanceof Error && /^Unauthorized/i.test(error.message)) {

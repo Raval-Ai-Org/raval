@@ -9,7 +9,7 @@ Mellox AI is powered by Ravi, a Marketing Reasoning Core built on four brains â€
 - [Studio](/app): Chat-first workspace where Ravi plans, creates and optimizes for the active brand.
 - [Agency HQ](/agency): Manage all clients at once â€” approvals, schedules, activity and combined analytics.
 - [Clients](/projects): Every brand in one place with Brand DNA, memory and recent activity.
-- [AI Search Visibility (AEO / GEO)](/app): 40-point scans that show how brands appear inside ChatGPT, Perplexity, Gemini and Claude.
+- [AI Search Visibility (AEO / GEO)](/app): Site-wide scans with 60+ checks that show how brands appear inside ChatGPT, Perplexity, Gemini and Claude.
 - [Content](/app): On-brand articles, briefs, social and landing copy grounded in Brand DNA.
 - [Analytics](/app): Unified traffic, AI citations and pipeline insights.
 

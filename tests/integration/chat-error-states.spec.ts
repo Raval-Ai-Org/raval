@@ -1,4 +1,5 @@
 import { test, expect, type Route } from "@playwright/test";
+import { STORAGE_KEY } from "../fixtures/supabase-ref";
 
 /**
  * Verifies the chat surfaces the correct user-facing message when
@@ -6,8 +7,6 @@ import { test, expect, type Route } from "@playwright/test";
  * and that the composer recovers gracefully so the user can retry.
  */
 
-const SUPABASE_HOST = "slcmqbbjzyztqyucauol.supabase.co";
-const STORAGE_KEY = "sb-slcmqbbjzyztqyucauol-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -126,16 +125,8 @@ async function seed(page: import("@playwright/test").Page) {
         window.localStorage.setItem("workspace:selected", wsId);
         // Prevent onboarding auto-send from interfering.
         window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
-        // @ts-expect-error test stub
-        window.WebSocket = function () {
-          return {
-            addEventListener() {},
-            removeEventListener() {},
-            send() {},
-            close() {},
-            readyState: 3,
-          };
-        };
+        // No window.WebSocket stub: replacing the global hangs supabase-js's
+        // getSession(), so SessionGate never leaves "Loading your workspace…".
       } catch {
         /* noop */
       }

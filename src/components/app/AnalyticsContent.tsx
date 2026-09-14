@@ -880,11 +880,15 @@ function OrganicPanel() {
   const { data, isLoading } = query;
   const audit = data?.latestAudit;
   const subs = audit?.subscores ?? {};
+  // Category keys from AI Visibility scans; legacy single-page audit keys as fallback.
   const scoreCards = [
-    { label: "SEO", key: "content", color: "#2D7EF8" },
-    { label: "AEO", key: "schema", color: "#F59E0B" },
-    { label: "GEO", key: "ai-access", color: "#EF4444" },
-  ].map((s) => ({ ...s, score: Math.round((subs[s.key] as number) ?? 0) }));
+    { label: "SEO", keys: ["technical", "crawl"], color: "#2D7EF8" },
+    { label: "AEO", keys: ["content", "structured_data", "schema"], color: "#F59E0B" },
+    { label: "GEO", keys: ["ai_access", "ai-access"], color: "#EF4444" },
+  ].map((s) => {
+    const key = s.keys.find((k) => typeof subs[k] === "number");
+    return { ...s, key: s.label, score: Math.round(key ? (subs[key] as number) : 0) };
+  });
 
   const actions = audit?.topActions ?? [];
 
@@ -905,7 +909,7 @@ function OrganicPanel() {
             </>
           ) : (
             <>
-              Open the AI Visibility panel and enter your URL — we'll run a live 40-point audit and
+              Open the AI Visibility panel and enter your URL — we'll scan it with 60+ checks and
               store the score here.
             </>
           )
@@ -983,7 +987,7 @@ function OrganicPanel() {
               {Object.entries(subs).map(([k, v]) => (
                 <li key={k}>
                   <div className="mb-1 flex items-center justify-between text-[12.5px]">
-                    <span className="font-medium capitalize">{k.replace(/-/g, " ")}</span>
+                    <span className="font-medium capitalize">{k.replace(/[-_]/g, " ")}</span>
                     <span className="tabular-nums text-muted-foreground">
                       {Math.round(v as number)}/100
                     </span>

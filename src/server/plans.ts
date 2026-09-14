@@ -21,6 +21,8 @@ export type PlanLimits = {
   monthlyImages: number;
   monthlyVideos: number;
   monthlyPosts: number;
+  /** Pages one AI Visibility site scan may crawl (PLAN_<ID>_GEO_MAX_PAGES). */
+  geoMaxPages: number;
 };
 
 const PLANS: Record<PlanId, PlanLimits> = {
@@ -32,6 +34,7 @@ const PLANS: Record<PlanId, PlanLimits> = {
     monthlyImages: 150,
     monthlyVideos: 10,
     monthlyPosts: 60,
+    geoMaxPages: 25,
   },
   growth: {
     id: "growth",
@@ -41,6 +44,7 @@ const PLANS: Record<PlanId, PlanLimits> = {
     monthlyImages: 600,
     monthlyVideos: 40,
     monthlyPosts: 300,
+    geoMaxPages: 100,
   },
   agency: {
     id: "agency",
@@ -50,6 +54,7 @@ const PLANS: Record<PlanId, PlanLimits> = {
     monthlyImages: 2_500,
     monthlyVideos: 150,
     monthlyPosts: 2_000,
+    geoMaxPages: 300,
   },
 };
 
@@ -86,5 +91,9 @@ export function getPlanLimits(plan: string | null | undefined): PlanLimits {
     monthlyImages: envNumber(`PLAN_${key}_MONTHLY_IMAGES`) ?? base.monthlyImages,
     monthlyVideos: envNumber(`PLAN_${key}_MONTHLY_VIDEOS`) ?? base.monthlyVideos,
     monthlyPosts: envNumber(`PLAN_${key}_MONTHLY_POSTS`) ?? base.monthlyPosts,
+    geoMaxPages: Math.max(
+      1,
+      Math.min(1000, envNumber(`PLAN_${key}_GEO_MAX_PAGES`) ?? base.geoMaxPages),
+    ),
   };
 }

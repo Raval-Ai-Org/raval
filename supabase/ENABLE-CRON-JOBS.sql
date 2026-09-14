@@ -108,7 +108,10 @@ BEGIN
       ('mellox-agents-tick',     '*/15 * * * *', '/api/public/hooks/agents-tick'),
       -- Missed-heartbeat, AI spend, truncation and webhook-rejection alerts,
       -- plus retention for operational log tables.
-      ('mellox-ops-watch',       '*/5 * * * *',  '/api/public/hooks/ops-watch')
+      ('mellox-ops-watch',       '*/5 * * * *',  '/api/public/hooks/ops-watch'),
+      -- Resumes AI Visibility site scans whose worker lease expired (restarts,
+      -- deploys, crawls that yielded at their time budget). Max 3 per run.
+      ('mellox-geo-scans',       '* * * * *',    '/api/public/hooks/geo-scans')
     ) AS t(jobname, schedule, path)
   LOOP
     IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = v_job.jobname) THEN

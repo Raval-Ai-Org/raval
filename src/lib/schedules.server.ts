@@ -127,6 +127,7 @@ type ClaimedJob = {
   next_run_at: string;
   created_by: string | null;
   run_count: number | null;
+  meta?: unknown;
 };
 
 /**
@@ -163,7 +164,7 @@ async function claimJobs(opts: { onlyJobId?: string; max?: number }): Promise<{
   let q = supabaseAdmin
     .from("scheduled_jobs")
     .select(
-      "id, workspace_id, title, task_type, channel, agent, cadence, prompt, next_run_at, created_by, run_count",
+      "id, workspace_id, title, task_type, channel, agent, cadence, prompt, next_run_at, created_by, run_count, meta",
     )
     .eq("active", true)
     .neq("task_type", "market-brain")
@@ -176,7 +177,69 @@ async function claimJobs(opts: { onlyJobId?: string; max?: number }): Promise<{
   return { jobs: (data ?? []) as ClaimedJob[], leased: false };
 }
 
+/**
+ * AI Visibility monitor: enqueue a full site scan. The scan itself runs on the
+ * geo-scans cron hook, so this job only records which scan it started. A scan
+ * already running for the workspace counts as this run (no duplicate crawl).
+ */
+async function runGeoScanJob(job: ClaimedJob, nowIso: string, leased: boolean): Promise<boolean> {
+  const release = leased ? LEASE_RELEASE : {};
+  const meta = (job.meta && typeof job.meta === "object" ? job.meta : {}) as Record<
+    string,
+    unknown
+  >;
+  try {
+    const url = typeof meta.url === "string" ? meta.url : "";
+    if (!url) throw new Error("This monitor has no website URL");
+    const { createScan, GeoScanConflictError } = await import("@/server/geo/service.server");
+    let scanId: string;
+    try {
+      const scan = await createScan({
+        workspaceId: job.workspace_id,
+        userId: job.created_by,
+        url,
+        mode: "full",
+        trigger: "scheduled",
+        scheduledJobId: job.id,
+      });
+      scanId = scan.id;
+    } catch (error) {
+      if (!(error instanceof GeoScanConflictError)) throw error;
+      scanId = error.activeScanId;
+    }
+    const next = computeNext(new Date(job.next_run_at), job.cadence as Cadence);
+    await supabaseAdmin
+      .from("scheduled_jobs")
+      .update({
+        last_run_at: nowIso,
+        last_run_status: "ok",
+        last_run_error: null,
+        run_count: (job.run_count ?? 0) + 1,
+        next_run_at: next ? next.toISOString() : job.next_run_at,
+        active: Boolean(next),
+        meta: { ...meta, last_scan_id: scanId } as never,
+        ...release,
+      })
+      .eq("id", job.id);
+    return true;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("scheduled AI visibility scan failed", job.id, msg);
+    await supabaseAdmin
+      .from("scheduled_jobs")
+      .update({
+        last_run_at: nowIso,
+        last_run_status: "error",
+        last_run_error: msg.slice(0, 500),
+        ...release,
+      })
+      .eq("id", job.id);
+    return false;
+  }
+}
+
 async function runJob(job: ClaimedJob, nowIso: string, leased: boolean): Promise<boolean> {
+  if (job.task_type === "geo-scan") return runGeoScanJob(job, nowIso, leased);
   // Lease columns exist only once the claim migration is applied.
   const release = leased ? LEASE_RELEASE : {};
   try {

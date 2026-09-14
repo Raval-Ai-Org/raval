@@ -1,7 +1,6 @@
 import { test, expect, type BrowserContext, type Page, type Route } from "@playwright/test";
+import { STORAGE_KEY, SUPABASE_HOST } from "../fixtures/supabase-ref";
 
-const SUPABASE_HOST = "slcmqbbjzyztqyucauol.supabase.co";
-const STORAGE_KEY = "sb-slcmqbbjzyztqyucauol-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const COLLECTION_ID = "11111111-1111-1111-1111-111111111111";

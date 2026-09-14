@@ -1,4 +1,5 @@
 import { test, expect, type Route, type Page, type BrowserContext } from "@playwright/test";
+import { STORAGE_KEY, SUPABASE_HOST } from "../fixtures/supabase-ref";
 
 /**
  * Deep-link tests for every window event a Studio suggestion can fire.
@@ -9,7 +10,7 @@ import { test, expect, type Route, type Page, type BrowserContext } from "@playw
  * MUST respond exactly as if the user had clicked the suggestion in
  * the rail:
  *
- *   geo:run-audit         → GeoAeoPanel posts to /api/geo-audit
+ *   geo:run-audit         → AI Visibility posts a scan to /api/geo/scans
  *   open:brand-dna        → Brand DNA (Memory) dialog opens
  *   open:content-calendar → Content Calendar dialog opens
  *   open:client-portal    → Client portal dialog opens
@@ -21,8 +22,6 @@ import { test, expect, type Route, type Page, type BrowserContext } from "@playw
  * having rendered first.
  */
 
-const SUPABASE_HOST = "nfgbofcxoqapaileqhon.supabase.co";
-const STORAGE_KEY = "sb-nfgbofcxoqapaileqhon-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -108,16 +107,8 @@ async function seed(page: Page, opts: SeedOpts = {}) {
         if (brandDna) {
           window.localStorage.setItem(`brand-dna:v3:${wsId}`, JSON.stringify(brandDna));
         }
-        // @ts-expect-error test stub
-        window.WebSocket = function () {
-          return {
-            addEventListener() {},
-            removeEventListener() {},
-            send() {},
-            close() {},
-            readyState: 3,
-          };
-        };
+        // No window.WebSocket stub: replacing the global hangs supabase-js's
+        // getSession(), so SessionGate never leaves "Loading your workspace…".
       } catch {
         /* noop */
       }
@@ -131,9 +122,8 @@ async function freshLoad(page: Page) {
   // Wait for the shell + workspace to hydrate. AppShell only mounts the
   // ChatPanel / dialog listeners once workspaceId is set, so a naive wait
   // on the Studio rail races the event dispatch.
-  await expect(page.getByRole("button", { name: "Collapse Studio panel" })).toBeVisible({
-    timeout: 15_000,
-  });
+  // (The Studio rail starts collapsed now, so its "Collapse Studio panel"
+  // button is not a reliable ready signal — the composer + workspace name are.)
   await page.waitForFunction(
     () => !!window.localStorage.getItem("workspace:name") && !!document.querySelector("textarea"),
     null,
@@ -217,10 +207,12 @@ test.describe("Suggestion event deep-links", () => {
 
     await dispatch(page, "open:canvas", { type: "article" });
     // The Studio composer titles a fresh brief "New <format noun>".
-    await expect(page.getByRole("dialog", { name: /New article/i })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("dialog", { name: /New article/i })).toBeVisible({
+      timeout: 5_000,
+    });
   });
 
-  test("geo:run-audit triggers a POST to /api/geo-audit from GeoAeoPanel", async ({
+  test("geo:run-audit opens AI Visibility and POSTs a scan to /api/geo/scans", async ({
     context,
     page,
   }) => {
@@ -228,22 +220,50 @@ test.describe("Suggestion event deep-links", () => {
     await stubSupabase(context, { websiteUrl: "https://example.com" });
     await seed(page, { brandDna: { brandName: "Example", websiteUrl: "https://example.com" } });
 
+    // The panel lists past scans and plan settings over RPC before it can run.
+    await context.route("**/api/rpc/geo/**", async (route) => {
+      const name = new URL(route.request().url()).pathname.split("/").pop();
+      const result =
+        name === "getGeoSettings"
+          ? { plan: "starter", planLabel: "Starter", maxPages: 25, probesAvailable: false }
+          : [];
+      await route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ result }) });
+    });
+
     let auditHit = false;
     let auditBody: string | null = null;
-    await context.route("**/api/geo-audit", async (route) => {
+    await context.route("**/api/geo/scans", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
       auditHit = true;
       auditBody = route.request().postData();
-      // Keep the request pending briefly so the test polls the flag, then
-      // fulfill with a minimal valid AuditResult so the panel doesn't error.
+      // A queued full scan: the panel switches to progress and polls.
       await route.fulfill({
-        status: 200,
+        status: 201,
         headers: JSON_HEADERS,
         body: JSON.stringify({
-          url: "https://example.com",
-          overall: 72,
-          subscores: [],
-          actions: [],
-          fetchedAt: new Date().toISOString(),
+          scan: {
+            id: "00000000-0000-4000-8000-000000000001",
+            url: "https://example.com/",
+            origin: "https://example.com",
+            host: "example.com",
+            mode: "full",
+            trigger: "chat",
+            status: "queued",
+            stage: "queued",
+            progress: { discovered: 0, fetched: 0, failed: 0, skipped: 0, pending: 0 },
+            maxPages: 25,
+            overallScore: null,
+            categoryScores: {},
+            report: null,
+            probes: null,
+            probesRequested: false,
+            previousScanId: null,
+            error: null,
+            cancelRequested: false,
+            createdAt: new Date().toISOString(),
+            startedAt: null,
+            completedAt: null,
+          },
         }),
       });
     });
@@ -251,7 +271,15 @@ test.describe("Suggestion event deep-links", () => {
     await freshLoad(page);
     await dispatch(page, "geo:run-audit");
 
-    await expect.poll(() => auditHit, { timeout: 5_000 }).toBe(true);
+    // Dev mode compiles the lazy dialog + panel chunks on first use.
+    await expect.poll(() => auditHit, { timeout: 30_000 }).toBe(true);
     expect(auditBody ?? "").toContain("example.com");
+
+    // The dialog shows live scan progress for the queued scan.
+    const dialog = page.getByRole("dialog", { name: /AI Visibility/i });
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+    await expect(dialog.getByText(/Scanning example\.com/i)).toBeVisible({ timeout: 5_000 });
+    await expect(dialog.getByRole("button", { name: /Cancel/i })).toBeVisible();
+    await page.screenshot({ path: "test-results/geo-scan-progress.png" });
   });
 });

@@ -8,15 +8,17 @@ Supabase (PostgreSQL) backend.
 
 The app runs on the Next.js App Router.
 
-| Path                          | What lives there                                                                                                                         |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/app/**/page.tsx`         | Routes. Each is a server component exporting `metadata`, rendering the `"use client"` UI beside it (`LoginPage.tsx`, `AppShell.tsx`, …). |
-| `src/app/**/route.ts`         | HTTP handlers (`/api/*`, `/sitemap.xml`), all authenticated with a Supabase bearer token.                                                |
-| `src/app/api/rpc/[...fn]`     | The single transport every server function is called through.                                                                            |
-| `src/server/fns/*.ts`         | Server-function implementations. Never bundled for the browser.                                                                          |
-| `src/lib/*.functions.ts`      | Their browser-side stubs: `await listContentItems({ data })` posts to `/api/rpc/<module>/<name>`.                                        |
-| `src/lib/navigation.tsx`      | `Link` / `useNavigate` / `useRouterState` / `redirect` on top of `next/navigation`.                                                      |
-| `src/components`, `src/hooks` | Shared UI and hooks (all client components).                                                                                             |
+| Path                            | What lives there                                                                                                                         |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/**/page.tsx`           | Routes. Each is a server component exporting `metadata`, rendering the `"use client"` UI beside it (`LoginPage.tsx`, `AppShell.tsx`, …). |
+| `src/app/**/route.ts`           | HTTP handlers (`/api/*`, `/sitemap.xml`), all authenticated with a Supabase bearer token.                                                |
+| `src/app/api/rpc/[...fn]`       | The single transport every server function is called through.                                                                            |
+| `src/server/fns/*.ts`           | Server-function implementations. Never bundled for the browser.                                                                          |
+| `src/lib/*.functions.ts`        | Their browser-side stubs: `await listContentItems({ data })` posts to `/api/rpc/<module>/<name>`.                                        |
+| `src/lib/navigation.tsx`        | `Link` / `useNavigate` / `useRouterState` / `redirect` on top of `next/navigation`.                                                      |
+| `src/components`, `src/hooks`   | Shared UI and hooks (all client components).                                                                                             |
+| `src/lib/geo`, `src/server/geo` | AI Visibility (GEO / AEO / SEO): scan engine and background worker — see [docs/geo-intelligence.md](docs/geo-intelligence.md).           |
+| `src/server/connectors`         | Website source connectors (GitHub App): install, repositories, webhooks — see [docs/github-connector.md](docs/github-connector.md).      |
 
 Auth is a Supabase session in `localStorage`, so the signed-in routes gate in the
 browser via `SessionGate` and every server call carries an `Authorization: Bearer`

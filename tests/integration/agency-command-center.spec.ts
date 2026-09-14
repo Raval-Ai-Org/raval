@@ -1,4 +1,5 @@
 import { test, expect, type Route, type Page } from "@playwright/test";
+import { STORAGE_KEY, SUPABASE_HOST } from "../fixtures/supabase-ref";
 
 /**
  * Agency HQ Command Center — palette, quick actions, filter chips.
@@ -15,8 +16,6 @@ import { test, expect, type Route, type Page } from "@playwright/test";
  * is deterministic and offline-safe.
  */
 
-const SUPABASE_HOST = "nfgbofcxoqapaileqhon.supabase.co";
-const STORAGE_KEY = "sb-nfgbofcxoqapaileqhon-auth-token";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const WS_A = "00000000-0000-0000-0000-0000000000a1";
 const WS_B = "00000000-0000-0000-0000-0000000000b2";

@@ -1,4 +1,5 @@
 import { test, expect, type Route } from "@playwright/test";
+import { STORAGE_KEY, SUPABASE_HOST } from "../fixtures/supabase-ref";
 
 /**
  * Verifies that clicking each Studio suggestion card dispatches the
@@ -7,8 +8,6 @@ import { test, expect, type Route } from "@playwright/test";
  * "platform is actually integrated" contract for the suggestion rail.
  */
 
-const SUPABASE_HOST = "nfgbofcxoqapaileqhon.supabase.co";
-const STORAGE_KEY = "sb-nfgbofcxoqapaileqhon-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -40,7 +39,7 @@ const SUGGESTIONS = [
   {
     id: "s-geo",
     label: "Run AI visibility audit",
-    hint: "40-point scan",
+    hint: "60+ check scan",
     accent: "blue",
     icon: "Search",
     intent: "geo-audit",
@@ -154,16 +153,8 @@ test.describe("Studio suggestions wiring", () => {
             JSON.stringify({ at: Date.now(), items }),
           );
           // Neutralize realtime.
-          // @ts-expect-error test stub
-          window.WebSocket = function () {
-            return {
-              addEventListener() {},
-              removeEventListener() {},
-              send() {},
-              close() {},
-              readyState: 3,
-            };
-          };
+          // No window.WebSocket stub: replacing the global hangs supabase-js's
+          // getSession(), so SessionGate never leaves "Loading your workspace…".
           // Capture events dispatched by suggestion clicks.
           (window as unknown as { __ev: string[] }).__ev = [];
           const kinds = [

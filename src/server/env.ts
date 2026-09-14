@@ -42,6 +42,15 @@ const Schema = z.object({
   SOCIALAPI_WEBHOOK_SECRET: z.string().optional(),
   SOCIALAPI_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(60).optional(),
   FEATURE_FLAG_SOCIALAPI_ENABLED: z.string().optional(),
+  // GitHub App (source connector) — server-only. Never expose as NEXT_PUBLIC_*.
+  GITHUB_APP_ID: z.string().regex(/^\d+$/).optional().or(z.literal("")),
+  GITHUB_APP_SLUG: z.string().optional(),
+  GITHUB_APP_NAME: z.string().optional(),
+  GITHUB_APP_PRIVATE_KEY: z.string().optional(),
+  GITHUB_WEBHOOK_SECRET: z.string().optional(),
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+  GITHUB_INSTALL_VERIFICATION: z.enum(["oauth", "install_window", ""]).optional(),
   // Operations — optional.
   REDIS_URL: z.string().optional(),
   SENTRY_DSN: optionalUrl,
@@ -100,6 +109,17 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
       if (!env[name]) errors.push(`${name} is required when FEATURE_FLAG_SDR_ENABLED is on`);
     }
   }
+  if (env.GITHUB_APP_ID) {
+    for (const name of ["GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET"]) {
+      if (!env[name]) warnings.push(`${name} is not set (the GitHub connector is disabled)`);
+    }
+    if (!env.GITHUB_CLIENT_SECRET) {
+      (production ? warnings : warnings).push(
+        "GITHUB_CLIENT_SECRET is not set — GitHub installs can't be verified with OAuth" +
+          (production ? " and new GitHub connections are refused" : ""),
+      );
+    }
+  }
   if ((env.DISTRIBUTION_PROVIDER ?? "").toLowerCase() === "socialapi" && !env.SOCIALAPI_API_KEY) {
     errors.push("SOCIALAPI_API_KEY is required when DISTRIBUTION_PROVIDER is socialapi");
   }
@@ -110,7 +130,12 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
   }
   // A provider secret in a NEXT_PUBLIC_* variable is inlined into the browser bundle.
   for (const name of Object.keys(env)) {
-    if (/^NEXT_PUBLIC_.*(SOCIALAPI|SDR_ADMIN|SERVICE_ROLE)/i.test(name) && env[name]) {
+    if (
+      /^NEXT_PUBLIC_.*(SOCIALAPI|SDR_ADMIN|SERVICE_ROLE|GITHUB_APP_PRIVATE|GITHUB_WEBHOOK|GITHUB_CLIENT_SECRET)/i.test(
+        name,
+      ) &&
+      env[name]
+    ) {
       errors.push(`${name} exposes a server-only secret to the browser — remove it`);
     }
   }

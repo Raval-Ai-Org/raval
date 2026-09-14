@@ -42,6 +42,14 @@ Jobs call `public.call_app_hook(path)`, which reads `mellox_app_base_url` and
 `mellox-*` jobs only once both secrets exist.
 
 - **First setup / re-schedule**: [supabase/ENABLE-CRON-JOBS.sql](../supabase/ENABLE-CRON-JOBS.sql).
+- **AI Visibility scans stuck in "running"**: check `mellox-geo-scans` (every
+  minute, migration `20260914120000`) and the `geo-scans` heartbeat. Scans whose
+  lease expired are resumed by that hook; a scan claimed 60+ times is failed.
+  To stop one by hand: `update geo_scans set cancel_requested = true where id = '…';`
+- **GitHub connections stuck or wrong**: webhook deliveries are in
+  `sdr_webhook_events` (`provider = 'github'`); rejected rows mean
+  `GITHUB_WEBHOOK_SECRET` doesn't match the App. Redeliver from the App's
+  _Advanced_ tab. Setup and status meanings: [github-connector.md](github-connector.md).
 - **A job shows 401**: Vault `mellox_cron_secret` ≠ app `CRON_SECRET`.
 - **503**: `CRON_SECRET` unset or < 16 chars on the app.
 - **Timeouts**: `mellox_app_base_url` unreachable from Supabase.
@@ -56,15 +64,16 @@ These values were committed to git or stored in plaintext at some point.
 Git history keeps them: **rotate all of them**, then update every place that
 uses each one.
 
-| Credential                          | Where it was exposed                                  | Rotate by                                        | Also update                                                                            |
-| ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `CRON_SECRET`                       | Plaintext in a `cron.job` command on the live project | New random 32+ chars                             | App env **and** Vault `mellox_cron_secret` (`vault.update_secret`), then re-run STEP 3 |
-| `SDR_ADMIN_TOKEN` / `SDE_API_TOKEN` | ADR-0005 (history)                                    | New random token                                 | App env and SDR `.env` (must match)                                                    |
-| SDR `WEBHOOK_SECRET`                | ADR-0005 (history)                                    | New random secret                                | SDR `.env`; per-workspace webhook secrets are re-issued on reconnect                   |
-| SDR `FERNET_KEY`                    | ADR-0005 (history)                                    | New Fernet key                                   | SDR `.env`; stored OAuth tokens must be re-encrypted, or accounts reconnected          |
-| SDR Postgres password               | ADR-0005 (history)                                    | `ALTER USER sde PASSWORD …`                      | `POSTGRES_PASSWORD`, `DATABASE_URL`, `DATABASE_URL_SYNC`                               |
-| GitHub personal access token        | ADR-0005 (history)                                    | Revoke in GitHub → Settings → Developer settings | Use a deploy key or fine-grained token instead                                         |
-| Test account password               | README / launch plan (history)                        | Change the password in Supabase Auth             | `E2E_TEST_PASSWORD` in CI secrets only                                                 |
+| Credential                              | Where it was exposed                                  | Rotate by                                                                                | Also update                                                                            |
+| --------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `CRON_SECRET`                           | Plaintext in a `cron.job` command on the live project | New random 32+ chars                                                                     | App env **and** Vault `mellox_cron_secret` (`vault.update_secret`), then re-run STEP 3 |
+| `SDR_ADMIN_TOKEN` / `SDE_API_TOKEN`     | ADR-0005 (history)                                    | New random token                                                                         | App env and SDR `.env` (must match)                                                    |
+| SDR `WEBHOOK_SECRET`                    | ADR-0005 (history)                                    | New random secret                                                                        | SDR `.env`; per-workspace webhook secrets are re-issued on reconnect                   |
+| SDR `FERNET_KEY`                        | ADR-0005 (history)                                    | New Fernet key                                                                           | SDR `.env`; stored OAuth tokens must be re-encrypted, or accounts reconnected          |
+| SDR Postgres password                   | ADR-0005 (history)                                    | `ALTER USER sde PASSWORD …`                                                              | `POSTGRES_PASSWORD`, `DATABASE_URL`, `DATABASE_URL_SYNC`                               |
+| GitHub personal access token            | ADR-0005 (history)                                    | Revoke in GitHub → Settings → Developer settings                                         | Use a deploy key or fine-grained token instead                                         |
+| GitHub App private key / webhook secret | Pasted into a chat session during setup               | App settings → generate a new private key (delete the old one); set a new webhook secret | `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` in every environment                 |
+| Test account password                   | README / launch plan (history)                        | Change the password in Supabase Auth                                                     | `E2E_TEST_PASSWORD` in CI secrets only                                                 |
 
 `node scripts/scan-secrets.mjs` (also a CI job) fails if any of these patterns
 come back.

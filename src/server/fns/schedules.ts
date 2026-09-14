@@ -14,6 +14,7 @@ export const TaskTypeEnum = z.enum([
   "social-post",
   "content-gen",
   "seo-audit",
+  "geo-scan",
   "crm-message",
   "custom",
 ]);

@@ -1,4 +1,5 @@
 import { test, expect, type Route, type Page, type BrowserContext } from "@playwright/test";
+import { STORAGE_KEY, SUPABASE_HOST } from "../fixtures/supabase-ref";
 
 /**
  * Malformed / unknown suggestion event & deep-link handling.
@@ -21,8 +22,6 @@ import { test, expect, type Route, type Page, type BrowserContext } from "@playw
  *   - A thrown listener never breaks subsequent event dispatch.
  */
 
-const SUPABASE_HOST = "nfgbofcxoqapaileqhon.supabase.co";
-const STORAGE_KEY = "sb-nfgbofcxoqapaileqhon-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -101,16 +100,8 @@ async function seed(page: Page) {
         // Ensure the "last canvas" hint is empty so malformed events can't
         // accidentally fall back to a previously-persisted value.
         window.localStorage.removeItem("studio:last-canvas");
-        // @ts-expect-error stub WS
-        window.WebSocket = function () {
-          return {
-            addEventListener() {},
-            removeEventListener() {},
-            send() {},
-            close() {},
-            readyState: 3,
-          };
-        };
+        // No window.WebSocket stub: replacing the global hangs supabase-js's
+        // getSession(), so SessionGate never leaves "Loading your workspace…".
         // Collect any uncaught errors so tests can assert none happened.
         (window as any).__errors = [];
         window.addEventListener("error", (e) => (window as any).__errors.push(String(e.message)));
@@ -317,7 +308,9 @@ test.describe("Malformed / unknown suggestion event deep-links", () => {
 
     // Dispatch a valid open:canvas — the real handler must still run.
     await dispatch(page, "open:canvas", { type: "article" });
-    await expect(page.getByRole("dialog", { name: /New article/i })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("dialog", { name: /New article/i })).toBeVisible({
+      timeout: 5_000,
+    });
 
     // The rogue throw becomes a global error, but the app is still usable.
     const errs = await readErrors(page);

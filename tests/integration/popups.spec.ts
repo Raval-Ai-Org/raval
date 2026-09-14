@@ -1,4 +1,5 @@
 import { test, expect, type Route, type Page } from "@playwright/test";
+import { STORAGE_KEY, SUPABASE_HOST } from "../fixtures/supabase-ref";
 
 /**
  * End-to-end popup smoke test.
@@ -18,8 +19,6 @@ import { test, expect, type Route, type Page } from "@playwright/test";
  *     close.
  */
 
-const SUPABASE_HOST = "nfgbofcxoqapaileqhon.supabase.co";
-const STORAGE_KEY = "sb-nfgbofcxoqapaileqhon-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -146,17 +145,8 @@ async function seedSession(page: Page) {
         window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
         window.localStorage.setItem("profile:persona", "founder");
 
-        // silence realtime websocket noise
-        // @ts-expect-error test-only stub
-        window.WebSocket = function () {
-          return {
-            addEventListener() {},
-            removeEventListener() {},
-            send() {},
-            close() {},
-            readyState: 3,
-          };
-        };
+        // No window.WebSocket stub: replacing the global hangs supabase-js's
+        // getSession(), so SessionGate never leaves "Loading your workspace…".
       } catch {
         /* noop */
       }

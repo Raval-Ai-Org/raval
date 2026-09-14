@@ -11,38 +11,10 @@ import {
 const uuid = z.string().uuid();
 
 /* ------------------------------------------------------------------ */
-/* GEO Audit persistence + trend                                      */
+/* AI Visibility score trend                                          */
 /* ------------------------------------------------------------------ */
-export const persistGeoAudit = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((data) =>
-    z
-      .object({
-        workspaceId: uuid,
-        url: z.string().max(2048).optional().nullable(),
-        score: z.number().int().min(0).max(100),
-        subscores: z.record(z.string(), z.number()).optional(),
-        meta: z.record(z.string(), z.any()).optional(),
-      })
-      .parse(data),
-  )
-  .handler(async ({ data, context }) => {
-    const { data: row, error } = await context.supabase
-      .from("geo_audit_runs")
-      .insert({
-        workspace_id: data.workspaceId,
-        url: data.url ?? null,
-        score: data.score,
-        subscores: data.subscores ?? {},
-        meta: data.meta ?? {},
-        created_by: context.userId,
-      })
-      .select("id, created_at")
-      .single();
-    if (error || !row) throw new Error(error?.message ?? "Failed to persist audit");
-    return row;
-  });
-
+// geo_audit_runs rows are written by the scan worker when a scan completes
+// (src/server/geo/scan-runner.server.ts) — never from the browser.
 export const getGeoTrend = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) =>
@@ -58,7 +30,7 @@ export const getGeoTrend = createServerFn({ method: "POST" })
     const since = new Date(Date.now() - days * 86_400_000).toISOString();
     const { data: rows, error } = await context.supabase
       .from("geo_audit_runs")
-      .select("score, subscores, created_at")
+      .select("score, subscores, url, created_at")
       .eq("workspace_id", data.workspaceId)
       .gte("created_at", since)
       .order("created_at", { ascending: true })
@@ -67,6 +39,7 @@ export const getGeoTrend = createServerFn({ method: "POST" })
     const runs = (rows ?? []) as Array<{
       score: number;
       subscores: Record<string, number>;
+      url: string | null;
       created_at: string;
     }>;
     const latest = runs.length > 0 ? runs[runs.length - 1] : null;
@@ -77,6 +50,8 @@ export const getGeoTrend = createServerFn({ method: "POST" })
     return {
       runs: runs.map((r) => ({
         day: r.created_at.slice(0, 10),
+        at: r.created_at,
+        url: r.url,
         score: r.score,
       })),
       latest,

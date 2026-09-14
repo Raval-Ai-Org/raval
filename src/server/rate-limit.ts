@@ -26,7 +26,16 @@ import { createMiddleware } from "@/server/middleware";
  * `share-password` is the odd one out: it guards an unauthenticated brute-force
  * surface rather than a metered upstream, but the mechanism is identical.
  */
-export type RateLimitTier = "chat" | "generate" | "audit" | "image" | "video" | "share-password";
+export type RateLimitTier =
+  | "chat"
+  | "generate"
+  | "audit"
+  | "geo-scan"
+  | "connector"
+  | "connector-connect"
+  | "image"
+  | "video"
+  | "share-password";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -40,6 +49,13 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // Slow, crawl-backed, multi-model analyses (GEO audit, Brand DNA, Market
   // Brain). A human runs a handful an hour, not twenty a minute.
   audit: { limit: 20, windowSeconds: 300, label: "analysis" },
+  // Full-site AI Visibility crawls: each fetches up to the plan's page cap.
+  "geo-scan": { limit: 12, windowSeconds: 3600, label: "site scan" },
+  // Connector calls that hit a provider API (GitHub repository listing,
+  // verification, inspection). Protects the shared per-installation GitHub quota.
+  connector: { limit: 30, windowSeconds: 60, label: "integration" },
+  // Starting or completing a connection (install state issuance).
+  "connector-connect": { limit: 10, windowSeconds: 600, label: "connection attempt" },
   // Billed per image.
   image: { limit: 30, windowSeconds: 3600, label: "image generation" },
   // Billed per video, and the most expensive call in the product.

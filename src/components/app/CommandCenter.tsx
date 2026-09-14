@@ -47,7 +47,7 @@ export function CommandCenter() {
   return (
     <div className="relative px-3 pb-16 sm:px-5">
       <SitePreview workspaceId={workspaceId} />
-      <div className="hidden lg:block">
+      <div className="mt-6 hidden lg:block">
         <GeoAeoPanel workspaceId={workspaceId} />
       </div>
     </div>

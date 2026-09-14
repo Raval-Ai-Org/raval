@@ -1,7 +1,11 @@
 "use client";
 
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
+import { ensureGeoRunCapture } from "@/lib/geo/pending-run";
 import { Link, useRouterState, useNavigate } from "@/lib/navigation";
+
+// Remember a chat/suggestion scan request until the lazy AI Visibility dialog mounts.
+ensureGeoRunCapture();
 import { useServerFn } from "@/lib/use-server-fn";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -20,6 +24,7 @@ import {
   Calendar as CalendarIcon,
   ChevronDown,
   PanelRightOpen,
+  Plug,
   Plus,
   Radio,
   Rocket,
@@ -494,6 +499,15 @@ function AppShell() {
             label: "Content calendar",
             accent: "hsl(var(--brand-blue))",
             onClick: () => emitAppEvent("open:content-calendar"),
+          })}
+          {sidebarAction({
+            icon: Plug,
+            label: "Integrations",
+            hint: "GitHub",
+            onClick: () => {
+              emitAppEvent("open:connectors");
+              setNavOpen(false);
+            },
           })}
         </SidebarSection>
 

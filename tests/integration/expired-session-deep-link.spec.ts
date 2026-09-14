@@ -1,4 +1,5 @@
 import { test, expect, type Route, type Page, type BrowserContext } from "@playwright/test";
+import { STORAGE_KEY, SUPABASE_HOST } from "../fixtures/supabase-ref";
 
 /**
  * Expired-session deep-link tests.
@@ -16,8 +17,6 @@ import { test, expect, type Route, type Page, type BrowserContext } from "@playw
  * user on the wrong page.
  */
 
-const SUPABASE_HOST = "nfgbofcxoqapaileqhon.supabase.co";
-const STORAGE_KEY = "sb-nfgbofcxoqapaileqhon-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -148,16 +147,8 @@ async function seedExpired(page: Page) {
         window.localStorage.setItem(storageKey, JSON.stringify(sess));
         window.localStorage.setItem("workspace:selected", wsId);
         window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
-        // @ts-expect-error test stub
-        window.WebSocket = function () {
-          return {
-            addEventListener() {},
-            removeEventListener() {},
-            send() {},
-            close() {},
-            readyState: 3,
-          };
-        };
+        // No window.WebSocket stub: replacing the global hangs supabase-js's
+        // getSession(), so SessionGate never leaves "Loading your workspace…".
       } catch {
         /* noop */
       }
@@ -221,16 +212,8 @@ test.describe("Expired session deep-link recovery", () => {
           window.localStorage.setItem(storageKey, JSON.stringify(sess));
           window.localStorage.setItem("workspace:selected", wsId);
           window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
-          // @ts-expect-error test stub
-          window.WebSocket = function () {
-            return {
-              addEventListener() {},
-              removeEventListener() {},
-              send() {},
-              close() {},
-              readyState: 3,
-            };
-          };
+          // No window.WebSocket stub: replacing the global hangs supabase-js's
+          // getSession(), so SessionGate never leaves "Loading your workspace…".
         } catch {
           /* noop */
         }

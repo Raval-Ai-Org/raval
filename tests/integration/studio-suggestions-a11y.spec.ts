@@ -1,4 +1,5 @@
 import { test, expect, type Route } from "@playwright/test";
+import { STORAGE_KEY, SUPABASE_HOST } from "../fixtures/supabase-ref";
 
 /**
  * Accessibility contract for Studio suggestion cards + the "Try" action.
@@ -22,8 +23,6 @@ import { test, expect, type Route } from "@playwright/test";
  * that project list is expanded.
  */
 
-const SUPABASE_HOST = "nfgbofcxoqapaileqhon.supabase.co";
-const STORAGE_KEY = "sb-nfgbofcxoqapaileqhon-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -102,16 +101,8 @@ async function seed(page: import("@playwright/test").Page) {
         // No cached AI items — we rely on the deterministic suggestions the
         // hook always produces from Supabase counts (all 0 in this stub).
         window.localStorage.removeItem(`studio:suggestions:${wsId}`);
-        // @ts-expect-error test stub
-        window.WebSocket = function () {
-          return {
-            addEventListener() {},
-            removeEventListener() {},
-            send() {},
-            close() {},
-            readyState: 3,
-          };
-        };
+        // No window.WebSocket stub: replacing the global hangs supabase-js's
+        // getSession(), so SessionGate never leaves "Loading your workspace…".
         (window as unknown as { __ev: string[] }).__ev = [];
         for (const k of [
           "chat:prefill",

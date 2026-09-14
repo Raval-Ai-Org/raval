@@ -118,7 +118,7 @@ export function useStudioSuggestions() {
       out.push({
         id: "geo-audit",
         label: "Run AI visibility audit",
-        hint: "40-point GEO / AEO scan",
+        hint: "60+ check GEO / AEO scan",
         accent: "blue",
         icon: "Search",
         run: () => emitAppEvent("geo:run-audit"),

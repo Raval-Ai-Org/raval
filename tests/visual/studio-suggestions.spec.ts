@@ -1,4 +1,5 @@
 import { test, expect, type Route } from "@playwright/test";
+import { STORAGE_KEY, SUPABASE_HOST } from "../fixtures/supabase-ref";
 
 /**
  * Visual regression for the Studio rail "Suggestions for you" cards.
@@ -13,8 +14,6 @@ import { test, expect, type Route } from "@playwright/test";
  * workspace snapshot so runs are deterministic and offline-safe.
  */
 
-const SUPABASE_HOST = "nfgbofcxoqapaileqhon.supabase.co";
-const STORAGE_KEY = "sb-nfgbofcxoqapaileqhon-auth-token";
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "00000000-0000-0000-0000-000000000002";
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -52,7 +51,7 @@ const SEEDED_SUGGESTIONS = [
   {
     id: "seed-2",
     label: "Run AI visibility audit",
-    hint: "40-point GEO / AEO scan across your public surface area",
+    hint: "60+ check GEO / AEO scan across your public surface area",
     accent: "blue",
     icon: "Search",
   },
@@ -204,7 +203,7 @@ async function stubBackend(context: import("@playwright/test").BrowserContext) {
       body: "data: [DONE]\n",
     }),
   );
-  await context.route("**/api/geo-audit", (route) =>
+  await context.route("**/api/geo/scans", (route) =>
     route.fulfill({ status: 200, headers: JSON_HEADERS, body: "{}" }),
   );
   await context.route("**/_serverFn/**", (route) =>
@@ -224,16 +223,8 @@ async function seedSession(page: import("@playwright/test").Page) {
         window.localStorage.setItem("studio:open", "1");
         window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
         window.localStorage.setItem("reach-theme", "light");
-        // @ts-expect-error test stub
-        window.WebSocket = function () {
-          return {
-            addEventListener() {},
-            removeEventListener() {},
-            send() {},
-            close() {},
-            readyState: 3,
-          };
-        };
+        // No window.WebSocket stub: replacing the global hangs supabase-js's
+        // getSession(), so SessionGate never leaves "Loading your workspace…".
       } catch {
         /* noop */
       }

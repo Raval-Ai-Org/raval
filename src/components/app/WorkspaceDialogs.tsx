@@ -10,9 +10,11 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { renameWorkspace, getWorkspaceDetails } from "@/lib/workspaces.functions";
-import { Github, Globe, Plug, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
+import { Globe, Plug, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
+import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
+import { CONNECTOR_PROVIDERS } from "@/lib/connectors/types";
 
 type Props = {
   workspaceId: string | null;
@@ -54,7 +56,11 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
       />
       <DetailsDialog open={detailsOpen} onOpenChange={setDetailsOpen} workspaceId={workspaceId} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <ConnectorsDialog open={connectorsOpen} onOpenChange={setConnectorsOpen} />
+      <ConnectorsDialog
+        open={connectorsOpen}
+        onOpenChange={setConnectorsOpen}
+        workspaceId={workspaceId}
+      />
     </>
   );
 }
@@ -338,11 +344,21 @@ function ToggleRow({
 function ConnectorsDialog({
   open,
   onOpenChange,
+  workspaceId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  workspaceId: string | null;
 }) {
-  const connectors = [
+  // Providers that aren't built yet, stated honestly — the website sources share
+  // the connector records GitHub introduced (src/lib/connectors/types.ts).
+  const upcoming = [
+    ...CONNECTOR_PROVIDERS.filter((p) => p.availability === "coming_soon").map((p) => ({
+      id: p.id,
+      label: p.name,
+      desc: p.tagline,
+      icon: <Globe className="h-4 w-4" />,
+    })),
     {
       id: "meta",
       label: "Meta Ads",
@@ -355,52 +371,59 @@ function ConnectorsDialog({
       desc: "Search, YouTube & Performance Max",
       icon: <BrandLogo name="google" brand size={18} />,
     },
-    {
-      id: "github",
-      label: "GitHub",
-      desc: "Read repos, ship pull requests",
-      icon: <Github className="h-4 w-4" />,
-    },
-    {
-      id: "wordpress",
-      label: "WordPress",
-      desc: "Publish posts and pages",
-      icon: <Globe className="h-4 w-4" />,
-    },
   ];
   return (
     <AppModalShell
       open={open}
       onOpenChange={onOpenChange}
-      size="sm"
+      size="lg"
       Icon={Plug}
-      eyebrow="Integrations"
-      title="Connectors"
-      description="Plug Mellox AI into the tools your team already uses."
-      bodyClassName="px-5 py-5 sm:px-6"
+      eyebrow="Workspace"
+      title="Integrations"
+      description="Connect the systems behind your website so Mellox can see how it's built."
+      bodyClassName="space-y-6 px-5 py-5 sm:px-6"
     >
-      <ul className="space-y-2">
-        {connectors.map((c) => (
-          <li
-            key={c.id}
-            className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2.5 transition hover:border-border"
-          >
-            <div className="grid h-9 w-9 place-items-center rounded-lg bg-secondary">{c.icon}</div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium">{c.label}</div>
-              <p className="truncate text-[11.5px] text-muted-foreground">{c.desc}</p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => toast.success(`We'll notify you when ${c.label} is live`)}
+      <div>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Website source
+        </p>
+        {workspaceId ? (
+          <GitHubConnector workspaceId={workspaceId} />
+        ) : (
+          <p className="text-[13px] text-muted-foreground">
+            Select a workspace to manage integrations.
+          </p>
+        )}
+      </div>
+      <div className="border-t border-border/70 pt-5">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Coming soon
+        </p>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {upcoming.map((c) => (
+            <li
+              key={c.id}
+              className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2.5"
             >
-              Notify me
-            </Button>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-4 flex justify-end">
+              <div className="grid h-9 w-9 place-items-center rounded-lg bg-secondary">
+                {c.icon}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-medium">{c.label}</div>
+                <p className="truncate text-[11.5px] text-muted-foreground">{c.desc}</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => toast.success(`We'll let you know when ${c.label} is available`)}
+              >
+                Notify me
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="flex justify-end">
         <Button variant="ghost" onClick={() => onOpenChange(false)}>
           Close
         </Button>
