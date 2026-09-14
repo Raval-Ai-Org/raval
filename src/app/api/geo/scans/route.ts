@@ -35,7 +35,7 @@ export const POST = defineRoute({
   rateLimit: ({ body }) => ({ tier: body.mode === "quick" ? "audit" : "geo-scan" }),
   handler: async ({ body, workspaceId, userId, supabase }) => {
     let scanId: string;
-    let mode: "quick" | "full";
+    let mode: "quick" | "full" | "targeted";
     try {
       const scan = await createScan({
         workspaceId,

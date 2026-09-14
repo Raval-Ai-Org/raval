@@ -195,6 +195,22 @@ function summarizeRule(ev: Evaluation): Omit<RuleSummary, "pointsLost"> {
   };
 }
 
+/**
+ * One rule's raw outcome per page (or once for a site rule) — what a
+ * verification needs to tell "passes" from "not applicable" or "not analysed".
+ */
+export function ruleOutcomes(
+  site: SiteArtifacts,
+  pages: CrawledPage[],
+  ruleId: string,
+  opts: { mode: ScanMode },
+): { pageUrl: string | null; outcome: RuleOutcome }[] | null {
+  const rule = GEO_RULES.find((r) => r.id === ruleId);
+  if (!rule) return null;
+  const ctx = buildContext(site, pages, opts.mode);
+  return evaluateRules(ctx, [rule])[0].outcomes;
+}
+
 export type ScoredScan = {
   report: ScanReport;
   findings: GeoFinding[];

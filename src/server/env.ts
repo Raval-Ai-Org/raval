@@ -51,6 +51,12 @@ const Schema = z.object({
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
   GITHUB_INSTALL_VERIFICATION: z.enum(["oauth", "install_window", ""]).optional(),
+  // AI Visibility rendering fallback + fix verification.
+  FEATURE_FLAG_GEO_RENDERING_ENABLED: z.string().optional(),
+  GEO_RENDER_EXECUTABLE: z.string().optional(),
+  GEO_RENDER_WS_ENDPOINT: z.string().optional(),
+  GEO_RENDER_NO_SANDBOX: z.string().optional(),
+  GEO_FIX_VERIFY_DELAYS: z.string().optional(),
   // Operations — optional.
   REDIS_URL: z.string().optional(),
   SENTRY_DSN: optionalUrl,

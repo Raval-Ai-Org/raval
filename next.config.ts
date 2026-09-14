@@ -71,7 +71,9 @@ const nextConfig: NextConfig = {
   // into its own directory instead of fighting over .next.
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   poweredByHeader: false,
-  serverExternalPackages: ["pdfjs-dist", "mammoth", "xlsx"],
+  // playwright-core drives the AI Visibility rendering fallback; typescript
+  // parses proposed code changes. Both are large and must not be bundled.
+  serverExternalPackages: ["pdfjs-dist", "mammoth", "xlsx", "playwright-core", "typescript"],
   images: {
     remotePatterns: [
       {

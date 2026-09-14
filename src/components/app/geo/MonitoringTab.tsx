@@ -17,17 +17,23 @@ import {
   Segmented,
 } from "./geo-ui";
 
+/** A drop of this many points between monitored scans is flagged. */
+const REGRESSION_POINTS = 5;
+
 export function MonitoringTab({
   workspaceId,
   defaultUrl,
+  probesAvailable,
 }: {
   workspaceId: string;
   defaultUrl: string;
+  probesAvailable: boolean;
 }) {
   const [monitors, setMonitors] = useState<GeoMonitor[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState(defaultUrl);
   const [cadence, setCadence] = useState<"weekly" | "daily">("weekly");
+  const [probes, setProbes] = useState(false);
   const [saving, setSaving] = useState(false);
   const [nonce, setNonce] = useState(0);
 
@@ -49,7 +55,9 @@ export function MonitoringTab({
     setSaving(true);
     setError(null);
     try {
-      const monitor = await saveMonitor({ data: { workspaceId, url, cadence, active: true } });
+      const monitor = await saveMonitor({
+        data: { workspaceId, url, cadence, active: true, probes: probes && probesAvailable },
+      });
       setMonitors((rows) => [...(rows ?? []), monitor]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save the monitor");
@@ -58,7 +66,10 @@ export function MonitoringTab({
     }
   };
 
-  const update = async (m: GeoMonitor, patch: Partial<Pick<GeoMonitor, "active" | "cadence">>) => {
+  const update = async (
+    m: GeoMonitor,
+    patch: Partial<Pick<GeoMonitor, "active" | "cadence" | "probes">>,
+  ) => {
     setError(null);
     try {
       const saved = await saveMonitor({
@@ -68,6 +79,7 @@ export function MonitoringTab({
           url: m.url,
           cadence: patch.cadence ?? m.cadence,
           active: patch.active ?? m.active,
+          probes: patch.probes ?? m.probes,
         },
       });
       setMonitors((rows) => rows?.map((r) => (r.id === m.id ? saved : r)) ?? rows);
@@ -98,7 +110,7 @@ export function MonitoringTab({
           e.preventDefault();
           void add();
         }}
-        className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card/50 p-3 sm:flex-row sm:items-center"
+        className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card/50 p-3 sm:flex-row sm:flex-wrap sm:items-center"
       >
         <input
           value={url}
@@ -116,6 +128,12 @@ export function MonitoringTab({
             { value: "daily", label: "Daily" },
           ]}
         />
+        {probesAvailable && (
+          <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <input type="checkbox" checked={probes} onChange={(e) => setProbes(e.target.checked)} />
+            Ask AI engines (uses credits)
+          </label>
+        )}
         <button
           type="submit"
           disabled={!url.trim() || saving}
@@ -159,9 +177,25 @@ export function MonitoringTab({
                     ? `Next run ${relativeTime(m.nextRunAt).replace(" ago", "")}`
                     : "Paused"}
                   {m.lastRunAt ? ` · last run ${relativeTime(m.lastRunAt)}` : ""}
+                  {m.probes ? " · with AI answer checks" : ""}
                   {m.lastRunStatus === "error" && m.lastRunError ? ` · ${m.lastRunError}` : ""}
                 </div>
               </div>
+              {m.lastScoreDelta !== null && (
+                <Chip
+                  tone={
+                    m.lastScoreDelta <= -REGRESSION_POINTS
+                      ? "destructive"
+                      : m.lastScoreDelta > 0
+                        ? "success"
+                        : "muted"
+                  }
+                >
+                  {m.lastScoreDelta <= -REGRESSION_POINTS ? "Regressed " : ""}
+                  {m.lastScoreDelta > 0 ? "+" : ""}
+                  {m.lastScoreDelta} pts last scan
+                </Chip>
+              )}
               {m.lastRunStatus && (
                 <Chip tone={m.lastRunStatus === "ok" ? "success" : "destructive"}>
                   {m.lastRunStatus === "ok" ? "Last run ok" : "Last run failed"}
@@ -176,6 +210,16 @@ export function MonitoringTab({
                   { value: "daily", label: "Daily" },
                 ]}
               />
+              {probesAvailable && (
+                <button
+                  type="button"
+                  aria-pressed={m.probes}
+                  onClick={() => void update(m, { probes: !m.probes })}
+                  className={cn(ghostBtn, "px-3 py-1.5 text-[12px]")}
+                >
+                  {m.probes ? "AI checks on" : "AI checks off"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void update(m, { active: !m.active })}
@@ -196,7 +240,8 @@ export function MonitoringTab({
         </ul>
       )}
       <p className="text-[11.5px] text-muted-foreground">
-        Scheduled scans use the same page limit as manual scans and run in the background.
+        Scheduled scans use the same page limit as manual scans and run in the background. A
+        resolved finding that appears again in a later scan is reopened automatically.
       </p>
     </div>
   );

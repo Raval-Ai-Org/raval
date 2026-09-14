@@ -4,8 +4,8 @@
 // adds what HTTP can't see: which repository and framework build a site, and
 // where its robots / sitemap / llms.txt are generated. Today this context is
 // shown next to scan results; the GEO engine does not score source code yet.
-// Future phases read files through the connector here to propose fixes as
-// pull requests — nothing in this module writes to a repository.
+// Fix pull requests are built in src/server/geo/fixes — nothing in this
+// module writes to a repository.
 import "server-only";
 import type { UserSupabaseClient } from "@/integrations/supabase/client.user.server";
 import type { SourceView } from "@/lib/connectors/types";
@@ -14,7 +14,7 @@ import { presentSource, SOURCE_COLS, type SourceRow } from "./present";
 export type SiteSourceContext = {
   source: SourceView;
   /** Capabilities available now vs. planned. */
-  capabilities: { inspect: true; proposeChanges: false };
+  capabilities: { inspect: true; proposeChanges: boolean };
 };
 
 /** The connected source linked to `host` in this workspace, if any (RLS-scoped). */
@@ -35,6 +35,10 @@ export async function getSiteSourceContext(
   if (error || !data) return null;
   return {
     source: presentSource(data as unknown as SourceRow),
-    capabilities: { inspect: true, proposeChanges: false },
+    // Pull requests for AI Visibility fixes: src/server/geo/fixes/service.server.ts.
+    capabilities: {
+      inspect: true,
+      proposeChanges: (data as { status?: string }).status === "active",
+    },
   };
 }

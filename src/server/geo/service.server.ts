@@ -27,7 +27,13 @@ import { assertPublicUrl } from "@/server/safe-fetch";
 import { getDefaultFetcher, siteHost } from "./crawler.server";
 import { presentScan, SCAN_VIEW_COLS } from "./present";
 import { runGeoProbes } from "./probes.server";
-import { advanceScan, LEASE_SECONDS, type SliceResult } from "./scan-runner.server";
+import { createRenderer, getRenderingAvailability } from "./render.server";
+import {
+  advanceScan,
+  defaultMaxRenders,
+  LEASE_SECONDS,
+  type SliceResult,
+} from "./scan-runner.server";
 import {
   createSupabaseGeoStore,
   type ScanMode,
@@ -55,6 +61,8 @@ export type CreateScanInput = {
   probes?: boolean;
   idempotencyKey?: string;
   scheduledJobId?: string;
+  /** targeted mode: the pages to re-check (same site as `url`). */
+  urls?: string[];
 };
 
 async function activeFullScan(workspaceId: string): Promise<string | null> {
@@ -99,10 +107,26 @@ export async function createScan(input: CreateScanInput): Promise<ScanRow> {
     if (active) throw new GeoScanConflictError(active);
   }
 
+  const urls =
+    input.mode === "targeted"
+      ? [
+          ...new Set((input.urls ?? []).map((u) => assertPublicUrl(normalizeUrl(u)).toString())),
+        ].slice(0, 20)
+      : undefined;
+  if (input.mode === "targeted") {
+    if (!urls?.length) throw new TypeError("No pages to verify");
+    const host = siteHost(url.toString());
+    if (urls.some((u) => siteHost(u) !== host)) {
+      throw new TypeError("Pages to verify must belong to the scanned site");
+    }
+  }
   const config = {
-    maxPages: input.mode === "quick" ? 1 : limits.geoMaxPages,
-    maxDepth: input.mode === "quick" ? 0 : 5,
+    maxPages:
+      input.mode === "full" ? limits.geoMaxPages : input.mode === "targeted" ? urls!.length + 1 : 1,
+    maxDepth: input.mode === "full" ? 5 : 0,
     probes: input.mode === "full" && input.probes === true && isGeoProbesEnabled(input.workspaceId),
+    maxRenders: defaultMaxRenders(input.mode, urls?.length),
+    ...(urls ? { urls } : {}),
   };
   const { data, error } = await supabaseAdmin
     .from("geo_scans")
@@ -143,17 +167,21 @@ export async function driveScan(
   return runSlice(scan, deadline);
 }
 
-function runSlice(scan: ScanRow, deadline: number): Promise<SliceResult> {
+async function runSlice(scan: ScanRow, deadline: number): Promise<SliceResult> {
   const store = createSupabaseGeoStore(supabaseAdmin);
+  const fetcher = getDefaultFetcher();
+  const rendering = await getRenderingAvailability();
   return runWithScope(
     { workspaceId: scan.workspace_id, userId: scan.created_by ?? undefined, route: "geo.scan" },
     () =>
       advanceScan(scan, {
         store,
-        fetcher: getDefaultFetcher(),
+        fetcher,
         worker: WORKER,
         deadline,
         probes: scan.config?.probes ? runGeoProbes : undefined,
+        render: rendering.available ? createRenderer(fetcher) : undefined,
+        renderUnavailableReason: rendering.available ? undefined : rendering.reason,
         log: (message, detail) => console.error(message, detail),
       }),
   );

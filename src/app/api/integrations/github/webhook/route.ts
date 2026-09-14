@@ -131,6 +131,18 @@ export async function POST(request: Request) {
         if (error) console.error("[github:webhook] audit not recorded", error.message);
       },
       forgetToken: forgetInstallationToken,
+      onPullRequest: async (installationId, pr) => {
+        const { handlePullRequestWebhook } = await import("@/server/geo/fixes/service.server");
+        return handlePullRequestWebhook(await connectionIds(installationId), pr);
+      },
+      onChecksCompleted: async (installationId, repositoryId, headSha) => {
+        const { refreshChecksForCommit } = await import("@/server/geo/fixes/service.server");
+        return refreshChecksForCommit(await connectionIds(installationId), repositoryId, headSha);
+      },
+      onAccessLost: async (installationId) => {
+        const { markProposalsAccessLost } = await import("@/server/geo/fixes/service.server");
+        return markProposalsAccessLost(await connectionIds(installationId));
+      },
     },
   ).catch((error: unknown) => {
     console.error(

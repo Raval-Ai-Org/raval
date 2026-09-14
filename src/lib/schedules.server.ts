@@ -192,6 +192,28 @@ async function runGeoScanJob(job: ClaimedJob, nowIso: string, leased: boolean): 
     const url = typeof meta.url === "string" ? meta.url : "";
     if (!url) throw new Error("This monitor has no website URL");
     const { createScan, GeoScanConflictError } = await import("@/server/geo/service.server");
+
+    // Score change of the previous monitored scan, now that it has finished.
+    let lastScoreDelta: number | null =
+      typeof meta.last_score_delta === "number" ? meta.last_score_delta : null;
+    if (typeof meta.last_scan_id === "string") {
+      const { data: last } = await supabaseAdmin
+        .from("geo_scans")
+        .select("status, overall_score, previous_scan_id")
+        .eq("id", meta.last_scan_id)
+        .maybeSingle();
+      if (last?.status === "succeeded" && last.overall_score !== null && last.previous_scan_id) {
+        const { data: prev } = await supabaseAdmin
+          .from("geo_scans")
+          .select("overall_score")
+          .eq("id", last.previous_scan_id)
+          .maybeSingle();
+        if (prev?.overall_score !== null && prev?.overall_score !== undefined) {
+          lastScoreDelta = last.overall_score - prev.overall_score;
+        }
+      }
+    }
+
     let scanId: string;
     try {
       const scan = await createScan({
@@ -201,6 +223,8 @@ async function runGeoScanJob(job: ClaimedJob, nowIso: string, leased: boolean): 
         mode: "full",
         trigger: "scheduled",
         scheduledJobId: job.id,
+        // Paid AI answer checks only when the monitor opted in; createScan re-checks the flag.
+        probes: meta.probes === true,
       });
       scanId = scan.id;
     } catch (error) {
@@ -217,7 +241,7 @@ async function runGeoScanJob(job: ClaimedJob, nowIso: string, leased: boolean): 
         run_count: (job.run_count ?? 0) + 1,
         next_run_at: next ? next.toISOString() : job.next_run_at,
         active: Boolean(next),
-        meta: { ...meta, last_scan_id: scanId } as never,
+        meta: { ...meta, last_scan_id: scanId, last_score_delta: lastScoreDelta } as never,
         ...release,
       })
       .eq("id", job.id);

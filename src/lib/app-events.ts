@@ -83,14 +83,14 @@ export type AppEventMap = {
   "open:client-portal": undefined;
   "open:command-bar": undefined;
   "open:competitor-watch": undefined;
-  "open:connectors": undefined;
   "open:content-calendar": undefined;
   "open:details": undefined;
   "open:marketing-coach": undefined;
   "open:publish": undefined;
   "open:rename": undefined;
   "open:schedule": undefined;
-  "open:settings": undefined;
+  /** Settings, optionally on a section (provider connections live under "connections"). */
+  "open:settings": { section?: "connections" | "preferences" } | undefined;
   "open:share": undefined;
   "open:studio": undefined;
   "open:tasks": undefined;

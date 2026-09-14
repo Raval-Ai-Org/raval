@@ -1,6 +1,7 @@
 // present.ts — database rows → API contracts (src/lib/geo/contracts.ts).
 import "server-only";
 import type {
+  FindingResolution,
   FindingWorkflowState,
   GeoFindingView,
   GeoPageView,
@@ -43,6 +44,8 @@ export function presentScan(row: Row): GeoScanView {
       failed: num(progress.failed),
       skipped: num(progress.skipped),
       pending: num(progress.pending),
+      rendered: num(progress.rendered),
+      renderNeeded: num(progress.renderNeeded),
     },
     maxPages: num(config.maxPages, 1),
     overallScore: row.overall_score ?? null,
@@ -77,10 +80,15 @@ export function presentSummary(row: Row): GeoScanSummary {
   };
 }
 
-export function presentFinding(
-  row: Row,
-  states: Map<string, { state: FindingWorkflowState; note: string | null }>,
-): GeoFindingView {
+export type FindingStateRecord = {
+  state: FindingWorkflowState;
+  note: string | null;
+  resolution: FindingResolution;
+  verifiedAt: string | null;
+  reopenedAt: string | null;
+};
+
+export function presentFinding(row: Row, states: Map<string, FindingStateRecord>): GeoFindingView {
   const state = states.get(row.fingerprint);
   return {
     id: row.id,
@@ -102,6 +110,9 @@ export function presentFinding(
     effort: row.effort,
     state: state?.state ?? "open",
     note: state?.note ?? null,
+    resolution: state?.state === "resolved" ? (state.resolution ?? "manual_legacy") : null,
+    verifiedAt: state?.verifiedAt ?? null,
+    reopenedAt: state?.reopenedAt ?? null,
   };
 }
 

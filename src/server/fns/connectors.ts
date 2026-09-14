@@ -151,7 +151,7 @@ export const verifyConnection = createServerFn({ method: "POST" })
   });
 
 export const disconnectConnection = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
   .inputValidator((data) => z.object({ workspaceId: uuid, connectionId: uuid }).parse(data))
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "admin");
@@ -236,7 +236,7 @@ export const updateSource = createServerFn({ method: "POST" })
   });
 
 export const removeSource = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
   .inputValidator((data) => z.object({ workspaceId: uuid, sourceId: uuid }).parse(data))
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "admin");
@@ -266,6 +266,7 @@ export const getSiteSource = createServerFn({ method: "POST" })
     z.object({ workspaceId: uuid, host: z.string().min(1).max(255) }).parse(data),
   )
   .handler(async ({ data, context }) => {
+    if (!(await getWorkspaceRole(context, data.workspaceId))) throw new ForbiddenError();
     const { getSiteSourceContext } = await import("@/server/connectors/source-context.server");
     return getSiteSourceContext(context.supabase, data.workspaceId, data.host);
   });

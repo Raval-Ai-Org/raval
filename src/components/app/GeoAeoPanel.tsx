@@ -154,6 +154,20 @@ function Panel({
 
   const brandHost = brandUrl ? hostOf(brandUrl) : "";
   const targetHost = target ? hostOf(target) : "";
+  // Websites this workspace has scanned (plus its Brand DNA site), newest first.
+  const sites = useMemo(() => {
+    const out = new Map<string, { host: string; url: string; latestId: string | null }>();
+    for (const h of scans.history ?? []) {
+      if (!out.has(h.host)) {
+        out.set(h.host, { host: h.host, url: h.url, latestId: null });
+      }
+      const entry = out.get(h.host)!;
+      if (!entry.latestId && h.status === "succeeded") entry.latestId = h.id;
+    }
+    if (brandHost && !out.has(brandHost))
+      out.set(brandHost, { host: brandHost, url: brandUrl, latestId: null });
+    return [...out.values()];
+  }, [scans.history, brandHost, brandUrl]);
   const hint = !brandUrl ? (
     <>
       No website saved in Brand DNA yet.{" "}
@@ -186,6 +200,37 @@ function Panel({
 
   return (
     <section aria-label="AI visibility" className="space-y-5 px-1 pb-2">
+      {sites.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Websites">
+          <span className="text-[11.5px] font-medium text-muted-foreground">Websites</span>
+          {sites.map((s) => {
+            const selected = (current?.host ?? targetHost) === s.host;
+            return (
+              <button
+                key={s.host}
+                type="button"
+                aria-pressed={selected}
+                disabled={busy}
+                onClick={() => {
+                  urlTouched.current = true;
+                  setUrlInput(displayUrl(s.url));
+                  if (s.latestId) void scans.view(s.latestId);
+                  setTab("overview");
+                }}
+                className={cn(
+                  "rounded-full px-3 py-1 text-[12px] font-medium ring-1 transition-colors disabled:opacity-60",
+                  selected
+                    ? "bg-primary text-primary-foreground ring-primary"
+                    : "bg-card text-muted-foreground ring-border/70 hover:text-foreground",
+                )}
+              >
+                {s.host}
+                {!s.latestId && <span className="ml-1 opacity-70">· not scanned</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <ScanBar
         url={urlInput}
         onUrlChange={(v) => {
@@ -313,7 +358,11 @@ function Panel({
             />
           </TabsContent>
           <TabsContent value="monitoring" className="mt-4">
-            <MonitoringTab workspaceId={workspaceId} defaultUrl={current.origin} />
+            <MonitoringTab
+              workspaceId={workspaceId}
+              defaultUrl={current.origin}
+              probesAvailable={!!settings?.probesAvailable}
+            />
           </TabsContent>
         </Tabs>
       )}

@@ -16,8 +16,10 @@ import type {
 
 export type GeoScanStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type GeoScanStage = "queued" | "discovering" | "crawling" | "analyzing" | "probing" | "done";
-export type GeoScanMode = "quick" | "full";
+export type GeoScanMode = "quick" | "full" | "targeted";
 export type FindingWorkflowState = "open" | "in_progress" | "resolved" | "dismissed";
+/** How a resolved finding was resolved: confirmed by a verification scan, or set by hand before verification existed. */
+export type FindingResolution = "verified" | "manual_legacy" | null;
 
 export type StoredScanReport = Omit<ScanReport, "pageScores">;
 
@@ -27,7 +29,7 @@ export type GeoScanView = {
   origin: string;
   host: string;
   mode: GeoScanMode;
-  trigger: "manual" | "scheduled" | "rescan" | "chat";
+  trigger: "manual" | "scheduled" | "rescan" | "chat" | "verification";
   status: GeoScanStatus;
   stage: GeoScanStage;
   progress: {
@@ -36,6 +38,8 @@ export type GeoScanView = {
     failed: number;
     skipped: number;
     pending: number;
+    rendered: number;
+    renderNeeded: number;
   };
   maxPages: number;
   overallScore: number | null;
@@ -85,6 +89,9 @@ export type GeoFindingView = {
   effort: Effort;
   state: FindingWorkflowState;
   note: string | null;
+  resolution: FindingResolution;
+  verifiedAt: string | null;
+  reopenedAt: string | null;
 };
 
 export type GeoPageView = {
@@ -118,4 +125,8 @@ export type GeoMonitor = {
   lastRunAt: string | null;
   lastRunStatus: string | null;
   lastRunError: string | null;
+  /** Ask AI engines on each scheduled scan (paid; only when probes are available). */
+  probes: boolean;
+  /** Overall score change of the last completed monitored scan vs the scan before it. */
+  lastScoreDelta: number | null;
 };

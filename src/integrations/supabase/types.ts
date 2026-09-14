@@ -1384,28 +1384,47 @@ export type Database = {
         Row: {
           fingerprint: string;
           note: string | null;
+          reopened_at: string | null;
+          resolved_via: string | null;
           state: string;
           updated_at: string;
           updated_by: string | null;
+          verification_id: string | null;
+          verified_at: string | null;
           workspace_id: string;
         };
         Insert: {
           fingerprint: string;
           note?: string | null;
+          reopened_at?: string | null;
+          resolved_via?: string | null;
           state?: string;
           updated_at?: string;
           updated_by?: string | null;
+          verification_id?: string | null;
+          verified_at?: string | null;
           workspace_id: string;
         };
         Update: {
           fingerprint?: string;
           note?: string | null;
+          reopened_at?: string | null;
+          resolved_via?: string | null;
           state?: string;
           updated_at?: string;
           updated_by?: string | null;
+          verification_id?: string | null;
+          verified_at?: string | null;
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "geo_finding_states_verification_id_fkey";
+            columns: ["verification_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_verifications";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "geo_finding_states_workspace_id_fkey";
             columns: ["workspace_id"];
@@ -1499,6 +1518,321 @@ export type Database = {
           },
           {
             foreignKeyName: "geo_findings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      geo_fix_batches: {
+        Row: {
+          approved_at: string | null;
+          approved_by: string | null;
+          base_branch: string | null;
+          base_sha: string | null;
+          checks: Json | null;
+          commit_sha: string | null;
+          connection_id: string | null;
+          content_hash: string | null;
+          created_at: string;
+          created_by: string | null;
+          error: string | null;
+          explanation: string | null;
+          files: Json;
+          files_purged_at: string | null;
+          framework: string | null;
+          head_branch: string | null;
+          host: string;
+          id: string;
+          items: Json;
+          last_synced_at: string | null;
+          pr_merged_at: string | null;
+          pr_number: number | null;
+          pr_state: string | null;
+          pr_url: string | null;
+          progress: Json;
+          provider: string;
+          repo_external_id: string | null;
+          repo_full_name: string | null;
+          scan_id: string | null;
+          site_origin: string;
+          source_id: string | null;
+          status: string;
+          updated_at: string;
+          validation: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          approved_at?: string | null;
+          approved_by?: string | null;
+          base_branch?: string | null;
+          base_sha?: string | null;
+          checks?: Json | null;
+          commit_sha?: string | null;
+          connection_id?: string | null;
+          content_hash?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          explanation?: string | null;
+          files?: Json;
+          files_purged_at?: string | null;
+          framework?: string | null;
+          head_branch?: string | null;
+          host: string;
+          id?: string;
+          items?: Json;
+          last_synced_at?: string | null;
+          pr_merged_at?: string | null;
+          pr_number?: number | null;
+          pr_state?: string | null;
+          pr_url?: string | null;
+          progress?: Json;
+          provider?: string;
+          repo_external_id?: string | null;
+          repo_full_name?: string | null;
+          scan_id?: string | null;
+          site_origin: string;
+          source_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          validation?: Json;
+          workspace_id: string;
+        };
+        Update: {
+          approved_at?: string | null;
+          approved_by?: string | null;
+          base_branch?: string | null;
+          base_sha?: string | null;
+          checks?: Json | null;
+          commit_sha?: string | null;
+          connection_id?: string | null;
+          content_hash?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          explanation?: string | null;
+          files?: Json;
+          files_purged_at?: string | null;
+          framework?: string | null;
+          head_branch?: string | null;
+          host?: string;
+          id?: string;
+          items?: Json;
+          last_synced_at?: string | null;
+          pr_merged_at?: string | null;
+          pr_number?: number | null;
+          pr_state?: string | null;
+          pr_url?: string | null;
+          progress?: Json;
+          provider?: string;
+          repo_external_id?: string | null;
+          repo_full_name?: string | null;
+          scan_id?: string | null;
+          site_origin?: string;
+          source_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          validation?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "geo_fix_batches_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_fix_batches_scan_id_fkey";
+            columns: ["scan_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_scans";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_fix_batches_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_fix_batches_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      geo_fix_proposals: {
+        Row: {
+          approved_at: string | null;
+          approved_by: string | null;
+          base_branch: string | null;
+          base_sha: string | null;
+          batch_id: string | null;
+          checks: Json | null;
+          commit_sha: string | null;
+          connection_id: string | null;
+          content_hash: string | null;
+          created_at: string;
+          created_by: string | null;
+          error: string | null;
+          explanation: string | null;
+          files: Json;
+          files_purged_at: string | null;
+          finding_id: string | null;
+          fingerprint: string;
+          fix_id: string;
+          framework: string | null;
+          head_branch: string | null;
+          id: string;
+          last_synced_at: string | null;
+          model: string | null;
+          page_url: string | null;
+          pr_merged_at: string | null;
+          pr_number: number | null;
+          pr_state: string | null;
+          pr_url: string | null;
+          provider: string;
+          repo_external_id: string | null;
+          repo_full_name: string | null;
+          rule_id: string;
+          scan_id: string | null;
+          site_origin: string;
+          source_id: string | null;
+          status: string;
+          strategy: string | null;
+          updated_at: string;
+          validation: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          approved_at?: string | null;
+          approved_by?: string | null;
+          base_branch?: string | null;
+          base_sha?: string | null;
+          batch_id?: string | null;
+          checks?: Json | null;
+          commit_sha?: string | null;
+          connection_id?: string | null;
+          content_hash?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          explanation?: string | null;
+          files?: Json;
+          files_purged_at?: string | null;
+          finding_id?: string | null;
+          fingerprint: string;
+          fix_id: string;
+          framework?: string | null;
+          head_branch?: string | null;
+          id?: string;
+          last_synced_at?: string | null;
+          model?: string | null;
+          page_url?: string | null;
+          pr_merged_at?: string | null;
+          pr_number?: number | null;
+          pr_state?: string | null;
+          pr_url?: string | null;
+          provider?: string;
+          repo_external_id?: string | null;
+          repo_full_name?: string | null;
+          rule_id: string;
+          scan_id?: string | null;
+          site_origin: string;
+          source_id?: string | null;
+          status?: string;
+          strategy?: string | null;
+          updated_at?: string;
+          validation?: Json;
+          workspace_id: string;
+        };
+        Update: {
+          approved_at?: string | null;
+          approved_by?: string | null;
+          base_branch?: string | null;
+          base_sha?: string | null;
+          batch_id?: string | null;
+          checks?: Json | null;
+          commit_sha?: string | null;
+          connection_id?: string | null;
+          content_hash?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          explanation?: string | null;
+          files?: Json;
+          files_purged_at?: string | null;
+          finding_id?: string | null;
+          fingerprint?: string;
+          fix_id?: string;
+          framework?: string | null;
+          head_branch?: string | null;
+          id?: string;
+          last_synced_at?: string | null;
+          model?: string | null;
+          page_url?: string | null;
+          pr_merged_at?: string | null;
+          pr_number?: number | null;
+          pr_state?: string | null;
+          pr_url?: string | null;
+          provider?: string;
+          repo_external_id?: string | null;
+          repo_full_name?: string | null;
+          rule_id?: string;
+          scan_id?: string | null;
+          site_origin?: string;
+          source_id?: string | null;
+          status?: string;
+          strategy?: string | null;
+          updated_at?: string;
+          validation?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "geo_fix_proposals_batch_id_fkey";
+            columns: ["batch_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_fix_batches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_fix_proposals_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_fix_proposals_finding_id_fkey";
+            columns: ["finding_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_findings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_fix_proposals_scan_id_fkey";
+            columns: ["scan_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_scans";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_fix_proposals_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_fix_proposals_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -1695,6 +2029,120 @@ export type Database = {
           },
           {
             foreignKeyName: "geo_scans_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      geo_verifications: {
+        Row: {
+          after: Json;
+          attempts: number;
+          baseline_scan_id: string | null;
+          batch_id: string | null;
+          before: Json;
+          completed_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          fingerprints: string[];
+          id: string;
+          lease_until: string | null;
+          locked_by: string | null;
+          max_attempts: number;
+          next_attempt_at: string;
+          origin: string;
+          outcome_detail: string | null;
+          proposal_id: string | null;
+          rule_ids: string[];
+          scan_id: string | null;
+          status: string;
+          updated_at: string;
+          urls: string[];
+          workspace_id: string;
+        };
+        Insert: {
+          after?: Json;
+          attempts?: number;
+          baseline_scan_id?: string | null;
+          batch_id?: string | null;
+          before?: Json;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          fingerprints: string[];
+          id?: string;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          origin: string;
+          outcome_detail?: string | null;
+          proposal_id?: string | null;
+          rule_ids?: string[];
+          scan_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          urls: string[];
+          workspace_id: string;
+        };
+        Update: {
+          after?: Json;
+          attempts?: number;
+          baseline_scan_id?: string | null;
+          batch_id?: string | null;
+          before?: Json;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          fingerprints?: string[];
+          id?: string;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          origin?: string;
+          outcome_detail?: string | null;
+          proposal_id?: string | null;
+          rule_ids?: string[];
+          scan_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          urls?: string[];
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "geo_verifications_baseline_scan_id_fkey";
+            columns: ["baseline_scan_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_scans";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_verifications_batch_id_fkey";
+            columns: ["batch_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_fix_batches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_verifications_proposal_id_fkey";
+            columns: ["proposal_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_fix_proposals";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_verifications_scan_id_fkey";
+            columns: ["scan_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_scans";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_verifications_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -2770,6 +3218,10 @@ export type Database = {
       claim_geo_scans: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_scan_id?: string };
         Returns: Database["public"]["Tables"]["geo_scans"]["Row"][];
+      };
+      claim_geo_verifications: {
+        Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
+        Returns: Database["public"]["Tables"]["geo_verifications"]["Row"][];
       };
       consume_rate_limit: {
         Args: { p_bucket_key: string; p_window_seconds: number; p_limit: number; p_cost?: number };

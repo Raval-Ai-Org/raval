@@ -9,9 +9,11 @@
 // fetched again, and re-running the analyze stage replaces its outputs.
 import "server-only";
 import { analyzePage } from "@/lib/geo/analyze-page";
+import { needsRendering } from "@/lib/geo/rendering";
 import { crawlDelayFor, isPathAllowed } from "@/lib/geo/robots";
 import { scoreScan } from "@/lib/geo/score";
-import type { GeoAction, SiteArtifacts } from "@/lib/geo/types";
+import type { GeoAction, PageAnalysis, SiteArtifacts } from "@/lib/geo/types";
+import type { Renderer } from "./render.server";
 import {
   discoverSiteArtifacts,
   fetchWithRetry,
@@ -45,8 +47,17 @@ export type RunnerDeps = {
   deadline: number;
   now?: () => number;
   probes?: ProbeRunner;
+  /** Browser rendering for client-rendered shells; absent when unavailable. */
+  render?: Renderer;
+  /** Why rendering is unavailable (shown on pages that needed it). */
+  renderUnavailableReason?: string;
   log?: (message: string, detail?: unknown) => void;
 };
+
+/** Default per-scan browser-render allowance by mode. */
+export function defaultMaxRenders(mode: ScanRow["mode"], urls = 0): number {
+  return mode === "full" ? 10 : mode === "targeted" ? Math.min(20, urls + 1) : 1;
+}
 
 export type SliceResult = "done" | "yield" | "lost_lease";
 
@@ -184,9 +195,46 @@ async function discover(scan: ScanRow, deps: RunnerDeps): Promise<SliceResult | 
   // Idempotent on re-entry: the homepage row is looked up by URL and only
   // filled while still pending, so a retried slice never overwrites a page.
   const homeUrl = normalizeCrawlUrl(finalUrl, host) ?? finalUrl;
+
+  if (scan.mode === "targeted") {
+    // Verification: exactly the requested pages on this site, nothing discovered.
+    const targets = [
+      ...new Set(
+        (scan.config.urls ?? [])
+          .map((u) => normalizeCrawlUrl(u, host))
+          .filter((u): u is string => !!u),
+      ),
+    ].slice(0, 20);
+    if (!targets.length) {
+      return finish(deps, scan, "failed", "None of the pages to verify belong to this site.");
+    }
+    await deps.store.insertPages(
+      scan,
+      targets.map((url) => ({ url, depth: 0 })),
+    );
+    if (targets.includes(homeUrl)) {
+      const row = await deps.store.findPage(scan.id, homeUrl);
+      if (row?.state === "pending") {
+        await deps.store.updatePage(
+          row.id,
+          await pagePatchFromFetch(home, homeHtml, site, scan, deps),
+        );
+      }
+    }
+    const counts = await deps.store.countPages(scan.id);
+    await write(deps, scan, {
+      stage: "crawling",
+      origin,
+      host,
+      site,
+      progress: progressOf(counts, scan),
+    });
+    return null;
+  }
+
   await deps.store.insertPages(scan, [{ url: homeUrl, depth: 0 }]);
   const homeRow = await deps.store.findPage(scan.id, homeUrl);
-  const homePatch = pagePatchFromFetch(home, homeHtml, site);
+  const homePatch = await pagePatchFromFetch(home, homeHtml, site, scan, deps);
   if (homeRow?.state === "pending") await deps.store.updatePage(homeRow.id, homePatch);
 
   if (scan.mode === "full" && scan.config.maxPages > 1) {
@@ -210,16 +258,95 @@ async function discover(scan: ScanRow, deps: RunnerDeps): Promise<SliceResult | 
     origin,
     host,
     site,
-    progress: progressOf(counts),
+    progress: progressOf(counts, scan),
   });
   return null;
 }
 
-function pagePatchFromFetch(
+/**
+ * HTTP analysis first; when the server HTML is a client-rendered shell and
+ * rendering is available (and within this scan's allowance), analyse the
+ * rendered DOM instead while keeping the raw-HTML measurements crawlers see.
+ */
+async function analyzeWithRendering(
+  body: string,
+  url: string,
+  meta: { bytes: number; truncated: boolean },
+  scan: ScanRow,
+  deps: RunnerDeps,
+): Promise<PageAnalysis> {
+  const http = analyzePage(body, url, meta);
+  const decision = needsRendering(body, http);
+  if (!decision.render) return http;
+
+  const progress = scan.progress as Record<string, number | undefined>;
+  progress.renderNeeded = (progress.renderNeeded ?? 0) + 1;
+  const base = { httpWords: http.text.words, markers: decision.markers };
+  const allowance =
+    scan.config.maxRenders ?? defaultMaxRenders(scan.mode, scan.config.urls?.length);
+  if (!deps.render) {
+    return {
+      ...http,
+      rendering: {
+        mode: "http",
+        reason: deps.renderUnavailableReason ?? "Browser rendering is unavailable.",
+        renderedWords: null,
+        ...base,
+      },
+    };
+  }
+  if ((progress.rendered ?? 0) >= allowance) {
+    return {
+      ...http,
+      rendering: {
+        mode: "http",
+        reason: "This scan's browser-rendering allowance was used.",
+        renderedWords: null,
+        ...base,
+      },
+    };
+  }
+  progress.rendered = (progress.rendered ?? 0) + 1;
+  const result = await deps.render(url);
+  if (!result.ok) {
+    return {
+      ...http,
+      rendering: {
+        mode: "http",
+        reason: `Rendering failed: ${result.error}`,
+        renderedWords: null,
+        ...base,
+      },
+    };
+  }
+  const rendered = analyzePage(result.html, url, {
+    bytes: Buffer.byteLength(result.html),
+    truncated: false,
+  });
+  return {
+    ...rendered,
+    url: http.url,
+    // What crawlers download stays measured on the server HTML.
+    bytes: http.bytes,
+    truncated: http.truncated,
+    text: { ...rendered.text, textToHtmlRatio: http.text.textToHtmlRatio },
+    rendering: {
+      mode: "browser",
+      reason: decision.reason,
+      renderedWords: rendered.text.words,
+      ms: result.ms,
+      ...base,
+    },
+  };
+}
+
+async function pagePatchFromFetch(
   res: Awaited<ReturnType<typeof fetchWithRetry>>,
   isHtml: boolean,
   site: SiteArtifacts,
-): Parameters<GeoStore["updatePage"]>[1] {
+  scan: ScanRow,
+  deps: RunnerDeps,
+): Promise<Parameters<GeoStore["updatePage"]>[1]> {
   const base = {
     final_url: res.finalUrl,
     status_code: res.status,
@@ -236,10 +363,13 @@ function pagePatchFromFetch(
   if (res.finalUrl && siteHost(res.finalUrl) !== site.host) {
     return { ...base, state: "skipped", skip_reason: "Redirects to another site" };
   }
-  const analysis = analyzePage(res.body, res.finalUrl ?? "", {
-    bytes: res.bytes,
-    truncated: res.truncated,
-  });
+  const analysis = await analyzeWithRendering(
+    res.body,
+    res.finalUrl ?? "",
+    { bytes: res.bytes, truncated: res.truncated },
+    scan,
+    deps,
+  );
   return { ...base, state: "fetched", skip_reason: null, analysis };
 }
 
@@ -261,19 +391,24 @@ async function enqueue(
   await deps.store.insertPages(scan, batch);
 }
 
-function progressOf(c: {
-  total: number;
-  pending: number;
-  fetched: number;
-  failed: number;
-  skipped: number;
-}) {
+function progressOf(
+  c: {
+    total: number;
+    pending: number;
+    fetched: number;
+    failed: number;
+    skipped: number;
+  },
+  scan: ScanRow,
+) {
   return {
     discovered: c.total,
     pending: c.pending,
     fetched: c.fetched,
     failed: c.failed,
     skipped: c.skipped,
+    rendered: scan.progress.rendered ?? 0,
+    renderNeeded: scan.progress.renderNeeded ?? 0,
   };
 }
 
@@ -317,11 +452,11 @@ async function crawl(scan: ScanRow, deps: RunnerDeps): Promise<boolean> {
     await enqueue(scan, deps, discovered);
 
     const counts = await deps.store.countPages(scan.id);
-    await write(deps, scan, { progress: progressOf(counts) });
+    await write(deps, scan, { progress: progressOf(counts, scan) });
   }
 
   const counts = await deps.store.countPages(scan.id);
-  await write(deps, scan, { stage: "analyzing", progress: progressOf(counts) });
+  await write(deps, scan, { stage: "analyzing", progress: progressOf(counts, scan) });
   return true;
 }
 
@@ -350,7 +485,7 @@ async function crawlPage(
 
   const res = await fetchWithRetry(deps.fetcher, page.url);
   const isHtml = res.ok && isHtmlResponse(res.contentType, res.body);
-  const patch = pagePatchFromFetch(res, isHtml, site);
+  const patch = await pagePatchFromFetch(res, isHtml, site, scan, deps);
   await deps.store.updatePage(page.id, patch);
 
   const analysis = patch.analysis;
@@ -367,9 +502,19 @@ async function analyze(scan: ScanRow, deps: RunnerDeps) {
   await deps.store.skipPending(scan.id, "Page limit reached");
   const rows = await deps.store.loadPages(scan.id);
   const site = scan.site as SiteArtifacts;
+  // A targeted scan reads a handful of pages: multi-page rules don't apply.
   const { report, findings, pageScores } = scoreScan(site, rows.map(pageRowToCrawled), {
-    mode: scan.mode,
+    mode: scan.mode === "targeted" ? "quick" : scan.mode,
   });
+  const renderNeeded = rows.filter((r) => r.analysis?.rendering).length;
+  report.rendering = {
+    available: Boolean(deps.render),
+    reason: deps.render
+      ? "Browser rendering available"
+      : (deps.renderUnavailableReason ?? "Browser rendering unavailable"),
+    rendered: rows.filter((r) => r.analysis?.rendering?.mode === "browser").length,
+    needed: renderNeeded,
+  };
 
   if (!report.counts.pagesCrawled) {
     await finish(
@@ -408,27 +553,32 @@ async function analyze(scan: ScanRow, deps: RunnerDeps) {
       }),
   );
 
-  const previous = await deps.store.findPreviousScan(
-    scan.workspace_id,
-    scan.host,
-    scan.created_at,
-    scan.id,
-  );
+  const targeted = scan.mode === "targeted";
+  // Verification scans aren't part of the site's score history.
+  const previous = targeted
+    ? null
+    : await deps.store.findPreviousScan(scan.workspace_id, scan.host, scan.created_at, scan.id);
   const categoryScores = Object.fromEntries(report.categories.map((c) => [c.id, c.score]));
   const counts = await deps.store.countPages(scan.id);
   const { pageScores: _omit, ...storedReport } = report;
+  const probing = !targeted && scan.config.probes && deps.probes;
 
   await write(deps, scan, {
     overall_score: report.overall,
     category_scores: categoryScores,
     report: storedReport,
     previous_scan_id: previous,
-    progress: progressOf(counts),
-    stage: scan.config.probes && deps.probes ? "probing" : "done",
-    ...(scan.config.probes && deps.probes
-      ? {}
-      : { status: "succeeded" as const, completed_at: nowIso(), lease_until: null }),
+    progress: progressOf(counts, scan),
+    stage: probing ? "probing" : "done",
+    ...(probing ? {} : { status: "succeeded" as const, completed_at: nowIso(), lease_until: null }),
   });
+
+  if (!targeted)
+    await deps.store.reopenRegressed?.(
+      scan.workspace_id,
+      findings.map((f) => f.fingerprint),
+    );
+  if (targeted) return;
 
   // Analytics, Coach and suggestions read the score history from geo_audit_runs.
   try {

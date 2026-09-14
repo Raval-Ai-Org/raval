@@ -30,8 +30,9 @@ describeLive("GitHub App connector (live)", () => {
     const { appRequest } = await import("@/server/connectors/github/api.server");
     const app = await appRequest<{ slug: string; permissions: Record<string, string> }>("/app");
     expect(app?.slug).toBe(process.env.GITHUB_APP_SLUG);
-    // The App must not ask for more than the connection + pull-request workflow needs.
-    const allowed = new Set(["metadata", "contents", "pull_requests"]);
+    // The App must not ask for more than the connection + pull-request workflow needs
+    // (checks / statuses are optional, read-only, for CI status on fix PRs).
+    const allowed = new Set(["metadata", "contents", "pull_requests", "checks", "statuses"]);
     const extra = Object.keys(app?.permissions ?? {}).filter((k) => !allowed.has(k));
     expect(extra, `unexpected permissions: ${extra.join(", ")}`).toEqual([]);
     console.info(`[live] app ${app?.slug} permissions ${JSON.stringify(app?.permissions)}`);

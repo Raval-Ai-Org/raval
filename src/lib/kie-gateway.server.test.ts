@@ -196,6 +196,61 @@ describe("KIE image gateway", () => {
     });
   });
 
+  it("retries a transient 5xx from Kie once before succeeding", async () => {
+    let createAttempts = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/jobs/createTask")) {
+          createAttempts += 1;
+          if (createAttempts === 1) return new Response("Service Unavailable", { status: 503 });
+          return Response.json({ code: 200, data: { taskId: "task-retried" } });
+        }
+        if (url.includes("/jobs/recordInfo"))
+          return Response.json({
+            code: 200,
+            data: {
+              state: "success",
+              resultJson: JSON.stringify({ resultUrls: ["https://cdn.kie.ai/retried.png"] }),
+            },
+          });
+        return new Response(new Uint8Array([137, 80, 78, 71]), {
+          headers: { "content-type": "image/png" },
+        });
+      }),
+    );
+
+    const { imageGenerationStream } = await import("./kie-gateway.server");
+    const response = await imageGenerationStream({ prompt: "A resilient visual" });
+    expect(createAttempts).toBe(2);
+    expect(await response.text()).toContain("image_generation.completed");
+  }, 10_000);
+
+  it("falls back to the next candidate model when one model's task creation keeps failing", async () => {
+    const modelsRequested: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/jobs/createTask")) {
+          const model = JSON.parse(String(init?.body)).model as string;
+          modelsRequested.push(model);
+          if (model === "gpt-image-2-5-flare-text-to-image")
+            return new Response("Service Unavailable", { status: 503 });
+          return Response.json({ code: 200, data: { taskId: "task-fallback" } });
+        }
+        throw new Error(`unexpected call to ${url}`);
+      }),
+    );
+
+    const { startImageTask } = await import("./kie-gateway.server");
+    const started = await startImageTask({ prompt: "A fallback visual", size: "1024x1024" });
+    // The first candidate is retried (twice) before the gateway moves on.
+    expect(modelsRequested.filter((m) => m === "gpt-image-2-5-flare-text-to-image")).toHaveLength(
+      3,
+    );
+    expect(started.model).toBe("gpt-image-2-5-sunburst-text-to-image");
+  }, 10_000);
+
   it("maps a provider failure to a clean generation error", async () => {
     vi.stubGlobal(
       "fetch",

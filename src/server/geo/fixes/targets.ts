@@ -1,0 +1,416 @@
+// targets.ts — which rules Mellox can fix through a pull request, and which
+// repository files a fix touches for a given framework and page. Pure: works on
+// the repository's path list only, so the plan is explainable before any file
+// is read or any model is called.
+//
+// The support matrix is deliberately narrow. A rule is listed only when its
+// fix is a bounded edit (a discovery file, document head metadata, a heading)
+// whose effect a rescan can verify. Content rewrites, trust pages, schema that
+// would need facts Mellox doesn't have (sameAs profiles, authors, dates, FAQ
+// answers, a real og:image) and anything under a dynamic route stay manual.
+
+export type FixKind =
+  | "robots"
+  | "robots-sitemap"
+  | "llms"
+  | "sitemap"
+  | "title"
+  | "meta-desc"
+  | "canonical"
+  | "h1"
+  | "lang"
+  | "viewport"
+  | "charset"
+  | "org-schema";
+
+/** ruleId → the change that fixes it. Anything else is manual. */
+export const PR_FIXABLE_RULES: Readonly<Record<string, FixKind>> = {
+  "ai.robots_txt": "robots",
+  "ai.llms_txt": "llms",
+  "tech.sitemap": "sitemap",
+  "tech.robots_sitemap": "robots-sitemap",
+  "tech.canonical": "canonical",
+  // Duplicate title/description rules need a multi-page scan to evaluate, so a
+  // targeted verification can't confirm them — they stay manual.
+  "tech.title": "title",
+  "tech.meta_description": "meta-desc",
+  "tech.lang": "lang",
+  "schema.jsonld": "org-schema",
+  "schema.organization": "org-schema",
+  "schema.website": "org-schema",
+  "content.h1": "h1",
+  "perf.viewport": "viewport",
+  "perf.charset": "charset",
+};
+
+export function fixKindForRule(ruleId: string): FixKind | null {
+  if (ruleId.startsWith("ai.bot.")) return "robots";
+  return PR_FIXABLE_RULES[ruleId] ?? null;
+}
+
+const STATIC_KINDS = new Set<FixKind>(["robots", "robots-sitemap", "llms", "sitemap"]);
+const PAGE_KINDS = new Set<FixKind>(["title", "meta-desc", "canonical", "h1"]);
+
+export type FrameworkKind = "next" | "nuxt" | "astro" | "angular" | "vite" | "cra" | "static";
+
+/** Map the connector's framework label (inspect.ts) to a supported layout, or null. */
+export function frameworkKind(label: string | null): FrameworkKind | null {
+  switch (label) {
+    case "Next.js":
+      return "next";
+    case "Nuxt":
+      return "nuxt";
+    case "Astro":
+      return "astro";
+    case "Angular":
+      return "angular";
+    case "Vite":
+    case "Vue":
+      return "vite";
+    case "Create React App":
+      return "cra";
+    case "Static HTML":
+      return "static";
+    default:
+      return null;
+  }
+}
+
+export type TargetFile = { path: string; action: "create" | "update" };
+
+export type TargetPlan =
+  | {
+      ok: true;
+      kind: FixKind;
+      strategy: "static_file";
+      scope: "site";
+      files: TargetFile[];
+      reason: string;
+    }
+  | {
+      ok: true;
+      kind: FixKind;
+      strategy: "code_edit";
+      scope: "page" | "site";
+      files: TargetFile[];
+      reason: string;
+    }
+  | { ok: false; reason: string };
+
+const IGNORED =
+  /(^|\/)(node_modules|\.git|dist|build|out|\.next|\.nuxt|\.output|coverage|vendor)\//;
+const SOURCE_EXT = "(tsx|jsx|ts|js)";
+
+function pathOf(pageUrl: string | null): string {
+  if (!pageUrl) return "/";
+  try {
+    const p = new URL(pageUrl).pathname.replace(/\/+$/, "");
+    return p || "/";
+  } catch {
+    return "/";
+  }
+}
+
+function first(paths: Set<string>, candidates: string[]): string | null {
+  return candidates.find((c) => paths.has(c)) ?? null;
+}
+
+function publicDir(kind: FrameworkKind, paths: string[]): string | null {
+  const has = (dir: string) => paths.some((p) => p.startsWith(`${dir}/`));
+  switch (kind) {
+    case "next":
+    case "astro":
+    case "vite":
+    case "cra":
+      return "public";
+    case "nuxt":
+      return has("public") || !has("static") ? "public" : "static";
+    case "angular":
+      // Angular 17+ serves public/ from the site root; older layouts need angular.json changes.
+      return has("public") ? "public" : null;
+    case "static": {
+      const index = paths
+        .filter((p) => /(^|\/)index\.html?$/i.test(p) && !IGNORED.test(p))
+        .sort((a, b) => a.split("/").length - b.split("/").length)[0];
+      if (!index) return null;
+      const dir = index.split("/").slice(0, -1).join("/");
+      return dir;
+    }
+  }
+}
+
+const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
+
+/* ───────────────────────── static discovery files ───────────────────────── */
+
+function planStatic(
+  kind: FixKind,
+  fw: FrameworkKind,
+  paths: string[],
+  set: Set<string>,
+): TargetPlan {
+  const dir = publicDir(fw, paths);
+  const appDirs = ["app", "src/app"];
+
+  if (kind === "llms") {
+    const route = paths.find((p) => /(^|\/)app\/llms(-full)?\.txt\/route\.(ts|js)$/.test(p));
+    if (route) {
+      return { ok: false, reason: `llms.txt is generated by ${route}; edit that route by hand.` };
+    }
+    if (dir === null)
+      return { ok: false, reason: "Couldn't find the folder this site serves from its root." };
+    const path = join(dir, "llms.txt");
+    return {
+      ok: true,
+      kind,
+      strategy: "static_file",
+      scope: "site",
+      files: [{ path, action: set.has(path) ? "update" : "create" }],
+      reason: `${fw === "static" ? "The site root" : `${dir}/`} is served at /, so ${path} is published as /llms.txt.`,
+    };
+  }
+
+  if (kind === "sitemap") {
+    const dynamic = paths.find((p) =>
+      new RegExp(
+        `^(src/)?app/sitemap\\.${SOURCE_EXT}$|(^|/)app/sitemap\\.xml/route\\.(ts|js)$`,
+      ).test(p),
+    );
+    if (dynamic) {
+      return {
+        ok: false,
+        reason: `The sitemap is generated by ${dynamic}; it needs a manual fix.`,
+      };
+    }
+    if (dir === null)
+      return { ok: false, reason: "Couldn't find the folder this site serves from its root." };
+    const path = join(dir, "sitemap.xml");
+    return {
+      ok: true,
+      kind,
+      strategy: "static_file",
+      scope: "site",
+      files: [{ path, action: set.has(path) ? "update" : "create" }],
+      reason: `A static sitemap of the pages Mellox crawled, published as /sitemap.xml.`,
+    };
+  }
+
+  // robots / robots-sitemap
+  const dynamicRobots = first(
+    set,
+    appDirs.flatMap((d) => ["ts", "js", "tsx", "jsx"].map((e) => `${d}/robots.${e}`)),
+  );
+  if (dynamicRobots && fw === "next") {
+    return {
+      ok: true,
+      kind,
+      strategy: "code_edit",
+      scope: "site",
+      files: [{ path: dynamicRobots, action: "update" }],
+      reason: `robots.txt is generated by ${dynamicRobots} (Next.js metadata route).`,
+    };
+  }
+  if (dir === null)
+    return { ok: false, reason: "Couldn't find the folder this site serves from its root." };
+  const path = join(dir, "robots.txt");
+  return {
+    ok: true,
+    kind,
+    strategy: "static_file",
+    scope: "site",
+    files: [{ path, action: set.has(path) ? "update" : "create" }],
+    reason: `${path} is served as /robots.txt.`,
+  };
+}
+
+/* ───────────────────────── page & layout files ───────────────────────── */
+
+/** Next.js app-router page file for a URL path (static segments and route groups only). */
+function nextAppPage(paths: string[], urlPath: string): string | null {
+  const want = urlPath === "/" ? [] : urlPath.split("/").filter(Boolean);
+  for (const p of paths) {
+    const m = p.match(/^(src\/)?app\/(.*?)\/?page\.(tsx|jsx|ts|js|mdx)$/);
+    if (!m) continue;
+    const segments = (m[2] ?? "")
+      .split("/")
+      .filter(Boolean)
+      .filter((s) => !/^\(.*\)$/.test(s));
+    if (segments.some((s) => s.startsWith("[") || s.startsWith("@") || s.startsWith("_"))) continue;
+    if (segments.length === want.length && segments.every((s, i) => s === want[i])) return p;
+  }
+  return null;
+}
+
+function routeFile(
+  set: Set<string>,
+  bases: string[],
+  urlPath: string,
+  exts: string[],
+): string | null {
+  const rel = urlPath === "/" ? "index" : urlPath.replace(/^\//, "");
+  const candidates: string[] = [];
+  for (const base of bases) {
+    for (const ext of exts) {
+      candidates.push(`${base}/${rel}.${ext}`);
+      if (urlPath !== "/") candidates.push(`${base}/${rel}/index.${ext}`);
+    }
+  }
+  return first(set, candidates);
+}
+
+function staticPage(set: Set<string>, root: string, urlPath: string): string | null {
+  const rel = urlPath === "/" ? "" : urlPath.replace(/^\//, "");
+  if (/\.html?$/i.test(rel)) return first(set, [join(root, rel)]);
+  return first(
+    set,
+    rel
+      ? [join(root, `${rel}.html`), join(root, `${rel}/index.html`), join(root, `${rel}.htm`)]
+      : [join(root, "index.html"), join(root, "index.htm")],
+  );
+}
+
+function spaIndex(fw: FrameworkKind, set: Set<string>): string | null {
+  if (fw === "angular") return first(set, ["src/index.html"]);
+  if (fw === "cra") return first(set, ["public/index.html"]);
+  return first(set, ["index.html", "public/index.html"]);
+}
+
+function planCode(
+  kind: FixKind,
+  fw: FrameworkKind,
+  paths: string[],
+  set: Set<string>,
+  urlPath: string,
+): TargetPlan {
+  const pageScope = PAGE_KINDS.has(kind);
+  const update = (path: string, scope: "page" | "site", reason: string): TargetPlan => ({
+    ok: true,
+    kind,
+    strategy: "code_edit",
+    scope,
+    files: [{ path, action: "update" }],
+    reason,
+  });
+
+  switch (fw) {
+    case "next": {
+      const appRouter = paths.some((p) => /^(src\/)?app\/layout\.(tsx|jsx|ts|js)$/.test(p));
+      if (appRouter) {
+        if (pageScope) {
+          const page = nextAppPage(paths, urlPath);
+          if (page) return update(page, "page", `${page} renders ${urlPath} (Next.js App Router).`);
+          const pagesRouter = routeFile(set, ["pages", "src/pages"], urlPath, [
+            "tsx",
+            "jsx",
+            "js",
+            "ts",
+          ]);
+          if (pagesRouter) return update(pagesRouter, "page", `${pagesRouter} renders ${urlPath}.`);
+          return {
+            ok: false,
+            reason: `No static page file renders ${urlPath} (dynamic routes need a manual fix).`,
+          };
+        }
+        const layout = first(
+          set,
+          ["app", "src/app"].flatMap((d) =>
+            ["tsx", "jsx", "ts", "js"].map((e) => `${d}/layout.${e}`),
+          ),
+        )!;
+        return update(layout, "site", `${layout} is the root layout every page shares.`);
+      }
+      if (pageScope) {
+        const page = routeFile(set, ["pages", "src/pages"], urlPath, ["tsx", "jsx", "js", "ts"]);
+        if (page) return update(page, "page", `${page} renders ${urlPath} (Next.js Pages Router).`);
+        return { ok: false, reason: `No static page file renders ${urlPath}.` };
+      }
+      const doc = first(
+        set,
+        ["pages", "src/pages"].flatMap((d) =>
+          ["tsx", "jsx", "js", "ts"].map((e) => `${d}/_document.${e}`),
+        ),
+      );
+      if (doc) return update(doc, "site", `${doc} controls the HTML document for every page.`);
+      return {
+        ok: false,
+        reason: "This Next.js site has no pages/_document; add the tag manually.",
+      };
+    }
+    case "nuxt": {
+      if (pageScope) {
+        const page = routeFile(set, ["pages", "src/pages", "app/pages"], urlPath, ["vue"]);
+        if (page) return update(page, "page", `${page} renders ${urlPath} (Nuxt).`);
+        return { ok: false, reason: `No static Nuxt page renders ${urlPath}.` };
+      }
+      const app = first(set, ["app.vue", "src/app.vue", "app/app.vue"]);
+      if (app) return update(app, "site", `${app} wraps every page (useHead applies site-wide).`);
+      return {
+        ok: false,
+        reason:
+          "This Nuxt site has no app.vue; the change belongs in nuxt.config, which Mellox doesn't edit.",
+      };
+    }
+    case "astro": {
+      const page = routeFile(set, ["src/pages"], urlPath, ["astro"]);
+      if (pageScope) {
+        if (page) return update(page, "page", `${page} renders ${urlPath} (Astro).`);
+        return { ok: false, reason: `No static .astro page renders ${urlPath}.` };
+      }
+      const layouts = paths.filter((p) => /^src\/layouts\/[^/]+\.astro$/.test(p));
+      if (layouts.length === 1)
+        return update(layouts[0], "site", `${layouts[0]} is the site's only layout.`);
+      if (page)
+        return update(page, "page", `${page} renders ${urlPath}; the site has several layouts.`);
+      return { ok: false, reason: "Couldn't tell which Astro layout renders this page." };
+    }
+    case "vite":
+    case "cra":
+    case "angular": {
+      const index = spaIndex(fw, set);
+      if (!index) return { ok: false, reason: "Couldn't find the app's index.html." };
+      if (pageScope && urlPath !== "/") {
+        return {
+          ok: false,
+          reason: `This single-page app serves one HTML document for every route, so ${urlPath} can't get its own tags from index.html. Use a head manager in the route component.`,
+        };
+      }
+      return update(
+        index,
+        pageScope ? "page" : "site",
+        `${index} is the HTML document the app is served in.`,
+      );
+    }
+    case "static": {
+      const root = publicDir("static", paths) ?? "";
+      const page = staticPage(set, root, urlPath);
+      if (!page) return { ok: false, reason: `No HTML file in the repository matches ${urlPath}.` };
+      return update(page, "page", `${page} is served as ${urlPath}.`);
+    }
+  }
+}
+
+export function planFixTarget(input: {
+  ruleId: string;
+  pageUrl: string | null;
+  framework: string | null;
+  paths: string[];
+}): TargetPlan {
+  const kind = fixKindForRule(input.ruleId);
+  if (!kind) return { ok: false, reason: "This finding needs a manual fix." };
+  const fw = frameworkKind(input.framework);
+  if (!fw) {
+    return {
+      ok: false,
+      reason: input.framework
+        ? `Mellox can't yet edit ${input.framework} sites safely. Follow the manual steps.`
+        : "Mellox couldn't identify the framework behind this repository. Follow the manual steps.",
+    };
+  }
+  const paths = input.paths.filter((p) => !IGNORED.test(p));
+  const set = new Set(paths);
+  const plan = STATIC_KINDS.has(kind)
+    ? planStatic(kind, fw, paths, set)
+    : planCode(kind, fw, paths, set, pathOf(input.pageUrl));
+  // Every planned path must be one Mellox may write.
+  return plan;
+}

@@ -24,7 +24,6 @@ import {
   Calendar as CalendarIcon,
   ChevronDown,
   PanelRightOpen,
-  Plug,
   Plus,
   Radio,
   Rocket,
@@ -499,15 +498,6 @@ function AppShell() {
             label: "Content calendar",
             accent: "hsl(var(--brand-blue))",
             onClick: () => emitAppEvent("open:content-calendar"),
-          })}
-          {sidebarAction({
-            icon: Plug,
-            label: "Integrations",
-            hint: "GitHub",
-            onClick: () => {
-              emitAppEvent("open:connectors");
-              setNavOpen(false);
-            },
           })}
         </SidebarSection>
 

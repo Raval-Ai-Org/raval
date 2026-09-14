@@ -29,14 +29,20 @@ async function requireEditor(context: ServerFnContext, workspaceId: string) {
 async function loadStates(context: ServerFnContext, workspaceId: string) {
   const { data, error } = await context.supabase
     .from("geo_finding_states")
-    .select("fingerprint, state, note")
+    .select("fingerprint, state, note, resolved_via, verified_at, reopened_at")
     .eq("workspace_id", workspaceId)
     .limit(10_000);
   if (error) throw new Error(error.message);
   return new Map(
     (data ?? []).map((r) => [
       r.fingerprint,
-      { state: r.state as FindingWorkflowState, note: r.note as string | null },
+      {
+        state: r.state as FindingWorkflowState,
+        note: r.note as string | null,
+        resolution: (r.resolved_via as "verified" | "manual_legacy" | null) ?? null,
+        verifiedAt: r.verified_at ?? null,
+        reopenedAt: r.reopened_at ?? null,
+      },
     ]),
   );
 }
@@ -62,6 +68,8 @@ export const listScans = createServerFn({ method: "POST" })
       .from("geo_scans")
       .select(SCAN_SUMMARY_COLS)
       .eq("workspace_id", data.workspaceId)
+      // Verification rescans (a few pages) aren't site scores.
+      .neq("mode", "targeted")
       .order("created_at", { ascending: false })
       .limit(data.limit ?? 30);
     if (data.host) q = q.eq("host", data.host);
@@ -201,7 +209,8 @@ export const setFindingState = createServerFn({ method: "POST" })
       .object({
         workspaceId: uuid,
         fingerprint: z.string().min(3).max(800),
-        state: z.enum(["open", "in_progress", "resolved", "dismissed"]),
+        // "resolved" is set only by a verification scan (src/server/geo/fixes/verify.server.ts).
+        state: z.enum(["open", "in_progress", "dismissed"]),
         note: z.string().max(1000).nullable().optional(),
       })
       .parse(data),
@@ -214,6 +223,9 @@ export const setFindingState = createServerFn({ method: "POST" })
         fingerprint: data.fingerprint,
         state: data.state,
         note: data.note ?? null,
+        resolved_via: null,
+        verified_at: null,
+        verification_id: null,
         updated_by: context.userId,
         updated_at: new Date().toISOString(),
       },
@@ -240,6 +252,9 @@ function presentMonitor(row: Record<string, any>): GeoMonitor {
     lastRunAt: row.last_run_at ?? null,
     lastRunStatus: row.last_run_status ?? null,
     lastRunError: row.last_run_error ?? null,
+    probes: row.meta?.probes === true,
+    lastScoreDelta:
+      typeof row.meta?.last_score_delta === "number" ? row.meta.last_score_delta : null,
   };
 }
 
@@ -267,11 +282,14 @@ export const saveMonitor = createServerFn({ method: "POST" })
         url: z.string().trim().min(1).max(2000),
         cadence: z.enum(["daily", "weekly"]),
         active: z.boolean().default(true),
+        probes: z.boolean().default(false),
       })
       .parse(data),
   )
   .handler(async ({ data, context }): Promise<GeoMonitor> => {
     await requireEditor(context, data.workspaceId);
+    const { isGeoProbesEnabled } = await import("@/lib/feature-flags");
+    const probes = data.probes && isGeoProbesEnabled(data.workspaceId);
     const [{ assertPublicUrl }, { normalizeUrl }] = await Promise.all([
       import("@/server/safe-fetch"),
       import("@/lib/crawl/html"),
@@ -287,7 +305,7 @@ export const saveMonitor = createServerFn({ method: "POST" })
       title: `AI Visibility · ${host}`,
       cadence: data.cadence,
       active: data.active,
-      meta: { url: url.toString() } as never,
+      meta: { url: url.toString(), probes } as never,
     };
     const query = data.id
       ? context.supabase

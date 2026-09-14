@@ -11,9 +11,22 @@ export const POST = defineCronRoute({
   job: "geo-scans",
   expectedIntervalSeconds: 60,
   handler: async () => {
-    const { runDueGeoScans } = await import("@/server/geo/service.server");
-    // Stay inside pg_net's 120 s call timeout.
-    return runDueGeoScans({ budgetMs: 90_000, max: 3 });
+    const [{ runDueGeoScans }, { runDueVerifications }, { syncStaleOpenProposals }] =
+      await Promise.all([
+        import("@/server/geo/service.server"),
+        import("@/server/geo/fixes/verify.server"),
+        import("@/server/geo/fixes/service.server"),
+      ]);
+    // Stay inside pg_net's 120 s call timeout: scans, then fix verifications,
+    // then pull requests whose webhook may not have reached us.
+    const scans = await runDueGeoScans({ budgetMs: 55_000, max: 3 });
+    const verifications = await runDueVerifications({ budgetMs: 40_000, max: 2 }).catch((e) => ({
+      error: e instanceof Error ? e.message : String(e),
+    }));
+    const pullRequests = await syncStaleOpenProposals(5).catch((e) => ({
+      error: e instanceof Error ? e.message : String(e),
+    }));
+    return { ...scans, verifications, pullRequests };
   },
 });
 

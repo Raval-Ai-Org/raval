@@ -143,7 +143,11 @@ function mapStatus(status: number, detail?: string): KieGatewayError {
   return new KieGatewayError(502, "The image provider is temporarily unavailable.", "provider");
 }
 
-async function fetchJson(url: string, init: RequestInit, timeoutMs: number): Promise<any> {
+/** A blip worth one silent retry rather than surfacing to the user. */
+const TRANSIENT_RETRY_CATEGORIES = new Set(["provider", "network"]);
+const TRANSIENT_RETRY_DELAYS_MS = [800, 2000];
+
+async function fetchJsonOnce(url: string, init: RequestInit, timeoutMs: number): Promise<any> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -176,6 +180,28 @@ async function fetchJson(url: string, init: RequestInit, timeoutMs: number): Pro
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * A single 5xx or dropped connection from Kie shouldn't fail the whole
+ * generation — it's usually a passing blip, not a real outage. Retry those
+ * (never validation/auth/rate-limit errors, which won't change on retry)
+ * before letting the error reach the caller.
+ */
+async function fetchJson(url: string, init: RequestInit, timeoutMs: number): Promise<any> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= TRANSIENT_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await fetchJsonOnce(url, init, timeoutMs);
+    } catch (error) {
+      lastError = error;
+      const retryable =
+        error instanceof KieGatewayError && TRANSIENT_RETRY_CATEGORIES.has(error.category);
+      if (!retryable || attempt === TRANSIENT_RETRY_DELAYS_MS.length) throw error;
+      await new Promise((resolve) => setTimeout(resolve, TRANSIENT_RETRY_DELAYS_MS[attempt]));
+    }
+  }
+  throw lastError;
 }
 
 function aspectRatio(size: "1024x1024" | "1792x1024" | "1024x1792"): string {
@@ -485,7 +511,6 @@ export async function startImageTask(opts: {
     editing: referenceAssets.length > 0,
   });
   if (!opts.model) await enforceBudget("image");
-  const model = opts.model ?? plan.model;
   const key = getApiKey();
   const input: Record<string, unknown> = {
     prompt: opts.prompt.slice(0, 10_000),
@@ -494,11 +519,42 @@ export async function startImageTask(opts: {
     background: "opaque",
   };
   if (referenceAssets.length) input.image_urls = referenceAssets;
-  const json = await fetchJson(
-    `${KIE_BASE}/jobs/createTask`,
-    { method: "POST", headers: headers(key), body: JSON.stringify({ model, input }) },
-    30_000,
-  );
+
+  // fetchJson already retries a lone 5xx/network blip; if that model still
+  // won't accept the task, fall back to the next candidate rather than
+  // failing generation outright (matches imageGenerationStream's behaviour).
+  const candidates = opts.model
+    ? [opts.model]
+    : [plan.model, ...plan.fallbacks].filter(
+        (candidate, index, all) => candidate && all.indexOf(candidate) === index,
+      );
+  let model = candidates[0];
+  let lastError: unknown;
+  let json: any;
+  for (const candidate of candidates) {
+    try {
+      json = await fetchJson(
+        `${KIE_BASE}/jobs/createTask`,
+        {
+          method: "POST",
+          headers: headers(key),
+          body: JSON.stringify({ model: candidate, input }),
+        },
+        30_000,
+      );
+      model = candidate;
+      lastError = undefined;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (
+        error instanceof KieGatewayError &&
+        ["configuration", "authentication", "request"].includes(error.category)
+      )
+        throw error;
+    }
+  }
+  if (lastError) throw lastError;
   const taskId = json?.data?.taskId ?? json?.data?.task_id ?? json?.taskId ?? json?.task_id;
   if (typeof taskId !== "string" || !taskId) {
     throw new KieGatewayError(502, "The image provider did not return a task ID.", "response");

@@ -60,10 +60,24 @@ const PERMISSIONS = [
   {
     label: "Propose changes as pull requests",
     detail:
-      "Coming next: fixes arrive as a branch + pull request you review and merge. Nothing is pushed today.",
+      "Only when you approve a specific AI Visibility fix: Mellox creates a mellox/ branch and a pull request you review and merge. It never pushes to or merges your branches.",
     icon: GitCommit,
   },
+  {
+    label: "Read CI checks (optional)",
+    detail:
+      "Checks and commit statuses on Mellox's pull requests, so you can see whether they pass.",
+    icon: CheckCircle,
+  },
 ];
+
+const PERMISSION_LABEL: Record<string, string> = {
+  metadata: "Metadata",
+  contents: "Contents",
+  pull_requests: "Pull requests",
+  checks: "Checks",
+  statuses: "Commit statuses",
+};
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "never";
@@ -119,18 +133,21 @@ function connectionHealth(c: ConnectionView) {
 
 /* ───────────────────────── Repository picker ───────────────────────── */
 
-function RepositoryPicker({
+export function RepositoryPicker({
   workspaceId,
   connection,
   selectedIds,
   canManage,
   onSelected,
+  siteUrl,
 }: {
   workspaceId: string;
   connection: ConnectionView;
   selectedIds: Set<string>;
   canManage: boolean;
   onSelected: (source: SourceView) => void;
+  /** Link the chosen repository to this website instead of the repository's homepage. */
+  siteUrl?: string;
 }) {
   const [repos, setRepos] = useState<RepositoryOption[] | null>(null);
   const [meta, setMeta] = useState<{ total: number; truncated: boolean } | null>(null);
@@ -176,7 +193,7 @@ function RepositoryPicker({
           workspaceId,
           connectionId: connection.id,
           repositoryId: repo.id,
-          siteUrl: repo.homepage,
+          siteUrl: siteUrl ?? repo.homepage,
         },
       });
       onSelected(source);
@@ -527,8 +544,9 @@ function SourceCard({
             ))}
           </dl>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Read-only. AI Visibility scores your live website; using this source to propose code
-            fixes as pull requests is the next phase.
+            AI Visibility scores your live website. From a finding, “Fix this” uses this repository
+            to propose a pull request you approve; the finding is resolved only after a rescan of
+            the live site confirms it.
           </p>
         </div>
       )}
@@ -676,8 +694,8 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
             )}
           </div>
           <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
-            Connect the repository behind your website so Mellox can inspect how your SEO, GEO and
-            AEO setup is built — and, next, propose fixes as pull requests you review.
+            Connect the repository behind your website so Mellox can see how your SEO, GEO and AEO
+            setup is built and propose approved fixes as pull requests you review.
           </p>
         </div>
       </div>
@@ -814,6 +832,28 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
                   </Button>
                 )}
               </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
+              <span className="text-muted-foreground">Permissions:</span>
+              {Object.entries(connection.permissions)
+                .filter(([k]) => PERMISSION_LABEL[k])
+                .map(([k, v]) => (
+                  <StatusChip key={k} tone={v === "write" ? "warning" : "muted"}>
+                    {PERMISSION_LABEL[k]} · {v}
+                  </StatusChip>
+                ))}
+              {(!connection.permissions.checks || !connection.permissions.statuses) && (
+                <span className="text-muted-foreground">
+                  CI status on fix pull requests needs Checks and Commit statuses (read).
+                </span>
+              )}
+              {(connection.permissions.contents !== "write" ||
+                connection.permissions.pull_requests !== "write") && (
+                <span className="text-destructive">
+                  Fix pull requests need Contents and Pull requests (write).
+                </span>
+              )}
             </div>
 
             {connection.status === "suspended" && (

@@ -1,25 +1,41 @@
 # GitHub connector (website sources)
 
 GitHub is the first **website source connector**: a workspace connects the
-repository that builds its website so Mellox can later inspect it, propose
-AI-visibility fixes, open a pull request and rescan after the user merges.
+repository that builds its website so AI Visibility can propose approved fixes
+as pull requests and verify them on the live site after the user merges.
+Decision records: [ADR-0011](adr/0011-github-app-website-connector.md) (connection),
+[ADR-0012](adr/0012-geo-fix-pull-requests-and-verification.md) (fix workflow).
 
-This phase delivers the **connection only**. Mellox reads repository metadata
-and a handful of file paths; it never writes to a repository, creates a branch
-or opens a pull request. Decision record:
-[ADR-0011](adr/0011-github-app-website-connector.md).
+## Workflow
 
-## Planned workflow and what ships now
+| Step                                            | Where                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| Connect GitHub (App install)                    | Settings → Connections, or "Fix this" on a finding           |
+| Choose repository, link it to the website       | Settings, or inline in the fix flow                          |
+| Choose base branch, see affected files          | Fix flow (`previewFix`)                                      |
+| Generate change, diff, checks                   | `createFixProposal` → `src/server/geo/fixes/`                |
+| Approve exact content → mellox/ branch + PR     | `approveFixProposal` → `git.server.ts`                       |
+| PR status + CI checks                           | webhook (`pull_request`, `check_*`) or polling (cron / view) |
+| Merge on GitHub → verification rescans          | `verify.server.ts` (targeted scan); resolves only on a pass  |
+| Close PR from Mellox (deletes its mellox/ branch) | `discardFixProposal`                                        |
 
-| Step                                        | Status                                        |
-| ------------------------------------------- | --------------------------------------------- |
-| Connect GitHub (App install)                | Shipped                                       |
-| Choose repository, branch, site URL         | Shipped                                       |
-| Inspect source (framework, discovery files) | Shipped — read-only, names only               |
-| Analyze with AI Visibility scans            | Existing GEO engine (crawls the live site)    |
-| Propose code changes                        | Next phase                                    |
-| Create branch + pull request                | Next phase (App already holds the permission) |
-| User merges, Mellox rescans                 | Next phase (webhook + rescan-and-compare)     |
+### Fix all automatically
+
+Findings tab → **Fix all**, or Overview → **Fix all automatically**:
+
+1. **Preflight** — how many open findings are fixable, how many need manual work,
+   how many already have a fix in progress; the GitHub connect / repository step
+   appears inline when it's missing.
+2. **Generate all fixes** — background run over up to 15 findings with live progress.
+   Each finding is Included, Skipped or Failed, with the reason.
+3. **Review once** — one combined diff and one set of checks.
+4. **Approve once** — one `mellox/geo-all-N-…` branch, one commit, one pull request.
+5. **Merge on GitHub** — one verification rescan; findings resolve individually.
+
+RPC: `getFixAllPreflight`, `createFixBatch` (tier `geo-fix-batch`, 4/h),
+`getFixBatch`, `approveFixBatch`, `discardFixBatch` (`connector-write`). Audit:
+`geo.fix_batch.started / generated / approved / committed / pr_opened /
+apply_failed / pr_merged / pr_closed / discarded`.
 
 ## Architecture
 
@@ -32,19 +48,24 @@ src/server/connectors/github/
   service.server.ts                        install state, linking, repos, sources, inspection, audit
   webhook.ts                               signature verification + event handling (pure, injected deps)
   inspect.ts                               framework + discovery-file detection (pure)
+  git.server.ts                            branches, file reads, commit to new mellox/ branch, PRs, checks
+  paths.ts                                 writable-path allowlist + branch naming (pure)
+src/server/audit.server.ts                 shared audit_logs writer (scrubs credential-like keys)
+src/server/geo/fixes/                      fix planning, generation, validation, PR + verification
 src/server/connectors/present.ts           row → view mapping (whitelists URLs)
 src/server/connectors/source-context.server.ts   GEO boundary: getSiteSourceContext(host)
 src/server/fns/connectors.ts               server functions (auth, roles, rate limits)
 src/app/api/integrations/github/webhook    POST webhook receiver
 src/app/api/integrations/github/callback   GET → forwards to the callback page
 src/app/integrations/github/callback       client page that completes the install
-src/components/app/connectors/             GitHubConnector (Integrations dialog), install callback UI
+src/components/app/connectors/             GitHubConnector (Settings → Connections), RepositoryPicker, install callback UI
 ```
 
-The UI lives in **Workspace → Integrations** (sidebar), in the existing
-Integrations dialog. WordPress, Webflow, Shopify and Framer appear there as
-"coming soon"; they are entries in `CONNECTOR_PROVIDERS` and allowed values of
-`workspace_connections.provider`, with no implementation.
+The UI lives in **Settings → Connections** (account menu → Settings), next to
+social accounts, and is also reachable from a finding's fix flow. WordPress,
+Webflow, Shopify and Framer are listed as "Not available yet"; they are entries in
+`CONNECTOR_PROVIDERS` and allowed values of `workspace_connections.provider`, with
+no implementation.
 
 ## Connection flow
 
@@ -109,13 +130,16 @@ through server functions using the service role after a role check.
 
 | Action                                                     | Minimum role |
 | ---------------------------------------------------------- | ------------ |
-| View connections and sources                               | member       |
-| List repositories, verify connection, inspect source       | editor       |
+| View connections, sources, proposals, verifications        | member       |
+| List repositories/branches, verify connection, inspect source | editor    |
+| Generate, approve (open PR), close/discard a fix proposal  | editor       |
 | Connect, choose/remove repository, edit source, disconnect | admin        |
 
 Rate limits: `connector` (30/min) for GitHub-calling reads, `connector-connect`
-(10 per 10 min) for install start/complete. Non-members get **403**, signed-out
-callers **401**.
+(10 per 10 min) for install start/complete, `connector-write` (10 per 10 min) for
+opening/closing PRs, disconnect and remove, `geo-fix` (20/h, paid model call) for
+proposals, `geo-verify` (20/h) for verification rescans. Non-members get **403**,
+signed-out callers **401**.
 
 ## Webhooks
 
@@ -131,7 +155,13 @@ callers **401**.
   - `installation.suspend` / `unsuspend` → `suspended` / `active`
   - `installation.new_permissions_accepted` → permissions refreshed
   - `installation_repositories.removed` / `added` → sources `access_lost` / restored
+  - `pull_request` (opened/closed/reopened/synchronize/edited) on a `mellox/` head
+    branch → the matching proposal's state; a merge schedules verification
+  - `check_suite` / `check_run` completed → CI status refreshed on the proposal
+  - `installation.deleted` also marks open proposals `access_lost`
   - `ping` → `{pong: true}`
+- Webhooks can't reach localhost: open PRs are also polled (every cron tick for
+  PRs not synced in 5 minutes, and when a proposal is viewed).
 - Webhooks never create or link a connection; unknown installations are ignored.
 - A handler error returns 500 so GitHub retries (handlers are idempotent).
 
@@ -147,10 +177,24 @@ reconnect prompt, never a 500.
 ## GEO boundary
 
 `getSiteSource` / `getSiteSourceContext(workspaceId, host)` returns the
-connected repository for a scanned site host, with
-`capabilities: { inspect: true, proposeChanges: false }`. AI Visibility keeps
-crawling the live website; no code-level scanning exists yet and the UI does
-not claim it.
+connected repository for a scanned site host (`proposeChanges` is true while the
+source is active). AI Visibility still scores the live website — repository code
+is read only to plan and generate a specific approved fix, and scores never come
+from source code.
+
+## Repository write safety
+
+- Paths: `paths.ts` allows site source only (html, tsx/ts/jsx/js, vue, svelte,
+  astro, txt, xml, json, md) and refuses traversal, `.git`, `.github`, CI, env,
+  lockfiles, package manifests and framework/build config.
+- Reads ≤ 512 KB and UTF-8 text only; writes ≤ 200 KB and ≤ 400 changed lines, ≤ 4 files.
+- Branches: only `mellox/geo-<fix>-<random>`; creating an existing branch fails;
+  the base branch head must equal the reviewed base commit.
+- Approval binds a SHA-256 of the exact file contents + base commit.
+- A failed PR after a branch was created deletes that branch. Closing from Mellox
+  closes the PR and deletes only its `mellox/` branch.
+- Audit actions: `geo.fix.proposed`, `approved`, `committed`, `pr_opened`,
+  `apply_failed`, `pr_merged`, `pr_closed`, `discarded`, `geo.verification.*`.
 
 ## Environment
 
@@ -171,7 +215,10 @@ Integrations dialog listing variable **names** only.
 ## GitHub App settings
 
 - **Permissions** (repository): Metadata _read_, Contents _read & write_,
-  Pull requests _read & write_. Write access is for the next phase and unused now.
+  Pull requests _read & write_ (fix PRs), Checks _read_ and Commit statuses _read_
+  (CI status on fix PRs — optional; without them Mellox shows "CI status unavailable").
+  Changing permissions asks existing installations to accept them on GitHub.
+- **Subscribe to events**: Pull request, Check suite, Check run.
 - **Callback URL** and **Setup URL**: `<APP_URL>/api/integrations/github/callback`
 - **Request user authorization (OAuth) during installation**: on
 - **Webhook URL**: `<APP_URL>/api/integrations/github/webhook`, with the webhook secret.

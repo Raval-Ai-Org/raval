@@ -44,6 +44,15 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
 - Scores are server-computed; never let the browser write `geo_audit_runs`.
 - AI answer probes are paid and flagged off (`FEATURE_FLAG_GEO_AI_PROBES_ENABLED`).
 - The runner is tested against `store.memory.ts`; keep it store-agnostic.
+- Fix workflow (ADR-0012): `src/server/geo/fixes/` (targets → generate → validate →
+  PR → verify), RPC `src/server/fns/geo-fixes.ts`, UI `geo/FindingDetail.tsx`.
+  "Fix all" = `batch.server.ts` + `geo/FixAllPanel.tsx`: one PR, one approval,
+  per-finding verification. Batch member proposals are approved only via their batch.
+  **Only a verification scan resolves a finding** (`verify.server.ts`); never set
+  `geo_finding_states.state = 'resolved'` anywhere else (RLS refuses browsers).
+- Browser rendering is a fallback for empty client-side shells only
+  (`render.server.ts`, flag `FEATURE_FLAG_GEO_RENDERING_ENABLED`); every browser
+  request is fulfilled through the SSRF-guarded fetcher.
 
 ## Website source connectors (GitHub)
 
@@ -51,12 +60,14 @@ Full reference: [docs/github-connector.md](docs/github-connector.md), decision
 record [ADR-0011](docs/adr/0011-github-app-website-connector.md).
 
 - Server code in `src/server/connectors/`; RPC `src/server/fns/connectors.ts`;
-  webhook `src/app/api/integrations/github/webhook`; UI in the Integrations
-  dialog (`src/components/app/connectors/`).
+  webhook `src/app/api/integrations/github/webhook`; UI in Settings → Connections
+  (`src/components/app/connectors/`), and contextually from a finding's "Fix this".
 - Never persist or return GitHub tokens, keys or raw API responses — map rows
   through `present.ts`. Only `api.server.ts` talks to `api.github.com`.
 - Role checks use `requireWorkspaceRole` (throws `ForbiddenError` → 403).
-- This phase is read-only on repositories: no branches, commits or PRs.
+- Repository writes go only through `git.server.ts`: new `mellox/` branches,
+  paths checked by `paths.ts`, exact-content approval, a PR — never a push to or
+  merge of a base branch. Every write is audited (`src/server/audit.server.ts`).
 
 ## Verifying work
 

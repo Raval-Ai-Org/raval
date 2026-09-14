@@ -17,16 +17,28 @@ import type {
 
 export type ScanStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type ScanStage = "queued" | "discovering" | "crawling" | "analyzing" | "probing" | "done";
-export type ScanMode = "quick" | "full";
-export type ScanTrigger = "manual" | "scheduled" | "rescan" | "chat";
+export type ScanMode = "quick" | "full" | "targeted";
+export type ScanTrigger = "manual" | "scheduled" | "rescan" | "chat" | "verification";
 
-export type ScanConfig = { maxPages: number; maxDepth: number; probes: boolean };
+export type ScanConfig = {
+  maxPages: number;
+  maxDepth: number;
+  probes: boolean;
+  /** targeted mode: exactly these pages (plus site discovery files). */
+  urls?: string[];
+  /** Pages this scan may render in a browser. */
+  maxRenders?: number;
+};
 export type ScanProgress = {
   discovered: number;
   fetched: number;
   failed: number;
   skipped: number;
   pending: number;
+  /** Pages rendered in a browser so far. */
+  rendered?: number;
+  /** Pages whose server HTML looked like a client-rendered shell. */
+  renderNeeded?: number;
 };
 
 export type ScanRow = {
@@ -134,6 +146,11 @@ export interface GeoStore {
     excludeId: string,
   ): Promise<string | null>;
   recordAuditRun(row: AuditRunRow): Promise<void>;
+  /**
+   * Findings marked resolved whose fingerprint appears again in a completed
+   * scan go back to open (a fix regressed or never deployed).
+   */
+  reopenRegressed?(workspaceId: string, fingerprints: string[]): Promise<number>;
 }
 
 export function pageRowToCrawled(row: PageRow): CrawledPage {
@@ -368,6 +385,31 @@ export function createSupabaseGeoStore(db: SupabaseClient<Database>): GeoStore {
         .maybeSingle();
       if (error) throw new Error(error.message);
       return data?.id ?? null;
+    },
+
+    async reopenRegressed(workspaceId, fingerprints) {
+      let reopened = 0;
+      const unique = [...new Set(fingerprints)];
+      for (let i = 0; i < unique.length; i += 200) {
+        const { data, error } = await db
+          .from("geo_finding_states")
+          .update({
+            state: "open",
+            resolved_via: null,
+            verified_at: null,
+            verification_id: null,
+            reopened_at: new Date().toISOString(),
+            note: "Reopened: the issue was found again in a later scan.",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("workspace_id", workspaceId)
+          .eq("state", "resolved")
+          .in("fingerprint", unique.slice(i, i + 200))
+          .select("fingerprint");
+        if (error) throw new Error(error.message);
+        reopened += data?.length ?? 0;
+      }
+      return reopened;
     },
 
     async recordAuditRun(row) {

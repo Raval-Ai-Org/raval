@@ -246,6 +246,22 @@ export type PageAnalysis = {
     social: number;
     referenceSection: boolean;
   };
+  /**
+   * How the page was read. Absent on pages whose server HTML was used as-is
+   * without needing a decision (and on analyses stored before rendering).
+   * mode "browser": content fields come from the rendered DOM; bytes, ratio
+   * and httpWords still describe the raw server HTML crawlers download.
+   */
+  rendering?: PageRendering;
+};
+
+export type PageRendering = {
+  mode: "http" | "browser";
+  reason: string;
+  httpWords: number;
+  renderedWords: number | null;
+  markers: string[];
+  ms?: number;
 };
 
 /* ───────────────────────── Site + crawl records ───────────────────────── */
@@ -384,4 +400,6 @@ export type ScanReport = {
     llmsTxt: boolean;
   };
   pageScores: { url: string; score: number; categories: Partial<Record<GeoCategoryId, number>> }[];
+  /** Browser-rendering use in this scan (absent on older scans). */
+  rendering?: { available: boolean; reason: string; rendered: number; needed: number };
 };

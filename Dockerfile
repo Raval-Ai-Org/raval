@@ -33,6 +33,15 @@ ENV PORT=3000
 # in-process LRU only. docker-compose.yml points it at the redis service.
 ENV REDIS_URL=
 
+# Chromium for AI Visibility's rendering fallback (src/server/geo/render.server.ts).
+# Pages are rendered only when their server HTML is an empty client-side app
+# shell, and every request the browser makes is fulfilled through Mellox's
+# SSRF-guarded fetcher. Enable with FEATURE_FLAG_GEO_RENDERING_ENABLED=true.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends chromium fonts-liberation \
+  && rm -rf /var/lib/apt/lists/*
+ENV GEO_RENDER_EXECUTABLE=/usr/bin/chromium
+
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs
 

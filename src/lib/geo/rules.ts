@@ -1304,13 +1304,71 @@ const performance: GeoRule[] = [
     effort: "high",
     confidence: 0.8,
     evaluate: ({ a }) => {
-      const detail = `${a.text.words.toLocaleString()} words readable without JavaScript.`;
-      if (!isContentPage(a)) return a.text.words < 20 ? fail(detail) : pass(detail);
-      return a.text.words < 50
-        ? fail(`${detail} LLM crawlers that skip JavaScript may see an empty shell.`)
-        : a.text.words < 150
-          ? warn(detail)
-          : pass(detail);
+      // Judged on the raw server HTML even when the page was rendered for analysis.
+      const words = a.rendering?.httpWords ?? a.text.words;
+      const rendered =
+        a.rendering?.mode === "browser" && a.rendering.renderedWords !== null
+          ? ` (${a.rendering.renderedWords.toLocaleString()} after JavaScript runs)`
+          : "";
+      const detail = `${words.toLocaleString()} words readable without JavaScript${rendered}.`;
+      const evidence = a.rendering
+        ? {
+            httpWords: words,
+            renderedWords: a.rendering.renderedWords,
+            rendering: a.rendering.mode,
+            markers: a.rendering.markers,
+          }
+        : { words };
+      if (!isContentPage(a)) return words < 20 ? fail(detail, evidence) : pass(detail, evidence);
+      return words < 50
+        ? fail(`${detail} LLM crawlers that skip JavaScript may see an empty shell.`, evidence)
+        : words < 150
+          ? warn(detail, evidence)
+          : pass(detail, evidence);
+    },
+  },
+  {
+    id: "perf.js_dependent_content",
+    scope: "page",
+    category: "performance",
+    title: "Content doesn't depend on JavaScript",
+    weight: 3,
+    severity: "high",
+    recommendation: "Server-render content that only appears after JavaScript runs",
+    actionKey: "perf.server_rendered",
+    fixId: "ssr",
+    safety: "manual_review",
+    effort: "high",
+    confidence: 0.85,
+    evaluate: ({ a }) => {
+      const r = a.rendering;
+      if (!r) return na("The server HTML already carried the content; no rendering was needed.");
+      if (r.mode !== "browser" || r.renderedWords === null) {
+        return na(`Not rendered in a browser: ${r.reason}`);
+      }
+      const gained = Math.max(0, r.renderedWords - r.httpWords);
+      const share = r.renderedWords ? gained / r.renderedWords : 0;
+      const evidence = {
+        httpWords: r.httpWords,
+        renderedWords: r.renderedWords,
+        markers: r.markers,
+      };
+      if (gained >= 100 && share >= 0.5) {
+        return fail(
+          `${gained.toLocaleString()} of ${r.renderedWords.toLocaleString()} words only appear after JavaScript runs — crawlers that don't execute JavaScript miss them.`,
+          evidence,
+        );
+      }
+      if (gained >= 50) {
+        return warn(
+          `${gained.toLocaleString()} words are added by JavaScript after the page loads.`,
+          evidence,
+        );
+      }
+      return pass(
+        `Rendering added ${gained} words — the server HTML carries the content.`,
+        evidence,
+      );
     },
   },
   {

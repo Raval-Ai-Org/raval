@@ -301,15 +301,15 @@ function ActionRow({
               {open ? "Hide fix" : "Show fix"}
             </button>
           )}
-          {action.affectedPages > 0 && (
-            <button
-              type="button"
-              onClick={() => onOpenFindings({ ruleId: action.ruleId })}
-              className={cn(ghostBtn, "px-3 py-1.5 text-[12px]")}
-            >
-              <Eye className="h-3.5 w-3.5" /> Pages
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onOpenFindings({ ruleId: action.ruleId })}
+            className={cn(ghostBtn, "px-3 py-1.5 text-[12px]")}
+            title="Evidence, affected pages, pull-request fix and verification"
+          >
+            <Eye className="h-3.5 w-3.5" />{" "}
+            {action.affectedPages > 1 ? `${action.affectedPages} pages · Fix this` : "Fix this"}
+          </button>
           <button
             type="button"
             onClick={ask}
@@ -416,7 +416,7 @@ export function OverviewTab({
   sparkValues: number[];
   brandName: string | null;
   probesAvailable: boolean;
-  onOpenFindings: (filter: { category?: GeoCategoryId; ruleId?: string }) => void;
+  onOpenFindings: (filter: { category?: GeoCategoryId; ruleId?: string; fixAll?: boolean }) => void;
 }) {
   const report = scan.report!;
   const [openCategory, setOpenCategory] = useState<GeoCategoryId | null>(null);
@@ -578,6 +578,18 @@ export function OverviewTab({
                 ? `${report.actions.length} recommendations, highest impact first`
                 : undefined
             }
+            action={
+              report.actions.length ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenFindings({ fixAll: true })}
+                  className={cn(primaryBtn, "px-3 py-1.5 text-[12px]")}
+                  title="Every fix Mellox can make, in one GitHub pull request you approve once"
+                >
+                  <Wand className="h-3.5 w-3.5" strokeWidth={2.2} /> Fix all automatically
+                </button>
+              ) : undefined
+            }
           />
           {report.actions.length === 0 ? (
             <div className="flex items-center gap-3 rounded-xl border border-success/30 bg-success/5 px-4 py-3.5">
@@ -675,20 +687,45 @@ export function OverviewTab({
       </div>
 
       {/* AI answer checks */}
-      {(scan.probes || probesAvailable) && (
-        <div>
-          <PanelHeading
-            icon={Radio}
-            title="AI answer checks"
-            hint="Do engines mention and cite you?"
-          />
-          {scan.probes ? (
-            <ProbesPanel probes={scan.probes} />
-          ) : (
-            <div className="rounded-xl border border-dashed border-border/70 px-4 py-3 text-[12.5px] text-muted-foreground">
-              Turn on “Ask AI engines about your brand” for your next full scan to see whether
-              ChatGPT and Perplexity mention and cite {displayUrl(scan.origin)}.
-            </div>
+      <div>
+        <PanelHeading
+          icon={Radio}
+          title="AI answer checks"
+          hint="Observed answers — separate from the readiness score"
+        />
+        {scan.probes ? (
+          <ProbesPanel probes={scan.probes} />
+        ) : scan.probesRequested && scan.stage === "probing" ? (
+          <div className="rounded-xl border border-border/60 px-4 py-3 text-[12.5px] text-muted-foreground">
+            Pending — asking AI engines now.
+          </div>
+        ) : scan.probesRequested ? (
+          <div className="rounded-xl border border-border/60 px-4 py-3 text-[12.5px] text-muted-foreground">
+            Requested for this scan, but no answers were recorded.
+          </div>
+        ) : probesAvailable ? (
+          <div className="rounded-xl border border-dashed border-border/70 px-4 py-3 text-[12.5px] text-muted-foreground">
+            Not run for this scan. Turn on “Ask AI engines about your brand” for your next full scan
+            to see whether AI engines mention and cite {displayUrl(scan.origin)}. Uses AI credits.
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border/70 px-4 py-3 text-[12.5px] text-muted-foreground">
+            Unavailable in this workspace. AI answer checks are paid model calls and are switched
+            off; nothing on this page estimates mentions or citations.
+          </div>
+        )}
+      </div>
+
+      {report.rendering && report.rendering.needed > 0 && (
+        <div className="rounded-xl border border-border/60 bg-card/50 px-4 py-3 text-[12.5px]">
+          <span className="font-medium">JavaScript rendering: </span>
+          {report.rendering.rendered} of {report.rendering.needed} client-rendered page
+          {report.rendering.needed === 1 ? "" : "s"} were rendered in a browser for analysis.
+          {!report.rendering.available && (
+            <span className="text-muted-foreground">
+              {" "}
+              {report.rendering.reason} Content checks on those pages used the server HTML only.
+            </span>
           )}
         </div>
       )}

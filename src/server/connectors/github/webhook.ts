@@ -53,6 +53,26 @@ export type WebhookDeps = {
     payload: Record<string, unknown>,
   ) => Promise<void>;
   forgetToken: (installationId: string) => void;
+  /** A pull request changed; update any Mellox fix proposal it belongs to. Returns proposals touched. */
+  onPullRequest?: (
+    installationId: string,
+    pr: {
+      repositoryId: string;
+      number: number;
+      state: "open" | "closed" | "merged";
+      mergedAt: string | null;
+      headSha: string;
+      headRef: string;
+    },
+  ) => Promise<number>;
+  /** CI finished for a commit; refresh check status on matching proposals. */
+  onChecksCompleted?: (
+    installationId: string,
+    repositoryId: string,
+    headSha: string,
+  ) => Promise<number>;
+  /** The installation lost access; open fix proposals can no longer be tracked. */
+  onAccessLost?: (installationId: string) => Promise<number>;
   now?: () => Date;
 };
 
@@ -76,6 +96,16 @@ type InstallationPayload = {
   repositories_removed?: { id: number }[];
   repositories_added?: { id: number }[];
   repository_selection?: string;
+  repository?: { id?: number };
+  pull_request?: {
+    number?: number;
+    state?: string;
+    merged?: boolean;
+    merged_at?: string | null;
+    head?: { sha?: string; ref?: string };
+  };
+  check_suite?: { head_sha?: string; status?: string };
+  check_run?: { head_sha?: string; status?: string };
 };
 
 export async function handleGitHubWebhook(
@@ -149,6 +179,7 @@ export async function handleGitHubWebhook(
         revoked_reason: "uninstalled_on_github",
       });
       await deps.markSourcesAccessLost(installationId, "all");
+      await deps.onAccessLost?.(installationId);
       await audit("connector.github.uninstalled");
     } else if (action === "suspend") {
       deps.forgetToken(installationId);
@@ -197,6 +228,40 @@ export async function handleGitHubWebhook(
       status: 200,
       body: { ok: true, handled: `installation_repositories.${action}`, lost, restored },
     };
+  }
+
+  if (event === "pull_request") {
+    const pr = payload.pull_request;
+    const repositoryId = payload.repository?.id ? String(payload.repository.id) : null;
+    if (!pr?.number || !repositoryId || !pr.head?.sha || !deps.onPullRequest) {
+      return { status: 200, body: { ok: true, ignored: `pull_request.${action}` } };
+    }
+    if (!["opened", "closed", "reopened", "synchronize", "edited"].includes(action)) {
+      return { status: 200, body: { ok: true, ignored: `pull_request.${action}` } };
+    }
+    const merged = pr.merged === true || Boolean(pr.merged_at);
+    const touched = await deps.onPullRequest(installationId, {
+      repositoryId,
+      number: pr.number,
+      state: merged ? "merged" : pr.state === "closed" ? "closed" : "open",
+      mergedAt: pr.merged_at ?? null,
+      headSha: pr.head.sha,
+      headRef: pr.head.ref ?? "",
+    });
+    return {
+      status: 200,
+      body: { ok: true, handled: `pull_request.${action}`, proposals: touched },
+    };
+  }
+
+  if (event === "check_suite" || event === "check_run") {
+    const suite = payload.check_suite ?? payload.check_run;
+    const repositoryId = payload.repository?.id ? String(payload.repository.id) : null;
+    if (action !== "completed" || !suite?.head_sha || !repositoryId || !deps.onChecksCompleted) {
+      return { status: 200, body: { ok: true, ignored: `${event}.${action}` } };
+    }
+    const touched = await deps.onChecksCompleted(installationId, repositoryId, suite.head_sha);
+    return { status: 200, body: { ok: true, handled: `${event}.completed`, proposals: touched } };
   }
 
   return { status: 200, body: { ok: true, ignored: event } };

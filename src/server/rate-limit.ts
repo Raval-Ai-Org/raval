@@ -33,6 +33,10 @@ export type RateLimitTier =
   | "geo-scan"
   | "connector"
   | "connector-connect"
+  | "connector-write"
+  | "geo-fix"
+  | "geo-fix-batch"
+  | "geo-verify"
   | "image"
   | "video"
   | "share-password";
@@ -56,6 +60,15 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   connector: { limit: 30, windowSeconds: 60, label: "integration" },
   // Starting or completing a connection (install state issuance).
   "connector-connect": { limit: 10, windowSeconds: 600, label: "connection attempt" },
+  // Writes to a connected repository (branch + commit + pull request), and
+  // disconnect/remove actions. Each is audited; a person approves every one.
+  "connector-write": { limit: 10, windowSeconds: 600, label: "repository change" },
+  // Proposed fixes for AI Visibility findings: a paid model call per proposal.
+  "geo-fix": { limit: 20, windowSeconds: 3600, label: "fix proposal" },
+  // "Fix all": up to 15 model calls per run.
+  "geo-fix-batch": { limit: 4, windowSeconds: 3600, label: "fix-all run" },
+  // Verification rescans of a few pages each.
+  "geo-verify": { limit: 20, windowSeconds: 3600, label: "verification scan" },
   // Billed per image.
   image: { limit: 30, windowSeconds: 3600, label: "image generation" },
   // Billed per video, and the most expensive call in the product.

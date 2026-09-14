@@ -1,36 +1,76 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence } from "framer-motion";
-import { ChevronDown, ExternalLink, MessageSquare, Search, Wand } from "@/components/icons";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  ChevronDown,
+  ExternalLink,
+  MessageSquare,
+  Search,
+  ShieldCheck,
+  Wand,
+} from "@/components/icons";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { emitAppEvent } from "@/lib/app-events";
 import { cn } from "@/lib/utils";
 import { getScanFindings, setFindingState } from "@/lib/geo.functions";
+import { listFixActivity, requestVerification } from "@/lib/geo-fixes.functions";
 import type { FindingWorkflowState, GeoFindingView, GeoScanView } from "@/lib/geo/contracts";
-import { fixRecipeFor } from "@/lib/geo/fix-recipes";
 import { GEO_CATEGORIES, type GeoCategoryId, type Priority } from "@/lib/geo/types";
-import { FixDrawer } from "./FixDrawer";
+import { FindingDetail } from "./FindingDetail";
+import { FixAllPanel } from "./FixAllPanel";
 import {
   Chip,
   displayUrl,
   ghostBtn,
+  primaryBtn,
   pathOf,
   PriorityChip,
   SAFETY_META,
   StatusGlyph,
 } from "./geo-ui";
 
-export type FindingsFilter = { category?: GeoCategoryId; ruleId?: string };
+export type FindingsFilter = { category?: GeoCategoryId; ruleId?: string; fixAll?: boolean };
 
-const STATE_OPTIONS: { value: FindingWorkflowState; label: string }[] = [
+/** States a person can set. "Resolved" comes only from a verification scan. */
+type ManualState = Exclude<FindingWorkflowState, "resolved">;
+const MANUAL_STATES: { value: ManualState; label: string }[] = [
   { value: "open", label: "Open" },
   { value: "in_progress", label: "In progress" },
-  { value: "resolved", label: "Resolved" },
   { value: "dismissed", label: "Dismissed" },
 ];
+const FILTER_STATES: { value: FindingWorkflowState; label: string }[] = [
+  ...MANUAL_STATES,
+  { value: "resolved", label: "Resolved" },
+];
 const PRIORITY_RANK: Record<Priority, number> = { critical: 3, high: 2, medium: 1, low: 0 };
+/** Checks that compare pages across the site can't be verified by rescanning one page. */
+const SITE_COMPARISON_RULES = new Set([
+  "tech.duplicate_title",
+  "tech.duplicate_description",
+  "tech.broken_links",
+  "tech.crawl_depth",
+  "tech.http_errors",
+]);
+
+type Activity = Awaited<ReturnType<typeof listFixActivity>>;
+
+const PROPOSAL_LABEL: Record<
+  string,
+  { label: string; tone: "primary" | "success" | "warning" | "destructive" | "muted" }
+> = {
+  draft: { label: "Fix proposed", tone: "primary" },
+  applying: { label: "Opening PR", tone: "primary" },
+  pr_open: { label: "PR open", tone: "primary" },
+  merged: { label: "PR merged", tone: "primary" },
+  verifying: { label: "Verifying", tone: "primary" },
+  verified: { label: "Verified", tone: "success" },
+  not_verified: { label: "Not verified", tone: "destructive" },
+  failed: { label: "Fix failed", tone: "destructive" },
+  stale: { label: "Proposal outdated", tone: "warning" },
+  access_lost: { label: "GitHub access lost", tone: "warning" },
+};
 
 type Group = {
   ruleId: string;
@@ -44,50 +84,30 @@ type Group = {
   items: GeoFindingView[];
 };
 
-function EvidenceList({ evidence }: { evidence: Record<string, unknown> }) {
-  const entries = Object.entries(evidence).filter(
-    ([, v]) => v !== null && v !== undefined && v !== "",
-  );
-  if (!entries.length) return null;
-  return (
-    <dl className="mt-1.5 grid gap-1 rounded-lg bg-background/70 p-2 text-[11.5px]">
-      {entries.slice(0, 8).map(([k, v]) => (
-        <div key={k} className="grid grid-cols-[minmax(80px,140px)_1fr] gap-2">
-          <dt className="truncate text-muted-foreground">
-            {k.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}
-          </dt>
-          <dd className="min-w-0 break-words font-mono text-foreground/85">
-            {typeof v === "string" || typeof v === "number" || typeof v === "boolean"
-              ? String(v)
-              : JSON.stringify(v, null, 0).slice(0, 400)}
-          </dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 function FindingItem({
   finding,
+  activity,
   onState,
   onAsk,
+  onOpen,
 }: {
   finding: GeoFindingView;
-  onState: (f: GeoFindingView, s: FindingWorkflowState) => void;
+  activity: Activity | null;
+  onState: (f: GeoFindingView, s: ManualState) => void;
   onAsk: (f: GeoFindingView) => void;
+  onOpen: (f: GeoFindingView) => void;
 }) {
-  const [showEvidence, setShowEvidence] = useState(false);
+  const proposal = activity?.proposals[finding.fingerprint];
+  const badge = proposal ? PROPOSAL_LABEL[proposal.status] : null;
+  const resolved = finding.state === "resolved";
   return (
     <li
-      className={cn(
-        "px-3.5 py-2.5",
-        (finding.state === "resolved" || finding.state === "dismissed") && "opacity-60",
-      )}
+      className={cn("px-3.5 py-2.5", (resolved || finding.state === "dismissed") && "opacity-70")}
     >
       <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
         <StatusGlyph status={finding.status} className="mt-0.5" />
         <div className="min-w-0 flex-1 basis-[220px]">
-          <div className="flex min-w-0 items-center gap-1.5 text-[12.5px] font-medium text-foreground/90">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[12.5px] font-medium text-foreground/90">
             {finding.pageUrl ? (
               <a
                 href={finding.pageUrl}
@@ -106,37 +126,50 @@ function FindingItem({
                 −{finding.pointImpact}
               </span>
             )}
+            {resolved && finding.resolution === "verified" && (
+              <Chip tone="success">
+                <ShieldCheck className="h-3 w-3" /> Verified
+              </Chip>
+            )}
+            {resolved && finding.resolution === "manual_legacy" && (
+              <Chip tone="muted">Resolved (unverified)</Chip>
+            )}
+            {finding.reopenedAt && !resolved && <Chip tone="warning">Reopened</Chip>}
+            {badge && !resolved && <Chip tone={badge.tone}>{badge.label}</Chip>}
           </div>
           <div className="mt-0.5 break-words text-[12.5px] leading-relaxed text-muted-foreground">
             {finding.detail}
           </div>
-          {Object.keys(finding.evidence).length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowEvidence((v) => !v)}
-              className="mt-1 text-[11.5px] font-medium text-primary underline-offset-2 hover:underline"
-            >
-              {showEvidence ? "Hide evidence" : "Show evidence"}
-            </button>
-          )}
-          {showEvidence && <EvidenceList evidence={finding.evidence} />}
+          <button
+            type="button"
+            onClick={() => onOpen(finding)}
+            className="mt-1 text-[11.5px] font-medium text-primary underline-offset-2 hover:underline"
+          >
+            Details & fix
+          </button>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <label className="sr-only" htmlFor={`state-${finding.id}`}>
-            Status
-          </label>
-          <select
-            id={`state-${finding.id}`}
-            value={finding.state}
-            onChange={(e) => onState(finding, e.target.value as FindingWorkflowState)}
-            className="h-8 rounded-full border border-border/70 bg-card px-2.5 text-[12px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-          >
-            {STATE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          {resolved ? (
+            <span className="text-[12px] text-muted-foreground">Resolved</span>
+          ) : (
+            <>
+              <label className="sr-only" htmlFor={`state-${finding.id}`}>
+                Status
+              </label>
+              <select
+                id={`state-${finding.id}`}
+                value={finding.state}
+                onChange={(e) => onState(finding, e.target.value as ManualState)}
+                className="h-8 rounded-full border border-border/70 bg-card px-2.5 text-[12px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              >
+                {MANUAL_STATES.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           <button
             type="button"
             onClick={() => onAsk(finding)}
@@ -165,20 +198,30 @@ export function FindingsTab({
   onFilterChange: (f: FindingsFilter) => void;
 }) {
   const [findings, setFindings] = useState<GeoFindingView[] | null>(null);
+  const [activity, setActivity] = useState<Activity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const [stateFilter, setStateFilter] = useState<"active" | FindingWorkflowState | "all">("active");
   const [query, setQuery] = useState("");
   const [openGroup, setOpenGroup] = useState<string | null>(filter.ruleId ?? null);
-  const [fixOpen, setFixOpen] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [verifyingGroup, setVerifyingGroup] = useState<string | null>(null);
   const [limit, setLimit] = useState(40);
+
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
 
   useEffect(() => {
     let cancelled = false;
-    setFindings(null);
     setError(null);
-    getScanFindings({ data: { workspaceId, scanId: scan.id } })
-      .then((rows) => !cancelled && setFindings(rows))
+    Promise.all([
+      getScanFindings({ data: { workspaceId, scanId: scan.id } }),
+      listFixActivity({ data: { workspaceId, scanId: scan.id } }).catch(() => null),
+    ])
+      .then(([rows, act]) => {
+        if (cancelled) return;
+        setFindings(rows);
+        setActivity(act);
+      })
       .catch(
         (e) => !cancelled && setError(e instanceof Error ? e.message : "Couldn't load findings"),
       );
@@ -186,6 +229,11 @@ export function FindingsTab({
       cancelled = true;
     };
   }, [workspaceId, scan.id, nonce]);
+
+  useEffect(() => {
+    setFindings(null);
+    setDetailId(null);
+  }, [scan.id]);
 
   useEffect(() => {
     if (filter.ruleId) setOpenGroup(filter.ruleId);
@@ -223,8 +271,10 @@ export function FindingsTab({
     );
   }, [findings, filter, stateFilter, query]);
 
-  const updateState = async (targets: GeoFindingView[], state: FindingWorkflowState) => {
-    const fingerprints = new Set(targets.map((t) => t.fingerprint));
+  const updateState = async (targets: GeoFindingView[], state: ManualState) => {
+    const fingerprints = new Set(
+      targets.filter((t) => t.state !== "resolved").map((t) => t.fingerprint),
+    );
     const previous = findings;
     setFindings(
       (rows) => rows?.map((r) => (fingerprints.has(r.fingerprint) ? { ...r, state } : r)) ?? rows,
@@ -239,17 +289,78 @@ export function FindingsTab({
     }
   };
 
+  const verifyGroup = async (g: Group) => {
+    const targets = g.items
+      .filter((i) => i.state !== "resolved" && i.state !== "dismissed")
+      .slice(0, 20);
+    if (!targets.length) return;
+    setVerifyingGroup(g.ruleId);
+    try {
+      const { urls } = await requestVerification({
+        data: { workspaceId, findingIds: targets.map((t) => t.id) },
+      });
+      toast.success(`Re-scanning ${urls.length} page${urls.length === 1 ? "" : "s"} to verify`, {
+        description: "Open a finding to follow the result.",
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't start the verification");
+    } finally {
+      setVerifyingGroup(null);
+    }
+  };
+
   const ask = (f: GeoFindingView) =>
     emitAppEvent("chat:prefill", {
       text: `Help me fix this AI visibility finding on ${f.pageUrl ?? displayUrl(scan.origin)}: "${f.title}" — ${f.detail} Give me exact changes.`,
       focus: true,
     });
 
-  if (error && !findings)
-    return <ErrorState size="sm" detail={error} onRetry={() => setNonce((n) => n + 1)} />;
+  if (error && !findings) return <ErrorState size="sm" detail={error} onRetry={reload} />;
+
+  if (filter.fixAll) {
+    return (
+      <FixAllPanel
+        workspaceId={workspaceId}
+        scan={scan}
+        onBack={() => onFilterChange({})}
+        onChanged={reload}
+      />
+    );
+  }
+
+  const detail = detailId ? findings?.find((f) => f.id === detailId) : null;
+  if (detail) {
+    return (
+      <FindingDetail
+        workspaceId={workspaceId}
+        scan={scan}
+        finding={detail}
+        related={findings!.filter((f) => f.ruleId === detail.ruleId)}
+        brandName={brandName}
+        onBack={() => setDetailId(null)}
+        onChanged={reload}
+      />
+    );
+  }
 
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3.5 py-2.5">
+        <p className="min-w-0 flex-1 basis-[220px] text-[12.5px]">
+          <span className="font-medium">Fix all automatically</span>
+          <span className="text-muted-foreground">
+            {" "}
+            — every fix Mellox can make, in one GitHub pull request you approve once.
+          </span>
+        </p>
+        <button
+          type="button"
+          onClick={() => onFilterChange({ fixAll: true })}
+          className={cn(primaryBtn, "px-3.5 py-1.5 text-[12.5px]")}
+        >
+          <Wand className="h-3.5 w-3.5" /> Fix all
+        </button>
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1.5">
           <button
@@ -280,15 +391,15 @@ export function FindingsTab({
             </button>
           ))}
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <label className="relative flex items-center">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+          <label className="relative flex min-w-0 flex-1 items-center sm:flex-none">
             <span className="sr-only">Search findings</span>
             <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search findings or pages"
-              className="h-8 w-48 rounded-full border border-border/70 bg-background/60 pl-8 pr-3 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+              className="h-8 w-full rounded-full border border-border/70 bg-background/60 pl-8 pr-3 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-primary/25 sm:w-48"
             />
           </label>
           <label className="sr-only" htmlFor="geo-state-filter">
@@ -301,7 +412,7 @@ export function FindingsTab({
             className="h-8 rounded-full border border-border/70 bg-card px-2.5 text-[12px] outline-none"
           >
             <option value="active">Open & in progress</option>
-            {STATE_OPTIONS.map((o) => (
+            {FILTER_STATES.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -347,15 +458,9 @@ export function FindingsTab({
         <ul className="space-y-2">
           {groups.slice(0, limit).map((g) => {
             const open = openGroup === g.ruleId;
-            const recipe = g.fixId
-              ? fixRecipeFor(g.fixId, {
-                  url: scan.origin,
-                  pageUrl: g.items.find((i) => i.pageUrl)?.pageUrl,
-                  brandName,
-                  description: scan.report?.snapshot.description,
-                })
-              : null;
             const sitewide = g.items.every((i) => !i.pageUrl);
+            const resolvedCount = g.items.filter((i) => i.state === "resolved").length;
+            const canVerify = !SITE_COMPARISON_RULES.has(g.ruleId);
             return (
               <li
                 key={g.ruleId}
@@ -399,23 +504,28 @@ export function FindingsTab({
                 {open && (
                   <div className="border-t border-border/40">
                     <div className="flex flex-wrap items-center gap-1.5 px-3.5 pt-2.5">
-                      {recipe && (
-                        <button
-                          type="button"
-                          onClick={() => setFixOpen(fixOpen === g.ruleId ? null : g.ruleId)}
-                          className={cn(ghostBtn, "px-3 py-1.5 text-[12px]")}
-                        >
-                          <Wand className="h-3.5 w-3.5" />{" "}
-                          {fixOpen === g.ruleId ? "Hide fix" : "Show fix"}
-                        </button>
-                      )}
                       <button
                         type="button"
-                        onClick={() => void updateState(g.items, "resolved")}
-                        className={cn(ghostBtn, "px-3 py-1.5 text-[12px]")}
+                        onClick={() => setDetailId(g.items[0].id)}
+                        className={cn(ghostBtn, "border-primary/40 px-3 py-1.5 text-[12px]")}
                       >
-                        Mark all resolved
+                        <Wand className="h-3.5 w-3.5" /> Fix this
                       </button>
+                      {canVerify ? (
+                        <button
+                          type="button"
+                          disabled={verifyingGroup !== null}
+                          onClick={() => void verifyGroup(g)}
+                          className={cn(ghostBtn, "px-3 py-1.5 text-[12px]")}
+                          title="Re-scan the affected pages; findings resolve only if the check passes"
+                        >
+                          {verifyingGroup === g.ruleId ? "Starting…" : "Verify fixes"}
+                        </button>
+                      ) : (
+                        <span className="text-[11.5px] text-muted-foreground">
+                          Run a full re-scan to verify this check.
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={() => void updateState(g.items, "dismissed")}
@@ -423,25 +533,18 @@ export function FindingsTab({
                       >
                         Dismiss
                       </button>
-                      {g.items.some((i) => i.state !== "open") && (
-                        <Chip tone="muted">
-                          {g.items.filter((i) => i.state === "resolved").length} resolved
-                        </Chip>
+                      {resolvedCount > 0 && (
+                        <Chip tone="success">{resolvedCount} verified resolved</Chip>
                       )}
                     </div>
-                    <AnimatePresence initial={false}>
-                      {fixOpen === g.ruleId && recipe && (
-                        <div className="pt-2.5">
-                          <FixDrawer recipe={recipe} safety={g.safety} />
-                        </div>
-                      )}
-                    </AnimatePresence>
                     <ul className="divide-y divide-border/40">
                       {g.items.slice(0, 100).map((f) => (
                         <FindingItem
                           key={f.id}
                           finding={f}
+                          activity={activity}
                           onAsk={ask}
+                          onOpen={(x) => setDetailId(x.id)}
                           onState={(finding, s) => void updateState([finding], s)}
                         />
                       ))}

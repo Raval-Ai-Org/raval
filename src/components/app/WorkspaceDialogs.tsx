@@ -1,6 +1,6 @@
 "use client";
 
-import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
+import { addAppEventListener, removeAppEventListener, type AppEvent } from "@/lib/app-events";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
 import { AppModalShell } from "@/components/app/AppModalShell";
@@ -10,11 +10,13 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { renameWorkspace, getWorkspaceDetails } from "@/lib/workspaces.functions";
-import { Globe, Plug, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { Globe, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
 import { CONNECTOR_PROVIDERS } from "@/lib/connectors/types";
+
+type SettingsSection = "connections" | "preferences";
 
 type Props = {
   workspaceId: string | null;
@@ -26,22 +28,22 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
   const [renameOpen, setRenameOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [connectorsOpen, setConnectorsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("connections");
 
   useEffect(() => {
     const openRename = () => setRenameOpen(true);
     const openDetails = () => setDetailsOpen(true);
-    const openSettings = () => setSettingsOpen(true);
-    const openConnectors = () => setConnectorsOpen(true);
+    const openSettings = (e: AppEvent<"open:settings">) => {
+      setSettingsSection(e.detail?.section ?? "connections");
+      setSettingsOpen(true);
+    };
     addAppEventListener("open:rename", openRename);
     addAppEventListener("open:details", openDetails);
     addAppEventListener("open:settings", openSettings);
-    addAppEventListener("open:connectors", openConnectors);
     return () => {
       removeAppEventListener("open:rename", openRename);
       removeAppEventListener("open:details", openDetails);
       removeAppEventListener("open:settings", openSettings);
-      removeAppEventListener("open:connectors", openConnectors);
     };
   }, []);
 
@@ -55,11 +57,12 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
         onRenamed={onRenamed}
       />
       <DetailsDialog open={detailsOpen} onOpenChange={setDetailsOpen} workspaceId={workspaceId} />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <ConnectorsDialog
-        open={connectorsOpen}
-        onOpenChange={setConnectorsOpen}
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
         workspaceId={workspaceId}
+        section={settingsSection}
+        onSectionChange={setSettingsSection}
       />
     </>
   );
@@ -250,9 +253,15 @@ function DetailsDialog({
 function SettingsDialog({
   open,
   onOpenChange,
+  workspaceId,
+  section,
+  onSectionChange,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  workspaceId: string | null;
+  section: SettingsSection;
+  onSectionChange: (s: SettingsSection) => void;
 }) {
   const [notifications, setNotifications] = useState(true);
   const [sounds, setSounds] = useState(true);
@@ -275,43 +284,96 @@ function SettingsDialog({
     <AppModalShell
       open={open}
       onOpenChange={onOpenChange}
-      size="md"
+      size="lg"
       Icon={Settings2}
-      eyebrow="Preferences"
+      eyebrow="Workspace"
       title="Settings"
-      description="Manage workspace connections and tune how Mellox AI behaves on this device."
-      bodyClassName="space-y-6 px-5 py-5 sm:px-6"
+      description="Connect the accounts and systems Mellox works with, and tune how it behaves on this device."
+      bodyClassName="space-y-5 px-5 py-5 sm:px-6"
     >
-      <SocialAccountsSection variant="settings" />
+      <Tabs value={section} onValueChange={(v) => onSectionChange(v as SettingsSection)}>
+        <TabsList className="h-9 rounded-full bg-muted/70 p-1">
+          <TabsTrigger value="connections" className="rounded-full px-3 text-[12.5px]">
+            Connections
+          </TabsTrigger>
+          <TabsTrigger value="preferences" className="rounded-full px-3 text-[12.5px]">
+            Preferences
+          </TabsTrigger>
+        </TabsList>
 
-      <div className="border-t border-border/70 pt-5">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Workspace preferences
-        </p>
-        <ul className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card/40">
-          <ToggleRow
-            label="Approval notifications"
-            description="Toast me when an agent needs a sign-off."
-            checked={notifications}
-            onChange={(v) => {
-              setNotifications(v);
-              save("settings:notifications", v);
-            }}
-          />
-          <ToggleRow
-            label="Interface sounds"
-            description="Subtle chimes when actions complete."
-            checked={sounds}
-            onChange={(v) => {
-              setSounds(v);
-              save("settings:sounds", v);
-            }}
-          />
-        </ul>
-        <p className="mt-3 text-[11.5px] text-muted-foreground">
-          Need theme controls? Open the workspace menu → Appearance.
-        </p>
-      </div>
+        <TabsContent value="connections" className="mt-5 space-y-6">
+          <SocialAccountsSection variant="settings" />
+          <div className="border-t border-border/70 pt-5">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Website sources
+            </p>
+            <p className="mb-3 text-[12px] text-muted-foreground">
+              The code behind your website. AI Visibility uses it to open fix pull requests you
+              review — only when you approve a specific fix.
+            </p>
+            {workspaceId ? (
+              <GitHubConnector workspaceId={workspaceId} />
+            ) : (
+              <p className="text-[13px] text-muted-foreground">
+                Select a workspace to manage connections.
+              </p>
+            )}
+          </div>
+          <div className="border-t border-border/70 pt-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Other website platforms
+            </p>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {CONNECTOR_PROVIDERS.filter((p) => p.availability === "coming_soon").map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/40 px-3 py-2.5"
+                >
+                  <div className="grid h-9 w-9 place-items-center rounded-lg bg-secondary">
+                    <Globe className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-medium">{p.name}</div>
+                    <p className="truncate text-[11.5px] text-muted-foreground">{p.tagline}</p>
+                  </div>
+                  <span className="whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    Not available yet
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="preferences" className="mt-5">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Device preferences
+          </p>
+          <ul className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card/40">
+            <ToggleRow
+              label="Approval notifications"
+              description="Toast me when an agent needs a sign-off."
+              checked={notifications}
+              onChange={(v) => {
+                setNotifications(v);
+                save("settings:notifications", v);
+              }}
+            />
+            <ToggleRow
+              label="Interface sounds"
+              description="Subtle chimes when actions complete."
+              checked={sounds}
+              onChange={(v) => {
+                setSounds(v);
+                save("settings:sounds", v);
+              }}
+            />
+          </ul>
+          <p className="mt-3 text-[11.5px] text-muted-foreground">
+            Need theme controls? Open the workspace menu → Appearance.
+          </p>
+        </TabsContent>
+      </Tabs>
       <div className="mt-4 flex justify-end">
         <Button onClick={() => onOpenChange(false)}>Done</Button>
       </div>
@@ -338,96 +400,5 @@ function ToggleRow({
       </div>
       <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
     </li>
-  );
-}
-
-function ConnectorsDialog({
-  open,
-  onOpenChange,
-  workspaceId,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  workspaceId: string | null;
-}) {
-  // Providers that aren't built yet, stated honestly — the website sources share
-  // the connector records GitHub introduced (src/lib/connectors/types.ts).
-  const upcoming = [
-    ...CONNECTOR_PROVIDERS.filter((p) => p.availability === "coming_soon").map((p) => ({
-      id: p.id,
-      label: p.name,
-      desc: p.tagline,
-      icon: <Globe className="h-4 w-4" />,
-    })),
-    {
-      id: "meta",
-      label: "Meta Ads",
-      desc: "Facebook & Instagram campaigns",
-      icon: <BrandLogo name="meta" brand size={18} />,
-    },
-    {
-      id: "google",
-      label: "Google Ads",
-      desc: "Search, YouTube & Performance Max",
-      icon: <BrandLogo name="google" brand size={18} />,
-    },
-  ];
-  return (
-    <AppModalShell
-      open={open}
-      onOpenChange={onOpenChange}
-      size="lg"
-      Icon={Plug}
-      eyebrow="Workspace"
-      title="Integrations"
-      description="Connect the systems behind your website so Mellox can see how it's built."
-      bodyClassName="space-y-6 px-5 py-5 sm:px-6"
-    >
-      <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Website source
-        </p>
-        {workspaceId ? (
-          <GitHubConnector workspaceId={workspaceId} />
-        ) : (
-          <p className="text-[13px] text-muted-foreground">
-            Select a workspace to manage integrations.
-          </p>
-        )}
-      </div>
-      <div className="border-t border-border/70 pt-5">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Coming soon
-        </p>
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {upcoming.map((c) => (
-            <li
-              key={c.id}
-              className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2.5"
-            >
-              <div className="grid h-9 w-9 place-items-center rounded-lg bg-secondary">
-                {c.icon}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-medium">{c.label}</div>
-                <p className="truncate text-[11.5px] text-muted-foreground">{c.desc}</p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => toast.success(`We'll let you know when ${c.label} is available`)}
-              >
-                Notify me
-              </Button>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="flex justify-end">
-        <Button variant="ghost" onClick={() => onOpenChange(false)}>
-          Close
-        </Button>
-      </div>
-    </AppModalShell>
   );
 }

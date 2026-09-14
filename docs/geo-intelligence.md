@@ -170,10 +170,47 @@ npx playwright test tests/integration/suggestion-event-deep-links.spec.ts  # nee
    still completes scans, one minute per 90-second slice.
 4. Optionally enable probes per workspace.
 
+## Fix workflow and verification
+
+See [ADR-0012](adr/0012-geo-fix-pull-requests-and-verification.md) and
+[github-connector.md](github-connector.md). In short: a finding's "Fix this" plans
+files for supported framework × rule pairs (`src/server/geo/fixes/targets.ts`),
+generates a validated change, opens a PR after exact-content approval, and a
+targeted rescan (`mode = 'targeted'`, excluded from history and `geo_audit_runs`)
+resolves the finding only when its rule passes on the live page. Manual fixes use
+"Verify fix". Resolved findings that reappear are reopened by the next scan.
+
+"Fix all automatically" (`src/server/geo/fixes/batch.server.ts`, table
+`geo_fix_batches`) does the same for up to 15 findings at once. The result is one
+combined, validated change, approved once and delivered as one pull request.
+After merge, one verification resolves each finding only when its own check passes.
+
+PR-fixable rules: `ai.robots_txt`, `ai.bot.*`, `ai.llms_txt`, `tech.sitemap`,
+`tech.robots_sitemap`, `tech.title`, `tech.meta_description`, `tech.canonical`,
+`tech.lang`, `schema.jsonld`, `schema.organization`, `schema.website`,
+`content.h1`, `perf.viewport`, `perf.charset` — on Next.js (App/Pages Router),
+Nuxt, Astro, Vite/Vue, Create React App, Angular (`src/index.html`) and static
+HTML. Single-page apps get per-route tags only for the homepage.
+
+## JavaScript rendering
+
+HTTP first. `src/lib/geo/rendering.ts` flags a page whose server HTML has fewer
+than 150 words and a client-rendered shell (empty `#root`/`#app`, `<app-root>`,
+Nuxt/Next/Svelte markers, module bundles). Those pages are rendered by
+`src/server/geo/render.server.ts` (Chromium via `playwright-core`) when
+`FEATURE_FLAG_GEO_RENDERING_ENABLED` is on — 10 per full scan, 1 per quick scan.
+Every browser request is fulfilled through `createSafeFetch` (Chromium itself
+resolves no hostnames), GET only, no images/fonts/media/websockets, ≤ 80 requests,
+≤ 8 MB, 20 s. `analysis.rendering` records the mode, reason and word counts;
+content rules use the rendered DOM, `perf.server_rendered` still judges the raw
+HTML, and `perf.js_dependent_content` reports content that only exists after
+JavaScript. When rendering is unavailable the report says so.
+
 ## Known limitations
 
-- No JavaScript rendering: pages that render copy client-side score low on
-  rendering/content (reported as such, by design of what AI crawlers see).
+- Rendering needs Chromium (in the Docker image, or Playwright's in development)
+  and the flag; without it client-rendered pages are analysed from server HTML and
+  the report says rendering was unavailable.
 - Authority is on-page only — no backlink data, Search Console, Analytics or
   PageSpeed/Core Web Vitals integration (none existed in the GEO-Module either).
 - Heuristic NLP (topic, entities, questions) is English-centric.
@@ -184,15 +221,14 @@ npx playwright test tests/integration/suggestion-event-deep-links.spec.ts  # nee
 
 - FastAPI routes, SQLAlchemy models, its orchestration layer (in-memory queue,
   worker, scheduler) — replaced by Mellox's leases, pg_cron and `scheduled_jobs`.
-- GitHub / WordPress auto-apply connectors — never exposed by an API in the
-  module; applying changes to customer sites needs an approval/rollback product
-  surface first. Fixes are copy-paste recipes with a safety tier.
+- The module's auto-apply connectors — replaced by approval-gated GitHub pull
+  requests (ADR-0012); WordPress/Webflow/Framer/Shopify aren't implemented.
 - Simulated validation — replaced by real rescans and fingerprint comparison.
 - The controlled-site lab, keyword stuffing of intent/content-gap rules that
   depended on unimplemented taxonomies.
 
 ## Future improvements
 
-Search Console / GA4 connectors; headless rendering for JS-only sites; backlink
-and brand-mention data; approval-gated auto-apply via CMS connectors; per-page
-rescans for quick fix validation; probe trends over time and competitor sets.
+Search Console / GA4 connectors; backlink and brand-mention data; CMS connectors
+(WordPress, Webflow, Shopify, Framer) on the same proposal/verification records;
+probe trends over time and competitor sets.

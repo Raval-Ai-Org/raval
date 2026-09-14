@@ -20,6 +20,7 @@ import {
   installationRequest,
   userCanAccessInstallation,
 } from "./api.server";
+import { recordAudit } from "@/server/audit.server";
 import { HttpError } from "@/server/http-error";
 import { requireGitHubConfig, GitHubNotConfiguredError } from "./config.server";
 import { buildInspection } from "./inspect";
@@ -71,20 +72,13 @@ type GitHubRepository = {
   archived: boolean;
 };
 
-async function audit(
+function audit(
   workspaceId: string,
   userId: string | null,
   action: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
-  const { error } = await supabaseAdmin.from("audit_logs").insert({
-    workspace_id: workspaceId,
-    user_id: userId,
-    action,
-    entity: "connector",
-    payload: payload as Json,
-  });
-  if (error) console.error("[connectors] audit not recorded", action, error.message);
+  return recordAudit({ workspaceId, userId, action, entity: "connector", payload });
 }
 
 /* ───────────────────────── Install ───────────────────────── */
@@ -308,7 +302,7 @@ async function markAccessProblem(
 }
 
 /** Run a GitHub call for a connection; access failures update its status before rethrowing. */
-async function withAccess<T>(
+export async function withAccess<T>(
   connection: ConnectionRow,
   userId: string | null,
   fn: () => Promise<T>,

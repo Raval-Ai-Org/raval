@@ -37,6 +37,24 @@ export class GitHubRateLimitError extends UpstreamError {
   }
 }
 
+/** GitHub refused the request as invalid or conflicting (e.g. the branch already exists). */
+export class GitHubRequestError extends UpstreamError {
+  constructor(
+    readonly githubStatus: number,
+    readonly githubMessage: string,
+  ) {
+    super(
+      githubStatus === 409 ? 409 : 422,
+      `GitHub rejected the request: ${githubMessage || githubStatus}`,
+      {
+        provider: "github",
+        code: githubStatus === 409 ? "conflict" : "unprocessable",
+      },
+    );
+    this.name = "GitHubRequestError";
+  }
+}
+
 function base64url(input: string | Buffer): string {
   return Buffer.from(input).toString("base64url");
 }
@@ -147,6 +165,7 @@ async function toError(res: Response): Promise<Error> {
       "GitHub couldn't find that installation or repository.",
     );
   }
+  if (res.status === 409 || res.status === 422) return new GitHubRequestError(res.status, message);
   return new UpstreamError(
     res.status >= 500 ? 502 : 400,
     `GitHub request failed (${res.status}).`,
