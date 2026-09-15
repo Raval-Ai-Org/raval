@@ -191,15 +191,21 @@ function contextFingerprint(workspace: WorkspaceRow): string {
   return createHash("sha256").update(context).digest("hex");
 }
 
-// A collection row is refreshed in place when its data expires, keeping its id,
-// so the key includes completed_at: new trend data must never hit old analysis.
+// A collection row is refreshed in place when its data expires, keeping its id.
+// The key hashes the measured evidence itself: new trend data never hits old
+// analysis, while a daily re-collection that returned identical data reuses the
+// stored analysis instead of billing a fresh one.
 function analysisKey(
-  collection: Pick<TrendCollectionRow, "id" | "completed_at">,
+  collection: Pick<TrendCollectionRow, "id" | "normalized_result">,
   fingerprint: string,
   analysisType: string,
 ): string {
+  const evidence = isRecord(collection.normalized_result)
+    ? serializeTrendEvidence(collection.normalized_result as GoogleTrendsData)
+    : "";
+  const evidenceHash = createHash("sha256").update(evidence).digest("hex");
   return createHash("sha256")
-    .update(`${collection.id}:${collection.completed_at ?? ""}:${fingerprint}:${analysisType}`)
+    .update(`${collection.id}:${evidenceHash}:${fingerprint}:${analysisType}`)
     .digest("hex");
 }
 
@@ -449,7 +455,9 @@ async function generateIntelligence({
     maxCharsPerField: 500,
   });
   const prompt = buildPrompt({ collection, workspace, brandContext });
-  const model = selectClaudeModel("deep-strategy");
+  // A structured summary of supplied evidence (not open research): Sonnet 5 at
+  // medium effort. Opus stays one env var away: MARKET_INTELLIGENCE_MODEL.
+  const model = process.env.MARKET_INTELLIGENCE_MODEL?.trim() || selectClaudeModel("default");
   const startedAt = Date.now();
   let intelligence: MarketIntelligence;
   try {

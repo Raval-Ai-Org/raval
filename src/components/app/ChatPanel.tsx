@@ -317,17 +317,24 @@ export function ChatPanel({
     dnaRef.current = dna;
   }, [dna]);
   const syncingMemoryRef = useRef(false);
+  // Live message count at this session's last sync. The stored count is the DB
+  // window (at most 60), which a long conversation outgrows — it then fired an
+  // extraction on every turn.
+  const lastSyncedLiveCountRef = useRef<number | null>(null);
   const maybeSyncMemory = async () => {
     if (syncingMemoryRef.current) return;
     const current = dnaRef.current;
-    const last = current.memoryLastMsgCount ?? 0;
     const liveCount = messagesRef.current.length;
+    const lastRaw = lastSyncedLiveCountRef.current ?? current.memoryLastMsgCount ?? 0;
+    // A shorter live list means a different conversation: count from zero.
+    const last = liveCount < lastRaw ? 0 : lastRaw;
     if (liveCount < 4) return;
     if (liveCount - last < 4) return;
     syncingMemoryRef.current = true;
     try {
       const { syncMemoryFromChat } = await import("@/lib/memory-sync");
       const res = await syncMemoryFromChat(workspaceId, current, saveDna, conversationRef.current);
+      lastSyncedLiveCountRef.current = liveCount;
       if (res.added > 0) {
         toast.success(`Memory updated · ${res.added} new insight${res.added > 1 ? "s" : ""}`);
       }

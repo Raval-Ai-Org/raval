@@ -5,7 +5,9 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rateLimitFor } from "@/server/rate-limit";
 import { coachSystem } from "@/lib/ai/prompts";
 import { assemble } from "@/lib/ai/prompts/assemble";
+import { COACH_OUTPUT_SCHEMA } from "@/lib/ai/output-schemas";
 import { claudeJsonPrompt, selectClaudeModel } from "@/lib/anthropic-gateway.server";
+import { cache, digest } from "@/server/cache/store";
 import { fetchPublicText } from "@/server/safe-fetch";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 
@@ -98,11 +100,9 @@ async function fetchHtml(url: string, timeoutMs = 7000): Promise<string> {
   });
 }
 
-async function ddgSearch(
-  query: string,
-  limit = 6,
-  timeoutMs = 6000,
-): Promise<{ title: string; url: string; snippet: string }[]> {
+type SearchResult = { title: string; url: string; snippet: string };
+
+async function ddgSearch(query: string, limit = 6, timeoutMs = 6000): Promise<SearchResult[]> {
   try {
     const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
       headers: { "User-Agent": "Mozilla/5.0 MelloxCoachBot" },
@@ -110,7 +110,7 @@ async function ddgSearch(
     });
     if (!res.ok) return [];
     const html = await res.text();
-    const out: { title: string; url: string; snippet: string }[] = [];
+    const out: SearchResult[] = [];
     const re =
       /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
     for (const m of html.matchAll(re)) {
@@ -139,9 +139,112 @@ function extractMeta(html: string) {
   return metas;
 }
 
-/* -------------------- AI call -------------------- */
+/* -------------------- Caching -------------------- */
 
-// callJsonModel removed — coach briefings now use runJsonPrompt.
+// Site scrape + three web searches change slowly; a refresh inside this window
+// reuses them instead of re-crawling.
+const RESEARCH_TTL_SECONDS = 3 * 3600;
+// A generated briefing is reused until the workspace signals, the Brand DNA or
+// the day change. "Refresh" (force) always generates a new one.
+const BRIEFING_TTL_SECONDS = 6 * 3600;
+
+type CoachResearch = {
+  siteText: string;
+  siteMeta: Record<string, string>;
+  brandSeed: string;
+  compResults: SearchResult[];
+  reviewResults: SearchResult[];
+  trendResults: SearchResult[];
+};
+
+async function loadResearch(
+  workspaceId: string,
+  siteUrl: string | null,
+  workspaceName: string,
+): Promise<CoachResearch> {
+  const key = `coach:research:${await digest(`${workspaceId}|${siteUrl ?? ""}|${workspaceName}`)}`;
+  const hit = await cache.get<CoachResearch>(key);
+  if (hit) return hit;
+
+  let hostname = "";
+  if (siteUrl) {
+    try {
+      hostname = new URL(siteUrl).hostname;
+    } catch {}
+  }
+  let brandSeed = workspaceName || "";
+  const seed = brandSeed || hostname;
+
+  const [homeHtml, aboutHtml, compResults, reviewResults, trendResults] = await Promise.all([
+    // Fetch homepage
+    siteUrl ? fetchHtml(siteUrl, 7000) : Promise.resolve(""),
+    // Fetch about page as bonus signal
+    siteUrl ? fetchHtml(new URL("/about", siteUrl).toString(), 5000) : Promise.resolve(""),
+    // Competitor discovery
+    seed ? ddgSearch(`${seed} competitors alternatives`, 6) : Promise.resolve([]),
+    // Reviews / customer voice
+    seed ? ddgSearch(`${seed} review OR "vs" OR complaint`, 5) : Promise.resolve([]),
+    // Market trend
+    seed ? ddgSearch(`${seed} industry trends 2026`, 5) : Promise.resolve([]),
+  ]);
+
+  let siteText = "";
+  let siteMeta: Record<string, string> = {};
+  if (homeHtml) {
+    siteMeta = extractMeta(homeHtml);
+    siteText = [
+      `[HOMEPAGE ${siteUrl}]`,
+      stripHtml(homeHtml, 4000),
+      aboutHtml ? `[ABOUT]\n${stripHtml(aboutHtml, 2500)}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, 7000);
+    if (!brandSeed) {
+      brandSeed =
+        siteMeta["og:site_name"] ||
+        siteMeta["og:title"]?.split(/[|·\-—]/)[0]?.trim() ||
+        hostname.replace(/^www\./, "").split(".")[0];
+    }
+  }
+
+  const research = { siteText, siteMeta, brandSeed, compResults, reviewResults, trendResults };
+  // A total miss (site down, search blocked) is not cached: the next open retries.
+  if (siteText || compResults.length || reviewResults.length || trendResults.length) {
+    await cache.set(key, research, RESEARCH_TTL_SECONDS);
+  }
+  return research;
+}
+
+/* -------------------- Output normalisation -------------------- */
+
+// The output schema requires every field, so "not applicable" arrives as "".
+function cleanAction(action: Partial<CoachAction> | undefined): CoachAction | undefined {
+  const label = action?.label?.trim();
+  const prompt = action?.prompt?.trim();
+  if (!label || !prompt) return undefined;
+  return { label, prompt, intent: action?.intent ?? "ideate" };
+}
+
+function cleanItems(items: CoachInsight[] | undefined, max = 3): CoachInsight[] {
+  return (items ?? [])
+    .filter((item) => item?.title?.trim())
+    .slice(0, max)
+    .map((item) => ({
+      title: item.title,
+      detail: item.detail ?? "",
+      tone: item.tone,
+      action: cleanAction(item.action),
+      source: item.source?.trim() || undefined,
+    }));
+}
+
+function coachModel(): string {
+  // Sonnet 5: a grounded executive summary of supplied signals. The old
+  // "Opus when the scraped site text is long" rule picked Opus for most sites,
+  // and every one of those calls failed. COACH_MODEL overrides.
+  return process.env.COACH_MODEL?.trim() || selectClaudeModel("marketing-coach");
+}
 
 /* -------------------- Server function -------------------- */
 
@@ -160,7 +263,7 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString();
 
-    /* 1. Pull workspace + real signals from DB (in parallel) */
+    /* 1. Pull workspace + real signals from DB (in parallel, RLS-scoped) */
     const [
       wsRow,
       publishedRecent,
@@ -225,67 +328,6 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
     const rawUrl = wsRow.data?.website_url?.trim() ?? "";
     const siteUrl = rawUrl ? normalizeUrl(rawUrl) : null;
 
-    /* 2. Auto-scrape the site and search the web (parallel, tolerant) */
-    let siteText = "";
-    let siteMeta: Record<string, string> = {};
-    let hostname = "";
-    let brandSeed = workspaceName || "";
-    if (siteUrl) {
-      try {
-        const u = new URL(siteUrl);
-        hostname = u.hostname;
-      } catch {}
-    }
-
-    const research = await Promise.all([
-      // Fetch homepage
-      siteUrl ? fetchHtml(siteUrl, 7000) : Promise.resolve(""),
-      // Fetch about page as bonus signal
-      siteUrl ? fetchHtml(new URL("/about", siteUrl).toString(), 5000) : Promise.resolve(""),
-      // Competitor discovery
-      hostname || brandSeed
-        ? ddgSearch(`${brandSeed || hostname} competitors alternatives`, 6)
-        : Promise.resolve([]),
-      // Reviews / customer voice
-      hostname || brandSeed
-        ? ddgSearch(`${brandSeed || hostname} review OR "vs" OR complaint`, 5)
-        : Promise.resolve([]),
-      // Market trend
-      brandSeed || hostname
-        ? ddgSearch(`${brandSeed || hostname} industry trends 2026`, 5)
-        : Promise.resolve([]),
-    ]);
-    const [homeHtml, aboutHtml, compResults, reviewResults, trendResults] = research;
-
-    if (homeHtml) {
-      siteMeta = extractMeta(homeHtml);
-      siteText = [
-        `[HOMEPAGE ${siteUrl}]`,
-        stripHtml(homeHtml, 4000),
-        aboutHtml ? `[ABOUT]\n${stripHtml(aboutHtml, 2500)}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n\n")
-        .slice(0, 7000);
-      if (!brandSeed) {
-        brandSeed =
-          siteMeta["og:site_name"] ||
-          siteMeta["og:title"]?.split(/[|·\-—]/)[0]?.trim() ||
-          hostname.replace(/^www\./, "").split(".")[0];
-      }
-    }
-
-    /* 3. Aggregate cited sources */
-    const cited: { label: string; url: string }[] = [];
-    const pushCited = (items: { title: string; url: string }[], tag: string) => {
-      for (const it of items.slice(0, 3)) {
-        cited.push({ label: `${tag}: ${it.title.slice(0, 70)}`, url: it.url });
-      }
-    };
-    pushCited(compResults, "Competitor");
-    pushCited(reviewResults, "Voice of customer");
-    pushCited(trendResults, "Market trend");
-
     const signals = {
       workspaceName,
       website: siteUrl,
@@ -301,8 +343,39 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
 
     const today = new Date();
     const dayName = today.toLocaleDateString("en-US", { weekday: "long" });
+    const model = coachModel();
 
-    /* 4. Reason with the strongest available model */
+    /* 2. Reuse today's briefing while nothing it was built from has changed */
+    const briefingKey = `coach:briefing:${await digest(
+      JSON.stringify({
+        workspaceId: data.workspaceId,
+        day: today.toISOString().slice(0, 10),
+        signals,
+        brandContext: data.brandContext ?? "",
+        model,
+      }),
+    )}`;
+    if (!data.force) {
+      const cached = await cache.get<CoachBriefing>(briefingKey);
+      if (cached) return cached;
+    }
+
+    /* 3. Scrape the site and search the web (cached, tolerant) */
+    const { siteText, siteMeta, brandSeed, compResults, reviewResults, trendResults } =
+      await loadResearch(data.workspaceId, siteUrl, workspaceName);
+
+    /* 4. Aggregate cited sources */
+    const cited: { label: string; url: string }[] = [];
+    const pushCited = (items: { title: string; url: string }[], tag: string) => {
+      for (const it of items.slice(0, 3)) {
+        cited.push({ label: `${tag}: ${it.title.slice(0, 70)}`, url: it.url });
+      }
+    };
+    pushCited(compResults, "Competitor");
+    pushCited(reviewResults, "Voice of customer");
+    pushCited(trendResults, "Market trend");
+
+    /* 5. Reason over the evidence */
     const system = coachSystem(dayName);
 
     // Scraped pages, search snippets and stored Brand DNA are fenced as
@@ -337,26 +410,26 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
           { maxChars: 3500, route: "coach" },
         ),
       },
+      { body: "Where an item has no suitable action or source, use empty strings for them." },
     ]);
 
-    const shouldUseOpus =
-      (data.brandContext?.length ?? 0) > 7000 ||
-      (signals.recentInsights?.length ?? 0) > 10 ||
-      siteText.length > 5000;
-    const model = selectClaudeModel("marketing-coach", {
-      isComplexStrategy: shouldUseOpus,
-    });
-
+    // Structured output: valid JSON by construction, so no repair call. Thinking
+    // shares max_tokens on Claude 5 models — the old 1,800 ceiling truncated the
+    // briefing (and its 3,600 repair) and users got the template fallback.
     const parsed = await claudeJsonPrompt<Partial<CoachBriefing>>({
       route: "coach.briefing",
       system,
       user,
       fallback: {},
       model,
-      maxTokens: 1800,
+      effort: "medium",
+      maxTokens: 6000,
+      outputSchema: COACH_OUTPUT_SCHEMA,
+      timeoutMs: 90_000,
+      retries: 1,
     });
 
-    /* 5. Build final briefing (with resilient fallbacks) */
+    /* 6. Build final briefing (with resilient fallbacks) */
     const focusFallback: CoachBriefing["focus"] = !siteUrl
       ? {
           title: "Add your website so I can research your brand",
@@ -387,18 +460,22 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
             },
           };
 
+    const focusAction = cleanAction(parsed.focus?.action);
     const briefing: CoachBriefing = {
       greeting:
-        parsed.greeting ??
+        parsed.greeting?.trim() ||
         `Good ${today.getHours() < 12 ? "morning" : today.getHours() < 18 ? "afternoon" : "evening"}${brandSeed ? `, ${brandSeed}` : ""} — here's your ${dayName} brief`,
-      headline: parsed.headline ?? "Let's build momentum today.",
-      focus: parsed.focus ?? focusFallback,
-      wins: (parsed.wins ?? []).slice(0, 3),
-      risks: (parsed.risks ?? []).slice(0, 3),
-      competitors: (parsed.competitors ?? []).slice(0, 3),
-      market: (parsed.market ?? []).slice(0, 3),
-      plays: (parsed.plays ?? []).slice(0, 3),
-      weekPlan: (parsed.weekPlan ?? []).slice(0, 5),
+      headline: parsed.headline?.trim() || "Let's build momentum today.",
+      focus:
+        parsed.focus?.title?.trim() && focusAction
+          ? { title: parsed.focus.title, why: parsed.focus.why ?? "", action: focusAction }
+          : focusFallback,
+      wins: cleanItems(parsed.wins),
+      risks: cleanItems(parsed.risks),
+      competitors: cleanItems(parsed.competitors),
+      market: cleanItems(parsed.market),
+      plays: cleanItems(parsed.plays),
+      weekPlan: (parsed.weekPlan ?? []).filter((s) => s?.trim()).slice(0, 5),
       sources: cited.slice(0, 10),
       brandSnapshot: {
         name: brandSeed || workspaceName || undefined,
@@ -408,5 +485,9 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
       generatedAt: new Date().toISOString(),
     };
 
+    // Only a real model briefing is reused; a fallback is regenerated next time.
+    if (Object.keys(parsed).length > 0) {
+      await cache.set(briefingKey, briefing, BRIEFING_TTL_SECONDS);
+    }
     return briefing;
   });

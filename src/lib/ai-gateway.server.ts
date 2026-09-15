@@ -313,8 +313,13 @@ export async function chatCompletion(
   if (opts.tools) body.tools = opts.tools;
   if (opts.tool_choice) body.tool_choice = opts.tool_choice;
 
-  // Cache identical requests per tenant (never tool loops — non-deterministic).
-  const cacheable = !opts.noCache && !opts.tools;
+  // Cache identical requests per tenant. A call forced onto one named function
+  // is a single structured answer and caches like one; open tool use doesn't.
+  const forcedSingleTool =
+    Array.isArray(opts.tools) &&
+    opts.tools.length === 1 &&
+    (opts.tool_choice as { type?: string } | undefined)?.type === "function";
+  const cacheable = !opts.noCache && (!opts.tools || forcedSingleTool);
   const route = opts.route;
   let cacheKey = "";
   if (cacheable) {

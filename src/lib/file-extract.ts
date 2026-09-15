@@ -178,8 +178,36 @@ async function extractSpreadsheet(file: File): Promise<string> {
   return sheets.join("\n\n");
 }
 
+// Vision models bill by image resolution; past ~2k px on the long edge extra
+// pixels add tokens and upload time without improving what can be read.
+const MAX_VISION_EDGE = 2048;
+
+async function visionDataUrl(file: File): Promise<string> {
+  const original = await readAsDataURL(file);
+  // GIFs may be animated; environments without canvas bitmaps send as-is.
+  if (file.type === "image/gif" || typeof createImageBitmap !== "function") return original;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const longEdge = Math.max(bitmap.width, bitmap.height);
+    if (longEdge <= MAX_VISION_EDGE) {
+      bitmap.close();
+      return original;
+    }
+    const scale = MAX_VISION_EDGE / longEdge;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const type = file.type === "image/png" || file.type === "image/webp" ? file.type : "image/jpeg";
+    return canvas.toDataURL(type, 0.9);
+  } catch {
+    return original;
+  }
+}
+
 async function extractImageOnServer(file: File): Promise<string> {
-  const dataUrl = await readAsDataURL(file);
+  const dataUrl = await visionDataUrl(file);
   const res = await authedFetch("/api/file-extract", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

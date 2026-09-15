@@ -37,6 +37,24 @@ function transcript(turns: ChatTurn[]): string {
 }
 
 /**
+ * Older turns are summarised in whole buckets of this size. Summarising
+ * "everything but the last 12" changed the summarised slice on every turn, so
+ * each turn paid for a fresh summary; with buckets the same slice (and so the
+ * same cached request) is reused until another SUMMARY_BUCKET turns accumulate.
+ */
+export const SUMMARY_BUCKET = 8;
+
+/** How many leading turns get summarised; the rest stay verbatim (keepTail to keepTail + bucket - 1). */
+export function summarizedTurnCount(
+  total: number,
+  keepTail = KEEP_TAIL,
+  bucket = SUMMARY_BUCKET,
+): number {
+  if (total <= keepTail) return 0;
+  return Math.floor((total - keepTail) / bucket) * bucket;
+}
+
+/**
  * Same contract as compactHistory: returns the tail verbatim, preceded by one
  * system message summarising everything older (when there is anything older).
  */
@@ -45,9 +63,10 @@ export async function summarizeHistory(
   opts: { keepTail?: number } = {},
 ): Promise<ChatTurn[]> {
   const keep = opts.keepTail ?? KEEP_TAIL;
-  if (messages.length <= keep) return messages;
-  const older = messages.slice(0, messages.length - keep);
-  const tail = messages.slice(-keep);
+  const olderCount = summarizedTurnCount(messages.length, keep);
+  if (olderCount === 0) return messages;
+  const older = messages.slice(0, olderCount);
+  const tail = messages.slice(olderCount);
   try {
     const json = await chatCompletion({
       model: FAST_CHAT_MODEL,
@@ -71,6 +90,6 @@ export async function summarizeHistory(
       "[chat] history summary unavailable, using heuristic compaction",
       error instanceof Error ? error.message : error,
     );
-    return compactHistory(messages, { keepTail: keep });
+    return compactHistory(messages, { keepTail: messages.length - olderCount });
   }
 }

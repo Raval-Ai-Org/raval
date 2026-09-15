@@ -34,6 +34,12 @@ export type FetchWithRetryOptions = FetchWithTimeoutOptions & {
   baseDelayMs?: number;
   /** Response statuses worth retrying. Default 429/502/503/504. */
   retryableStatuses?: readonly number[];
+  /**
+   * Retry after a timeout. Default true. Long model generations set false: the
+   * provider may already have billed the timed-out generation, so an automatic
+   * retry pays for the same output twice.
+   */
+  retryOnTimeout?: boolean;
 };
 
 const DEFAULT_RETRYABLE = [429, 502, 503, 504] as const;
@@ -88,12 +94,20 @@ export async function fetchWithRetry(
 
   for (let attempt = 0; ; attempt++) {
     const last = attempt >= retries;
+    let failure: TransportFailure["kind"] | null = null;
     let res: Response;
     try {
-      res = await fetchWithTimeout(url, init, opts);
+      res = await fetchWithTimeout(url, init, {
+        ...opts,
+        onTransportError: (f) => {
+          failure = f.kind;
+          return opts.onTransportError(f);
+        },
+      });
     } catch (error) {
       const transient = error instanceof UpstreamError && TRANSPORT_STATUSES.has(error.status);
-      if (last || !transient) throw error;
+      const skipTimeout = failure === "timeout" && opts.retryOnTimeout === false;
+      if (last || !transient || skipTimeout) throw error;
       await sleep(backoff(baseDelayMs, attempt));
       continue;
     }
