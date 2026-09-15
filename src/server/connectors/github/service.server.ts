@@ -22,7 +22,11 @@ import {
 } from "./api.server";
 import { recordAudit } from "@/server/audit.server";
 import { HttpError } from "@/server/http-error";
-import { requireGitHubConfig, GitHubNotConfiguredError } from "./config.server";
+import {
+  allowedReturnOrigin,
+  requireGitHubConfig,
+  GitHubNotConfiguredError,
+} from "./config.server";
 import { buildInspection } from "./inspect";
 import {
   CONNECTION_COLS,
@@ -83,15 +87,23 @@ function audit(
 
 /* ───────────────────────── Install ───────────────────────── */
 
-export async function createInstallUrl(args: { workspaceId: string; userId: string }): Promise<{
+export async function createInstallUrl(args: {
+  workspaceId: string;
+  userId: string;
+  /** The browser origin that started the flow (holds the user's session). */
+  returnOrigin?: string | null;
+}): Promise<{
   url: string;
   expiresInSeconds: number;
 }> {
   const config = requireGitHubConfig();
   if (config.installVerification === "unavailable") {
-    throw new GitHubNotConfiguredError([
-      "GitHub installs can't be verified: set GITHUB_CLIENT_SECRET and enable OAuth during installation.",
-    ], "verification_unavailable");
+    throw new GitHubNotConfiguredError(
+      [
+        "GitHub installs can't be verified: set GITHUB_CLIENT_SECRET and enable OAuth during installation.",
+      ],
+      "verification_unavailable",
+    );
   }
   const state = randomBytes(32).toString("base64url");
   const now = Date.now();
@@ -105,6 +117,9 @@ export async function createInstallUrl(args: { workspaceId: string; userId: stri
     user_id: args.userId,
     provider: "github",
     expires_at: new Date(now + STATE_TTL_MS).toISOString(),
+    return_origin: allowedReturnOrigin(args.returnOrigin, process.env, {
+      allowLocal: process.env.NODE_ENV !== "production",
+    }),
   });
   if (error) throw new Error(`Couldn't start the GitHub connection: ${error.message}`);
   await audit(args.workspaceId, args.userId, "connector.github.install_started", {});
@@ -115,11 +130,23 @@ export async function createInstallUrl(args: { workspaceId: string; userId: stri
   return { url: url.toString(), expiresInSeconds: STATE_TTL_MS / 1000 };
 }
 
-export type InstallState = { workspaceId: string; userId: string; createdAt: string };
+export type InstallState = {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  createdAt: string;
+  consumedAt: string | null;
+};
 
-/** Claim a state exactly once. Throws a user-facing error for unknown, expired, used or foreign state. */
-export async function consumeInstallState(state: string, userId: string): Promise<InstallState> {
-  if (!/^[A-Za-z0-9_-]{32,128}$/.test(state)) {
+const STATE_FORMAT = /^[A-Za-z0-9_-]{32,128}$/;
+
+/**
+ * Look up a state for the returning user without using it up, so a failed
+ * completion (GitHub hiccup, missing OAuth code) can be retried. Throws a
+ * user-facing error for unknown, expired or foreign state.
+ */
+export async function readInstallState(state: string, userId: string): Promise<InstallState> {
+  if (!STATE_FORMAT.test(state)) {
     throw new ConnectorError(
       "This connection link is invalid. Start the connection again from Mellox.",
     );
@@ -140,21 +167,70 @@ export async function consumeInstallState(state: string, userId: string): Promis
       "This connection was started by a different Mellox user. Sign in as that user or start again.",
     );
   }
-  if (row.consumed_at) throw new ConnectorError("This connection link was already used.");
-  if (Date.parse(row.expires_at) < Date.now()) {
+  if (!row.consumed_at && Date.parse(row.expires_at) < Date.now()) {
     throw new ConnectorError(
       "This connection link has expired. Start the connection again from Mellox.",
     );
   }
-  const { data: claimed, error: claimError } = await supabaseAdmin
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    userId: row.user_id,
+    createdAt: row.created_at,
+    consumedAt: row.consumed_at,
+  };
+}
+
+/** Mark a state used once its connection is saved. Idempotent. */
+export async function markInstallStateUsed(state: InstallState): Promise<void> {
+  const { error } = await supabaseAdmin
     .from("connector_install_states")
     .update({ consumed_at: new Date().toISOString() })
-    .eq("id", row.id)
-    .is("consumed_at", null)
-    .select("id");
-  if (claimError) throw new Error(claimError.message);
-  if (!claimed?.length) throw new ConnectorError("This connection link was already used.");
-  return { workspaceId: row.workspace_id, userId: row.user_id, createdAt: row.created_at };
+    .eq("id", state.id)
+    .is("consumed_at", null);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * The connection an already-used state produced for this installation — lets a
+ * reloaded or double-submitted callback show the saved result instead of an
+ * error. Only matches a connection this user saved after the state was issued.
+ */
+export async function findConnectionFromState(
+  state: InstallState,
+  installationId: string,
+): Promise<ConnectionView | null> {
+  const { data, error } = await supabaseAdmin
+    .from("workspace_connections")
+    .select(CONNECTION_COLS)
+    .eq("workspace_id", state.workspaceId)
+    .eq("provider", "github")
+    .eq("external_account_id", installationId)
+    .eq("connected_by", state.userId)
+    .neq("status", "revoked")
+    .gte("last_verified_at", state.createdAt)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? presentConnection(data as unknown as ConnectionRow) : null;
+}
+
+/**
+ * Where the GitHub callback should send the installer: the allowlisted origin
+ * the flow started from, or null (stay on this origin). Read-only.
+ */
+export async function installReturnOrigin(state: string): Promise<string | null> {
+  if (!STATE_FORMAT.test(state)) return null;
+  const { data } = await supabaseAdmin
+    .from("connector_install_states")
+    .select("return_origin, expires_at")
+    .eq("state_hash", hashState(state))
+    .eq("provider", "github")
+    .maybeSingle();
+  if (!data?.return_origin) return null;
+  // Stored only by a Mellox server after its own allowlist check; re-checked
+  // here against this deployment's allowlist. Local development origins are
+  // accepted because only a server holding the service role can write them.
+  return allowedReturnOrigin(data.return_origin, process.env, { allowLocal: true });
 }
 
 /**
@@ -257,8 +333,16 @@ export async function linkInstallation(args: {
     .single();
   if (error || !row) throw new Error(error?.message ?? "Couldn't save the GitHub connection");
 
-  // A reconnect restores sources that are still reachable.
-  await syncSourceAccess(row as ConnectionRow);
+  // A reconnect restores sources that are still reachable. The connection is
+  // already saved, so a GitHub hiccup here must not report the connect as failed.
+  try {
+    await syncSourceAccess(row as ConnectionRow);
+  } catch (e) {
+    console.warn(
+      "[github] source access sync after connect failed:",
+      e instanceof Error ? e.message : e,
+    );
+  }
   await audit(args.state.workspaceId, args.state.userId, "connector.github.connected", {
     connectionId: row.id,
     installationId: args.installationId,

@@ -36,11 +36,10 @@ import {
   listGithubRepositories,
   removeSource,
   selectGithubRepository,
-  startGithubInstall,
-  subscribeConnectors,
   updateSource,
   verifyConnection,
 } from "@/lib/connectors.functions";
+import { useGithubInstall } from "./useGithubInstall";
 import type {
   ConnectionView,
   ConnectorsOverview,
@@ -572,7 +571,6 @@ function SourceCard({
 export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
   const [overview, setOverview] = useState<ConnectorsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [installing, setInstalling] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
@@ -591,47 +589,16 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
     void load();
   }, [load]);
 
-  // The install popup reports back here; refresh on focus as a fallback.
-  useEffect(() => {
-    const unsubscribe = subscribeConnectors((message) => {
-      if (message.provider !== "github") return;
-      setInstalling(false);
-      if (message.type === "connected") {
-        toast.success("GitHub connected");
-        setShowPicker(true);
-      } else {
-        toast.error(message.message);
-      }
-      void load();
-    });
-    const onFocus = () => {
-      if (installing) void load();
-    };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      unsubscribe();
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [load, installing]);
-
-  const install = async () => {
-    setInstalling(true);
-    // Open synchronously (popup blockers), then point it at GitHub.
-    const popup = window.open(
-      "about:blank",
-      "mellox-github-install",
-      "popup,width=1020,height=760",
-    );
-    try {
-      const { url } = await startGithubInstall({ data: { workspaceId } });
-      if (popup && !popup.closed) popup.location.href = url;
-      else window.location.href = url;
-    } catch (e) {
-      popup?.close();
-      setInstalling(false);
-      toast.error(e instanceof Error ? e.message : "Couldn't start the GitHub connection");
-    }
-  };
+  // The install popup reports back over a BroadcastChannel; "Connected" is only
+  // shown from the reloaded server overview, never from the message itself.
+  const onConnected = useCallback(() => {
+    setShowPicker(true);
+    void load();
+  }, [load]);
+  const { installing, install } = useGithubInstall(workspaceId, {
+    onConnected,
+    onSettled: () => void load(),
+  });
 
   const verify = async (connection: ConnectionView) => {
     setBusy(`verify:${connection.id}`);

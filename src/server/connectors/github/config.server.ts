@@ -256,6 +256,44 @@ export function getGitHubConfigCheck(env: Env = process.env): ConfigCheck {
   return cached.result;
 }
 
+/**
+ * Where an install flow may send the installer back to: this deployment's
+ * public origins (APP_URL, NEXT_PUBLIC_APP_URL), GITHUB_ALLOWED_RETURN_ORIGINS
+ * (comma-separated, e.g. a custom domain and the Railway domain), and — when
+ * `allowLocal` — a localhost development server. Returns the normalized origin
+ * or null. The GitHub App has a single callback URL; this lets that callback
+ * hand the installer back to the origin that holds their Mellox session.
+ */
+export function allowedReturnOrigin(
+  candidate: string | null | undefined,
+  env: Env = process.env,
+  opts: { allowLocal: boolean },
+): string | null {
+  if (!candidate) return null;
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password) return null;
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  if (/^(localhost|127\.0\.0\.1)$/i.test(url.hostname)) return opts.allowLocal ? url.origin : null;
+  if (url.protocol !== "https:") return null;
+  const allowed = [
+    env.APP_URL,
+    env.NEXT_PUBLIC_APP_URL,
+    ...(env.GITHUB_ALLOWED_RETURN_ORIGINS ?? "").split(","),
+  ].flatMap((raw) => {
+    try {
+      return raw?.trim() ? [new URL(raw.trim()).origin] : [];
+    } catch {
+      return [];
+    }
+  });
+  return allowed.includes(url.origin) ? url.origin : null;
+}
+
 export function requireGitHubConfig(): GitHubAppConfig {
   const check = getGitHubConfigCheck();
   if (!check.ok) {

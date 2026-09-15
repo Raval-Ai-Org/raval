@@ -1,6 +1,7 @@
 import { createHmac, createPublicKey, generateKeyPairSync, verify } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
+  allowedReturnOrigin,
   checkGitHubConfig,
   getGitHubDiagnostic,
   normalizePrivateKey,
@@ -144,10 +145,9 @@ describe("GitHub App config", () => {
   });
 
   it("rejects localhost as a production callback origin", () => {
-    expect(
-      getGitHubDiagnostic({ ...BASE_ENV, APP_URL: "http://localhost:8080" })
-        .appUrlHttps,
-    ).toBe(false);
+    expect(getGitHubDiagnostic({ ...BASE_ENV, APP_URL: "http://localhost:8080" }).appUrlHttps).toBe(
+      false,
+    );
   });
 });
 
@@ -361,5 +361,49 @@ describe("source inspection", () => {
       commitSha: "abc1234def",
     });
     expect(JSON.stringify(record)).not.toContain("dependencies");
+  });
+});
+
+describe("GitHub install return origin", () => {
+  const env = {
+    APP_URL: "https://mellox.ai",
+    NEXT_PUBLIC_APP_URL: "https://mellox.ai/",
+    GITHUB_ALLOWED_RETURN_ORIGINS: " https://raval-production-c901.up.railway.app , not a url",
+  };
+
+  it("accepts this deployment's public origins and the configured extras, normalized", () => {
+    expect(allowedReturnOrigin("https://mellox.ai/app?x=1", env, { allowLocal: false })).toBe(
+      "https://mellox.ai",
+    );
+    expect(
+      allowedReturnOrigin("https://raval-production-c901.up.railway.app", env, {
+        allowLocal: false,
+      }),
+    ).toBe("https://raval-production-c901.up.railway.app");
+  });
+
+  it("refuses foreign, downgraded, credentialed and malformed origins", () => {
+    for (const bad of [
+      "https://evil.example",
+      "http://mellox.ai",
+      "https://user:pw@mellox.ai",
+      "https://mellox.ai.evil.example",
+      "javascript:alert(1)",
+      "not a url",
+      "",
+      null,
+    ]) {
+      expect(allowedReturnOrigin(bad, env, { allowLocal: true })).toBeNull();
+    }
+  });
+
+  it("allows a localhost development origin only when asked", () => {
+    expect(allowedReturnOrigin("http://localhost:8080/x", env, { allowLocal: true })).toBe(
+      "http://localhost:8080",
+    );
+    expect(allowedReturnOrigin("http://127.0.0.1:8081", env, { allowLocal: true })).toBe(
+      "http://127.0.0.1:8081",
+    );
+    expect(allowedReturnOrigin("http://localhost:8080", env, { allowLocal: false })).toBeNull();
   });
 });

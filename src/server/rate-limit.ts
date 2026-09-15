@@ -33,6 +33,7 @@ export type RateLimitTier =
   | "geo-scan"
   | "connector"
   | "connector-connect"
+  | "connector-complete"
   | "connector-write"
   | "geo-fix"
   | "geo-fix-batch"
@@ -62,6 +63,9 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   connector: { limit: 30, windowSeconds: 60, label: "integration" },
   // Starting or completing a connection (install state issuance).
   "connector-connect": { limit: 10, windowSeconds: 600, label: "connection attempt" },
+  // Completing a connection on return from the provider. Separate from starting
+  // one so a few retries of a failed return don't lock the user out of starting over.
+  "connector-complete": { limit: 20, windowSeconds: 600, label: "connection completion" },
   // Writes to a connected repository (branch + commit + pull request), and
   // disconnect/remove actions. Each is audited; a person approves every one.
   "connector-write": { limit: 10, windowSeconds: 600, label: "repository change" },

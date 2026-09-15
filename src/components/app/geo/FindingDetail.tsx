@@ -31,7 +31,8 @@ import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import { emitAppEvent } from "@/lib/app-events";
-import { startGithubInstall, subscribeConnectors, updateSource } from "@/lib/connectors.functions";
+import { updateSource } from "@/lib/connectors.functions";
+import { useGithubInstall } from "../connectors/useGithubInstall";
 import type { SourceView } from "@/lib/connectors/types";
 import {
   DISMISS_REASONS,
@@ -247,40 +248,6 @@ export function VerificationCard({ v }: { v: VerificationView }) {
 
 /* ───────────────────────── GitHub connect (contextual) ───────────────────────── */
 
-function useGithubInstall(workspaceId: string, onConnected: () => void) {
-  const [installing, setInstalling] = useState(false);
-  useEffect(
-    () =>
-      subscribeConnectors((message) => {
-        if (message.provider !== "github") return;
-        setInstalling(false);
-        if (message.type === "connected") {
-          toast.success("GitHub connected");
-          onConnected();
-        } else toast.error(message.message);
-      }),
-    [onConnected],
-  );
-  const install = async () => {
-    setInstalling(true);
-    const popup = window.open(
-      "about:blank",
-      "mellox-github-install",
-      "popup,width=1020,height=760",
-    );
-    try {
-      const { url } = await startGithubInstall({ data: { workspaceId } });
-      if (popup && !popup.closed) popup.location.href = url;
-      else window.location.href = url;
-    } catch (e) {
-      popup?.close();
-      setInstalling(false);
-      toast.error(errMsg(e, "Couldn't start the GitHub connection"));
-    }
-  };
-  return { installing, install };
-}
-
 /* ───────────────────────── GitHub setup step (shared with "Fix all") ───────────────────────── */
 
 export function SetupRequirement({
@@ -294,7 +261,10 @@ export function SetupRequirement({
   setup: FixSetup;
   onReload: () => void;
 }) {
-  const { installing, install } = useGithubInstall(workspaceId, onReload);
+  const { installing, install } = useGithubInstall(workspaceId, {
+    onConnected: onReload,
+    onSettled: onReload,
+  });
   const [linking, setLinking] = useState(false);
   const a = setup;
 

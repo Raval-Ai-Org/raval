@@ -1064,6 +1064,7 @@ export type Database = {
           expires_at: string;
           id: string;
           provider: string;
+          return_origin: string | null;
           state_hash: string;
           user_id: string;
           workspace_id: string;
@@ -1074,6 +1075,7 @@ export type Database = {
           expires_at: string;
           id?: string;
           provider: string;
+          return_origin?: string | null;
           state_hash: string;
           user_id: string;
           workspace_id: string;
@@ -1084,6 +1086,7 @@ export type Database = {
           expires_at?: string;
           id?: string;
           provider?: string;
+          return_origin?: string | null;
           state_hash?: string;
           user_id?: string;
           workspace_id?: string;

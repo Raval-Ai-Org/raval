@@ -88,12 +88,17 @@ export const getConnectors = createServerFn({ method: "POST" })
     if (check.ok && !diagnostic.githubApiReachable) {
       issues.push("GitHub App authentication failed — verify the App ID, slug and private key");
     }
-    if (diagnostic.githubApiReachable && !diagnostic.oauthConfigurationValid) {
-      issues.push(
-        "GitHub App OAuth installation authorization is disabled or its client ID does not match",
-      );
+    const oauthMode = check.ok && check.config.installVerification === "oauth";
+    if (diagnostic.githubApiReachable && oauthMode && !diagnostic.oauthConfigurationValid) {
+      issues.push("GITHUB_CLIENT_ID doesn't match the GitHub App's client ID");
     }
-    if (!diagnostic.appUrlHttps || !diagnostic.callbackUrlValid || !diagnostic.webhookUrlValid) {
+    const urlsValid =
+      diagnostic.appUrlHttps && diagnostic.callbackUrlValid && diagnostic.webhookUrlValid;
+    // Production needs its public HTTPS origin for callbacks and webhooks. A
+    // development server is connectable: the production callback hands the
+    // installer back to it (see installReturnOrigin).
+    const production = process.env.NODE_ENV === "production";
+    if (!urlsValid && production) {
       issues.push("APP_URL must be the deployed HTTPS origin for GitHub callbacks and webhooks");
     }
     return {
@@ -104,10 +109,9 @@ export const getConnectors = createServerFn({ method: "POST" })
             check.ok &&
             check.config.installVerification !== "unavailable" &&
             diagnostic.githubApiReachable &&
-            diagnostic.oauthConfigurationValid &&
+            (!oauthMode || diagnostic.oauthConfigurationValid) &&
             diagnostic.webhookSecretPresent &&
-            diagnostic.callbackUrlValid &&
-            diagnostic.webhookUrlValid,
+            (urlsValid || !production),
           installVerification: check.ok ? check.config.installVerification : "unavailable",
           // Variable names and rules only — never values.
           issues,
@@ -126,15 +130,21 @@ export const getConnectors = createServerFn({ method: "POST" })
 
 export const startGithubInstall = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("connector-connect")])
-  .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))
+  .inputValidator((data) =>
+    z.object({ workspaceId: uuid, returnOrigin: z.string().max(200).optional() }).parse(data),
+  )
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "admin");
     const { createInstallUrl } = await import("@/server/connectors/github/service.server");
-    return createInstallUrl({ workspaceId: data.workspaceId, userId: context.userId });
+    return createInstallUrl({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      returnOrigin: data.returnOrigin ?? null,
+    });
   });
 
 export const completeGithubInstall = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth, rateLimitFor("connector-connect")])
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-complete")])
   .inputValidator((data) =>
     z
       .object({
@@ -146,16 +156,32 @@ export const completeGithubInstall = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { consumeInstallState, linkInstallation } =
-      await import("@/server/connectors/github/service.server");
+    const {
+      ConnectorError,
+      findConnectionFromState,
+      linkInstallation,
+      markInstallStateUsed,
+      readInstallState,
+    } = await import("@/server/connectors/github/service.server");
     // The state binds the flow to the user who started it and to their workspace.
-    const state = await consumeInstallState(data.state, context.userId);
+    // It is used up only once the connection is saved, so failures are retryable.
+    const state = await readInstallState(data.state, context.userId);
     await requireWorkspaceRole(context, state.workspaceId, "admin");
+    if (state.consumedAt) {
+      const existing = await findConnectionFromState(state, data.installationId);
+      if (!existing) {
+        throw new ConnectorError(
+          "This connection link was already used. Start the connection again from Mellox.",
+        );
+      }
+      return { workspaceId: state.workspaceId, connection: existing };
+    }
     const connection = await linkInstallation({
       state,
       installationId: data.installationId,
       code: data.code ?? null,
     });
+    await markInstallStateUsed(state);
     return { workspaceId: state.workspaceId, connection };
   });
 

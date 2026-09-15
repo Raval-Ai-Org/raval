@@ -232,19 +232,16 @@ export async function diagnoseGitHub(): Promise<GitHubDiagnostic> {
   }
   try {
     const config = requireGitHubConfig();
-    const app = await appRequest<{
-      slug?: string;
-      client_id?: string;
-      request_oauth_on_install?: boolean;
-    }>("/app");
+    const app = await appRequest<{ slug?: string; client_id?: string }>("/app");
     const appMatches = app?.slug === config.slug;
     return {
       ...diagnostic,
       githubApiReachable: appMatches,
+      // GET /app doesn't expose "Request user authorization (OAuth) during
+      // installation", so only the client pairing is checked here; a missing
+      // `code` on the return is reported by linkInstallation instead.
       oauthConfigurationValid:
-        Boolean(config.clientId && config.clientSecret) &&
-        app?.client_id === config.clientId &&
-        app?.request_oauth_on_install === true,
+        Boolean(config.clientId && config.clientSecret) && app?.client_id === config.clientId,
     };
   } catch {
     return diagnostic;
