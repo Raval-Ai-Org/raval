@@ -20,6 +20,31 @@ The app runs on the Next.js App Router.
 | `src/lib/geo`, `src/server/geo` | AI Visibility (GEO / AEO / SEO): scan engine and background worker — see [docs/geo-intelligence.md](docs/geo-intelligence.md).           |
 | `src/server/connectors`         | Website source connectors (GitHub App): install, repositories, webhooks — see [docs/github-connector.md](docs/github-connector.md).      |
 
+## Latest product update: GEO coding agent and repository ownership
+
+The current `main` release includes the GEO coding-agent workflow and GitHub
+repository ownership support. The feature is implemented across the GEO agent
+runner, state/contracts, repository tools, dashboard panels, readiness views,
+public hooks, and Supabase migrations for source ownership and agent runs.
+
+Key areas for contributors:
+
+- `src/server/geo/agents/` - agent framework, runner, prompts, repository tools,
+   and service orchestration
+- `src/lib/geo/` - agent contracts, state, dimensions, lanes, and fix contracts
+- `src/server/connectors/github/` - GitHub API, repository ownership, and source
+   context services
+- `src/components/app/geo/agent/` and `src/components/app/geo/dashboard/` - GEO
+   agent and readiness UI
+- `supabase/migrations/20260917090000_add_source_ownership.sql` and
+   `20260917090100_add_geo_agent_runs.sql` - related database changes
+- `docs/adr/0013-geo-coding-agent-and-repo-ownership.md` - architectural decision
+   and safety boundary for the coding agent
+
+The agent is supervised and repository-scoped. It must not bypass workspace
+authorization, approval policy, or the existing deterministic fix and
+verification paths.
+
 Auth is a Supabase session in `localStorage`, so the signed-in routes gate in the
 browser via `SessionGate` and every server call carries an `Authorization: Bearer`
 header rather than a cookie.
