@@ -1339,6 +1339,292 @@ export type Database = {
         };
         Relationships: [];
       };
+      geo_agent_events: {
+        Row: {
+          actor: string;
+          at: string;
+          detail: Json;
+          id: number;
+          kind: string;
+          run_id: string;
+          stage: string | null;
+          summary: string;
+          user_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          actor?: string;
+          at?: string;
+          detail?: Json;
+          id?: number;
+          kind: string;
+          run_id: string;
+          stage?: string | null;
+          summary: string;
+          user_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          actor?: string;
+          at?: string;
+          detail?: Json;
+          id?: number;
+          kind?: string;
+          run_id?: string;
+          stage?: string | null;
+          summary?: string;
+          user_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "geo_agent_events_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_agent_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_agent_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      geo_agent_runs: {
+        Row: {
+          attempts: number;
+          base_branch: string | null;
+          base_sha: string | null;
+          batch_id: string | null;
+          cancel_requested_at: string | null;
+          checkpoint: Json | null;
+          completed_at: string | null;
+          connection_id: string | null;
+          correction_rounds: number;
+          created_at: string;
+          created_by: string | null;
+          error: string | null;
+          error_code: string | null;
+          failed_at_step: string | null;
+          feedback: string | null;
+          files_inspected: Json;
+          finding_id: string | null;
+          fingerprint: string;
+          framework: string | null;
+          id: string;
+          inputs: Json;
+          kind: string;
+          lease_until: string | null;
+          locked_by: string | null;
+          max_attempts: number;
+          model: string | null;
+          next_attempt_at: string;
+          page_url: string | null;
+          parent_run_id: string | null;
+          patch: Json | null;
+          plan: Json | null;
+          plan_approved_at: string | null;
+          plan_approved_by: string | null;
+          plan_hash: string | null;
+          plan_ready_at: string | null;
+          plan_revision: number;
+          proposal_id: string | null;
+          repo_external_id: string | null;
+          repo_full_name: string | null;
+          result: Json | null;
+          review: Json | null;
+          rule_id: string;
+          scan_id: string | null;
+          site_host: string;
+          site_origin: string;
+          source_id: string | null;
+          status: string;
+          status_detail: string | null;
+          updated_at: string;
+          usage: Json;
+          validation: Json | null;
+          verification_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          attempts?: number;
+          base_branch?: string | null;
+          base_sha?: string | null;
+          batch_id?: string | null;
+          cancel_requested_at?: string | null;
+          checkpoint?: Json | null;
+          completed_at?: string | null;
+          connection_id?: string | null;
+          correction_rounds?: number;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          error_code?: string | null;
+          failed_at_step?: string | null;
+          feedback?: string | null;
+          files_inspected?: Json;
+          finding_id?: string | null;
+          fingerprint: string;
+          framework?: string | null;
+          id?: string;
+          inputs?: Json;
+          kind?: string;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          model?: string | null;
+          next_attempt_at?: string;
+          page_url?: string | null;
+          parent_run_id?: string | null;
+          patch?: Json | null;
+          plan?: Json | null;
+          plan_approved_at?: string | null;
+          plan_approved_by?: string | null;
+          plan_hash?: string | null;
+          plan_ready_at?: string | null;
+          plan_revision?: number;
+          proposal_id?: string | null;
+          repo_external_id?: string | null;
+          repo_full_name?: string | null;
+          result?: Json | null;
+          review?: Json | null;
+          rule_id: string;
+          scan_id?: string | null;
+          site_host: string;
+          site_origin: string;
+          source_id?: string | null;
+          status?: string;
+          status_detail?: string | null;
+          updated_at?: string;
+          usage?: Json;
+          validation?: Json | null;
+          verification_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          attempts?: number;
+          base_branch?: string | null;
+          base_sha?: string | null;
+          batch_id?: string | null;
+          cancel_requested_at?: string | null;
+          checkpoint?: Json | null;
+          completed_at?: string | null;
+          connection_id?: string | null;
+          correction_rounds?: number;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          error_code?: string | null;
+          failed_at_step?: string | null;
+          feedback?: string | null;
+          files_inspected?: Json;
+          finding_id?: string | null;
+          fingerprint?: string;
+          framework?: string | null;
+          id?: string;
+          inputs?: Json;
+          kind?: string;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          model?: string | null;
+          next_attempt_at?: string;
+          page_url?: string | null;
+          parent_run_id?: string | null;
+          patch?: Json | null;
+          plan?: Json | null;
+          plan_approved_at?: string | null;
+          plan_approved_by?: string | null;
+          plan_hash?: string | null;
+          plan_ready_at?: string | null;
+          plan_revision?: number;
+          proposal_id?: string | null;
+          repo_external_id?: string | null;
+          repo_full_name?: string | null;
+          result?: Json | null;
+          review?: Json | null;
+          rule_id?: string;
+          scan_id?: string | null;
+          site_host?: string;
+          site_origin?: string;
+          source_id?: string | null;
+          status?: string;
+          status_detail?: string | null;
+          updated_at?: string;
+          usage?: Json;
+          validation?: Json | null;
+          verification_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "geo_agent_runs_batch_id_fkey";
+            columns: ["batch_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_fix_batches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_agent_runs_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_agent_runs_finding_id_fkey";
+            columns: ["finding_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_findings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_agent_runs_parent_run_id_fkey";
+            columns: ["parent_run_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_agent_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_agent_runs_proposal_id_fkey";
+            columns: ["proposal_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_fix_proposals";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_agent_runs_scan_id_fkey";
+            columns: ["scan_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_scans";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_agent_runs_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_agent_runs_verification_id_fkey";
+            columns: ["verification_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_verifications";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_agent_runs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       geo_audit_runs: {
         Row: {
           created_at: string;
@@ -1382,10 +1668,13 @@ export type Database = {
       };
       geo_finding_states: {
         Row: {
+          dismiss_reason: string | null;
           fingerprint: string;
           note: string | null;
           reopened_at: string | null;
           resolved_via: string | null;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
           state: string;
           updated_at: string;
           updated_by: string | null;
@@ -1394,10 +1683,13 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          dismiss_reason?: string | null;
           fingerprint: string;
           note?: string | null;
           reopened_at?: string | null;
           resolved_via?: string | null;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
           state?: string;
           updated_at?: string;
           updated_by?: string | null;
@@ -1406,10 +1698,13 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          dismiss_reason?: string | null;
           fingerprint?: string;
           note?: string | null;
           reopened_at?: string | null;
           resolved_via?: string | null;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
           state?: string;
           updated_at?: string;
           updated_by?: string | null;
@@ -1670,6 +1965,7 @@ export type Database = {
       };
       geo_fix_proposals: {
         Row: {
+          agent_run_id: string | null;
           approved_at: string | null;
           approved_by: string | null;
           base_branch: string | null;
@@ -1698,6 +1994,7 @@ export type Database = {
           pr_number: number | null;
           pr_state: string | null;
           pr_url: string | null;
+          preview: Json | null;
           provider: string;
           repo_external_id: string | null;
           repo_full_name: string | null;
@@ -1712,6 +2009,7 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          agent_run_id?: string | null;
           approved_at?: string | null;
           approved_by?: string | null;
           base_branch?: string | null;
@@ -1740,6 +2038,7 @@ export type Database = {
           pr_number?: number | null;
           pr_state?: string | null;
           pr_url?: string | null;
+          preview?: Json | null;
           provider?: string;
           repo_external_id?: string | null;
           repo_full_name?: string | null;
@@ -1754,6 +2053,7 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          agent_run_id?: string | null;
           approved_at?: string | null;
           approved_by?: string | null;
           base_branch?: string | null;
@@ -1782,6 +2082,7 @@ export type Database = {
           pr_number?: number | null;
           pr_state?: string | null;
           pr_url?: string | null;
+          preview?: Json | null;
           provider?: string;
           repo_external_id?: string | null;
           repo_full_name?: string | null;
@@ -1796,6 +2097,13 @@ export type Database = {
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "geo_fix_proposals_agent_run_id_fkey";
+            columns: ["agent_run_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_agent_runs";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "geo_fix_proposals_batch_id_fkey";
             columns: ["batch_id"];
@@ -3048,6 +3356,8 @@ export type Database = {
       };
       workspace_sources: {
         Row: {
+          agent_consent_at: string | null;
+          agent_consent_by: string | null;
           branch: string | null;
           connection_id: string;
           created_at: string;
@@ -3062,6 +3372,14 @@ export type Database = {
           last_synced_at: string | null;
           name: string;
           owner_login: string | null;
+          ownership_checked_at: string | null;
+          ownership_checked_by: string | null;
+          ownership_commit_sha: string | null;
+          ownership_confidence: number | null;
+          ownership_evidence: Json;
+          ownership_hints: Json;
+          ownership_site_host: string | null;
+          ownership_status: string;
           private: boolean;
           provider: string;
           selected_by: string | null;
@@ -3072,6 +3390,8 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          agent_consent_at?: string | null;
+          agent_consent_by?: string | null;
           branch?: string | null;
           connection_id: string;
           created_at?: string;
@@ -3086,6 +3406,14 @@ export type Database = {
           last_synced_at?: string | null;
           name: string;
           owner_login?: string | null;
+          ownership_checked_at?: string | null;
+          ownership_checked_by?: string | null;
+          ownership_commit_sha?: string | null;
+          ownership_confidence?: number | null;
+          ownership_evidence?: Json;
+          ownership_hints?: Json;
+          ownership_site_host?: string | null;
+          ownership_status?: string;
           private?: boolean;
           provider: string;
           selected_by?: string | null;
@@ -3096,6 +3424,8 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          agent_consent_at?: string | null;
+          agent_consent_by?: string | null;
           branch?: string | null;
           connection_id?: string;
           created_at?: string;
@@ -3110,6 +3440,14 @@ export type Database = {
           last_synced_at?: string | null;
           name?: string;
           owner_login?: string | null;
+          ownership_checked_at?: string | null;
+          ownership_checked_by?: string | null;
+          ownership_commit_sha?: string | null;
+          ownership_confidence?: number | null;
+          ownership_evidence?: Json;
+          ownership_hints?: Json;
+          ownership_site_host?: string | null;
+          ownership_status?: string;
           private?: boolean;
           provider?: string;
           selected_by?: string | null;
@@ -3215,6 +3553,10 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["scheduled_jobs"]["Row"][];
       };
+      claim_geo_agent_runs: {
+        Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
+        Returns: Database["public"]["Tables"]["geo_agent_runs"]["Row"][];
+      };
       claim_geo_scans: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_scan_id?: string };
         Returns: Database["public"]["Tables"]["geo_scans"]["Row"][];
@@ -3234,6 +3576,7 @@ export type Database = {
         Returns: string;
       };
       my_workspace_role: { Args: { _workspace_id: string }; Returns: string };
+      prune_geo_agent_runs: { Args: never; Returns: Json };
       prune_operational_logs: { Args: never; Returns: Json };
       record_ai_usage: { Args: { p_event: Json }; Returns: number };
       set_persona_once: {

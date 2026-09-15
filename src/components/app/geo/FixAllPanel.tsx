@@ -127,7 +127,7 @@ function BatchReview({
   if (b.status === "generating") {
     const pct = b.progress.total ? Math.round((b.progress.done / b.progress.total) * 100) : 0;
     return (
-      <div className="space-y-3 rounded-xl border border-border/60 bg-card/50 p-4">
+      <div className="space-y-3 rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-4">
         <p className="flex items-center gap-2 text-[13px] font-medium">
           <Spinner className="h-4 w-4 animate-spin" /> Preparing fixes for {b.host}…
         </p>
@@ -165,7 +165,7 @@ function BatchReview({
         </p>
       )}
 
-      <section className="rounded-xl border border-border/60 bg-card/50 p-3.5">
+      <section className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
         <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Findings ({included.length} included
           {excluded.length ? `, ${excluded.length} need manual work` : ""})
@@ -211,7 +211,7 @@ function BatchReview({
       </section>
 
       {b.files.length > 0 && (
-        <section className="space-y-3 rounded-xl border border-border/60 bg-card/50 p-3.5">
+        <section className="space-y-3 rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
           <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Combined change ({b.files.length} file{b.files.length === 1 ? "" : "s"})
           </h4>
@@ -299,7 +299,7 @@ function BatchReview({
       )}
 
       {b.pr && (
-        <div className="space-y-2 rounded-xl border border-border/60 bg-background/60 p-3.5">
+        <div className="space-y-2 rounded-xl border border-border/60 bg-gradient-to-b from-background/80 to-muted/20 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
           <div className="flex flex-wrap items-center gap-2">
             <a
               href={b.pr.url}
@@ -538,7 +538,7 @@ export function FixAllPanel({
             ].map(([n, label]) => (
               <div
                 key={String(label)}
-                className="rounded-xl border border-border/60 bg-card/50 px-3 py-2.5"
+                className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border px-3 py-2.5"
               >
                 <div className="text-[19px] font-semibold tabular-nums">{n}</div>
                 <div className="text-[11.5px] text-muted-foreground">{label}</div>
@@ -547,12 +547,12 @@ export function FixAllPanel({
           </div>
 
           {preflight.fixable.length === 0 ? (
-            <p className="rounded-xl border border-border/60 bg-card/50 px-4 py-3 text-[12.5px] text-muted-foreground">
+            <p className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border px-4 py-3 text-[12.5px] text-muted-foreground">
               No open findings in this scan can be fixed automatically. Open a finding for its
               manual steps.
             </p>
           ) : (
-            <section className="rounded-xl border border-border/60 bg-card/50 p-3.5">
+            <section className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
               <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Will be attempted
                 {preflight.fixable.length > preflight.maxFindings
@@ -573,7 +573,7 @@ export function FixAllPanel({
             </section>
           )}
 
-          <section className="rounded-xl border border-border/60 bg-card/50 p-3.5">
+          <section className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
             <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               GitHub repository
             </h4>

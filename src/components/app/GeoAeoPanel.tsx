@@ -195,7 +195,7 @@ function Panel({
       </button>
     </>
   ) : (
-    "60+ checks across AI crawler access, technical SEO, schema, answer-ready content, trust and rendering."
+    "60+ checks for AI engines, SEO and content."
   );
 
   return (
@@ -290,8 +290,8 @@ function Panel({
               </button>
             </div>
           )}
-          <div className="-mx-1 overflow-x-auto px-1">
-            <TabsList className="h-10 rounded-full bg-muted/70 p-1">
+          <div className="sticky -top-4 z-20 -mx-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-background/85 px-1 py-2 backdrop-blur-md sm:-top-5">
+            <TabsList className="h-11 gap-0.5 rounded-full border border-border/60 bg-muted/60 p-1 shadow-sm">
               {(["overview", "findings", "pages", "history", "monitoring"] as const).map((id) => {
                 const Icon = TAB_ICON[id];
                 const count =
@@ -304,7 +304,9 @@ function Panel({
                   <TabsTrigger
                     key={id}
                     value={id}
-                    className={cn("gap-1.5 rounded-full px-3 text-[12.5px] capitalize")}
+                    className={cn(
+                      "gap-1.5 rounded-full px-3.5 text-[12.5px] capitalize transition-all duration-200 data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-border/60",
+                    )}
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {id}
@@ -316,9 +318,13 @@ function Panel({
               })}
             </TabsList>
           </div>
-          <TabsContent value="overview" className="mt-4">
+          <TabsContent
+            value="overview"
+            className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
+          >
             {current.report ? (
               <OverviewTab
+                workspaceId={workspaceId}
                 scan={current}
                 previousScore={previousScore}
                 sparkValues={sparkValues}
@@ -334,7 +340,10 @@ function Panel({
               />
             )}
           </TabsContent>
-          <TabsContent value="findings" className="mt-4">
+          <TabsContent
+            value="findings"
+            className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
+          >
             <FindingsTab
               workspaceId={workspaceId}
               scan={current}
@@ -343,10 +352,16 @@ function Panel({
               onFilterChange={setFindingsFilter}
             />
           </TabsContent>
-          <TabsContent value="pages" className="mt-4">
+          <TabsContent
+            value="pages"
+            className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
+          >
             <PagesTab workspaceId={workspaceId} scan={current} />
           </TabsContent>
-          <TabsContent value="history" className="mt-4">
+          <TabsContent
+            value="history"
+            className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
+          >
             <HistoryTab
               workspaceId={workspaceId}
               history={scans.history}
@@ -357,7 +372,10 @@ function Panel({
               }}
             />
           </TabsContent>
-          <TabsContent value="monitoring" className="mt-4">
+          <TabsContent
+            value="monitoring"
+            className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
+          >
             <MonitoringTab
               workspaceId={workspaceId}
               defaultUrl={current.origin}

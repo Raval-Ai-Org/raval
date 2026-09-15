@@ -53,6 +53,27 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
 - Browser rendering is a fallback for empty client-side shells only
   (`render.server.ts`, flag `FEATURE_FLAG_GEO_RENDERING_ENABLED`); every browser
   request is fulfilled through the SSRF-guarded fetcher.
+- GEO Engineer coding agent ([ADR-0013](docs/adr/0013-geo-coding-agent-and-repo-ownership.md)):
+  `src/server/geo/agents/`:
+  - tool loop `claudeToolLoop` in `anthropic-gateway.server.ts`;
+  - read-only `repo-tools.server.ts`;
+  - stages in `geo-coding-agent.ts`;
+  - leased `runner.server.ts`;
+  - `service.server.ts`;
+  - RPC `src/server/fns/geo-agent.ts`, UI `geo/agent/AgentPanel.tsx`.
+  Model `GEO_AGENT_MODEL` (default `claude-sonnet-5`). Rules:
+  - **Ownership first:** no proposal, batch or run unless
+    `src/lib/connectors/ownership.ts` verified the repository builds that host
+    (`assertSourceOwnsHost`).
+  - **Plans:** they may only change files the agent read this run.
+  - **Approval:** it binds the plan hash, then the exact patch hash.
+  - **Grounding:** agent patches go through `fixes/grounding.ts` — no invented facts.
+  - **Strategies:** every rule needs a strategy in `fixes/strategies.ts`
+    (a test enforces it).
+  - **Activity log:** `geo_agent_events` holds real tool/transition summaries
+    only, never model reasoning.
+- Dimension scores (`src/lib/geo/dimensions.ts`) are derived from the stored
+  rule summaries; every rule id must be mapped (a test enforces it).
 
 ## Website source connectors (GitHub)
 

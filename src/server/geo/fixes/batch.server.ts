@@ -72,8 +72,10 @@ import {
   loadConnectionAdmin,
   loadConnectors,
   loadScanFacts,
+  assertSourceOwnsHost,
   loadSourceWithConnection,
   normHost,
+  sourceOwnsHost,
   snapshotRepo,
   type FixContext,
 } from "./service.server";
@@ -262,6 +264,18 @@ async function getSiteSetup(ctx: FixContext, host: string): Promise<FixSetup> {
       `Mellox lost access to ${source.full_name}. Re-grant it on GitHub, then verify the connection.`,
     );
   }
+  if (source.ownership_status === "mismatch") {
+    return setup(
+      "ownership_mismatch",
+      `The evidence says ${source.full_name} doesn't build ${host}. Link the repository that does.`,
+    );
+  }
+  if (!sourceOwnsHost(source, host)) {
+    return setup(
+      "verify_ownership",
+      `Before changing code, Mellox checks that ${source.full_name} really builds ${host}.`,
+    );
+  }
   const framework = source.inspection?.framework ?? null;
   if (source.inspection && !frameworkKind(framework)) {
     return setup(
@@ -329,11 +343,7 @@ export async function createFixBatch(
     throw new FixWorkflowError("That branch name isn't valid.");
   const scan = await loadScan(ctx, args.scanId);
   const { source, connection } = await loadSourceWithConnection(ctx, args.sourceId);
-  if (normHost(source.site_host) !== normHost(scan.host)) {
-    throw new FixWorkflowError(
-      `${source.full_name} is linked to ${source.site_host ?? "no website"}, not ${scan.host}. Link the repository to this website first.`,
-    );
-  }
+  assertSourceOwnsHost(source, scan.host);
   const { fixable } = await classifyFindings(ctx, args.scanId);
   if (!fixable.length) {
     throw new FixWorkflowError(
@@ -830,6 +840,7 @@ export async function approveFixBatch(
   if (source.full_name !== row.repo_full_name) {
     throw new FixWorkflowError("The linked repository changed. Start “Fix all” again.", 409);
   }
+  assertSourceOwnsHost(source, new URL(row.site_origin).hostname);
   const { data: claimed, error: claimError } = await supabaseAdmin
     .from("geo_fix_batches")
     .update({

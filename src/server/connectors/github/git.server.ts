@@ -110,7 +110,222 @@ export async function getTreePaths(
   return { paths, truncated: Boolean(json?.truncated) };
 }
 
+export type TreeEntry = { path: string; sha: string; size: number };
+
+/** Blob entries with size and sha — lets callers pick files without reading them. */
+export async function getTreeEntries(
+  installationId: string,
+  repo: string,
+  treeSha: string,
+): Promise<{ entries: TreeEntry[]; truncated: boolean }> {
+  const json = await installationRequest<{
+    tree: { path: string; type: string; sha: string; size?: number }[];
+    truncated: boolean;
+  }>(installationId, `${repoPath(repo)}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`);
+  const entries = (json?.tree ?? [])
+    .filter((e) => e.type === "blob")
+    .slice(0, 60_000)
+    .map((e) => ({ path: e.path, sha: e.sha, size: e.size ?? 0 }));
+  return { entries, truncated: Boolean(json?.truncated) };
+}
+
+/**
+ * Fallback for repositories whose recursive tree GitHub truncates: walk the
+ * listed top-level directories one level at a time (bounded).
+ */
+export async function getTreeScoped(
+  installationId: string,
+  repo: string,
+  treeSha: string,
+  dirs: string[],
+  maxEntries = 20_000,
+): Promise<TreeEntry[]> {
+  const root = await installationRequest<{
+    tree: { path: string; type: string; sha: string; size?: number }[];
+  }>(installationId, `${repoPath(repo)}/git/trees/${encodeURIComponent(treeSha)}`);
+  const out: TreeEntry[] = [];
+  for (const e of root?.tree ?? []) {
+    if (e.type === "blob") out.push({ path: e.path, sha: e.sha, size: e.size ?? 0 });
+  }
+  for (const dir of dirs) {
+    const sub = (root?.tree ?? []).find((e) => e.type === "tree" && e.path === dir);
+    if (!sub) continue;
+    const json = await installationRequest<{
+      tree: { path: string; type: string; sha: string; size?: number }[];
+    }>(installationId, `${repoPath(repo)}/git/trees/${encodeURIComponent(sub.sha)}?recursive=1`);
+    for (const e of json?.tree ?? []) {
+      if (e.type !== "blob") continue;
+      out.push({ path: `${dir}/${e.path}`, sha: e.sha, size: e.size ?? 0 });
+      if (out.length >= maxEntries) return out;
+    }
+  }
+  return out;
+}
+
+/* ───────────────────────── Repository metadata & deployments ───────────────────────── */
+
+export type RepositoryInfo = {
+  id: string;
+  fullName: string;
+  homepage: string | null;
+  defaultBranch: string;
+  archived: boolean;
+  fork: boolean;
+  hasPages: boolean;
+};
+
+export async function getRepository(
+  installationId: string,
+  repo: string,
+): Promise<RepositoryInfo | null> {
+  const json = await installationRequest<{
+    id: number;
+    full_name: string;
+    homepage: string | null;
+    default_branch: string;
+    archived: boolean;
+    fork: boolean;
+    has_pages?: boolean;
+  }>(installationId, repoPath(repo));
+  if (!json) return null;
+  return {
+    id: String(json.id),
+    fullName: json.full_name,
+    homepage: json.homepage && /^https?:\/\//i.test(json.homepage) ? json.homepage : null,
+    defaultBranch: json.default_branch,
+    archived: json.archived,
+    fork: json.fork,
+    hasPages: json.has_pages === true,
+  };
+}
+
+/**
+ * GitHub Pages site for a repository (custom domain or github.io URL), or
+ * null when Pages isn't enabled. Needs "Pages: read" on private repositories;
+ * a 403/404 means "not known", never "not served".
+ */
+export async function getPagesSite(
+  installationId: string,
+  repo: string,
+): Promise<{ url: string; cname: string | null; sourceBranch: string | null } | null> {
+  const json = await installationRequest<{
+    html_url?: string | null;
+    cname?: string | null;
+    source?: { branch?: string | null } | null;
+  }>(installationId, `${repoPath(repo)}/pages`).catch((error) => {
+    if (error instanceof GitHubAccessError || error instanceof GitHubRequestError) return null;
+    throw error;
+  });
+  if (!json?.html_url || !/^https?:\/\//i.test(json.html_url)) return null;
+  return {
+    url: json.html_url,
+    cname: json.cname ?? null,
+    sourceBranch: json.source?.branch ?? null,
+  };
+}
+
+export type DeploymentInfo = {
+  id: number;
+  sha: string;
+  ref: string;
+  environment: string;
+  productionEnvironment: boolean;
+  createdAt: string;
+};
+
+/**
+ * Recent deployments. Needs the App's "Deployments: read" permission; without
+ * it GitHub answers 403 and this returns `{ available: false }` — never a guess.
+ */
+export async function listDeployments(
+  installationId: string,
+  repo: string,
+  opts: { sha?: string; perPage?: number } = {},
+): Promise<{ available: true; deployments: DeploymentInfo[] } | { available: false }> {
+  const q = new URLSearchParams({ per_page: String(Math.min(opts.perPage ?? 30, 100)) });
+  if (opts.sha) q.set("sha", opts.sha);
+  try {
+    const json = await installationRequest<
+      {
+        id: number;
+        sha: string;
+        ref: string;
+        environment: string;
+        production_environment?: boolean;
+        created_at: string;
+      }[]
+    >(installationId, `${repoPath(repo)}/deployments?${q}`);
+    return {
+      available: true,
+      deployments: (json ?? []).map((d) => ({
+        id: d.id,
+        sha: d.sha,
+        ref: d.ref,
+        environment: d.environment,
+        productionEnvironment: d.production_environment === true,
+        createdAt: d.created_at,
+      })),
+    };
+  } catch (error) {
+    if (error instanceof GitHubAccessError) return { available: false };
+    throw error;
+  }
+}
+
+export type DeploymentStatusInfo = {
+  state: string;
+  environmentUrl: string | null;
+  createdAt: string;
+};
+
+export async function getDeploymentStatuses(
+  installationId: string,
+  repo: string,
+  deploymentId: number,
+): Promise<DeploymentStatusInfo[]> {
+  const json = await installationRequest<
+    {
+      state: string;
+      environment_url?: string | null;
+      target_url?: string | null;
+      created_at: string;
+    }[]
+  >(installationId, `${repoPath(repo)}/deployments/${deploymentId}/statuses?per_page=10`).catch(
+    (error) => {
+      if (error instanceof GitHubAccessError) return null;
+      throw error;
+    },
+  );
+  return (json ?? []).map((s) => {
+    const url = s.environment_url || s.target_url || null;
+    return {
+      state: s.state,
+      environmentUrl: url && /^https?:\/\//i.test(url) ? url : null,
+      createdAt: s.created_at,
+    };
+  });
+}
+
 /* ───────────────────────── Files ───────────────────────── */
+
+/**
+ * Read a text blob by sha (search tools read many files; the contents API
+ * would cost a path lookup each). Null for binary or oversized blobs.
+ */
+export async function readBlob(
+  installationId: string,
+  repo: string,
+  sha: string,
+): Promise<string | null> {
+  if (!/^[0-9a-f]{40}$/i.test(sha)) throw new GitOperationError("Invalid blob sha", "invalid");
+  const json = await installationRequest<{ content?: string; encoding?: string; size: number }>(
+    installationId,
+    `${repoPath(repo)}/git/blobs/${sha}`,
+  );
+  if (!json || json.size > MAX_READ_BYTES) return null;
+  if (json.encoding !== "base64" || typeof json.content !== "string") return null;
+  return decodeTextFile(Buffer.from(json.content, "base64"));
+}
 
 export type RepoFile = { path: string; sha: string; content: string; size: number };
 

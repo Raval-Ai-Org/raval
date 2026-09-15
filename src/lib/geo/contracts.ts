@@ -92,7 +92,24 @@ export type GeoFindingView = {
   resolution: FindingResolution;
   verifiedAt: string | null;
   reopenedAt: string | null;
+  /** Why a person ignored it (required when dismissed). */
+  dismissReason: DismissReason | null;
+  /** When someone marked the evidence reviewed. */
+  reviewedAt: string | null;
+  /** How it can be fixed: built by Mellox, by the GEO Engineer, or by a person. */
+  fixMode: "deterministic" | "agent" | "manual";
+  /** What proves a fix: a page rescan, site files, or a full rescan. */
+  verifyScope: "page" | "site" | "full";
 };
+
+export type DismissReason = "false_positive" | "not_relevant" | "wont_fix" | "handled_elsewhere";
+
+export const DISMISS_REASONS: { value: DismissReason; label: string }[] = [
+  { value: "false_positive", label: "False positive — the check is wrong here" },
+  { value: "not_relevant", label: "Not relevant to this page" },
+  { value: "wont_fix", label: "Won't fix — accepted trade-off" },
+  { value: "handled_elsewhere", label: "Handled another way" },
+];
 
 export type GeoPageView = {
   id: string;

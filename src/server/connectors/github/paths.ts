@@ -60,6 +60,32 @@ export function checkRepoPath(raw: string): PathCheck {
   return { ok: true, path };
 }
 
+/** Files that may hold credentials — never read, never sent to a model. */
+const SECRET_FILES =
+  /(^|\/)(\.env[^/]*|\.npmrc|\.yarnrc(\.yml)?|\.netrc|\.pypirc|id_(rsa|dsa|ecdsa|ed25519)[^/]*|[^/]*\.(pem|key|p12|pfx|jks|keystore|crt|cer|der|kdbx)|credentials(\.json)?|service[-_]?account[^/]*\.json|secrets?\.(json|ya?ml|toml))$/i;
+const SECRET_DIRS = /(^|\/)(\.git|\.ssh|\.aws|\.gnupg|secrets?|node_modules)(\/|$)/i;
+
+/**
+ * Validate a path Mellox wants to READ (agent investigation). Broader than
+ * writes: configuration and manifests may be read to understand the site, but
+ * credential files, git internals and dependency trees never are.
+ */
+export function checkReadPath(raw: string): PathCheck {
+  if (typeof raw !== "string" || !raw.trim()) return { ok: false, reason: "Empty path" };
+  const path = raw.trim().replace(/^\.\//, "");
+  if (path.length > 300) return { ok: false, reason: "Path is too long" };
+  if ([...path].some((ch) => ch.charCodeAt(0) < 32) || path.includes("\\"))
+    return { ok: false, reason: "Path contains invalid characters" };
+  if (path.startsWith("/") || /^[a-z]:/i.test(path))
+    return { ok: false, reason: "Absolute paths aren't allowed" };
+  if (path.split("/").some((s) => s === "" || s === "." || s === ".."))
+    return { ok: false, reason: "Path traversal isn't allowed" };
+  if (SECRET_DIRS.test(path)) return { ok: false, reason: "That directory is off-limits" };
+  if (SECRET_FILES.test(path))
+    return { ok: false, reason: "Files that may hold credentials are never read" };
+  return { ok: true, path };
+}
+
 const BRANCH_RE = /^mellox\/geo-[a-z0-9][a-z0-9-]{0,48}-[a-z0-9]{6}$/;
 
 /** Branch Mellox creates for a proposal: always under mellox/, never a base branch. */

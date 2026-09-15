@@ -8,6 +8,7 @@
 // module writes to a repository.
 import "server-only";
 import type { UserSupabaseClient } from "@/integrations/supabase/client.user.server";
+import { ownershipIsCurrent } from "@/lib/connectors/ownership";
 import type { SourceView } from "@/lib/connectors/types";
 import { presentSource, SOURCE_COLS, type SourceRow } from "./present";
 
@@ -33,12 +34,21 @@ export async function getSiteSourceContext(
     .limit(1)
     .maybeSingle();
   if (error || !data) return null;
+  const row = data as unknown as SourceRow;
   return {
-    source: presentSource(data as unknown as SourceRow),
+    source: presentSource(row),
     // Pull requests for AI Visibility fixes: src/server/geo/fixes/service.server.ts.
+    // Changes are only proposed once the repository is proven to build this host.
     capabilities: {
       inspect: true,
-      proposeChanges: (data as { status?: string }).status === "active",
+      proposeChanges:
+        row.status === "active" &&
+        ownershipIsCurrent({
+          status: row.ownership_status,
+          checkedHost: row.ownership_site_host,
+          checkedAt: row.ownership_checked_at,
+          siteHost: normalized,
+        }),
     },
   };
 }

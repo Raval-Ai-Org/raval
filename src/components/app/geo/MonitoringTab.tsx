@@ -110,7 +110,7 @@ export function MonitoringTab({
           e.preventDefault();
           void add();
         }}
-        className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card/50 p-3 sm:flex-row sm:flex-wrap sm:items-center"
+        className="flex flex-col gap-2 rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3 sm:flex-row sm:flex-wrap sm:items-center"
       >
         <input
           value={url}
@@ -166,7 +166,7 @@ export function MonitoringTab({
           {monitors.map((m) => (
             <li
               key={m.id}
-              className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-card/50 px-3.5 py-3"
+              className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border px-3.5 py-3"
             >
               <div className="min-w-0 flex-1 basis-[200px]">
                 <div className="truncate text-[13.5px] font-medium text-foreground">

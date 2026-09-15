@@ -257,6 +257,41 @@ export const inspectSource = createServerFn({ method: "POST" })
   });
 
 /* ------------------------------------------------------------------ */
+/* Ownership: does this repository build the website?                 */
+/* ------------------------------------------------------------------ */
+
+export const verifySourceOwnership = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector")])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        sourceId: uuid,
+        siteHost: z.string().min(3).max(255).nullable().optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }): Promise<SourceView> => {
+    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const { source, connection } = await loadSource(context, data.workspaceId, data.sourceId);
+    const { verifySourceOwnership: verify } =
+      await import("@/server/connectors/github/ownership.server");
+    return verify({ source, connection, userId: context.userId, siteHost: data.siteHost });
+  });
+
+export const setAgentConsent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .inputValidator((data) =>
+    z.object({ workspaceId: uuid, sourceId: uuid, consent: z.boolean() }).parse(data),
+  )
+  .handler(async ({ data, context }): Promise<SourceView> => {
+    await requireWorkspaceRole(context, data.workspaceId, "admin");
+    const { source } = await loadSource(context, data.workspaceId, data.sourceId);
+    const { setAgentConsent: set } = await import("@/server/connectors/github/service.server");
+    return set({ source, userId: context.userId, consent: data.consent });
+  });
+
+/* ------------------------------------------------------------------ */
 /* AI Visibility boundary                                             */
 /* ------------------------------------------------------------------ */
 

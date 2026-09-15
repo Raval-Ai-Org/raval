@@ -14,9 +14,16 @@ import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { emitAppEvent } from "@/lib/app-events";
 import { cn } from "@/lib/utils";
-import { getScanFindings, setFindingState } from "@/lib/geo.functions";
+import { bulkSetFindingStates, getScanFindings } from "@/lib/geo.functions";
+import { listAgentRuns } from "@/lib/geo-agent.functions";
 import { listFixActivity, requestVerification } from "@/lib/geo-fixes.functions";
-import type { FindingWorkflowState, GeoFindingView, GeoScanView } from "@/lib/geo/contracts";
+import {
+  DISMISS_REASONS,
+  type DismissReason,
+  type FindingWorkflowState,
+  type GeoFindingView,
+  type GeoScanView,
+} from "@/lib/geo/contracts";
 import { GEO_CATEGORIES, type GeoCategoryId, type Priority } from "@/lib/geo/types";
 import { FindingDetail } from "./FindingDetail";
 import { FixAllPanel } from "./FixAllPanel";
@@ -31,7 +38,106 @@ import {
   StatusGlyph,
 } from "./geo-ui";
 
-export type FindingsFilter = { category?: GeoCategoryId; ruleId?: string; fixAll?: boolean };
+export type FindingsFilter = {
+  category?: GeoCategoryId;
+  ruleId?: string;
+  fixAll?: boolean;
+  /** Open this finding's detail directly (from the dashboard). */
+  findingId?: string;
+};
+
+type AgentRuns = Awaited<ReturnType<typeof listAgentRuns>>["runs"];
+
+const AGENT_LABEL: Record<
+  string,
+  { label: string; tone: "primary" | "success" | "warning" | "destructive" | "muted" }
+> = {
+  queued: { label: "Agent queued", tone: "primary" },
+  investigating: { label: "Agent investigating", tone: "primary" },
+  needs_input: { label: "Agent needs input", tone: "warning" },
+  awaiting_plan_approval: { label: "Plan ready", tone: "warning" },
+  implementing: { label: "Agent implementing", tone: "primary" },
+  reviewing: { label: "Agent reviewing", tone: "primary" },
+  validating: { label: "Agent validating", tone: "primary" },
+  correcting: { label: "Agent correcting", tone: "primary" },
+  awaiting_patch_approval: { label: "Patch ready", tone: "warning" },
+  applying: { label: "Opening PR", tone: "primary" },
+  pr_open: { label: "PR open", tone: "primary" },
+  merged: { label: "PR merged", tone: "primary" },
+  rescan_pending: { label: "Re-scanning", tone: "primary" },
+  verified_fixed: { label: "Verified fixed", tone: "success" },
+  not_verified: { label: "Not verified", tone: "destructive" },
+  not_fixable: { label: "Needs manual fix", tone: "muted" },
+  failed: { label: "Agent failed", tone: "destructive" },
+  cancelled: { label: "Agent cancelled", tone: "muted" },
+  closed: { label: "PR closed", tone: "muted" },
+  stale: { label: "Plan outdated", tone: "warning" },
+};
+
+function IgnoreDialog({
+  count,
+  onConfirm,
+  onCancel,
+  busy,
+}: {
+  count: number;
+  onConfirm: (reason: DismissReason, note: string) => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  const [reason, setReason] = useState<DismissReason | "">("");
+  const [note, setNote] = useState("");
+  return (
+    <form
+      className="space-y-2 rounded-lg border border-border/60 bg-background/80 p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (reason) onConfirm(reason, note);
+      }}
+    >
+      <fieldset className="space-y-1">
+        <legend className="text-[12.5px] font-medium">
+          Ignore {count} finding{count === 1 ? "" : "s"} — why?
+        </legend>
+        {DISMISS_REASONS.map((r) => (
+          <label key={r.value} className="flex items-center gap-2 text-[12px]">
+            <input
+              type="radio"
+              name="ignore-reason"
+              value={r.value}
+              checked={reason === r.value}
+              onChange={() => setReason(r.value)}
+            />
+            {r.label}
+          </label>
+        ))}
+      </fieldset>
+      <input
+        aria-label="Note"
+        value={note}
+        onChange={(e) => setNote(e.target.value.slice(0, 1000))}
+        placeholder="Optional note for your team"
+        className="h-8 w-full rounded-lg border border-border/70 bg-background px-2.5 text-[12px] outline-none"
+      />
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={!reason || busy}
+          className={cn(primaryBtn, "px-3 py-1.5 text-[12px]")}
+        >
+          {busy ? "Saving…" : "Ignore"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className={cn(ghostBtn, "px-3 py-1.5 text-[12px]")}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
 
 /** States a person can set. "Resolved" comes only from a verification scan. */
 type ManualState = Exclude<FindingWorkflowState, "resolved">;
@@ -70,6 +176,8 @@ const PROPOSAL_LABEL: Record<
   failed: { label: "Fix failed", tone: "destructive" },
   stale: { label: "Proposal outdated", tone: "warning" },
   access_lost: { label: "GitHub access lost", tone: "warning" },
+  closed: { label: "PR closed", tone: "muted" },
+  discarded: { label: "Fix discarded", tone: "muted" },
 };
 
 type Group = {
@@ -87,18 +195,25 @@ type Group = {
 function FindingItem({
   finding,
   activity,
+  agentRuns,
   onState,
   onAsk,
   onOpen,
 }: {
   finding: GeoFindingView;
   activity: Activity | null;
+  agentRuns: AgentRuns | null;
   onState: (f: GeoFindingView, s: ManualState) => void;
   onAsk: (f: GeoFindingView) => void;
   onOpen: (f: GeoFindingView) => void;
 }) {
   const proposal = activity?.proposals[finding.fingerprint];
-  const badge = proposal ? PROPOSAL_LABEL[proposal.status] : null;
+  const agent = agentRuns?.[finding.fingerprint];
+  const badge = agent
+    ? (AGENT_LABEL[agent.status] ?? null)
+    : proposal
+      ? PROPOSAL_LABEL[proposal.status]
+      : null;
   const resolved = finding.state === "resolved";
   return (
     <li
@@ -136,17 +251,41 @@ function FindingItem({
             )}
             {finding.reopenedAt && !resolved && <Chip tone="warning">Reopened</Chip>}
             {badge && !resolved && <Chip tone={badge.tone}>{badge.label}</Chip>}
+            {finding.reviewedAt && <Chip tone="muted">Reviewed</Chip>}
+            {finding.state === "dismissed" && finding.dismissReason && (
+              <Chip tone="muted">
+                {
+                  DISMISS_REASONS.find((r) => r.value === finding.dismissReason)?.label.split(
+                    " —",
+                  )[0]
+                }
+              </Chip>
+            )}
           </div>
           <div className="mt-0.5 break-words text-[12.5px] leading-relaxed text-muted-foreground">
             {finding.detail}
           </div>
-          <button
-            type="button"
-            onClick={() => onOpen(finding)}
-            className="mt-1 text-[11.5px] font-medium text-primary underline-offset-2 hover:underline"
-          >
-            Details & fix
-          </button>
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onOpen(finding)}
+              className="text-[11.5px] font-medium text-primary underline-offset-2 hover:underline"
+            >
+              View evidence
+            </button>
+            {finding.fixMode !== "manual" && !resolved && (
+              <button
+                type="button"
+                onClick={() => onOpen(finding)}
+                className="inline-flex items-center gap-1 text-[11.5px] font-medium text-primary underline-offset-2 hover:underline"
+              >
+                <Wand className="h-3 w-3" /> Fix with AI Agent
+              </button>
+            )}
+            {finding.fixMode === "manual" && (
+              <span className="text-[11.5px] text-muted-foreground">Manual fix</span>
+            )}
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {resolved ? (
@@ -199,6 +338,9 @@ export function FindingsTab({
 }) {
   const [findings, setFindings] = useState<GeoFindingView[] | null>(null);
   const [activity, setActivity] = useState<Activity | null>(null);
+  const [agentRuns, setAgentRuns] = useState<AgentRuns | null>(null);
+  const [ignoreTargets, setIgnoreTargets] = useState<GeoFindingView[] | null>(null);
+  const [savingState, setSavingState] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const [stateFilter, setStateFilter] = useState<"active" | FindingWorkflowState | "all">("active");
@@ -216,11 +358,13 @@ export function FindingsTab({
     Promise.all([
       getScanFindings({ data: { workspaceId, scanId: scan.id } }),
       listFixActivity({ data: { workspaceId, scanId: scan.id } }).catch(() => null),
+      listAgentRuns({ data: { workspaceId, scanId: scan.id } }).catch(() => null),
     ])
-      .then(([rows, act]) => {
+      .then(([rows, act, runs]) => {
         if (cancelled) return;
         setFindings(rows);
         setActivity(act);
+        setAgentRuns(runs?.runs ?? null);
       })
       .catch(
         (e) => !cancelled && setError(e instanceof Error ? e.message : "Couldn't load findings"),
@@ -238,6 +382,10 @@ export function FindingsTab({
   useEffect(() => {
     if (filter.ruleId) setOpenGroup(filter.ruleId);
   }, [filter.ruleId]);
+
+  useEffect(() => {
+    if (filter.findingId) setDetailId(filter.findingId);
+  }, [filter.findingId]);
 
   const groups = useMemo(() => {
     if (!findings) return [];
@@ -271,21 +419,57 @@ export function FindingsTab({
     );
   }, [findings, filter, stateFilter, query]);
 
-  const updateState = async (targets: GeoFindingView[], state: ManualState) => {
-    const fingerprints = new Set(
-      targets.filter((t) => t.state !== "resolved").map((t) => t.fingerprint),
-    );
+  const updateState = async (
+    targets: GeoFindingView[],
+    state: ManualState,
+    dismiss?: { reason: DismissReason; note: string },
+  ) => {
+    // Ignoring always asks why first.
+    if (state === "dismissed" && !dismiss) {
+      setIgnoreTargets(targets.filter((t) => t.state !== "resolved"));
+      return;
+    }
+    const fingerprints = [
+      ...new Set(targets.filter((t) => t.state !== "resolved").map((t) => t.fingerprint)),
+    ];
+    if (!fingerprints.length) return;
+    const set = new Set(fingerprints);
     const previous = findings;
     setFindings(
-      (rows) => rows?.map((r) => (fingerprints.has(r.fingerprint) ? { ...r, state } : r)) ?? rows,
+      (rows) =>
+        rows?.map((r) =>
+          set.has(r.fingerprint)
+            ? { ...r, state, dismissReason: state === "dismissed" ? dismiss!.reason : null }
+            : r,
+        ) ?? rows,
     );
+    setSavingState(true);
     try {
-      for (const fp of [...fingerprints].slice(0, 100)) {
-        await setFindingState({ data: { workspaceId, fingerprint: fp, state } });
+      let updated = 0;
+      // One request per 500 findings; the server writes each batch at once.
+      for (let i = 0; i < fingerprints.length; i += 500) {
+        const res = await bulkSetFindingStates({
+          data: {
+            workspaceId,
+            fingerprints: fingerprints.slice(i, i + 500),
+            state,
+            note: dismiss?.note.trim() || null,
+            dismissReason: dismiss?.reason ?? null,
+          },
+        });
+        updated += res.updated;
       }
+      setIgnoreTargets(null);
+      toast.success(
+        state === "dismissed"
+          ? `Ignored ${updated} finding${updated === 1 ? "" : "s"}`
+          : `Updated ${updated} finding${updated === 1 ? "" : "s"}`,
+      );
     } catch (e) {
       setFindings(previous);
       setError(e instanceof Error ? e.message : "Couldn't update the finding");
+    } finally {
+      setSavingState(false);
     }
   };
 
@@ -337,7 +521,10 @@ export function FindingsTab({
         finding={detail}
         related={findings!.filter((f) => f.ruleId === detail.ruleId)}
         brandName={brandName}
-        onBack={() => setDetailId(null)}
+        onBack={() => {
+          setDetailId(null);
+          if (filter.findingId) onFilterChange({ ...filter, findingId: undefined });
+        }}
         onChanged={reload}
       />
     );
@@ -394,7 +581,7 @@ export function FindingsTab({
         <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
           <label className="relative flex min-w-0 flex-1 items-center sm:flex-none">
             <span className="sr-only">Search findings</span>
-            <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <Search className="pointer-events-none absolute z-10 left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -438,6 +625,16 @@ export function FindingsTab({
         <div role="alert" className="text-[12.5px] text-destructive">
           {error}
         </div>
+      )}
+      {ignoreTargets && (
+        <IgnoreDialog
+          count={ignoreTargets.length}
+          busy={savingState}
+          onCancel={() => setIgnoreTargets(null)}
+          onConfirm={(reason, note) =>
+            void updateState(ignoreTargets, "dismissed", { reason, note })
+          }
+        />
       )}
 
       {!findings ? (
@@ -531,7 +728,7 @@ export function FindingsTab({
                         onClick={() => void updateState(g.items, "dismissed")}
                         className={cn(ghostBtn, "px-3 py-1.5 text-[12px]")}
                       >
-                        Dismiss
+                        Ignore with reason
                       </button>
                       {resolvedCount > 0 && (
                         <Chip tone="success">{resolvedCount} verified resolved</Chip>
@@ -543,6 +740,7 @@ export function FindingsTab({
                           key={f.id}
                           finding={f}
                           activity={activity}
+                          agentRuns={agentRuns}
                           onAsk={ask}
                           onOpen={(x) => setDetailId(x.id)}
                           onState={(finding, s) => void updateState([finding], s)}

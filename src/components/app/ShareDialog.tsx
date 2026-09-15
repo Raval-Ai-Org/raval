@@ -256,7 +256,7 @@ export function ShareDialog({
             </div>
             <div className="flex items-stretch gap-2">
               <div className="relative flex-1">
-                <Mail className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Mail className="pointer-events-none absolute z-10 left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="email"
                   value={email}

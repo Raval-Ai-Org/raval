@@ -192,6 +192,55 @@ PR-fixable rules: `ai.robots_txt`, `ai.bot.*`, `ai.llms_txt`, `tech.sitemap`,
 Nuxt, Astro, Vite/Vue, Create React App, Angular (`src/index.html`) and static
 HTML. Single-page apps get per-route tags only for the homepage.
 
+## GEO Engineer (coding agent) and repository ownership
+
+See [ADR-0013](adr/0013-geo-coding-agent-and-repo-ownership.md).
+
+**Ownership.**
+- **Before any repository change**, Mellox proves the linked repository builds
+  the scanned host (`src/lib/connectors/ownership.ts` +
+  `src/server/connectors/github/ownership.server.ts`). Evidence: GitHub Pages /
+  deployment hosting, repository homepage, CNAME, config site URLs, the host
+  written in source, and live page text found in source.
+- The verdict and its evidence are on `workspace_sources.ownership_*`.
+- Fixes need `verified` for the host, checked within 7 days.
+- Settings → Connections and the finding's setup step show what would prove it.
+
+**From a finding, "Fix with AI Agent"** starts a run (`geo_agent_runs`):
+1. **Investigate.** Claude Sonnet 5 (`GEO_AGENT_MODEL`) uses read-only tools:
+   list/search/read repository files, the scan's page facts, the rule and
+   framework playbook, and the live page via the SSRF-guarded fetcher.
+2. **Plan.** Files with reasons and evidence, risks, scope and validation
+   criteria. The server rejects plans that change unread files, blocked paths,
+   more than 4 files, or manual-only rules. Missing facts become `needs_input`.
+3. **Approve the plan.** Bound to its hash.
+4. **Implement.** Exact find/replace edits limited to the plan's files.
+5. **Self-review, then validate.** Paths, size, secrets, unsafe additions,
+   imports, syntax, rule re-check, plan scope, grounding, deletion cap. Up to
+   two correction rounds.
+6. **Draft proposal.** From here it follows the ADR-0012 workflow: exact-patch
+   approval → `mellox/` branch → PR → merge (by you) → verification rescan.
+
+**Run record.**
+- Every tool call and transition is a `geo_agent_events` summary. Model
+  reasoning is never stored or shown.
+- Runs are leased (`claim_geo_agent_runs`), checkpoint each turn, resume after a
+  restart, cancel (closing Mellox's PR), and retry from investigation or from
+  the approved plan.
+
+**Limits.**
+- `GEO_AGENT_MAX_COST_USD` per run and `GEO_AGENT_DAILY_RUNS` per workspace.
+- `geo-agent` and `geo-agent-action` rate-limit tiers.
+- Per-repository admin consent before code is sent to the model.
+
+**Dimensions** (`src/lib/geo/dimensions.ts`) — crawlability, indexability,
+technical SEO, extractability, answer readiness, entity clarity, structured
+data, authority & trust, AI search readiness, plus overall readiness:
+- They are derived from each scan's rule summaries, with every rule mapped.
+- The legacy overall score is unchanged.
+- Findings carry `fixMode` and `verifyScope`, and can be marked reviewed or
+  ignored with a reason.
+
 ## JavaScript rendering
 
 HTTP first. `src/lib/geo/rendering.ts` flags a page whose server HTML has fewer

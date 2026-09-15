@@ -7,6 +7,7 @@ import * as competitorWatch from "./competitor-watch";
 import * as connectors from "./connectors";
 import * as content from "./content";
 import * as geo from "./geo";
+import * as geoAgent from "./geo-agent";
 import * as geoFixes from "./geo-fixes";
 import * as insights from "./insights";
 import * as schedules from "./schedules";
@@ -21,6 +22,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   connectors,
   content,
   geo,
+  "geo-agent": geoAgent,
   "geo-fixes": geoFixes,
   insights,
   schedules,

@@ -1,5 +1,7 @@
 "use client";
 
+import { RepoOwnershipCard } from "./RepoOwnershipCard";
+
 // GitHubConnector — connect the repository behind a workspace's website.
 // Install happens on GitHub in a popup (/integrations/github/callback reports
 // back over a BroadcastChannel); everything else — repositories, selection,
@@ -220,7 +222,7 @@ export function RepositoryPicker({
       <div className="flex flex-wrap items-center gap-2">
         <label className="relative flex min-w-0 flex-1 items-center">
           <span className="sr-only">Search repositories</span>
-          <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="pointer-events-none absolute z-10 left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -448,6 +450,17 @@ function SourceCard({
       )}
       {source.lastError && source.status !== "access_lost" && (
         <p className="mt-2 text-[12px] text-destructive">{source.lastError}</p>
+      )}
+      {source.siteUrl && source.status !== "access_lost" && (
+        <div className="mt-2">
+          <RepoOwnershipCard
+            workspaceId={workspaceId}
+            source={source}
+            canVerify
+            onChange={onChange}
+            compact
+          />
+        </div>
       )}
 
       {confirmRemove && (

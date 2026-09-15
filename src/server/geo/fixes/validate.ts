@@ -31,7 +31,7 @@ export type ProposedFile = {
 
 const MAX_CHANGED_LINES = 400;
 
-const SECRET_PATTERNS = [
+export const SECRET_PATTERNS = [
   /AKIA[0-9A-Z]{16}/,
   /gh[pousr]_[A-Za-z0-9]{36,}/,
   /github_pat_[A-Za-z0-9_]{40,}/,
@@ -185,7 +185,7 @@ function ruleStatusFor(ruleId: string, site: SiteArtifacts, pages: CrawledPage[]
 }
 
 function ruleRecheck(input: {
-  kind: FixKind;
+  kind: FixKind | null;
   ruleId: string;
   pageUrl: string | null;
   site: SiteArtifacts;
@@ -248,7 +248,8 @@ function ruleRecheck(input: {
 }
 
 export function validateProposal(input: {
-  kind: FixKind;
+  /** The deterministic fix kind, when the rule has one (agent patches may have none). */
+  kind: FixKind | null;
   ruleId: string;
   pageUrl: string | null;
   site: SiteArtifacts;
@@ -257,6 +258,10 @@ export function validateProposal(input: {
   crawlerReadsFile: boolean;
   /** Changed-line cap; a "Fix all" batch reviews more lines in one pull request. */
   maxChangedLines?: number;
+  /** Extra imports a patch may add (framework head helpers the repository depends on). */
+  allowedImports?: Set<string>;
+  /** Whether a relative/alias import resolves to a file in the repository. */
+  resolveImport?: (spec: string, fromPath: string) => boolean;
 }): ProposalValidation {
   const maxLines = input.maxChangedLines ?? MAX_CHANGED_LINES;
   const checks: ValidationCheck[] = [];
@@ -329,7 +334,11 @@ export function validateProposal(input: {
     for (const m of text.matchAll(
       /^\s*import\s+(?:type\s+)?(?:[^'"]*?\s+from\s+)?["']([^"']+)["']/gm,
     )) {
-      if (!IMPORT_ALLOWLIST.has(m[1])) unsafe.push(`${a.path} imports “${m[1]}”`);
+      const spec = m[1];
+      if (IMPORT_ALLOWLIST.has(spec) || input.allowedImports?.has(spec)) continue;
+      // Project-local modules are fine when they really exist in the repository.
+      if (/^(\.|@\/|~\/)/.test(spec) && input.resolveImport?.(spec, a.path)) continue;
+      unsafe.push(`${a.path} imports “${spec}”`);
     }
   }
   add({

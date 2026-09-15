@@ -33,7 +33,14 @@ import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import { emitAppEvent } from "@/lib/app-events";
 import { startGithubInstall, subscribeConnectors, updateSource } from "@/lib/connectors.functions";
 import type { SourceView } from "@/lib/connectors/types";
-import type { GeoFindingView, GeoScanView } from "@/lib/geo/contracts";
+import {
+  DISMISS_REASONS,
+  type DismissReason,
+  type GeoFindingView,
+  type GeoScanView,
+} from "@/lib/geo/contracts";
+import { markFindingsReviewed, setFindingState } from "@/lib/geo.functions";
+import { AgentPanel } from "./agent/AgentPanel";
 import type {
   FixAvailability,
   FixProposalView,
@@ -58,6 +65,7 @@ import {
 } from "@/lib/geo-fixes.functions";
 import { cn } from "@/lib/utils";
 import { RepositoryPicker } from "../connectors/GitHubConnector";
+import { RepoOwnershipCard } from "../connectors/RepoOwnershipCard";
 import { FixDrawer } from "./FixDrawer";
 import { Chip, pathOf, PriorityChip, relativeTime, SAFETY_META, StatusGlyph } from "./geo-ui";
 
@@ -104,7 +112,12 @@ function Section({
   className?: string;
 }) {
   return (
-    <section className={cn("rounded-xl border border-border/60 bg-card/50 p-3.5", className)}>
+    <section
+      className={cn(
+        "rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5",
+        className,
+      )}
+    >
       <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {title}
       </h4>
@@ -306,31 +319,26 @@ export function SetupRequirement({
     case "connect":
     case "reconnect":
       return (
-        <div className="space-y-2">
-          <p className="text-[12.5px]">{a.reason}</p>
-          {a.canManageConnections ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" loading={installing} onClick={() => void install()}>
-                <Github className="h-3.5 w-3.5" />{" "}
-                {a.requirement === "connect" ? "Connect GitHub" : "Reconnect GitHub"}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => emitAppEvent("open:settings", { section: "connections" })}
-              >
-                Manage in Settings
-              </Button>
-              {installing && (
-                <span className="text-[12px] text-muted-foreground">
-                  Finish on GitHub, then return here…
-                </span>
-              )}
-            </div>
-          ) : (
-            <p className="text-[12px] text-muted-foreground">
-              Ask a workspace admin to connect GitHub in Settings → Connections.
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-gradient-to-b from-background/80 to-muted/20 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3 animate-in fade-in slide-in-from-bottom-1 duration-300">
+          <span className="grid h-9 w-9 place-items-center rounded-lg bg-secondary">
+            <Github className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-medium">
+              {a.requirement === "connect" ? "Connect GitHub" : "Reconnect GitHub"}
             </p>
+            <p className="text-[12px] text-muted-foreground">
+              {installing
+                ? "Finish on GitHub…"
+                : "Mellox opens reviewed pull requests — never pushes."}
+            </p>
+          </div>
+          {a.canManageConnections ? (
+            <Button size="sm" loading={installing} onClick={() => void install()}>
+              {a.requirement === "connect" ? "Connect" : "Reconnect"}
+            </Button>
+          ) : (
+            <span className="text-[12px] text-muted-foreground">Ask an admin</span>
           )}
         </div>
       );
@@ -382,6 +390,33 @@ export function SetupRequirement({
                 />
               )}
             </>
+          )}
+        </div>
+      );
+    }
+    case "verify_ownership":
+    case "ownership_mismatch": {
+      const source = a.source;
+      return (
+        <div className="space-y-2">
+          <p className="text-[12.5px]">{a.reason}</p>
+          {source && (
+            <RepoOwnershipCard
+              workspaceId={workspaceId}
+              source={source}
+              siteHost={scan.host}
+              canVerify={a.canPropose}
+              onChange={() => onReload()}
+            />
+          )}
+          {a.requirement === "ownership_mismatch" && a.canManageConnections && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => emitAppEvent("open:settings", { section: "connections" })}
+            >
+              Link a different repository
+            </Button>
           )}
         </div>
       );
@@ -947,6 +982,155 @@ function FixFlow({
   );
 }
 
+/* ───────────────────────── Finding state (review / ignore / reopen) ───────────────────────── */
+
+function FindingStateActions({
+  workspaceId,
+  finding,
+  onChanged,
+}: {
+  workspaceId: string;
+  finding: GeoFindingView;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState<"review" | "ignore" | "reopen" | null>(null);
+  const [ignoring, setIgnoring] = useState(false);
+  const [reason, setReason] = useState<DismissReason | "">("");
+  const [note, setNote] = useState("");
+  const [reviewedAt, setReviewedAt] = useState(finding.reviewedAt);
+  useEffect(() => setReviewedAt(finding.reviewedAt), [finding.reviewedAt]);
+  const resolved = finding.state === "resolved";
+
+  const review = async () => {
+    setBusy("review");
+    try {
+      const next = !reviewedAt;
+      await markFindingsReviewed({
+        data: { workspaceId, fingerprints: [finding.fingerprint], reviewed: next },
+      });
+      setReviewedAt(next ? new Date().toISOString() : null);
+      onChanged();
+    } catch (e) {
+      toast.error(errMsg(e, "Couldn't update the review"));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const setState = async (state: "open" | "dismissed") => {
+    setBusy(state === "open" ? "reopen" : "ignore");
+    try {
+      await setFindingState({
+        data: {
+          workspaceId,
+          fingerprint: finding.fingerprint,
+          state,
+          note: state === "dismissed" ? note.trim() || null : null,
+          dismissReason: state === "dismissed" ? (reason as DismissReason) : null,
+        },
+      });
+      toast.success(state === "open" ? "Finding reopened" : "Finding ignored");
+      setIgnoring(false);
+      onChanged();
+    } catch (e) {
+      toast.error(errMsg(e, "Couldn't update the finding"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {finding.pageUrl && (
+          <a
+            href={finding.pageUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-8 items-center gap-1 rounded-full border border-border/70 bg-card px-3 text-[12px] font-medium hover:bg-secondary"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Open affected page
+          </a>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          loading={busy === "review"}
+          onClick={() => void review()}
+        >
+          <CheckCircle className="h-3.5 w-3.5" /> {reviewedAt ? "Reviewed" : "Mark as reviewed"}
+        </Button>
+        {!resolved &&
+          (finding.state === "dismissed" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              loading={busy === "reopen"}
+              onClick={() => void setState("open")}
+            >
+              Reopen
+            </Button>
+          ) : (
+            <Button size="sm" variant="ghost" onClick={() => setIgnoring((v) => !v)}>
+              Ignore with reason
+            </Button>
+          ))}
+        {reviewedAt && (
+          <span className="text-[11.5px] text-muted-foreground">
+            Reviewed {relativeTime(reviewedAt)}
+          </span>
+        )}
+        {finding.state === "dismissed" && finding.dismissReason && (
+          <Chip tone="muted">
+            Ignored: {DISMISS_REASONS.find((r) => r.value === finding.dismissReason)?.label}
+          </Chip>
+        )}
+      </div>
+      {ignoring && (
+        <form
+          className="space-y-2 rounded-lg border border-border/60 bg-background/60 p-2.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (reason) void setState("dismissed");
+          }}
+        >
+          <fieldset className="space-y-1">
+            <legend className="text-[12px] font-medium">Why ignore this finding?</legend>
+            {DISMISS_REASONS.map((r) => (
+              <label key={r.value} className="flex items-center gap-2 text-[12px]">
+                <input
+                  type="radio"
+                  name={`dismiss-${finding.id}`}
+                  value={r.value}
+                  checked={reason === r.value}
+                  onChange={() => setReason(r.value)}
+                />
+                {r.label}
+              </label>
+            ))}
+          </fieldset>
+          <label className="block text-[12px]">
+            <span className="sr-only">Note</span>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value.slice(0, 1000))}
+              placeholder="Optional note for your team"
+              className="h-8 w-full rounded-lg border border-border/70 bg-background px-2.5 text-[12px] outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            />
+          </label>
+          <div className="flex gap-2">
+            <Button size="sm" type="submit" disabled={!reason} loading={busy === "ignore"}>
+              Ignore finding
+            </Button>
+            <Button size="sm" variant="ghost" type="button" onClick={() => setIgnoring(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 /* ───────────────────────── Finding detail ───────────────────────── */
 
 export function FindingDetail({
@@ -1050,7 +1234,7 @@ export function FindingDetail({
         <ArrowLeft className="h-3.5 w-3.5" /> All findings
       </button>
 
-      <header className="rounded-xl border border-border/70 bg-card/70 p-4">
+      <header className="rounded-xl border border-border/70 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-4">
         <div className="flex flex-wrap items-center gap-2">
           <PriorityChip priority={finding.priority} />
           <StatusGlyph status={finding.status} />
@@ -1076,8 +1260,16 @@ export function FindingDetail({
           )}
           <span>Effort: {finding.effort}</span>
           <span title={SAFETY_META[finding.safety].hint}>{SAFETY_META[finding.safety].label}</span>
+          <span>
+            {finding.fixMode === "manual"
+              ? "Manual fix"
+              : finding.fixMode === "agent"
+                ? "GEO Engineer can fix"
+                : "Mellox can fix"}
+          </span>
           <span className="font-mono">{finding.ruleId}</span>
         </div>
+        <FindingStateActions workspaceId={workspaceId} finding={finding} onChanged={onChanged} />
       </header>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -1114,7 +1306,29 @@ export function FindingDetail({
         </ul>
       </Section>
 
-      <Section title="Fix">
+      <Section title="Fix with AI Agent">
+        {!availability && !error ? (
+          <Skeleton className="h-24 w-full rounded-lg" />
+        ) : (
+          <AgentPanel
+            workspaceId={workspaceId}
+            findingId={finding.id}
+            fixMode={finding.fixMode}
+            canPropose={availability?.canPropose ?? false}
+            ready={availability?.requirement === "ready"}
+            notReadyReason={
+              availability && availability.requirement !== "ready" ? availability.reason : null
+            }
+            manualSteps={recipe?.steps ?? (rule ? [rule.recommendation] : [])}
+            onChanged={() => {
+              reload();
+              onChanged();
+            }}
+          />
+        )}
+      </Section>
+
+      <Section title="Repository & manual fix">
         {error ? (
           <ErrorState size="sm" detail={error} onRetry={reload} />
         ) : !availability ? (
@@ -1166,15 +1380,27 @@ export function FindingDetail({
           finding resolved only if the check passes on the live site.
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            loading={startingVerify}
-            disabled={!!pendingVerification || finding.state === "dismissed"}
-            onClick={() => void verify()}
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Verify fix
-          </Button>
+          {finding.verifyScope === "full" ? (
+            <p className="text-[12px] text-muted-foreground">
+              This check compares pages across the whole site. Run a full re-scan from the scan bar
+              to verify it.
+            </p>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              loading={startingVerify}
+              disabled={!!pendingVerification || finding.state === "dismissed"}
+              onClick={() => void verify()}
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Re-scan to verify
+            </Button>
+          )}
+          {finding.state === "dismissed" && (
+            <span className="text-[12px] text-muted-foreground">
+              Reopen the finding to verify it.
+            </span>
+          )}
         </div>
         <div className="mt-2 space-y-2">
           {verifying && !history.some((h) => h.id === verifying.id) && (

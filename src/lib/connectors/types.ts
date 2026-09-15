@@ -6,6 +6,8 @@
 // Plain data only — safe to import from the browser. Credentials never appear
 // in these types: providers mint short-lived tokens server-side on demand.
 
+import type { OwnershipEvidence, OwnershipStatus } from "./ownership";
+
 export type ConnectorProviderId = "github" | "wordpress" | "webflow" | "framer" | "shopify";
 
 /** What a provider can do for a connected source. */
@@ -125,6 +127,21 @@ export type SourceView = {
   lastSyncedAt: string | null;
   lastError: string | null;
   selectedAt: string;
+  /** Evidence that this repository builds `siteUrl` (fixes require "verified"). */
+  ownership: SourceOwnershipView;
+  /** When an admin agreed to send this repository's code to the GEO coding agent's model. */
+  agentConsentAt: string | null;
+};
+
+export type SourceOwnershipView = {
+  status: OwnershipStatus;
+  confidence: number | null;
+  /** The host the evidence was collected for. */
+  siteHost: string | null;
+  commitSha: string | null;
+  evidence: OwnershipEvidence[];
+  hints: string[];
+  checkedAt: string | null;
 };
 
 /** A repository the installation can access, as offered in the picker. */

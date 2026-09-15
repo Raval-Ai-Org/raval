@@ -101,11 +101,11 @@ export const SAFETY_META: Record<FixSafety, { label: string; hint: string }> = {
 export const btnFocus =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background";
 export const primaryBtn = cn(
-  "inline-flex items-center justify-center gap-1.5 rounded-full bg-primary font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-primary font-semibold text-primary-foreground shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)] transition-all duration-200 hover:-translate-y-px hover:bg-primary/90 hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)] active:translate-y-0 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
   btnFocus,
 );
 export const ghostBtn = cn(
-  "inline-flex items-center justify-center gap-1.5 rounded-full border border-border/70 bg-card font-medium text-foreground/85 transition-colors hover:border-foreground/20 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-card/80 font-medium text-foreground/85 backdrop-blur transition-all duration-200 hover:border-foreground/20 hover:bg-secondary hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
   btnFocus,
 );
 
@@ -267,15 +267,21 @@ export function PanelHeading({
   action?: React.ReactNode;
 }) {
   return (
-    <div className={cn("mb-2.5 flex min-w-0 items-center gap-2", className)}>
-      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-primary/12 text-primary">
+    <div className={cn("mb-3 flex min-w-0 items-center gap-2.5", className)}>
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/20">
         <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
       </span>
-      <h3 className="truncate text-[14px] font-semibold text-foreground">{title}</h3>
-      {hint && (
-        <span className="hidden truncate text-[12px] text-muted-foreground sm:inline">{hint}</span>
-      )}
-      {action && <div className="ml-auto shrink-0">{action}</div>}
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate text-[14.5px] font-semibold leading-tight tracking-tight text-foreground">
+          {title}
+        </h3>
+        {hint && (
+          <p className="hidden truncate text-[12px] leading-snug text-muted-foreground sm:block">
+            {hint}
+          </p>
+        )}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }

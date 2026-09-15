@@ -55,12 +55,13 @@ export function ScanBar({
           e.preventDefault();
           onRun();
         }}
+        data-no-rhythm
         className="flex flex-col gap-2 lg:flex-row lg:items-center"
       >
         <label className="relative flex min-w-0 flex-1 items-center">
           <span className="sr-only">Website to scan</span>
           <Globe
-            className="pointer-events-none absolute left-3.5 h-4 w-4 text-muted-foreground"
+            className="pointer-events-none absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
             strokeWidth={2}
           />
           <input
@@ -164,7 +165,7 @@ export function ScanProgress({ scan, onCancel }: { scan: GeoScanView; onCancel: 
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       aria-live="polite"
-      className="rounded-2xl border border-border/60 bg-card/50 p-5 sm:p-6"
+      className="rounded-2xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-5 sm:p-6"
     >
       <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
         <BrandStar mood="scanning" size={72} animate />
@@ -265,7 +266,7 @@ export function ScanIntro({ hasUrl, maxPages }: { hasUrl: boolean; maxPages: num
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/50 p-5 sm:p-6"
+      className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-5 sm:p-6"
     >
       <div
         aria-hidden
@@ -286,7 +287,10 @@ export function ScanIntro({ hasUrl, maxPages }: { hasUrl: boolean; maxPages: num
       </div>
       <div className="relative mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         {FEATURES.map(({ icon: Icon, title, body }) => (
-          <div key={title} className="rounded-xl border border-border/60 bg-background/50 p-3.5">
+          <div
+            key={title}
+            className="rounded-xl border border-border/60 bg-gradient-to-b from-background/80 to-muted/20 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5"
+          >
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/12 text-primary">
               <Icon className="h-4 w-4" strokeWidth={2.1} />
             </span>

@@ -5,6 +5,7 @@ import { enforceBudget } from "@/server/ai/budget";
 import { recordUsage } from "@/server/ai/metering";
 import { unitPrice } from "@/server/ai/pricing";
 import { getRequestScope } from "@/server/request-context";
+import { log } from "@/server/observability/logger";
 import {
   getImageModelConfigStatus,
   routeImageModel,
@@ -124,8 +125,20 @@ function headers(key: string): HeadersInit {
   return { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
 }
 
+/**
+ * Kie reuses HTTP-500-shaped codes for plain request-validation failures (an
+ * unsupported aspect ratio, a missing field) as well as for genuine provider
+ * errors — confirmed by direct testing: both `{"code":500,"msg":"This
+ * aspect_ratio is not within the range of allowed options"}` and a real
+ * transient failure come back the same shape. Recognize the validation kind
+ * by its message so it fails fast (no retry, no model fallback burning
+ * credits on a request that will never succeed) instead of being treated as
+ * a temporary outage.
+ */
+const VALIDATION_HINT_RE = /not within the range|is required|not supported|invalid|must be one of/i;
+
 function mapStatus(status: number, detail?: string): KieGatewayError {
-  const message = detail || "The request was not accepted by the Kie provider.";
+  const message = detail?.trim() || undefined;
   if (status === 401 || status === 403)
     return new KieGatewayError(
       503,
@@ -138,9 +151,21 @@ function mapStatus(status: number, detail?: string): KieGatewayError {
       "Kie is rate limiting generation requests. Please try again shortly.",
       "rate_limit",
     );
-  if (status === 422) return new KieGatewayError(422, message, "request");
-  if (status >= 400 && status < 500) return new KieGatewayError(400, message, "request");
-  return new KieGatewayError(502, "The image provider is temporarily unavailable.", "provider");
+  if (status === 422)
+    return new KieGatewayError(422, message || "Kie rejected this request.", "request");
+  if (status >= 400 && status < 500)
+    return new KieGatewayError(400, message || "Kie rejected this request.", "request");
+  if (message && VALIDATION_HINT_RE.test(message)) {
+    return new KieGatewayError(400, message, "request");
+  }
+  // A real 5xx / unrecognized code: never invent detail Kie didn't give us,
+  // but never discard detail it did give us either — the generic sentence is
+  // strictly a fallback for a genuinely empty response.
+  return new KieGatewayError(
+    502,
+    message ? `The image provider rejected the request: ${message}` : "The image provider is temporarily unavailable.",
+    "provider",
+  );
 }
 
 /** A blip worth one silent retry rather than surfacing to the user. */
@@ -280,27 +305,49 @@ async function createTask(
     background: "opaque",
   };
   if (referenceAssets.length) input.image_urls = referenceAssets;
-  const json = await fetchJson(
-    `${KIE_BASE}/jobs/createTask`,
-    {
-      method: "POST",
-      headers: headers(getApiKey()),
-      body: JSON.stringify({
-        model,
-        input,
-      }),
-    },
-    30_000,
-  );
-  const taskId = json?.data?.taskId ?? json?.data?.task_id ?? json?.taskId ?? json?.task_id;
-  if (typeof taskId !== "string" || !taskId) {
-    throw new KieGatewayError(502, "The image provider did not return a task ID.", "response");
+  const started = Date.now();
+  try {
+    const json = await fetchJson(
+      `${KIE_BASE}/jobs/createTask`,
+      {
+        method: "POST",
+        headers: headers(getApiKey()),
+        body: JSON.stringify({
+          model,
+          input,
+        }),
+      },
+      30_000,
+    );
+    const taskId = json?.data?.taskId ?? json?.data?.task_id ?? json?.taskId ?? json?.task_id;
+    if (typeof taskId !== "string" || !taskId) {
+      throw new KieGatewayError(502, "The image provider did not return a task ID.", "response");
+    }
+    log.info("kie.image.submitted", {
+      model,
+      aspectRatio: input.aspect_ratio,
+      hasReference: referenceAssets.length > 0,
+      taskId,
+      elapsedMs: Date.now() - started,
+    });
+    return taskId;
+  } catch (error) {
+    log.warn("kie.image.submit_failed", {
+      model,
+      aspectRatio: input.aspect_ratio,
+      hasReference: referenceAssets.length > 0,
+      elapsedMs: Date.now() - started,
+      status: error instanceof KieGatewayError ? error.status : undefined,
+      category: error instanceof KieGatewayError ? error.category : undefined,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
-  return taskId;
 }
 
 async function waitForTask(taskId: string): Promise<string[]> {
   const deadline = Date.now() + TASK_TIMEOUT_MS;
+  const startedAt = Date.now();
   while (Date.now() < deadline) {
     const json = await fetchJson(
       `${KIE_BASE}/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
@@ -311,15 +358,35 @@ async function waitForTask(taskId: string): Promise<string[]> {
     const state = String(record?.state ?? record?.status ?? record?.taskStatus ?? "").toLowerCase();
     if (["success", "completed", "succeeded"].includes(state)) {
       const urls = resultUrls(record);
-      if (!urls.length)
+      if (!urls.length) {
+        log.warn("kie.image.empty_result", { taskId, state, elapsedMs: Date.now() - startedAt });
         throw new KieGatewayError(502, "The image provider returned no image.", "response");
+      }
+      log.info("kie.image.completed", { taskId, state, elapsedMs: Date.now() - startedAt });
       return urls;
     }
     if (["fail", "failed", "error", "cancelled"].includes(state)) {
-      throw new KieGatewayError(502, "Image generation failed at the provider.", "generation");
+      const reason =
+        typeof record?.failMsg === "string" && record.failMsg.trim()
+          ? record.failMsg.trim().slice(0, 200)
+          : undefined;
+      log.warn("kie.image.task_failed", {
+        taskId,
+        state,
+        reason,
+        elapsedMs: Date.now() - startedAt,
+      });
+      throw new KieGatewayError(
+        502,
+        reason
+          ? `Image generation failed at the provider: ${reason}`
+          : "Image generation failed at the provider.",
+        state === "cancelled" ? "cancelled" : "generation",
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
+  log.warn("kie.image.timeout", { taskId, elapsedMs: Date.now() - startedAt });
   throw new KieGatewayError(504, "Image generation timed out. Please retry.", "timeout");
 }
 
@@ -328,10 +395,16 @@ async function downloadImage(url: string): Promise<{ b64: string; mimeType: stri
     throw new KieGatewayError(502, "The image provider returned an invalid image URL.", "response");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), IMAGE_URL_TIMEOUT_MS);
+  const started = Date.now();
   try {
     const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok)
+    if (!response.ok) {
+      log.warn("kie.image.download_failed", {
+        httpStatus: response.status,
+        elapsedMs: Date.now() - started,
+      });
       throw new KieGatewayError(502, "The generated image could not be downloaded.", "storage");
+    }
     const declared = Number(response.headers.get("content-length") ?? "0");
     if (declared > MAX_IMAGE_BYTES)
       throw new KieGatewayError(502, "The generated image is too large to accept.", "response");
@@ -342,12 +415,17 @@ async function downloadImage(url: string): Promise<{ b64: string; mimeType: stri
     for (let offset = 0; offset < bytes.length; offset += 0x8000) {
       binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
     }
+    log.info("kie.image.downloaded", { bytes: bytes.byteLength, elapsedMs: Date.now() - started });
     return {
       b64: btoa(binary),
       mimeType: response.headers.get("content-type")?.split(";")[0] || "image/png",
     };
   } catch (error) {
     if (error instanceof KieGatewayError) throw error;
+    log.warn("kie.image.download_error", {
+      elapsedMs: Date.now() - started,
+      message: error instanceof Error ? error.message : String(error),
+    });
     throw new KieGatewayError(502, "The generated image could not be downloaded.", "network");
   } finally {
     clearTimeout(timer);
@@ -487,8 +565,16 @@ export async function imageGenerationStream(opts: {
 export type KieImageSize = "1024x1024" | "1024x1280" | "1792x1024" | "1024x1792";
 
 function imageAspect(size: KieImageSize): string {
+  // Kie's gpt-image-2-5 models reject "4:5" outright — confirmed live:
+  // {"code":500,"msg":"This aspect_ratio is not within the range of allowed
+  // options"}. Verified-supported ratios include 1:1, 4:3, 3:4, 3:2, 2:3,
+  // 16:9, 9:16, 21:9. 3:4 is the closest supported ratio to Instagram's 4:5
+  // portrait crop, so Studio's portrait format (1024x1280) renders as 3:4
+  // instead of failing every request. This was the root cause of every
+  // Studio image render failing: Instagram/Facebook/Threads default to 4:5,
+  // and carousel always uses 4:5.
   return size === "1024x1280"
-    ? "4:5"
+    ? "3:4"
     : aspectRatio(size as "1024x1024" | "1792x1024" | "1024x1792");
 }
 
@@ -531,6 +617,7 @@ export async function startImageTask(opts: {
   let model = candidates[0];
   let lastError: unknown;
   let json: any;
+  const startedAt = Date.now();
   for (const candidate of candidates) {
     try {
       json = await fetchJson(
@@ -547,18 +634,49 @@ export async function startImageTask(opts: {
       break;
     } catch (error) {
       lastError = error;
+      log.warn("kie.studio.image.submit_failed", {
+        model: candidate,
+        aspectRatio: input.aspect_ratio,
+        hasReference: referenceAssets.length > 0,
+        status: error instanceof KieGatewayError ? error.status : undefined,
+        category: error instanceof KieGatewayError ? error.category : undefined,
+        message: error instanceof Error ? error.message : String(error),
+      });
       if (
         error instanceof KieGatewayError &&
         ["configuration", "authentication", "request"].includes(error.category)
       )
-        throw error;
+        break; // not retryable — stop trying other candidates too
     }
   }
-  if (lastError) throw lastError;
+  if (lastError) {
+    recordUsage({
+      provider: "kie",
+      model,
+      kind: "image",
+      status: "error",
+      latencyMs: Date.now() - startedAt,
+    });
+    throw lastError;
+  }
   const taskId = json?.data?.taskId ?? json?.data?.task_id ?? json?.taskId ?? json?.task_id;
   if (typeof taskId !== "string" || !taskId) {
+    recordUsage({
+      provider: "kie",
+      model,
+      kind: "image",
+      status: "error",
+      latencyMs: Date.now() - startedAt,
+    });
     throw new KieGatewayError(502, "The image provider did not return a task ID.", "response");
   }
+  log.info("kie.studio.image.submitted", {
+    model,
+    aspectRatio: input.aspect_ratio,
+    hasReference: referenceAssets.length > 0,
+    taskId,
+    elapsedMs: Date.now() - startedAt,
+  });
   return {
     taskId,
     model,
@@ -582,31 +700,51 @@ export async function startVideoTask(opts: {
   }
   await enforceBudget("video");
   const model = KIE_VIDEO_MODEL;
-  const json = await fetchJson(
-    `${KIE_BASE}/jobs/createTask`,
-    {
-      method: "POST",
-      headers: headers(getApiKey()),
-      body: JSON.stringify({
-        model,
-        input: {
-          prompt: opts.prompt.slice(0, 20_000),
-          resolution: opts.resolution ?? "720P",
-          aspect_ratio: normalizeKieAspectRatio(opts.aspectRatio),
-          duration,
-          audio: opts.audio ?? true,
-          seed: opts.seed ?? 0,
-          nsfw_checker: true,
-        },
-      }),
-    },
-    30_000,
-  );
-  const taskId = json?.data?.taskId ?? json?.data?.task_id ?? json?.taskId ?? json?.task_id;
-  if (typeof taskId !== "string" || !taskId) {
-    throw new KieGatewayError(502, "The video provider did not return a task ID.", "response");
+  const startedAt = Date.now();
+  try {
+    const json = await fetchJson(
+      `${KIE_BASE}/jobs/createTask`,
+      {
+        method: "POST",
+        headers: headers(getApiKey()),
+        body: JSON.stringify({
+          model,
+          input: {
+            prompt: opts.prompt.slice(0, 20_000),
+            resolution: opts.resolution ?? "720P",
+            aspect_ratio: normalizeKieAspectRatio(opts.aspectRatio),
+            duration,
+            audio: opts.audio ?? true,
+            seed: opts.seed ?? 0,
+            nsfw_checker: true,
+          },
+        }),
+      },
+      30_000,
+    );
+    const taskId = json?.data?.taskId ?? json?.data?.task_id ?? json?.taskId ?? json?.task_id;
+    if (typeof taskId !== "string" || !taskId) {
+      throw new KieGatewayError(502, "The video provider did not return a task ID.", "response");
+    }
+    log.info("kie.studio.video.submitted", { model, taskId, elapsedMs: Date.now() - startedAt });
+    return { taskId, model, route: "video", fallbacks: [] };
+  } catch (error) {
+    log.warn("kie.studio.video.submit_failed", {
+      model,
+      elapsedMs: Date.now() - startedAt,
+      status: error instanceof KieGatewayError ? error.status : undefined,
+      category: error instanceof KieGatewayError ? error.category : undefined,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    recordUsage({
+      provider: "kie",
+      model,
+      kind: "video",
+      status: "error",
+      latencyMs: Date.now() - startedAt,
+    });
+    throw error;
   }
-  return { taskId, model, route: "video", fallbacks: [] };
 }
 
 export type TaskCheck =
@@ -633,6 +771,7 @@ export async function checkTask(taskId: string): Promise<TaskCheck> {
       typeof record?.failMsg === "string" && record.failMsg.trim()
         ? record.failMsg.trim().slice(0, 200)
         : "The provider could not complete this render.";
+    log.warn("kie.task_failed", { taskId, state, reason });
     return { state: "failed", message: reason };
   }
   return { state: "pending" };
@@ -643,7 +782,15 @@ export function recordTaskUsage(args: {
   model: string;
   latencyMs: number;
   ok: boolean;
+  taskId?: string;
 }) {
+  log[args.ok ? "info" : "warn"]("kie.task_completed", {
+    kind: args.kind,
+    model: args.model,
+    taskId: args.taskId,
+    ok: args.ok,
+    elapsedMs: args.latencyMs,
+  });
   recordUsage({
     provider: "kie",
     model: args.model,

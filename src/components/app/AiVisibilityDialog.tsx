@@ -57,11 +57,10 @@ export function AiVisibilityDialog({ workspaceId }: { workspaceId: string | null
       onOpenChange={setOpen}
       size="xl"
       Icon={Sparkles}
-      eyebrow="Intelligence"
       title="AI Visibility"
-      description="Can ChatGPT, Claude, Gemini and Perplexity read, understand and cite your site? Scan it, track it and apply fixes."
+      description="Scan, fix and track how AI engines see your site"
       srDescription="AI visibility intelligence: site scans, findings, page evidence and monitoring"
-      bodyClassName="px-3 py-3 sm:px-5 sm:py-5"
+      bodyClassName="px-4 py-4 sm:px-6 sm:py-5"
     >
       <Suspense
         fallback={

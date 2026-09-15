@@ -13,6 +13,12 @@ export const getScanPages = serverFn<typeof Handlers.getScanPages>("geo/getScanP
 export const getScanPage = serverFn<typeof Handlers.getScanPage>("geo/getScanPage");
 export const compareScans = serverFn<typeof Handlers.compareScans>("geo/compareScans");
 export const setFindingState = serverFn<typeof Handlers.setFindingState>("geo/setFindingState");
+export const bulkSetFindingStates = serverFn<typeof Handlers.bulkSetFindingStates>(
+  "geo/bulkSetFindingStates",
+);
+export const markFindingsReviewed = serverFn<typeof Handlers.markFindingsReviewed>(
+  "geo/markFindingsReviewed",
+);
 export const listMonitors = serverFn<typeof Handlers.listMonitors>("geo/listMonitors");
 export const saveMonitor = serverFn<typeof Handlers.saveMonitor>("geo/saveMonitor");
 export const deleteMonitor = serverFn<typeof Handlers.deleteMonitor>("geo/deleteMonitor");

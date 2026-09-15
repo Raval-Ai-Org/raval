@@ -107,26 +107,39 @@ async function send(
   const url = path.startsWith("https://") ? path : `${API}${path}`;
   if (!url.startsWith(`${API}/`))
     throw new Error("Refusing to send GitHub credentials to another host");
-  return fetchWithTimeout(
-    url,
-    {
-      method: opts.method ?? "GET",
-      headers: {
-        authorization,
-        accept: "application/vnd.github+json",
-        "x-github-api-version": API_VERSION,
-        "user-agent": "Mellox-AI-GitHub-App",
-        ...(opts.body ? { "content-type": "application/json" } : {}),
-      },
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
-      redirect: "error",
-    },
-    {
-      timeoutMs: TIMEOUT_MS,
-      onTransportError: (f) =>
-        new UpstreamError(502, `GitHub is unreachable (${f.kind}).`, { provider: "github" }),
-    },
-  );
+  const method = opts.method ?? "GET";
+  // Reads are idempotent: retry a dropped connection or timeout a couple of
+  // times (agent investigations make hundreds of reads). Writes never retry —
+  // a repeated commit or pull request must not be possible.
+  const attempts = method === "GET" ? 3 : 1;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetchWithTimeout(
+        url,
+        {
+          method,
+          headers: {
+            authorization,
+            accept: "application/vnd.github+json",
+            "x-github-api-version": API_VERSION,
+            "user-agent": "Mellox-AI-GitHub-App",
+            ...(opts.body ? { "content-type": "application/json" } : {}),
+          },
+          body: opts.body ? JSON.stringify(opts.body) : undefined,
+          redirect: "error",
+        },
+        {
+          timeoutMs: TIMEOUT_MS,
+          onTransportError: (f) =>
+            new UpstreamError(502, `GitHub is unreachable (${f.kind}).`, { provider: "github" }),
+        },
+      );
+    } catch (error) {
+      const transport = error instanceof UpstreamError && error.status === 502;
+      if (!transport || attempt >= attempts) throw error;
+      await new Promise((r) => setTimeout(r, 300 * 3 ** (attempt - 1)));
+    }
+  }
 }
 
 async function readError(res: Response): Promise<string> {

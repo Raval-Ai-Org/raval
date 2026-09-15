@@ -1,7 +1,7 @@
 import "server-only";
 import { safeParseJson } from "@/lib/ai/json";
 import { fetchWithRetry, UpstreamError } from "@/server/upstream";
-import { checkBudget } from "@/server/ai/budget";
+import { BudgetExceededError, checkBudget } from "@/server/ai/budget";
 import { recordUsage } from "@/server/ai/metering";
 import { estimateTextCost } from "@/server/ai/pricing";
 import { logGuardrailEvent } from "@/server/guardrails/events";
@@ -103,6 +103,13 @@ async function requestClaude(
         429,
         "Claude rate limit reached. Please try again in a moment.",
         "rate_limited",
+      );
+    }
+    if (/credit balance is too low|billing/i.test(raw)) {
+      throw new AnthropicGatewayError(
+        402,
+        "The Anthropic account behind this server has run out of API credits. Add credits in the Anthropic Console (Plans & Billing), then retry.",
+        "insufficient_credits",
       );
     }
     throw new AnthropicGatewayError(
@@ -255,6 +262,320 @@ export async function claudeTextCompletion(opts: ClaudeTextOpts): Promise<Claude
   }
 
   return { text, truncated, model, degraded };
+}
+
+/* ───────────────────────── Tool-use loop (agents) ───────────────────────── */
+
+export type ClaudeTool = {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  /** Schema-valid tool inputs (requires additionalProperties: false + required). */
+  strict?: boolean;
+};
+
+export type ClaudeBlock = { type: string; [key: string]: unknown };
+export type ClaudeMessage = { role: "user" | "assistant"; content: string | ClaudeBlock[] };
+
+export type ToolOutcome = {
+  /** What the model sees. */
+  content: string;
+  isError?: boolean;
+  /** One line for the activity log — never the model's reasoning. */
+  summary: string;
+  detail?: Record<string, unknown>;
+};
+
+export type ToolLoopUsage = {
+  turns: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costUsd: number;
+};
+
+export type ToolLoopTurn = {
+  turn: number;
+  usage: ToolLoopUsage;
+  toolCalls: { name: string; summary: string; isError: boolean }[];
+  stopReason: string;
+  messages: ClaudeMessage[];
+};
+
+export type ClaudeToolLoopOpts = {
+  route: string;
+  model?: string;
+  system: string;
+  tools: ClaudeTool[];
+  /** Conversation so far (resumable from a checkpoint). Never mutated. */
+  messages: ClaudeMessage[];
+  handleTool: (name: string, input: unknown) => Promise<ToolOutcome>;
+  /** Calling one of these (with a non-error outcome) ends the loop with a submission. */
+  terminalTools: string[];
+  maxTurns: number;
+  maxTokensPerTurn?: number;
+  maxCostUsd: number;
+  /** Absolute wall-clock deadline (ms since epoch). */
+  deadlineAt: number;
+  effort?: ClaudeEffort;
+  workspaceId?: string | null;
+  userId?: string | null;
+  maxToolResultChars?: number;
+  maxParallelTools?: number;
+  isCancelled?: () => boolean | Promise<boolean>;
+  onTurn?: (turn: ToolLoopTurn) => Promise<void> | void;
+};
+
+export type ClaudeToolLoopResult = {
+  status: "submitted" | "max_turns" | "budget" | "deadline" | "cancelled" | "no_submission";
+  submission: { tool: string; input: unknown } | null;
+  messages: ClaudeMessage[];
+  usage: ToolLoopUsage;
+  model: string;
+};
+
+/** Raw request function; replaceable in tests. */
+export type ClaudeTransport = (
+  payload: Record<string, unknown>,
+  timeoutMs: number,
+  route: string,
+  retries?: number,
+) => Promise<any>;
+
+let transportOverride: ClaudeTransport | null = null;
+
+/** Tests: route Claude requests to a fake. Returns a restore function. */
+export function setClaudeTransport(t: ClaudeTransport | null): () => void {
+  const previous = transportOverride;
+  transportOverride = t;
+  return () => {
+    transportOverride = previous;
+  };
+}
+
+const PER_REQUEST_TIMEOUT_MS = 120_000;
+
+/** Put one cache breakpoint on the last block of the last message (rolling). */
+function withRollingCache(messages: ClaudeMessage[]): ClaudeMessage[] {
+  if (!messages.length) return messages;
+  const out = messages.slice();
+  const last = out[out.length - 1];
+  const blocks: ClaudeBlock[] =
+    typeof last.content === "string"
+      ? [{ type: "text", text: last.content }]
+      : last.content.map((b) => ({ ...b }));
+  const i = blocks.length - 1;
+  if (i >= 0 && blocks[i].type !== "thinking" && blocks[i].type !== "redacted_thinking") {
+    blocks[i] = { ...blocks[i], cache_control: { type: "ephemeral" } };
+  }
+  out[out.length - 1] = { role: last.role, content: blocks };
+  return out;
+}
+
+async function runLimited<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>) {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
+  return out;
+}
+
+/**
+ * A metered, bounded tool-use loop. Every turn is budget-checked and metered;
+ * the loop stops at a submission, a turn/cost/deadline cap, or cancellation.
+ * Full assistant content (thinking blocks included) is appended back
+ * unchanged, and all tool results for a turn go back in one user message.
+ */
+export async function claudeToolLoop(opts: ClaudeToolLoopOpts): Promise<ClaudeToolLoopResult> {
+  const model = opts.model ?? CLAUDE_SONNET_MODEL;
+  const maxTokens = Math.max(1024, Math.min(opts.maxTokensPerTurn ?? 16_000, 32_000));
+  const maxResult = opts.maxToolResultChars ?? 40_000;
+  const terminal = new Set(opts.terminalTools);
+  const messages: ClaudeMessage[] = opts.messages.slice();
+  const usage: ToolLoopUsage = {
+    turns: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    costUsd: 0,
+  };
+  const done = (
+    status: ClaudeToolLoopResult["status"],
+    submission: ClaudeToolLoopResult["submission"] = null,
+  ): ClaudeToolLoopResult => ({ status, submission, messages, usage, model });
+  const send = transportOverride ?? requestClaude;
+  let nudged = false;
+
+  for (let turn = 1; turn <= opts.maxTurns; turn++) {
+    if (await opts.isCancelled?.()) return done("cancelled");
+    const remaining = opts.deadlineAt - Date.now();
+    if (remaining <= 1_000) return done("deadline");
+    if (usage.costUsd >= opts.maxCostUsd) return done("budget");
+
+    const budget = await checkBudget("text", {
+      workspaceId: opts.workspaceId,
+      userId: opts.userId,
+    });
+    if (budget.mode === "block") {
+      throw new BudgetExceededError(
+        "text",
+        budget.reason ?? "AI allowance reached for this period.",
+      );
+    }
+    // A degraded workspace doesn't get a long agent run on a smaller budget.
+    if (budget.mode === "degrade") return done("budget");
+
+    const payload: Record<string, unknown> = {
+      model,
+      max_tokens: maxTokens,
+      system: [{ type: "text", text: opts.system, cache_control: { type: "ephemeral" } }],
+      tools: opts.tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.input_schema,
+        ...(t.strict ? { strict: true } : {}),
+      })),
+      tool_choice: { type: "auto" },
+      messages: withRollingCache(messages),
+      ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
+    };
+
+    const started = Date.now();
+    let response: any;
+    try {
+      response = await send(payload, Math.min(remaining, PER_REQUEST_TIMEOUT_MS), opts.route, 2);
+    } catch (error) {
+      recordUsage({
+        provider: "anthropic",
+        model,
+        route: opts.route,
+        status: "error",
+        latencyMs: Date.now() - started,
+        workspaceId: opts.workspaceId,
+        userId: opts.userId,
+      });
+      throw error;
+    }
+
+    const u = response?.usage ?? {};
+    const turnCost = estimateTextCost(model, {
+      inputTokens: u.input_tokens ?? 0,
+      outputTokens: u.output_tokens ?? 0,
+      cacheReadTokens: u.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+    });
+    usage.turns = turn;
+    usage.inputTokens += u.input_tokens ?? 0;
+    usage.outputTokens += u.output_tokens ?? 0;
+    usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
+    usage.cacheWriteTokens += u.cache_creation_input_tokens ?? 0;
+    usage.costUsd = Math.round((usage.costUsd + (turnCost ?? 0)) * 1e6) / 1e6;
+    const stopReason: string = response?.stop_reason ?? "unknown";
+    recordUsage({
+      provider: "anthropic",
+      model,
+      route: opts.route,
+      inputTokens: (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0),
+      outputTokens: u.output_tokens,
+      estCostUsd: turnCost,
+      truncated: stopReason === "max_tokens",
+      latencyMs: Date.now() - started,
+      status: "ok",
+      workspaceId: opts.workspaceId,
+      userId: opts.userId,
+    });
+
+    if (stopReason === "refusal") {
+      throw new AnthropicGatewayError(
+        422,
+        `Claude declined the request for ${opts.route}.`,
+        "refusal",
+      );
+    }
+    if (stopReason === "model_context_window_exceeded") {
+      throw new AnthropicGatewayError(
+        413,
+        "The investigation grew past the model's context window.",
+        "context_exceeded",
+      );
+    }
+    const content: ClaudeBlock[] = Array.isArray(response?.content) ? response.content : [];
+    if (stopReason === "max_tokens") {
+      throw new AnthropicGatewayError(
+        502,
+        `Claude's turn for ${opts.route} was cut off before it finished.`,
+        "max_tokens",
+      );
+    }
+    messages.push({ role: "assistant", content });
+
+    const toolUses = content.filter((b) => b.type === "tool_use") as (ClaudeBlock & {
+      id: string;
+      name: string;
+      input: unknown;
+    })[];
+    const toolCalls: ToolLoopTurn["toolCalls"] = [];
+
+    if (stopReason === "pause_turn") {
+      await opts.onTurn?.({ turn, usage: { ...usage }, toolCalls, stopReason, messages });
+      continue;
+    }
+
+    if (!toolUses.length) {
+      await opts.onTurn?.({ turn, usage: { ...usage }, toolCalls, stopReason, messages });
+      if (nudged) return done("no_submission");
+      nudged = true;
+      messages.push({
+        role: "user",
+        content: `Finish by calling ${opts.terminalTools.map((t) => `\`${t}\``).join(" or ")} with your result.`,
+      });
+      continue;
+    }
+
+    let submission: ClaudeToolLoopResult["submission"] = null;
+    const results = await runLimited(toolUses, opts.maxParallelTools ?? 4, async (call) => {
+      let outcome: ToolOutcome;
+      try {
+        outcome = await opts.handleTool(call.name, call.input);
+      } catch (error) {
+        outcome = {
+          content: error instanceof Error ? error.message : "The tool failed.",
+          isError: true,
+          summary: `${call.name} failed`,
+        };
+      }
+      if (terminal.has(call.name) && !outcome.isError && !submission) {
+        submission = { tool: call.name, input: call.input };
+      }
+      toolCalls.push({
+        name: call.name,
+        summary: outcome.summary,
+        isError: Boolean(outcome.isError),
+      });
+      const text =
+        outcome.content.length > maxResult
+          ? `${outcome.content.slice(0, maxResult)}\n…[truncated ${outcome.content.length - maxResult} characters]`
+          : outcome.content;
+      return {
+        type: "tool_result",
+        tool_use_id: call.id,
+        content: text,
+        ...(outcome.isError ? { is_error: true } : {}),
+      } satisfies ClaudeBlock;
+    });
+    messages.push({ role: "user", content: results });
+    await opts.onTurn?.({ turn, usage: { ...usage }, toolCalls, stopReason, messages });
+    if (submission) return done("submitted", submission);
+  }
+  return done("max_turns");
 }
 
 /** Text-only convenience wrapper (existing callers). */

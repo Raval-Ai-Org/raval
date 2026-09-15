@@ -35,7 +35,7 @@ function ComparisonView({
   onClose: () => void;
 }) {
   return (
-    <div className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4">
+    <div className="space-y-3 rounded-2xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-[14px] font-semibold text-foreground">{comparison.summary}</div>
@@ -89,7 +89,7 @@ function ComparisonView({
         ].map((col) => (
           <div
             key={col.title}
-            className="min-w-0 rounded-xl border border-border/60 bg-background/50 p-3"
+            className="min-w-0 rounded-xl border border-border/60 bg-gradient-to-b from-background/80 to-muted/20 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3"
           >
             <div className={cn("mb-1.5 text-[12.5px] font-semibold", TONE[col.tone].text)}>
               {col.title}

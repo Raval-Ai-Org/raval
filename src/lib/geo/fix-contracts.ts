@@ -21,6 +21,10 @@ export type FixRequirement =
   | "select_repository"
   /** The linked repository is no longer accessible. */
   | "access_lost"
+  /** Mellox hasn't yet proven that the linked repository builds this website. */
+  | "verify_ownership"
+  /** The evidence says the linked repository does not build this website. */
+  | "ownership_mismatch"
   /** The repository's framework or layout can't be edited safely for this fix. */
   | "unsupported"
   /** This finding has no automated fix (manual steps only). */

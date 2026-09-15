@@ -17,6 +17,7 @@ import { randomBytes } from "node:crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { UserSupabaseClient } from "@/integrations/supabase/client.user.server";
 import type { Json } from "@/integrations/supabase/types";
+import { ownershipIsCurrent } from "@/lib/connectors/ownership";
 import type { ConnectionView, SourceView } from "@/lib/connectors/types";
 import type {
   FixAvailability,
@@ -236,6 +237,37 @@ export function normHost(host: string | null) {
   return (host ?? "").toLowerCase().replace(/^www\./, "");
 }
 
+/** The source is linked to `host` and a current ownership check proved it builds that host. */
+export function sourceOwnsHost(source: SourceRow, host: string): boolean {
+  return (
+    normHost(source.site_host) === normHost(host) &&
+    ownershipIsCurrent({
+      status: source.ownership_status,
+      checkedHost: source.ownership_site_host,
+      checkedAt: source.ownership_checked_at,
+      siteHost: host,
+    })
+  );
+}
+
+/** Refuse repository writes for a source that isn't proven to build `host`. */
+export function assertSourceOwnsHost(source: SourceRow, host: string) {
+  if (normHost(source.site_host) !== normHost(host)) {
+    throw new FixWorkflowError(
+      `${source.full_name} is linked to ${source.site_host ?? "no website"}, not ${host}. Link the repository to this website first.`,
+      409,
+    );
+  }
+  if (!sourceOwnsHost(source, host)) {
+    throw new FixWorkflowError(
+      source.ownership_status === "mismatch"
+        ? `The evidence says ${source.full_name} doesn't build ${host}. Mellox won't change it.`
+        : `Mellox hasn't verified that ${source.full_name} builds ${host} (or the check is out of date). Verify the repository first.`,
+      409,
+    );
+  }
+}
+
 export async function getFixAvailability(
   ctx: FixContext,
   findingId: string,
@@ -326,6 +358,18 @@ export async function getFixAvailability(
     return requirement(
       "access_lost",
       `Mellox lost access to ${source.full_name}. Re-grant it on GitHub, then verify the connection.`,
+    );
+  }
+  if (source.ownership_status === "mismatch") {
+    return requirement(
+      "ownership_mismatch",
+      `The evidence says ${source.full_name} doesn't build ${scan.host}. Link the repository that does.`,
+    );
+  }
+  if (!sourceOwnsHost(source, scan.host)) {
+    return requirement(
+      "verify_ownership",
+      `Before changing code, Mellox checks that ${source.full_name} really builds ${scan.host}.`,
     );
   }
   const framework = source.inspection?.framework ?? null;
@@ -529,11 +573,11 @@ export async function createProposal(
   }
 
   const { source, connection } = await loadSourceWithConnection(ctx, args.sourceId);
-  if (normHost(source.site_host) !== normHost(scan.host)) {
-    return {
-      ok: false,
-      reason: `${source.full_name} is linked to ${source.site_host ?? "no website"}, not ${scan.host}. Link the repository to this website first.`,
-    };
+  try {
+    assertSourceOwnsHost(source, scan.host);
+  } catch (error) {
+    if (error instanceof FixWorkflowError) return { ok: false, reason: error.message };
+    throw error;
   }
   const installationId = connection.external_account_id;
   const snap = await snapshotRepo(connection, source, ctx.userId, args.baseBranch);
@@ -698,7 +742,18 @@ async function patchProposal(id: string, patch: Record<string, unknown>): Promis
     .select(PROPOSAL_COLS)
     .single();
   if (error || !data) throw new Error(error?.message ?? "Couldn't update the proposal");
+  if ("status" in patch) await syncAgentRun(id);
   return data as unknown as ProposalRow;
+}
+
+/** Keep a GEO agent run in step with the proposal it produced (no-op otherwise). */
+export async function syncAgentRun(proposalId: string) {
+  try {
+    const { syncAgentRunFromProposal } = await import("../agents/runner.server");
+    await syncAgentRunFromProposal(proposalId);
+  } catch (error) {
+    console.error(`[geo] agent run sync for proposal ${proposalId} failed`, error);
+  }
 }
 
 function prBody(row: ProposalRow, title: string): string {
@@ -764,6 +819,7 @@ export async function approveAndApply(
   if (source.full_name !== row.repo_full_name) {
     throw new FixWorkflowError("The linked repository changed. Regenerate the proposal.", 409);
   }
+  assertSourceOwnsHost(source, new URL(row.site_origin).hostname);
 
   // Claim: exactly one approval can move a draft to applying.
   const { data: claimed, error: claimError } = await supabaseAdmin
@@ -780,6 +836,7 @@ export async function approveAndApply(
     .select("id");
   if (claimError) throw new Error(claimError.message);
   if (!claimed?.length) throw new FixWorkflowError("This proposal is already being applied.", 409);
+  await syncAgentRun(row.id);
 
   await recordAudit({
     workspaceId: ctx.workspaceId,

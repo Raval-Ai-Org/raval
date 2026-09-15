@@ -1,6 +1,8 @@
 // present.ts — database rows → API contracts (src/lib/geo/contracts.ts).
 import "server-only";
+import { strategyForRule } from "./fixes/strategies";
 import type {
+  DismissReason,
   FindingResolution,
   FindingWorkflowState,
   GeoFindingView,
@@ -86,10 +88,13 @@ export type FindingStateRecord = {
   resolution: FindingResolution;
   verifiedAt: string | null;
   reopenedAt: string | null;
+  dismissReason?: DismissReason | null;
+  reviewedAt?: string | null;
 };
 
 export function presentFinding(row: Row, states: Map<string, FindingStateRecord>): GeoFindingView {
   const state = states.get(row.fingerprint);
+  const strategy = strategyForRule(row.rule_id);
   return {
     id: row.id,
     ruleId: row.rule_id,
@@ -113,6 +118,10 @@ export function presentFinding(row: Row, states: Map<string, FindingStateRecord>
     resolution: state?.state === "resolved" ? (state.resolution ?? "manual_legacy") : null,
     verifiedAt: state?.verifiedAt ?? null,
     reopenedAt: state?.reopenedAt ?? null,
+    dismissReason: state?.state === "dismissed" ? (state.dismissReason ?? null) : null,
+    reviewedAt: state?.reviewedAt ?? null,
+    fixMode: strategy.mode,
+    verifyScope: strategy.verifyScope,
   };
 }
 

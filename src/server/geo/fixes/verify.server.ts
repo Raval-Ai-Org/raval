@@ -156,6 +156,12 @@ async function setProposalStatus(
     .update({ status, ...(error !== undefined ? { error } : {}) })
     .eq("id", row.proposal_id)
     .in("status", ["merged", "verifying", "not_verified", "pr_open"]);
+  try {
+    const { syncAgentRunFromProposal } = await import("../agents/runner.server");
+    await syncAgentRunFromProposal(row.proposal_id);
+  } catch (err) {
+    console.error(`[geo] agent run sync for verification ${row.id} failed`, err);
+  }
 }
 
 /** Retry later, or conclude when attempts are used up. */

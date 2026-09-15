@@ -505,7 +505,7 @@ export function LibraryPage({
               </div>
 
               <label className="relative order-last flex h-9 min-w-0 basis-full items-center @2xl/library:order-none @2xl/library:basis-auto @2xl/library:flex-1">
-                <Search className="pointer-events-none absolute left-3 size-3.5 text-muted-foreground" />
+                <Search className="pointer-events-none absolute z-10 left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
                 <span className="sr-only">Search the library</span>
                 <input
                   ref={searchRef}

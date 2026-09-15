@@ -30,6 +30,8 @@ import {
   type GeoCategoryId,
 } from "@/lib/geo/types";
 import { FixDrawer } from "./FixDrawer";
+import { PriorityLanes, useScanFindings } from "./dashboard/PriorityLanes";
+import { ReadinessDimensions } from "./dashboard/ReadinessDimensions";
 import {
   CATEGORY_ICON,
   Chip,
@@ -53,7 +55,8 @@ import {
 
 const ENGINE_STATE = {
   open: { label: "Allowed", tone: "success" },
-  unknown: { label: "Allowed", tone: "success" },
+  // No robots.txt rules for this engine: crawling isn't blocked, but nothing grants it either.
+  unknown: { label: "No rules", tone: "muted" },
   partial: { label: "Partly blocked", tone: "warning" },
   blocked: { label: "Blocked", tone: "destructive" },
 } as const;
@@ -153,7 +156,7 @@ function CategoryExplanation({
       transition={{ duration: 0.26, ease: EASE }}
       className="overflow-hidden"
     >
-      <div className="mt-3 rounded-xl border border-border/60 bg-background/60 p-3.5">
+      <div className="mt-3 rounded-xl border border-border/60 bg-gradient-to-b from-background/80 to-muted/20 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div className="text-[13.5px] font-semibold text-foreground">
             Why {category.name.toLowerCase()} scores {category.score}
@@ -330,14 +333,14 @@ function ActionRow({
 function ProbesPanel({ probes }: { probes: ProbeSummary | { error: string } }) {
   if ("error" in probes) {
     return (
-      <div className="rounded-xl border border-border/60 bg-card/50 px-4 py-3 text-[12.5px] text-muted-foreground">
+      <div className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border px-4 py-3 text-[12.5px] text-muted-foreground">
         AI answer checks didn't complete for this scan: {probes.error}
       </div>
     );
   }
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/50 p-4">
+    <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           ["Mentioned", pct(probes.mentionRate)],
@@ -404,6 +407,7 @@ function ProbesPanel({ probes }: { probes: ProbeSummary | { error: string } }) {
 }
 
 export function OverviewTab({
+  workspaceId,
   scan,
   previousScore,
   sparkValues,
@@ -411,14 +415,29 @@ export function OverviewTab({
   probesAvailable,
   onOpenFindings,
 }: {
+  workspaceId: string;
   scan: GeoScanView;
   previousScore: number | null;
   sparkValues: number[];
   brandName: string | null;
   probesAvailable: boolean;
-  onOpenFindings: (filter: { category?: GeoCategoryId; ruleId?: string; fixAll?: boolean }) => void;
+  onOpenFindings: (filter: {
+    category?: GeoCategoryId;
+    ruleId?: string;
+    fixAll?: boolean;
+    findingId?: string;
+  }) => void;
 }) {
   const report = scan.report!;
+  const scanFindings = useScanFindings(workspaceId, scan.id);
+  const fixModeByRule = useMemo(
+    () => new Map((scanFindings.findings ?? []).map((f) => [f.ruleId, f.fixMode] as const)),
+    [scanFindings.findings],
+  );
+  const openFindings = scanFindings.findings?.filter(
+    (f) => f.state !== "resolved" && f.state !== "dismissed",
+  );
+  const fixableCount = openFindings?.filter((f) => f.fixMode !== "manual").length ?? null;
   const [openCategory, setOpenCategory] = useState<GeoCategoryId | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -433,7 +452,7 @@ export function OverviewTab({
   return (
     <div className="space-y-6">
       {/* Score */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-4 sm:p-5">
+      <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-4 sm:p-5">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl"
@@ -474,6 +493,11 @@ export function OverviewTab({
               <Chip tone="success">{report.counts.passed} passing checks</Chip>
               <Chip tone="warning">{report.counts.warned} to improve</Chip>
               <Chip tone="destructive">{report.counts.failed} failing</Chip>
+              {fixableCount !== null && (
+                <Chip tone="primary">
+                  <Wand className="h-3 w-3" /> {fixableCount} fixable by Mellox
+                </Chip>
+              )}
             </div>
           </div>
           <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-end">
@@ -536,6 +560,28 @@ export function OverviewTab({
         </AnimatePresence>
       </div>
 
+      {/* Readiness dimensions */}
+      <ReadinessDimensions
+        report={report}
+        fixModeByRule={fixModeByRule}
+        onOpenRule={(ruleId) => onOpenFindings({ ruleId })}
+      />
+
+      {/* What to do next */}
+      <div>
+        <PanelHeading
+          icon={Target}
+          title="What to do next"
+          hint="Open findings grouped by urgency and who can fix them"
+        />
+        <PriorityLanes
+          findings={scanFindings.findings}
+          error={scanFindings.error}
+          onRetry={scanFindings.reload}
+          onOpenFinding={(f) => onOpenFindings({ ruleId: f.ruleId, findingId: f.id })}
+        />
+      </div>
+
       {/* Engines */}
       <div>
         <PanelHeading
@@ -549,7 +595,7 @@ export function OverviewTab({
             return (
               <div
                 key={e.id}
-                className="min-w-0 rounded-xl border border-border/60 bg-card/50 px-3 py-2.5"
+                className="min-w-0 rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border px-3 py-2.5"
                 title={`Crawlers: ${e.bots.join(", ")}`}
               >
                 <div className="truncate text-[13px] font-medium text-foreground">{e.name}</div>
@@ -630,7 +676,7 @@ export function OverviewTab({
         </div>
         <div className="min-w-0">
           <PanelHeading icon={Eye} title="What AI engines see" hint="Homepage" />
-          <div className="space-y-3 rounded-2xl border border-border/60 bg-card/50 p-4">
+          <div className="space-y-3 rounded-2xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-4">
             {[
               ["Title", report.snapshot.title],
               ["Description", report.snapshot.description],
@@ -717,7 +763,7 @@ export function OverviewTab({
       </div>
 
       {report.rendering && report.rendering.needed > 0 && (
-        <div className="rounded-xl border border-border/60 bg-card/50 px-4 py-3 text-[12.5px]">
+        <div className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border px-4 py-3 text-[12.5px]">
           <span className="font-medium">JavaScript rendering: </span>
           {report.rendering.rendered} of {report.rendering.needed} client-rendered page
           {report.rendering.needed === 1 ? "" : "s"} were rendered in a browser for analysis.

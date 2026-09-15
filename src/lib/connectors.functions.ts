@@ -30,6 +30,12 @@ export const updateSource = serverFn<typeof Handlers.updateSource>("connectors/u
 export const removeSource = serverFn<typeof Handlers.removeSource>("connectors/removeSource");
 export const inspectSource = serverFn<typeof Handlers.inspectSource>("connectors/inspectSource");
 export const getSiteSource = serverFn<typeof Handlers.getSiteSource>("connectors/getSiteSource");
+export const verifySourceOwnership = serverFn<typeof Handlers.verifySourceOwnership>(
+  "connectors/verifySourceOwnership",
+);
+export const setAgentConsent = serverFn<typeof Handlers.setAgentConsent>(
+  "connectors/setAgentConsent",
+);
 
 /** Tell every open Mellox tab that a connection finished (the install runs in a popup). */
 export function broadcastConnector(message: ConnectorBroadcast): void {

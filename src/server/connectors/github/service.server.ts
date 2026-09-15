@@ -568,11 +568,14 @@ export async function updateSource(args: {
     site_host?: string | null;
     branch?: string;
     inspection?: null;
+    ownership_status?: "unchecked";
   } = {};
   if (args.siteUrl !== undefined) {
     const site = normalizeSiteUrl(args.siteUrl);
     patch.site_url = site?.url ?? null;
     patch.site_host = site?.host ?? null;
+    // Evidence was collected for the previous site; it proves nothing about this one.
+    if (patch.site_host !== args.source.site_host) patch.ownership_status = "unchecked";
   }
   if (args.branch !== undefined && args.branch !== args.source.branch) {
     const branch = (args.branch ?? "").trim() || args.source.default_branch;
@@ -589,6 +592,7 @@ export async function updateSource(args: {
     });
     patch.branch = branch;
     patch.inspection = null;
+    patch.ownership_status = "unchecked";
   }
   if (!Object.keys(patch).length) return presentSource(args.source);
   const { data: row, error } = await supabaseAdmin
@@ -601,6 +605,30 @@ export async function updateSource(args: {
   await audit(args.source.workspace_id, args.userId, "connector.github.source_updated", {
     sourceId: args.source.id,
     fields: Object.keys(patch),
+  });
+  return presentSource(row as SourceRow);
+}
+
+/** An admin agrees (or withdraws agreement) to send this repository's code to the GEO agent's model. */
+export async function setAgentConsent(args: {
+  source: SourceRow;
+  userId: string;
+  consent: boolean;
+}): Promise<SourceView> {
+  const { data: row, error } = await supabaseAdmin
+    .from("workspace_sources")
+    .update({
+      agent_consent_at: args.consent ? new Date().toISOString() : null,
+      agent_consent_by: args.consent ? args.userId : null,
+    })
+    .eq("id", args.source.id)
+    .select(SOURCE_COLS)
+    .single();
+  if (error || !row) throw new Error(error?.message ?? "Couldn't update consent");
+  await audit(args.source.workspace_id, args.userId, "connector.github.agent_consent", {
+    sourceId: args.source.id,
+    repository: args.source.full_name,
+    consent: args.consent,
   });
   return presentSource(row as SourceRow);
 }

@@ -1072,6 +1072,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           model: task.model,
           latencyMs: now - task.startedAt,
           ok: false,
+          taskId: task.taskId,
         });
         const next = task.kind === "image" ? task.fallbacks[0] : undefined;
         if (next) {
@@ -1117,6 +1118,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         model: task.model,
         latencyMs: Date.now() - task.startedAt,
         ok: true,
+        taskId: task.taskId,
       });
       if (!persisted.ok) {
         task.state = "failed";

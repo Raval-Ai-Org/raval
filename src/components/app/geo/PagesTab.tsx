@@ -31,7 +31,7 @@ function StatusCell({ page }: { page: GeoPageView }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-border/60 bg-card/50 p-3.5">
+    <section className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
       <h4 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
         {title}
       </h4>
@@ -369,7 +369,7 @@ export function PagesTab({ workspaceId, scan }: { workspaceId: string; scan: Geo
         />
         <label className="relative ml-auto flex items-center">
           <span className="sr-only">Search pages</span>
-          <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="pointer-events-none absolute z-10 left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}

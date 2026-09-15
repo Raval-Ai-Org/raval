@@ -60,9 +60,15 @@ try {
     expect(preflight.fixable.some((f) => f.ruleId === "tech.meta_description")).toBe(true);
     expect(preflight.fixable.every((f) => !f.ruleId.startsWith("trust."))).toBe(true);
     expect(preflight.manualCount).toBeGreaterThanOrEqual(0);
-    expect(["connect", "reconnect", "select_repository", "ready", "not_configured", "access_lost", "unsupported"]).toContain(
-      preflight.setup.requirement,
-    );
+    expect([
+      "connect",
+      "reconnect",
+      "select_repository",
+      "ready",
+      "not_configured",
+      "access_lost",
+      "unsupported",
+    ]).toContain(preflight.setup.requirement);
 
     if (preflight.setup.requirement !== "ready") {
       await expect(
@@ -73,7 +79,11 @@ try {
         }),
       ).rejects.toThrow(/not found|isn't valid|linked/i);
       await expect(
-        createFixBatch(ctx, { scanId: scan.id, sourceId: "00000000-0000-0000-0000-000000000000", baseBranch: "mellox/geo-x-aaaaaa" }),
+        createFixBatch(ctx, {
+          scanId: scan.id,
+          sourceId: "00000000-0000-0000-0000-000000000000",
+          baseBranch: "mellox/geo-x-aaaaaa",
+        }),
       ).rejects.toThrow(/branch name isn't valid/i);
     }
 

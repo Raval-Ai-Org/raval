@@ -37,6 +37,8 @@ export type RateLimitTier =
   | "geo-fix"
   | "geo-fix-batch"
   | "geo-verify"
+  | "geo-agent"
+  | "geo-agent-action"
   | "image"
   | "video"
   | "share-password";
@@ -69,6 +71,11 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   "geo-fix-batch": { limit: 4, windowSeconds: 3600, label: "fix-all run" },
   // Verification rescans of a few pages each.
   "geo-verify": { limit: 20, windowSeconds: 3600, label: "verification scan" },
+  // GEO coding agent runs: a multi-turn model investigation (capped per run in
+  // dollars too — GEO_AGENT_MAX_COST_USD).
+  "geo-agent": { limit: 10, windowSeconds: 3600, label: "GEO agent run" },
+  // Plan approvals, revisions and inputs — each may trigger more model turns.
+  "geo-agent-action": { limit: 40, windowSeconds: 3600, label: "GEO agent action" },
   // Billed per image.
   image: { limit: 30, windowSeconds: 3600, label: "image generation" },
   // Billed per video, and the most expensive call in the product.

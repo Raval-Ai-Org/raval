@@ -6,6 +6,7 @@ import type { ServerFnContext } from "@/server/server-fn";
 import { requireWorkspaceRole } from "@/server/workspace-access.server";
 import { compareScans as diffScans, type ComparableFinding } from "@/lib/geo/compare";
 import type {
+  DismissReason,
   FindingWorkflowState,
   GeoFindingView,
   GeoMonitor,
@@ -29,7 +30,9 @@ async function requireEditor(context: ServerFnContext, workspaceId: string) {
 async function loadStates(context: ServerFnContext, workspaceId: string) {
   const { data, error } = await context.supabase
     .from("geo_finding_states")
-    .select("fingerprint, state, note, resolved_via, verified_at, reopened_at")
+    .select(
+      "fingerprint, state, note, resolved_via, verified_at, reopened_at, dismiss_reason, reviewed_at",
+    )
     .eq("workspace_id", workspaceId)
     .limit(10_000);
   if (error) throw new Error(error.message);
@@ -42,6 +45,8 @@ async function loadStates(context: ServerFnContext, workspaceId: string) {
         resolution: (r.resolved_via as "verified" | "manual_legacy" | null) ?? null,
         verifiedAt: r.verified_at ?? null,
         reopenedAt: r.reopened_at ?? null,
+        dismissReason: (r.dismiss_reason as DismissReason | null) ?? null,
+        reviewedAt: r.reviewed_at ?? null,
       },
     ]),
   );
@@ -212,27 +217,145 @@ export const setFindingState = createServerFn({ method: "POST" })
         // "resolved" is set only by a verification scan (src/server/geo/fixes/verify.server.ts).
         state: z.enum(["open", "in_progress", "dismissed"]),
         note: z.string().max(1000).nullable().optional(),
+        // Ignoring a finding requires saying why.
+        dismissReason: DISMISS_REASON.nullable().optional(),
+      })
+      .refine(
+        (v) => v.state !== "dismissed" || Boolean(v.dismissReason),
+        "Choose a reason to ignore this finding",
+      )
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await requireEditor(context, data.workspaceId);
+    return writeFindingStates(context, data.workspaceId, [data.fingerprint], {
+      state: data.state,
+      note: data.note ?? null,
+      dismissReason: data.state === "dismissed" ? (data.dismissReason ?? null) : null,
+    }).then(() => ({ fingerprint: data.fingerprint, state: data.state }));
+  });
+
+const DISMISS_REASON = z.enum(["false_positive", "not_relevant", "wont_fix", "handled_elsewhere"]);
+
+async function writeFindingStates(
+  context: ServerFnContext,
+  workspaceId: string,
+  fingerprints: string[],
+  change: {
+    state: "open" | "in_progress" | "dismissed";
+    note: string | null;
+    dismissReason: string | null;
+  },
+) {
+  const now = new Date().toISOString();
+  // Resolved findings stay resolved: only a verification scan changes them.
+  const { data: resolved } = await context.supabase
+    .from("geo_finding_states")
+    .select("fingerprint")
+    .eq("workspace_id", workspaceId)
+    .eq("state", "resolved")
+    .in("fingerprint", fingerprints);
+  const skip = new Set((resolved ?? []).map((r) => r.fingerprint));
+  const rows = fingerprints
+    .filter((fp) => !skip.has(fp))
+    .map((fingerprint) => ({
+      workspace_id: workspaceId,
+      fingerprint,
+      state: change.state,
+      note: change.note,
+      dismiss_reason: change.dismissReason,
+      resolved_via: null,
+      verified_at: null,
+      verification_id: null,
+      updated_by: context.userId,
+      updated_at: now,
+    }));
+  if (!rows.length) return { updated: 0, skippedResolved: skip.size };
+  const { error } = await context.supabase
+    .from("geo_finding_states")
+    .upsert(rows, { onConflict: "workspace_id,fingerprint" });
+  if (error) throw new Error(error.message);
+  return { updated: rows.length, skippedResolved: skip.size };
+}
+
+/** One write for many findings (no silent caps, no partial client-side loops). */
+export const bulkSetFindingStates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        fingerprints: z.array(z.string().min(3).max(800)).min(1).max(500),
+        state: z.enum(["open", "in_progress", "dismissed"]),
+        note: z.string().max(1000).nullable().optional(),
+        dismissReason: DISMISS_REASON.nullable().optional(),
+      })
+      .refine(
+        (v) => v.state !== "dismissed" || Boolean(v.dismissReason),
+        "Choose a reason to ignore these findings",
+      )
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await requireEditor(context, data.workspaceId);
+    return writeFindingStates(context, data.workspaceId, [...new Set(data.fingerprints)], {
+      state: data.state,
+      note: data.note ?? null,
+      dismissReason: data.state === "dismissed" ? (data.dismissReason ?? null) : null,
+    });
+  });
+
+/** Mark findings reviewed (someone looked at the evidence) without changing their state. */
+export const markFindingsReviewed = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        fingerprints: z.array(z.string().min(3).max(800)).min(1).max(500),
+        reviewed: z.boolean(),
       })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
     await requireEditor(context, data.workspaceId);
-    const { error } = await context.supabase.from("geo_finding_states").upsert(
-      {
+    const fingerprints = [...new Set(data.fingerprints)];
+    const now = new Date().toISOString();
+    const { data: existing, error: readError } = await context.supabase
+      .from("geo_finding_states")
+      .select("fingerprint, state")
+      .eq("workspace_id", data.workspaceId)
+      .in("fingerprint", fingerprints);
+    if (readError) throw new Error(readError.message);
+    const known = new Map((existing ?? []).map((r) => [r.fingerprint, r.state]));
+    const review = {
+      reviewed_at: data.reviewed ? now : null,
+      reviewed_by: data.reviewed ? context.userId : null,
+    };
+    const updates = fingerprints.filter((fp) => known.has(fp));
+    if (updates.length) {
+      const { error } = await context.supabase
+        .from("geo_finding_states")
+        .update({ ...review, updated_by: context.userId, updated_at: now })
+        .eq("workspace_id", data.workspaceId)
+        .in("fingerprint", updates);
+      if (error) throw new Error(error.message);
+    }
+    const inserts = fingerprints
+      .filter((fp) => !known.has(fp))
+      .map((fingerprint) => ({
         workspace_id: data.workspaceId,
-        fingerprint: data.fingerprint,
-        state: data.state,
-        note: data.note ?? null,
-        resolved_via: null,
-        verified_at: null,
-        verification_id: null,
+        fingerprint,
+        state: "open",
+        ...review,
         updated_by: context.userId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "workspace_id,fingerprint" },
-    );
-    if (error) throw new Error(error.message);
-    return { fingerprint: data.fingerprint, state: data.state };
+        updated_at: now,
+      }));
+    if (inserts.length) {
+      const { error } = await context.supabase.from("geo_finding_states").insert(inserts);
+      if (error) throw new Error(error.message);
+    }
+    return { updated: fingerprints.length, reviewed: data.reviewed };
   });
 
 /* ------------------------------------------------------------------ */

@@ -32,6 +32,7 @@ const buttonVariants = cva(
     "duration-[--motion-duration-base] ease-[--motion-ease-standard]",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     "disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none",
+    "active:scale-[0.98]",
     // Icons are real SVGs now, so these selectors actually apply. Under the
     // previous font-ligature icon system they matched nothing, and every
     // button silently fell back to the icon module's own default size.
@@ -41,9 +42,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: [
-          "bg-primary text-primary-foreground shadow-1",
+          "bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)]",
           "hover:bg-[color-mix(in_oklab,hsl(var(--primary))_88%,hsl(var(--foreground)))]",
-          "hover:shadow-2 active:shadow-none",
+          "hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)] active:shadow-none",
         ].join(" "),
         destructive: [
           "bg-destructive text-destructive-foreground shadow-1",

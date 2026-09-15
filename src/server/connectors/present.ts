@@ -9,12 +9,13 @@ import type {
   SourceInspection,
   SourceView,
 } from "@/lib/connectors/types";
+import type { OwnershipEvidence, OwnershipStatus } from "@/lib/connectors/ownership";
 
 export const CONNECTION_COLS =
   "id, workspace_id, provider, status, external_account_id, account_login, account_type, account_avatar_url, manage_url, repository_selection, permissions, verification, last_verified_at, last_error, revoked_at, revoked_reason, created_at";
 
 export const SOURCE_COLS =
-  "id, workspace_id, connection_id, provider, external_id, name, full_name, owner_login, private, default_branch, branch, html_url, site_url, site_host, status, inspection, last_synced_at, last_error, created_at";
+  "id, workspace_id, connection_id, provider, external_id, name, full_name, owner_login, private, default_branch, branch, html_url, site_url, site_host, status, inspection, last_synced_at, last_error, created_at, ownership_status, ownership_confidence, ownership_site_host, ownership_commit_sha, ownership_evidence, ownership_hints, ownership_checked_at, agent_consent_at";
 
 export type ConnectionRow = {
   id: string;
@@ -56,6 +57,14 @@ export type SourceRow = {
   last_synced_at: string | null;
   last_error: string | null;
   created_at: string;
+  ownership_status: OwnershipStatus;
+  ownership_confidence: number | string | null;
+  ownership_site_host: string | null;
+  ownership_commit_sha: string | null;
+  ownership_evidence: OwnershipEvidence[] | null;
+  ownership_hints: string[] | null;
+  ownership_checked_at: string | null;
+  agent_consent_at: string | null;
 };
 
 const SAFE_URL = /^https:\/\/(github\.com|avatars\.githubusercontent\.com)\//;
@@ -99,5 +108,22 @@ export function presentSource(row: SourceRow): SourceView {
     lastSyncedAt: row.last_synced_at,
     lastError: row.last_error,
     selectedAt: row.created_at,
+    ownership: {
+      status: row.ownership_status ?? "unchecked",
+      confidence: row.ownership_confidence == null ? null : Number(row.ownership_confidence),
+      siteHost: row.ownership_site_host ?? null,
+      commitSha: row.ownership_commit_sha ?? null,
+      evidence: (row.ownership_evidence ?? []).slice(0, 30).map((e) => ({
+        signal: e.signal,
+        weight: e.weight,
+        polarity: e.polarity,
+        detail: String(e.detail ?? "").slice(0, 300),
+        ...(e.path ? { path: String(e.path).slice(0, 300) } : {}),
+        ...(e.url && /^https?:\/\//i.test(e.url) ? { url: String(e.url).slice(0, 300) } : {}),
+      })),
+      hints: (row.ownership_hints ?? []).slice(0, 6).map((h) => String(h).slice(0, 300)),
+      checkedAt: row.ownership_checked_at ?? null,
+    },
+    agentConsentAt: row.agent_consent_at ?? null,
   };
 }

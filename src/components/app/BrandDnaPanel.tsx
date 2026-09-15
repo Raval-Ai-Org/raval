@@ -899,7 +899,7 @@ function TileToolbar({
       <label className="relative flex min-w-0 flex-1 items-center">
         <SearchIcon
           aria-hidden="true"
-          className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-muted-foreground"
+          className="pointer-events-none absolute z-10 left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
         />
         <span className="sr-only">Search Brand DNA sections</span>
         <Input
