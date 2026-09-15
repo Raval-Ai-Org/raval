@@ -689,7 +689,9 @@ async function runImplementation(run: AgentRunRow) {
       ? await transition(moved, "fail", {
           error_code: outcome.code,
           error: outcome.message,
-          failed_at_step: "validating",
+          // A patch that failed review/validation stopped at validating; budget,
+          // turn or deadline limits stopped while implementing.
+          failed_at_step: outcome.validation || outcome.review ? "validating" : "implementing",
           status_detail: outcome.message.slice(0, 500),
           usage,
           review: (outcome.review ?? null) as unknown as Json,
@@ -1022,9 +1024,65 @@ async function handleRunError(run: AgentRunRow, error: unknown) {
   });
 }
 
+const ACTIVE_STATUSES = [
+  "queued",
+  "investigating",
+  "implementing",
+  "reviewing",
+  "validating",
+  "correcting",
+] as const;
+
+/**
+ * Runs whose lease expired after their last allowed attempt are never claimed
+ * again (claim_geo_agent_runs requires attempts < max_attempts). Fail them so
+ * the UI stops showing progress and offers Retry instead of spinning forever.
+ */
+export async function failExhaustedRuns(id?: string): Promise<number> {
+  let query = supabaseAdmin
+    .from("geo_agent_runs")
+    .select("id, attempts, max_attempts, lease_until")
+    .in("status", [...ACTIVE_STATUSES])
+    .limit(20);
+  if (id) query = query.eq("id", id);
+  const { data, error } = await query;
+  if (error) throw new Error(`exhausted run sweep failed: ${error.message}`);
+  const now = Date.now();
+  let failed = 0;
+  for (const row of data ?? []) {
+    if (row.attempts < row.max_attempts) continue;
+    if (row.lease_until && Date.parse(row.lease_until) > now) continue;
+    const run = await loadRun(row.id);
+    if (!run || !nextStatus(run.status, "fail")) continue;
+    const message =
+      "The run was interrupted too many times (server restarts or time limits) and stopped. Retry to start again.";
+    const moved = await transition(run, "fail", {
+      error_code: "attempts_exhausted",
+      error: message,
+      status_detail: message,
+      failed_at_step:
+        run.status === "queued" || run.status === "investigating"
+          ? "investigating"
+          : "implementing",
+      checkpoint: null,
+    });
+    if (!moved) continue;
+    failed++;
+    await logAgentEvent(run, { stage: null, kind: "error", actor: "system", summary: message });
+  }
+  return failed;
+}
+
+/** Retention for checkpoints (repository code), patches and events — see the migration. */
+export async function pruneAgentRuns() {
+  const { data, error } = await supabaseAdmin.rpc("prune_geo_agent_runs");
+  if (error) throw new Error(`prune_geo_agent_runs failed: ${error.message}`);
+  return data;
+}
+
 export async function runDueAgentRuns(opts: { budgetMs?: number; max?: number; id?: string } = {}) {
   const deadline = Date.now() + (opts.budgetMs ?? 100_000);
-  const results = { claimed: 0, errors: 0 };
+  const results = { claimed: 0, errors: 0, exhausted: await failExhaustedRuns(opts.id) };
   while (results.claimed < (opts.max ?? 1) && Date.now() < deadline - 20_000) {
     const { data, error } = await supabaseAdmin.rpc("claim_geo_agent_runs", {
       p_worker: WORKER,

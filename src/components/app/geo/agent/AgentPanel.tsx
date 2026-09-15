@@ -716,7 +716,7 @@ export function AgentPanel({
         {!ready ? (
           <p className="text-[12px] text-muted-foreground">
             {notReadyReason ??
-              "Connect and verify the repository behind this website first (see Fix method above)."}
+              "Connect and verify the repository behind this website first (see Repository setup below)."}
           </p>
         ) : !canPropose ? (
           <p className="text-[12px] text-muted-foreground">An editor can start the GEO Engineer.</p>
