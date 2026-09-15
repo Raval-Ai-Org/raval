@@ -223,9 +223,41 @@ describe("Market Intelligence engine", () => {
   it("regenerates when the collection is refreshed in place with new data", async () => {
     await analyzeMarketCollection({ collectionId, workspaceId });
     state.collection!.completed_at = "2026-09-11T06:00:00.000Z";
+    state.collection!.normalized_result = {
+      ...trendData,
+      interestOverTime: [
+        ...trendData.interestOverTime,
+        { timestamp: 2, date: "2024-01-08", values: [95] },
+      ],
+    };
     const refreshed = await analyzeMarketCollection({ collectionId, workspaceId });
     expect(refreshed.state).toBe("completed");
     expect(claudeTextPrompt).toHaveBeenCalledTimes(2);
+  });
+
+  // A daily re-collection that returned identical evidence must not bill again.
+  it("reuses the analysis when a refreshed collection returned identical evidence", async () => {
+    await analyzeMarketCollection({ collectionId, workspaceId });
+    state.collection!.completed_at = "2026-09-11T06:00:00.000Z";
+    const refreshed = await analyzeMarketCollection({ collectionId, workspaceId });
+    expect(refreshed.state).toBe("cached");
+    expect(claudeTextPrompt).toHaveBeenCalledOnce();
+  });
+
+  it("analyses on the default (Sonnet) tier unless MARKET_INTELLIGENCE_MODEL overrides it", async () => {
+    const { selectClaudeModel } = await import("@/lib/anthropic-gateway.server");
+    await analyzeMarketCollection({ collectionId, workspaceId });
+    expect(selectClaudeModel).toHaveBeenCalledWith("default");
+    expect(claudeTextPrompt.mock.calls[0][0].model).toBe("test-model");
+
+    state.cached = null;
+    process.env.MARKET_INTELLIGENCE_MODEL = "claude-opus-5";
+    try {
+      await analyzeMarketCollection({ collectionId, workspaceId });
+      expect(claudeTextPrompt.mock.calls[1][0].model).toBe("claude-opus-5");
+    } finally {
+      delete process.env.MARKET_INTELLIGENCE_MODEL;
+    }
   });
 
   it("regenerates instead of returning an empty cached result when the cache entry is invalid", async () => {

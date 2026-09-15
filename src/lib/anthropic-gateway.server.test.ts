@@ -2,9 +2,100 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CLAUDE_SONNET_MODEL,
   CLAUDE_OPUS_MODEL,
+  claudeJsonPrompt,
   claudeTextPrompt,
   selectClaudeModel,
 } from "./anthropic-gateway.server";
+
+describe("claudeJsonPrompt with an output schema", () => {
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: { headline: { type: "string" } },
+    required: ["headline"],
+  };
+  const reply = (body: Record<string, unknown>) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  it("returns schema-constrained JSON from a single call with no repair request", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        reply({ stop_reason: "end_turn", content: [{ type: "text", text: '{"headline":"Go"}' }] }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const out = await claudeJsonPrompt({
+      route: "coach.briefing",
+      system: "s",
+      user: "u",
+      fallback: {},
+      effort: "medium",
+      maxTokens: 6000,
+      outputSchema: schema,
+    });
+
+    expect(out).toEqual({ headline: "Go" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(request.system).toBe("s");
+    expect(request.output_config).toEqual({
+      effort: "medium",
+      format: { type: "json_schema", schema },
+    });
+  });
+
+  it("retries an answer cut off at the ceiling once, with twice the ceiling", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        reply({ stop_reason: "max_tokens", content: [{ type: "text", text: '{"head' }] }),
+      )
+      .mockResolvedValueOnce(
+        reply({ stop_reason: "end_turn", content: [{ type: "text", text: '{"headline":"Go"}' }] }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const out = await claudeJsonPrompt({
+      route: "brand-extract",
+      system: "s",
+      user: "u",
+      fallback: {},
+      maxTokens: 4000,
+      outputSchema: schema,
+    });
+
+    expect(out).toEqual({ headline: "Go" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).max_tokens).toBe(8000);
+  });
+
+  // A timed-out generation may already be billed: re-sending it pays twice.
+  it("does not automatically re-send a generation that timed out", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error("aborted"), { name: "AbortError" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      claudeJsonPrompt({
+        route: "brand-extract",
+        system: "s",
+        user: "u",
+        fallback: {},
+        outputSchema: schema,
+        retries: 2,
+      }),
+    ).rejects.toMatchObject({ code: "timeout" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();

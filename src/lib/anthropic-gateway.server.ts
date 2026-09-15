@@ -44,6 +44,7 @@ async function requestClaude(
   timeoutMs = 60_000,
   route = "unknown",
   retries?: number,
+  retryOnTimeout = true,
 ): Promise<any> {
   const apiKey = getAnthropicKey();
 
@@ -62,6 +63,7 @@ async function requestClaude(
     {
       timeoutMs,
       retries,
+      retryOnTimeout,
       // Anthropic returns 500 for transient failures, 529 for overload, plus 5xx gateway errors.
       retryableStatuses: [429, 500, 502, 503, 504, 529],
       onTransportError: ({ kind, detail }) =>
@@ -202,6 +204,9 @@ export async function claudeTextCompletion(opts: ClaudeTextOpts): Promise<Claude
       opts.timeoutMs ?? 60_000,
       opts.route,
       opts.retries,
+      // A single long generation that timed out may already be billed; 429,
+      // 5xx and 529 are still retried.
+      false,
     );
   } catch (error) {
     recordUsage({
@@ -586,21 +591,80 @@ export async function claudeTextPrompt(opts: ClaudeTextOpts): Promise<string> {
 const JSON_ONLY =
   "Return ONLY valid JSON matching the requested schema. Do not wrap in markdown fences. Do not add prose before or after the JSON.";
 
-/**
- * Claude JSON prompt with a safe default. A parse failure gets one repair
- * attempt (with a larger budget if the first answer was cut off); if that also
- * fails the fallback is returned and a `parse_failure` guardrail event is
- * recorded — never silently. Callers that must not use a fallback should use
- * claudeStructuredPrompt.
- */
-export async function claudeJsonPrompt<T>(opts: {
+export type ClaudeJsonPromptOpts<T> = {
   route: string;
   system: string;
   user: string;
   fallback: T;
   model?: string;
   maxTokens?: number;
-}): Promise<T> {
+  effort?: ClaudeEffort;
+  /**
+   * JSON Schema for structured output. The answer is then valid JSON by
+   * construction, so no parse-repair call is made; an answer cut off at the
+   * ceiling is retried once with twice the ceiling.
+   */
+  outputSchema?: Record<string, unknown>;
+  timeoutMs?: number;
+  retries?: number;
+};
+
+const isCutOff = (error: unknown) =>
+  error instanceof AnthropicGatewayError && error.code === "max_tokens";
+
+async function claudeSchemaPrompt<T>(
+  opts: ClaudeJsonPromptOpts<T>,
+  schema: Record<string, unknown>,
+): Promise<T> {
+  const maxTokens = opts.maxTokens ?? 1800;
+  const call = (ceiling: number) =>
+    claudeTextCompletion({
+      route: opts.route,
+      system: opts.system,
+      user: opts.user,
+      model: opts.model,
+      maxTokens: ceiling,
+      effort: opts.effort,
+      outputSchema: schema,
+      timeoutMs: opts.timeoutMs,
+      retries: opts.retries,
+    });
+  let text: string | null = null;
+  let truncated = false;
+  try {
+    text = (await call(maxTokens)).text;
+  } catch (error) {
+    if (!isCutOff(error)) throw error;
+    truncated = true;
+    try {
+      text = (await call(Math.min(maxTokens * 2, 16_000))).text;
+    } catch (retryError) {
+      if (!isCutOff(retryError)) throw retryError;
+    }
+  }
+  if (text !== null) {
+    const sentinel = Symbol("unparsed");
+    const parsed = safeParseJson<T | typeof sentinel>(text, sentinel);
+    if (parsed !== sentinel && parsed != null) return parsed as T;
+  }
+  logGuardrailEvent({
+    kind: "parse_failure",
+    severity: "warn",
+    route: opts.route,
+    detail: { fallbackUsed: true, truncated, provider: "anthropic", structured: true },
+  });
+  return opts.fallback;
+}
+
+/**
+ * Claude JSON prompt with a safe default. With `outputSchema` the answer is
+ * schema-constrained (see claudeSchemaPrompt). Without one, a parse failure
+ * gets one repair attempt (with a larger budget if the first answer was cut
+ * off); if that also fails the fallback is returned and a `parse_failure`
+ * guardrail event is recorded — never silently.
+ */
+export async function claudeJsonPrompt<T>(opts: ClaudeJsonPromptOpts<T>): Promise<T> {
+  if (opts.outputSchema) return claudeSchemaPrompt(opts, opts.outputSchema);
   const system = `${opts.system}\n\n${JSON_ONLY}`;
   const first = await claudeTextCompletion({
     route: opts.route,

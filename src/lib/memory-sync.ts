@@ -22,6 +22,51 @@ const similar = (a: string, b: string) => {
   return x.includes(y) || y.includes(x);
 };
 
+/** History window read per sync (newest messages). */
+const HISTORY_WINDOW = 60;
+/** Already-extracted turns re-sent ahead of the new ones, for context. */
+export const CONTEXT_OVERLAP = 2;
+/** New user text shorter than this ("ok", "thanks") can't hold a durable fact. */
+export const MIN_NEW_USER_CHARS = 40;
+const MAX_WATERMARKS = 50;
+
+type Turn = { role: "user" | "assistant"; content: string; at: number };
+
+/**
+ * Pick what to send for extraction: only turns newer than the watermark, plus
+ * CONTEXT_OVERLAP earlier turns. Returns null when there is nothing new worth
+ * a model call. Exported for tests.
+ */
+export function selectNewTurns(
+  turns: Turn[],
+  since: number,
+): { send: Turn[]; newest: number; substantive: boolean } | null {
+  const firstNew = turns.findIndex((t) => t.at > since);
+  if (firstNew === -1) return null;
+  const fresh = turns.slice(firstNew);
+  const newUserChars = fresh
+    .filter((t) => t.role === "user")
+    .reduce((sum, t) => sum + t.content.trim().length, 0);
+  return {
+    send: turns.slice(Math.max(0, firstNew - CONTEXT_OVERLAP)),
+    newest: Math.max(...fresh.map((t) => t.at)),
+    substantive: newUserChars >= MIN_NEW_USER_CHARS,
+  };
+}
+
+/** Set one watermark, keeping only the most recently synced keys. Exported for tests. */
+export function nextWatermarks(
+  current: Record<string, number> | undefined,
+  key: string,
+  at: number,
+): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries({ ...(current ?? {}), [key]: at })
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, MAX_WATERMARKS),
+  );
+}
+
 interface ExtractedMemory {
   insights?: { title: string; body: string }[];
   competitors?: Partial<Competitor>[];
@@ -37,13 +82,14 @@ export async function syncMemoryFromChat(
   save: (next: Partial<BrandDna>) => void,
   conversationId?: string | null,
 ): Promise<{ added: number; skipped?: string }> {
-  // Pull recent chat history from Supabase (RLS-scoped).
+  // Pull the NEWEST chat history (RLS-scoped). Ascending + limit used to return
+  // the oldest 60 messages forever, re-extracting them and never the new ones.
   let historyQuery = supabase
     .from("chat_messages")
     .select("role,content,created_at")
     .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: true })
-    .limit(60);
+    .order("created_at", { ascending: false })
+    .limit(HISTORY_WINDOW);
   if (conversationId) historyQuery = historyQuery.eq("conversation_id", conversationId);
   const { data, error } = await historyQuery;
 
@@ -51,15 +97,32 @@ export async function syncMemoryFromChat(
     return { added: 0, skipped: "no chat history" };
   }
 
-  const messages = (data as { role: string; content: string }[])
+  const turns: Turn[] = (data as { role: string; content: string; created_at: string }[])
+    .slice()
+    .reverse()
     .filter((m) => m.role === "user" || m.role === "assistant")
     .filter((m) => typeof m.content === "string" && m.content.trim().length > 0)
     .map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content.slice(0, 8000),
+      at: Date.parse(m.created_at) || 0,
     }));
 
-  if (messages.length === 0) return { added: 0, skipped: "empty" };
+  if (turns.length === 0) return { added: 0, skipped: "empty" };
+
+  // Incremental: only turns this conversation hasn't sent for extraction yet.
+  const watermarkKey = conversationId ?? "workspace";
+  const selection = selectNewTurns(turns, dna.memorySyncedAt?.[watermarkKey] ?? 0);
+  if (!selection) return { added: 0, skipped: "no new messages" };
+  const synced = {
+    memoryLastMsgCount: turns.length,
+    memorySyncedAt: nextWatermarks(dna.memorySyncedAt, watermarkKey, selection.newest),
+  };
+  if (!selection.substantive) {
+    save(synced);
+    return { added: 0, skipped: "nothing substantive" };
+  }
+  const messages = selection.send.map(({ role, content }) => ({ role, content }));
 
   const known = {
     brandName: dna.brandName || undefined,
@@ -78,6 +141,7 @@ export async function syncMemoryFromChat(
   });
 
   if (!res.ok) {
+    // Watermark unchanged: the same turns are retried on the next sync.
     return { added: 0, skipped: `extract failed (${res.status})` };
   }
 
@@ -174,7 +238,7 @@ export async function syncMemoryFromChat(
     newFeedback.length === 0 &&
     Object.keys(brandPatch).length === 0
   ) {
-    save({ memoryLastMsgCount: messages.length, memoryUpdatedAt: now });
+    save({ ...synced, memoryUpdatedAt: now });
     return { added: 0 };
   }
 
@@ -188,7 +252,7 @@ export async function syncMemoryFromChat(
       objectionSignals: [...dna.customer.objectionSignals, ...newObjections],
       feedbackSources: [...dna.customer.feedbackSources, ...newFeedback],
     },
-    memoryLastMsgCount: messages.length,
+    ...synced,
     memoryUpdatedAt: now,
   });
 

@@ -136,6 +136,8 @@ export type RunToolOpts = {
   parameters: Record<string, unknown>;
   system: string;
   user: string;
+  /** Default: the chat model. Classification-style tools should pass the economy model. */
+  model?: string;
   maxTokens?: number;
   temperature?: number;
   noCache?: boolean;
@@ -155,6 +157,7 @@ export async function runTool<T>(opts: RunToolOpts): Promise<T | null> {
     },
   };
   const json = await chatCompletion({
+    model: opts.model,
     messages: [
       { role: "system", content: opts.system },
       { role: "user", content: opts.user },

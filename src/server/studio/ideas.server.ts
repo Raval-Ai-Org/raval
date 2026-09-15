@@ -17,13 +17,13 @@ import {
   type StudioIdea,
 } from "@/lib/studio/ideas";
 import { sections } from "@/lib/studio/prompts";
+import { cache } from "@/server/cache/store";
 import { loadStudioContext } from "./context.server";
 
-const CACHE_MS = 30 * 60_000;
-const cache = new Map<
-  string,
-  { at: number; ideas: StudioIdea[]; generated: "model" | "fallback" }
->();
+// Shared cache (Redis when configured): every app instance reuses one model
+// pass instead of each process paying for its own.
+const CACHE_TTL_SECONDS = 30 * 60;
+type CachedIdeas = { ideas: StudioIdea[]; generated: "model" | "fallback" };
 
 const IdeasSchema = z.object({
   ideas: z
@@ -77,8 +77,9 @@ export async function generateStudioIdeas(args: {
         .join("|"),
     ),
   ].join(":");
-  const hit = cache.get(key);
-  if (hit && !args.refresh && Date.now() - hit.at < CACHE_MS) {
+  const cacheKey = `studio:ideas:${key}`;
+  const hit = args.refresh ? null : await cache.get<CachedIdeas>(cacheKey);
+  if (hit) {
     return {
       ideas: dedupeIdeas(hit.ideas, args.dismissed ?? []).slice(0, limit),
       generated: hit.generated,
@@ -170,6 +171,6 @@ export async function generateStudioIdeas(args: {
   }
 
   const deduped = dedupeIdeas(ideas, avoid);
-  cache.set(key, { at: Date.now(), ideas: deduped, generated });
+  await cache.set(cacheKey, { ideas: deduped, generated } satisfies CachedIdeas, CACHE_TTL_SECONDS);
   return { ideas: deduped.slice(0, limit), generated, cached: false };
 }

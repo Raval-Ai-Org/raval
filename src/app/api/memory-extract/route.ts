@@ -31,6 +31,8 @@ const BodySchema = z.object({
     .optional(),
 });
 
+const MAX_TRANSCRIPT_CHARS = 12_000;
+
 const EMPTY = {
   insights: [],
   competitors: [],
@@ -128,10 +130,15 @@ export const POST = defineRoute({
   // Gemini tool call over up to 12k chars of transcript.
   rateLimit: "generate",
   handler: async ({ body }) => {
-    const transcript = body.messages
+    // Keep the NEWEST 12k chars: the newest turns are the ones not yet extracted
+    // (slicing from the front re-read old turns and dropped the new facts).
+    const fullTranscript = body.messages
       .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
-      .join("\n\n")
-      .slice(0, 12_000);
+      .join("\n\n");
+    const transcript =
+      fullTranscript.length > MAX_TRANSCRIPT_CHARS
+        ? fullTranscript.slice(fullTranscript.length - MAX_TRANSCRIPT_CHARS)
+        : fullTranscript;
 
     const known = body.current ?? {};
     const knownBlock = assemble([

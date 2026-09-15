@@ -129,6 +129,8 @@ export interface BrandDna {
   userInsights: MemoryNote[];
   memoryLastMsgCount?: number;
   memoryUpdatedAt?: number;
+  /** Newest chat message (ms) already sent for memory extraction, per conversation id or "workspace". */
+  memorySyncedAt?: Record<string, number>;
 }
 
 export const emptyCustomer: CustomerSignals = {
