@@ -6,6 +6,7 @@ import {
   getGitHubDiagnostic,
   normalizePrivateKey,
   resolveInstallVerification,
+  safeReturnPath,
 } from "./config.server";
 import { signAppJwt } from "./api.server";
 import { handleGitHubWebhook, verifyGitHubSignature, type WebhookDeps } from "./webhook";
@@ -405,5 +406,32 @@ describe("GitHub install return origin", () => {
       "http://127.0.0.1:8081",
     );
     expect(allowedReturnOrigin("http://localhost:8080", env, { allowLocal: false })).toBeNull();
+  });
+});
+
+describe("GitHub connect return path", () => {
+  it("keeps same-origin in-app paths, normalized", () => {
+    expect(safeReturnPath("/app?settings=connections")).toBe("/app?settings=connections");
+    expect(safeReturnPath("/app?geo=findings&rule=geo.llms-txt")).toBe(
+      "/app?geo=findings&rule=geo.llms-txt",
+    );
+    expect(safeReturnPath("/app/../app?x=1#top")).toBe("/app?x=1#top");
+  });
+
+  it("refuses absolute, protocol-relative, backslash and control-character paths", () => {
+    for (const bad of [
+      "https://evil.example/app",
+      "//evil.example/app",
+      "/\\evil.example",
+      "javascript:alert(1)",
+      "app?settings=connections",
+      "/app\n?x=1",
+      `/${"a".repeat(400)}`,
+      "",
+      null,
+      undefined,
+    ]) {
+      expect(safeReturnPath(bad)).toBeNull();
+    }
   });
 });

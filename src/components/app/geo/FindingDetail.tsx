@@ -251,10 +251,12 @@ export function SetupRequirement({
   setup: FixSetup;
   onReload: () => void;
 }) {
-  const { installing, install } = useGithubInstall(workspaceId, {
-    onConnected: onReload,
-    onSettled: onReload,
-  });
+  // GitHub returns to AI Visibility on this finding's rule.
+  const returnRule = "ruleId" in setup && typeof setup.ruleId === "string" ? setup.ruleId : null;
+  const { installing, install } = useGithubInstall(
+    workspaceId,
+    `/app?geo=findings${returnRule ? `&rule=${encodeURIComponent(returnRule)}` : ""}`,
+  );
   const [linking, setLinking] = useState(false);
   const a = setup;
 
@@ -289,7 +291,7 @@ export function SetupRequirement({
             </p>
             <p className="text-[12px] text-muted-foreground">
               {installing
-                ? "Finish on GitHub…"
+                ? "Opening GitHub…"
                 : "Mellox opens reviewed pull requests — never pushes."}
             </p>
           </div>

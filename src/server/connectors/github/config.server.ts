@@ -294,6 +294,24 @@ export function allowedReturnOrigin(
   return allowed.includes(url.origin) ? url.origin : null;
 }
 
+/**
+ * The in-app page to return to after connecting: a same-origin relative path
+ * (e.g. "/app?settings=connections"), or null when absent or unsafe.
+ */
+export function safeReturnPath(value: string | null | undefined): string | null {
+  if (!value || value.length > 300) return null;
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return null;
+  if (/\p{Cc}/u.test(value)) return null;
+  const base = "https://return-path.invalid";
+  try {
+    const url = new URL(value, base);
+    if (url.origin !== base) return null;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 export function requireGitHubConfig(): GitHubAppConfig {
   const check = getGitHubConfigCheck();
   if (!check.ok) {

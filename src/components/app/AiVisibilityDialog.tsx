@@ -5,6 +5,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Sparkles } from "@/components/ui/gemini-icons";
 import { takePendingGeoRun } from "@/lib/geo/pending-run";
+import type { FindingsFilter } from "@/components/app/geo/FindingsTab";
 
 const GeoAeoPanel = lazy(() =>
   import("@/components/app/GeoAeoPanel").then((m) => ({ default: m.GeoAeoPanel })),
@@ -19,6 +20,8 @@ export function AiVisibilityDialog({ workspaceId }: { workspaceId: string | null
   const [open, setOpen] = useState(false);
   // Non-zero while a chat/suggestion scan request waits for the panel to start it.
   const [runToken, setRunToken] = useState(0);
+  // Deep link /app?geo=findings[&rule=…] — e.g. back from connecting GitHub on a finding.
+  const [initialFindings, setInitialFindings] = useState<FindingsFilter | undefined>();
 
   const requestRun = useCallback(() => {
     setOpen(true);
@@ -40,6 +43,14 @@ export function AiVisibilityDialog({ workspaceId }: { workspaceId: string | null
     addAppEventListener("geo:run-audit", runFn);
     addAppEventListener("chat:prefill", closeFn);
     addAppEventListener("open:brand-dna", closeFn);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("geo") === "findings") {
+      const rule = url.searchParams.get("rule");
+      setInitialFindings(rule && /^[w.:-]{1,80}$/.test(rule) ? { ruleId: rule } : {});
+      setOpen(true);
+      for (const key of ["geo", "rule", "github"]) url.searchParams.delete(key);
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
     // A request that arrived before this code-split dialog finished loading.
     if (takePendingGeoRun()) requestRun();
     return () => {
@@ -74,6 +85,7 @@ export function AiVisibilityDialog({ workspaceId }: { workspaceId: string | null
             workspaceId={workspaceId}
             autoRunToken={runToken}
             onAutoRunHandled={() => setRunToken(0)}
+            initialFindings={initialFindings}
           />
         ) : (
           <div className="grid place-items-center py-24 text-sm text-muted-foreground">

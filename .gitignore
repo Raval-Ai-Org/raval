@@ -46,3 +46,4 @@ playwright-report
 !.env.example
 .dev.vars
 
+.next-e2e

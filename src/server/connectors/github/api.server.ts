@@ -17,7 +17,15 @@ import {
   type GitHubDiagnostic,
 } from "./config.server";
 
-const API = "https://api.github.com";
+// Tests only: GITHUB_API_BASE_OVERRIDE points every GitHub call (API, OAuth and
+// the authorize/install pages) at a local double. Never honoured in production.
+const TEST_BASE =
+  process.env.NODE_ENV !== "production"
+    ? (process.env.GITHUB_API_BASE_OVERRIDE ?? "").trim().replace(/\/+$/, "")
+    : "";
+const API = TEST_BASE || "https://api.github.com";
+/** Where users authorize and install the App. */
+export const GITHUB_WEB = TEST_BASE || "https://github.com";
 const API_VERSION = "2022-11-28";
 const TIMEOUT_MS = 15_000;
 
@@ -304,7 +312,7 @@ export async function exchangeOAuthCode(code: string): Promise<string> {
   const config = requireGitHubConfig();
   if (!config.clientId || !config.clientSecret) throw new Error("GitHub OAuth is not configured");
   const res = await fetchWithTimeout(
-    "https://github.com/login/oauth/access_token",
+    `${GITHUB_WEB}/login/oauth/access_token`,
     {
       method: "POST",
       headers: { accept: "application/json", "content-type": "application/json" },
@@ -331,18 +339,28 @@ export async function exchangeOAuthCode(code: string): Promise<string> {
   return json.access_token;
 }
 
-/** Whether the OAuth user can access `installationId` (paginates /user/installations). */
+export type UserInstallation = { id: string; accountLogin: string | null };
+
+/** Installations of this App the OAuth user can access (paginates /user/installations). */
+export async function listUserInstallations(userToken: string): Promise<UserInstallation[]> {
+  const found: UserInstallation[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const res = await send(`/user/installations?per_page=100&page=${page}`, `token ${userToken}`);
+    if (!res.ok) throw await toError(res);
+    const json = (await res.json()) as {
+      installations?: { id: number; account?: { login?: string } | null }[];
+    };
+    const list = json.installations ?? [];
+    for (const i of list) found.push({ id: String(i.id), accountLogin: i.account?.login ?? null });
+    if (list.length < 100) break;
+  }
+  return found;
+}
+
+/** Whether the OAuth user can access `installationId`. */
 export async function userCanAccessInstallation(
   userToken: string,
   installationId: string,
 ): Promise<boolean> {
-  for (let page = 1; page <= 10; page++) {
-    const res = await send(`/user/installations?per_page=100&page=${page}`, `token ${userToken}`);
-    if (!res.ok) throw await toError(res);
-    const json = (await res.json()) as { installations?: { id: number }[] };
-    const list = json.installations ?? [];
-    if (list.some((i) => String(i.id) === installationId)) return true;
-    if (list.length < 100) return false;
-  }
-  return false;
+  return (await listUserInstallations(userToken)).some((i) => i.id === installationId);
 }

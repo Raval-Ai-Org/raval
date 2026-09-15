@@ -12,7 +12,8 @@ import { installReturnOrigin } from "@/server/connectors/github/service.server";
 
 export const dynamic = "force-dynamic";
 
-const FORWARDED = ["installation_id", "setup_action", "state", "code"] as const;
+// `error` is how GitHub reports a cancelled authorization (error=access_denied).
+const FORWARDED = ["installation_id", "setup_action", "state", "code", "error"] as const;
 const CALLBACK_PAGE = "/integrations/github/callback";
 
 export async function GET(request: Request) {

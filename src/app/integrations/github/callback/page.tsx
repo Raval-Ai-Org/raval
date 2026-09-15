@@ -11,7 +11,13 @@ export const metadata: Metadata = {
 
 export default function GitHubCallbackPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <main className="grid min-h-dvh place-items-center bg-background p-4 text-sm text-muted-foreground">
+          Completing GitHub connection…
+        </main>
+      }
+    >
       <GitHubInstallCallback />
     </Suspense>
   );
