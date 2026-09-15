@@ -366,6 +366,7 @@ export function SetupRequirement({
               source={source}
               siteHost={scan.host}
               canVerify={a.canPropose}
+              canAttest={a.canManageConnections}
               onChange={() => onReload()}
             />
           )}

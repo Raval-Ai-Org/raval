@@ -25,6 +25,8 @@ import {
   normalizeHost,
   scoreOwnership,
   SIGNAL_WEIGHTS,
+  canAttestOwnership,
+  OWNERSHIP_TTL_MS,
   type OwnershipEvidence,
   type OwnershipResult,
   type PageFingerprintInput,
@@ -32,6 +34,7 @@ import {
 import type { SourceView } from "@/lib/connectors/types";
 import type { PageAnalysis } from "@/lib/geo/types";
 import { recordAudit } from "@/server/audit.server";
+import { HttpError } from "@/server/http-error";
 import {
   getBranch,
   getDeploymentStatuses,
@@ -391,6 +394,66 @@ async function fetchHomePage(host: string): Promise<PageFingerprintInput[]> {
     onOverflow: "truncate",
   }).catch(() => "");
   return html ? [pageFingerprintInput(analyzePage(html, url))] : [];
+}
+
+/* ───────────────────────── admin confirmation ───────────────────────── */
+
+/**
+ * A workspace admin confirms that the repository builds the site when automatic
+ * proof isn't available for the host. Allowed only on top of a current check
+ * for that host with some positive and no contrary evidence (canAttestOwnership).
+ * The evidence stays on the row; the confirmation is audited and expires like a
+ * check (ownershipIsCurrent). Scoped to this workspace's source row.
+ */
+export async function attestSourceOwnership(args: {
+  source: SourceRow;
+  userId: string;
+  siteHost: string;
+}): Promise<SourceView> {
+  const { source } = args;
+  const host = normalizeHost(args.siteHost);
+  const evidence = (source.ownership_evidence ?? []) as unknown as OwnershipEvidence[];
+  const allowed = canAttestOwnership({
+    status: source.ownership_status,
+    checkedHost: source.ownership_site_host,
+    siteHost: host,
+    evidence,
+  });
+  if (!allowed.ok) throw new HttpError(409, allowed.reason);
+  const checkedAt = source.ownership_checked_at ? Date.parse(source.ownership_checked_at) : 0;
+  if (Date.now() - checkedAt > OWNERSHIP_TTL_MS) {
+    throw new HttpError(409, "The last ownership check is out of date. Check again first.");
+  }
+  const { data: row, error } = await supabaseAdmin
+    .from("workspace_sources")
+    .update({
+      ownership_status: "attested",
+      ownership_checked_at: new Date().toISOString(),
+      ownership_checked_by: args.userId,
+      ownership_hints: [] as unknown as Json,
+    })
+    .eq("id", source.id)
+    .eq("workspace_id", source.workspace_id)
+    .eq("ownership_status", source.ownership_status)
+    .select(SOURCE_COLS)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!row) throw new HttpError(409, "The ownership check changed. Review it again.");
+  await recordAudit({
+    workspaceId: source.workspace_id,
+    userId: args.userId,
+    action: "connector.github.ownership_attested",
+    entity: "workspace_source",
+    payload: {
+      sourceId: source.id,
+      repository: source.full_name,
+      siteHost: host,
+      previousStatus: source.ownership_status,
+      confidence: source.ownership_confidence,
+      signals: evidence.map((e) => e.signal),
+    },
+  });
+  return presentSource(row as unknown as SourceRow);
 }
 
 /* ───────────────────────── service entry point ───────────────────────── */

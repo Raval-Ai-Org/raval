@@ -328,6 +328,27 @@ export const verifySourceOwnership = createServerFn({ method: "POST" })
     return verify({ source, connection, userId: context.userId, siteHost: data.siteHost });
   });
 
+export const attestSourceOwnership = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        sourceId: uuid,
+        siteHost: z.string().min(3).max(255),
+        // The admin ticked the statement in the UI; the server records who and when.
+        confirm: z.literal(true),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }): Promise<SourceView> => {
+    await requireWorkspaceRole(context, data.workspaceId, "admin");
+    const { source } = await loadSource(context, data.workspaceId, data.sourceId);
+    const { attestSourceOwnership: attest } =
+      await import("@/server/connectors/github/ownership.server");
+    return attest({ source, userId: context.userId, siteHost: data.siteHost });
+  });
+
 export const setAgentConsent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
   .inputValidator((data) =>

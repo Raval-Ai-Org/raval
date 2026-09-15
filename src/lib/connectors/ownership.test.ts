@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canAttestOwnership,
   contentFingerprints,
   hostsInConfig,
   hostsMatch,
@@ -185,5 +186,59 @@ describe("ownership verdict", () => {
     expect(
       ownershipIsCurrent({ ...base, siteHost: "other.com", checkedAt: "2026-09-14T00:00:00Z" }),
     ).toBe(false);
+  });
+});
+
+describe("admin ownership confirmation", () => {
+  const positive = {
+    signal: "content_fingerprint" as const,
+    weight: 0.3,
+    polarity: "positive" as const,
+    detail: "Live page text found in the source",
+  };
+  const base = {
+    status: "unverified" as const,
+    checkedHost: "threereach.lovable.app",
+    siteHost: "www.threereach.lovable.app",
+    evidence: [positive],
+  };
+
+  it("allows confirming a checked, unproven repository with some positive evidence", () => {
+    expect(canAttestOwnership(base)).toEqual({ ok: true });
+    expect(canAttestOwnership({ ...base, status: "likely" })).toEqual({ ok: true });
+  });
+
+  it("refuses without a check for this host, positive evidence, or with contrary evidence", () => {
+    expect(canAttestOwnership({ ...base, checkedHost: null }).ok).toBe(false);
+    expect(canAttestOwnership({ ...base, siteHost: "other.example" }).ok).toBe(false);
+    expect(canAttestOwnership({ ...base, evidence: [] }).ok).toBe(false);
+    expect(canAttestOwnership({ ...base, status: "mismatch" }).ok).toBe(false);
+    expect(canAttestOwnership({ ...base, status: "verified" }).ok).toBe(false);
+    expect(
+      canAttestOwnership({
+        ...base,
+        evidence: [
+          positive,
+          {
+            signal: "homepage_other_host",
+            weight: 0.4,
+            polarity: "negative",
+            detail: "Homepage is another site",
+          },
+        ],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it("counts a confirmation as allowing fixes until it expires", () => {
+    expect(ownershipAllowsFixes("attested")).toBe(true);
+    expect(
+      ownershipIsCurrent({
+        status: "attested",
+        checkedHost: "threereach.lovable.app",
+        checkedAt: new Date().toISOString(),
+        siteHost: "threereach.lovable.app",
+      }),
+    ).toBe(true);
   });
 });

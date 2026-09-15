@@ -9,8 +9,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle, RefreshCw, ShieldCheck, XCircle } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { verifySourceOwnership } from "@/lib/connectors.functions";
-import { hostsMatch, ownershipIsCurrent, type OwnershipStatus } from "@/lib/connectors/ownership";
+import { attestSourceOwnership, verifySourceOwnership } from "@/lib/connectors.functions";
+import {
+  canAttestOwnership,
+  hostsMatch,
+  ownershipIsCurrent,
+  type OwnershipStatus,
+} from "@/lib/connectors/ownership";
 import type { SourceView } from "@/lib/connectors/types";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +43,7 @@ export function RepoOwnershipCard({
   source,
   siteHost,
   canVerify,
+  canAttest = false,
   onChange,
   compact = false,
 }: {
@@ -46,10 +52,14 @@ export function RepoOwnershipCard({
   /** The website being fixed; defaults to the source's linked site. */
   siteHost?: string | null;
   canVerify: boolean;
+  /** Workspace admins may confirm ownership when automatic proof isn't possible. */
+  canAttest?: boolean;
   onChange: (source: SourceView) => void;
   compact?: boolean;
 }) {
   const [running, setRunning] = useState(false);
+  const [attesting, setAttesting] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const host = siteHost ?? hostOf(source.siteUrl);
   const o = source.ownership;
   const forOtherHost = Boolean(o.siteHost && host && !hostsMatch(o.siteHost, host));
@@ -62,6 +72,32 @@ export function RepoOwnershipCard({
   });
   const stale = ["verified", "attested"].includes(o.status) && !current && !forOtherHost;
   const meta = STATUS[status];
+  const attestable =
+    canAttest && !running && !forOtherHost && host
+      ? canAttestOwnership({
+          status: o.status,
+          checkedHost: o.siteHost,
+          siteHost: host,
+          evidence: o.evidence,
+        }).ok
+      : false;
+
+  const attest = async () => {
+    if (!host) return;
+    setAttesting(true);
+    try {
+      const updated = await attestSourceOwnership({
+        data: { workspaceId, sourceId: source.id, siteHost: host, confirm: true },
+      });
+      onChange(updated);
+      setConfirmed(false);
+      toast.success(`Confirmed: ${source.fullName} builds ${host}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't confirm ownership");
+    } finally {
+      setAttesting(false);
+    }
+  };
 
   const run = async () => {
     setRunning(true);
@@ -184,6 +220,41 @@ export function RepoOwnershipCard({
             ))}
           </ul>
         </div>
+      )}
+      {attestable && (
+        <div className="mt-2 space-y-2 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2">
+          <p className="text-[12px] text-foreground/85">
+            Some hosts (Lovable, Replit, your own server) don&apos;t tell GitHub where a repository
+            is deployed, so Mellox can&apos;t prove it automatically. As a workspace admin you can
+            confirm it. Mellox still opens only pull requests you approve.
+          </p>
+          <label className="flex items-start gap-2 text-[12px]">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+            />
+            <span>
+              I confirm <span className="font-medium">{source.fullName}</span> is the source code
+              that builds <span className="font-medium">{host}</span>. This is recorded with my
+              name.
+            </span>
+          </label>
+          <Button
+            size="sm"
+            disabled={!confirmed || attesting}
+            loading={attesting}
+            onClick={() => void attest()}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" /> Confirm ownership
+          </Button>
+        </div>
+      )}
+      {o.status === "attested" && !forOtherHost && (
+        <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+          Confirmed by a workspace admin — the automatic evidence alone wasn&apos;t conclusive.
+        </p>
       )}
       {o.checkedAt && !forOtherHost && (
         <p className="mt-1.5 text-[11px] text-muted-foreground">

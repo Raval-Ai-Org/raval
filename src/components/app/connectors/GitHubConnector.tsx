@@ -456,6 +456,7 @@ function SourceCard({
             workspaceId={workspaceId}
             source={source}
             canVerify
+            canAttest={canManage}
             onChange={onChange}
             compact
           />

@@ -33,6 +33,9 @@ export const getSiteSource = serverFn<typeof Handlers.getSiteSource>("connectors
 export const verifySourceOwnership = serverFn<typeof Handlers.verifySourceOwnership>(
   "connectors/verifySourceOwnership",
 );
+export const attestSourceOwnership = serverFn<typeof Handlers.attestSourceOwnership>(
+  "connectors/attestSourceOwnership",
+);
 export const setAgentConsent = serverFn<typeof Handlers.setAgentConsent>(
   "connectors/setAgentConsent",
 );

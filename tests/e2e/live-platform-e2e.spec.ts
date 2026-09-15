@@ -6,7 +6,8 @@ import { test, expect, Page } from "@playwright/test";
  * Runs against the real RavalAI dev server (http://localhost:8080)
  * with real Supabase auth + real SDR tunnel.
  *
- * Credentials: junaidsajjad2298@gmail.com / Junaid@1234
+ * Credentials: E2E_TEST_EMAIL / E2E_TEST_PASSWORD from the environment (never
+ * commit them). The suite skips when they are not set.
  *
  * Scenarios:
  *  1. Login with email/password
@@ -17,12 +18,13 @@ import { test, expect, Page } from "@playwright/test";
  *  6. Verify all pages render without errors
  */
 
-const TEST_EMAIL = "junaidsajjad2298@gmail.com";
-const TEST_PASSWORD = "Junaid@1234";
+const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "";
+const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "";
 const BASE_URL = "http://localhost:8080";
 
 test.describe.serial("Live Platform E2E", () => {
   test.describe.configure({ timeout: 120_000 });
+  test.skip(!TEST_EMAIL || !TEST_PASSWORD, "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run");
   test.beforeEach(async ({ page }) => {
     // Capture console errors
     page.on("console", (msg) => {
