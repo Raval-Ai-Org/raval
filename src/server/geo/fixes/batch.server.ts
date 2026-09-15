@@ -237,7 +237,11 @@ async function getSiteSetup(ctx: FixContext, host: string): Promise<FixSetup> {
     reason,
   });
   if (!configured)
-    return setup("not_configured", "GitHub isn't configured on this Mellox server yet.");
+    return setup(
+      "not_configured",
+      check.issues.find((issue) => issue.includes("GITHUB_CLIENT_SECRET")) ??
+        "GitHub configuration is incomplete on this Mellox server.",
+    );
   if (!liveConnections.length) {
     return setup(
       connections.length ? "reconnect" : "connect",

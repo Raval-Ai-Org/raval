@@ -91,7 +91,7 @@ export async function createInstallUrl(args: { workspaceId: string; userId: stri
   if (config.installVerification === "unavailable") {
     throw new GitHubNotConfiguredError([
       "GitHub installs can't be verified: set GITHUB_CLIENT_SECRET and enable OAuth during installation.",
-    ]);
+    ], "verification_unavailable");
   }
   const state = randomBytes(32).toString("base64url");
   const now = Date.now();
