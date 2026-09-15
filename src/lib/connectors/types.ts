@@ -8,6 +8,24 @@
 
 import type { OwnershipEvidence, OwnershipStatus } from "./ownership";
 
+export type GitHubDiagnostic = {
+  appIdPresent: boolean;
+  appSlugPresent: boolean;
+  appNamePresent: boolean;
+  privateKeyPresent: boolean;
+  privateKeyValid: boolean;
+  webhookSecretPresent: boolean;
+  clientIdPresent: boolean;
+  clientSecretPresent: boolean;
+  appUrlPresent: boolean;
+  appUrlHttps: boolean;
+  callbackUrlValid: boolean;
+  webhookUrlValid: boolean;
+  appJwtGenerationValid: boolean;
+  githubApiReachable: boolean;
+  oauthConfigurationValid: boolean;
+};
+
 export type ConnectorProviderId = "github" | "wordpress" | "webflow" | "framer" | "shopify";
 
 /** What a provider can do for a connected source. */
@@ -168,6 +186,7 @@ export type ConnectorsOverview = {
       ready: boolean;
       installVerification: ConnectionVerification | "unavailable";
       issues: string[];
+      diagnostic: GitHubDiagnostic;
     }
   >;
   connections: ConnectionView[];

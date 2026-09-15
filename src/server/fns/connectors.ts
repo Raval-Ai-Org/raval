@@ -62,11 +62,13 @@ export const getConnectors = createServerFn({ method: "POST" })
     const [
       { CONNECTION_COLS, SOURCE_COLS, presentConnection, presentSource },
       { getGitHubConfigCheck },
+      { diagnoseGitHub },
     ] = await Promise.all([
       import("@/server/connectors/present"),
       import("@/server/connectors/github/config.server"),
+      import("@/server/connectors/github/api.server"),
     ]);
-    const [connections, sources] = await Promise.all([
+    const [connections, sources, diagnostic] = await Promise.all([
       context.supabase
         .from("workspace_connections")
         .select(CONNECTION_COLS)
@@ -77,18 +79,39 @@ export const getConnectors = createServerFn({ method: "POST" })
         .select(SOURCE_COLS)
         .eq("workspace_id", data.workspaceId)
         .order("created_at", { ascending: true }),
+      diagnoseGitHub(),
     ]);
     if (connections.error) throw new Error(connections.error.message);
     if (sources.error) throw new Error(sources.error.message);
     const check = getGitHubConfigCheck();
+    const issues = [...check.issues];
+    if (check.ok && !diagnostic.githubApiReachable) {
+      issues.push("GitHub App authentication failed — verify the App ID, slug and private key");
+    }
+    if (diagnostic.githubApiReachable && !diagnostic.oauthConfigurationValid) {
+      issues.push(
+        "GitHub App OAuth installation authorization is disabled or its client ID does not match",
+      );
+    }
+    if (!diagnostic.appUrlHttps || !diagnostic.callbackUrlValid || !diagnostic.webhookUrlValid) {
+      issues.push("APP_URL must be the deployed HTTPS origin for GitHub callbacks and webhooks");
+    }
     return {
       providers: CONNECTOR_PROVIDERS,
       configured: {
         github: {
-          ready: check.ok && check.config.installVerification !== "unavailable",
+          ready:
+            check.ok &&
+            check.config.installVerification !== "unavailable" &&
+            diagnostic.githubApiReachable &&
+            diagnostic.oauthConfigurationValid &&
+            diagnostic.webhookSecretPresent &&
+            diagnostic.callbackUrlValid &&
+            diagnostic.webhookUrlValid,
           installVerification: check.ok ? check.config.installVerification : "unavailable",
           // Variable names and rules only — never values.
-          issues: check.issues,
+          issues,
+          diagnostic,
         },
       },
       connections: (connections.data ?? []).map((r) => presentConnection(r as never)),

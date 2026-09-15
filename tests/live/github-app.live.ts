@@ -14,6 +14,13 @@ const describeLive =
   process.env.GITHUB_APP_ID && process.env.SUPABASE_SERVICE_ROLE_KEY ? describe : describe.skip;
 
 describeLive("GitHub App connector (live)", () => {
+  it("reports only safe production diagnostic statuses", async () => {
+    const { diagnoseGitHub } = await import("@/server/connectors/github/api.server");
+    const diagnostic = await diagnoseGitHub();
+    expect(Object.values(diagnostic).every((value) => typeof value === "boolean")).toBe(true);
+    console.info(`[live] github diagnostic ${JSON.stringify(diagnostic)}`);
+  });
+
   it("loads a valid App configuration from the environment", async () => {
     const { getGitHubConfigCheck } = await import("@/server/connectors/github/config.server");
     const check = getGitHubConfigCheck();

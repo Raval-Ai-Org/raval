@@ -119,6 +119,9 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
     for (const name of ["GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET"]) {
       if (!env[name]) warnings.push(`${name} is not set (the GitHub connector is disabled)`);
     }
+    if (!env.GITHUB_CLIENT_ID) {
+      warnings.push("GITHUB_CLIENT_ID is not set — GitHub OAuth installs can't be verified");
+    }
     if (!env.GITHUB_CLIENT_SECRET) {
       (production ? warnings : warnings).push(
         "GITHUB_CLIENT_SECRET is not set — GitHub installs can't be verified with OAuth" +

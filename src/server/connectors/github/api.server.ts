@@ -10,7 +10,12 @@
 import "server-only";
 import { createSign } from "node:crypto";
 import { fetchWithTimeout, UpstreamError } from "@/server/upstream";
-import { requireGitHubConfig, type GitHubAppConfig } from "./config.server";
+import {
+  getGitHubDiagnostic,
+  requireGitHubConfig,
+  type GitHubAppConfig,
+  type GitHubDiagnostic,
+} from "./config.server";
 
 const API = "https://api.github.com";
 const API_VERSION = "2022-11-28";
@@ -52,6 +57,16 @@ export class GitHubRequestError extends UpstreamError {
       },
     );
     this.name = "GitHubRequestError";
+  }
+}
+
+export class GitHubAppAuthenticationError extends UpstreamError {
+  constructor() {
+    super(502, "GitHub App authentication failed.", {
+      provider: "github",
+      code: "github_app_authentication_failed",
+    });
+    this.name = "GitHubAppAuthenticationError";
   }
 }
 
@@ -194,8 +209,46 @@ export async function appRequest<T>(path: string, opts: RequestOptions = {}): Pr
   const res = await send(path, `Bearer ${getAppJwt(config)}`, opts);
   if (res.status === 204) return null;
   if (res.status === 404 && !opts.notFoundIsAccessError) return null;
+  if (path === "/app" && (res.status === 401 || res.status === 403)) {
+    throw new GitHubAppAuthenticationError();
+  }
   if (!res.ok) throw await toError(res);
   return (await res.json()) as T;
+}
+
+/**
+ * Probe the App without returning credentials, tokens, JWTs or GitHub payloads.
+ * This intentionally authenticates as the App, not as an installation.
+ */
+export async function diagnoseGitHub(): Promise<GitHubDiagnostic> {
+  const diagnostic = getGitHubDiagnostic();
+  if (
+    !diagnostic.appIdPresent ||
+    !diagnostic.appSlugPresent ||
+    !diagnostic.privateKeyValid ||
+    !diagnostic.appJwtGenerationValid
+  ) {
+    return diagnostic;
+  }
+  try {
+    const config = requireGitHubConfig();
+    const app = await appRequest<{
+      slug?: string;
+      client_id?: string;
+      request_oauth_on_install?: boolean;
+    }>("/app");
+    const appMatches = app?.slug === config.slug;
+    return {
+      ...diagnostic,
+      githubApiReachable: appMatches,
+      oauthConfigurationValid:
+        Boolean(config.clientId && config.clientSecret) &&
+        app?.client_id === config.clientId &&
+        app?.request_oauth_on_install === true,
+    };
+  } catch {
+    return diagnostic;
+  }
 }
 
 async function mintInstallationToken(installationId: string): Promise<string> {

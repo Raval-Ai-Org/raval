@@ -1,9 +1,33 @@
 // config.server.ts — GitHub App configuration, read from the server
 // environment only. Nothing here may be imported by browser code.
 import "server-only";
-import { createPrivateKey, type KeyObject } from "node:crypto";
+import { createPrivateKey, createSign, type KeyObject } from "node:crypto";
 
 export type InstallVerificationMode = "oauth" | "install_window" | "unavailable";
+export type GitHubConfigurationErrorCode =
+  | "missing_variable"
+  | "invalid_private_key"
+  | "invalid_app_id"
+  | "invalid_app_slug"
+  | "verification_unavailable";
+
+export type GitHubDiagnostic = {
+  appIdPresent: boolean;
+  appSlugPresent: boolean;
+  appNamePresent: boolean;
+  privateKeyPresent: boolean;
+  privateKeyValid: boolean;
+  webhookSecretPresent: boolean;
+  clientIdPresent: boolean;
+  clientSecretPresent: boolean;
+  appUrlPresent: boolean;
+  appUrlHttps: boolean;
+  callbackUrlValid: boolean;
+  webhookUrlValid: boolean;
+  appJwtGenerationValid: boolean;
+  githubApiReachable: boolean;
+  oauthConfigurationValid: boolean;
+};
 
 export type GitHubAppConfig = {
   appId: string;
@@ -18,8 +42,21 @@ export type GitHubAppConfig = {
 };
 
 export class GitHubNotConfiguredError extends Error {
-  constructor(readonly issues: string[]) {
-    super("GitHub isn't configured on this server yet.");
+  constructor(
+    readonly issues: string[],
+    readonly code: GitHubConfigurationErrorCode = "missing_variable",
+  ) {
+    super(
+      code === "verification_unavailable"
+        ? "GitHub installation verification isn't configured for this server."
+        : code === "invalid_private_key"
+          ? "GitHub's private key is invalid on this server."
+          : code === "invalid_app_id"
+            ? "GitHub's App ID is invalid on this server."
+            : code === "invalid_app_slug"
+              ? "GitHub's App slug is invalid on this server."
+              : "GitHub is not configured on this server.",
+    );
     this.name = "GitHubNotConfiguredError";
   }
 }
@@ -55,7 +92,7 @@ export function normalizePrivateKey(raw: string | undefined): string | null {
  * allowed with GITHUB_INSTALL_VERIFICATION=install_window.
  */
 export function resolveInstallVerification(env: Env): InstallVerificationMode {
-  if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET) return "oauth";
+  if (env.GITHUB_CLIENT_ID?.trim() && env.GITHUB_CLIENT_SECRET?.trim()) return "oauth";
   const explicit = (env.GITHUB_INSTALL_VERIFICATION ?? "").trim().toLowerCase();
   if (explicit === "install_window") return "install_window";
   return env.NODE_ENV === "production" ? "unavailable" : "install_window";
@@ -70,7 +107,7 @@ export function checkGitHubConfig(env: Env): ConfigCheck {
   const appId = (env.GITHUB_APP_ID ?? "").trim();
   const slug = (env.GITHUB_APP_SLUG ?? "").trim();
   if (!/^\d+$/.test(appId)) issues.push("GITHUB_APP_ID is missing or not numeric");
-  if (!/^[a-z0-9-]+$/i.test(slug)) issues.push("GITHUB_APP_SLUG is missing");
+  if (!/^[a-z0-9-]+$/i.test(slug)) issues.push("GITHUB_APP_SLUG is missing or invalid");
 
   const pem = normalizePrivateKey(env.GITHUB_APP_PRIVATE_KEY);
   let privateKey: KeyObject | null = null;
@@ -119,6 +156,88 @@ export function checkGitHubConfig(env: Env): ConfigCheck {
   };
 }
 
+function appUrlState(env: Env): {
+  present: boolean;
+  https: boolean;
+  callbackValid: boolean;
+  webhookValid: boolean;
+} {
+  const raw = (env.APP_URL ?? "").trim();
+  const present = Boolean(raw);
+  try {
+    const url = new URL(raw);
+    const https =
+      url.protocol === "https:" &&
+      !/^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/i.test(url.hostname) &&
+      !url.username &&
+      !url.password;
+    const callback = new URL("/api/integrations/github/callback", url);
+    const webhook = new URL("/api/integrations/github/webhook", url);
+    const validPath = (candidate: URL, path: string) =>
+      candidate.href === `${url.origin}${path}` && candidate.protocol === "https:";
+    return {
+      present,
+      https,
+      callbackValid: https && validPath(callback, "/api/integrations/github/callback"),
+      webhookValid: https && validPath(webhook, "/api/integrations/github/webhook"),
+    };
+  } catch {
+    return { present, https: false, callbackValid: false, webhookValid: false };
+  }
+}
+
+/** A secret-free local diagnostic. API authentication is filled by the API probe. */
+export function getGitHubDiagnostic(env: Env = process.env): GitHubDiagnostic {
+  const rawAppId = (env.GITHUB_APP_ID ?? "").trim();
+  const rawSlug = (env.GITHUB_APP_SLUG ?? "").trim();
+  const rawName = (env.GITHUB_APP_NAME ?? "").trim();
+  const rawPrivateKey = (env.GITHUB_APP_PRIVATE_KEY ?? "").trim();
+  const rawWebhookSecret = (env.GITHUB_WEBHOOK_SECRET ?? "").trim();
+  const rawClientId = (env.GITHUB_CLIENT_ID ?? "").trim();
+  const rawClientSecret = (env.GITHUB_CLIENT_SECRET ?? "").trim();
+  const urls = appUrlState(env);
+  const pem = normalizePrivateKey(env.GITHUB_APP_PRIVATE_KEY);
+  let privateKeyValid = false;
+  let appJwtGenerationValid = false;
+  if (pem) {
+    try {
+      const key = createPrivateKey(pem);
+      privateKeyValid = key.asymmetricKeyType === "rsa";
+      if (privateKeyValid && /^\d+$/.test(rawAppId)) {
+        const now = Math.floor(Date.now() / 1000);
+        const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString(
+          "base64url",
+        );
+        const payload = Buffer.from(
+          JSON.stringify({ iat: now - 60, exp: now + 540, iss: Number(rawAppId) }),
+        ).toString("base64url");
+        const signer = createSign("RSA-SHA256");
+        signer.update(`${header}.${payload}`);
+        appJwtGenerationValid = signer.sign(key).length > 0;
+      }
+    } catch {
+      privateKeyValid = false;
+    }
+  }
+  return {
+    appIdPresent: /^\d+$/.test(rawAppId),
+    appSlugPresent: /^[a-z0-9-]+$/i.test(rawSlug),
+    appNamePresent: Boolean(rawName),
+    privateKeyPresent: Boolean(rawPrivateKey),
+    privateKeyValid,
+    webhookSecretPresent: Boolean(rawWebhookSecret),
+    clientIdPresent: Boolean(rawClientId),
+    clientSecretPresent: Boolean(rawClientSecret),
+    appUrlPresent: urls.present,
+    appUrlHttps: urls.https,
+    callbackUrlValid: urls.callbackValid,
+    webhookUrlValid: urls.webhookValid,
+    appJwtGenerationValid,
+    githubApiReachable: false,
+    oauthConfigurationValid: false,
+  };
+}
+
 let cached: { signature: string; result: ConfigCheck } | null = null;
 
 /** Current config; re-validated when the relevant env vars change (tests, hot reload). */
@@ -139,6 +258,17 @@ export function getGitHubConfigCheck(env: Env = process.env): ConfigCheck {
 
 export function requireGitHubConfig(): GitHubAppConfig {
   const check = getGitHubConfigCheck();
-  if (!check.ok) throw new GitHubNotConfiguredError(check.issues);
+  if (!check.ok) {
+    const code: GitHubConfigurationErrorCode = check.issues.some((issue) =>
+      issue.includes("GITHUB_APP_PRIVATE_KEY"),
+    )
+      ? "invalid_private_key"
+      : check.issues.some((issue) => issue.includes("GITHUB_APP_ID"))
+        ? "invalid_app_id"
+        : check.issues.some((issue) => issue.includes("GITHUB_APP_SLUG"))
+          ? "invalid_app_slug"
+          : "missing_variable";
+    throw new GitHubNotConfiguredError(check.issues, code);
+  }
   return check.config;
 }

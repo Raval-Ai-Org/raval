@@ -2,6 +2,7 @@ import { createHmac, createPublicKey, generateKeyPairSync, verify } from "node:c
 import { describe, expect, it, vi } from "vitest";
 import {
   checkGitHubConfig,
+  getGitHubDiagnostic,
   normalizePrivateKey,
   resolveInstallVerification,
 } from "./config.server";
@@ -16,6 +17,9 @@ const BASE_ENV = {
   GITHUB_APP_SLUG: "mellox-ai-test",
   GITHUB_APP_PRIVATE_KEY: PEM,
   GITHUB_WEBHOOK_SECRET: "whsec_test_value_1234567890",
+  GITHUB_APP_NAME: "Mellox AI Test",
+  GITHUB_CLIENT_ID: "Iv1.test",
+  GITHUB_CLIENT_SECRET: "client-secret-test",
   NODE_ENV: "test",
 };
 
@@ -57,7 +61,7 @@ describe("GitHub App config", () => {
       }),
     ).toBe("install_window");
     const check = checkGitHubConfig(BASE_ENV);
-    expect(check.ok && check.config.installVerification).toBe("install_window");
+    expect(check.ok && check.config.installVerification).toBe("oauth");
   });
 
   it("signs a valid RS256 App JWT with a drift-tolerant window", () => {
@@ -81,6 +85,69 @@ describe("GitHub App config", () => {
       Buffer.from(signature, "base64url"),
     );
     expect(ok).toBe(true);
+  });
+
+  it("returns only safe statuses for production-style configuration", () => {
+    const diagnostic = getGitHubDiagnostic({
+      ...BASE_ENV,
+      APP_URL: "https://raval-production-c901.up.railway.app",
+      GITHUB_APP_PRIVATE_KEY: PEM.replace(/\n/g, "\\n"),
+    });
+    expect(diagnostic).toEqual({
+      appIdPresent: true,
+      appSlugPresent: true,
+      appNamePresent: true,
+      privateKeyPresent: true,
+      privateKeyValid: true,
+      webhookSecretPresent: true,
+      clientIdPresent: true,
+      clientSecretPresent: true,
+      appUrlPresent: true,
+      appUrlHttps: true,
+      callbackUrlValid: true,
+      webhookUrlValid: true,
+      appJwtGenerationValid: true,
+      githubApiReachable: false,
+      oauthConfigurationValid: false,
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain(PEM);
+  });
+
+  it("treats blank Railway values as absent", () => {
+    const diagnostic = getGitHubDiagnostic({
+      GITHUB_APP_ID: "",
+      GITHUB_APP_SLUG: " ",
+      GITHUB_APP_NAME: "",
+      GITHUB_APP_PRIVATE_KEY: "\n",
+      GITHUB_WEBHOOK_SECRET: "",
+      GITHUB_CLIENT_ID: "",
+      GITHUB_CLIENT_SECRET: " ",
+      APP_URL: "",
+    });
+    expect(diagnostic).toEqual({
+      appIdPresent: false,
+      appSlugPresent: false,
+      appNamePresent: false,
+      privateKeyPresent: false,
+      privateKeyValid: false,
+      webhookSecretPresent: false,
+      clientIdPresent: false,
+      clientSecretPresent: false,
+      appUrlPresent: false,
+      appUrlHttps: false,
+      callbackUrlValid: false,
+      webhookUrlValid: false,
+      appJwtGenerationValid: false,
+      githubApiReachable: false,
+      oauthConfigurationValid: false,
+    });
+  });
+
+  it("rejects localhost as a production callback origin", () => {
+    expect(
+      getGitHubDiagnostic({ ...BASE_ENV, APP_URL: "http://localhost:8080" })
+        .appUrlHttps,
+    ).toBe(false);
   });
 });
 

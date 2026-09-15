@@ -332,7 +332,11 @@ export async function getFixAvailability(
     reason,
   });
   if (!configured) {
-    return requirement("not_configured", "GitHub isn't configured on this Mellox server yet.");
+    return requirement(
+      "not_configured",
+      check.issues.find((issue) => issue.includes("GITHUB_CLIENT_SECRET")) ??
+        "GitHub configuration is incomplete on this Mellox server.",
+    );
   }
   if (!liveConnections.length) {
     return requirement(
