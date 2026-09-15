@@ -5,7 +5,6 @@
 // src/server/fns/connectors.ts. No credential or token ever comes back.
 import { serverFn } from "@/lib/rpc-client";
 import type * as Handlers from "@/server/fns/connectors";
-import { CONNECTOR_BROADCAST_CHANNEL, type ConnectorBroadcast } from "@/lib/connectors/types";
 
 export const getConnectors = serverFn<typeof Handlers.getConnectors>("connectors/getConnectors");
 export const startGithubInstall = serverFn<typeof Handlers.startGithubInstall>(
@@ -33,25 +32,9 @@ export const getSiteSource = serverFn<typeof Handlers.getSiteSource>("connectors
 export const verifySourceOwnership = serverFn<typeof Handlers.verifySourceOwnership>(
   "connectors/verifySourceOwnership",
 );
+export const attestSourceOwnership = serverFn<typeof Handlers.attestSourceOwnership>(
+  "connectors/attestSourceOwnership",
+);
 export const setAgentConsent = serverFn<typeof Handlers.setAgentConsent>(
   "connectors/setAgentConsent",
 );
-
-/** Tell every open Mellox tab that a connection finished (the install runs in a popup). */
-export function broadcastConnector(message: ConnectorBroadcast): void {
-  if (typeof BroadcastChannel === "undefined") return;
-  try {
-    const channel = new BroadcastChannel(CONNECTOR_BROADCAST_CHANNEL);
-    channel.postMessage(message);
-    channel.close();
-  } catch {
-    /* unavailable — the Integrations view refreshes on focus */
-  }
-}
-
-export function subscribeConnectors(onMessage: (m: ConnectorBroadcast) => void): () => void {
-  if (typeof BroadcastChannel === "undefined") return () => undefined;
-  const channel = new BroadcastChannel(CONNECTOR_BROADCAST_CHANNEL);
-  channel.onmessage = (event) => onMessage(event.data as ConnectorBroadcast);
-  return () => channel.close();
-}

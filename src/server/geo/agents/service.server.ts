@@ -45,6 +45,7 @@ import {
 import { strategyForRule } from "../fixes/strategies";
 import { isValidBaseBranch } from "@/server/connectors/github/paths";
 import { hashPlan } from "./geo-coding-agent";
+import { geoAgentEnabled, geoAgentModelConfigured } from "./flags";
 import {
   cancelRunNow,
   kickAgentRun,
@@ -56,8 +57,17 @@ import {
 
 const MAX_PLAN_REVISIONS = 3;
 
-export function geoAgentEnabled(): boolean {
-  return (process.env.FEATURE_FLAG_GEO_AGENT_ENABLED ?? "true").trim().toLowerCase() !== "false";
+export { geoAgentEnabled } from "./flags";
+
+async function dailyLimitReached(workspaceId: string): Promise<boolean> {
+  const since = new Date();
+  since.setUTCHours(0, 0, 0, 0);
+  const { count } = await supabaseAdmin
+    .from("geo_agent_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId)
+    .gte("created_at", since.toISOString());
+  return (count ?? 0) >= dailyRunLimit();
 }
 
 function dailyRunLimit(): number {
@@ -282,7 +292,7 @@ export async function startAgentRun(
   if (!ctx.canPropose) throw new FixWorkflowError("Only editors can run the GEO agent.", 403);
   if (!geoAgentEnabled())
     return { ok: false, reason: "The GEO coding agent is turned off on this server." };
-  if (!process.env.ANTHROPIC_API_KEY?.trim())
+  if (!geoAgentModelConfigured())
     return {
       ok: false,
       reason: "The AI model isn't configured on this server (ANTHROPIC_API_KEY).",
@@ -352,14 +362,7 @@ export async function startAgentRun(
   const baseBranch = args.baseBranch ?? source.branch ?? source.default_branch ?? "main";
   if (!isValidBaseBranch(baseBranch)) throw new FixWorkflowError("That branch name isn't valid.");
 
-  const since = new Date();
-  since.setUTCHours(0, 0, 0, 0);
-  const { count } = await supabaseAdmin
-    .from("geo_agent_runs")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", ctx.workspaceId)
-    .gte("created_at", since.toISOString());
-  if ((count ?? 0) >= dailyRunLimit()) {
+  if (await dailyLimitReached(ctx.workspaceId)) {
     return {
       ok: false,
       reason: `This workspace has used today's ${dailyRunLimit()} GEO agent runs. Try again tomorrow.`,
@@ -588,6 +591,19 @@ export async function retryAgentRun(
   args: { runId: string; fromStage: "investigate" | "implement" },
 ) {
   if (!ctx.canPropose) throw new FixWorkflowError("Only editors can retry runs.", 403);
+  // A retry is a new paid run: the same switches and limits as starting one.
+  if (!geoAgentEnabled())
+    throw new FixWorkflowError("The GEO coding agent is turned off on this server.", 409);
+  if (!geoAgentModelConfigured())
+    throw new FixWorkflowError(
+      "The AI model isn't configured on this server (ANTHROPIC_API_KEY).",
+      409,
+    );
+  if (await dailyLimitReached(ctx.workspaceId))
+    throw new FixWorkflowError(
+      `This workspace has used today's ${dailyRunLimit()} GEO agent runs. Try again tomorrow.`,
+      429,
+    );
   const run = await loadRunRls(ctx, args.runId);
   if (!canRetry(run.status)) throw new FixWorkflowError("This run can't be retried now.", 409);
   await sourceForRun(ctx, run);

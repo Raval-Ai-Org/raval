@@ -1,91 +1,216 @@
 "use client";
 
-// GitHubInstallCallback — where the GitHub App install (or reconfigure) flow
-// returns. It completes the connection with the signed-in user's session (the
-// single-use state proves this user started it), tells every open Mellox tab
-// over a BroadcastChannel, and closes the popup.
-import { useEffect, useRef, useState } from "react";
+// GitHubInstallCallback — where GitHub returns after the user authorizes (or
+// installs) the Mellox App. It completes the connection with the signed-in
+// user's session (the single-use state proves this user started it), shows
+// the result, and returns to the Mellox page the connection started from.
+// "Connected" is shown only after the server has read the saved connection
+// back through this user's own access.
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle, Github, Loader2 } from "@/components/icons";
-import { broadcastConnector, completeGithubInstall } from "@/lib/connectors.functions";
+import { completeGithubInstall, startGithubInstall } from "@/lib/connectors.functions";
+import { rememberGithubConnected } from "@/lib/connectors/github-return";
+import type { ConnectionView } from "@/lib/connectors/types";
 import { ServerFnError } from "@/lib/rpc-client";
 
 type View =
   | { kind: "working" }
-  | { kind: "connected"; account: string }
+  | { kind: "continuing"; step: "install" | "authorize" }
+  | { kind: "connected"; connections: ConnectionView[]; next: string }
+  | { kind: "cancelled" }
   | { kind: "requested" }
+  | { kind: "updated" }
   | { kind: "error"; message: string }
   | { kind: "signin"; loginHref: string };
 
-const BACK_HREF = "/app";
+const CONNECTIONS_HREF = "/app?settings=connections";
+const GEO_HREF = "/app?geo=findings";
+/** Authorize ↔ install hand-offs in one attempt; stops a misconfigured App from looping. */
+const HOPS_KEY = "mellox:github-connect-hops";
+const RETURN_DELAY_MS = 2500;
+
+function safePath(path: string | null | undefined): string {
+  return path && path.startsWith("/") && !path.startsWith("//") ? path : CONNECTIONS_HREF;
+}
+
+function withConnectedFlag(path: string): string {
+  const url = new URL(safePath(path), window.location.origin);
+  url.searchParams.set("github", "connected");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+/** Land in the workspace GitHub was connected to, not whichever was open last. */
+function selectWorkspace(id: string) {
+  try {
+    if (localStorage.getItem("workspace:selected") === id) return;
+    localStorage.setItem("workspace:selected", id);
+    localStorage.removeItem("workspace:name");
+    localStorage.removeItem("workspace:website");
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function hops(next?: number): number {
+  try {
+    if (next === undefined) return Number(sessionStorage.getItem(HOPS_KEY) ?? "0") || 0;
+    if (next === 0) sessionStorage.removeItem(HOPS_KEY);
+    else sessionStorage.setItem(HOPS_KEY, String(next));
+    return next;
+  } catch {
+    return 0;
+  }
+}
 
 export function GitHubInstallCallback() {
-  const params = useSearchParams();
+  const search = useSearchParams();
   const [view, setView] = useState<View>({ kind: "working" });
+  const [retrying, setRetrying] = useState(false);
   const started = useRef(false);
+  const workspaceId = useRef<string | null>(null);
 
   useEffect(() => {
-    // The state is single-use: never submit it twice (Strict Mode runs effects twice in dev).
+    // The code and state are single-use: never submit twice (Strict Mode runs effects twice in dev).
     if (started.current) return;
     started.current = true;
 
-    const installationId = params.get("installation_id") ?? "";
-    const setupAction = params.get("setup_action");
-    const state = params.get("state") ?? "";
-    const code = params.get("code");
+    const installationId = search.get("installation_id");
+    const setupAction = search.get("setup_action");
+    const state = search.get("state") ?? "";
+    const code = search.get("code");
+    const error = search.get("error");
+    // Drop the single-use parameters from the address bar and history.
+    const clearParams = () => window.history.replaceState(null, "", window.location.pathname);
 
+    if (error) {
+      clearParams();
+      hops(0);
+      setView(
+        error === "access_denied"
+          ? { kind: "cancelled" }
+          : { kind: "error", message: "GitHub didn't complete the authorization. Try again." },
+      );
+      return;
+    }
     if (setupAction === "request") {
       // An organization member asked an owner to approve the install.
+      clearParams();
       setView({ kind: "requested" });
       return;
     }
-    if (!installationId || !state) {
+    if (setupAction === "update" && !state) {
+      // Reconfigured from GitHub's own settings page — no Mellox request to complete.
+      clearParams();
+      setView({ kind: "updated" });
+      return;
+    }
+    if (!state || (!installationId && !code)) {
       setView({
         kind: "error",
         message: state
-          ? "GitHub didn't return an installation. Try connecting again."
-          : "This page was opened without a Mellox connection request. Start the connection from Mellox → Integrations.",
+          ? "GitHub didn't return an installation or an authorization. Try connecting again."
+          : "This page was opened without a Mellox connection request. Start the connection from Settings → Connections.",
       });
       return;
     }
 
-    // Kept so a signed-out installer can sign in and land back here; the state stays bound to the user who started it.
-    const returnPath = `${window.location.pathname}${window.location.search}`;
-
-    completeGithubInstall({
-      data: {
-        state,
-        installationId,
-        setupAction: setupAction === "install" || setupAction === "update" ? setupAction : null,
-        code,
-      },
-    })
-      .then(({ connection }) => {
-        broadcastConnector({ type: "connected", provider: "github", connectionId: connection.id });
-        setView({ kind: "connected", account: connection.accountLogin });
-      })
-      .catch((e: unknown) => {
-        if (e instanceof ServerFnError && e.status === 401) {
-          setView({ kind: "signin", loginHref: `/login?next=${encodeURIComponent(returnPath)}` });
+    // Kept so a signed-out user can sign in and land back here; the state stays bound to the user who started it.
+    const loginNext = `${window.location.pathname}${window.location.search}`;
+    void (async () => {
+      try {
+        const result = await completeGithubInstall({
+          data: {
+            state,
+            installationId,
+            setupAction: setupAction === "install" || setupAction === "update" ? setupAction : null,
+            code,
+          },
+        });
+        workspaceId.current = result.workspaceId;
+        clearParams();
+        if (result.status === "continue") {
+          const count = hops();
+          if (count >= 3) {
+            hops(0);
+            setView({
+              kind: "error",
+              message:
+                result.step === "install"
+                  ? "GitHub didn't send you back after installing the Mellox AI app. Check that the app is installed on your account, then connect again."
+                  : "GitHub kept asking for authorization without confirming it. Try connecting again.",
+            });
+            return;
+          }
+          hops(count + 1);
+          setView({ kind: "continuing", step: result.step });
+          window.setTimeout(() => window.location.assign(result.url), 900);
           return;
         }
-        const message =
-          e instanceof Error ? e.message : "The GitHub connection couldn't be completed.";
-        broadcastConnector({ type: "error", provider: "github", message });
-        setView({ kind: "error", message });
-      });
-    // Drop sensitive query parameters from the address bar and history.
-    window.history.replaceState(null, "", window.location.pathname);
-  }, [params]);
+        hops(0);
+        selectWorkspace(result.workspaceId);
+        rememberGithubConnected({
+          workspaceId: result.workspaceId,
+          accounts: result.connections.map((c) => c.accountLogin),
+        });
+        setView({
+          kind: "connected",
+          connections: result.connections,
+          next: withConnectedFlag(result.returnPath ?? CONNECTIONS_HREF),
+        });
+      } catch (e: unknown) {
+        if (e instanceof ServerFnError && e.status === 401) {
+          setView({ kind: "signin", loginHref: `/login?next=${encodeURIComponent(loginNext)}` });
+          return;
+        }
+        clearParams();
+        hops(0);
+        setView({
+          kind: "error",
+          message: e instanceof Error ? e.message : "The GitHub connection couldn't be completed.",
+        });
+      }
+    })();
+  }, [search]);
 
+  // Return to where the connection started once the success has been seen.
   useEffect(() => {
     if (view.kind !== "connected") return;
-    // Only script-opened windows can close themselves; otherwise the link stays.
-    const t = window.setTimeout(() => window.close(), 1600);
+    const t = window.setTimeout(() => window.location.replace(view.next), RETURN_DELAY_MS);
     return () => window.clearTimeout(t);
-  }, [view.kind]);
+  }, [view]);
+
+  const retry = useCallback(async () => {
+    let ws = workspaceId.current;
+    try {
+      ws ??= localStorage.getItem("workspace:selected");
+    } catch {
+      /* storage unavailable */
+    }
+    if (!ws) {
+      window.location.assign(CONNECTIONS_HREF);
+      return;
+    }
+    setRetrying(true);
+    try {
+      const { url } = await startGithubInstall({
+        data: {
+          workspaceId: ws,
+          returnOrigin: window.location.origin,
+          returnPath: CONNECTIONS_HREF,
+        },
+      });
+      window.location.assign(url);
+    } catch (e) {
+      setRetrying(false);
+      setView({
+        kind: "error",
+        message: e instanceof Error ? e.message : "Couldn't start the GitHub connection.",
+      });
+    }
+  }, []);
 
   return (
     <main className="grid min-h-dvh place-items-center bg-background p-4 text-foreground">
@@ -101,29 +226,97 @@ export function GitHubInstallCallback() {
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Integrations
             </p>
-            <h1 className="truncate text-base font-semibold">Connect GitHub</h1>
+            <h1 className="truncate text-base font-semibold">
+              {view.kind === "connected"
+                ? "GitHub connected successfully"
+                : view.kind === "error"
+                  ? "GitHub connection failed"
+                  : view.kind === "cancelled"
+                    ? "GitHub authorization was cancelled"
+                    : "Connect GitHub"}
+            </h1>
           </div>
         </div>
 
         {view.kind === "working" && (
-          <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground" role="status">
             <Loader2 className="size-4 animate-spin" aria-hidden />
-            Verifying the installation with GitHub…
+            Completing GitHub connection…
+          </p>
+        )}
+
+        {view.kind === "continuing" && (
+          <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground" role="status">
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+            {view.step === "install"
+              ? "Your GitHub account doesn't have the Mellox AI app yet — taking you to GitHub to install it…"
+              : "Taking you to GitHub to confirm this installation…"}
           </p>
         )}
 
         {view.kind === "connected" && (
           <div className="mt-6 space-y-4">
-            <p className="flex items-center gap-2 text-sm font-medium text-success">
-              <CheckCircle className="size-4" aria-hidden />
-              GitHub account {view.account} is connected.
-            </p>
+            <ul className="space-y-2">
+              {view.connections.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center gap-3 rounded-xl border border-border/70 px-3 py-2.5"
+                >
+                  {c.accountAvatarUrl ? (
+                    <img
+                      src={c.accountAvatarUrl}
+                      alt=""
+                      className="size-8 rounded-full ring-1 ring-border"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="grid size-8 place-items-center rounded-full bg-secondary text-sm font-semibold">
+                      {c.accountLogin.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{c.accountLogin}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {c.accountType ?? "Account"} ·{" "}
+                      {c.repositorySelection === "all"
+                        ? "all repositories"
+                        : "selected repositories"}
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success ring-1 ring-success/25">
+                    <CheckCircle className="size-3" aria-hidden />
+                    {c.status === "active" ? "Installation active" : c.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
             <p className="text-sm text-muted-foreground">
-              Back in Mellox, choose the repository behind your website. You can close this window.
+              Next, choose the repository that builds your website. Taking you back to Mellox…
             </p>
-            <Button asChild variant="outline" className="w-full">
-              <Link href={BACK_HREF}>Back to Mellox</Link>
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button asChild className="flex-1">
+                <Link href={withConnectedFlag(CONNECTIONS_HREF)}>Continue to Connections</Link>
+              </Button>
+              <Button asChild variant="outline" className="flex-1">
+                <Link href={withConnectedFlag(GEO_HREF)}>Continue to GEO</Link>
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {view.kind === "cancelled" && (
+          <div className="mt-6 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Nothing was connected. You can try again whenever you&apos;re ready.
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" loading={retrying} onClick={() => void retry()}>
+                Try again
+              </Button>
+              <Button asChild variant="outline" className="flex-1">
+                <Link href={CONNECTIONS_HREF}>Return to Connections</Link>
+              </Button>
+            </div>
           </div>
         )}
 
@@ -132,10 +325,23 @@ export function GitHubInstallCallback() {
             <p className="text-sm font-medium">Install request sent</p>
             <p className="text-sm text-muted-foreground">
               An owner of that GitHub organization needs to approve the Mellox AI app. Once they do,
-              return to Mellox → Integrations and connect again.
+              return to Settings → Connections and connect again.
             </p>
             <Button asChild variant="outline" className="w-full">
-              <Link href={BACK_HREF}>Back to Mellox</Link>
+              <Link href={CONNECTIONS_HREF}>Return to Connections</Link>
+            </Button>
+          </div>
+        )}
+
+        {view.kind === "updated" && (
+          <div className="mt-6 space-y-4">
+            <p className="text-sm font-medium">GitHub saved your changes</p>
+            <p className="text-sm text-muted-foreground">
+              In Settings → Connections, press Verify on the GitHub connection to pick up the new
+              repository access.
+            </p>
+            <Button asChild className="w-full">
+              <Link href={CONNECTIONS_HREF}>Open Settings → Connections</Link>
             </Button>
           </div>
         )}
@@ -144,8 +350,8 @@ export function GitHubInstallCallback() {
           <div className="mt-6 space-y-4">
             <p className="text-sm font-medium">Sign in to finish connecting</p>
             <p className="text-sm text-muted-foreground">
-              GitHub sent you back, but this browser isn't signed in to Mellox. Sign in with the
-              account that started the connection and it will complete automatically.
+              GitHub sent you back, but this browser isn&apos;t signed in to Mellox here. Sign in
+              with the account that started the connection and it will complete automatically.
             </p>
             <Button asChild className="w-full">
               <Link href={view.loginHref}>Sign in to Mellox</Link>
@@ -160,11 +366,11 @@ export function GitHubInstallCallback() {
               <span>{view.message}</span>
             </p>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => window.close()}>
-                Close
+              <Button className="flex-1" loading={retrying} onClick={() => void retry()}>
+                Try again
               </Button>
-              <Button asChild className="flex-1">
-                <Link href={BACK_HREF}>Back to Mellox</Link>
+              <Button asChild variant="outline" className="flex-1">
+                <Link href={CONNECTIONS_HREF}>Return to Connections</Link>
               </Button>
             </div>
           </div>

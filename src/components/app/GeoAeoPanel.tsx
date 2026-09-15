@@ -46,12 +46,15 @@ type AutoRunProps = {
   autoRunToken?: number;
   /** Called once the requested scan has been started, so a remount never repeats it. */
   onAutoRunHandled?: () => void;
+  /** Open on the Findings tab with this filter (deep link). */
+  initialFindings?: FindingsFilter;
 };
 
 export function GeoAeoPanel({
   workspaceId,
   autoRunToken,
   onAutoRunHandled,
+  initialFindings,
 }: { workspaceId: string | null } & AutoRunProps) {
   if (!workspaceId) {
     return (
@@ -67,6 +70,7 @@ export function GeoAeoPanel({
       workspaceId={workspaceId}
       autoRunToken={autoRunToken}
       onAutoRunHandled={onAutoRunHandled}
+      initialFindings={initialFindings}
     />
   );
 }
@@ -75,6 +79,7 @@ function Panel({
   workspaceId,
   autoRunToken,
   onAutoRunHandled,
+  initialFindings,
 }: { workspaceId: string } & AutoRunProps) {
   const { dna } = useBrandDna(workspaceId);
   const brandUrl = dna.websiteUrl?.trim() ?? "";
@@ -86,8 +91,8 @@ function Panel({
   const urlTouched = useRef(false);
   const [mode, setMode] = useState<GeoScanMode>("full");
   const [probes, setProbes] = useState(false);
-  const [tab, setTab] = useState<TabId>("overview");
-  const [findingsFilter, setFindingsFilter] = useState<FindingsFilter>({});
+  const [tab, setTab] = useState<TabId>(initialFindings ? "findings" : "overview");
+  const [findingsFilter, setFindingsFilter] = useState<FindingsFilter>(initialFindings ?? {});
 
   useEffect(() => {
     getGeoSettings({ data: { workspaceId } })

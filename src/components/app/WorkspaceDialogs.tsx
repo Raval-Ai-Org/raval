@@ -40,6 +40,16 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
     addAppEventListener("open:rename", openRename);
     addAppEventListener("open:details", openDetails);
     addAppEventListener("open:settings", openSettings);
+    // Deep link: /app?settings=connections (the GitHub install returns here).
+    const url = new URL(window.location.href);
+    const section = url.searchParams.get("settings");
+    if (section === "connections" || section === "preferences") {
+      setSettingsSection(section);
+      setSettingsOpen(true);
+      url.searchParams.delete("settings");
+      url.searchParams.delete("github");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
     return () => {
       removeAppEventListener("open:rename", openRename);
       removeAppEventListener("open:details", openDetails);

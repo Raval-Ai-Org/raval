@@ -8,6 +8,7 @@ import { roleAtLeast } from "@/server/api-auth";
 import { ForbiddenError } from "@/server/http-error";
 import {
   CONNECTOR_PROVIDERS,
+  type ConnectionView,
   type ConnectorsOverview,
   type RepositoryOption,
   type SourceView,
@@ -88,12 +89,17 @@ export const getConnectors = createServerFn({ method: "POST" })
     if (check.ok && !diagnostic.githubApiReachable) {
       issues.push("GitHub App authentication failed — verify the App ID, slug and private key");
     }
-    if (diagnostic.githubApiReachable && !diagnostic.oauthConfigurationValid) {
-      issues.push(
-        "GitHub App OAuth installation authorization is disabled or its client ID does not match",
-      );
+    const oauthMode = check.ok && check.config.installVerification === "oauth";
+    if (diagnostic.githubApiReachable && oauthMode && !diagnostic.oauthConfigurationValid) {
+      issues.push("GITHUB_CLIENT_ID doesn't match the GitHub App's client ID");
     }
-    if (!diagnostic.appUrlHttps || !diagnostic.callbackUrlValid || !diagnostic.webhookUrlValid) {
+    const urlsValid =
+      diagnostic.appUrlHttps && diagnostic.callbackUrlValid && diagnostic.webhookUrlValid;
+    // Production needs its public HTTPS origin for callbacks and webhooks. A
+    // development server is connectable: the production callback hands the
+    // installer back to it (see installReturnOrigin).
+    const production = process.env.NODE_ENV === "production";
+    if (!urlsValid && production) {
       issues.push("APP_URL must be the deployed HTTPS origin for GitHub callbacks and webhooks");
     }
     return {
@@ -104,10 +110,9 @@ export const getConnectors = createServerFn({ method: "POST" })
             check.ok &&
             check.config.installVerification !== "unavailable" &&
             diagnostic.githubApiReachable &&
-            diagnostic.oauthConfigurationValid &&
+            (!oauthMode || diagnostic.oauthConfigurationValid) &&
             diagnostic.webhookSecretPresent &&
-            diagnostic.callbackUrlValid &&
-            diagnostic.webhookUrlValid,
+            (urlsValid || !production),
           installVerification: check.ok ? check.config.installVerification : "unavailable",
           // Variable names and rules only — never values.
           issues,
@@ -126,37 +131,133 @@ export const getConnectors = createServerFn({ method: "POST" })
 
 export const startGithubInstall = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("connector-connect")])
-  .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        returnOrigin: z.string().max(200).optional(),
+        returnPath: z.string().max(300).optional(),
+      })
+      .parse(data),
+  )
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "admin");
     const { createInstallUrl } = await import("@/server/connectors/github/service.server");
-    return createInstallUrl({ workspaceId: data.workspaceId, userId: context.userId });
+    return createInstallUrl({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      returnOrigin: data.returnOrigin ?? null,
+      returnPath: data.returnPath ?? null,
+    });
   });
 
+export type GithubConnectResult =
+  | {
+      status: "connected";
+      workspaceId: string;
+      returnPath: string | null;
+      connections: ConnectionView[];
+    }
+  /** GitHub needs one more step (install the App, or authorize) — the page continues there. */
+  | { status: "continue"; workspaceId: string; step: "install" | "authorize"; url: string };
+
 export const completeGithubInstall = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth, rateLimitFor("connector-connect")])
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-complete")])
   .inputValidator((data) =>
     z
       .object({
         state: z.string().min(16).max(256),
-        installationId: z.string().regex(/^\d{1,20}$/),
+        installationId: z
+          .string()
+          .regex(/^d{1,20}$/)
+          .nullable()
+          .optional(),
         setupAction: z.enum(["install", "update", "request"]).nullable().optional(),
         code: z.string().max(200).nullable().optional(),
       })
       .parse(data),
   )
-  .handler(async ({ data, context }) => {
-    const { consumeInstallState, linkInstallation } =
-      await import("@/server/connectors/github/service.server");
+  .handler(async ({ data, context }): Promise<GithubConnectResult> => {
+    const [svc, { CONNECTION_COLS, presentConnection }] = await Promise.all([
+      import("@/server/connectors/github/service.server"),
+      import("@/server/connectors/present"),
+    ]);
     // The state binds the flow to the user who started it and to their workspace.
-    const state = await consumeInstallState(data.state, context.userId);
+    // It is used up only once the connection is saved, so failures are retryable.
+    const state = await svc.readInstallState(data.state, context.userId);
     await requireWorkspaceRole(context, state.workspaceId, "admin");
-    const connection = await linkInstallation({
-      state,
-      installationId: data.installationId,
-      code: data.code ?? null,
-    });
-    return { workspaceId: state.workspaceId, connection };
+    const installationId = data.installationId ?? null;
+    const code = data.code ?? null;
+
+    let linked: ConnectionView[];
+    if (state.consumedAt) {
+      // A reload or double submit: show what this flow already saved.
+      linked = installationId
+        ? [await svc.findConnectionFromState(state, installationId)].filter(
+            (c): c is ConnectionView => c !== null,
+          )
+        : await svc.findConnectionsFromState(state);
+      if (!linked.length) {
+        throw new svc.ConnectorError(
+          "This connection link was already used. Start the connection again from Mellox.",
+        );
+      }
+    } else if (installationId) {
+      try {
+        linked = [await svc.linkInstallation({ state, installationId, code })];
+      } catch (e) {
+        if (e instanceof svc.GitHubAuthorizationRequired) {
+          return {
+            status: "continue",
+            workspaceId: state.workspaceId,
+            step: "authorize",
+            url: svc.githubAuthorizeUrl(data.state),
+          };
+        }
+        throw e;
+      }
+      await svc.markInstallStateUsed(state);
+    } else {
+      if (!code) {
+        throw new svc.ConnectorError(
+          "GitHub didn't return an authorization. Start the connection again from Mellox.",
+        );
+      }
+      linked = await svc.linkAuthorizedInstallations({ state, code });
+      if (!linked.length) {
+        return {
+          status: "continue",
+          workspaceId: state.workspaceId,
+          step: "install",
+          url: svc.githubInstallUrl(data.state),
+        };
+      }
+      await svc.markInstallStateUsed(state);
+    }
+
+    // Report "connected" only when the signed-in user can read the saved rows
+    // through their own RLS client — never on the service role's word alone.
+    const { data: visible, error } = await context.supabase
+      .from("workspace_connections")
+      .select(CONNECTION_COLS)
+      .eq("workspace_id", state.workspaceId)
+      .in(
+        "id",
+        linked.map((c) => c.id),
+      );
+    if (error) throw new Error(error.message);
+    if ((visible ?? []).length !== linked.length) {
+      throw new svc.ConnectorError(
+        "GitHub was connected, but your account can't see the saved connection in this workspace. Refresh Settings → Connections, or ask a workspace owner to check your role.",
+        409,
+      );
+    }
+    return {
+      status: "connected",
+      workspaceId: state.workspaceId,
+      returnPath: state.returnPath,
+      connections: (visible ?? []).map((r) => presentConnection(r as never)),
+    };
   });
 
 /* ------------------------------------------------------------------ */
@@ -300,6 +401,27 @@ export const verifySourceOwnership = createServerFn({ method: "POST" })
     const { verifySourceOwnership: verify } =
       await import("@/server/connectors/github/ownership.server");
     return verify({ source, connection, userId: context.userId, siteHost: data.siteHost });
+  });
+
+export const attestSourceOwnership = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        sourceId: uuid,
+        siteHost: z.string().min(3).max(255),
+        // The admin ticked the statement in the UI; the server records who and when.
+        confirm: z.literal(true),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }): Promise<SourceView> => {
+    await requireWorkspaceRole(context, data.workspaceId, "admin");
+    const { source } = await loadSource(context, data.workspaceId, data.sourceId);
+    const { attestSourceOwnership: attest } =
+      await import("@/server/connectors/github/ownership.server");
+    return attest({ source, userId: context.userId, siteHost: data.siteHost });
   });
 
 export const setAgentConsent = createServerFn({ method: "POST" })

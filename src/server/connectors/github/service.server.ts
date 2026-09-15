@@ -17,12 +17,19 @@ import {
   exchangeOAuthCode,
   forgetInstallationToken,
   GitHubAccessError,
+  GITHUB_WEB,
   installationRequest,
+  listUserInstallations,
   userCanAccessInstallation,
 } from "./api.server";
 import { recordAudit } from "@/server/audit.server";
 import { HttpError } from "@/server/http-error";
-import { requireGitHubConfig, GitHubNotConfiguredError } from "./config.server";
+import {
+  allowedReturnOrigin,
+  requireGitHubConfig,
+  safeReturnPath,
+  GitHubNotConfiguredError,
+} from "./config.server";
 import { buildInspection } from "./inspect";
 import {
   CONNECTION_COLS,
@@ -42,6 +49,14 @@ export class ConnectorError extends HttpError {
   constructor(message: string, status = 400) {
     super(status, message);
     this.name = "ConnectorError";
+  }
+}
+
+/** The installer returned without OAuth proof; send them through GitHub's authorize step. */
+export class GitHubAuthorizationRequired extends Error {
+  constructor() {
+    super("GitHub authorization is required to confirm this installation.");
+    this.name = "GitHubAuthorizationRequired";
   }
 }
 
@@ -83,15 +98,41 @@ function audit(
 
 /* ───────────────────────── Install ───────────────────────── */
 
-export async function createInstallUrl(args: { workspaceId: string; userId: string }): Promise<{
+export async function createInstallUrl(args: {
+  workspaceId: string;
+  userId: string;
+  /** The browser origin that started the flow (holds the user's session). */
+  returnOrigin?: string | null;
+  /** The Mellox page to come back to (relative path). */
+  returnPath?: string | null;
+}): Promise<{
   url: string;
+  flow: "authorize" | "install";
   expiresInSeconds: number;
 }> {
   const config = requireGitHubConfig();
   if (config.installVerification === "unavailable") {
-    throw new GitHubNotConfiguredError([
-      "GitHub installs can't be verified: set GITHUB_CLIENT_SECRET and enable OAuth during installation.",
-    ], "verification_unavailable");
+    throw new GitHubNotConfiguredError(
+      [
+        "GitHub installs can't be verified: set GITHUB_CLIENT_SECRET and enable OAuth during installation.",
+      ],
+      "verification_unavailable",
+    );
+  }
+  // Never silently bounce the user to an origin where they aren't signed in.
+  const returnOrigin = allowedReturnOrigin(args.returnOrigin, process.env, {
+    allowLocal: process.env.NODE_ENV !== "production",
+  });
+  if (args.returnOrigin && !returnOrigin) {
+    let label = "this address";
+    try {
+      label = new URL(args.returnOrigin).host.slice(0, 100);
+    } catch {
+      /* keep the generic label */
+    }
+    throw new ConnectorError(
+      `GitHub can't send you back to ${label} from this server. Open Mellox on its main address, or add ${label} to GITHUB_ALLOWED_RETURN_ORIGINS.`,
+    );
   }
   const state = randomBytes(32).toString("base64url");
   const now = Date.now();
@@ -105,28 +146,64 @@ export async function createInstallUrl(args: { workspaceId: string; userId: stri
     user_id: args.userId,
     provider: "github",
     expires_at: new Date(now + STATE_TTL_MS).toISOString(),
+    return_origin: returnOrigin,
+    return_path: safeReturnPath(args.returnPath),
   });
   if (error) throw new Error(`Couldn't start the GitHub connection: ${error.message}`);
   await audit(args.workspaceId, args.userId, "connector.github.install_started", {});
-  const url = new URL(
-    `https://github.com/apps/${encodeURIComponent(config.slug)}/installations/new`,
-  );
-  url.searchParams.set("state", state);
-  return { url: url.toString(), expiresInSeconds: STATE_TTL_MS / 1000 };
+  // With OAuth, start at GitHub's authorize page: it always redirects back —
+  // including when the App is already installed, where the install page would
+  // strand the user on GitHub's settings screen. The return lists the
+  // installations they can access, and sends them on to install when there are none.
+  const flow = config.installVerification === "oauth" && config.clientId ? "authorize" : "install";
+  return {
+    url: flow === "authorize" ? githubAuthorizeUrl(state) : githubInstallUrl(state),
+    flow,
+    expiresInSeconds: STATE_TTL_MS / 1000,
+  };
 }
 
-export type InstallState = { workspaceId: string; userId: string; createdAt: string };
+export function githubAuthorizeUrl(state: string): string {
+  const config = requireGitHubConfig();
+  const url = new URL(`${GITHUB_WEB}/login/oauth/authorize`);
+  url.searchParams.set("client_id", config.clientId ?? "");
+  url.searchParams.set("state", state);
+  return url.toString();
+}
 
-/** Claim a state exactly once. Throws a user-facing error for unknown, expired, used or foreign state. */
-export async function consumeInstallState(state: string, userId: string): Promise<InstallState> {
-  if (!/^[A-Za-z0-9_-]{32,128}$/.test(state)) {
+export function githubInstallUrl(state: string): string {
+  const config = requireGitHubConfig();
+  const url = new URL(`${GITHUB_WEB}/apps/${encodeURIComponent(config.slug)}/installations/new`);
+  url.searchParams.set("state", state);
+  return url.toString();
+}
+
+export type InstallState = {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  createdAt: string;
+  consumedAt: string | null;
+  /** The Mellox page the user started from, if any. */
+  returnPath: string | null;
+};
+
+const STATE_FORMAT = /^[A-Za-z0-9_-]{32,128}$/;
+
+/**
+ * Look up a state for the returning user without using it up, so a failed
+ * completion (GitHub hiccup, missing OAuth code) can be retried. Throws a
+ * user-facing error for unknown, expired or foreign state.
+ */
+export async function readInstallState(state: string, userId: string): Promise<InstallState> {
+  if (!STATE_FORMAT.test(state)) {
     throw new ConnectorError(
       "This connection link is invalid. Start the connection again from Mellox.",
     );
   }
   const { data: row, error } = await supabaseAdmin
     .from("connector_install_states")
-    .select("id, workspace_id, user_id, expires_at, consumed_at, created_at")
+    .select("id, workspace_id, user_id, expires_at, consumed_at, created_at, return_path")
     .eq("state_hash", hashState(state))
     .eq("provider", "github")
     .maybeSingle();
@@ -140,21 +217,85 @@ export async function consumeInstallState(state: string, userId: string): Promis
       "This connection was started by a different Mellox user. Sign in as that user or start again.",
     );
   }
-  if (row.consumed_at) throw new ConnectorError("This connection link was already used.");
-  if (Date.parse(row.expires_at) < Date.now()) {
+  if (!row.consumed_at && Date.parse(row.expires_at) < Date.now()) {
     throw new ConnectorError(
       "This connection link has expired. Start the connection again from Mellox.",
     );
   }
-  const { data: claimed, error: claimError } = await supabaseAdmin
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    userId: row.user_id,
+    createdAt: row.created_at,
+    consumedAt: row.consumed_at,
+    returnPath: safeReturnPath(row.return_path),
+  };
+}
+
+/** Mark a state used once its connection is saved. Idempotent. */
+export async function markInstallStateUsed(state: InstallState): Promise<void> {
+  const { error } = await supabaseAdmin
     .from("connector_install_states")
     .update({ consumed_at: new Date().toISOString() })
-    .eq("id", row.id)
-    .is("consumed_at", null)
-    .select("id");
-  if (claimError) throw new Error(claimError.message);
-  if (!claimed?.length) throw new ConnectorError("This connection link was already used.");
-  return { workspaceId: row.workspace_id, userId: row.user_id, createdAt: row.created_at };
+    .eq("id", state.id)
+    .is("consumed_at", null);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * The connection an already-used state produced for this installation — lets a
+ * reloaded or double-submitted callback show the saved result instead of an
+ * error. Only matches a connection this user saved after the state was issued.
+ */
+export async function findConnectionFromState(
+  state: InstallState,
+  installationId: string,
+): Promise<ConnectionView | null> {
+  const { data, error } = await supabaseAdmin
+    .from("workspace_connections")
+    .select(CONNECTION_COLS)
+    .eq("workspace_id", state.workspaceId)
+    .eq("provider", "github")
+    .eq("external_account_id", installationId)
+    .eq("connected_by", state.userId)
+    .neq("status", "revoked")
+    .gte("last_verified_at", state.createdAt)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? presentConnection(data as unknown as ConnectionRow) : null;
+}
+
+/** Every connection an already-used OAuth state saved (reload of the authorize return). */
+export async function findConnectionsFromState(state: InstallState): Promise<ConnectionView[]> {
+  const { data, error } = await supabaseAdmin
+    .from("workspace_connections")
+    .select(CONNECTION_COLS)
+    .eq("workspace_id", state.workspaceId)
+    .eq("provider", "github")
+    .eq("connected_by", state.userId)
+    .neq("status", "revoked")
+    .gte("last_verified_at", state.createdAt);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => presentConnection(r as unknown as ConnectionRow));
+}
+
+/**
+ * Where the GitHub callback should send the installer: the allowlisted origin
+ * the flow started from, or null (stay on this origin). Read-only.
+ */
+export async function installReturnOrigin(state: string): Promise<string | null> {
+  if (!STATE_FORMAT.test(state)) return null;
+  const { data } = await supabaseAdmin
+    .from("connector_install_states")
+    .select("return_origin, expires_at")
+    .eq("state_hash", hashState(state))
+    .eq("provider", "github")
+    .maybeSingle();
+  if (!data?.return_origin) return null;
+  // Stored only by a Mellox server after its own allowlist check; re-checked
+  // here against this deployment's allowlist. Local development origins are
+  // accepted because only a server holding the service role can write them.
+  return allowedReturnOrigin(data.return_origin, process.env, { allowLocal: true });
 }
 
 /**
@@ -174,27 +315,13 @@ export async function linkInstallation(args: {
   if (!/^\d{1,20}$/.test(args.installationId))
     throw new ConnectorError("GitHub returned an invalid installation.");
 
-  const installation = await appRequest<GitHubInstallation>(
-    `/app/installations/${args.installationId}`,
-  );
-  if (!installation?.account) {
-    throw new ConnectorError(
-      "That GitHub installation doesn't exist or was removed. Install the app again.",
-    );
-  }
-  if (installation.suspended_at) {
-    throw new ConnectorError(
-      "This GitHub installation is suspended. Unsuspend it on GitHub, then reconnect.",
-    );
-  }
+  const installation = await loadInstallation(args.installationId);
 
   let verification: "oauth" | "install_window";
   if (config.installVerification === "oauth") {
-    if (!args.code) {
-      throw new ConnectorError(
-        "GitHub didn't send an authorization code. Enable “Request user authorization (OAuth) during installation” on the GitHub App.",
-      );
-    }
+    // "Request user authorization during installation" is off on the App:
+    // prove the installer through GitHub's authorize step instead.
+    if (!args.code) throw new GitHubAuthorizationRequired();
     const userToken = await exchangeOAuthCode(args.code);
     if (!(await userCanAccessInstallation(userToken, args.installationId))) {
       throw new ConnectorError("Your GitHub account can't access that installation.");
@@ -229,14 +356,73 @@ export async function linkInstallation(args: {
     throw new GitHubNotConfiguredError(["GitHub installs can't be verified on this server."]);
   }
 
+  return saveInstallation(args.state, installation, verification);
+}
+
+type LiveInstallation = GitHubInstallation & {
+  account: NonNullable<GitHubInstallation["account"]>;
+};
+
+async function loadInstallation(installationId: string): Promise<LiveInstallation> {
+  const installation = await appRequest<GitHubInstallation>(`/app/installations/${installationId}`);
+  if (!installation?.account) {
+    throw new ConnectorError(
+      "That GitHub installation doesn't exist or was removed. Install the app again.",
+    );
+  }
+  if (installation.suspended_at) {
+    throw new ConnectorError(
+      "This GitHub installation is suspended. Unsuspend it on GitHub, then reconnect.",
+    );
+  }
+  return installation as LiveInstallation;
+}
+
+/**
+ * The OAuth authorize return: link every installation of this App the GitHub
+ * user can access (GitHub itself proves access). Empty when they have none yet —
+ * the caller then sends them on to install, with the same state.
+ */
+export async function linkAuthorizedInstallations(args: {
+  state: InstallState;
+  code: string;
+}): Promise<ConnectionView[]> {
+  const userToken = await exchangeOAuthCode(args.code);
+  const accessible = await listUserInstallations(userToken);
+  const linked: ConnectionView[] = [];
+  let suspended = 0;
+  for (const { id } of accessible.slice(0, 20)) {
+    if (!/^\d{1,20}$/.test(id)) continue;
+    const installation = await appRequest<GitHubInstallation>(`/app/installations/${id}`);
+    if (!installation?.account) continue;
+    if (installation.suspended_at) {
+      suspended++;
+      continue;
+    }
+    linked.push(await saveInstallation(args.state, installation as LiveInstallation, "oauth"));
+  }
+  if (!linked.length && suspended) {
+    throw new ConnectorError(
+      "Your Mellox AI installation on GitHub is suspended. Unsuspend it on GitHub, then connect again.",
+    );
+  }
+  return linked;
+}
+
+async function saveInstallation(
+  state: InstallState,
+  installation: LiveInstallation,
+  verification: "oauth" | "install_window",
+): Promise<ConnectionView> {
+  const installationId = String(installation.id);
   const now = new Date().toISOString();
   const { data: row, error } = await supabaseAdmin
     .from("workspace_connections")
     .upsert(
       {
-        workspace_id: args.state.workspaceId,
+        workspace_id: state.workspaceId,
         provider: "github",
-        external_account_id: args.installationId,
+        external_account_id: installationId,
         status: "active",
         account_login: installation.account.login,
         account_type: installation.account.type,
@@ -245,7 +431,7 @@ export async function linkInstallation(args: {
         repository_selection: installation.repository_selection,
         permissions: installation.permissions,
         verification,
-        connected_by: args.state.userId,
+        connected_by: state.userId,
         last_verified_at: now,
         last_error: null,
         revoked_at: null,
@@ -257,11 +443,19 @@ export async function linkInstallation(args: {
     .single();
   if (error || !row) throw new Error(error?.message ?? "Couldn't save the GitHub connection");
 
-  // A reconnect restores sources that are still reachable.
-  await syncSourceAccess(row as ConnectionRow);
-  await audit(args.state.workspaceId, args.state.userId, "connector.github.connected", {
+  // A reconnect restores sources that are still reachable. The connection is
+  // already saved, so a GitHub hiccup here must not report the connect as failed.
+  try {
+    await syncSourceAccess(row as ConnectionRow);
+  } catch (e) {
+    console.warn(
+      "[github] source access sync after connect failed:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+  await audit(state.workspaceId, state.userId, "connector.github.connected", {
     connectionId: row.id,
-    installationId: args.installationId,
+    installationId,
     account: installation.account.login,
     repositorySelection: installation.repository_selection,
     verification,

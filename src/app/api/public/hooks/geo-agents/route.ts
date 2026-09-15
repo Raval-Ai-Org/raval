@@ -11,9 +11,13 @@ export const POST = defineCronRoute({
   job: "geo-agents",
   expectedIntervalSeconds: 60,
   handler: async () => {
-    const { runDueAgentRuns } = await import("@/server/geo/agents/runner.server");
+    const { runDueAgentRuns, pruneAgentRuns } = await import("@/server/geo/agents/runner.server");
     // Stay inside pg_net's call timeout; long stages continue on the next tick.
-    return runDueAgentRuns({ budgetMs: 110_000, max: 2 });
+    const runs = await runDueAgentRuns({ budgetMs: 110_000, max: 2 });
+    // Retention (ADR-0013): checkpoints holding repository code are dropped a day
+    // after a run ends. Hourly is enough.
+    const pruned = new Date().getUTCMinutes() === 0 ? await pruneAgentRuns() : null;
+    return { ...runs, pruned };
   },
 });
 

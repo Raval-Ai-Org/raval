@@ -3,10 +3,11 @@
 import { RepoOwnershipCard } from "./RepoOwnershipCard";
 
 // GitHubConnector — connect the repository behind a workspace's website.
-// Install happens on GitHub in a popup (/integrations/github/callback reports
-// back over a BroadcastChannel); everything else — repositories, selection,
-// verification, inspection, disconnect — goes through server functions that
-// hold the GitHub credentials. No token or key ever reaches this component.
+// Connecting happens on GitHub in this tab; /integrations/github/callback saves
+// the connection and returns here with ?github=connected. Everything else —
+// repositories, selection, verification, inspection, disconnect — goes through
+// server functions that hold the GitHub credentials. No token or key ever
+// reaches this component, and "Connected" is only ever read from the server.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -36,11 +37,11 @@ import {
   listGithubRepositories,
   removeSource,
   selectGithubRepository,
-  startGithubInstall,
-  subscribeConnectors,
   updateSource,
   verifyConnection,
 } from "@/lib/connectors.functions";
+import { useGithubInstall } from "./useGithubInstall";
+import { takeGithubConnected } from "@/lib/connectors/github-return";
 import type {
   ConnectionView,
   ConnectorsOverview,
@@ -409,6 +410,11 @@ function SourceCard({
             ) : (
               <StatusChip tone="success">Readable</StatusChip>
             )}
+            {source.siteUrl && source.status !== "access_lost" && (
+              <StatusChip tone="success">
+                <CheckCircle className="h-3 w-3" /> Repository linked
+              </StatusChip>
+            )}
           </div>
           <p className="mt-0.5 text-[11.5px] text-muted-foreground">
             Branch {source.branch ?? source.defaultBranch ?? "—"}
@@ -457,6 +463,7 @@ function SourceCard({
             workspaceId={workspaceId}
             source={source}
             canVerify
+            canAttest={canManage}
             onChange={onChange}
             compact
           />
@@ -572,7 +579,6 @@ function SourceCard({
 export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
   const [overview, setOverview] = useState<ConnectorsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [installing, setInstalling] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
@@ -591,46 +597,31 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
     void load();
   }, [load]);
 
-  // The install popup reports back here; refresh on focus as a fallback.
-  useEffect(() => {
-    const unsubscribe = subscribeConnectors((message) => {
-      if (message.provider !== "github") return;
-      setInstalling(false);
-      if (message.type === "connected") {
-        toast.success("GitHub connected");
-        setShowPicker(true);
-      } else {
-        toast.error(message.message);
-      }
-      void load();
-    });
-    const onFocus = () => {
-      if (installing) void load();
-    };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      unsubscribe();
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [load, installing]);
+  const { installing, install } = useGithubInstall(workspaceId);
+  const [justConnected, setJustConnected] = useState<string[] | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const install = async () => {
-    setInstalling(true);
-    // Open synchronously (popup blockers), then point it at GitHub.
-    const popup = window.open(
-      "about:blank",
-      "mellox-github-install",
-      "popup,width=1020,height=760",
-    );
-    try {
-      const { url } = await startGithubInstall({ data: { workspaceId } });
-      if (popup && !popup.closed) popup.location.href = url;
-      else window.location.href = url;
-    } catch (e) {
-      popup?.close();
-      setInstalling(false);
-      toast.error(e instanceof Error ? e.message : "Couldn't start the GitHub connection");
+  // Back from GitHub: the callback page saved and verified the connection. The
+  // overview above is re-read from the server; go straight to choosing a repository.
+  useEffect(() => {
+    const notice = takeGithubConnected(workspaceId);
+    if (notice) {
+      setJustConnected(notice.accounts);
+      setShowPicker(true);
     }
+  }, [workspaceId]);
+
+  // Fallback for changes made elsewhere (another tab, GitHub's own settings).
+  useEffect(() => {
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [load]);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
   };
 
   const verify = async (connection: ConnectionView) => {
@@ -705,6 +696,15 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
             ) : (
               <StatusChip tone="muted">Not connected</StatusChip>
             )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto h-7 px-2 text-[11.5px]"
+              loading={refreshing}
+              onClick={() => void refresh()}
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Refresh status
+            </Button>
           </div>
           <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
             Connect the repository behind your website so Mellox can see how your SEO, GEO and AEO
@@ -712,6 +712,22 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
           </p>
         </div>
       </div>
+
+      {justConnected && live.length > 0 && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-2 rounded-xl border border-success/30 bg-success/5 px-3.5 py-2.5 text-[12.5px]"
+        >
+          <CheckCircle className="h-4 w-4 shrink-0 text-success" />
+          <span className="min-w-0 flex-1">
+            GitHub connected{justConnected.length ? ` — ${justConnected.join(", ")}` : ""}. Choose
+            the repository that builds your website below.
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => setJustConnected(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       {!config.ready && (
         <div
@@ -758,9 +774,7 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
               <Github className="h-4 w-4" /> Connect GitHub
             </Button>
             {installing && (
-              <span className="text-[12px] text-muted-foreground">
-                Finish installing in the GitHub window…
-              </span>
+              <span className="text-[12px] text-muted-foreground">Opening GitHub…</span>
             )}
             {!canManage && (
               <span className="text-[12px] text-muted-foreground">

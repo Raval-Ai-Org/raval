@@ -317,6 +317,46 @@ export function scoreOwnership(evidence: OwnershipEvidence[]): OwnershipResult {
   return { status, confidence, evidence, hints };
 }
 
+/**
+ * Whether a workspace admin may confirm ownership themselves. Some hosts
+ * (Lovable, Replit, custom servers) report no deployments and have no Pages
+ * site, so automatic proof is impossible. An admin may confirm only after a
+ * check for this host found some positive evidence and nothing pointing at a
+ * different website — never for a repository that shows no link to the site.
+ */
+export function canAttestOwnership(input: {
+  status: OwnershipStatus | null | undefined;
+  checkedHost: string | null | undefined;
+  siteHost: string | null | undefined;
+  evidence: OwnershipEvidence[];
+}): { ok: true } | { ok: false; reason: string } {
+  if (!input.checkedHost || !hostsMatch(input.checkedHost, input.siteHost)) {
+    return { ok: false, reason: "Run the ownership check for this website first." };
+  }
+  if (input.status !== "unverified" && input.status !== "likely") {
+    return {
+      ok: false,
+      reason:
+        input.status === "mismatch"
+          ? "The evidence says this repository builds a different website."
+          : "Ownership doesn't need confirming.",
+    };
+  }
+  if (input.evidence.some((e) => e.polarity === "negative" && e.weight > 0)) {
+    return {
+      ok: false,
+      reason: "The evidence says this repository points at a different website.",
+    };
+  }
+  if (!input.evidence.some((e) => e.polarity === "positive" && e.weight > 0)) {
+    return {
+      ok: false,
+      reason: "No evidence links this repository to the website, so it can't be confirmed.",
+    };
+  }
+  return { ok: true };
+}
+
 /** Whether a fix may be proposed against a source with this ownership state. */
 export function ownershipAllowsFixes(status: OwnershipStatus | null | undefined): boolean {
   return status === "verified" || status === "attested";

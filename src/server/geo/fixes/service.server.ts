@@ -71,6 +71,8 @@ import {
   type VerificationRow,
 } from "./present";
 import { fixKindForRule, frameworkKind, planFixTarget, type TargetPlan } from "./targets";
+import { isAgentFixable } from "./strategies";
+import { geoAgentEnabled } from "@/server/geo/agents/flags";
 import type { CrawledPageFacts } from "./text-artifacts";
 import { validateProposal } from "./validate";
 import { kickVerification, scheduleVerification, verifyDelaysMinutes } from "./verify.server";
@@ -316,7 +318,10 @@ export async function getFixAvailability(
     verifications: verifications.map(presentVerification),
   };
 
-  if (!kind) {
+  // The GEO Engineer reads the repository itself, so a rule it has a strategy for
+  // needs only the GitHub setup — not the one-shot planner's rule/framework list.
+  const agentFixable = geoAgentEnabled() && isAgentFixable(finding.rule_id);
+  if (!kind && !agentFixable) {
     return {
       ...base,
       method: "manual",
@@ -377,7 +382,7 @@ export async function getFixAvailability(
     );
   }
   const framework = source.inspection?.framework ?? null;
-  if (source.inspection && !frameworkKind(framework)) {
+  if (!agentFixable && source.inspection && !frameworkKind(framework)) {
     return requirement(
       "unsupported",
       framework
