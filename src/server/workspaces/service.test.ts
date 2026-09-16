@@ -1,5 +1,74 @@
 import { describe, expect, it, vi } from "vitest";
-import { createMemoryDb } from "../../../tests/fixtures/memory-supabase";
+
+// Self-contained in-memory stand-in for the service-role client. Files under
+// src/ are type-checked by `next build`, and the deploy image excludes tests/
+// (.dockerignore), so this test must not import from tests/fixtures.
+type Row = Record<string, unknown>;
+type Result = { data: unknown; error: null };
+
+function createMemoryDb(seed: Record<string, Row[]>) {
+  const tables = new Map<string, Row[]>(
+    Object.entries(seed).map(([name, rows]) => [name, rows.map((r) => ({ ...r }))]),
+  );
+  const rowsOf = (name: string): Row[] => {
+    let rows = tables.get(name);
+    if (!rows) tables.set(name, (rows = []));
+    return rows;
+  };
+
+  function from(table: string) {
+    let op: "select" | "insert" | "delete" = "select";
+    let payload: Row | Row[] = [];
+    let returning = false;
+    const filters: Array<(r: Row) => boolean> = [];
+    const matched = () => rowsOf(table).filter((r) => filters.every((f) => f(r)));
+
+    const run = (single: boolean): Result => {
+      if (op === "insert") {
+        const incoming = Array.isArray(payload) ? payload : [payload];
+        rowsOf(table).push(...incoming.map((r) => ({ ...r })));
+        return { data: returning ? incoming : null, error: null };
+      }
+      if (op === "delete") {
+        const doomed = new Set(matched());
+        tables.set(
+          table,
+          rowsOf(table).filter((r) => !doomed.has(r)),
+        );
+        return { data: returning ? [...doomed] : null, error: null };
+      }
+      const rows = matched();
+      return { data: single ? (rows[0] ?? null) : rows, error: null };
+    };
+
+    const builder = {
+      select() {
+        if (op !== "select") returning = true;
+        return builder;
+      },
+      insert(rows: Row | Row[]) {
+        op = "insert";
+        payload = rows;
+        return builder;
+      },
+      delete() {
+        op = "delete";
+        return builder;
+      },
+      eq(column: string, value: unknown) {
+        filters.push((r) => r[column] === value);
+        return builder;
+      },
+      maybeSingle: () => Promise.resolve(run(true)),
+      then<T>(resolve: (value: Result) => T, reject?: (reason: unknown) => T) {
+        return Promise.resolve(run(false)).then(resolve, reject);
+      },
+    };
+    return builder;
+  }
+
+  return { from, rows: (table: string): Row[] => rowsOf(table) };
+}
 
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: {} }));
 
@@ -71,7 +140,7 @@ describe("deleteWorkspace", () => {
       db as never,
     );
     expect(out).toEqual({ id: A, name: "Mellox AI", storageObjectsRemoved: 1 });
-    expect(db.rows("workspaces").map((w) => w.id)).toEqual([B]);
+    expect(db.rows("workspaces").map((w: Row) => w.id)).toEqual([B]);
     expect(d.listObjects).toHaveBeenCalledWith(A);
     expect(d.removeObjects).toHaveBeenCalledWith([`workspace/${A}/assets/one.png`]);
     expect(d.releaseSocialBrand).toHaveBeenCalledWith("brand-a");
