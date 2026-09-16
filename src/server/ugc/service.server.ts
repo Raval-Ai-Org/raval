@@ -20,7 +20,6 @@ import {
   ProductSchema,
   ScriptSchema,
   type AllowanceView,
-  type Brief,
   type Concept,
   type ProjectSummary,
   type ProjectView,
@@ -32,6 +31,7 @@ import { ASSET_BUCKET } from "@/server/assets/persist.server";
 import { getAppUrl } from "@/server/env";
 import { HttpError } from "@/server/http-error";
 import { getPlanLimits } from "@/server/plans";
+import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import { createRenderEngine } from "./engine.server";
 import {
   defaultModelKey,
@@ -63,13 +63,17 @@ export const renderEngine = createRenderEngine({
 
 /** Advance one render right after the response is sent (Vercel/Node after()). */
 export function kickRender(id: string) {
-  after(async () => {
-    try {
-      await renderEngine.runDue({ worker: WORKER, budgetMs: 25_000, max: 1, id });
-    } catch (error) {
-      console.error("[ugc] kick failed", error instanceof Error ? error.message : error);
-    }
-  });
+  try {
+    after(async () => {
+      try {
+        await renderEngine.runDue({ worker: WORKER, budgetMs: 25_000, max: 1, id });
+      } catch (error) {
+        console.error("[ugc] kick failed", error instanceof Error ? error.message : error);
+      }
+    });
+  } catch {
+    // Outside a request scope (scripts, workers): the cron hook and status reads advance it.
+  }
 }
 
 export function runDueUgcRenders(opts: { budgetMs: number; max: number }) {
@@ -154,13 +158,13 @@ export async function createProject(
     title?: string;
     product: unknown;
     brief: unknown;
-    brand?: Record<string, unknown>;
     referenceAssetIds: string[];
   },
 ) {
   const product = ProductSchema.parse(input.product);
   const brief = BriefSchema.parse(input.brief ?? {});
   const refs = await ownedImageAssetIds(input.workspaceId, input.referenceAssetIds);
+  const brand = await workspaceBrand(db, input.workspaceId);
   const { data, error } = await db
     .from("ugc_projects")
     .insert({
@@ -170,7 +174,7 @@ export async function createProject(
       product_url: product.url,
       product: product as unknown as Json,
       brief: brief as unknown as Json,
-      brand_snapshot: brandSnapshot(input.brand) as Json,
+      brand_snapshot: brand as Json,
       reference_asset_ids: refs,
     })
     .select("id")
@@ -187,7 +191,6 @@ export async function updateProject(
     title?: string;
     product?: unknown;
     brief?: unknown;
-    brand?: Record<string, unknown>;
     selectedConceptId?: string | null;
     script?: unknown;
     referenceAssetIds?: string[];
@@ -202,9 +205,9 @@ export async function updateProject(
     update.product_url = product.url;
   }
   if (patch.brief !== undefined) update.brief = BriefSchema.parse(patch.brief);
-  if (patch.brand !== undefined) update.brand_snapshot = brandSnapshot(patch.brand);
   if (patch.selectedConceptId !== undefined) update.selected_concept_id = patch.selectedConceptId;
-  if (patch.script !== undefined) update.script = patch.script === null ? null : ScriptSchema.parse(patch.script);
+  if (patch.script !== undefined)
+    update.script = patch.script === null ? null : ScriptSchema.parse(patch.script);
   if (patch.referenceAssetIds !== undefined) {
     update.reference_asset_ids = await ownedImageAssetIds(workspaceId, patch.referenceAssetIds);
   }
@@ -224,11 +227,13 @@ export async function saveConcepts(
   workspaceId: string,
   id: string,
   concepts: Concept[],
+  brand: Record<string, unknown>,
 ) {
   const first = concepts[0];
   const { error } = await db
     .from("ugc_projects")
     .update({
+      brand_snapshot: brand as Json,
       concepts: concepts as unknown as Json,
       selected_concept_id: first?.id ?? null,
       script: (first?.script ?? null) as unknown as Json,
@@ -239,19 +244,26 @@ export async function saveConcepts(
   return getProjectView(db, workspaceId, id);
 }
 
+/** The workspace's saved Brand DNA (server-side, by verified workspace id), trimmed for ads. */
+async function workspaceBrand(db: UserSupabaseClient, workspaceId: string) {
+  const stored = await readBrandDna(db as unknown as SupabaseClient, workspaceId);
+  return brandSnapshot(stored?.dna);
+}
+
 export async function projectContext(db: UserSupabaseClient, workspaceId: string, id: string) {
   const row = await loadProjectRow(db, workspaceId, id);
-  const { data: ws } = await db
-    .from("workspaces")
-    .select("industry, audience")
-    .eq("id", workspaceId)
-    .maybeSingle();
+  const [{ data: ws }, brand] = await Promise.all([
+    db.from("workspaces").select("industry, audience").eq("id", workspaceId).maybeSingle(),
+    workspaceBrand(db, workspaceId),
+  ]);
   return {
     row,
     product: ProductSchema.parse(row.product ?? {}),
     brief: BriefSchema.parse(row.brief ?? {}),
-    brand: (row.brand_snapshot ?? {}) as Record<string, unknown>,
-    script: row.script ? ScriptSchema.safeParse(row.script).data ?? null : null,
+    brand: Object.keys(brand).length
+      ? brand
+      : ((row.brand_snapshot ?? {}) as Record<string, unknown>),
+    script: row.script ? (ScriptSchema.safeParse(row.script).data ?? null) : null,
     workspace: (ws ?? {}) as { industry?: string | null; audience?: string | null },
   };
 }
@@ -300,7 +312,11 @@ async function assetPaths(workspaceId: string, ids: string[]) {
   );
 }
 
-function presentRender(row: RenderRow, videoUrl: string | null, releasedHolds: Set<string>): RenderView {
+function presentRender(
+  row: RenderRow,
+  videoUrl: string | null,
+  releasedHolds: Set<string>,
+): RenderView {
   const script = row.script as { hook?: string };
   const model = isUgcModelKey(row.model_key) ? UGC_MODELS[row.model_key] : null;
   return {
@@ -398,7 +414,10 @@ export async function getProjectView(
   };
 }
 
-export async function listProjects(db: UserSupabaseClient, workspaceId: string): Promise<ProjectSummary[]> {
+export async function listProjects(
+  db: UserSupabaseClient,
+  workspaceId: string,
+): Promise<ProjectSummary[]> {
   const { data, error } = await db
     .from("ugc_projects")
     .select("id, title, product, reference_asset_ids, updated_at")
@@ -415,7 +434,10 @@ export async function listProjects(db: UserSupabaseClient, workspaceId: string):
     updated_at: string;
   }>;
   const ids = rows.map((r) => r.id);
-  const latest = new Map<string, { id: string; status: RenderView["status"]; asset_id: string | null }>();
+  const latest = new Map<
+    string,
+    { id: string; status: RenderView["status"]; asset_id: string | null }
+  >();
   if (ids.length) {
     const { data: renders } = await db
       .from("ugc_renders")
@@ -426,7 +448,11 @@ export async function listProjects(db: UserSupabaseClient, workspaceId: string):
       .limit(200);
     for (const r of renders ?? []) {
       if (!latest.has(r.project_id)) {
-        latest.set(r.project_id, { id: r.id, status: r.status as RenderView["status"], asset_id: r.asset_id });
+        latest.set(r.project_id, {
+          id: r.id,
+          status: r.status as RenderView["status"],
+          asset_id: r.asset_id,
+        });
       }
     }
   }
@@ -468,7 +494,11 @@ export async function archiveProject(db: UserSupabaseClient, workspaceId: string
 /* ───────────────────────────── renders ───────────────────────────── */
 
 async function workspacePlan(workspaceId: string) {
-  const { data } = await supabaseAdmin.from("workspaces").select("plan").eq("id", workspaceId).maybeSingle();
+  const { data } = await supabaseAdmin
+    .from("workspaces")
+    .select("plan")
+    .eq("id", workspaceId)
+    .maybeSingle();
   return getPlanLimits((data as { plan?: string } | null)?.plan ?? null);
 }
 
@@ -486,14 +516,18 @@ export async function startRender(
     referenceAssetIds: string[];
   },
 ): Promise<{ render: RenderView; created: boolean }> {
-  const existing = await supabaseUgcStore.findByIdempotencyKey(input.workspaceId, input.idempotencyKey);
+  const existing = await supabaseUgcStore.findByIdempotencyKey(
+    input.workspaceId,
+    input.idempotencyKey,
+  );
   if (existing) {
     if (existing.project_id !== input.projectId) throw new HttpError(409, "Duplicate request key");
     return { render: (await presentRenders(input.workspaceId, [existing]))[0], created: false };
   }
 
   const ctx = await projectContext(db, input.workspaceId, input.projectId);
-  if (!ctx.script) throw new HttpError(400, "Choose a concept and finish the script before generating.");
+  if (!ctx.script)
+    throw new HttpError(400, "Choose a concept and finish the script before generating.");
   if (!isUgcModelKey(input.model) || !isModelEnabled(input.model)) {
     throw new HttpError(400, "That video model isn't available.");
   }
@@ -519,7 +553,9 @@ export async function startRender(
     units: estimate.units,
     estCostUsd: estimate.usd,
     provider: "kie",
-    model: model.providerVariant ? `${model.providerModel}:${model.providerVariant}` : model.providerModel,
+    model: model.providerVariant
+      ? `${model.providerModel}:${model.providerVariant}`
+      : model.providerModel,
     route: "ugc/renders:create",
     sourceId: `${input.workspaceId}:${input.idempotencyKey}`,
     ttlSeconds: RESERVATION_TTL_SECONDS,
@@ -585,7 +621,10 @@ export async function startRender(
     throw error;
   }
   if (inserted.created) kickRender(inserted.row.id);
-  return { render: (await presentRenders(input.workspaceId, [inserted.row]))[0], created: inserted.created };
+  return {
+    render: (await presentRenders(input.workspaceId, [inserted.row]))[0],
+    created: inserted.created,
+  };
 }
 
 async function loadRender(db: UserSupabaseClient, workspaceId: string, id: string) {
@@ -637,7 +676,8 @@ export async function cancelRender(db: UserSupabaseClient, workspaceId: string, 
 
 export async function renderDownload(db: UserSupabaseClient, workspaceId: string, id: string) {
   const row = await loadRender(db, workspaceId, id);
-  if (row.status !== "succeeded" || !row.asset_id) throw new HttpError(409, "This video isn't ready yet.");
+  if (row.status !== "succeeded" || !row.asset_id)
+    throw new HttpError(409, "This video isn't ready yet.");
   const asset = (await assetPaths(workspaceId, [row.asset_id])).get(row.asset_id);
   if (!asset) throw new HttpError(404, "The stored video was not found.");
   const db2 = supabaseAdmin as unknown as SupabaseClient;
@@ -656,10 +696,17 @@ const CHANNEL_BY_PLATFORM: Record<string, string> = {
 };
 
 /** Create a draft post carrying the video and its caption (Mellox's publishing flow). */
-export async function createPostDraft(db: UserSupabaseClient, workspaceId: string, id: string, userId: string) {
+export async function createPostDraft(
+  db: UserSupabaseClient,
+  workspaceId: string,
+  id: string,
+  userId: string,
+) {
   const row = await loadRender(db, workspaceId, id);
-  if (row.status !== "succeeded" || !row.asset_id) throw new HttpError(409, "This video isn't ready yet.");
-  const existingId = typeof row.provider_meta.contentItemId === "string" ? row.provider_meta.contentItemId : null;
+  if (row.status !== "succeeded" || !row.asset_id)
+    throw new HttpError(409, "This video isn't ready yet.");
+  const existingId =
+    typeof row.provider_meta.contentItemId === "string" ? row.provider_meta.contentItemId : null;
   if (existingId) return { contentItemId: existingId };
   const asset = (await assetPaths(workspaceId, [row.asset_id])).get(row.asset_id);
   const script = ScriptSchema.safeParse(row.script);
@@ -680,7 +727,7 @@ export async function createPostDraft(db: UserSupabaseClient, workspaceId: strin
       status: "draft",
       meta: {
         source: "ugc",
-        studio_type: "ugc",
+        studio_type: "video",
         platform: channel,
         ugc_project_id: row.project_id,
         ugc_render_id: row.id,
@@ -716,8 +763,7 @@ export async function getAllowance(workspaceId: string): Promise<AllowanceView> 
       .in("status", [...ACTIVE_RENDER_STATUSES]),
   ]);
   const s = (Array.isArray(summary.data) ? summary.data[0] : summary.data) as
-    | { month_videos?: number; month_cost_usd?: number; today_cost_usd?: number }
-    | undefined;
+    { month_videos?: number; month_cost_usd?: number; today_cost_usd?: number } | undefined;
   const held = (holds.data ?? [])
     .filter((h) => h.kind === "video")
     .reduce((n, h) => n + Number(h.units ?? 0), 0);
@@ -740,5 +786,3 @@ export async function getAllowance(workspaceId: string): Promise<AllowanceView> 
 export function modelCatalog() {
   return { models: enabledModels(), defaultModel: defaultModelKey() };
 }
-
-export type { Brief };

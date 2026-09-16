@@ -36,12 +36,24 @@ Rules:
 const OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["name", "brand", "category", "description", "facts", "benefits", "audienceHints", "useCases"],
+  required: [
+    "name",
+    "brand",
+    "category",
+    "description",
+    "facts",
+    "benefits",
+    "audienceHints",
+    "useCases",
+  ],
   properties: {
     name: { type: "string" },
     brand: { type: "string" },
     category: { type: "string" },
-    description: { type: "string", description: "One or two plain sentences: what it is and who it's for." },
+    description: {
+      type: "string",
+      description: "One or two plain sentences: what it is and who it's for.",
+    },
     facts: {
       type: "array",
       items: {
@@ -70,7 +82,10 @@ type ModelOutput = {
 
 const clip = (s: unknown, max: number) => (typeof s === "string" ? s.trim().slice(0, max) : "");
 const list = (v: unknown, max: number, len: number) =>
-  (Array.isArray(v) ? v : []).map((x) => clip(x, len)).filter(Boolean).slice(0, max);
+  (Array.isArray(v) ? v : [])
+    .map((x) => clip(x, len))
+    .filter(Boolean)
+    .slice(0, max);
 
 export async function extractProduct(rawUrl: string): Promise<ExtractionResult> {
   const url = assertPublicUrl(normalizeUrl(rawUrl)).toString();
@@ -87,7 +102,10 @@ export async function extractProduct(rawUrl: string): Promise<ExtractionResult> 
       },
     });
     if (!res.ok) {
-      throw new HttpError(422, `We couldn't open that page (the site answered ${res.status}). Check the link or enter the product details manually.`);
+      throw new HttpError(
+        422,
+        `We couldn't open that page (the site answered ${res.status}). Check the link or enter the product details manually.`,
+      );
     }
     const type = res.headers.get("content-type") ?? "";
     if (type && !/html|xml|text/i.test(type)) {
@@ -98,11 +116,17 @@ export async function extractProduct(rawUrl: string): Promise<ExtractionResult> 
   } catch (error) {
     if (error instanceof HttpError) throw error;
     if (error instanceof ResponseTooLargeError) {
-      throw new HttpError(422, "That page is too large to read. Enter the product details manually.");
+      throw new HttpError(
+        422,
+        "That page is too large to read. Enter the product details manually.",
+      );
     }
     // SsrfBlockedError propagates (the route kernel maps it to 400).
     if ((error as { name?: string })?.name === "SsrfBlockedError") throw error;
-    throw new HttpError(422, "We couldn't reach that page. Check the link or enter the product details manually.");
+    throw new HttpError(
+      422,
+      "We couldn't reach that page. Check the link or enter the product details manually.",
+    );
   }
 
   const signals = parseProductPage(html, finalUrl);

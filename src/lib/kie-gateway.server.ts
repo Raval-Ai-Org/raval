@@ -171,7 +171,9 @@ function mapStatusCategory(status: number, detail?: string): KieGatewayError {
   // strictly a fallback for a genuinely empty response.
   return new KieGatewayError(
     502,
-    message ? `The image provider rejected the request: ${message}` : "The image provider is temporarily unavailable.",
+    message
+      ? `The image provider rejected the request: ${message}`
+      : "The image provider is temporarily unavailable.",
     "provider",
   );
 }

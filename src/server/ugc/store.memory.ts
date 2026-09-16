@@ -12,7 +12,12 @@ import type {
   UgcRenderStore,
 } from "./store";
 
-type Hold = { id: string; state: "held" | "captured" | "released"; reason?: string; cost: number | null };
+type Hold = {
+  id: string;
+  state: "held" | "captured" | "released";
+  reason?: string;
+  cost: number | null;
+};
 
 export class MemoryUgcStore implements UgcRenderStore {
   renders = new Map<string, RenderRow>();
@@ -118,7 +123,8 @@ export class MemoryUgcStore implements UgcRenderStore {
 
   async capture(reservationId: string, actualCostUsd: number | null) {
     const h = this.hold(reservationId);
-    if (!h || !(h.state === "held" || (h.state === "released" && h.reason === "expired"))) return false;
+    if (!h || !(h.state === "held" || (h.state === "released" && h.reason === "expired")))
+      return false;
     h.state = "captured";
     h.cost = actualCostUsd;
     this.usageEvents.push({ reservationId, cost: actualCostUsd });
@@ -141,13 +147,17 @@ export class MemoryUgcStore implements UgcRenderStore {
     return assetIds.map((id) => this.images.get(id)).filter((u): u is string => Boolean(u));
   }
 
-  async persistVideo(input: { sourceUrl: string; idempotencyKey: string }): Promise<PersistVideoResult> {
+  async persistVideo(input: {
+    sourceUrl: string;
+    idempotencyKey: string;
+  }): Promise<PersistVideoResult> {
     if (this.persistFailures > 0) {
       this.persistFailures--;
       return { ok: false, status: 502, message: "download failed" };
     }
     const existing = this.persisted.findIndex((p) => p.idempotencyKey === input.idempotencyKey);
-    if (existing === -1) this.persisted.push({ idempotencyKey: input.idempotencyKey, sourceUrl: input.sourceUrl });
+    if (existing === -1)
+      this.persisted.push({ idempotencyKey: input.idempotencyKey, sourceUrl: input.sourceUrl });
     return { ok: true, assetId: `asset-${input.idempotencyKey}` };
   }
 }

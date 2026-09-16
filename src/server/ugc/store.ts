@@ -85,13 +85,10 @@ export type ReserveRequest = {
   maxConcurrent: number;
 };
 
-export type ReserveResult =
-  | { ok: true; id: string }
-  | { ok: false; code: string; reason: string };
+export type ReserveResult = { ok: true; id: string } | { ok: false; code: string; reason: string };
 
 export type PersistVideoResult =
-  | { ok: true; assetId: string }
-  | { ok: false; status: number; message: string };
+  { ok: true; assetId: string } | { ok: false; status: number; message: string };
 
 export interface UgcRenderStore {
   getRender(id: string): Promise<RenderRow | null>;
@@ -100,10 +97,18 @@ export interface UgcRenderStore {
   /** Insert, or return the existing row for the same (workspace, idempotency key). */
   insertRender(row: NewRenderRow): Promise<{ row: RenderRow; created: boolean }>;
   /** Compare-and-set: apply `patch` only while status is one of `from`. */
-  transition(id: string, from: readonly RenderStatus[], patch: RenderPatch): Promise<RenderRow | null>;
+  transition(
+    id: string,
+    from: readonly RenderStatus[],
+    patch: RenderPatch,
+  ): Promise<RenderRow | null>;
   claim(worker: string, max: number, leaseSeconds: number, id?: string): Promise<RenderRow[]>;
   reserve(request: ReserveRequest): Promise<ReserveResult>;
-  capture(reservationId: string, actualCostUsd: number | null, latencyMs: number | null): Promise<boolean>;
+  capture(
+    reservationId: string,
+    actualCostUsd: number | null,
+    latencyMs: number | null,
+  ): Promise<boolean>;
   release(reservationId: string, reason: string): Promise<boolean>;
   sweepExpiredReservations(): Promise<number>;
   /** Signed, provider-fetchable URLs for the workspace's ready image assets, in order. */

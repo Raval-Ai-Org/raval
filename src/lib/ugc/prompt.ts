@@ -49,7 +49,8 @@ export function fitScenes(scenes: Scene[], durationSec: number): Scene[] {
   const factor = durationSec / span;
   return sorted.map((s, i) => {
     const start = i === 0 ? 0 : round1(s.start * factor);
-    const end = i === sorted.length - 1 ? durationSec : round1(Math.max(s.end * factor, start + 0.5));
+    const end =
+      i === sorted.length - 1 ? durationSec : round1(Math.max(s.end * factor, start + 0.5));
     return { ...s, start, end };
   });
 }
@@ -96,13 +97,16 @@ function creatorPhrase(brief: Brief): string {
   const age = brief.creator.age === "any" ? "" : ` aged ${brief.creator.age.replace("-", " to ")}`;
   const vibe =
     CREATOR_VIBES.find((v) => v.id === brief.creator.vibe)?.prompt ?? "warm and approachable";
-  const audience = brief.audience ? `, someone the target audience (${brief.audience}) relates to` : "";
+  const audience = brief.audience
+    ? `, someone the target audience (${brief.audience}) relates to`
+    : "";
   return `One everyday content creator: a ${who}${age}, ${vibe}${audience}. Natural look, real skin texture, casual clothing. The same person throughout.`;
 }
 
 function settingPhrase(brief: Brief, product: Product): string {
   const chosen = SETTINGS.find((s) => s.id === brief.creator.setting)?.prompt;
-  if (chosen) return `${chosen[0].toUpperCase()}${chosen.slice(1)}, lived-in and realistic, natural window light.`;
+  if (chosen)
+    return `${chosen[0].toUpperCase()}${chosen.slice(1)}, lived-in and realistic, natural window light.`;
   const useCase = product.useCases[0];
   return useCase
     ? `A realistic everyday place where someone would ${useCase.replace(/\.$/, "").toLowerCase()}, natural light.`
@@ -149,7 +153,9 @@ export function buildVideoPrompt(input: PromptInput): string {
   lines.push(`PERFORMANCE: ${TONE_DIRECTION[brief.tone]}.`);
   lines.push("");
 
-  const productLine = [`PRODUCT: ${productName}${product.category ? ` (${product.category})` : ""}.`];
+  const productLine = [
+    `PRODUCT: ${productName}${product.category ? ` (${product.category})` : ""}.`,
+  ];
   if (imageMode === "references") {
     productLine.push(
       "It must look exactly like the product in the reference image(s): same shape, colours, materials, label and packaging design. Do not redesign, recolour or add parts.",
@@ -165,7 +171,8 @@ export function buildVideoPrompt(input: PromptInput): string {
     "Show the product clearly, in focus and well lit, held naturally in hand or in use. It is the only branded product in the video.",
   );
   lines.push(productLine.join(" "));
-  if (facts.length) lines.push(`TRUE PRODUCT FACTS (only these may be claimed): ${facts.join("; ")}.`);
+  if (facts.length)
+    lines.push(`TRUE PRODUCT FACTS (only these may be claimed): ${facts.join("; ")}.`);
   if (input.brandVoice) lines.push(`BRAND VOICE: ${truncate(input.brandVoice, 200)}.`);
   lines.push("");
 

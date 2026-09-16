@@ -45,7 +45,11 @@ function slug(text: string) {
 
 export const supabaseUgcStore: UgcRenderStore = {
   async getRender(id) {
-    const { data, error } = await supabaseAdmin.from("ugc_renders").select(RENDER_COLS).eq("id", id).maybeSingle();
+    const { data, error } = await supabaseAdmin
+      .from("ugc_renders")
+      .select(RENDER_COLS)
+      .eq("id", id)
+      .maybeSingle();
     if (error) throw new Error(error.message);
     return data ? toRow(data) : null;
   },
@@ -80,7 +84,10 @@ export const supabaseUgcStore: UgcRenderStore = {
       .single();
     if (!error && data) return { row: toRow(data), created: true };
     if (error?.code === "23505") {
-      const existing = await supabaseUgcStore.findByIdempotencyKey(row.workspace_id, row.idempotency_key);
+      const existing = await supabaseUgcStore.findByIdempotencyKey(
+        row.workspace_id,
+        row.idempotency_key,
+      );
       if (existing) return { row: existing, created: false };
     }
     throw new Error(error?.message ?? "Could not create the render");
@@ -135,7 +142,11 @@ export const supabaseUgcStore: UgcRenderStore = {
     if (error) throw new Error(`Allowance check failed: ${error.message}`);
     const r = (data ?? {}) as { ok?: boolean; id?: string; code?: string; reason?: string };
     if (r.ok && r.id) return { ok: true, id: r.id };
-    return { ok: false, code: r.code ?? "blocked", reason: r.reason ?? "AI allowance reached for this period." };
+    return {
+      ok: false,
+      code: r.code ?? "blocked",
+      reason: r.reason ?? "AI allowance reached for this period.",
+    };
   },
 
   async capture(reservationId, actualCostUsd, latencyMs) {

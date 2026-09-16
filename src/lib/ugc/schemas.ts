@@ -117,8 +117,6 @@ export const CreateProjectBody = z.object({
   title: text(200).optional(),
   product: ProductSchema,
   brief: BriefSchema.default({}),
-  /** Brand DNA from the browser (it lives client-side). Serialized server-side. */
-  brand: z.record(z.unknown()).optional(),
   referenceAssetIds: z.array(uuid).max(9).default([]),
 });
 
@@ -127,7 +125,6 @@ export const UpdateProjectBody = z.object({
   title: text(200).optional(),
   product: ProductSchema.optional(),
   brief: BriefSchema.optional(),
-  brand: z.record(z.unknown()).optional(),
   selectedConceptId: z.string().max(32).nullable().optional(),
   script: ScriptSchema.nullable().optional(),
   referenceAssetIds: z.array(uuid).max(9).optional(),

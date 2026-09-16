@@ -11,7 +11,12 @@
 // after() and status reads can all advance the same render concurrently
 // without double-submitting, double-storing or double-charging.
 import "server-only";
-import { UGC_MODELS, isUgcModelKey, type UgcAspectRatio, type UgcResolution } from "@/lib/ugc/models";
+import {
+  UGC_MODELS,
+  isUgcModelKey,
+  type UgcAspectRatio,
+  type UgcResolution,
+} from "@/lib/ugc/models";
 import { ACTIVE_RENDER_STATUSES, type RenderStatus } from "@/lib/ugc/schemas";
 import { log as defaultLog } from "@/server/observability/logger";
 import type { VideoProvider } from "./providers/types";
@@ -59,7 +64,8 @@ export function createRenderEngine(deps: EngineDeps) {
   }
 
   async function submit(row: RenderRow): Promise<RenderRow> {
-    if (!isUgcModelKey(row.model_key)) return fail(row, "model_unavailable", "This model is no longer available.");
+    if (!isUgcModelKey(row.model_key))
+      return fail(row, "model_unavailable", "This model is no longer available.");
     const model = UGC_MODELS[row.model_key];
     if (row.submit_attempts >= MAX_SUBMIT_ATTEMPTS) {
       return fail(
@@ -113,8 +119,12 @@ export function createRenderEngine(deps: EngineDeps) {
         next_attempt_at: iso(t + pollDelayMs(iso(t), t)),
         lease_until: null,
       });
-      log.info("ugc.render.submitted", { renderId: current.id, taskId: result.taskId, model: model.key });
-      return processing ?? ((await store.getRender(current.id)) ?? current);
+      log.info("ugc.render.submitted", {
+        renderId: current.id,
+        taskId: result.taskId,
+        model: model.key,
+      });
+      return processing ?? (await store.getRender(current.id)) ?? current;
     }
     if (!result.retryable) return fail(current, result.code, result.message);
     const attempts = current.submit_attempts + 1;
@@ -134,9 +144,14 @@ export function createRenderEngine(deps: EngineDeps) {
 
   async function check(row: RenderRow): Promise<RenderRow> {
     const t = now();
-    if (!row.provider_task_id) return fail(row, "missing_task", "The render lost its provider task.");
+    if (!row.provider_task_id)
+      return fail(row, "missing_task", "The render lost its provider task.");
     if (row.submitted_at && t - Date.parse(row.submitted_at) > RENDER_TIMEOUT_MS) {
-      return fail(row, "timeout", "The render took too long and was stopped. Your allowance was returned.");
+      return fail(
+        row,
+        "timeout",
+        "The render took too long and was stopped. Your allowance was returned.",
+      );
     }
     let result;
     try {
@@ -185,7 +200,8 @@ export function createRenderEngine(deps: EngineDeps) {
   }
 
   async function persist(row: RenderRow): Promise<RenderRow> {
-    const videoUrl = typeof row.provider_meta.videoUrl === "string" ? row.provider_meta.videoUrl : null;
+    const videoUrl =
+      typeof row.provider_meta.videoUrl === "string" ? row.provider_meta.videoUrl : null;
     if (!videoUrl) return fail(row, "no_result", "The provider finished without a video.");
     const persistAttempts = Number(row.provider_meta.persistAttempts ?? 0) + 1;
     const script = row.script as { hook?: string; postCaption?: string };
@@ -195,7 +211,7 @@ export function createRenderEngine(deps: EngineDeps) {
       idempotencyKey: `ugc:${row.id}:${row.provider_task_id}`,
       metadata: {
         source: "ugc",
-        studio_type: "ugc",
+        studio_type: "video",
         project_id: row.project_id,
         render_id: row.id,
         model: row.model_key,
@@ -208,9 +224,17 @@ export function createRenderEngine(deps: EngineDeps) {
     });
     const t = now();
     if (!stored.ok) {
-      log.warn("ugc.render.persist_failed", { renderId: row.id, attempt: persistAttempts, message: stored.message });
+      log.warn("ugc.render.persist_failed", {
+        renderId: row.id,
+        attempt: persistAttempts,
+        message: stored.message,
+      });
       if (persistAttempts >= MAX_PERSIST_ATTEMPTS) {
-        return fail(row, "persist_failed", "The video was made but couldn't be saved. Your allowance was returned.");
+        return fail(
+          row,
+          "persist_failed",
+          "The video was made but couldn't be saved. Your allowance was returned.",
+        );
       }
       return (
         (await store.transition(row.id, ["persisting"], {
@@ -232,8 +256,12 @@ export function createRenderEngine(deps: EngineDeps) {
       error_message: null,
       lease_until: null,
     });
-    log.info("ugc.render.succeeded", { renderId: row.id, assetId: stored.assetId, costUsd: row.actual_cost_usd });
-    return done ?? ((await store.getRender(row.id)) ?? row);
+    log.info("ugc.render.succeeded", {
+      renderId: row.id,
+      assetId: stored.assetId,
+      costUsd: row.actual_cost_usd,
+    });
+    return done ?? (await store.getRender(row.id)) ?? row;
   }
 
   /** Advance one leased render by one step. */
@@ -272,7 +300,12 @@ export function createRenderEngine(deps: EngineDeps) {
     const out = { advanced: 0, succeeded: 0, failed: 0, swept: 0 };
     if (!opts.id) out.swept = await store.sweepExpiredReservations();
     while (now() - started < opts.budgetMs) {
-      const rows = await store.claim(opts.worker, opts.id ? 1 : Math.min(opts.max, 5), LEASE_SECONDS, opts.id);
+      const rows = await store.claim(
+        opts.worker,
+        opts.id ? 1 : Math.min(opts.max, 5),
+        LEASE_SECONDS,
+        opts.id,
+      );
       if (!rows.length) break;
       for (const row of rows) {
         const next = await advance(row);

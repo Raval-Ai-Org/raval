@@ -12,12 +12,15 @@ export const MAX_CALLBACK_BYTES = 256 * 1024;
 export const CALLBACK_TOLERANCE_SECONDS = 15 * 60;
 
 export type CallbackVerdict =
-  | { ok: true; taskId: string }
-  | { ok: false; status: number; reason: string };
+  { ok: true; taskId: string } | { ok: false; status: number; reason: string };
 
 /** The task id Kie sends in its callback body (market and Veo shapes). */
 export function callbackTaskId(body: unknown): string | null {
-  const b = body as { data?: { taskId?: unknown; task_id?: unknown }; taskId?: unknown; task_id?: unknown };
+  const b = body as {
+    data?: { taskId?: unknown; task_id?: unknown };
+    taskId?: unknown;
+    task_id?: unknown;
+  };
   const id = b?.data?.taskId ?? b?.data?.task_id ?? b?.taskId ?? b?.task_id;
   return typeof id === "string" && /^[A-Za-z0-9_-]{6,128}$/.test(id) ? id : null;
 }

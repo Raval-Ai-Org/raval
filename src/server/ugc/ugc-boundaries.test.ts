@@ -7,12 +7,17 @@ import { callbackTaskId, signKieCallback, verifyKieCallback } from "./webhook.se
 describe("Kie callback verification", () => {
   const key = "test-hmac-key-0123456789";
   const now = 1_789_570_000;
-  const body = JSON.stringify({ code: 200, data: { taskId: "92de474bed1b5a7083bd2577c221e7d0", info: {} } });
+  const body = JSON.stringify({
+    code: 200,
+    data: { taskId: "92de474bed1b5a7083bd2577c221e7d0", info: {} },
+  });
   const ts = String(now);
   const sig = signKieCallback("92de474bed1b5a7083bd2577c221e7d0", ts, key);
 
   it("accepts a correctly signed, fresh callback", () => {
-    expect(verifyKieCallback({ rawBody: body, signature: sig, timestamp: ts, key, nowSeconds: now + 5 })).toEqual({
+    expect(
+      verifyKieCallback({ rawBody: body, signature: sig, timestamp: ts, key, nowSeconds: now + 5 }),
+    ).toEqual({
       ok: true,
       taskId: "92de474bed1b5a7083bd2577c221e7d0",
     });
@@ -20,22 +25,36 @@ describe("Kie callback verification", () => {
 
   it("rejects tampered, stale, unsigned and unconfigured callbacks", () => {
     const other = body.replace("92de474b", "00000000");
-    expect(verifyKieCallback({ rawBody: other, signature: sig, timestamp: ts, key, nowSeconds: now })).toMatchObject({
+    expect(
+      verifyKieCallback({ rawBody: other, signature: sig, timestamp: ts, key, nowSeconds: now }),
+    ).toMatchObject({
       ok: false,
       status: 401,
     });
     expect(
-      verifyKieCallback({ rawBody: body, signature: sig, timestamp: ts, key, nowSeconds: now + 3600 }),
+      verifyKieCallback({
+        rawBody: body,
+        signature: sig,
+        timestamp: ts,
+        key,
+        nowSeconds: now + 3600,
+      }),
     ).toMatchObject({ ok: false, reason: "stale timestamp" });
-    expect(verifyKieCallback({ rawBody: body, signature: null, timestamp: ts, key, nowSeconds: now })).toMatchObject({
+    expect(
+      verifyKieCallback({ rawBody: body, signature: null, timestamp: ts, key, nowSeconds: now }),
+    ).toMatchObject({
       ok: false,
       status: 401,
     });
-    expect(verifyKieCallback({ rawBody: body, signature: sig, timestamp: ts, key: undefined })).toMatchObject({
+    expect(
+      verifyKieCallback({ rawBody: body, signature: sig, timestamp: ts, key: undefined }),
+    ).toMatchObject({
       ok: false,
       status: 503,
     });
-    expect(verifyKieCallback({ rawBody: "{", signature: sig, timestamp: ts, key })).toMatchObject({ status: 400 });
+    expect(verifyKieCallback({ rawBody: "{", signature: sig, timestamp: ts, key })).toMatchObject({
+      status: 400,
+    });
   });
 
   it("reads the task id from Veo and market callback shapes only when well-formed", () => {
@@ -54,7 +73,23 @@ describe("reference image probing", () => {
     return b;
   }
   function jpeg(w: number, h: number) {
-    return new Uint8Array([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, h >> 8, h & 255, w >> 8, w & 255, 3, 0, 0, 0]);
+    return new Uint8Array([
+      0xff,
+      0xd8,
+      0xff,
+      0xc0,
+      0x00,
+      0x11,
+      0x08,
+      h >> 8,
+      h & 255,
+      w >> 8,
+      w & 255,
+      3,
+      0,
+      0,
+      0,
+    ]);
   }
 
   it("identifies PNG and JPEG by bytes and reads the size", () => {
@@ -66,7 +101,9 @@ describe("reference image probing", () => {
   it("enforces the video models' image limits", () => {
     expect(referenceImageProblem(probeImage(png(1024, 1024)), 1000)).toBeNull();
     expect(referenceImageProblem(probeImage(png(200, 200)), 1000)).toMatch(/300px/);
-    expect(referenceImageProblem(probeImage(png(3000, 1000)), 1000)).toMatch(/too tall or too wide/);
+    expect(referenceImageProblem(probeImage(png(3000, 1000)), 1000)).toMatch(
+      /too tall or too wide/,
+    );
     expect(referenceImageProblem(null, 1000)).toMatch(/PNG, JPEG or WebP/);
     expect(referenceImageProblem(probeImage(png(1024, 1024)), 11 * 1024 * 1024)).toMatch(/10 MB/);
   });
@@ -110,7 +147,23 @@ describe("product page parsing", () => {
 describe("brand snapshot", () => {
   it("keeps only ad-relevant Brand DNA fields", () => {
     expect(
-      brandSnapshot({ brandName: "Lumen", voice: "Warm", logoUrl: "x", competitors: [{ name: "Y" }], audienceTags: ["a", 1] }),
+      brandSnapshot({
+        brandName: "Lumen",
+        voice: "Warm",
+        logoUrl: "x",
+        competitors: [{ name: "Y" }],
+        audienceTags: ["a", 1],
+      }),
     ).toEqual({ brandName: "Lumen", voice: "Warm", audienceTags: ["a"] });
+  });
+});
+
+describe("storefront image sizes", () => {
+  it("asks CDNs for a usable size instead of a thumbnail", async () => {
+    const { largerImage } = await import("@/lib/ugc/product-page");
+    expect(largerImage("https://x.com/cdn/shop/files/a.png?v=1&width=300")).toBe(
+      "https://x.com/cdn/shop/files/a.png?v=1&width=1200",
+    );
+    expect(largerImage("https://x.com/a.jpg?w=2000")).toBe("https://x.com/a.jpg?w=2000");
   });
 });

@@ -15,7 +15,13 @@ class FakeProvider implements VideoProvider {
   generationType = kieGenerationType;
   async submit(req: { imageUrls: string[]; callbackUrl?: string }) {
     this.submits.push({ imageUrls: req.imageUrls, callbackUrl: req.callbackUrl });
-    return this.submitResults.shift() ?? { ok: true as const, taskId: `task-${this.submits.length}`, request: {} };
+    return (
+      this.submitResults.shift() ?? {
+        ok: true as const,
+        taskId: `task-${this.submits.length}`,
+        request: {},
+      }
+    );
   }
   async check() {
     return this.checks.shift() ?? { state: "pending" as const, providerState: "generating" };
@@ -62,8 +68,12 @@ function newRow(overrides: Partial<NewRenderRow> = {}): NewRenderRow {
 }
 
 async function start(overrides: Partial<NewRenderRow> = {}) {
-  const hold = await store.reserve({ sourceId: overrides.idempotency_key ?? `src-${Math.random()}` } as never);
-  const { row } = await store.insertRender(newRow({ reservation_id: hold.ok ? hold.id : null, ...overrides }));
+  const hold = await store.reserve({
+    sourceId: overrides.idempotency_key ?? `src-${Math.random()}`,
+  } as never);
+  const { row } = await store.insertRender(
+    newRow({ reservation_id: hold.ok ? hold.id : null, ...overrides }),
+  );
   return row;
 }
 
@@ -139,13 +149,21 @@ describe("UGC render engine", () => {
     const current = (await store.getRender(row.id))!;
     expect(current.status).toBe("failed");
     expect(current.error_message).toBe("Blocked by safety filter");
-    expect([...store.holds.values()][0]).toMatchObject({ state: "released", reason: "render_failed" });
+    expect([...store.holds.values()][0]).toMatchObject({
+      state: "released",
+      reason: "render_failed",
+    });
     expect(store.usageEvents).toHaveLength(0);
   });
 
   it("retries transient submit errors with backoff, then fails and releases", async () => {
     const row = await start();
-    const transient: SubmitResult = { ok: false, code: "provider_network", message: "down", retryable: true };
+    const transient: SubmitResult = {
+      ok: false,
+      code: "provider_network",
+      message: "down",
+      retryable: true,
+    };
     provider.submitResults = Array.from({ length: MAX_SUBMIT_ATTEMPTS }, () => transient);
 
     await tick(row.id, 0);
@@ -206,7 +224,10 @@ describe("UGC render engine", () => {
 
     const gone = await start({ reference_asset_ids: ["missing"] });
     await tick(gone.id, 0);
-    expect(await store.getRender(gone.id)).toMatchObject({ status: "failed", error_code: "reference_missing" });
+    expect(await store.getRender(gone.id)).toMatchObject({
+      status: "failed",
+      error_code: "reference_missing",
+    });
   });
 
   it("the same idempotency key returns the same render", async () => {
@@ -231,11 +252,20 @@ describe("UGC render engine", () => {
 });
 
 describe("Kie provider mapping", () => {
-  const base = { prompt: "p", durationSec: 8, aspectRatio: "9:16" as const, resolution: "720p" as const };
+  const base = {
+    prompt: "p",
+    durationSec: 8,
+    aspectRatio: "9:16" as const,
+    resolution: "720p" as const,
+  };
 
   it("builds Veo 3.1 reference-to-video input with the tier in input.model", () => {
     expect(
-      buildKieInput({ ...base, model: UGC_MODELS["veo-3-1-fast"], imageUrls: ["a", "b", "c", "d"] }),
+      buildKieInput({
+        ...base,
+        model: UGC_MODELS["veo-3-1-fast"],
+        imageUrls: ["a", "b", "c", "d"],
+      }),
     ).toEqual({
       prompt: "p",
       model: "veo3_fast",
@@ -249,12 +279,16 @@ describe("Kie provider mapping", () => {
   });
 
   it("uses a first frame for Veo Quality and text-to-video without images", () => {
-    expect(buildKieInput({ ...base, model: UGC_MODELS["veo-3-1-quality"], imageUrls: ["a", "b"] })).toMatchObject({
+    expect(
+      buildKieInput({ ...base, model: UGC_MODELS["veo-3-1-quality"], imageUrls: ["a", "b"] }),
+    ).toMatchObject({
       model: "veo3",
       generation_type: "FIRST_AND_LAST_FRAMES_2_VIDEO",
       image_urls: ["a"],
     });
-    expect(buildKieInput({ ...base, model: UGC_MODELS["veo-3-1-lite"], imageUrls: [] })).toMatchObject({
+    expect(
+      buildKieInput({ ...base, model: UGC_MODELS["veo-3-1-lite"], imageUrls: [] }),
+    ).toMatchObject({
       model: "veo3_lite",
       generation_type: "TEXT_2_VIDEO",
     });
@@ -262,7 +296,12 @@ describe("Kie provider mapping", () => {
 
   it("builds Seedance input with reference images and audio", () => {
     expect(
-      buildKieInput({ ...base, durationSec: 12, model: UGC_MODELS["seedance-2-fast"], imageUrls: ["a"] }),
+      buildKieInput({
+        ...base,
+        durationSec: 12,
+        model: UGC_MODELS["seedance-2-fast"],
+        imageUrls: ["a"],
+      }),
     ).toEqual({
       prompt: "p",
       reference_image_urls: ["a"],

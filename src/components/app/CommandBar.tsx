@@ -22,6 +22,7 @@ import {
   Bot,
   Zap,
   CornerDownLeft,
+  Video,
 } from "@/components/brand/icons";
 import { agentList } from "@/lib/agents";
 import { useAgentToggles } from "@/hooks/use-agent-toggles";
@@ -81,6 +82,7 @@ const QUICK_PROMPTS = [
 ] as const;
 
 const WORKSPACE_ACTIONS = [
+  { id: "ugc-studio", label: "Create a UGC video ad", icon: Video, event: "open:ugc-studio" },
   { id: "brand-dna", label: "Open Brand DNA memory", icon: Brain, event: "open:brand-dna" },
   { id: "tasks", label: "Open Tasks & alerts", icon: CheckSquare, event: "open:tasks" },
   { id: "autopilot", label: "Open Automations", icon: Bot, event: "open:autopilot" },

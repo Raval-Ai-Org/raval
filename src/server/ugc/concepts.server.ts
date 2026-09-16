@@ -55,7 +55,10 @@ const SCENE_SCHEMA = {
     action: { type: "string", description: "What the creator physically does." },
     dialogue: { type: "string", description: "Exact spoken words, or empty." },
     productPlacement: { type: "string", description: "How and where the product is visible." },
-    caption: { type: "string", description: "Short on-screen caption to add in editing (not rendered)." },
+    caption: {
+      type: "string",
+      description: "Short on-screen caption to add in editing (not rendered).",
+    },
   },
 } as const;
 
@@ -192,7 +195,10 @@ export function normalizeScript(raw: RawScript, ctx: ConceptContext): Script | n
       .map((h) => String(h).replace(/^#/, "").replace(/\s+/g, "").slice(0, 40))
       .filter(Boolean)
       .slice(0, 10),
-    factIds: validFactIds(Array.isArray(raw.factIds) ? raw.factIds.map(String) : [], ctx.product.facts),
+    factIds: validFactIds(
+      Array.isArray(raw.factIds) ? raw.factIds.map(String) : [],
+      ctx.product.facts,
+    ),
   });
   return parsed.success ? parsed.data : null;
 }
@@ -252,7 +258,9 @@ function toConcepts(raw: unknown, ctx: ConceptContext): Concept[] {
     if (!script) return;
     const hooks = [script.hook, ...(Array.isArray(c.hooks) ? c.hooks.map(String) : [])]
       .map((h) => h.trim().slice(0, 200))
-      .filter((h, idx, all) => h && all.findIndex((x) => x.toLowerCase() === h.toLowerCase()) === idx)
+      .filter(
+        (h, idx, all) => h && all.findIndex((x) => x.toLowerCase() === h.toLowerCase()) === idx,
+      )
       .slice(0, 5);
     const parsed = ConceptSchema.safeParse({
       id: `c${i + 1}`,
@@ -286,9 +294,7 @@ export async function generateConcepts(
   const flagged = concepts.filter((c) => c.warnings.length);
   if (flagged.length) {
     log.info("ugc.concepts.repair", { flagged: flagged.length });
-    const repairs = flagged
-      .map((c) => `${c.title}:\n- ${c.warnings.join("\n- ")}`)
-      .join("\n\n");
+    const repairs = flagged.map((c) => `${c.title}:\n- ${c.warnings.join("\n- ")}`).join("\n\n");
     try {
       const repaired = toConcepts(
         await complete(

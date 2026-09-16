@@ -42,7 +42,7 @@ export const POST = defineRoute({
       return { project, warnings };
     }
     const concepts = await generateConcepts(conceptCtx);
-    await saveConcepts(supabase, workspaceId, id, concepts);
+    await saveConcepts(supabase, workspaceId, id, concepts, ctx.brand);
     return { project: await getProjectView(supabase, workspaceId, id), warnings: [] };
   },
 });

@@ -93,7 +93,11 @@ describe("model registry", () => {
       resolution: "480p",
       imageCount: 2,
     });
-    expect(problems.map((p) => p.field).sort()).toEqual(["aspectRatio", "durationSec", "resolution"]);
+    expect(problems.map((p) => p.field).sort()).toEqual([
+      "aspectRatio",
+      "durationSec",
+      "resolution",
+    ]);
   });
 
   it("coerces settings to the nearest valid combination", () => {
@@ -106,7 +110,13 @@ describe("model registry", () => {
         resolution: "480p",
         imageCount: 0,
       }),
-    ).toEqual({ model: veo.key, durationSec: 8, aspectRatio: "9:16", resolution: "720p", imageCount: 0 });
+    ).toEqual({
+      model: veo.key,
+      durationSec: 8,
+      aspectRatio: "9:16",
+      resolution: "720p",
+      imageCount: 0,
+    });
   });
 
   it("prices per video and per second", () => {
@@ -117,7 +127,9 @@ describe("model registry", () => {
 
   it("every platform preset maps to at least one enabled model", () => {
     for (const p of PLATFORMS) {
-      expect(UGC_MODEL_KEYS.some((k) => UGC_MODELS[k].aspectRatios.includes(p.aspectRatio))).toBe(true);
+      expect(UGC_MODEL_KEYS.some((k) => UGC_MODELS[k].aspectRatios.includes(p.aspectRatio))).toBe(
+        true,
+      );
     }
   });
 });
@@ -140,7 +152,9 @@ describe("prompt builder", () => {
 
   it("directs a native UGC shoot with the exact dialogue, product fidelity and restrictions", () => {
     const prompt = buildVideoPrompt(input);
-    expect(prompt).toContain("vertical 9:16 8-second user-generated-content (UGC) video ad for Lumen GlowSerum Vitamin C");
+    expect(prompt).toContain(
+      "vertical 9:16 8-second user-generated-content (UGC) video ad for Lumen GlowSerum Vitamin C",
+    );
     expect(prompt).toContain("TikTok creator video");
     expect(prompt).toContain('The creator says: "My skin looked so tired, honestly."');
     expect(prompt).toContain("exactly like the product in the reference image(s)");
@@ -173,7 +187,9 @@ describe("prompt builder", () => {
   it("keeps speech inside the word budget for the clip", () => {
     expect(dialogueWordBudget(8)).toBe(18);
     expect(scriptWordCount(script)).toBeLessThanOrEqual(dialogueWordBudget(8));
-    expect(scriptWordCount({ scenes: [{ ...script.scenes[0], dialogue: "你好世界你好世界" }] }, "zh")).toBe(4);
+    expect(
+      scriptWordCount({ scenes: [{ ...script.scenes[0], dialogue: "你好世界你好世界" }] }, "zh"),
+    ).toBe(4);
   });
 
   it("does not repeat the brand when the name already has it", () => {
@@ -184,7 +200,9 @@ describe("prompt builder", () => {
 
 describe("claim grounding", () => {
   it("finds specific claims", () => {
-    const claims = findClaims("Clinically proven, 50% brighter in 7 days. #1 serum, money-back guarantee, $29.");
+    const claims = findClaims(
+      "Clinically proven, 50% brighter in 7 days. #1 serum, money-back guarantee, $29.",
+    );
     expect(claims.map((c) => c.kind)).toEqual(
       expect.arrayContaining([
         "a percentage",

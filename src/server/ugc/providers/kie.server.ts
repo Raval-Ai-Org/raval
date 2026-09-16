@@ -3,12 +3,7 @@
 // and maps Kie's task records and errors to provider-neutral results. All HTTP
 // goes through src/lib/kie-gateway.server.ts.
 import "server-only";
-import {
-  createKieTask,
-  getKieTask,
-  KieGatewayError,
-  pickVideoUrl,
-} from "@/lib/kie-gateway.server";
+import { createKieTask, getKieTask, KieGatewayError, pickVideoUrl } from "@/lib/kie-gateway.server";
 import type { UgcModel } from "@/lib/ugc/models";
 import { log } from "@/server/observability/logger";
 import { kieUsdPerCredit } from "../models.server";
@@ -85,7 +80,11 @@ export function kieFailure(error: unknown): ProviderFailure {
     }
     return { code: "provider_rejected", message: error.message.slice(0, 300), retryable: false };
   }
-  return { code: "provider_error", message: "The video provider could not be reached.", retryable: true };
+  return {
+    code: "provider_error",
+    message: "The video provider could not be reached.",
+    retryable: true,
+  };
 }
 
 export const kieVideoProvider: VideoProvider = {
@@ -117,7 +116,8 @@ export const kieVideoProvider: VideoProvider = {
       creditsConsumed: record.creditsConsumed,
       costTimeMs: record.costTimeMs,
     };
-    if (record.state === "pending") return { state: "pending", providerState: record.providerState };
+    if (record.state === "pending")
+      return { state: "pending", providerState: record.providerState };
     if (record.state === "failed") {
       return {
         state: "failed",

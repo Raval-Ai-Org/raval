@@ -3,7 +3,11 @@
 // video models accept are stored: PNG, JPEG or WebP, 300–6000px per side,
 // aspect ratio between 0.4 and 2.5.
 
-export type ImageProbe = { mime: "image/png" | "image/jpeg" | "image/webp"; width: number; height: number };
+export type ImageProbe = {
+  mime: "image/png" | "image/jpeg" | "image/webp";
+  width: number;
+  height: number;
+};
 
 export function probeImage(bytes: Uint8Array): ImageProbe | null {
   const b = bytes;
@@ -44,12 +48,18 @@ export function probeImage(bytes: Uint8Array): ImageProbe | null {
     String.fromCharCode(b[8], b[9], b[10], b[11]) === "WEBP"
   ) {
     const chunk = String.fromCharCode(b[12], b[13], b[14], b[15]);
-    if (chunk === "VP8 ") return { mime: "image/webp", width: u16le(26) & 0x3fff, height: u16le(28) & 0x3fff };
+    if (chunk === "VP8 ")
+      return { mime: "image/webp", width: u16le(26) & 0x3fff, height: u16le(28) & 0x3fff };
     if (chunk === "VP8L") {
       const bits = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24);
-      return { mime: "image/webp", width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+      return {
+        mime: "image/webp",
+        width: (bits & 0x3fff) + 1,
+        height: ((bits >> 14) & 0x3fff) + 1,
+      };
     }
-    if (chunk === "VP8X") return { mime: "image/webp", width: u24le(24) + 1, height: u24le(27) + 1 };
+    if (chunk === "VP8X")
+      return { mime: "image/webp", width: u24le(24) + 1, height: u24le(27) + 1 };
   }
   return null;
 }
@@ -64,6 +74,7 @@ export function referenceImageProblem(probe: ImageProbe | null, byteLength: numb
   if (Math.min(width, height) < 300) return "Images must be at least 300px on each side.";
   if (Math.max(width, height) > 6000) return "Images must be at most 6000px on each side.";
   const ratio = width / height;
-  if (ratio < 0.4 || ratio > 2.5) return "That image is too tall or too wide. Crop it closer to square.";
+  if (ratio < 0.4 || ratio > 2.5)
+    return "That image is too tall or too wide. Crop it closer to square.";
   return null;
 }

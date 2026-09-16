@@ -8,7 +8,12 @@ import { persistAsset } from "@/server/assets/persist.server";
 import { HttpError } from "@/server/http-error";
 import { ResponseTooLargeError, safeFetch } from "@/server/safe-fetch";
 
-async function store(workspaceId: string, bytes: Uint8Array, filename: string, origin: string | null) {
+async function store(
+  workspaceId: string,
+  bytes: Uint8Array,
+  filename: string,
+  origin: string | null,
+) {
   const probe = probeImage(bytes);
   const problem = referenceImageProblem(probe, bytes.byteLength);
   if (problem || !probe) throw new HttpError(422, problem ?? "Unsupported image.");
@@ -50,16 +55,21 @@ export async function importReferenceFromUrl(workspaceId: string, url: string) {
       timeoutMs: 20_000,
       maxBytes: MAX_REFERENCE_BYTES,
       onOverflow: "error",
-      headers: { Accept: "image/avif,image/webp,image/png,image/jpeg,*/*" },
+      // No AVIF: video models accept PNG, JPEG and WebP only, and CDNs negotiate on Accept.
+      headers: { Accept: "image/webp,image/png,image/jpeg;q=0.9,image/*;q=0.5" },
     });
     if (!res.ok) throw new HttpError(422, "That image couldn't be downloaded. Upload it instead.");
     bytes = res.bytes;
   } catch (error) {
     if (error instanceof HttpError) throw error;
-    if (error instanceof ResponseTooLargeError) throw new HttpError(422, "Images must be 10 MB or smaller.");
+    if (error instanceof ResponseTooLargeError)
+      throw new HttpError(422, "Images must be 10 MB or smaller.");
     if ((error as { name?: string })?.name === "SsrfBlockedError") throw error;
     throw new HttpError(422, "That image couldn't be downloaded. Upload it instead.");
   }
-  const name = decodeURIComponent(new URL(url).pathname.split("/").pop() || "product-photo").slice(0, 100);
+  const name = decodeURIComponent(new URL(url).pathname.split("/").pop() || "product-photo").slice(
+    0,
+    100,
+  );
   return store(workspaceId, bytes, name, url);
 }

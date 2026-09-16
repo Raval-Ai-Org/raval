@@ -9,7 +9,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { ResponseTooLargeError, safeFetch } from "@/server/safe-fetch";
 import { mergeMeta } from "@/lib/content-lifecycle";
 
-const DATA_URL_RE = /^data:([a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i;
+const DATA_URL_RE = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i;
 export const MAX_ASSET_BYTES = 50 * 1024 * 1024;
 export const ASSET_BUCKET = "generated-assets";
 

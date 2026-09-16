@@ -34,7 +34,9 @@ const asText = (v: unknown): string =>
 
 function typesOf(node: any): string[] {
   const t = node?.["@type"];
-  return (Array.isArray(t) ? t : [t]).filter((x) => typeof x === "string").map((x) => x.toLowerCase());
+  return (Array.isArray(t) ? t : [t])
+    .filter((x) => typeof x === "string")
+    .map((x) => x.toLowerCase());
 }
 
 /** Every JSON-LD node, flattening @graph and nested arrays. */
@@ -71,13 +73,35 @@ function ldPrice(offers: unknown): string {
   return "";
 }
 
-const JUNK_IMAGE_RE = /(sprite|icon|logo|favicon|badge|pixel|spacer|placeholder|avatar|payment|flag)[^/]*$/i;
+/**
+ * Storefront CDNs (Shopify, imgix, Cloudinary-style params) serve thumbnails
+ * from the same URL with a small width. Ask for a size video models accept.
+ */
+export function largerImage(url: string | null): string | null {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    for (const key of ["width", "w"]) {
+      const value = Number(u.searchParams.get(key));
+      if (value && value < 1024) u.searchParams.set(key, "1200");
+    }
+    u.searchParams.delete("height");
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+const JUNK_IMAGE_RE =
+  /(sprite|icon|logo|favicon|badge|pixel|spacer|placeholder|avatar|payment|flag)[^/]*$/i;
 
 export function parseProductPage(html: string, pageUrl: string): ProductPageSignals {
   const base = new URL(pageUrl);
   const meta = extractMeta(html);
   const nodes = flattenLd(extractJsonLd(html));
-  const product = nodes.find((n) => typesOf(n).some((t) => t === "product" || t === "productgroup"));
+  const product = nodes.find((n) =>
+    typesOf(n).some((t) => t === "product" || t === "productgroup"),
+  );
 
   const title = decode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "");
   const h1 = decode(stripHtml(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? "", 200));
@@ -100,13 +124,12 @@ export function parseProductPage(html: string, pageUrl: string): ProductPageSign
     decode(meta["description"] ?? "");
   const metaPrice = decode(meta["product:price:amount"] ?? meta["og:price:amount"] ?? "");
   const metaCurrency = decode(meta["product:price:currency"] ?? meta["og:price:currency"] ?? "");
-  const price =
-    ldPrice(product?.offers) || [metaCurrency, metaPrice].filter(Boolean).join(" ");
+  const price = ldPrice(product?.offers) || [metaCurrency, metaPrice].filter(Boolean).join(" ");
   const category = asText(product?.category).split(/[>/]/).pop()?.trim() ?? "";
 
   const candidates: Array<{ url: string; alt: string }> = [];
   const push = (href: string | undefined | null, alt = "") => {
-    const abs = absoluteUrl(href ? decode(href) : null, base);
+    const abs = largerImage(absoluteUrl(href ? decode(href) : null, base));
     if (!abs || !/^https:\/\//i.test(abs)) return;
     if (/\.svg(\?|$)/i.test(abs) || JUNK_IMAGE_RE.test(abs.split("?")[0])) return;
     if (candidates.some((c) => c.url === abs)) return;
@@ -119,7 +142,8 @@ export function parseProductPage(html: string, pageUrl: string): ProductPageSign
     if (candidates.length >= 12) break;
     const tag = m[0];
     const src =
-      tag.match(/\s(?:data-zoom-image|data-large_image|data-src|src)=["']([^"']+)["']/i)?.[1] ?? null;
+      tag.match(/\s(?:data-zoom-image|data-large_image|data-src|src)=["']([^"']+)["']/i)?.[1] ??
+      null;
     const alt = tag.match(/\salt=["']([^"']*)["']/i)?.[1] ?? "";
     const width = Number(tag.match(/\swidth=["']?(\d+)/i)?.[1] ?? 0);
     if (width && width < 200) continue;

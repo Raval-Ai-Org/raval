@@ -13,11 +13,7 @@
 export type UgcAspectRatio = "9:16" | "1:1" | "16:9" | "4:3" | "3:4";
 export type UgcResolution = "480p" | "720p" | "1080p";
 export type UgcModelKey =
-  | "veo-3-1-fast"
-  | "veo-3-1-quality"
-  | "veo-3-1-lite"
-  | "seedance-2"
-  | "seedance-2-fast";
+  "veo-3-1-fast" | "veo-3-1-quality" | "veo-3-1-lite" | "seedance-2" | "seedance-2-fast";
 
 /**
  * How product images reach the model:

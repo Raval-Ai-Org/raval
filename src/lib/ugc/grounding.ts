@@ -19,18 +19,42 @@ type ClaimPattern = { re: RegExp; kind: string };
 
 const CLAIM_PATTERNS: ClaimPattern[] = [
   { re: /\b\d+(?:[.,]\d+)?\s?%/g, kind: "a percentage" },
-  { re: /[$€£¥₹]\s?\d+(?:[.,]\d+)?|\b\d+(?:[.,]\d+)?\s?(?:usd|eur|gbp|dollars?|euros?|pounds?)\b/gi, kind: "a price" },
-  { re: /\b\d+(?:[.,]\d+)?\s?(?:x|times)\b(?:\s+(?:faster|more|better|stronger|longer))?/gi, kind: "a multiplier" },
+  {
+    re: /[$€£¥₹]\s?\d+(?:[.,]\d+)?|\b\d+(?:[.,]\d+)?\s?(?:usd|eur|gbp|dollars?|euros?|pounds?)\b/gi,
+    kind: "a price",
+  },
+  {
+    re: /\b\d+(?:[.,]\d+)?\s?(?:x|times)\b(?:\s+(?:faster|more|better|stronger|longer))?/gi,
+    kind: "a multiplier",
+  },
   {
     re: /\b(?:in|within|after|for)\s+(?:just\s+|only\s+)?\d+\s+(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b/gi,
     kind: "a timed result",
   },
-  { re: /\b\d[\d,.]*\s*(?:\+\s*)?(?:customers|users|reviews|people|sold|downloads|clients)\b/gi, kind: "a usage figure" },
-  { re: /\b(?:clinically|scientifically|dermatologist|doctor|lab)[-\s](?:proven|tested|recommended|approved)\b/gi, kind: "a professional endorsement" },
-  { re: /\b(?:fda|iso|usda|organic|vegan|cruelty[- ]free|gluten[- ]free|non[- ]gmo)[- ]?(?:approved|certified)?\b/gi, kind: "a certification" },
-  { re: /(?:#\s?1|\bnumber one\b|\bbest[- ]selling\b|\bbestseller\b|\baward[- ]winning\b|\brated best\b)/gi, kind: "a ranking or award" },
-  { re: /\b(?:guarantee[ds]?|money[- ]back|risk[- ]free|lifetime warranty)\b/gi, kind: "a guarantee" },
-  { re: /\b(?:cures?|heals?|prevents?|eliminates?|reverses?)\b/gi, kind: "a medical or absolute effect" },
+  {
+    re: /\b\d[\d,.]*\s*(?:\+\s*)?(?:customers|users|reviews|people|sold|downloads|clients)\b/gi,
+    kind: "a usage figure",
+  },
+  {
+    re: /\b(?:clinically|scientifically|dermatologist|doctor|lab)[-\s](?:proven|tested|recommended|approved)\b/gi,
+    kind: "a professional endorsement",
+  },
+  {
+    re: /\b(?:fda|iso|usda|organic|vegan|cruelty[- ]free|gluten[- ]free|non[- ]gmo)[- ]?(?:approved|certified)?\b/gi,
+    kind: "a certification",
+  },
+  {
+    re: /(?:#\s?1|\bnumber one\b|\bbest[- ]selling\b|\bbestseller\b|\baward[- ]winning\b|\brated best\b)/gi,
+    kind: "a ranking or award",
+  },
+  {
+    re: /\b(?:guarantee[ds]?|money[- ]back|risk[- ]free|lifetime warranty)\b/gi,
+    kind: "a guarantee",
+  },
+  {
+    re: /\b(?:cures?|heals?|prevents?|eliminates?|reverses?)\b/gi,
+    kind: "a medical or absolute effect",
+  },
   { re: /\bfree (?:shipping|delivery|returns|trial)\b/gi, kind: "an offer" },
 ];
 
@@ -46,7 +70,9 @@ function claimTokens(claim: string): string[] {
   const n = normalize(claim);
   const numbers = n.match(/\d+(?:[.,]\d+)?/g) ?? [];
   if (numbers.length) return numbers.map((x) => x.replace(",", "."));
-  return n.split(/[\s-]+/).filter((w) => w.length > 2 && !["for", "the", "and", "just", "only"].includes(w));
+  return n
+    .split(/[\s-]+/)
+    .filter((w) => w.length > 2 && !["for", "the", "and", "just", "only"].includes(w));
 }
 
 function supported(claim: string, factText: string): boolean {
