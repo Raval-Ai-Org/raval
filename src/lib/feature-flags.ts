@@ -49,6 +49,22 @@ export function getDistributionProviderForWorkspace(
 }
 
 /**
+ * UGC Video Ads (Kie.ai video renders). On whenever KIE_API_KEY is set, unless
+ * FEATURE_FLAG_UGC_VIDEO_ENABLED=false; FEATURE_FLAG_UGC_VIDEO_ENABLED_WS_<id>
+ * overrides per workspace.
+ */
+export function isUgcVideoEnabled(workspaceId?: string): boolean {
+  if (!process.env.KIE_API_KEY?.trim()) return false;
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_UGC_VIDEO_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_UGC_VIDEO_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
  * AI answer-engine probes for AI Visibility scans: each full scan asks a few
  * questions of the models in GEO_PROBE_MODELS through OpenRouter (metered and
  * budget-checked). Paid per scan, so OFF unless FEATURE_FLAG_GEO_AI_PROBES_ENABLED

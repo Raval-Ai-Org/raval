@@ -101,11 +101,14 @@ export function getKieConfigStatus() {
 
 export class KieGatewayError extends UpstreamError {
   readonly category: string;
+  /** Kie's own response code (e.g. 402 = the Kie account is out of credits). */
+  readonly providerCode?: number;
 
-  constructor(status: number, message: string, category = "provider") {
+  constructor(status: number, message: string, category = "provider", providerCode?: number) {
     super(status, message, { provider: "kie", code: category });
     this.name = "KieGatewayError";
     this.category = category;
+    this.providerCode = providerCode;
   }
 }
 
@@ -138,6 +141,11 @@ function headers(key: string): HeadersInit {
 const VALIDATION_HINT_RE = /not within the range|is required|not supported|invalid|must be one of/i;
 
 function mapStatus(status: number, detail?: string): KieGatewayError {
+  const error = mapStatusCategory(status, detail);
+  return new KieGatewayError(error.status, error.message, error.category, status);
+}
+
+function mapStatusCategory(status: number, detail?: string): KieGatewayError {
   const message = detail?.trim() || undefined;
   if (status === 401 || status === 403)
     return new KieGatewayError(
@@ -775,6 +783,80 @@ export async function checkTask(taskId: string): Promise<TaskCheck> {
     return { state: "failed", message: reason };
   }
   return { state: "pending" };
+}
+
+/**
+ * Create one Kie Market task with a caller-built input. No budget check and no
+ * metering here: the caller holds an ai_usage_reservations hold for the task
+ * and captures or releases it when the task settles. Not retried — a retried
+ * create after a lost response could start (and bill) a second render; the
+ * caller's job retries instead.
+ */
+export async function createKieTask(opts: {
+  model: string;
+  input: Record<string, unknown>;
+  callBackUrl?: string;
+}): Promise<{ taskId: string }> {
+  const startedAt = Date.now();
+  const json = await fetchJsonOnce(
+    `${KIE_BASE}/jobs/createTask`,
+    {
+      method: "POST",
+      headers: headers(getApiKey()),
+      body: JSON.stringify({
+        model: opts.model,
+        input: opts.input,
+        ...(opts.callBackUrl ? { callBackUrl: opts.callBackUrl } : {}),
+      }),
+    },
+    30_000,
+  );
+  const taskId = json?.data?.taskId ?? json?.data?.task_id ?? json?.taskId ?? json?.task_id;
+  if (typeof taskId !== "string" || !taskId) {
+    throw new KieGatewayError(502, "The video provider did not return a task ID.", "response");
+  }
+  log.info("kie.task.submitted", { model: opts.model, taskId, elapsedMs: Date.now() - startedAt });
+  return { taskId };
+}
+
+export type KieTaskRecord = {
+  state: "pending" | "success" | "failed";
+  /** Kie's raw state: waiting | queuing | generating | success | fail. */
+  providerState: string;
+  urls: string[];
+  failCode: string | null;
+  failMessage: string | null;
+  /** Kie credits the task consumed (reported once it settles). */
+  creditsConsumed: number | null;
+  costTimeMs: number | null;
+};
+
+/** One status read with the detail a durable job needs (cost, failure code). */
+export async function getKieTask(taskId: string): Promise<KieTaskRecord> {
+  const json = await fetchJson(
+    `${KIE_BASE}/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
+    { headers: headers(getApiKey()) },
+    30_000,
+  );
+  const record = json?.data ?? json;
+  const providerState = String(record?.state ?? record?.status ?? "").toLowerCase();
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const text = (v: unknown) =>
+    typeof v === "string" && v.trim() ? v.trim().slice(0, 300) : v == null ? null : String(v);
+  const base = {
+    providerState,
+    failCode: text(record?.failCode),
+    failMessage: text(record?.failMsg ?? record?.errorMessage),
+    creditsConsumed: num(record?.creditsConsumed),
+    costTimeMs: num(record?.costTime),
+  };
+  if (["success", "completed", "succeeded"].includes(providerState)) {
+    return { ...base, state: "success", urls: resultUrls(record) };
+  }
+  if (["fail", "failed", "error", "cancelled"].includes(providerState)) {
+    return { ...base, state: "failed", urls: [] };
+  }
+  return { ...base, state: "pending", urls: [] };
 }
 
 export function recordTaskUsage(args: {
