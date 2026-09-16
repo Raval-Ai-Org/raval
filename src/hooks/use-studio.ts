@@ -7,7 +7,13 @@ import { useEffect } from "react";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { isStudioType, normalizeStudioType, type StudioType } from "@/lib/studio/formats";
 import { detectStudioType } from "@/lib/studio/detect";
-import { generate, openComposer, openJob, refreshWorkspaceJobs } from "@/lib/studio/session-store";
+import {
+  enterWorkspace,
+  generate,
+  openComposer,
+  openJob,
+  refreshWorkspaceJobs,
+} from "@/lib/studio/session-store";
 import type { GoalId } from "@/lib/studio/jobs";
 import type { PlatformId } from "@/lib/social-platforms";
 
@@ -112,7 +118,9 @@ export function useStudioEntry(workspaceId: string | null) {
   }, []);
 
   useEffect(() => {
-    if (workspaceId) void refreshWorkspaceJobs(workspaceId);
+    if (!workspaceId) return;
+    enterWorkspace(workspaceId);
+    void refreshWorkspaceJobs(workspaceId);
   }, [workspaceId]);
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getActiveWorkspaceId } from "@/lib/authed-fetch";
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { getSdrStatus, type SdrStatus } from "@/lib/sdr.functions";
 
 // Per-workspace cache so every card in a list doesn't refetch the status.
@@ -11,7 +11,8 @@ const cache = new Map<string, Promise<SdrStatus>>();
  * `status.enabled && status.canPublish` — otherwise they would 503 or 403.
  */
 export function useSdrStatus(workspaceId?: string | null): SdrStatus | null {
-  const wsId = workspaceId ?? getActiveWorkspaceId();
+  const routeWorkspaceId = useOptionalWorkspaceId();
+  const wsId = workspaceId ?? routeWorkspaceId;
   const [status, setStatus] = useState<SdrStatus | null>(null);
 
   useEffect(() => {

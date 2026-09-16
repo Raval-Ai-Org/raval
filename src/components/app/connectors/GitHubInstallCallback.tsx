@@ -6,6 +6,7 @@
 // the result, and returns to the Mellox page the connection started from.
 // "Connected" is shown only after the server has read the saved connection
 // back through this user's own access.
+import { inWorkspace, isWorkspaceId, workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -26,8 +27,11 @@ type View =
   | { kind: "error"; message: string }
   | { kind: "signin"; loginHref: string };
 
-const CONNECTIONS_HREF = "/app?settings=connections";
-const GEO_HREF = "/app?geo=findings";
+const connectionsHref = (ws: string | null) =>
+  ws && isWorkspaceId(ws) ? workspacePath(ws, "", { settings: "connections" }) : WORKSPACES_HOME;
+const geoHref = (ws: string | null) =>
+  ws && isWorkspaceId(ws) ? workspacePath(ws, "", { geo: "findings" }) : WORKSPACES_HOME;
+const CONNECTIONS_HREF = WORKSPACES_HOME;
 /** Authorize ↔ install hand-offs in one attempt; stops a misconfigured App from looping. */
 const HOPS_KEY = "mellox:github-connect-hops";
 const RETURN_DELAY_MS = 2500;
@@ -40,18 +44,6 @@ function withConnectedFlag(path: string): string {
   const url = new URL(safePath(path), window.location.origin);
   url.searchParams.set("github", "connected");
   return `${url.pathname}${url.search}${url.hash}`;
-}
-
-/** Land in the workspace GitHub was connected to, not whichever was open last. */
-function selectWorkspace(id: string) {
-  try {
-    if (localStorage.getItem("workspace:selected") === id) return;
-    localStorage.setItem("workspace:selected", id);
-    localStorage.removeItem("workspace:name");
-    localStorage.removeItem("workspace:website");
-  } catch {
-    /* storage unavailable */
-  }
 }
 
 function hops(next?: number): number {
@@ -150,7 +142,6 @@ export function GitHubInstallCallback() {
           return;
         }
         hops(0);
-        selectWorkspace(result.workspaceId);
         rememberGithubConnected({
           workspaceId: result.workspaceId,
           accounts: result.connections.map((c) => c.accountLogin),
@@ -158,7 +149,12 @@ export function GitHubInstallCallback() {
         setView({
           kind: "connected",
           connections: result.connections,
-          next: withConnectedFlag(result.returnPath ?? CONNECTIONS_HREF),
+          // Land in the workspace GitHub was connected to, not whichever was open last.
+          next: withConnectedFlag(
+            result.returnPath
+              ? inWorkspace(result.workspaceId, result.returnPath)
+              : connectionsHref(result.workspaceId),
+          ),
         });
       } catch (e: unknown) {
         if (e instanceof ServerFnError && e.status === 401) {
@@ -183,12 +179,7 @@ export function GitHubInstallCallback() {
   }, [view]);
 
   const retry = useCallback(async () => {
-    let ws = workspaceId.current;
-    try {
-      ws ??= localStorage.getItem("workspace:selected");
-    } catch {
-      /* storage unavailable */
-    }
+    const ws = workspaceId.current;
     if (!ws) {
       window.location.assign(CONNECTIONS_HREF);
       return;
@@ -199,7 +190,7 @@ export function GitHubInstallCallback() {
         data: {
           workspaceId: ws,
           returnOrigin: window.location.origin,
-          returnPath: CONNECTIONS_HREF,
+          returnPath: connectionsHref(ws),
         },
       });
       window.location.assign(url);
@@ -295,10 +286,12 @@ export function GitHubInstallCallback() {
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button asChild className="flex-1">
-                <Link href={withConnectedFlag(CONNECTIONS_HREF)}>Continue to Connections</Link>
+                <Link href={withConnectedFlag(connectionsHref(workspaceId.current))}>
+                  Continue to Connections
+                </Link>
               </Button>
               <Button asChild variant="outline" className="flex-1">
-                <Link href={withConnectedFlag(GEO_HREF)}>Continue to GEO</Link>
+                <Link href={withConnectedFlag(geoHref(workspaceId.current))}>Continue to GEO</Link>
               </Button>
             </div>
           </div>
@@ -314,7 +307,7 @@ export function GitHubInstallCallback() {
                 Try again
               </Button>
               <Button asChild variant="outline" className="flex-1">
-                <Link href={CONNECTIONS_HREF}>Return to Connections</Link>
+                <Link href={connectionsHref(workspaceId.current)}>Return to Connections</Link>
               </Button>
             </div>
           </div>
@@ -328,7 +321,7 @@ export function GitHubInstallCallback() {
               return to Settings → Connections and connect again.
             </p>
             <Button asChild variant="outline" className="w-full">
-              <Link href={CONNECTIONS_HREF}>Return to Connections</Link>
+              <Link href={connectionsHref(workspaceId.current)}>Return to Connections</Link>
             </Button>
           </div>
         )}
@@ -341,7 +334,7 @@ export function GitHubInstallCallback() {
               repository access.
             </p>
             <Button asChild className="w-full">
-              <Link href={CONNECTIONS_HREF}>Open Settings → Connections</Link>
+              <Link href={connectionsHref(workspaceId.current)}>Open Settings → Connections</Link>
             </Button>
           </div>
         )}
@@ -370,7 +363,7 @@ export function GitHubInstallCallback() {
                 Try again
               </Button>
               <Button asChild variant="outline" className="flex-1">
-                <Link href={CONNECTIONS_HREF}>Return to Connections</Link>
+                <Link href={connectionsHref(workspaceId.current)}>Return to Connections</Link>
               </Button>
             </div>
           </div>

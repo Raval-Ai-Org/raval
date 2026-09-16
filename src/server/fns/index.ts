@@ -2,6 +2,7 @@ import "server-only";
 import type { AnyServerFn } from "@/server/server-fn";
 
 import * as analytics from "./analytics";
+import * as brandDna from "./brand-dna";
 import * as coach from "./coach";
 import * as competitorWatch from "./competitor-watch";
 import * as connectors from "./connectors";
@@ -17,6 +18,7 @@ import * as workspaces from "./workspaces";
 // the client stubs in src/lib/*.functions.ts were generated with.
 const MODULES: Record<string, Record<string, unknown>> = {
   analytics,
+  "brand-dna": brandDna,
   coach,
   "competitor-watch": competitorWatch,
   connectors,

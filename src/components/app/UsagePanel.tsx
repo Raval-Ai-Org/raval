@@ -4,10 +4,11 @@
 // (GET /api/usage). Replaces the "Upgrade plan" dead end while billing is out
 // of scope, and the cosmetic browser-side token counter: spend today and this
 // month vs the plan's ceilings, image/video quotas, cache hit rate and savings.
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
-import { authedFetch, getActiveWorkspaceId } from "@/lib/authed-fetch";
+import { authedFetch } from "@/lib/authed-fetch";
 
 type Usage = {
   plan: string;
@@ -80,6 +81,7 @@ const usd = (n: number) => `$${n.toFixed(n < 1 ? 3 : 2)}`;
 const count = (n: number) => String(n);
 
 export function UsagePanel() {
+  const workspaceId = useOptionalWorkspaceId();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<Usage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +94,6 @@ export function UsagePanel() {
 
   useEffect(() => {
     if (!open) return;
-    const workspaceId = getActiveWorkspaceId();
     if (!workspaceId) {
       setError("Select a workspace to see its usage.");
       return;
@@ -109,7 +110,7 @@ export function UsagePanel() {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, workspaceId]);
 
   if (!open) return null;
   const aiHit = data?.cache.hitRates.find((h) => h.namespace === "ai");

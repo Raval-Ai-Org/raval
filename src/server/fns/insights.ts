@@ -3,6 +3,7 @@ import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rateLimitFor } from "@/server/rate-limit";
+import { requireWorkspaceRole } from "@/server/workspace-access.server";
 import {
   buildSmartSuggestions,
   type SmartSuggestion as DetSuggestion,
@@ -98,6 +99,7 @@ export const refreshSuggestions = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
+    await requireWorkspaceRole(context, data.workspaceId, "viewer");
     const max = data.max ?? 5;
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString();

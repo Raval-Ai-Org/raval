@@ -1,5 +1,6 @@
 "use client";
 
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
@@ -70,8 +71,16 @@ export type ComposerFixtures = { ideas?: StudioIdea[]; rows?: ReviewRow[]; distr
  * and closed without losing anything.
  */
 export function StudioComposer() {
+  const workspaceId = useOptionalWorkspaceId();
   const session = useStudioStore(
-    (s) => s.sessions.find((x) => x.id === s.activeId && x.window !== "minimized") ?? null,
+    (s) =>
+      s.sessions.find(
+        (x) =>
+          x.id === s.activeId &&
+          x.window !== "minimized" &&
+          // Previews render without a workspace; in the app, only this one's.
+          (workspaceId === null || x.workspaceId === workspaceId),
+      ) ?? null,
   );
   const isMobile = useIsMobile();
   // Where the window goes when it leaves: into the dock (work continues) or away.

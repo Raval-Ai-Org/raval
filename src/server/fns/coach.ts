@@ -1,4 +1,5 @@
 import "server-only";
+import { requireWorkspaceRole } from "@/server/workspace-access.server";
 import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -260,6 +261,7 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }): Promise<CoachBriefing> => {
+    await requireWorkspaceRole(context, data.workspaceId, "viewer");
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString();
 

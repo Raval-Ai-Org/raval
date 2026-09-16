@@ -1,5 +1,12 @@
 "use client";
 
+import { useInvalidateWorkspaces, useWorkspaces } from "@/hooks/use-workspaces";
+import {
+  isWorkspaceId,
+  onboardingPath,
+  workspacePath,
+  WORKSPACES_HOME,
+} from "@/lib/workspace/paths";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { Link, useNavigate } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
@@ -125,14 +132,52 @@ const TINT: Record<string, string> = {
 
 function AgencyHQ() {
   const navigate = useNavigate();
-  const [clients, setClients] = useState<Client[]>([]);
+  // Every workspace the caller belongs to, with its own metrics and role — the
+  // same service Projects and the switchers use (no private workspace lookup).
+  const [sessionReady, setSessionReady] = useState(false);
+  const workspacesQuery = useWorkspaces({ enabled: sessionReady });
+  const invalidateWorkspaces = useInvalidateWorkspaces();
+  const summaries = useMemo(() => workspacesQuery.data ?? [], [workspacesQuery.data]);
+  const clients = useMemo<Client[]>(
+    () =>
+      summaries.map((w) => ({
+        id: w.id,
+        name: w.name,
+        website_url: w.websiteUrl,
+        client_status: w.clientStatus,
+      })),
+    [summaries],
+  );
+  const summaryById = useMemo(() => new Map(summaries.map((w) => [w.id, w])), [summaries]);
   // Caller's role per workspace — drives approve/reject permissions.
-  const [myRoles, setMyRoles] = useState<Record<string, "owner" | "admin" | "editor" | "viewer">>(
-    {},
+  const myRoles = useMemo(
+    () =>
+      Object.fromEntries(summaries.map((w) => [w.id, w.role])) as Record<
+        string,
+        "owner" | "admin" | "editor" | "viewer"
+      >,
+    [summaries],
+  );
+  // Aggregates are sums of per-workspace metrics (each counted on its own id),
+  // not counts over a truncated cross-workspace row sample.
+  const totals = useMemo(
+    () =>
+      summaries.reduce(
+        (acc, w) => ({
+          pendingApprovals: acc.pendingApprovals + w.pendingApprovals,
+          drafts: acc.drafts + w.draftCount,
+          scheduled: acc.scheduled + w.scheduledCount,
+          published: acc.published + w.publishedCount,
+          failed: acc.failed + w.failedCount,
+        }),
+        { pendingApprovals: 0, drafts: 0, scheduled: 0, published: 0, failed: 0 },
+      ),
+    [summaries],
   );
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [contentRows, setContentRows] = useState<ContentRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [contentLoaded, setContentLoaded] = useState(false);
+  const loading = !sessionReady || workspacesQuery.isLoading || !contentLoaded;
   const [userName, setUserName] = useState("");
   // Locally-resolved (approved/rejected/skipped) ids — keeps mocks reactive too.
   const [resolved, setResolved] = useState<Record<string, "approved" | "rejected" | "skipped">>({});
@@ -194,39 +239,25 @@ function AgencyHQ() {
       const email = sess.session.user.email ?? "";
       setUserName(email.split("@")[0]);
 
-      const { data: ws } = await supabase
-        .from("workspaces")
-        .select("id, name, website_url, client_status")
-        .order("created_at", { ascending: false });
-      const wsList = (ws ?? []) as Client[];
-      if (cancelled) return;
-      setClients(wsList);
-
-      if (wsList.length > 0) {
-        // Load caller's role on each workspace so we can gate approve/reject.
-        const { data: mems } = await supabase
-          .from("workspace_members")
-          .select("workspace_id, role")
-          .eq("user_id", sess.session.user.id)
-          .in(
-            "workspace_id",
-            wsList.map((w) => w.id),
-          );
-        if (!cancelled) {
-          const map: Record<string, "owner" | "admin" | "editor" | "viewer"> = {};
-          for (const m of (mems ?? []) as Array<{ workspace_id: string; role: string }>) {
-            map[m.workspace_id] = m.role as "owner" | "admin" | "editor" | "viewer";
-          }
-          setMyRoles(map);
-        }
-        await refreshFromDb(wsList.map((w) => w.id));
-      }
-      if (!cancelled) setLoading(false);
+      if (!cancelled) setSessionReady(true);
     })();
     return () => {
       cancelled = true;
     };
   }, [navigate]);
+
+  useEffect(() => {
+    if (!sessionReady || workspacesQuery.isLoading) return;
+    let cancelled = false;
+    (async () => {
+      await refreshFromDb(clients.map((w) => w.id));
+      if (!cancelled) setContentLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionReady, workspacesQuery.isLoading, clients]);
 
   // Realtime: react to content_items + approvals changes across every workspace.
   useEffect(() => {
@@ -236,14 +267,17 @@ function AgencyHQ() {
       .channel(`agency-feed-${ids.length}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "content_items" }, () => {
         void refreshFromDb(ids);
+        void invalidateWorkspaces();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "approvals" }, () => {
         void refreshFromDb(ids);
+        void invalidateWorkspaces();
       })
       .subscribe();
 
     const onLocal = () => {
       void refreshFromDb(ids);
+      void invalidateWorkspaces();
     };
     addAppEventListener("content:changed", onLocal);
     addAppEventListener("approvals:changed", onLocal);
@@ -982,13 +1016,13 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
       prompt?: string;
       clientId?: string;
     }[] = [];
-    const pending = contentRows.filter((c) => c.status === "pending" || c.status === "draft");
-    const published = contentRows.filter((c) => c.status === "published");
-    const scheduledCount = contentRows.filter((c) => c.status === "scheduled").length;
+    const pendingCount = totals.drafts;
+    const publishedCount = totals.published;
+    const scheduledCount = totals.scheduled;
 
-    if (pending.length > 0) {
+    if (pendingCount > 0) {
       out.push({
-        title: `Review ${pending.length} draft${pending.length === 1 ? "" : "s"}`,
+        title: `Review ${pendingCount} draft${pendingCount === 1 ? "" : "s"}`,
         body: "Approvals are blocking publish. Decide them now.",
         icon: <Bell className="h-3.5 w-3.5" />,
         tint: "#f59e0b",
@@ -996,11 +1030,8 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
     }
 
     // Find clients without anything scheduled this week
-    const scheduledByClient = new Set(
-      contentRows.filter((c) => c.status === "scheduled").map((c) => c.workspace_id),
-    );
     const idle = clients.filter(
-      (c) => c.client_status !== "paused" && !scheduledByClient.has(c.id),
+      (c) => c.client_status !== "paused" && !(summaryById.get(c.id)?.scheduledCount ?? 0),
     );
     if (idle.length > 0) {
       const first = idle[0];
@@ -1023,10 +1054,10 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
       });
     }
 
-    if (published.length >= 5) {
+    if (publishedCount >= 5) {
       out.push({
         title: "Run a content audit",
-        body: `${published.length} items live — find what's resonating and double-down.`,
+        body: `${publishedCount} items live across your clients — find what's resonating and double-down.`,
         icon: <BarChart3 className="h-3.5 w-3.5" />,
         tint: "#22c55e",
       });
@@ -1049,12 +1080,13 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
       );
     }
     return out.slice(0, 4);
-  }, [contentRows, clients]);
+  }, [totals, clients, summaryById]);
 
+  // Opens exactly this workspace. Its chat picks up a prefilled prompt, if any.
   const openClient = (id: string) => {
-    if (id === "demo") return;
-    localStorage.setItem("workspace:selected", id);
-    navigate({ to: "/app" });
+    if (!isWorkspaceId(id)) return;
+    const summary = summaryById.get(id);
+    navigate({ to: summary && !summary.onboarded ? onboardingPath(id) : workspacePath(id) });
   };
 
   const handleSuggestion = (s: { clientId?: string; prompt?: string }) => {
@@ -1077,7 +1109,7 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
   // sample numbers when the workspace is brand new.
   const todayPosts = combinedScheduled.length;
   const todayApprovals = pendingApprovals.length;
-  const todayTasks = 6 + (clients.length || 1) * 2;
+  const todayTasks = totals.pendingApprovals + totals.drafts + totals.failed;
 
   const stagger: Variants = {
     hidden: { opacity: 0 },
@@ -1108,7 +1140,7 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
       <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-5">
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
-            to="/workspaces"
+            to={WORKSPACES_HOME}
             aria-label="Back to all clients"
             className="group inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card/80 pl-2 pr-3 text-[12.5px] font-medium text-muted-foreground backdrop-blur transition hover:border-foreground/30 hover:bg-card hover:text-foreground"
           >
@@ -1120,7 +1152,7 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
           </Link>
           <span aria-hidden className="hidden h-5 w-px bg-border/70 sm:block" />
           <Link
-            to="/workspaces"
+            to={WORKSPACES_HOME}
             aria-label="Mellox AI home"
             className="hidden h-9 shrink-0 items-center sm:flex"
           >
@@ -1579,7 +1611,7 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
                 </ul>
               )}
               <Link
-                to="/workspaces"
+                to={WORKSPACES_HOME}
                 className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-foreground/80 hover:text-foreground"
               >
                 Manage clients <ArrowRight className="h-3 w-3" />
@@ -1599,16 +1631,10 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
               ) : (
                 <ul className="space-y-1.5">
                   {clients.slice(0, 6).map((c) => {
-                    const pending = contentRows.filter(
-                      (r) =>
-                        r.workspace_id === c.id && (r.status === "pending" || r.status === "draft"),
-                    ).length;
-                    const scheduled = contentRows.filter(
-                      (r) => r.workspace_id === c.id && r.status === "scheduled",
-                    ).length;
-                    const published = contentRows.filter(
-                      (r) => r.workspace_id === c.id && r.status === "published",
-                    ).length;
+                    const m = summaryById.get(c.id);
+                    const pending = (m?.draftCount ?? 0) + (m?.pendingApprovals ?? 0);
+                    const scheduled = m?.scheduledCount ?? 0;
+                    const published = m?.publishedCount ?? 0;
                     let tone: "good" | "warn" | "risk" = "good";
                     let label = "On track";
                     if (c.client_status === "paused") {
@@ -1733,7 +1759,7 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
           },
           allClients: () => {
             setCmdOpen(false);
-            navigate({ to: "/projects" });
+            navigate({ to: WORKSPACES_HOME });
           },
         }}
       />

@@ -5,6 +5,7 @@
 // here before any service-role write.
 import "server-only";
 import { ForbiddenError } from "@/server/http-error";
+import { setRequestScope } from "@/server/request-context";
 import type { ServerFnContext } from "@/server/server-fn";
 import { checkWorkspaceMembership, type VerifiedUser, type WorkspaceRole } from "@/server/api-auth";
 
@@ -28,6 +29,9 @@ export async function requireWorkspaceRole(
     const body = (await result.response.json().catch(() => null)) as { error?: string } | null;
     throw new ForbiddenError(body?.error);
   }
+  // The verified workspace this call acts on is also the one its AI spend is
+  // metered against — not whatever x-workspace-id header the browser sent.
+  setRequestScope({ workspaceId: result.workspaceId });
   return result.role;
 }
 

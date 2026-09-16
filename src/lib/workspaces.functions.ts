@@ -27,3 +27,7 @@ export const acceptWorkspaceInvite = serverFn<typeof Handlers.acceptWorkspaceInv
 export const getWorkspaceMemberProfiles = serverFn<typeof Handlers.getWorkspaceMemberProfiles>(
   "workspaces/getWorkspaceMemberProfiles",
 );
+export const listWorkspaces = serverFn<typeof Handlers.listWorkspaces>("workspaces/listWorkspaces");
+export const deleteWorkspace = serverFn<typeof Handlers.deleteWorkspace>(
+  "workspaces/deleteWorkspace",
+);

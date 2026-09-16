@@ -1,11 +1,12 @@
 // context.server.ts — everything Studio knows about a workspace when it writes:
 // brand, business, what was published recently (so it doesn't repeat itself),
 // what's scheduled, market and competitor signals, and upcoming moments.
-// Workspace data is cached briefly; Brand DNA arrives with each request because
-// it lives in the browser.
+// Workspace data is cached briefly. Brand DNA is read from the database for the
+// job's own workspace; a request-supplied copy is only used when none is stored.
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serializeBrandContext, type BrandCtxDna } from "@/lib/ai/brand-context";
+import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
 import { upcomingMoments } from "@/lib/studio/moments";
 import type { StudioContext } from "@/lib/studio/prompts";
@@ -170,8 +171,12 @@ export async function loadStudioContext(
   workspaceId: string,
   brand: Record<string, unknown> | null | undefined,
 ): Promise<StudioContext> {
-  const snapshot = await loadWorkspaceSnapshot(db, workspaceId);
-  const dna = (brand ?? null) as BrandCtxDna | null;
+  const [snapshot, stored] = await Promise.all([
+    loadWorkspaceSnapshot(db, workspaceId),
+    settle(readBrandDna(db, workspaceId), null, "brand dna"),
+  ]);
+  const storedDna = stored && Object.keys(stored.dna).length ? stored.dna : null;
+  const dna = (storedDna ?? brand ?? null) as BrandCtxDna | null;
   const brandText = serializeBrandContext(dna, {
     siteUrl: snapshot.website,
     maxCharsPerField: 320,

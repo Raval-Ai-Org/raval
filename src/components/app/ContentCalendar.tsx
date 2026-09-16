@@ -1,5 +1,6 @@
 "use client";
 
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1030,6 +1031,7 @@ function MonthGrid({
   onRegenerate: (id: string) => void;
   regenIds: Set<string>;
 }) {
+  const routeWorkspaceId = useOptionalWorkspaceId();
   const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const [overYmd, setOverYmd] = useState<string | null>(null);
   return (
@@ -1148,10 +1150,7 @@ function MonthGrid({
                           aria-label="Cancel scheduled post"
                           onClick={(ev) => {
                             ev.stopPropagation();
-                            const wsId =
-                              typeof window !== "undefined"
-                                ? localStorage.getItem("workspace:selected")
-                                : null;
+                            const wsId = routeWorkspaceId;
                             if (!wsId) {
                               toast.error("No workspace selected");
                               return;

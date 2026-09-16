@@ -9,6 +9,7 @@
 //              policy decisions
 // Labels follow the audit's UX rules: Suggested / Awaiting approval /
 // Executed / Failed / Needs review — a recommendation is never shown as done.
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -21,7 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
-import { authedFetch, getActiveWorkspaceId } from "@/lib/authed-fetch";
+import { authedFetch } from "@/lib/authed-fetch";
 
 type Tab = "findings" | "approvals" | "runs";
 
@@ -120,7 +121,8 @@ export function OperationsInbox() {
   const [busy, setBusy] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const closeRef = useRef<HTMLButtonElement>(null);
-  const workspaceId = open ? getActiveWorkspaceId() : null;
+  const routeWorkspaceId = useOptionalWorkspaceId();
+  const workspaceId = open ? routeWorkspaceId : null;
 
   useEffect(() => {
     const h = (e: CustomEvent<{ tab?: Tab } | undefined>) => {

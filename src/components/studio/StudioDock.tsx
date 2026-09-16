@@ -1,5 +1,6 @@
 "use client";
 
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, X } from "@/components/icons";
 import { cn } from "@/lib/utils";
@@ -42,7 +43,11 @@ export function StudioDock() {
   // selector would be a new snapshot on every read).
   const sessions = useStudioStore((s) => s.sessions);
   const activeId = useStudioStore((s) => s.activeId);
-  const visible = sessions.filter((s) => s.id !== activeId).slice(0, 4);
+  // Only this workspace's work: another brand's drafts never dock here.
+  const workspaceId = useOptionalWorkspaceId();
+  const visible = sessions
+    .filter((s) => s.workspaceId === workspaceId && s.id !== activeId)
+    .slice(0, 4);
 
   return (
     <div

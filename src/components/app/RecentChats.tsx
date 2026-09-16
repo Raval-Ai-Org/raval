@@ -1,5 +1,6 @@
 "use client";
 
+import { conversationPath, workspacePath } from "@/lib/workspace/paths";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
@@ -126,7 +127,7 @@ export function RecentChats({
         return;
       }
       onNavigate?.();
-      navigate({ to: `/app/chat/${data.id}` });
+      navigate({ to: conversationPath(workspaceId, data.id) });
     } finally {
       setCreating(false);
     }
@@ -134,7 +135,8 @@ export function RecentChats({
 
   const open = (id: string) => {
     onNavigate?.();
-    navigate({ to: `/app/chat/${id}` });
+    if (!workspaceId) return;
+    navigate({ to: conversationPath(workspaceId, id) });
   };
 
   const update = async (id: string, patch: { title?: string; is_pinned?: boolean }) => {
@@ -182,7 +184,7 @@ export function RecentChats({
       toast.error("Couldn't delete conversation", { description: error.message });
       return;
     }
-    if (activeConversationId === conversation.id) navigate({ to: "/app" });
+    if (activeConversationId === conversation.id) navigate({ to: workspacePath(workspaceId) });
     await load();
     emitAppEvent("chat:conversation-changed");
   };

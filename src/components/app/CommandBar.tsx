@@ -1,5 +1,7 @@
 "use client";
 
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
+import { inWorkspace, WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
@@ -90,6 +92,7 @@ export function CommandBar() {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const navigate = useNavigate();
+  const workspaceId = useOptionalWorkspaceId();
   const { isOn, set, setAll } = useAgentToggles();
 
   useEffect(() => {
@@ -122,7 +125,8 @@ export function CommandBar() {
 
   const go = (to: string, label: string, search?: any) => {
     setOpen(false);
-    navigate({ to: to as any, search });
+    // Every route here is inside the current workspace.
+    navigate({ to: workspaceId ? inWorkspace(workspaceId, to) : WORKSPACES_HOME, search });
     emit({ kind: "nav", title: `Opened ${label}` });
   };
 

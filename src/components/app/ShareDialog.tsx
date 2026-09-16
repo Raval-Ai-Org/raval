@@ -1,5 +1,6 @@
 "use client";
 
+import { workspacePath } from "@/lib/workspace/paths";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
@@ -100,7 +101,7 @@ export function ShareDialog({
   const getWorkspaceMemberProfilesFn = useServerFn(getWorkspaceMemberProfiles);
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-  const workspaceLink = workspaceId ? `${baseUrl}/app?workspace=${workspaceId}` : "";
+  const workspaceLink = workspaceId ? `${baseUrl}${workspacePath(workspaceId)}` : "";
 
   const refresh = async () => {
     if (!workspaceId) return;

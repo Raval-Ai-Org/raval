@@ -3,6 +3,7 @@ import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rateLimitFor } from "@/server/rate-limit";
+import { requireWorkspaceRole } from "@/server/workspace-access.server";
 import { AiOutputError, runJsonPrompt, runStructuredPrompt } from "@/lib/ai";
 import { contentBatchPrompt, nextPostPrompt, regeneratePrompt } from "@/lib/ai/prompts";
 import { buildNextSteps } from "@/lib/ai/deterministic-suggestions";
@@ -379,11 +380,21 @@ export const generateContentBatch = createServerFn({ method: "POST" })
     const channels = data.channels ?? ["instagram", "x", "linkedin"];
     const count = data.count ?? channels.length;
 
+    // Verified workspace; its stored Brand DNA is the brand context, so a
+    // batch can never be written in another brand's voice.
+    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const { readBrandDna } = await import("@/server/workspaces/brand-dna.server");
+    const { serializeBrandContext } = await import("@/lib/ai/brand-context");
+    const stored = await readBrandDna(context.supabase as never, data.workspaceId);
+    const storedBrand =
+      stored && Object.keys(stored.dna).length
+        ? serializeBrandContext(stored.dna as never, { maxCharsPerField: 320 }).slice(0, 5000)
+        : "";
     const { system, userTail } = contentBatchPrompt({
       agent: data.agent,
       count,
       channels,
-      brandContext: data.context,
+      brandContext: storedBrand || data.context,
       websiteUrl: data.websiteUrl,
     });
     const user = `${userTail}\n\n## Brief\n${data.prompt}`;
@@ -583,6 +594,7 @@ export const generateNextPost = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("generate")])
   .inputValidator((data) => NextPostSchema.parse(data))
   .handler(async ({ data, context }) => {
+    await requireWorkspaceRole(context, data.workspaceId, "viewer");
     // Recent items ground the suggestion in real history
     const { data: recent } = await context.supabase
       .from("content_items")

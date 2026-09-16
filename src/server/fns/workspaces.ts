@@ -2,12 +2,18 @@ import "server-only";
 import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { normalizeDomain } from "@/lib/workspace/domain";
+import { rateLimitFor } from "@/server/rate-limit";
+import { ForbiddenError, HttpError } from "@/server/http-error";
+import { getWorkspaceRole, requireWorkspaceRole } from "@/server/workspace-access.server";
 
 const uuidSchema = z.string().uuid();
 
 const createWorkspaceSchema = z.object({
   name: z.string().trim().min(1).max(120),
   websiteUrl: z.string().trim().url().max(2048).optional().nullable(),
+  /** One key per create attempt: retries, double clicks and refreshes replay it. */
+  idempotencyKey: z.string().trim().min(8).max(100).optional().nullable(),
 });
 
 const renameWorkspaceSchema = z.object({
@@ -19,11 +25,15 @@ export const renameWorkspace = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => renameWorkspaceSchema.parse(data))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
+    await requireWorkspaceRole(context, data.workspaceId, "admin");
+    const { data: updated, error } = await context.supabase
       .from("workspaces")
       .update({ name: data.name })
-      .eq("id", data.workspaceId);
+      .eq("id", data.workspaceId)
+      .select("id");
     if (error) throw new Error("Could not rename workspace");
+    // RLS filters an update the caller may not make: zero rows is a refusal.
+    if (!updated?.length) throw new ForbiddenError("Only the workspace owner can rename it");
     return { ok: true, name: data.name };
   });
 
@@ -33,10 +43,12 @@ export const getWorkspaceDetails = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { data: ws, error } = await context.supabase
       .from("workspaces")
-      .select("id, name, plan, website_url, industry, created_at, owner_id")
+      .select("id, name, plan, website_url, industry, created_at, owner_id, onboarded_at")
       .eq("id", data.workspaceId)
       .maybeSingle();
-    if (error || !ws) throw new Error("Workspace not found");
+    if (error || !ws) throw new HttpError(404, "Workspace not found");
+    const role = await getWorkspaceRole(context, data.workspaceId);
+    if (!role) throw new HttpError(404, "Workspace not found");
     const { count: memberCount } = await context.supabase
       .from("workspace_members")
       .select("id", { count: "exact", head: true })
@@ -46,8 +58,11 @@ export const getWorkspaceDetails = createServerFn({ method: "GET" })
       name: ws.name,
       plan: ws.plan ?? "free",
       websiteUrl: ws.website_url,
+      domain: normalizeDomain(ws.website_url),
       industry: ws.industry,
       createdAt: ws.created_at,
+      onboarded: Boolean(ws.onboarded_at),
+      role,
       isOwner: ws.owner_id === context.userId,
       memberCount: memberCount ?? 1,
     };
@@ -91,11 +106,9 @@ export const decideApproval = createServerFn({ method: "POST" })
   });
 
 export const createWorkspace = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("workspace-lifecycle")])
   .inputValidator((data) => createWorkspaceSchema.parse(data))
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
     // The site URL is crawled later (brand extract, coach, geo audit), so a
     // private or loopback address is refused at the point it is saved too.
     const websiteUrl = data.websiteUrl?.trim() || null;
@@ -104,36 +117,38 @@ export const createWorkspace = createServerFn({ method: "POST" })
       try {
         assertPublicUrl(websiteUrl);
       } catch {
-        throw new Error("Website must be a public http(s) address");
+        throw new HttpError(400, "Website must be a public http(s) address");
       }
     }
-
-    const { data: workspace, error: workspaceError } = await supabaseAdmin
-      .from("workspaces")
-      .insert({
-        owner_id: context.userId,
-        name: data.name,
-        website_url: websiteUrl,
-      })
-      .select("id")
-      .single();
-
-    if (workspaceError || !workspace) {
-      throw new Error("Could not create project");
-    }
-
-    const { error: memberError } = await supabaseAdmin.from("workspace_members").insert({
-      workspace_id: workspace.id,
-      user_id: context.userId,
-      role: "owner",
+    const { createOrGetWorkspace } = await import("@/server/workspaces/service.server");
+    return createOrGetWorkspace({
+      userId: context.userId,
+      name: data.name,
+      websiteUrl,
+      idempotencyKey: data.idempotencyKey ?? null,
     });
+  });
 
-    if (memberError) {
-      await supabaseAdmin.from("workspaces").delete().eq("id", workspace.id);
-      throw new Error("Could not create project membership");
-    }
+/** Every workspace the caller belongs to, with per-workspace metrics. */
+export const listWorkspaces = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { listAuthorizedWorkspaces } = await import("@/server/workspaces/service.server");
+    return listAuthorizedWorkspaces(context.supabase as never, context.userId);
+  });
 
-    return workspace.id;
+export const deleteWorkspace = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("workspace-lifecycle")])
+  .inputValidator((data) =>
+    z.object({ workspaceId: uuidSchema, confirmation: z.string().max(40) }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const service = await import("@/server/workspaces/service.server");
+    return service.deleteWorkspace({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      confirmation: data.confirmation,
+    });
   });
 
 export const ensureAuthWorkspace = createServerFn({ method: "POST" })
@@ -158,17 +173,9 @@ export const ensureAuthWorkspace = createServerFn({ method: "POST" })
         { onConflict: "id" },
       );
 
-    // Do NOT auto-create a workspace. New users must create their first client
-    // explicitly on /projects so we never show empty placeholder workspaces.
-    const { data: existing } = await supabaseAdmin
-      .from("workspace_members")
-      .select("workspace_id")
-      .eq("user_id", context.userId)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    return existing?.workspace_id ?? null;
+    // Never auto-create or pick a workspace: sign-in lands on /projects and
+    // the user chooses one explicitly.
+    return null;
   });
 
 export const acceptWorkspaceInvite = createServerFn({ method: "POST" })

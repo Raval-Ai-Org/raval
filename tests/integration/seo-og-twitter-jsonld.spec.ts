@@ -104,7 +104,7 @@ const ROUTES: Array<{ label: string; path: string; requireOgImage?: boolean }> =
   { label: "Workspace (/workspace)", path: "/workspace" },
   { label: "Onboarding (/onboarding)", path: "/onboarding" },
   { label: "Agency HQ (/agency)", path: "/agency" },
-  { label: "Workspaces (/workspaces)", path: "/workspaces" },
+  { label: "Workspaces (/projects)", path: "/projects" },
 ];
 
 test.describe("OpenGraph + Twitter Card � pitch-deck messaging", () => {
@@ -238,7 +238,7 @@ test.describe("JSON-LD structured data � pitch-deck messaging", () => {
   test("agency + projects ship WebPage schema tied to Organization/WebSite", async ({
     request,
   }) => {
-    for (const path of ["/agency", "/workspaces"]) {
+    for (const path of ["/agency", "/projects"]) {
       const html = await fetchHtml(request, path);
       const nodes = extractJsonLd(html);
       const page = findByType(nodes, "WebPage");

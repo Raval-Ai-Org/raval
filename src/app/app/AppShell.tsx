@@ -10,7 +10,8 @@ import { useServerFn } from "@/lib/use-server-fn";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
-import { acceptWorkspaceInvite } from "@/lib/workspaces.functions";
+import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
+import { conversationIdFromPath, workspacePath } from "@/lib/workspace/paths";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -100,24 +101,15 @@ import { OperationsInbox } from "@/components/app/OperationsInbox";
 import { UsagePanel } from "@/components/app/UsagePanel";
 
 function AppShell() {
-  const navigate = useNavigate();
-  const acceptWorkspaceInviteFn = useServerFn(acceptWorkspaceInvite);
-  // Start null on SSR to avoid hydration mismatch; hydrate from localStorage
-  // immediately on mount so ChatPanel renders without waiting on the network.
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [workspaceStatus, setWorkspaceStatus] = useState<"loading" | "ready" | "none">("loading");
-  const [workspaceName, setWorkspaceName] = useState<string>("Workspace");
-  const [workspaceWebsite, setWorkspaceWebsite] = useState<string | null>(null);
-  useEffect(() => {
-    try {
-      const id = localStorage.getItem("workspace:selected");
-      const name = localStorage.getItem("workspace:name");
-      const site = localStorage.getItem("workspace:website");
-      if (id) setWorkspaceId(id);
-      if (name) setWorkspaceName(name);
-      if (site) setWorkspaceWebsite(site);
-    } catch {}
-  }, []);
+  // The workspace comes from the route and is verified by WorkspaceProvider
+  // before this shell mounts — there is no loading-from-localStorage phase in
+  // which another workspace's name, logo or chats could show.
+  const workspace = useWorkspace();
+  const { patch: patchWorkspace } = useWorkspaceActions();
+  const workspaceId = workspace.id;
+  const workspaceName = workspace.displayName;
+  const workspaceWebsite = workspace.websiteUrl;
+  const homeHref = workspacePath(workspaceId);
 
   const { dna: brandDna } = useBrandDna(workspaceId);
   const brandLogo = brandDna.logoUrl || brandDna.faviconUrl;
@@ -149,7 +141,7 @@ function AppShell() {
   // analytics refresh instantly when chat/agents create or modify rows.
   useRealtimeContent(workspaceId);
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const activeConversationId = path.match(/^\/app\/chat\/([^/]+)/)?.[1] ?? null;
+  const activeConversationId = conversationIdFromPath(path);
   const isMobile = useIsMobile();
   const [navOpen, setNavOpen] = useState(false);
   // Sidebar is always inline — reserves its own space at every screen size.
@@ -198,7 +190,9 @@ function AppShell() {
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   useStudioEntry(workspaceId);
   // Load the composer bundle only once someone opens Studio.
-  const studioInUse = useStudioStore((st) => st.activeId !== null || st.sessions.length > 0);
+  const studioInUse = useStudioStore((st) =>
+    st.sessions.some((x) => x.workspaceId === workspaceId),
+  );
   // Open Analytics modal via custom event, ⌘./Ctrl+. keybind, or sessionStorage flag set by /app/analytics redirect.
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -267,95 +261,6 @@ function AppShell() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const currentAppPath = () => {
-      if (typeof window === "undefined") return "/app";
-      const { pathname, search } = window.location;
-      return pathname.startsWith("/app") ? `${pathname}${search || ""}` : "/app";
-    };
-    const load = async () => {
-      const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session) {
-        // Preserve invite token across login redirect
-        if (typeof window !== "undefined") {
-          const t = new URL(window.location.href).searchParams.get("invite_token");
-          if (t) localStorage.setItem("pending:invite_token", t);
-        }
-        // Preserve the target so the user lands back here after signing in.
-        navigate({ to: "/login", search: { next: currentAppPath() } as any });
-        return;
-      }
-
-      // Handle ?invite_token=... — accept invite and select that workspace
-      if (typeof window !== "undefined") {
-        const url = new URL(window.location.href);
-        const pending = localStorage.getItem("pending:invite_token");
-        const token = url.searchParams.get("invite_token") || pending;
-        if (pending) localStorage.removeItem("pending:invite_token");
-
-        if (token) {
-          try {
-            const wsId = await acceptWorkspaceInviteFn({ data: { token } });
-            if (wsId) localStorage.setItem("workspace:selected", wsId as string);
-          } catch (e: any) {
-            // Surface but don't block — user might already be a member
-            console.warn("invite accept failed", e?.message);
-          } finally {
-            url.searchParams.delete("invite_token");
-            window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
-          }
-        }
-      }
-
-      const selectedId =
-        typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
-      const query = supabase
-        .from("workspaces")
-        .select("id, name, website_url, industry, onboarded_at");
-      const { data } = selectedId
-        ? await query.eq("id", selectedId).maybeSingle()
-        : await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (cancelled) return;
-      if (data?.id) {
-        localStorage.setItem("workspace:selected", data.id);
-        setWorkspaceId(data.id);
-        setWorkspaceStatus("ready");
-        const domain = data.website_url
-          ? data.website_url
-              .replace(/^https?:\/\//i, "")
-              .replace(/\/$/, "")
-              .split("/")[0]
-          : null;
-        const name = domain || data.name || data.industry || "Workspace";
-        setWorkspaceName(name);
-        setWorkspaceWebsite(data.website_url ?? null);
-        try {
-          localStorage.setItem("workspace:name", name);
-          if (data.website_url) localStorage.setItem("workspace:website", data.website_url);
-          else localStorage.removeItem("workspace:website");
-        } catch {}
-      } else {
-        // No workspace, or a stale selection pointing at one the user can no
-        // longer see. This is a terminal state, not a loading one — the shell
-        // renders a create-a-workspace prompt for it.
-        localStorage.removeItem("workspace:selected");
-        setWorkspaceId(null);
-        setWorkspaceName("Workspace");
-        setWorkspaceWebsite(null);
-        setWorkspaceStatus("none");
-      }
-    };
-    load();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (!session) navigate({ to: "/login", search: { next: currentAppPath() } as any });
-    });
-    return () => {
-      cancelled = true;
-      sub.subscription.unsubscribe();
-    };
-  }, [acceptWorkspaceInviteFn, navigate]);
-
-  useEffect(() => {
     setChatOpen(false);
   }, [path]);
 
@@ -418,7 +323,7 @@ function AppShell() {
       {/* Brand row — sticky; height matches main header (h-14) for aligned baseline */}
       <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between bg-sidebar/95 px-2 backdrop-blur-xl">
         <Link
-          to="/app"
+          to={homeHref}
           aria-label="Mellox AI — workspace home"
           title="Workspace home"
           className="group flex h-9 items-center gap-1 rounded-md pl-1 pr-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -584,7 +489,7 @@ function AppShell() {
           {/* Brand mark — always visible; goes to workspace home. */}
           <div className="group relative mb-3 h-9 w-9">
             <Link
-              to="/app"
+              to={homeHref}
               aria-label="Mellox AI — workspace home"
               title="Workspace home"
               className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -928,7 +833,6 @@ function AppShell() {
           >
             <WorkspaceSurface
               workspaceId={workspaceId}
-              workspaceStatus={workspaceStatus}
               activeConversationId={activeConversationId}
             />
           </main>
@@ -963,7 +867,7 @@ function AppShell() {
         <WorkspaceDialogs
           workspaceId={workspaceId}
           workspaceName={workspaceName}
-          onRenamed={setWorkspaceName}
+          onRenamed={(name) => patchWorkspace({ name })}
         />
         <ContentCalendar workspaceId={workspaceId} />
       </Suspense>
@@ -973,11 +877,9 @@ function AppShell() {
 
 function WorkspaceSurface({
   workspaceId,
-  workspaceStatus,
   activeConversationId,
 }: {
-  workspaceId: string | null;
-  workspaceStatus: "loading" | "ready" | "none";
+  workspaceId: string;
   activeConversationId: string | null;
 }) {
   const isMobile = useIsMobile();
@@ -1036,46 +938,14 @@ function WorkspaceSurface({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-row bg-background">
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {workspaceId ? (
-          <ChatPanel
-            workspaceId={workspaceId}
-            conversationId={activeConversationId}
-            variant="centered"
-          />
-        ) : workspaceStatus === "none" ? (
-          <EmptyState
-            className="h-full"
-            icon={Building2}
-            title="No workspace yet"
-            description="A workspace holds one brand: its Brand DNA, content, calendar and connected accounts. Create one to get started."
-            action={
-              <Button asChild>
-                {/* /onboarding needs an existing workspace and redirects here anyway. */}
-                <Link to="/projects">
-                  <Plus className="size-4" />
-                  Create a workspace
-                </Link>
-              </Button>
-            }
-            secondaryAction={
-              <Button asChild variant="ghost">
-                <Link to="/workspaces">See all workspaces</Link>
-              </Button>
-            }
-          />
-        ) : (
-          <div
-            role="status"
-            aria-label="Loading workspace"
-            className="flex h-full flex-col items-center justify-end gap-4 p-6"
-          >
-            <div className="w-full max-w-2xl space-y-3">
-              <div className="h-4 w-2/3 animate-pulse rounded bg-surface-2" />
-              <div className="h-4 w-1/2 animate-pulse rounded bg-surface-2" />
-            </div>
-            <div className="h-14 w-full max-w-2xl animate-pulse rounded-2xl bg-surface-2" />
-          </div>
-        )}
+        {/* Keyed by workspace: nothing (messages, pending replies, context)
+            survives into another workspace. */}
+        <ChatPanel
+          key={workspaceId}
+          workspaceId={workspaceId}
+          conversationId={activeConversationId}
+          variant="centered"
+        />
       </section>
 
       {/* Studio — inline on desktop, overlay drawer on mobile. */}

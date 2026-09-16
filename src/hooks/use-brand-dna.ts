@@ -200,65 +200,172 @@ const TEXT_FIELDS: (keyof BrandDna)[] = [
   "dontRules",
 ];
 
-// Brand DNA fields save on every keystroke, but `brand-dna:saved` listeners
-// (Studio re-derives suggestions, including a model call) should run once an
-// edit settles — not per character. Trailing debounce, shared by all hooks.
+// Brand DNA is stored per workspace in the database (workspace_brand_dna,
+// src/server/fns/brand-dna.ts). This module keeps one entry PER WORKSPACE ID:
+//   - a hook for workspace B never sees workspace A's entry, so switching
+//     brands can't carry DNA across (it starts empty until B's loads);
+//   - `save` captures the workspace id at call time, and its debounced server
+//     write goes to that id even if the user has switched since;
+//   - `brand-dna:v3:<id>` in localStorage is only a same-workspace cache for
+//     instant render and for synchronous readers (Studio, post images).
+// Fields save on every keystroke, so server writes and the `brand-dna:saved`
+// announcement are debounced.
+
 const SAVED_SETTLE_MS = 2000;
+const SERVER_SAVE_MS = 800;
 let savedTimer: ReturnType<typeof setTimeout> | undefined;
 function announceSaved() {
   clearTimeout(savedTimer);
   savedTimer = setTimeout(() => emitAppEvent("brand-dna:saved"), SAVED_SETTLE_MS);
 }
 
+export function brandDnaCacheKey(workspaceId: string) {
+  return `brand-dna:v3:${workspaceId}`;
+}
+
+type Entry = {
+  dna: BrandDna;
+  status: "idle" | "loading" | "ready" | "error";
+  listeners: Set<() => void>;
+  saveTimer?: ReturnType<typeof setTimeout>;
+};
+
+const entries = new Map<string, Entry>();
+
+function readCache(workspaceId: string): BrandDna | null {
+  if (typeof window === "undefined") return null;
+  for (const k of [
+    brandDnaCacheKey(workspaceId),
+    `brand-dna:v2:${workspaceId}`,
+    `brand-dna:${workspaceId}`,
+  ]) {
+    try {
+      const raw = localStorage.getItem(k);
+      if (raw) return { ...emptyDna, ...JSON.parse(raw) };
+    } catch {
+      /* unreadable cache */
+    }
+  }
+  return null;
+}
+
+function writeCache(workspaceId: string, dna: BrandDna) {
+  try {
+    localStorage.setItem(brandDnaCacheKey(workspaceId), JSON.stringify(dna));
+  } catch {
+    /* storage full or unavailable */
+  }
+  try {
+    saveDesignMd(workspaceId, buildDesignMd(dna));
+  } catch {
+    /* noop */
+  }
+}
+
+function entryFor(workspaceId: string): Entry {
+  let entry = entries.get(workspaceId);
+  if (!entry) {
+    entry = { dna: readCache(workspaceId) ?? emptyDna, status: "idle", listeners: new Set() };
+    entries.set(workspaceId, entry);
+  }
+  return entry;
+}
+
+function notify(entry: Entry) {
+  for (const l of entry.listeners) l();
+}
+
+function hasContent(dna: Partial<BrandDna> | null | undefined): boolean {
+  return Boolean(dna && (dna.updatedAt || countBrandDnaFilled(dna as BrandDna).filled > 0));
+}
+
+async function loadFromServer(workspaceId: string) {
+  const entry = entryFor(workspaceId);
+  if (entry.status === "loading" || entry.status === "ready") return;
+  entry.status = "loading";
+  try {
+    const { getBrandDna, saveBrandDna } = await import("@/lib/brand-dna.functions");
+    const stored = await getBrandDna({ data: { workspaceId } });
+    if (stored && hasContent(stored.dna as Partial<BrandDna>)) {
+      // A local edit made while loading wins; otherwise the database does.
+      if (!entry.saveTimer) {
+        entry.dna = { ...emptyDna, ...(stored.dna as Partial<BrandDna>) };
+        writeCache(workspaceId, entry.dna);
+      }
+    } else if (hasContent(entry.dna)) {
+      // One-time migration of Brand DNA that only ever lived in this browser.
+      await saveBrandDna({ data: { workspaceId, dna: entry.dna as never } });
+    }
+    entry.status = "ready";
+  } catch {
+    entry.status = "error";
+  }
+  notify(entry);
+}
+
+function scheduleServerSave(workspaceId: string) {
+  const entry = entryFor(workspaceId);
+  clearTimeout(entry.saveTimer);
+  entry.saveTimer = setTimeout(async () => {
+    entry.saveTimer = undefined;
+    try {
+      const { saveBrandDna } = await import("@/lib/brand-dna.functions");
+      await saveBrandDna({ data: { workspaceId, dna: entry.dna as never } });
+    } catch (e) {
+      console.warn("[brand-dna] save failed", e);
+    }
+  }, SERVER_SAVE_MS);
+}
+
+/** Save Brand DNA for an explicit workspace (non-hook callers, e.g. onboarding). */
+export function saveBrandDnaFor(workspaceId: string, next: Partial<BrandDna>, replace = false) {
+  const entry = entryFor(workspaceId);
+  entry.dna = { ...(replace ? emptyDna : entry.dna), ...next, updatedAt: Date.now() };
+  writeCache(workspaceId, entry.dna);
+  notify(entry);
+  scheduleServerSave(workspaceId);
+  announceSaved();
+  return entry.dna;
+}
+
+/** Current Brand DNA for a workspace (cached copy; never another workspace's). */
+export function readBrandDnaFor(workspaceId: string | null | undefined): BrandDna {
+  return workspaceId ? entryFor(workspaceId).dna : emptyDna;
+}
+
+/** Test hook: forget every loaded workspace entry. */
+export function resetBrandDnaStore() {
+  for (const e of entries.values()) clearTimeout(e.saveTimer);
+  entries.clear();
+}
+
 export function useBrandDna(workspaceId: string | null) {
-  const key = workspaceId ? `brand-dna:v3:${workspaceId}` : null;
-  const legacyKeys = workspaceId ? [`brand-dna:v2:${workspaceId}`, `brand-dna:${workspaceId}`] : [];
-  const [dna, setDna] = useState<BrandDna>(emptyDna);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
-    if (!key) return;
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        setDna({ ...emptyDna, ...JSON.parse(raw) });
-        return;
-      }
-      for (const lk of legacyKeys) {
-        const legacy = localStorage.getItem(lk);
-        if (legacy) {
-          setDna({ ...emptyDna, ...JSON.parse(legacy) });
-          return;
-        }
-      }
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+    if (!workspaceId) return;
+    const entry = entryFor(workspaceId);
+    const listener = () => setTick((n) => n + 1);
+    entry.listeners.add(listener);
+    setTick((n) => n + 1);
+    void loadFromServer(workspaceId);
+    return () => {
+      entry.listeners.delete(listener);
+    };
+  }, [workspaceId]);
 
-  const persist = (next: BrandDna) => {
-    if (key) {
-      try {
-        localStorage.setItem(key, JSON.stringify(next));
-      } catch {}
-    }
-    // Sync Design.md
-    if (workspaceId) {
-      try {
-        saveDesignMd(workspaceId, buildDesignMd(next));
-      } catch {}
-    }
-    announceSaved();
-  };
+  // Read straight from the workspace's own entry on every render: after a
+  // switch the very first render already shows the new workspace (or empty).
+  const dna = workspaceId && typeof window !== "undefined" ? entryFor(workspaceId).dna : emptyDna;
 
   const save = (next: Partial<BrandDna>) => {
-    const merged = { ...dna, ...next, updatedAt: Date.now() };
-    setDna(merged);
-    persist(merged);
+    if (!workspaceId) return;
+    saveBrandDnaFor(workspaceId, next);
   };
 
   const replace = (next: BrandDna) => {
-    const merged = { ...next, updatedAt: Date.now() };
-    setDna(merged);
-    persist(merged);
+    if (!workspaceId) return;
+    saveBrandDnaFor(workspaceId, next, true);
   };
 
   const { filled, total } = countBrandDnaFilled(dna);
