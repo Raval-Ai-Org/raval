@@ -484,6 +484,80 @@ export type Database = {
           },
         ];
       };
+      ai_usage_reservations: {
+        Row: {
+          captured_at: string | null;
+          captured_cost_usd: number | null;
+          created_at: string;
+          est_cost_usd: number;
+          expires_at: string;
+          id: string;
+          kind: string;
+          model: string;
+          provider: string;
+          release_reason: string | null;
+          released_at: string | null;
+          route: string;
+          scope_key: string;
+          source: string;
+          source_id: string;
+          state: string;
+          units: number;
+          user_id: string | null;
+          workspace_id: string | null;
+        };
+        Insert: {
+          captured_at?: string | null;
+          captured_cost_usd?: number | null;
+          created_at?: string;
+          est_cost_usd?: number;
+          expires_at: string;
+          id?: string;
+          kind: string;
+          model: string;
+          provider: string;
+          release_reason?: string | null;
+          released_at?: string | null;
+          route: string;
+          scope_key: string;
+          source: string;
+          source_id: string;
+          state?: string;
+          units?: number;
+          user_id?: string | null;
+          workspace_id?: string | null;
+        };
+        Update: {
+          captured_at?: string | null;
+          captured_cost_usd?: number | null;
+          created_at?: string;
+          est_cost_usd?: number;
+          expires_at?: string;
+          id?: string;
+          kind?: string;
+          model?: string;
+          provider?: string;
+          release_reason?: string | null;
+          released_at?: string | null;
+          route?: string;
+          scope_key?: string;
+          source?: string;
+          source_id?: string;
+          state?: string;
+          units?: number;
+          user_id?: string | null;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_reservations_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       api_rate_limits: {
         Row: {
           bucket_key: string;
@@ -3093,6 +3167,220 @@ export type Database = {
           },
         ];
       };
+      ugc_projects: {
+        Row: {
+          brand_snapshot: Json;
+          brief: Json;
+          concepts: Json;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          product: Json;
+          product_url: string | null;
+          reference_asset_ids: string[];
+          script: Json | null;
+          selected_concept_id: string | null;
+          status: string;
+          title: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          brand_snapshot?: Json;
+          brief?: Json;
+          concepts?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          product?: Json;
+          product_url?: string | null;
+          reference_asset_ids?: string[];
+          script?: Json | null;
+          selected_concept_id?: string | null;
+          status?: string;
+          title?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          brand_snapshot?: Json;
+          brief?: Json;
+          concepts?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          product?: Json;
+          product_url?: string | null;
+          reference_asset_ids?: string[];
+          script?: Json | null;
+          selected_concept_id?: string | null;
+          status?: string;
+          title?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ugc_projects_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ugc_renders: {
+        Row: {
+          actual_cost_usd: number | null;
+          aspect_ratio: string;
+          asset_id: string | null;
+          attempts: number;
+          audio: boolean;
+          completed_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          duration_sec: number;
+          error_code: string | null;
+          error_message: string | null;
+          est_cost_usd: number;
+          generation_type: string;
+          id: string;
+          idempotency_key: string;
+          lease_until: string | null;
+          locked_by: string | null;
+          max_attempts: number;
+          model_key: string;
+          next_attempt_at: string;
+          project_id: string;
+          prompt: string;
+          provider: string;
+          provider_meta: Json;
+          provider_model: string;
+          provider_state: string | null;
+          provider_task_id: string | null;
+          provider_variant: string | null;
+          reference_asset_ids: string[];
+          reservation_id: string | null;
+          resolution: string;
+          script: Json;
+          settings: Json;
+          status: string;
+          submit_attempts: number;
+          submitted_at: string | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          actual_cost_usd?: number | null;
+          aspect_ratio: string;
+          asset_id?: string | null;
+          attempts?: number;
+          audio?: boolean;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          duration_sec: number;
+          error_code?: string | null;
+          error_message?: string | null;
+          est_cost_usd?: number;
+          generation_type: string;
+          id?: string;
+          idempotency_key: string;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          model_key: string;
+          next_attempt_at?: string;
+          project_id: string;
+          prompt: string;
+          provider: string;
+          provider_meta?: Json;
+          provider_model: string;
+          provider_state?: string | null;
+          provider_task_id?: string | null;
+          provider_variant?: string | null;
+          reference_asset_ids?: string[];
+          reservation_id?: string | null;
+          resolution: string;
+          script: Json;
+          settings?: Json;
+          status?: string;
+          submit_attempts?: number;
+          submitted_at?: string | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          actual_cost_usd?: number | null;
+          aspect_ratio?: string;
+          asset_id?: string | null;
+          attempts?: number;
+          audio?: boolean;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          duration_sec?: number;
+          error_code?: string | null;
+          error_message?: string | null;
+          est_cost_usd?: number;
+          generation_type?: string;
+          id?: string;
+          idempotency_key?: string;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          model_key?: string;
+          next_attempt_at?: string;
+          project_id?: string;
+          prompt?: string;
+          provider?: string;
+          provider_meta?: Json;
+          provider_model?: string;
+          provider_state?: string | null;
+          provider_task_id?: string | null;
+          provider_variant?: string | null;
+          reference_asset_ids?: string[];
+          reservation_id?: string | null;
+          resolution?: string;
+          script?: Json;
+          settings?: Json;
+          status?: string;
+          submit_attempts?: number;
+          submitted_at?: string | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ugc_renders_asset_id_fkey";
+            columns: ["asset_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ugc_renders_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "ugc_projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ugc_renders_reservation_id_fkey";
+            columns: ["reservation_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_usage_reservations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ugc_renders_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_agent_settings: {
         Row: {
           agents_paused: boolean;
@@ -3661,6 +3949,10 @@ export type Database = {
         }[];
       };
       call_app_hook: { Args: { p_path: string }; Returns: number };
+      capture_ai_usage_reservation: {
+        Args: { p_id: string; p_actual_cost_usd?: number; p_latency_ms?: number };
+        Returns: boolean;
+      };
       claim_due_scheduled_jobs: {
         Args: {
           p_max?: number;
@@ -3681,6 +3973,10 @@ export type Database = {
       claim_geo_verifications: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["geo_verifications"]["Row"][];
+      };
+      claim_ugc_renders: {
+        Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
+        Returns: Database["public"]["Tables"]["ugc_renders"]["Row"][];
       };
       consume_rate_limit: {
         Args: { p_bucket_key: string; p_window_seconds: number; p_limit: number; p_cost?: number };
@@ -3704,6 +4000,9 @@ export type Database = {
       prune_geo_agent_runs: { Args: never; Returns: Json };
       prune_operational_logs: { Args: never; Returns: Json };
       record_ai_usage: { Args: { p_event: Json }; Returns: number };
+      release_ai_usage_reservation: { Args: { p_id: string; p_reason?: string }; Returns: boolean };
+      release_expired_ai_usage_reservations: { Args: never; Returns: number };
+      reserve_ai_usage: { Args: { p_request: Json }; Returns: Json };
       set_persona_once: {
         Args: { _persona: string };
         Returns: { persona: string; persona_set_at: string }[];

@@ -79,6 +79,8 @@ export type AppEventMap = {
       }
     | undefined;
   "open:ai-visibility": undefined;
+  /** UGC Video Ads studio, optionally on one ad project. */
+  "open:ugc-studio": { projectId?: string } | undefined;
   "open:autopilot": undefined;
   "open:client-portal": undefined;
   "open:command-bar": undefined;

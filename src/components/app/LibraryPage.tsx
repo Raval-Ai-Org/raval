@@ -1166,7 +1166,9 @@ function MediaDetail({ asset, onCreate }: { asset: LibraryAsset; onCreate: () =>
             </>
           ) : null}
           <dt className="text-muted-foreground">Source</dt>
-          <dd className="text-foreground">Generated in Studio</dd>
+          <dd className="text-foreground">
+            {asset.metadata?.source === "ugc" ? "UGC video ad" : "Generated in Studio"}
+          </dd>
         </dl>
 
         <div className="mt-6 flex flex-wrap gap-2">

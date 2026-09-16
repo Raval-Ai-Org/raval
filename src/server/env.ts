@@ -23,6 +23,12 @@ const Schema = z.object({
   // Providers — optional; the feature reports "not configured" without them.
   ANTHROPIC_API_KEY: z.string().optional(),
   KIE_API_KEY: z.string().optional(),
+  // UGC Video Ads (docs/ugc-video-ads.md). Callbacks are optional; polling always works.
+  KIE_WEBHOOK_HMAC_KEY: z.string().optional(),
+  KIE_USD_PER_CREDIT: z.coerce.number().positive().optional(),
+  UGC_DEFAULT_MODEL: z.string().optional(),
+  UGC_MAX_CONCURRENT_RENDERS: z.coerce.number().int().min(1).max(20).optional(),
+  FEATURE_FLAG_UGC_VIDEO_ENABLED: z.string().optional(),
   DATAFORSEO_LOGIN: z.string().optional(),
   DATAFORSEO_PASSWORD: z.string().optional(),
   PEXELS_API_KEY: z.string().optional(),

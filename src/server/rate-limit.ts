@@ -42,6 +42,8 @@ export type RateLimitTier =
   | "geo-agent-action"
   | "image"
   | "video"
+  | "ugc-draft"
+  | "ugc-render"
   | "share-password"
   | "workspace-lifecycle";
 
@@ -85,6 +87,11 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   image: { limit: 30, windowSeconds: 3600, label: "image generation" },
   // Billed per video, and the most expensive call in the product.
   video: { limit: 8, windowSeconds: 3600, label: "video generation" },
+  // UGC ad drafting: product extraction, concepts and script rewrites (paid
+  // model calls, but a person iterates on one ad several times).
+  "ugc-draft": { limit: 40, windowSeconds: 3600, label: "ad concept" },
+  // UGC video renders. Spend is bounded by allowance reservations; this caps bursts.
+  "ugc-render": { limit: 12, windowSeconds: 3600, label: "video ad render" },
   // Client-share password attempts, keyed by slug. A real client mistypes a
   // password two or three times; 10 per 5 minutes is generous for them and
   // useless for a brute-force run.

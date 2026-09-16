@@ -2222,3 +2222,2528 @@ BEGIN
   END LOOP;
 END
 $$;
+
+-- ═══ 20260913080000_content_lifecycle_distribution_meta.sql ═══
+-- Editing approved content must invalidate its approval — but a *status
+-- transition* out of `approved` (approved → scheduled / publishing / published)
+-- legitimately writes bookkeeping into `meta` (sdr_job_id, sdr_revision) in the
+-- same UPDATE. The previous trigger treated that bookkeeping as an edit, forced
+-- NEW.status back to 'draft', and silently demoted every item the distribution
+-- engine had just accepted.
+--
+-- Rule now: approval is invalidated only when content changes while the status
+-- is left unchanged (or explicitly moved back to draft). Idempotent.
+CREATE OR REPLACE FUNCTION public.enforce_content_item_lifecycle()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF OLD.status = 'approved'
+     AND NEW.status = OLD.status
+     AND (
+       OLD.title IS DISTINCT FROM NEW.title OR
+       OLD.body IS DISTINCT FROM NEW.body OR
+       OLD.hashtags IS DISTINCT FROM NEW.hashtags OR
+       OLD.channel IS DISTINCT FROM NEW.channel OR
+       OLD.media_url IS DISTINCT FROM NEW.media_url OR
+       OLD.meta IS DISTINCT FROM NEW.meta
+     )
+  THEN
+    NEW.status := 'draft';
+  END IF;
+
+  IF OLD.status = NEW.status THEN
+    RETURN NEW;
+  END IF;
+
+  IF NOT (
+    (OLD.status = 'draft' AND NEW.status IN ('pending', 'approved')) OR
+    (OLD.status = 'pending' AND NEW.status IN ('draft', 'approved', 'rejected', 'failed')) OR
+    (OLD.status = 'approved' AND NEW.status IN ('draft', 'scheduled', 'publishing', 'published')) OR
+    (OLD.status = 'rejected' AND NEW.status IN ('draft', 'pending')) OR
+    (OLD.status = 'scheduled' AND NEW.status IN ('approved', 'draft', 'publishing', 'failed')) OR
+    (OLD.status = 'publishing' AND NEW.status IN ('published', 'partial_failed', 'failed')) OR
+    (OLD.status = 'published' AND NEW.status = 'draft') OR
+    (OLD.status = 'failed' AND NEW.status IN ('draft', 'pending', 'approved')) OR
+    (OLD.status = 'partial_failed' AND NEW.status IN ('approved', 'scheduled', 'draft'))
+  ) THEN
+    RAISE EXCEPTION 'Invalid content status transition: % -> %', OLD.status, NEW.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS enforce_content_item_lifecycle ON public.content_items;
+CREATE TRIGGER enforce_content_item_lifecycle
+  BEFORE UPDATE ON public.content_items
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_content_item_lifecycle();
+
+-- ═══ 20260913090000_studio_jobs.sql ═══
+-- Studio generation jobs. One row per generate / regenerate / refine request.
+--
+-- Image and video renders are asynchronous at the provider; the previous design
+-- held a single HTTP request open for up to three minutes and kept progress in
+-- browser memory, so closing the composer or reloading lost the work (and a
+-- render past the timeout was billed but never delivered). A job row makes the
+-- work durable: the client polls it, the rail shows it, and it survives
+-- navigation. Idempotent — safe to re-run.
+CREATE TABLE IF NOT EXISTS public.studio_jobs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  type text NOT NULL,
+  status text NOT NULL DEFAULT 'queued',
+  stage text NOT NULL DEFAULT 'context',
+  stage_at timestamptz NOT NULL DEFAULT now(),
+  title text,
+  input jsonb NOT NULL DEFAULT '{}'::jsonb,
+  output jsonb NOT NULL DEFAULT '{}'::jsonb,
+  error jsonb,
+  provider_tasks jsonb NOT NULL DEFAULT '[]'::jsonb,
+  idempotency_key text NOT NULL,
+  parent_job_id uuid REFERENCES public.studio_jobs(id) ON DELETE SET NULL,
+  group_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  content_item_ids uuid[] NOT NULL DEFAULT '{}',
+  asset_ids uuid[] NOT NULL DEFAULT '{}',
+  attempt integer NOT NULL DEFAULT 1,
+  lease_until timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz,
+  CONSTRAINT studio_jobs_status_check
+    CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+  CONSTRAINT studio_jobs_idempotency_unique UNIQUE (workspace_id, idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS studio_jobs_workspace_status_idx
+  ON public.studio_jobs (workspace_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS studio_jobs_group_idx ON public.studio_jobs (group_id);
+
+ALTER TABLE public.studio_jobs ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE ON public.studio_jobs TO authenticated;
+GRANT ALL ON public.studio_jobs TO service_role;
+
+-- Role checks (editor+) are enforced by the API kernel before any write;
+-- RLS keeps every row inside its workspace.
+DROP POLICY IF EXISTS "Workspace members can read studio jobs" ON public.studio_jobs;
+CREATE POLICY "Workspace members can read studio jobs"
+  ON public.studio_jobs FOR SELECT TO authenticated
+  USING (public.is_workspace_member(workspace_id, auth.uid()));
+
+DROP POLICY IF EXISTS "Workspace members can create studio jobs" ON public.studio_jobs;
+CREATE POLICY "Workspace members can create studio jobs"
+  ON public.studio_jobs FOR INSERT TO authenticated
+  WITH CHECK (public.is_workspace_member(workspace_id, auth.uid()));
+
+DROP POLICY IF EXISTS "Workspace members can update studio jobs" ON public.studio_jobs;
+CREATE POLICY "Workspace members can update studio jobs"
+  ON public.studio_jobs FOR UPDATE TO authenticated
+  USING (public.is_workspace_member(workspace_id, auth.uid()))
+  WITH CHECK (public.is_workspace_member(workspace_id, auth.uid()));
+
+DROP TRIGGER IF EXISTS studio_jobs_touch_updated_at ON public.studio_jobs;
+CREATE TRIGGER studio_jobs_touch_updated_at
+  BEFORE UPDATE ON public.studio_jobs
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+-- Live progress for the rail and the minimized dock.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'studio_jobs'
+     )
+  THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.studio_jobs;
+  END IF;
+END $$;
+
+-- ═══ 20260913100000_add_socialapi_distribution.sql ═══
+-- SocialAPI.ai as a distribution provider (docs/adr/0009-socialapi-distribution-provider.md).
+--
+-- SocialAPI.ai sits behind the same pipeline as the SDR: content_items →
+-- content_publications (per-destination delivery mirror) → signed webhook →
+-- reconcile sweep. This migration only ADDS schema; nothing existing is
+-- dropped or rewritten. Idempotent (required for migrations from 2026-09-11).
+--
+-- Tenant isolation model:
+--   * one Mellox workspace ↔ one SocialAPI brand (workspace_socialapi). The
+--     provider scopes accounts to a brand, and every server call filters by
+--     the workspace's own brand_id — never by an id the browser supplies.
+--   * provider credentials never live in the database; the API key is a
+--     server-only environment variable.
+--   * browser clients may READ their own workspace's accounts, deliveries and
+--     usage (RLS); every write goes through the server with the service role.
+
+-- ─── workspace ↔ brand mapping (server-only) ────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.workspace_socialapi (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL UNIQUE REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  -- Provider ids are opaque strings (SocialAPI reliability guide): text, not uuid.
+  brand_id text,
+  status text NOT NULL DEFAULT 'provisioning'
+    CHECK (status IN ('provisioning', 'active', 'error')),
+  last_error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS workspace_socialapi_brand_idx
+  ON public.workspace_socialapi (brand_id) WHERE brand_id IS NOT NULL;
+
+ALTER TABLE public.workspace_socialapi ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.workspace_socialapi FROM anon, authenticated;
+GRANT ALL ON public.workspace_socialapi TO service_role;
+
+-- ─── connected social accounts (mirror of the provider's account list) ──────
+CREATE TABLE IF NOT EXISTS public.social_accounts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  provider text NOT NULL DEFAULT 'socialapi',
+  provider_account_id text NOT NULL,
+  brand_id text,
+  platform text NOT NULL,
+  username text,
+  display_name text,
+  avatar_url text,
+  status text NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'reconnect_required', 'disconnected')),
+  reconnect_reason text,
+  connected_by uuid,
+  connected_at timestamptz NOT NULL DEFAULT now(),
+  disconnected_at timestamptz,
+  last_synced_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (provider, provider_account_id)
+);
+
+CREATE INDEX IF NOT EXISTS social_accounts_workspace_idx
+  ON public.social_accounts (workspace_id, status);
+
+ALTER TABLE public.social_accounts ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.social_accounts FROM anon, authenticated;
+GRANT SELECT ON public.social_accounts TO authenticated;
+GRANT ALL ON public.social_accounts TO service_role;
+
+DROP POLICY IF EXISTS "Members read workspace social accounts" ON public.social_accounts;
+CREATE POLICY "Members read workspace social accounts" ON public.social_accounts
+  FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+-- ─── OAuth connect state (CSRF + tenant binding, server-only) ───────────────
+-- The raw state value travels through the provider and back; only its SHA-256
+-- is stored, so a database read cannot be replayed into the callback.
+CREATE TABLE IF NOT EXISTS public.social_oauth_states (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  state_hash text NOT NULL UNIQUE,
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
+  provider text NOT NULL DEFAULT 'socialapi',
+  platform text NOT NULL,
+  connection_id text,
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS social_oauth_states_expiry_idx
+  ON public.social_oauth_states (expires_at);
+
+ALTER TABLE public.social_oauth_states ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.social_oauth_states FROM anon, authenticated;
+GRANT ALL ON public.social_oauth_states TO service_role;
+
+-- ─── post-credit ledger (plan quota + reporting) ────────────────────────────
+-- One row per provider operation that consumes a post credit (publish,
+-- schedule, retry). Append-only; the quota check counts the current month.
+CREATE TABLE IF NOT EXISTS public.social_usage_events (
+  id bigserial PRIMARY KEY,
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  provider text NOT NULL DEFAULT 'socialapi',
+  operation text NOT NULL CHECK (operation IN ('publish', 'schedule', 'retry')),
+  provider_post_id text,
+  content_item_id uuid REFERENCES public.content_items(id) ON DELETE SET NULL,
+  user_id uuid,
+  targets int NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS social_usage_events_workspace_idx
+  ON public.social_usage_events (workspace_id, created_at DESC);
+
+ALTER TABLE public.social_usage_events ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.social_usage_events FROM anon, authenticated;
+GRANT SELECT ON public.social_usage_events TO authenticated;
+GRANT ALL ON public.social_usage_events TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE public.social_usage_events_id_seq TO service_role;
+
+DROP POLICY IF EXISTS "Members read workspace social usage" ON public.social_usage_events;
+CREATE POLICY "Members read workspace social usage" ON public.social_usage_events
+  FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+-- ─── delivery mirror: provider + engagement metrics ─────────────────────────
+-- For SocialAPI rows: sdr_post_id holds the provider post id and sdr_target_id
+-- the target account id (one delivery per account per post). The column names
+-- predate the provider split and are kept to avoid a breaking rename.
+ALTER TABLE public.content_publications
+  ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'sdr',
+  ADD COLUMN IF NOT EXISTS error_code text,
+  ADD COLUMN IF NOT EXISTS metrics jsonb,
+  ADD COLUMN IF NOT EXISTS metrics_synced_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS publications_provider_post_idx
+  ON public.content_publications (provider, sdr_post_id);
+CREATE INDEX IF NOT EXISTS publications_ws_delivered_idx
+  ON public.content_publications (workspace_id, delivered_at DESC);
+
+COMMENT ON COLUMN public.content_publications.sdr_post_id IS
+  'Provider post/job id (SDR job id, or SocialAPI post id when provider = socialapi).';
+COMMENT ON COLUMN public.content_publications.sdr_target_id IS
+  'Provider delivery id (SDR target id, or the SocialAPI account id when provider = socialapi).';
+
+-- ─── webhook receipts: provider + delivery-id deduplication ─────────────────
+ALTER TABLE public.sdr_webhook_events
+  ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'sdr',
+  ADD COLUMN IF NOT EXISTS delivery_id text;
+
+ALTER TABLE public.sdr_webhook_events DROP CONSTRAINT IF EXISTS sdr_webhook_events_outcome_check;
+ALTER TABLE public.sdr_webhook_events ADD CONSTRAINT sdr_webhook_events_outcome_check
+  CHECK (outcome IN ('verified', 'rejected', 'stale', 'unknown', 'malformed', 'duplicate', 'ignored'));
+
+-- Only verified deliveries claim their id, so a forged request cannot burn a
+-- real delivery id ahead of the genuine one.
+CREATE UNIQUE INDEX IF NOT EXISTS sdr_webhook_events_delivery_idx
+  ON public.sdr_webhook_events (provider, delivery_id)
+  WHERE delivery_id IS NOT NULL AND outcome = 'verified';
+
+-- ═══ 20260914120000_add_geo_intelligence.sql ═══
+-- AI Visibility intelligence (GEO / AEO / SEO) — multi-page scans.
+--
+-- Replaces the single-page, browser-persisted audit with durable scan jobs:
+--   geo_scans           one row per scan (quick = homepage, full = crawl), leased
+--                       by the worker so a scan survives restarts and timeouts
+--   geo_scan_pages      the crawl frontier and per-page evidence (no raw HTML)
+--   geo_findings        explainable findings with fingerprints for comparison
+--   geo_finding_states  workflow state (open / in progress / resolved / dismissed)
+--                       per fingerprint, so it carries across rescans
+--
+-- All writes to scans, pages and findings come from the server (service role):
+-- authenticated users can read their workspace's rows and set finding states,
+-- nothing else. geo_audit_runs keeps its readers (Analytics, Coach, suggestions)
+-- but is now written only by the worker — the browser can no longer insert a
+-- score of its choosing.
+--
+-- Idempotent and non-destructive: safe to re-run.
+
+CREATE TABLE IF NOT EXISTS public.geo_scans (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  url text NOT NULL,
+  origin text NOT NULL,
+  host text NOT NULL,
+  mode text NOT NULL DEFAULT 'full',
+  trigger text NOT NULL DEFAULT 'manual',
+  status text NOT NULL DEFAULT 'queued',
+  stage text NOT NULL DEFAULT 'queued',
+  config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  site jsonb NOT NULL DEFAULT '{}'::jsonb,
+  progress jsonb NOT NULL DEFAULT '{}'::jsonb,
+  overall_score integer,
+  category_scores jsonb NOT NULL DEFAULT '{}'::jsonb,
+  report jsonb,
+  probes jsonb,
+  previous_scan_id uuid REFERENCES public.geo_scans(id) ON DELETE SET NULL,
+  scheduled_job_id uuid REFERENCES public.scheduled_jobs(id) ON DELETE SET NULL,
+  error text,
+  cancel_requested boolean NOT NULL DEFAULT false,
+  attempt_count integer NOT NULL DEFAULT 0,
+  lease_until timestamptz,
+  locked_by text,
+  idempotency_key text,
+  started_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT geo_scans_mode_check CHECK (mode IN ('quick', 'full')),
+  CONSTRAINT geo_scans_trigger_check CHECK (trigger IN ('manual', 'scheduled', 'rescan', 'chat')),
+  CONSTRAINT geo_scans_status_check
+    CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+  CONSTRAINT geo_scans_stage_check
+    CHECK (stage IN ('queued', 'discovering', 'crawling', 'analyzing', 'probing', 'done')),
+  CONSTRAINT geo_scans_score_check CHECK (overall_score IS NULL OR overall_score BETWEEN 0 AND 100)
+);
+
+CREATE INDEX IF NOT EXISTS geo_scans_workspace_created_idx
+  ON public.geo_scans (workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS geo_scans_workspace_host_idx
+  ON public.geo_scans (workspace_id, host, created_at DESC);
+CREATE INDEX IF NOT EXISTS geo_scans_claimable_idx
+  ON public.geo_scans (created_at) WHERE status IN ('queued', 'running');
+-- One full crawl at a time per workspace; quick checks finish inline.
+CREATE UNIQUE INDEX IF NOT EXISTS geo_scans_one_active_full_idx
+  ON public.geo_scans (workspace_id) WHERE status IN ('queued', 'running') AND mode = 'full';
+CREATE UNIQUE INDEX IF NOT EXISTS geo_scans_idempotency_idx
+  ON public.geo_scans (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS public.geo_scan_pages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  scan_id uuid NOT NULL REFERENCES public.geo_scans(id) ON DELETE CASCADE,
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  url text NOT NULL,
+  final_url text,
+  depth integer NOT NULL DEFAULT 0,
+  state text NOT NULL DEFAULT 'pending',
+  status_code integer,
+  content_type text,
+  fetch_ms integer,
+  skip_reason text,
+  x_robots_tag text,
+  analysis jsonb,
+  score integer,
+  category_scores jsonb NOT NULL DEFAULT '{}'::jsonb,
+  issues integer NOT NULL DEFAULT 0,
+  fetched_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT geo_scan_pages_state_check CHECK (state IN ('pending', 'fetched', 'failed', 'skipped')),
+  CONSTRAINT geo_scan_pages_url_unique UNIQUE (scan_id, url)
+);
+
+CREATE INDEX IF NOT EXISTS geo_scan_pages_frontier_idx
+  ON public.geo_scan_pages (scan_id, state, depth, created_at);
+CREATE INDEX IF NOT EXISTS geo_scan_pages_workspace_idx ON public.geo_scan_pages (workspace_id);
+
+CREATE TABLE IF NOT EXISTS public.geo_findings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  scan_id uuid NOT NULL REFERENCES public.geo_scans(id) ON DELETE CASCADE,
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  page_id uuid REFERENCES public.geo_scan_pages(id) ON DELETE SET NULL,
+  page_url text,
+  rule_id text NOT NULL,
+  category text NOT NULL,
+  status text NOT NULL,
+  severity text NOT NULL,
+  priority text NOT NULL,
+  priority_score numeric(5, 3) NOT NULL DEFAULT 0,
+  title text NOT NULL,
+  detail text NOT NULL DEFAULT '',
+  evidence jsonb NOT NULL DEFAULT '{}'::jsonb,
+  fingerprint text NOT NULL,
+  point_impact numeric(6, 2) NOT NULL DEFAULT 0,
+  fix_id text,
+  safety text NOT NULL DEFAULT 'manual_review',
+  effort text NOT NULL DEFAULT 'medium',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT geo_findings_status_check CHECK (status IN ('warn', 'fail')),
+  CONSTRAINT geo_findings_severity_check CHECK (severity IN ('critical', 'high', 'medium', 'low')),
+  CONSTRAINT geo_findings_priority_check CHECK (priority IN ('critical', 'high', 'medium', 'low'))
+);
+
+CREATE INDEX IF NOT EXISTS geo_findings_scan_idx
+  ON public.geo_findings (scan_id, priority_score DESC);
+CREATE INDEX IF NOT EXISTS geo_findings_page_idx ON public.geo_findings (page_id);
+CREATE INDEX IF NOT EXISTS geo_findings_workspace_fingerprint_idx
+  ON public.geo_findings (workspace_id, fingerprint);
+
+CREATE TABLE IF NOT EXISTS public.geo_finding_states (
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  fingerprint text NOT NULL,
+  state text NOT NULL DEFAULT 'open',
+  note text,
+  updated_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (workspace_id, fingerprint),
+  CONSTRAINT geo_finding_states_state_check
+    CHECK (state IN ('open', 'in_progress', 'resolved', 'dismissed')),
+  CONSTRAINT geo_finding_states_note_length CHECK (note IS NULL OR char_length(note) <= 1000)
+);
+
+-- ── Row-level security ────────────────────────────────────────────────────
+ALTER TABLE public.geo_scans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.geo_scan_pages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.geo_findings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.geo_finding_states ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.geo_scans, public.geo_scan_pages, public.geo_findings FROM anon, authenticated;
+REVOKE ALL ON public.geo_finding_states FROM anon;
+GRANT SELECT ON public.geo_scans, public.geo_scan_pages, public.geo_findings TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.geo_finding_states TO authenticated;
+GRANT ALL ON public.geo_scans, public.geo_scan_pages, public.geo_findings, public.geo_finding_states
+  TO service_role;
+
+DROP POLICY IF EXISTS "Workspace members read geo scans" ON public.geo_scans;
+CREATE POLICY "Workspace members read geo scans"
+  ON public.geo_scans FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP POLICY IF EXISTS "Workspace members read geo scan pages" ON public.geo_scan_pages;
+CREATE POLICY "Workspace members read geo scan pages"
+  ON public.geo_scan_pages FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP POLICY IF EXISTS "Workspace members read geo findings" ON public.geo_findings;
+CREATE POLICY "Workspace members read geo findings"
+  ON public.geo_findings FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+-- Role checks (editor+) are enforced by the API before a write; RLS keeps
+-- every state row inside its workspace and attributed to its author.
+DROP POLICY IF EXISTS "Workspace members read finding states" ON public.geo_finding_states;
+CREATE POLICY "Workspace members read finding states"
+  ON public.geo_finding_states FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP POLICY IF EXISTS "Workspace members write finding states" ON public.geo_finding_states;
+CREATE POLICY "Workspace members write finding states"
+  ON public.geo_finding_states FOR INSERT TO authenticated
+  WITH CHECK (
+    private.is_workspace_member(workspace_id, auth.uid())
+    AND (updated_by IS NULL OR updated_by = auth.uid())
+  );
+
+DROP POLICY IF EXISTS "Workspace members update finding states" ON public.geo_finding_states;
+CREATE POLICY "Workspace members update finding states"
+  ON public.geo_finding_states FOR UPDATE TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()))
+  WITH CHECK (
+    private.is_workspace_member(workspace_id, auth.uid())
+    AND (updated_by IS NULL OR updated_by = auth.uid())
+  );
+
+DROP POLICY IF EXISTS "Workspace members delete finding states" ON public.geo_finding_states;
+CREATE POLICY "Workspace members delete finding states"
+  ON public.geo_finding_states FOR DELETE TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+-- The worker writes audit history now; the browser no longer inserts scores.
+DROP POLICY IF EXISTS "Workspace members insert geo_audit_runs" ON public.geo_audit_runs;
+
+DROP TRIGGER IF EXISTS geo_scans_touch_updated_at ON public.geo_scans;
+CREATE TRIGGER geo_scans_touch_updated_at
+  BEFORE UPDATE ON public.geo_scans
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+-- ── Worker lease claim ────────────────────────────────────────────────────
+-- Claims queued scans and running scans whose lease expired (a worker died or
+-- yielded). FOR UPDATE SKIP LOCKED: overlapping cron calls and the in-request
+-- kick never process the same scan at once.
+CREATE OR REPLACE FUNCTION public.claim_geo_scans(
+  p_worker text,
+  p_max integer DEFAULT 2,
+  p_lease_seconds integer DEFAULT 150,
+  p_scan_id uuid DEFAULT NULL
+)
+RETURNS SETOF public.geo_scans
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE public.geo_scans AS s
+     SET lease_until = now() + make_interval(secs => greatest(p_lease_seconds, 30)),
+         locked_by = p_worker,
+         attempt_count = s.attempt_count + 1,
+         status = CASE WHEN s.status = 'queued' THEN 'running' ELSE s.status END,
+         started_at = coalesce(s.started_at, now())
+   WHERE s.id IN (
+     SELECT g.id
+       FROM public.geo_scans g
+      WHERE g.status IN ('queued', 'running')
+        AND (p_scan_id IS NULL OR g.id = p_scan_id)
+        AND (g.lease_until IS NULL OR g.lease_until < now())
+      ORDER BY g.created_at
+      LIMIT greatest(p_max, 0)
+      FOR UPDATE SKIP LOCKED
+   )
+  RETURNING s.*;
+$$;
+
+REVOKE ALL ON FUNCTION public.claim_geo_scans(text, integer, integer, uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_geo_scans(text, integer, integer, uuid) TO service_role;
+
+-- ── Retention ─────────────────────────────────────────────────────────────
+-- Per-page evidence is the bulk of the data; scan summaries, findings and
+-- history stay. Called from prune_operational_logs (ops-watch, every 5 min).
+CREATE OR REPLACE FUNCTION public.prune_operational_logs()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_webhooks integer;
+  v_guardrails integer;
+  v_usage integer;
+  v_geo_pages integer;
+BEGIN
+  DELETE FROM public.sdr_webhook_events WHERE received_at < now() - interval '30 days';
+  GET DIAGNOSTICS v_webhooks = ROW_COUNT;
+  DELETE FROM public.guardrail_events WHERE created_at < now() - interval '90 days';
+  GET DIAGNOSTICS v_guardrails = ROW_COUNT;
+  -- Raw events for 13 months; the daily rollup is kept indefinitely.
+  DELETE FROM public.ai_usage_events WHERE created_at < now() - interval '13 months';
+  GET DIAGNOSTICS v_usage = ROW_COUNT;
+  UPDATE public.geo_scan_pages
+     SET analysis = NULL
+   WHERE analysis IS NOT NULL AND created_at < now() - interval '180 days';
+  GET DIAGNOSTICS v_geo_pages = ROW_COUNT;
+  RETURN jsonb_build_object(
+    'sdr_webhook_events', v_webhooks,
+    'guardrail_events', v_guardrails,
+    'ai_usage_events', v_usage,
+    'geo_scan_page_evidence', v_geo_pages
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.prune_operational_logs() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.prune_operational_logs() TO service_role;
+
+-- ── Cron ──────────────────────────────────────────────────────────────────
+-- Same guard as 20260911120600: scheduled only once the Vault secrets exist.
+DO $$
+DECLARE
+  v_ready boolean;
+BEGIN
+  IF to_regnamespace('cron') IS NULL OR to_regclass('vault.decrypted_secrets') IS NULL THEN
+    RAISE NOTICE 'pg_cron or Vault unavailable — mellox-geo-scans not scheduled';
+    RETURN;
+  END IF;
+
+  SELECT count(*) = 2 INTO v_ready
+    FROM vault.decrypted_secrets
+   WHERE name IN ('mellox_app_base_url', 'mellox_cron_secret')
+     AND coalesce(decrypted_secret, '') <> '';
+
+  IF NOT v_ready THEN
+    RAISE NOTICE 'Vault secrets not set — mellox-geo-scans not scheduled. See docs/OPERATIONS-RUNBOOK.md.';
+    RETURN;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'mellox-geo-scans') THEN
+    PERFORM cron.unschedule('mellox-geo-scans');
+  END IF;
+  PERFORM cron.schedule(
+    'mellox-geo-scans',
+    '* * * * *',
+    format('SELECT public.call_app_hook(%L);', '/api/public/hooks/geo-scans')
+  );
+END
+$$;
+
+-- ═══ 20260915090000_add_workspace_connectors.sql ═══
+-- Workspace connectors — external systems behind a website (GitHub first).
+--
+--   workspace_connections   one row per connected external account per workspace
+--                           (GitHub: an App installation). No credentials are
+--                           stored: GitHub App tokens are minted server-side on
+--                           demand and live only in server memory.
+--   workspace_sources       what a connection is used for (GitHub: a selected
+--                           repository), optionally linked to the website it builds
+--   connector_install_states single-use, hashed install/OAuth state (CSRF + tenant binding)
+--
+-- Writes come only from the server (service role) after role checks; members
+-- read their workspace's rows. Webhook receipts reuse sdr_webhook_events
+-- (provider = 'github') and audit entries reuse audit_logs.
+--
+-- Idempotent and non-destructive: safe to re-run.
+
+CREATE TABLE IF NOT EXISTS public.workspace_connections (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  status text NOT NULL DEFAULT 'active',
+  -- GitHub: the App installation id.
+  external_account_id text NOT NULL,
+  account_login text NOT NULL,
+  account_type text,
+  account_avatar_url text,
+  manage_url text,
+  repository_selection text,
+  permissions jsonb NOT NULL DEFAULT '{}'::jsonb,
+  verification text NOT NULL,
+  connected_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  last_verified_at timestamptz,
+  last_error text,
+  revoked_at timestamptz,
+  revoked_reason text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT workspace_connections_provider_check
+    CHECK (provider IN ('github', 'wordpress', 'webflow', 'framer', 'shopify')),
+  CONSTRAINT workspace_connections_status_check
+    CHECK (status IN ('active', 'suspended', 'revoked', 'error')),
+  CONSTRAINT workspace_connections_verification_check
+    CHECK (verification IN ('oauth', 'install_window')),
+  CONSTRAINT workspace_connections_selection_check
+    CHECK (repository_selection IS NULL OR repository_selection IN ('all', 'selected')),
+  CONSTRAINT workspace_connections_error_length CHECK (last_error IS NULL OR char_length(last_error) <= 500),
+  CONSTRAINT workspace_connections_account_unique UNIQUE (workspace_id, provider, external_account_id)
+);
+
+CREATE INDEX IF NOT EXISTS workspace_connections_workspace_idx
+  ON public.workspace_connections (workspace_id, provider, status);
+CREATE INDEX IF NOT EXISTS workspace_connections_external_idx
+  ON public.workspace_connections (provider, external_account_id);
+
+CREATE TABLE IF NOT EXISTS public.workspace_sources (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  connection_id uuid NOT NULL REFERENCES public.workspace_connections(id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  kind text NOT NULL DEFAULT 'repository',
+  -- GitHub: the numeric repository id (stable across renames and transfers).
+  external_id text NOT NULL,
+  name text NOT NULL,
+  full_name text NOT NULL,
+  owner_login text,
+  private boolean NOT NULL DEFAULT false,
+  default_branch text,
+  branch text,
+  html_url text,
+  site_url text,
+  site_host text,
+  status text NOT NULL DEFAULT 'active',
+  -- Names and paths only (framework, discovery files) — never file contents.
+  inspection jsonb,
+  last_synced_at timestamptz,
+  last_error text,
+  selected_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT workspace_sources_status_check CHECK (status IN ('active', 'access_lost')),
+  CONSTRAINT workspace_sources_kind_check CHECK (kind IN ('repository')),
+  CONSTRAINT workspace_sources_error_length CHECK (last_error IS NULL OR char_length(last_error) <= 500),
+  CONSTRAINT workspace_sources_external_unique UNIQUE (workspace_id, provider, external_id)
+);
+
+CREATE INDEX IF NOT EXISTS workspace_sources_connection_idx
+  ON public.workspace_sources (connection_id);
+CREATE INDEX IF NOT EXISTS workspace_sources_site_idx
+  ON public.workspace_sources (workspace_id, site_host);
+
+CREATE TABLE IF NOT EXISTS public.connector_install_states (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- SHA-256 of the state that travels through GitHub; a database read can't be replayed.
+  state_hash text NOT NULL UNIQUE,
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS connector_install_states_expiry_idx
+  ON public.connector_install_states (expires_at);
+
+-- ── Row-level security ────────────────────────────────────────────────────
+ALTER TABLE public.workspace_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workspace_sources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.connector_install_states ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.workspace_connections, public.workspace_sources FROM anon, authenticated;
+REVOKE ALL ON public.connector_install_states FROM anon, authenticated;
+GRANT SELECT ON public.workspace_connections, public.workspace_sources TO authenticated;
+GRANT ALL ON public.workspace_connections, public.workspace_sources, public.connector_install_states
+  TO service_role;
+
+DROP POLICY IF EXISTS "Workspace members read connections" ON public.workspace_connections;
+CREATE POLICY "Workspace members read connections"
+  ON public.workspace_connections FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP POLICY IF EXISTS "Workspace members read sources" ON public.workspace_sources;
+CREATE POLICY "Workspace members read sources"
+  ON public.workspace_sources FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP TRIGGER IF EXISTS workspace_connections_touch_updated_at ON public.workspace_connections;
+CREATE TRIGGER workspace_connections_touch_updated_at
+  BEFORE UPDATE ON public.workspace_connections
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+DROP TRIGGER IF EXISTS workspace_sources_touch_updated_at ON public.workspace_sources;
+CREATE TRIGGER workspace_sources_touch_updated_at
+  BEFORE UPDATE ON public.workspace_sources
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+-- ═══ 20260916090000_add_geo_fix_workflow.sql ═══
+-- AI Visibility fix workflow: proposed repository changes, pull requests and
+-- verification rescans.
+--
+--   geo_fix_proposals  one proposed change for one finding: target repository,
+--                      the exact files Mellox would write (after content + diff),
+--                      validation results, the user's approval, the branch /
+--                      commit / pull request it produced and that PR's state
+--   geo_verifications  a targeted rescan that decides whether a finding is
+--                      really fixed. Attempts are scheduled (deploys take time)
+--                      and leased like scans (claim_geo_verifications)
+--
+-- geo_finding_states gains verification columns: "resolved" is now written
+-- only by the verification worker (service role). Members can still set open /
+-- in progress / dismissed; RLS refuses a browser-written "resolved".
+--
+-- All proposal and verification writes come from the server (service role).
+-- Idempotent and non-destructive: safe to re-run.
+
+-- ── Scans: targeted verification crawls ───────────────────────────────────
+ALTER TABLE public.geo_scans DROP CONSTRAINT IF EXISTS geo_scans_mode_check;
+ALTER TABLE public.geo_scans
+  ADD CONSTRAINT geo_scans_mode_check CHECK (mode IN ('quick', 'full', 'targeted'));
+ALTER TABLE public.geo_scans DROP CONSTRAINT IF EXISTS geo_scans_trigger_check;
+ALTER TABLE public.geo_scans
+  ADD CONSTRAINT geo_scans_trigger_check
+  CHECK (trigger IN ('manual', 'scheduled', 'rescan', 'chat', 'verification'));
+
+-- ── Proposals ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.geo_fix_proposals (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  scan_id uuid REFERENCES public.geo_scans(id) ON DELETE SET NULL,
+  finding_id uuid REFERENCES public.geo_findings(id) ON DELETE SET NULL,
+  fingerprint text NOT NULL,
+  rule_id text NOT NULL,
+  fix_id text NOT NULL,
+  page_url text,
+  site_origin text NOT NULL,
+  provider text NOT NULL DEFAULT 'github',
+  connection_id uuid REFERENCES public.workspace_connections(id) ON DELETE SET NULL,
+  source_id uuid REFERENCES public.workspace_sources(id) ON DELETE SET NULL,
+  repo_full_name text,
+  repo_external_id text,
+  framework text,
+  base_branch text,
+  base_sha text,
+  head_branch text,
+  strategy text,
+  files jsonb NOT NULL DEFAULT '[]'::jsonb,
+  files_purged_at timestamptz,
+  explanation text,
+  validation jsonb NOT NULL DEFAULT '{}'::jsonb,
+  content_hash text,
+  model text,
+  status text NOT NULL DEFAULT 'draft',
+  error text,
+  commit_sha text,
+  pr_number integer,
+  pr_url text,
+  pr_state text,
+  pr_merged_at timestamptz,
+  checks jsonb,
+  last_synced_at timestamptz,
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  approved_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  approved_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT geo_fix_proposals_provider_check CHECK (provider IN ('github')),
+  CONSTRAINT geo_fix_proposals_status_check CHECK (status IN (
+    'draft', 'applying', 'pr_open', 'merged', 'closed', 'verifying',
+    'verified', 'not_verified', 'failed', 'discarded', 'stale', 'access_lost'
+  )),
+  CONSTRAINT geo_fix_proposals_pr_state_check
+    CHECK (pr_state IS NULL OR pr_state IN ('open', 'closed', 'merged')),
+  CONSTRAINT geo_fix_proposals_head_branch_check
+    CHECK (head_branch IS NULL OR head_branch LIKE 'mellox/%'),
+  CONSTRAINT geo_fix_proposals_error_length CHECK (error IS NULL OR char_length(error) <= 2000)
+);
+
+CREATE INDEX IF NOT EXISTS geo_fix_proposals_workspace_idx
+  ON public.geo_fix_proposals (workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS geo_fix_proposals_fingerprint_idx
+  ON public.geo_fix_proposals (workspace_id, fingerprint, created_at DESC);
+CREATE INDEX IF NOT EXISTS geo_fix_proposals_pr_idx
+  ON public.geo_fix_proposals (repo_external_id, pr_number) WHERE pr_number IS NOT NULL;
+CREATE INDEX IF NOT EXISTS geo_fix_proposals_open_pr_idx
+  ON public.geo_fix_proposals (last_synced_at) WHERE status = 'pr_open';
+-- One live proposal per finding: regenerate or discard before proposing again.
+CREATE UNIQUE INDEX IF NOT EXISTS geo_fix_proposals_one_live_idx
+  ON public.geo_fix_proposals (workspace_id, fingerprint)
+  WHERE status IN ('draft', 'applying', 'pr_open', 'merged', 'verifying');
+
+-- ── Verifications ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.geo_verifications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  proposal_id uuid REFERENCES public.geo_fix_proposals(id) ON DELETE SET NULL,
+  origin text NOT NULL,
+  fingerprints text[] NOT NULL,
+  rule_ids text[] NOT NULL DEFAULT '{}',
+  urls text[] NOT NULL,
+  baseline_scan_id uuid REFERENCES public.geo_scans(id) ON DELETE SET NULL,
+  scan_id uuid REFERENCES public.geo_scans(id) ON DELETE SET NULL,
+  status text NOT NULL DEFAULT 'scheduled',
+  attempts integer NOT NULL DEFAULT 0,
+  max_attempts integer NOT NULL DEFAULT 1,
+  next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  lease_until timestamptz,
+  locked_by text,
+  before jsonb NOT NULL DEFAULT '{}'::jsonb,
+  after jsonb NOT NULL DEFAULT '{}'::jsonb,
+  outcome_detail text,
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz,
+  CONSTRAINT geo_verifications_status_check CHECK (status IN (
+    'scheduled', 'running', 'verified', 'not_verified', 'failed', 'cancelled'
+  )),
+  CONSTRAINT geo_verifications_urls_check CHECK (cardinality(urls) BETWEEN 1 AND 20),
+  CONSTRAINT geo_verifications_fingerprints_check
+    CHECK (cardinality(fingerprints) BETWEEN 1 AND 50),
+  CONSTRAINT geo_verifications_attempts_check CHECK (max_attempts BETWEEN 1 AND 10)
+);
+
+CREATE INDEX IF NOT EXISTS geo_verifications_workspace_idx
+  ON public.geo_verifications (workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS geo_verifications_proposal_idx
+  ON public.geo_verifications (proposal_id);
+CREATE INDEX IF NOT EXISTS geo_verifications_due_idx
+  ON public.geo_verifications (next_attempt_at) WHERE status IN ('scheduled', 'running');
+
+-- ── Finding states: verified resolution ───────────────────────────────────
+ALTER TABLE public.geo_finding_states ADD COLUMN IF NOT EXISTS resolved_via text;
+ALTER TABLE public.geo_finding_states ADD COLUMN IF NOT EXISTS verified_at timestamptz;
+ALTER TABLE public.geo_finding_states
+  ADD COLUMN IF NOT EXISTS verification_id uuid
+  REFERENCES public.geo_verifications(id) ON DELETE SET NULL;
+ALTER TABLE public.geo_finding_states ADD COLUMN IF NOT EXISTS reopened_at timestamptz;
+ALTER TABLE public.geo_finding_states DROP CONSTRAINT IF EXISTS geo_finding_states_resolved_via_check;
+ALTER TABLE public.geo_finding_states
+  ADD CONSTRAINT geo_finding_states_resolved_via_check
+  CHECK (resolved_via IS NULL OR resolved_via IN ('verified', 'manual_legacy'));
+
+-- Findings someone marked resolved by hand before verification existed stay
+-- visible, labelled as unverified.
+UPDATE public.geo_finding_states
+   SET resolved_via = 'manual_legacy'
+ WHERE state = 'resolved' AND resolved_via IS NULL;
+
+-- ── Row-level security ────────────────────────────────────────────────────
+ALTER TABLE public.geo_fix_proposals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.geo_verifications ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.geo_fix_proposals, public.geo_verifications FROM anon, authenticated;
+GRANT SELECT ON public.geo_fix_proposals, public.geo_verifications TO authenticated;
+GRANT ALL ON public.geo_fix_proposals, public.geo_verifications TO service_role;
+
+DROP POLICY IF EXISTS "Workspace members read fix proposals" ON public.geo_fix_proposals;
+CREATE POLICY "Workspace members read fix proposals"
+  ON public.geo_fix_proposals FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP POLICY IF EXISTS "Workspace members read verifications" ON public.geo_verifications;
+CREATE POLICY "Workspace members read verifications"
+  ON public.geo_verifications FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+-- Members may open, start or dismiss a finding, never mark it resolved or
+-- forge verification fields: only a verification (service role) resolves.
+DROP POLICY IF EXISTS "Workspace members write finding states" ON public.geo_finding_states;
+CREATE POLICY "Workspace members write finding states"
+  ON public.geo_finding_states FOR INSERT TO authenticated
+  WITH CHECK (
+    private.is_workspace_member(workspace_id, auth.uid())
+    AND (updated_by IS NULL OR updated_by = auth.uid())
+    AND state <> 'resolved'
+    AND resolved_via IS NULL
+    AND verified_at IS NULL
+    AND verification_id IS NULL
+  );
+
+DROP POLICY IF EXISTS "Workspace members update finding states" ON public.geo_finding_states;
+CREATE POLICY "Workspace members update finding states"
+  ON public.geo_finding_states FOR UPDATE TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()))
+  WITH CHECK (
+    private.is_workspace_member(workspace_id, auth.uid())
+    AND (updated_by IS NULL OR updated_by = auth.uid())
+    AND state <> 'resolved'
+    AND resolved_via IS NULL
+    AND verified_at IS NULL
+    AND verification_id IS NULL
+  );
+
+DROP TRIGGER IF EXISTS geo_fix_proposals_touch_updated_at ON public.geo_fix_proposals;
+CREATE TRIGGER geo_fix_proposals_touch_updated_at
+  BEFORE UPDATE ON public.geo_fix_proposals
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+DROP TRIGGER IF EXISTS geo_verifications_touch_updated_at ON public.geo_verifications;
+CREATE TRIGGER geo_verifications_touch_updated_at
+  BEFORE UPDATE ON public.geo_verifications
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+-- ── Worker lease claim ────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.claim_geo_verifications(
+  p_worker text,
+  p_max integer DEFAULT 2,
+  p_lease_seconds integer DEFAULT 240,
+  p_id uuid DEFAULT NULL
+)
+RETURNS SETOF public.geo_verifications
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE public.geo_verifications AS v
+     SET lease_until = now() + make_interval(secs => greatest(p_lease_seconds, 30)),
+         locked_by = p_worker,
+         status = 'running'
+   WHERE v.id IN (
+     SELECT g.id
+       FROM public.geo_verifications g
+      WHERE g.status IN ('scheduled', 'running')
+        AND (p_id IS NULL OR g.id = p_id)
+        AND g.next_attempt_at <= now()
+        AND (g.lease_until IS NULL OR g.lease_until < now())
+      ORDER BY g.next_attempt_at
+      LIMIT greatest(p_max, 0)
+      FOR UPDATE SKIP LOCKED
+   )
+  RETURNING v.*;
+$$;
+
+REVOKE ALL ON FUNCTION public.claim_geo_verifications(text, integer, integer, uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_geo_verifications(text, integer, integer, uuid)
+  TO service_role;
+
+-- ── Retention ─────────────────────────────────────────────────────────────
+-- Proposed file contents are customer source code: kept 30 days after a
+-- proposal ends, then reduced to paths only.
+CREATE OR REPLACE FUNCTION public.prune_operational_logs()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_webhooks integer;
+  v_guardrails integer;
+  v_usage integer;
+  v_geo_pages integer;
+  v_fix_files integer;
+BEGIN
+  DELETE FROM public.sdr_webhook_events WHERE received_at < now() - interval '30 days';
+  GET DIAGNOSTICS v_webhooks = ROW_COUNT;
+  DELETE FROM public.guardrail_events WHERE created_at < now() - interval '90 days';
+  GET DIAGNOSTICS v_guardrails = ROW_COUNT;
+  -- Raw events for 13 months; the daily rollup is kept indefinitely.
+  DELETE FROM public.ai_usage_events WHERE created_at < now() - interval '13 months';
+  GET DIAGNOSTICS v_usage = ROW_COUNT;
+  UPDATE public.geo_scan_pages
+     SET analysis = NULL
+   WHERE analysis IS NOT NULL AND created_at < now() - interval '180 days';
+  GET DIAGNOSTICS v_geo_pages = ROW_COUNT;
+  UPDATE public.geo_fix_proposals
+     SET files = coalesce((
+           SELECT jsonb_agg(jsonb_build_object('path', f->>'path', 'action', f->>'action'))
+             FROM jsonb_array_elements(files) AS f
+         ), '[]'::jsonb),
+         files_purged_at = now()
+   WHERE files_purged_at IS NULL
+     AND status IN ('verified', 'not_verified', 'failed', 'discarded', 'stale', 'closed', 'access_lost')
+     AND updated_at < now() - interval '30 days';
+  GET DIAGNOSTICS v_fix_files = ROW_COUNT;
+  RETURN jsonb_build_object(
+    'sdr_webhook_events', v_webhooks,
+    'guardrail_events', v_guardrails,
+    'ai_usage_events', v_usage,
+    'geo_scan_page_evidence', v_geo_pages,
+    'geo_fix_proposal_files', v_fix_files
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.prune_operational_logs() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.prune_operational_logs() TO service_role;
+
+-- ═══ 20260916100000_add_geo_fix_batches.sql ═══
+-- AI Visibility "Fix all": many findings fixed in ONE pull request after ONE
+-- approval.
+--
+--   geo_fix_batches   one run over a scan's fixable findings: generation
+--                     progress, per-finding items (generated / skipped + why),
+--                     the combined files, validation, the user's approval and
+--                     the single pull request it produced
+--
+-- Each finding in a batch still gets its own geo_fix_proposals row (batch_id
+-- set) so per-finding status, diff and verification keep working. After the
+-- PR is merged ONE verification (batch_id set) rescans all affected pages, and
+-- each finding is resolved only when its own check passes.
+--
+-- All writes come from the server (service role). Idempotent and non-destructive.
+
+CREATE TABLE IF NOT EXISTS public.geo_fix_batches (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  scan_id uuid REFERENCES public.geo_scans(id) ON DELETE SET NULL,
+  site_origin text NOT NULL,
+  host text NOT NULL,
+  provider text NOT NULL DEFAULT 'github',
+  connection_id uuid REFERENCES public.workspace_connections(id) ON DELETE SET NULL,
+  source_id uuid REFERENCES public.workspace_sources(id) ON DELETE SET NULL,
+  repo_full_name text,
+  repo_external_id text,
+  framework text,
+  base_branch text,
+  base_sha text,
+  head_branch text,
+  status text NOT NULL DEFAULT 'generating',
+  progress jsonb NOT NULL DEFAULT '{}'::jsonb,
+  items jsonb NOT NULL DEFAULT '[]'::jsonb,
+  files jsonb NOT NULL DEFAULT '[]'::jsonb,
+  files_purged_at timestamptz,
+  explanation text,
+  validation jsonb NOT NULL DEFAULT '{}'::jsonb,
+  content_hash text,
+  error text,
+  commit_sha text,
+  pr_number integer,
+  pr_url text,
+  pr_state text,
+  pr_merged_at timestamptz,
+  checks jsonb,
+  last_synced_at timestamptz,
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  approved_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  approved_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT geo_fix_batches_provider_check CHECK (provider IN ('github')),
+  CONSTRAINT geo_fix_batches_status_check CHECK (status IN (
+    'generating', 'draft', 'applying', 'pr_open', 'merged', 'verifying',
+    'completed', 'closed', 'failed', 'discarded', 'stale', 'access_lost'
+  )),
+  CONSTRAINT geo_fix_batches_pr_state_check
+    CHECK (pr_state IS NULL OR pr_state IN ('open', 'closed', 'merged')),
+  CONSTRAINT geo_fix_batches_head_branch_check
+    CHECK (head_branch IS NULL OR head_branch LIKE 'mellox/%'),
+  CONSTRAINT geo_fix_batches_error_length CHECK (error IS NULL OR char_length(error) <= 2000)
+);
+
+CREATE INDEX IF NOT EXISTS geo_fix_batches_workspace_idx
+  ON public.geo_fix_batches (workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS geo_fix_batches_pr_idx
+  ON public.geo_fix_batches (repo_external_id, pr_number) WHERE pr_number IS NOT NULL;
+CREATE INDEX IF NOT EXISTS geo_fix_batches_open_pr_idx
+  ON public.geo_fix_batches (last_synced_at) WHERE status = 'pr_open';
+-- One live "Fix all" per website at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS geo_fix_batches_one_live_idx
+  ON public.geo_fix_batches (workspace_id, host)
+  WHERE status IN ('generating', 'draft', 'applying', 'pr_open', 'merged', 'verifying');
+
+ALTER TABLE public.geo_fix_proposals
+  ADD COLUMN IF NOT EXISTS batch_id uuid REFERENCES public.geo_fix_batches(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS geo_fix_proposals_batch_idx ON public.geo_fix_proposals (batch_id);
+
+ALTER TABLE public.geo_verifications
+  ADD COLUMN IF NOT EXISTS batch_id uuid REFERENCES public.geo_fix_batches(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS geo_verifications_batch_idx ON public.geo_verifications (batch_id);
+
+ALTER TABLE public.geo_fix_batches ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.geo_fix_batches FROM anon, authenticated;
+GRANT SELECT ON public.geo_fix_batches TO authenticated;
+GRANT ALL ON public.geo_fix_batches TO service_role;
+
+DROP POLICY IF EXISTS "Workspace members read fix batches" ON public.geo_fix_batches;
+CREATE POLICY "Workspace members read fix batches"
+  ON public.geo_fix_batches FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP TRIGGER IF EXISTS geo_fix_batches_touch_updated_at ON public.geo_fix_batches;
+CREATE TRIGGER geo_fix_batches_touch_updated_at
+  BEFORE UPDATE ON public.geo_fix_batches
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+-- ── Retention: batch file contents follow the proposal rule (30 days) ──────
+CREATE OR REPLACE FUNCTION public.prune_operational_logs()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_webhooks integer;
+  v_guardrails integer;
+  v_usage integer;
+  v_geo_pages integer;
+  v_fix_files integer;
+  v_batch_files integer;
+BEGIN
+  DELETE FROM public.sdr_webhook_events WHERE received_at < now() - interval '30 days';
+  GET DIAGNOSTICS v_webhooks = ROW_COUNT;
+  DELETE FROM public.guardrail_events WHERE created_at < now() - interval '90 days';
+  GET DIAGNOSTICS v_guardrails = ROW_COUNT;
+  -- Raw events for 13 months; the daily rollup is kept indefinitely.
+  DELETE FROM public.ai_usage_events WHERE created_at < now() - interval '13 months';
+  GET DIAGNOSTICS v_usage = ROW_COUNT;
+  UPDATE public.geo_scan_pages
+     SET analysis = NULL
+   WHERE analysis IS NOT NULL AND created_at < now() - interval '180 days';
+  GET DIAGNOSTICS v_geo_pages = ROW_COUNT;
+  UPDATE public.geo_fix_proposals
+     SET files = coalesce((
+           SELECT jsonb_agg(jsonb_build_object('path', f->>'path', 'action', f->>'action'))
+             FROM jsonb_array_elements(files) AS f
+         ), '[]'::jsonb),
+         files_purged_at = now()
+   WHERE files_purged_at IS NULL
+     AND status IN ('verified', 'not_verified', 'failed', 'discarded', 'stale', 'closed', 'access_lost')
+     AND updated_at < now() - interval '30 days';
+  GET DIAGNOSTICS v_fix_files = ROW_COUNT;
+  UPDATE public.geo_fix_batches
+     SET files = coalesce((
+           SELECT jsonb_agg(jsonb_build_object('path', f->>'path', 'action', f->>'action'))
+             FROM jsonb_array_elements(files) AS f
+         ), '[]'::jsonb),
+         files_purged_at = now()
+   WHERE files_purged_at IS NULL
+     AND status IN ('completed', 'closed', 'failed', 'discarded', 'stale', 'access_lost')
+     AND updated_at < now() - interval '30 days';
+  GET DIAGNOSTICS v_batch_files = ROW_COUNT;
+  RETURN jsonb_build_object(
+    'sdr_webhook_events', v_webhooks,
+    'guardrail_events', v_guardrails,
+    'ai_usage_events', v_usage,
+    'geo_scan_page_evidence', v_geo_pages,
+    'geo_fix_proposal_files', v_fix_files,
+    'geo_fix_batch_files', v_batch_files
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.prune_operational_logs() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.prune_operational_logs() TO service_role;
+
+-- ═══ 20260917090000_add_source_ownership.sql ═══
+-- Repository ↔ website ownership (ADR-0013).
+--
+-- Mellox proposes changes to a repository only after it has evidence that the
+-- repository builds the scanned website: GitHub deployments, Pages CNAME, the
+-- repository's homepage, site URLs in config, and live page text found in the
+-- source. The verdict and its evidence live on the source row; writes come
+-- only from the server (service role) after role checks. Members keep read
+-- access through the existing workspace_sources policies.
+--
+-- Also records a workspace admin's consent to send repository code to the AI
+-- model used by the GEO coding agent.
+--
+-- Idempotent and non-destructive: safe to re-run.
+
+ALTER TABLE public.workspace_sources ADD COLUMN IF NOT EXISTS ownership_status text NOT NULL DEFAULT 'unchecked';
+ALTER TABLE public.workspace_sources ADD COLUMN IF NOT EXISTS ownership_confidence numeric(4,3);
+ALTER TABLE public.workspace_sources ADD COLUMN IF NOT EXISTS ownership_site_host text;
+ALTER TABLE public.workspace_sources ADD COLUMN IF NOT EXISTS ownership_commit_sha text;
+ALTER TABLE public.workspace_sources ADD COLUMN IF NOT EXISTS ownership_evidence jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.workspace_sources ADD COLUMN IF NOT EXISTS ownership_hints jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.workspace_sources ADD COLUMN IF NOT EXISTS ownership_checked_at timestamptz;
+ALTER TABLE public.workspace_sources
+  ADD COLUMN IF NOT EXISTS ownership_checked_by uuid REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE public.workspace_sources ADD COLUMN IF NOT EXISTS agent_consent_at timestamptz;
+ALTER TABLE public.workspace_sources
+  ADD COLUMN IF NOT EXISTS agent_consent_by uuid REFERENCES auth.users(id) ON DELETE SET NULL;
+
+ALTER TABLE public.workspace_sources DROP CONSTRAINT IF EXISTS workspace_sources_ownership_status_check;
+ALTER TABLE public.workspace_sources
+  ADD CONSTRAINT workspace_sources_ownership_status_check CHECK (ownership_status IN (
+    'unchecked', 'checking', 'verified', 'likely', 'unverified', 'mismatch', 'attested'
+  ));
+ALTER TABLE public.workspace_sources DROP CONSTRAINT IF EXISTS workspace_sources_ownership_confidence_check;
+ALTER TABLE public.workspace_sources
+  ADD CONSTRAINT workspace_sources_ownership_confidence_check
+  CHECK (ownership_confidence IS NULL OR (ownership_confidence >= 0 AND ownership_confidence <= 1));
+
+CREATE INDEX IF NOT EXISTS workspace_sources_ownership_idx
+  ON public.workspace_sources (workspace_id, site_host, ownership_status);
+
+-- ═══ 20260917090100_add_geo_agent_runs.sql ═══
+-- Mellox GEO Engineer: the coding agent that investigates a repository, plans a
+-- fix for an AI Visibility finding, and produces a validated patch (ADR-0013).
+--
+--   geo_agent_runs     one investigation → plan → patch per finding, leased like
+--                      scans (claim_geo_agent_runs) and advanced by cron + after()
+--   geo_agent_events   the run's activity log — concise action summaries written
+--                      only from real execution (never model reasoning)
+--
+-- A run hands its validated patch to geo_fix_proposals (agent_run_id); from
+-- there approval, the pull request and verification are unchanged, and only a
+-- verification resolves a finding.
+--
+-- Also: finding review / dismissal reasons on geo_finding_states.
+--
+-- Members read; the service role writes. Idempotent and non-destructive.
+
+CREATE TABLE IF NOT EXISTS public.geo_agent_runs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  kind text NOT NULL DEFAULT 'finding',
+  parent_run_id uuid REFERENCES public.geo_agent_runs(id) ON DELETE CASCADE,
+  scan_id uuid REFERENCES public.geo_scans(id) ON DELETE SET NULL,
+  finding_id uuid REFERENCES public.geo_findings(id) ON DELETE SET NULL,
+  fingerprint text NOT NULL,
+  rule_id text NOT NULL,
+  page_url text,
+  site_host text NOT NULL,
+  site_origin text NOT NULL,
+  source_id uuid REFERENCES public.workspace_sources(id) ON DELETE SET NULL,
+  connection_id uuid REFERENCES public.workspace_connections(id) ON DELETE SET NULL,
+  repo_full_name text,
+  repo_external_id text,
+  base_branch text,
+  base_sha text,
+  framework text,
+  status text NOT NULL DEFAULT 'queued',
+  status_detail text,
+  failed_at_step text,
+  error_code text,
+  error text,
+  attempts integer NOT NULL DEFAULT 0,
+  max_attempts integer NOT NULL DEFAULT 6,
+  next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  lease_until timestamptz,
+  locked_by text,
+  cancel_requested_at timestamptz,
+  plan jsonb,
+  plan_hash text,
+  plan_revision integer NOT NULL DEFAULT 0,
+  plan_ready_at timestamptz,
+  plan_approved_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  plan_approved_at timestamptz,
+  feedback text,
+  inputs jsonb NOT NULL DEFAULT '{}'::jsonb,
+  files_inspected jsonb NOT NULL DEFAULT '[]'::jsonb,
+  patch jsonb,
+  review jsonb,
+  validation jsonb,
+  correction_rounds integer NOT NULL DEFAULT 0,
+  proposal_id uuid REFERENCES public.geo_fix_proposals(id) ON DELETE SET NULL,
+  batch_id uuid REFERENCES public.geo_fix_batches(id) ON DELETE SET NULL,
+  verification_id uuid REFERENCES public.geo_verifications(id) ON DELETE SET NULL,
+  result jsonb,
+  model text,
+  usage jsonb NOT NULL DEFAULT '{}'::jsonb,
+  checkpoint jsonb,
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz,
+  CONSTRAINT geo_agent_runs_kind_check CHECK (kind IN ('finding', 'batch')),
+  CONSTRAINT geo_agent_runs_status_check CHECK (status IN (
+    'queued', 'investigating', 'needs_input', 'awaiting_plan_approval', 'implementing',
+    'reviewing', 'validating', 'correcting', 'awaiting_patch_approval', 'applying', 'pr_open',
+    'merged', 'rescan_pending', 'verified_fixed', 'not_verified', 'not_fixable', 'failed',
+    'cancelled', 'closed', 'stale'
+  )),
+  CONSTRAINT geo_agent_runs_error_length CHECK (error IS NULL OR char_length(error) <= 2000),
+  CONSTRAINT geo_agent_runs_feedback_length CHECK (feedback IS NULL OR char_length(feedback) <= 1000),
+  CONSTRAINT geo_agent_runs_attempts_check CHECK (max_attempts BETWEEN 1 AND 20)
+);
+
+CREATE INDEX IF NOT EXISTS geo_agent_runs_workspace_idx
+  ON public.geo_agent_runs (workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS geo_agent_runs_fingerprint_idx
+  ON public.geo_agent_runs (workspace_id, fingerprint, created_at DESC);
+CREATE INDEX IF NOT EXISTS geo_agent_runs_due_idx
+  ON public.geo_agent_runs (next_attempt_at)
+  WHERE status IN ('queued', 'investigating', 'implementing', 'reviewing', 'validating', 'correcting');
+CREATE INDEX IF NOT EXISTS geo_agent_runs_proposal_idx ON public.geo_agent_runs (proposal_id);
+-- One live run per finding: a second "Fix with AI Agent" joins the first.
+CREATE UNIQUE INDEX IF NOT EXISTS geo_agent_runs_one_live_per_finding
+  ON public.geo_agent_runs (workspace_id, fingerprint)
+  WHERE status NOT IN ('verified_fixed', 'not_verified', 'not_fixable', 'failed', 'cancelled', 'closed', 'stale');
+
+CREATE TABLE IF NOT EXISTS public.geo_agent_events (
+  id bigserial PRIMARY KEY,
+  run_id uuid NOT NULL REFERENCES public.geo_agent_runs(id) ON DELETE CASCADE,
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  at timestamptz NOT NULL DEFAULT now(),
+  stage text,
+  kind text NOT NULL,
+  actor text NOT NULL DEFAULT 'agent',
+  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  summary text NOT NULL,
+  detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT geo_agent_events_actor_check CHECK (actor IN ('agent', 'system', 'user')),
+  CONSTRAINT geo_agent_events_summary_length CHECK (char_length(summary) <= 300),
+  CONSTRAINT geo_agent_events_detail_size CHECK (pg_column_size(detail) <= 8192)
+);
+
+CREATE INDEX IF NOT EXISTS geo_agent_events_run_idx ON public.geo_agent_events (run_id, id);
+
+ALTER TABLE public.geo_fix_proposals
+  ADD COLUMN IF NOT EXISTS agent_run_id uuid REFERENCES public.geo_agent_runs(id) ON DELETE SET NULL;
+ALTER TABLE public.geo_fix_proposals ADD COLUMN IF NOT EXISTS preview jsonb;
+
+-- ── Finding review & dismissal reasons ────────────────────────────────────
+ALTER TABLE public.geo_finding_states ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
+ALTER TABLE public.geo_finding_states
+  ADD COLUMN IF NOT EXISTS reviewed_by uuid REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE public.geo_finding_states ADD COLUMN IF NOT EXISTS dismiss_reason text;
+ALTER TABLE public.geo_finding_states DROP CONSTRAINT IF EXISTS geo_finding_states_dismiss_reason_check;
+ALTER TABLE public.geo_finding_states
+  ADD CONSTRAINT geo_finding_states_dismiss_reason_check CHECK (dismiss_reason IS NULL OR dismiss_reason IN (
+    'false_positive', 'not_relevant', 'wont_fix', 'handled_elsewhere'
+  ));
+
+-- ── Row-level security ────────────────────────────────────────────────────
+ALTER TABLE public.geo_agent_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.geo_agent_events ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.geo_agent_runs, public.geo_agent_events FROM anon, authenticated;
+GRANT SELECT ON public.geo_agent_runs, public.geo_agent_events TO authenticated;
+GRANT ALL ON public.geo_agent_runs, public.geo_agent_events TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE public.geo_agent_events_id_seq TO service_role;
+
+DROP POLICY IF EXISTS "Workspace members read agent runs" ON public.geo_agent_runs;
+CREATE POLICY "Workspace members read agent runs"
+  ON public.geo_agent_runs FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP POLICY IF EXISTS "Workspace members read agent events" ON public.geo_agent_events;
+CREATE POLICY "Workspace members read agent events"
+  ON public.geo_agent_events FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+-- Members may review or dismiss (with a reason) — still never resolve, and
+-- never record a review in someone else's name.
+DROP POLICY IF EXISTS "Workspace members write finding states" ON public.geo_finding_states;
+CREATE POLICY "Workspace members write finding states"
+  ON public.geo_finding_states FOR INSERT TO authenticated
+  WITH CHECK (
+    private.is_workspace_member(workspace_id, auth.uid())
+    AND (updated_by IS NULL OR updated_by = auth.uid())
+    AND (reviewed_by IS NULL OR reviewed_by = auth.uid())
+    AND state <> 'resolved'
+    AND resolved_via IS NULL
+    AND verified_at IS NULL
+    AND verification_id IS NULL
+  );
+
+DROP POLICY IF EXISTS "Workspace members update finding states" ON public.geo_finding_states;
+CREATE POLICY "Workspace members update finding states"
+  ON public.geo_finding_states FOR UPDATE TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()))
+  WITH CHECK (
+    private.is_workspace_member(workspace_id, auth.uid())
+    AND (updated_by IS NULL OR updated_by = auth.uid())
+    AND (reviewed_by IS NULL OR reviewed_by = auth.uid())
+    AND state <> 'resolved'
+    AND resolved_via IS NULL
+    AND verified_at IS NULL
+    AND verification_id IS NULL
+  );
+
+DROP TRIGGER IF EXISTS geo_agent_runs_touch_updated_at ON public.geo_agent_runs;
+CREATE TRIGGER geo_agent_runs_touch_updated_at
+  BEFORE UPDATE ON public.geo_agent_runs
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+-- ── Worker lease claim ────────────────────────────────────────────────────
+-- Claims runs a worker advances whose lease is free. Status is not changed
+-- here: the runner moves queued → investigating itself (compare-and-set).
+CREATE OR REPLACE FUNCTION public.claim_geo_agent_runs(
+  p_worker text,
+  p_max integer DEFAULT 1,
+  p_lease_seconds integer DEFAULT 180,
+  p_id uuid DEFAULT NULL
+)
+RETURNS SETOF public.geo_agent_runs
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE public.geo_agent_runs AS r
+     SET lease_until = now() + make_interval(secs => greatest(p_lease_seconds, 30)),
+         locked_by = p_worker,
+         attempts = r.attempts + 1
+   WHERE r.id IN (
+     SELECT g.id
+       FROM public.geo_agent_runs g
+      WHERE g.status IN ('queued', 'investigating', 'implementing', 'reviewing', 'validating', 'correcting')
+        AND (p_id IS NULL OR g.id = p_id)
+        AND g.next_attempt_at <= now()
+        AND (g.lease_until IS NULL OR g.lease_until < now())
+        AND g.attempts < g.max_attempts
+      ORDER BY g.next_attempt_at
+      LIMIT greatest(p_max, 0)
+      FOR UPDATE SKIP LOCKED
+   )
+  RETURNING r.*;
+$$;
+
+REVOKE ALL ON FUNCTION public.claim_geo_agent_runs(text, integer, integer, uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_geo_agent_runs(text, integer, integer, uuid)
+  TO service_role;
+
+-- ── Retention ─────────────────────────────────────────────────────────────
+-- Conversation checkpoints hold repository code sent to the model: dropped a
+-- day after a run ends. Patches follow proposal retention (30 days). Events
+-- are kept 180 days.
+CREATE OR REPLACE FUNCTION public.prune_geo_agent_runs()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_checkpoints integer;
+  v_patches integer;
+  v_events integer;
+BEGIN
+  UPDATE public.geo_agent_runs
+     SET checkpoint = NULL
+   WHERE checkpoint IS NOT NULL
+     AND status IN ('verified_fixed', 'not_verified', 'not_fixable', 'failed', 'cancelled', 'closed', 'stale',
+                    'awaiting_patch_approval', 'pr_open', 'merged', 'rescan_pending')
+     AND updated_at < now() - interval '1 day';
+  GET DIAGNOSTICS v_checkpoints = ROW_COUNT;
+  UPDATE public.geo_agent_runs
+     SET patch = jsonb_build_object('purged', true)
+   WHERE patch IS NOT NULL
+     AND NOT (patch ? 'purged')
+     AND status IN ('verified_fixed', 'not_verified', 'not_fixable', 'failed', 'cancelled', 'closed', 'stale')
+     AND updated_at < now() - interval '30 days';
+  GET DIAGNOSTICS v_patches = ROW_COUNT;
+  DELETE FROM public.geo_agent_events WHERE at < now() - interval '180 days';
+  GET DIAGNOSTICS v_events = ROW_COUNT;
+  RETURN jsonb_build_object('checkpoints', v_checkpoints, 'patches', v_patches, 'events', v_events);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.prune_geo_agent_runs() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.prune_geo_agent_runs() TO service_role;
+
+-- ── Scheduling: advance agent runs every minute ───────────────────────────
+DO $$
+DECLARE
+  v_ready boolean;
+BEGIN
+  IF to_regnamespace('cron') IS NULL OR to_regclass('vault.decrypted_secrets') IS NULL THEN
+    RAISE NOTICE 'pg_cron or Vault unavailable — mellox-geo-agents not scheduled';
+    RETURN;
+  END IF;
+
+  SELECT count(*) = 2 INTO v_ready
+    FROM vault.decrypted_secrets
+   WHERE name IN ('mellox_app_base_url', 'mellox_cron_secret')
+     AND coalesce(decrypted_secret, '') <> '';
+
+  IF NOT v_ready THEN
+    RAISE NOTICE 'Vault secrets missing — mellox-geo-agents not scheduled';
+    RETURN;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'mellox-geo-agents') THEN
+    PERFORM cron.unschedule('mellox-geo-agents');
+  END IF;
+  PERFORM cron.schedule(
+    'mellox-geo-agents',
+    '* * * * *',
+    format('SELECT public.call_app_hook(%L);', '/api/public/hooks/geo-agents')
+  );
+END;
+$$;
+
+-- ═══ 20260918090000_connector_install_return_origin.sql ═══
+-- Connector install states remember the origin the install was started from.
+--
+-- A GitHub App has one callback URL, but Mellox runs on several origins (the
+-- custom domain, the Railway domain, localhost in development) and the user's
+-- session lives in that origin's browser storage. The callback route reads
+-- this column (service role only) to hand the installer back to the origin
+-- that started the flow; the value is re-checked against an allowlist there.
+--
+-- Idempotent and non-destructive: safe to re-run.
+
+ALTER TABLE public.connector_install_states
+  ADD COLUMN IF NOT EXISTS return_origin text;
+
+ALTER TABLE public.connector_install_states
+  DROP CONSTRAINT IF EXISTS connector_install_states_return_origin_len;
+ALTER TABLE public.connector_install_states
+  ADD CONSTRAINT connector_install_states_return_origin_len
+  CHECK (return_origin IS NULL OR char_length(return_origin) <= 200);
+
+-- ═══ 20260919090000_connector_install_return_path.sql ═══
+-- Connector install states remember where in Mellox the user started connecting
+-- (Settings → Connections, or a specific AI Visibility finding), so the GitHub
+-- callback returns them to that exact page instead of a generic dashboard.
+--
+-- Only a same-origin relative path is stored (validated server-side by
+-- safeReturnPath); the origin itself lives in return_origin.
+--
+-- Idempotent and non-destructive: safe to re-run.
+
+ALTER TABLE public.connector_install_states
+  ADD COLUMN IF NOT EXISTS return_path text;
+
+ALTER TABLE public.connector_install_states
+  DROP CONSTRAINT IF EXISTS connector_install_states_return_path_len;
+ALTER TABLE public.connector_install_states
+  ADD CONSTRAINT connector_install_states_return_path_len
+  CHECK (return_path IS NULL OR (char_length(return_path) <= 300 AND left(return_path, 1) = '/'));
+
+-- ═══ 20260920090000_canonical_workspaces.sql ═══
+-- Canonical workspaces: one brand (normalized website domain) = one workspace
+-- per owner, race-proof server-side creation, and guarded workspace columns.
+--
+-- Existing duplicates are FLAGGED (duplicate_of → the canonical workspace),
+-- never merged or deleted here: their data stays where it is until the owner
+-- decides in the UI. The unique index only covers unflagged rows.
+
+-- ── Domain normalization ────────────────────────────────────────────────────
+-- Must match src/lib/workspace/domain.ts (a unit test pins the cases).
+CREATE OR REPLACE FUNCTION private.normalize_domain(url text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = pg_catalog
+AS $$
+DECLARE
+  host text;
+BEGIN
+  IF url IS NULL THEN
+    RETURN NULL;
+  END IF;
+  host := lower(btrim(url));
+  host := regexp_replace(host, '^[a-z][a-z0-9+.-]*://', '');
+  host := regexp_replace(host, '[/?#].*$', '');
+  host := regexp_replace(host, '^[^@]*@', '');
+  host := regexp_replace(host, ':[0-9]*$', '');
+  host := regexp_replace(host, '\.+$', '');
+  host := regexp_replace(host, '^www\.', '');
+  IF host = '' THEN
+    RETURN NULL;
+  END IF;
+  RETURN host;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION private.normalize_domain(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.normalize_domain(text) TO authenticated, service_role;
+
+ALTER TABLE public.workspaces ADD COLUMN IF NOT EXISTS domain text;
+ALTER TABLE public.workspaces
+  ADD COLUMN IF NOT EXISTS duplicate_of uuid REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
+UPDATE public.workspaces
+   SET domain = private.normalize_domain(website_url)
+ WHERE domain IS DISTINCT FROM private.normalize_domain(website_url);
+
+-- ── Workspace role helper ───────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION private.workspace_role(_workspace_id uuid, _user_id uuid)
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT role FROM public.workspace_members
+   WHERE workspace_id = _workspace_id AND user_id = _user_id
+   LIMIT 1;
+$$;
+
+REVOKE ALL ON FUNCTION private.workspace_role(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.workspace_role(uuid, uuid) TO authenticated, service_role;
+
+-- ── Column guard ────────────────────────────────────────────────────────────
+-- domain is always derived; plan / owner / duplicate flag are server-managed.
+CREATE OR REPLACE FUNCTION private.guard_workspace_columns()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  NEW.domain := private.normalize_domain(NEW.website_url);
+  IF TG_OP = 'UPDATE' AND auth.uid() IS NOT NULL AND (
+    NEW.plan IS DISTINCT FROM OLD.plan OR
+    NEW.owner_id IS DISTINCT FROM OLD.owner_id OR
+    NEW.duplicate_of IS DISTINCT FROM OLD.duplicate_of
+  ) THEN
+    RAISE EXCEPTION 'workspace plan, owner and duplicate flag are server-managed'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION private.guard_workspace_columns() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION private.guard_workspace_columns() TO service_role;
+
+DROP TRIGGER IF EXISTS workspaces_column_guard ON public.workspaces;
+CREATE TRIGGER workspaces_column_guard
+  BEFORE INSERT OR UPDATE ON public.workspaces
+  FOR EACH ROW EXECUTE FUNCTION private.guard_workspace_columns();
+
+-- ── Flag existing duplicates ────────────────────────────────────────────────
+-- Canonical = the copy with the most real activity (connections > chats/scans
+-- > studio > content), then onboarded, then oldest.
+WITH scored AS (
+  SELECT w.id, w.owner_id, w.domain,
+         (SELECT count(*) FROM public.social_accounts s WHERE s.workspace_id = w.id) * 100
+       + (SELECT count(*) FROM public.workspace_connections c WHERE c.workspace_id = w.id) * 50
+       + (SELECT count(*) FROM public.conversations c WHERE c.workspace_id = w.id) * 10
+       + (SELECT count(*) FROM public.geo_scans g WHERE g.workspace_id = w.id) * 10
+       + (SELECT count(*) FROM public.studio_jobs j WHERE j.workspace_id = w.id) * 5
+       + (SELECT count(*) FROM public.content_items i WHERE i.workspace_id = w.id)
+       + CASE WHEN w.onboarded_at IS NOT NULL THEN 3 ELSE 0 END AS score,
+         w.created_at
+    FROM public.workspaces w
+   WHERE w.domain IS NOT NULL
+), ranked AS (
+  SELECT id, owner_id, domain,
+         first_value(id) OVER (PARTITION BY owner_id, domain ORDER BY score DESC, created_at ASC) AS canonical_id
+    FROM scored
+)
+UPDATE public.workspaces w
+   SET duplicate_of = r.canonical_id
+  FROM ranked r
+ WHERE w.id = r.id
+   AND r.id <> r.canonical_id
+   AND w.duplicate_of IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS workspaces_owner_domain_unique
+  ON public.workspaces (owner_id, domain)
+  WHERE domain IS NOT NULL AND duplicate_of IS NULL;
+
+-- ── Idempotent creation ─────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.workspace_create_requests (
+  idempotency_key text PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  workspace_id uuid REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.workspace_create_requests ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.workspace_create_requests FROM anon, authenticated;
+GRANT ALL ON public.workspace_create_requests TO service_role;
+
+-- Creation is server-only: the browser can no longer insert workspaces directly
+-- (that path skipped duplicate detection and membership).
+DROP POLICY IF EXISTS workspaces_insert_owner ON public.workspaces;
+DROP FUNCTION IF EXISTS public.create_workspace(text, text);
+
+-- Returns (workspace_id, created). created = false means an existing workspace
+-- was returned: the same idempotency key was replayed, or the owner already has
+-- a workspace for this domain. A per-user advisory lock serializes concurrent
+-- creates (double clicks, retries, multiple tabs).
+CREATE OR REPLACE FUNCTION private.create_workspace_for_user(
+  p_user_id uuid,
+  p_name text,
+  p_website_url text,
+  p_idempotency_key text
+)
+RETURNS TABLE (workspace_id uuid, created boolean)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+#variable_conflict use_column
+DECLARE
+  v_domain text := private.normalize_domain(p_website_url);
+  v_existing uuid;
+  v_id uuid;
+BEGIN
+  IF p_user_id IS NULL OR coalesce(btrim(p_name), '') = '' THEN
+    RAISE EXCEPTION 'user and name are required' USING ERRCODE = '22023';
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtext('workspace-create:' || p_user_id::text));
+
+  IF p_idempotency_key IS NOT NULL THEN
+    SELECT r.workspace_id INTO v_existing
+      FROM public.workspace_create_requests r
+     WHERE r.idempotency_key = p_idempotency_key AND r.user_id = p_user_id;
+    IF v_existing IS NOT NULL THEN
+      RETURN QUERY SELECT v_existing, false;
+      RETURN;
+    END IF;
+  END IF;
+
+  IF v_domain IS NOT NULL THEN
+    SELECT w.id INTO v_existing
+      FROM public.workspaces w
+     WHERE w.owner_id = p_user_id AND w.domain = v_domain AND w.duplicate_of IS NULL
+     LIMIT 1;
+    IF v_existing IS NOT NULL THEN
+      RETURN QUERY SELECT v_existing, false;
+      RETURN;
+    END IF;
+  END IF;
+
+  INSERT INTO public.workspaces (owner_id, name, website_url)
+  VALUES (p_user_id, btrim(p_name), nullif(btrim(coalesce(p_website_url, '')), ''))
+  RETURNING id INTO v_id;
+
+  INSERT INTO public.workspace_members (workspace_id, user_id, role)
+  VALUES (v_id, p_user_id, 'owner');
+
+  IF p_idempotency_key IS NOT NULL THEN
+    INSERT INTO public.workspace_create_requests (idempotency_key, user_id, workspace_id)
+    VALUES (p_idempotency_key, p_user_id, v_id)
+    ON CONFLICT (idempotency_key) DO NOTHING;
+  END IF;
+
+  RETURN QUERY SELECT v_id, true;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION private.create_workspace_for_user(uuid, text, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION private.create_workspace_for_user(uuid, text, text, text) TO service_role;
+
+-- PostgREST only exposes public; this thin wrapper stays service-role only.
+CREATE OR REPLACE FUNCTION public.create_workspace_for_user(
+  p_user_id uuid,
+  p_name text,
+  p_website_url text,
+  p_idempotency_key text
+)
+RETURNS TABLE (workspace_id uuid, created boolean)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT * FROM private.create_workspace_for_user(p_user_id, p_name, p_website_url, p_idempotency_key);
+$$;
+
+REVOKE ALL ON FUNCTION public.create_workspace_for_user(uuid, text, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_workspace_for_user(uuid, text, text, text) TO service_role;
+
+-- ── Deletion record ─────────────────────────────────────────────────────────
+-- audit_logs cascade with the workspace, so deletions are recorded here.
+CREATE TABLE IF NOT EXISTS public.workspace_deletions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  workspace_name text,
+  domain text,
+  owner_id uuid,
+  deleted_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  storage_objects_removed integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.workspace_deletions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.workspace_deletions FROM anon, authenticated;
+GRANT ALL ON public.workspace_deletions TO service_role;
+
+-- ── Invites: owners and admins manage them ──────────────────────────────────
+DROP POLICY IF EXISTS invites_select_owner ON public.workspace_invites;
+DROP POLICY IF EXISTS invites_insert_owner ON public.workspace_invites;
+DROP POLICY IF EXISTS invites_update_owner ON public.workspace_invites;
+DROP POLICY IF EXISTS invites_delete_owner ON public.workspace_invites;
+DROP POLICY IF EXISTS invites_select_admin ON public.workspace_invites;
+DROP POLICY IF EXISTS invites_insert_admin ON public.workspace_invites;
+DROP POLICY IF EXISTS invites_update_admin ON public.workspace_invites;
+DROP POLICY IF EXISTS invites_delete_admin ON public.workspace_invites;
+
+CREATE POLICY invites_select_admin ON public.workspace_invites FOR SELECT TO authenticated
+  USING (private.workspace_role(workspace_id, auth.uid()) IN ('owner', 'admin'));
+CREATE POLICY invites_insert_admin ON public.workspace_invites FOR INSERT TO authenticated
+  WITH CHECK (
+    private.workspace_role(workspace_id, auth.uid()) IN ('owner', 'admin')
+    AND invited_by = auth.uid()
+  );
+CREATE POLICY invites_update_admin ON public.workspace_invites FOR UPDATE TO authenticated
+  USING (private.workspace_role(workspace_id, auth.uid()) IN ('owner', 'admin'))
+  WITH CHECK (private.workspace_role(workspace_id, auth.uid()) IN ('owner', 'admin'));
+CREATE POLICY invites_delete_admin ON public.workspace_invites FOR DELETE TO authenticated
+  USING (private.workspace_role(workspace_id, auth.uid()) IN ('owner', 'admin'));
+
+-- ═══ 20260920090100_workspace_brand_dna.sql ═══
+-- Brand DNA moves from browser localStorage into the database: one row per
+-- workspace, read by members (RLS), written only by the server after a role
+-- check (src/server/fns/brand-dna.ts). The server loads it for AI requests by
+-- the request's verified workspace id, never from browser state.
+
+CREATE TABLE IF NOT EXISTS public.workspace_brand_dna (
+  workspace_id uuid PRIMARY KEY REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  dna jsonb NOT NULL DEFAULT '{}'::jsonb,
+  version integer NOT NULL DEFAULT 1,
+  updated_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.workspace_brand_dna ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.workspace_brand_dna FROM anon, authenticated;
+GRANT SELECT ON public.workspace_brand_dna TO authenticated;
+GRANT ALL ON public.workspace_brand_dna TO service_role;
+
+DROP POLICY IF EXISTS "Members read brand dna" ON public.workspace_brand_dna;
+CREATE POLICY "Members read brand dna"
+  ON public.workspace_brand_dna FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+-- ═══ 20260920090200_workspace_overview.sql ═══
+-- One row per workspace the CALLER belongs to, with per-workspace metrics for
+-- Projects / Agency HQ / Command Center. SECURITY INVOKER: every count runs
+-- under the caller's RLS and is correlated on that row's workspace id, so a
+-- metric can never be attributed to (or aggregated from) another workspace.
+
+CREATE OR REPLACE FUNCTION public.workspace_overview()
+RETURNS TABLE (
+  id uuid,
+  name text,
+  website_url text,
+  domain text,
+  industry text,
+  client_status text,
+  plan text,
+  role text,
+  owner_id uuid,
+  duplicate_of uuid,
+  onboarded_at timestamptz,
+  created_at timestamptz,
+  logo_url text,
+  pending_approvals bigint,
+  draft_count bigint,
+  scheduled_count bigint,
+  published_count bigint,
+  failed_count bigint,
+  connected_social_accounts bigint,
+  geo_score integer,
+  geo_scanned_at timestamptz,
+  last_activity_at timestamptz
+)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  SELECT
+    w.id,
+    w.name,
+    w.website_url,
+    w.domain,
+    w.industry,
+    w.client_status::text,
+    w.plan,
+    m.role,
+    w.owner_id,
+    w.duplicate_of,
+    w.onboarded_at,
+    w.created_at,
+    nullif(coalesce(d.dna ->> 'logoUrl', d.dna ->> 'faviconUrl'), '') AS logo_url,
+    (SELECT count(*) FROM public.approvals a WHERE a.workspace_id = w.id AND a.status = 'pending'),
+    (SELECT count(*) FROM public.content_items c WHERE c.workspace_id = w.id AND c.status IN ('draft', 'pending')),
+    (SELECT count(*) FROM public.content_items c WHERE c.workspace_id = w.id AND c.status = 'scheduled'),
+    (SELECT count(*) FROM public.content_items c WHERE c.workspace_id = w.id AND c.status = 'published'),
+    (SELECT count(*) FROM public.content_items c WHERE c.workspace_id = w.id AND c.status = 'failed'),
+    (SELECT count(*) FROM public.social_accounts s WHERE s.workspace_id = w.id AND s.status = 'active'),
+    g.overall_score,
+    g.completed_at,
+    GREATEST(
+      w.created_at,
+      (SELECT max(c.updated_at) FROM public.content_items c WHERE c.workspace_id = w.id),
+      (SELECT max(v.updated_at) FROM public.conversations v WHERE v.workspace_id = w.id),
+      g.completed_at,
+      d.updated_at
+    )
+  FROM public.workspace_members m
+  JOIN public.workspaces w ON w.id = m.workspace_id
+  LEFT JOIN public.workspace_brand_dna d ON d.workspace_id = w.id
+  LEFT JOIN LATERAL (
+    SELECT s.overall_score, s.completed_at
+      FROM public.geo_scans s
+     WHERE s.workspace_id = w.id AND s.status = 'succeeded'
+     ORDER BY s.completed_at DESC NULLS LAST
+     LIMIT 1
+  ) g ON true
+  WHERE m.user_id = auth.uid()
+  ORDER BY w.created_at DESC;
+$$;
+
+REVOKE ALL ON FUNCTION public.workspace_overview() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.workspace_overview() TO authenticated, service_role;
+
+-- ═══ 20260920090300_stop_signup_placeholder_workspace.sql ═══
+-- Schema drift fix: the live project still ran the OLD handle_new_user, which
+-- inserts a "My Workspace" (and owner membership) for every signup, although
+-- 20260709212343 replaced it with a profile-only version. That placeholder is
+-- a workspace nobody chose — it showed up on /projects and as a fallback.
+--
+-- Re-assert the profile-only trigger function. Workspaces are only ever created
+-- explicitly (private.create_workspace_for_user). Existing placeholder rows are
+-- left in place; the owner decides whether to delete them.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  display_name text;
+  avatar text;
+BEGIN
+  display_name := COALESCE(
+    NEW.raw_user_meta_data->>'full_name',
+    NEW.raw_user_meta_data->>'name',
+    split_part(NEW.email, '@', 1),
+    'New user'
+  );
+  avatar := COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture');
+  INSERT INTO public.profiles (id, name, avatar_url)
+  VALUES (NEW.id, display_name, avatar)
+  ON CONFLICT (id) DO UPDATE
+    SET name = COALESCE(EXCLUDED.name, public.profiles.name),
+        avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url);
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.handle_new_user() TO service_role;
+
+-- ═══ 20260921090000_add_ai_usage_reservations.sql ═══
+-- AI usage reservations: hold plan allowance before an expensive asynchronous
+-- provider task starts, then capture it (record the usage) when the task
+-- delivers, or release it when the task fails.
+--
+-- Why: budgets (src/server/ai/budget.ts) read metered spend and count a render
+-- only when it is recorded — after it finishes. Several renders started at the
+-- same time all passed the check, and a failed render never needed a refund
+-- because nothing was held. A reservation closes both gaps:
+--
+--   reserve_ai_usage()               serialised per scope (advisory lock): quota,
+--                                    spend ceilings and concurrent holds are
+--                                    checked against metered usage PLUS live
+--                                    holds, and the hold is inserted atomically.
+--   capture_ai_usage_reservation()   held → captured and record_ai_usage() in the
+--                                    same transaction: usage is recorded once.
+--   release_ai_usage_reservation()   held → released (failure, cancel).
+--   release_expired_ai_usage_reservations()  sweeper for abandoned holds.
+--
+-- ai_usage_summary() now adds live holds, so every budget check in the product
+-- (Studio, chat images, …) sees allowance that is already spoken for.
+-- Members read their workspace's holds; only the service role writes.
+-- Idempotent and non-destructive.
+
+CREATE TABLE IF NOT EXISTS public.ai_usage_reservations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  scope_key text NOT NULL,
+  workspace_id uuid REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  kind text NOT NULL CHECK (kind IN ('image', 'video')),
+  units integer NOT NULL DEFAULT 1 CHECK (units BETWEEN 1 AND 100),
+  est_cost_usd numeric(12, 6) NOT NULL DEFAULT 0 CHECK (est_cost_usd >= 0),
+  captured_cost_usd numeric(12, 6),
+  provider text NOT NULL,
+  model text NOT NULL,
+  route text NOT NULL,
+  source text NOT NULL,
+  source_id text NOT NULL,
+  state text NOT NULL DEFAULT 'held' CHECK (state IN ('held', 'captured', 'released')),
+  release_reason text,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  captured_at timestamptz,
+  released_at timestamptz,
+  CONSTRAINT ai_usage_reservations_source_unique UNIQUE (source, source_id),
+  CONSTRAINT ai_usage_reservations_reason_length
+    CHECK (release_reason IS NULL OR char_length(release_reason) <= 200)
+);
+
+CREATE INDEX IF NOT EXISTS ai_usage_reservations_live_idx
+  ON public.ai_usage_reservations (scope_key, expires_at)
+  WHERE state = 'held';
+CREATE INDEX IF NOT EXISTS ai_usage_reservations_workspace_idx
+  ON public.ai_usage_reservations (workspace_id, created_at DESC);
+
+ALTER TABLE public.ai_usage_reservations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.ai_usage_reservations FROM anon, authenticated;
+GRANT SELECT ON public.ai_usage_reservations TO authenticated;
+GRANT ALL ON public.ai_usage_reservations TO service_role;
+
+DROP POLICY IF EXISTS "Members read workspace AI reservations" ON public.ai_usage_reservations;
+CREATE POLICY "Members read workspace AI reservations" ON public.ai_usage_reservations
+  FOR SELECT TO authenticated
+  USING (
+    (workspace_id IS NOT NULL AND private.is_workspace_member(workspace_id, auth.uid()))
+    OR (workspace_id IS NULL AND user_id = auth.uid())
+  );
+
+-- ── Reserve ───────────────────────────────────────────────────────────────
+-- p_request: {scope_key, workspace_id?, user_id?, kind, units, est_cost_usd,
+--             provider, model, route, source, source_id, ttl_seconds,
+--             limits: {daily_usd, monthly_usd, monthly_units}, max_concurrent}
+-- Returns {ok, id?, reason?, code?, usage:{…}}. Re-reserving the same
+-- (source, source_id) returns the existing hold instead of a second one.
+CREATE OR REPLACE FUNCTION public.reserve_ai_usage(p_request jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_scope text := p_request ->> 'scope_key';
+  v_kind text := p_request ->> 'kind';
+  v_units integer := greatest(coalesce((p_request ->> 'units')::integer, 1), 1);
+  v_cost numeric := greatest(coalesce((p_request ->> 'est_cost_usd')::numeric, 0), 0);
+  v_source text := p_request ->> 'source';
+  v_source_id text := p_request ->> 'source_id';
+  v_ttl integer := least(greatest(coalesce((p_request ->> 'ttl_seconds')::integer, 7200), 300), 86400);
+  v_daily numeric := (p_request -> 'limits' ->> 'daily_usd')::numeric;
+  v_monthly numeric := (p_request -> 'limits' ->> 'monthly_usd')::numeric;
+  v_quota numeric := (p_request -> 'limits' ->> 'monthly_units')::numeric;
+  v_max_concurrent integer := coalesce((p_request ->> 'max_concurrent')::integer, 0);
+  v_existing public.ai_usage_reservations%ROWTYPE;
+  v_today_cost numeric;
+  v_month_cost numeric;
+  v_month_units numeric;
+  v_held_units numeric;
+  v_held_cost numeric;
+  v_held_count integer;
+  v_id uuid;
+  v_usage jsonb;
+BEGIN
+  IF v_scope IS NULL OR v_kind NOT IN ('image', 'video') OR v_source IS NULL OR v_source_id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'invalid', 'reason', 'Invalid reservation request.');
+  END IF;
+
+  -- One reservation decision at a time per scope.
+  PERFORM pg_advisory_xact_lock(hashtext('ai_usage_reservation:' || v_scope));
+
+  SELECT * INTO v_existing
+    FROM public.ai_usage_reservations
+   WHERE source = v_source AND source_id = v_source_id;
+  IF FOUND THEN
+    RETURN jsonb_build_object('ok', v_existing.state <> 'released', 'id', v_existing.id,
+      'state', v_existing.state, 'code', CASE WHEN v_existing.state = 'released' THEN 'released' END,
+      'reason', CASE WHEN v_existing.state = 'released' THEN 'This reservation was already released.' END);
+  END IF;
+
+  SELECT coalesce(sum(cost_usd) FILTER (WHERE day = (now() AT TIME ZONE 'utc')::date), 0),
+         coalesce(sum(cost_usd), 0),
+         coalesce(sum(CASE WHEN v_kind = 'video' THEN videos ELSE images END), 0)
+    INTO v_today_cost, v_month_cost, v_month_units
+    FROM public.ai_usage_daily
+   WHERE scope_key = v_scope
+     AND day >= date_trunc('month', now() AT TIME ZONE 'utc')::date;
+
+  SELECT coalesce(sum(units) FILTER (WHERE kind = v_kind), 0),
+         coalesce(sum(est_cost_usd), 0),
+         count(*) FILTER (WHERE source = v_source)
+    INTO v_held_units, v_held_cost, v_held_count
+    FROM public.ai_usage_reservations
+   WHERE scope_key = v_scope AND state = 'held' AND expires_at > now();
+
+  v_usage := jsonb_build_object(
+    'month_units', v_month_units, 'held_units', v_held_units,
+    'today_cost_usd', v_today_cost, 'month_cost_usd', v_month_cost, 'held_cost_usd', v_held_cost,
+    'held_count', v_held_count);
+
+  IF v_quota IS NOT NULL AND v_month_units + v_held_units + v_units > v_quota THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'quota', 'usage', v_usage,
+      'reason', format('Monthly %s quota reached for this plan.', v_kind));
+  END IF;
+  IF v_monthly IS NOT NULL AND v_month_cost + v_held_cost + v_cost > v_monthly THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'spend', 'usage', v_usage,
+      'reason', 'AI spend limit reached for this month.');
+  END IF;
+  IF v_daily IS NOT NULL AND v_today_cost + v_held_cost + v_cost > v_daily THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'spend', 'usage', v_usage,
+      'reason', 'AI spend limit reached for today.');
+  END IF;
+  IF v_max_concurrent > 0 AND v_held_count >= v_max_concurrent THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'concurrency', 'usage', v_usage,
+      'reason', format('%s renders are already in progress. Wait for one to finish.', v_held_count));
+  END IF;
+
+  INSERT INTO public.ai_usage_reservations (
+    scope_key, workspace_id, user_id, kind, units, est_cost_usd, provider, model, route,
+    source, source_id, expires_at
+  ) VALUES (
+    v_scope,
+    nullif(p_request ->> 'workspace_id', '')::uuid,
+    nullif(p_request ->> 'user_id', '')::uuid,
+    v_kind, v_units, v_cost,
+    coalesce(p_request ->> 'provider', 'unknown'),
+    coalesce(p_request ->> 'model', 'unknown'),
+    coalesce(p_request ->> 'route', 'unknown'),
+    v_source, v_source_id,
+    now() + make_interval(secs => v_ttl)
+  )
+  RETURNING id INTO v_id;
+
+  RETURN jsonb_build_object('ok', true, 'id', v_id, 'state', 'held', 'usage', v_usage);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.reserve_ai_usage(jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.reserve_ai_usage(jsonb) TO service_role;
+
+-- ── Capture ───────────────────────────────────────────────────────────────
+-- Records the usage exactly once. A hold the sweeper released only because it
+-- expired can still be captured (the render really delivered).
+CREATE OR REPLACE FUNCTION public.capture_ai_usage_reservation(
+  p_id uuid,
+  p_actual_cost_usd numeric DEFAULT NULL,
+  p_latency_ms integer DEFAULT NULL
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_row public.ai_usage_reservations%ROWTYPE;
+  v_cost numeric;
+BEGIN
+  UPDATE public.ai_usage_reservations
+     SET state = 'captured',
+         captured_at = now(),
+         captured_cost_usd = coalesce(p_actual_cost_usd, est_cost_usd)
+   WHERE id = p_id
+     AND (state = 'held' OR (state = 'released' AND release_reason = 'expired'))
+  RETURNING * INTO v_row;
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+
+  v_cost := coalesce(p_actual_cost_usd, v_row.est_cost_usd);
+  PERFORM public.record_ai_usage(jsonb_build_object(
+    'workspace_id', v_row.workspace_id,
+    'user_id', v_row.user_id,
+    'route', v_row.route,
+    'provider', v_row.provider,
+    'model', v_row.model,
+    'kind', v_row.kind,
+    'units', v_row.units,
+    'est_cost_usd', v_cost,
+    'latency_ms', p_latency_ms,
+    'status', 'ok',
+    'request_id', 'reservation:' || v_row.id::text
+  ));
+  RETURN true;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.capture_ai_usage_reservation(uuid, numeric, integer)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.capture_ai_usage_reservation(uuid, numeric, integer)
+  TO service_role;
+
+-- ── Release ───────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.release_ai_usage_reservation(p_id uuid, p_reason text DEFAULT NULL)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH released AS (
+    UPDATE public.ai_usage_reservations
+       SET state = 'released', released_at = now(), release_reason = left(p_reason, 200)
+     WHERE id = p_id AND state = 'held'
+    RETURNING 1
+  )
+  SELECT EXISTS (SELECT 1 FROM released);
+$$;
+
+REVOKE ALL ON FUNCTION public.release_ai_usage_reservation(uuid, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.release_ai_usage_reservation(uuid, text) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.release_expired_ai_usage_reservations()
+RETURNS integer
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH released AS (
+    UPDATE public.ai_usage_reservations
+       SET state = 'released', released_at = now(), release_reason = 'expired'
+     WHERE state = 'held' AND expires_at <= now()
+    RETURNING 1
+  )
+  SELECT count(*)::integer FROM released;
+$$;
+
+REVOKE ALL ON FUNCTION public.release_expired_ai_usage_reservations() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.release_expired_ai_usage_reservations() TO service_role;
+
+-- ── Budget summary now includes live holds ────────────────────────────────
+CREATE OR REPLACE FUNCTION public.ai_usage_summary(p_scope_key text)
+RETURNS TABLE (
+  today_cost_usd numeric,
+  month_cost_usd numeric,
+  month_images bigint,
+  month_videos bigint,
+  month_calls bigint,
+  month_cached_calls bigint,
+  month_saved_usd numeric
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH metered AS (
+    SELECT coalesce(sum(cost_usd) FILTER (WHERE day = (now() AT TIME ZONE 'utc')::date), 0) AS today_cost,
+           coalesce(sum(cost_usd), 0) AS month_cost,
+           coalesce(sum(images), 0) AS images,
+           coalesce(sum(videos), 0) AS videos,
+           coalesce(sum(calls), 0) AS calls,
+           coalesce(sum(cached_calls), 0) AS cached_calls,
+           coalesce(sum(saved_usd), 0) AS saved
+      FROM public.ai_usage_daily
+     WHERE scope_key = p_scope_key
+       AND day >= date_trunc('month', now() AT TIME ZONE 'utc')::date
+  ), held AS (
+    SELECT coalesce(sum(est_cost_usd), 0) AS cost,
+           coalesce(sum(units) FILTER (WHERE kind = 'image'), 0) AS images,
+           coalesce(sum(units) FILTER (WHERE kind = 'video'), 0) AS videos
+      FROM public.ai_usage_reservations
+     WHERE scope_key = p_scope_key AND state = 'held' AND expires_at > now()
+  )
+  SELECT m.today_cost + h.cost,
+         m.month_cost + h.cost,
+         (m.images + h.images)::bigint,
+         (m.videos + h.videos)::bigint,
+         m.calls::bigint,
+         m.cached_calls::bigint,
+         m.saved
+    FROM metered m CROSS JOIN held h;
+$$;
+
+REVOKE ALL ON FUNCTION public.ai_usage_summary(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.ai_usage_summary(text) TO service_role;
+
+-- ═══ 20260921090100_add_ugc_video_ads.sql ═══
+-- UGC Video Ads (docs/ugc-video-ads.md, ADR-0014).
+--
+--   ugc_projects  one ad per product: the extracted product facts, the brief,
+--                 AI concepts and the edited script. Members read; editors
+--                 write through the API (role enforced by the route kernel,
+--                 RLS keeps rows inside the workspace).
+--   ugc_renders   one provider video task per "Generate". Leased like GEO work
+--                 (claim_ugc_renders), advanced by after(), the ugc-renders cron
+--                 hook, provider callbacks and status reads. Holds an
+--                 ai_usage_reservations row: captured when the video is stored,
+--                 released when the render fails. Members read; only the service
+--                 role writes, so a browser can never mark a render done or
+--                 attach an asset.
+--
+-- Idempotent and non-destructive.
+
+CREATE TABLE IF NOT EXISTS public.ugc_projects (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  title text NOT NULL DEFAULT 'Untitled ad',
+  product_url text,
+  product jsonb NOT NULL DEFAULT '{}'::jsonb,
+  brief jsonb NOT NULL DEFAULT '{}'::jsonb,
+  brand_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
+  concepts jsonb NOT NULL DEFAULT '[]'::jsonb,
+  selected_concept_id text,
+  script jsonb,
+  reference_asset_ids uuid[] NOT NULL DEFAULT '{}',
+  status text NOT NULL DEFAULT 'draft',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ugc_projects_status_check CHECK (status IN ('draft', 'archived')),
+  CONSTRAINT ugc_projects_title_length CHECK (char_length(title) <= 200),
+  CONSTRAINT ugc_projects_url_length CHECK (product_url IS NULL OR char_length(product_url) <= 2048),
+  CONSTRAINT ugc_projects_refs_count CHECK (cardinality(reference_asset_ids) <= 9),
+  CONSTRAINT ugc_projects_size CHECK (
+    pg_column_size(product) + pg_column_size(brief) + pg_column_size(brand_snapshot)
+      + pg_column_size(concepts) + coalesce(pg_column_size(script), 0) <= 512000
+  )
+);
+
+CREATE INDEX IF NOT EXISTS ugc_projects_workspace_idx
+  ON public.ugc_projects (workspace_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.ugc_renders (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  project_id uuid NOT NULL REFERENCES public.ugc_projects(id) ON DELETE CASCADE,
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  idempotency_key text NOT NULL,
+  status text NOT NULL DEFAULT 'queued',
+  model_key text NOT NULL,
+  provider text NOT NULL,
+  provider_model text NOT NULL,
+  provider_variant text,
+  generation_type text NOT NULL,
+  duration_sec integer NOT NULL,
+  aspect_ratio text NOT NULL,
+  resolution text NOT NULL,
+  audio boolean NOT NULL DEFAULT true,
+  reference_asset_ids uuid[] NOT NULL DEFAULT '{}',
+  script jsonb NOT NULL,
+  settings jsonb NOT NULL DEFAULT '{}'::jsonb,
+  prompt text NOT NULL,
+  provider_task_id text,
+  provider_state text,
+  provider_meta jsonb NOT NULL DEFAULT '{}'::jsonb,
+  error_code text,
+  error_message text,
+  reservation_id uuid REFERENCES public.ai_usage_reservations(id) ON DELETE SET NULL,
+  est_cost_usd numeric(12, 6) NOT NULL DEFAULT 0,
+  actual_cost_usd numeric(12, 6),
+  asset_id uuid REFERENCES public.assets(id) ON DELETE SET NULL,
+  attempts integer NOT NULL DEFAULT 0,
+  max_attempts integer NOT NULL DEFAULT 40,
+  submit_attempts integer NOT NULL DEFAULT 0,
+  next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  lease_until timestamptz,
+  locked_by text,
+  submitted_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ugc_renders_status_check CHECK (status IN (
+    'queued', 'submitting', 'processing', 'persisting', 'succeeded', 'failed', 'cancelled'
+  )),
+  CONSTRAINT ugc_renders_idempotency_unique UNIQUE (workspace_id, idempotency_key),
+  CONSTRAINT ugc_renders_duration_check CHECK (duration_sec BETWEEN 1 AND 60),
+  CONSTRAINT ugc_renders_prompt_length CHECK (char_length(prompt) <= 20000),
+  CONSTRAINT ugc_renders_error_length CHECK (error_message IS NULL OR char_length(error_message) <= 1000),
+  CONSTRAINT ugc_renders_attempts_check CHECK (max_attempts BETWEEN 1 AND 200)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ugc_renders_provider_task_unique
+  ON public.ugc_renders (provider, provider_task_id)
+  WHERE provider_task_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ugc_renders_project_idx
+  ON public.ugc_renders (project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ugc_renders_workspace_idx
+  ON public.ugc_renders (workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ugc_renders_due_idx
+  ON public.ugc_renders (next_attempt_at)
+  WHERE status IN ('queued', 'submitting', 'processing', 'persisting');
+
+-- ── Row-level security ────────────────────────────────────────────────────
+ALTER TABLE public.ugc_projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ugc_renders ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.ugc_projects, public.ugc_renders FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.ugc_projects TO authenticated;
+GRANT SELECT ON public.ugc_renders TO authenticated;
+GRANT ALL ON public.ugc_projects, public.ugc_renders TO service_role;
+
+DROP POLICY IF EXISTS "Workspace members read UGC projects" ON public.ugc_projects;
+CREATE POLICY "Workspace members read UGC projects"
+  ON public.ugc_projects FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP POLICY IF EXISTS "Workspace members create UGC projects" ON public.ugc_projects;
+CREATE POLICY "Workspace members create UGC projects"
+  ON public.ugc_projects FOR INSERT TO authenticated
+  WITH CHECK (
+    private.is_workspace_member(workspace_id, auth.uid())
+    AND (created_by IS NULL OR created_by = auth.uid())
+  );
+
+DROP POLICY IF EXISTS "Workspace members update UGC projects" ON public.ugc_projects;
+CREATE POLICY "Workspace members update UGC projects"
+  ON public.ugc_projects FOR UPDATE TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()))
+  WITH CHECK (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP POLICY IF EXISTS "Workspace members read UGC renders" ON public.ugc_renders;
+CREATE POLICY "Workspace members read UGC renders"
+  ON public.ugc_renders FOR SELECT TO authenticated
+  USING (private.is_workspace_member(workspace_id, auth.uid()));
+
+DROP TRIGGER IF EXISTS ugc_projects_touch_updated_at ON public.ugc_projects;
+CREATE TRIGGER ugc_projects_touch_updated_at
+  BEFORE UPDATE ON public.ugc_projects
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+DROP TRIGGER IF EXISTS ugc_renders_touch_updated_at ON public.ugc_renders;
+CREATE TRIGGER ugc_renders_touch_updated_at
+  BEFORE UPDATE ON public.ugc_renders
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+-- Live render progress in the studio.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'ugc_renders'
+     )
+  THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.ugc_renders;
+  END IF;
+END $$;
+
+-- ── Worker lease claim ────────────────────────────────────────────────────
+-- Status is not changed here: the runner moves it with compare-and-set.
+CREATE OR REPLACE FUNCTION public.claim_ugc_renders(
+  p_worker text,
+  p_max integer DEFAULT 5,
+  p_lease_seconds integer DEFAULT 120,
+  p_id uuid DEFAULT NULL
+)
+RETURNS SETOF public.ugc_renders
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE public.ugc_renders AS r
+     SET lease_until = now() + make_interval(secs => greatest(p_lease_seconds, 30)),
+         locked_by = p_worker,
+         attempts = r.attempts + 1
+   WHERE r.id IN (
+     SELECT u.id
+       FROM public.ugc_renders u
+      WHERE u.status IN ('queued', 'submitting', 'processing', 'persisting')
+        AND (p_id IS NULL OR u.id = p_id)
+        AND u.next_attempt_at <= now()
+        AND (u.lease_until IS NULL OR u.lease_until < now())
+      ORDER BY u.next_attempt_at
+      LIMIT greatest(p_max, 0)
+      FOR UPDATE SKIP LOCKED
+   )
+  RETURNING r.*;
+$$;
+
+REVOKE ALL ON FUNCTION public.claim_ugc_renders(text, integer, integer, uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_ugc_renders(text, integer, integer, uuid)
+  TO service_role;
+
+-- ── Scheduling: advance renders every minute ──────────────────────────────
+DO $$
+DECLARE
+  v_ready boolean;
+BEGIN
+  IF to_regnamespace('cron') IS NULL OR to_regclass('vault.decrypted_secrets') IS NULL THEN
+    RAISE NOTICE 'pg_cron or Vault unavailable — mellox-ugc-renders not scheduled';
+    RETURN;
+  END IF;
+
+  SELECT count(*) = 2 INTO v_ready
+    FROM vault.decrypted_secrets
+   WHERE name IN ('mellox_app_base_url', 'mellox_cron_secret')
+     AND coalesce(decrypted_secret, '') <> '';
+
+  IF NOT v_ready THEN
+    RAISE NOTICE 'Vault secrets missing — mellox-ugc-renders not scheduled';
+    RETURN;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'mellox-ugc-renders') THEN
+    PERFORM cron.unschedule('mellox-ugc-renders');
+  END IF;
+  PERFORM cron.schedule(
+    'mellox-ugc-renders',
+    '* * * * *',
+    format('SELECT public.call_app_hook(%L);', '/api/public/hooks/ugc-renders')
+  );
+END;
+$$;
