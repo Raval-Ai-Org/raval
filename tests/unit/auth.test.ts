@@ -4,9 +4,9 @@ import { friendlyAuthError, safeNextPath } from "@/lib/auth";
 describe("auth helpers", () => {
   it("accepts only safe relative next paths", () => {
     expect(safeNextPath("/projects")).toBe("/projects");
-    expect(safeNextPath("//attacker.example")).toBe("/app");
-    expect(safeNextPath("https://attacker.example")).toBe("/app");
-    expect(safeNextPath(null)).toBe("/app");
+    expect(safeNextPath("//attacker.example")).toBe("/projects");
+    expect(safeNextPath("https://attacker.example")).toBe("/projects");
+    expect(safeNextPath(null)).toBe("/projects");
   });
 
   it("maps provider setup failures without exposing provider details", () => {

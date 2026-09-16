@@ -19,7 +19,7 @@ export function LandingGate() {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
         if (data.session) {
-          router.replace("/app");
+          router.replace("/projects");
           return;
         }
       } catch {

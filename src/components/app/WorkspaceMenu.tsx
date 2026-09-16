@@ -1,9 +1,9 @@
 "use client";
 
-import { emitAppEvent } from "@/lib/app-events";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "@/lib/navigation";
+import { emitAppEvent } from "@/lib/app-events";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   ArrowLeft,
@@ -16,34 +16,18 @@ import {
   LogOut,
 } from "@/components/brand/icons";
 import { useTokenUsage } from "@/hooks/use-agent-toggles";
-import { supabase } from "@/integrations/supabase/client";
+import { useWorkspaces, workspaceLabel, type WorkspaceSummary } from "@/hooks/use-workspaces";
+import { workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { signOutAndRedirect } from "@/lib/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { WorkspaceLogo } from "./WorkspaceLogo";
 import { cn } from "@/lib/utils";
-
-type Workspace = {
-  id: string;
-  name: string;
-  website_url: string | null;
-  industry: string | null;
-};
 
 type Props = {
   workspaceName: string;
   workspaceId: string | null;
   trigger: ReactNode;
 };
-
-function displayName(w: Workspace) {
-  const domain = w.website_url
-    ? w.website_url
-        .replace(/^https?:\/\//i, "")
-        .replace(/\/$/, "")
-        .split("/")[0]
-    : null;
-  return domain || w.name || w.industry || "Workspace";
-}
 
 function initials(name: string) {
   const parts = name
@@ -58,34 +42,15 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
   const { remaining, total, pct } = useTokenUsage();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [signingOut, setSigningOut] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      const { data } = await supabase
-        .from("workspaces")
-        .select("id, name, website_url, industry")
-        .order("created_at", { ascending: false })
-        .limit(50);
-      if (cancelled) return;
-      setWorkspaces((data ?? []) as Workspace[]);
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
+  const { data, isLoading: loading } = useWorkspaces({ enabled: open });
+  const workspaces = useMemo(() => data ?? [], [data]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = needle
-      ? workspaces.filter((w) => displayName(w).toLowerCase().includes(needle))
+      ? workspaces.filter((w) => workspaceLabel(w).toLowerCase().includes(needle))
       : workspaces;
     // Current workspace first
     return [...list].sort((a, b) => {
@@ -95,20 +60,10 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
     });
   }, [q, workspaces, workspaceId]);
 
-  const pick = (w: Workspace) => {
-    if (w.id === workspaceId) {
-      setOpen(false);
-      return;
-    }
-    const name = displayName(w);
-    try {
-      localStorage.setItem("workspace:selected", w.id);
-      localStorage.setItem("workspace:name", name);
-    } catch {}
-    emitAppEvent("workspace:changed", { id: w.id });
+  const pick = (w: WorkspaceSummary) => {
     setOpen(false);
-    if (typeof window !== "undefined") window.location.assign("/app");
-    else navigate({ to: "/app" });
+    if (w.id === workspaceId) return;
+    navigate({ to: workspacePath(w.id) });
   };
 
   const remainingDisplay =
@@ -130,7 +85,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
         <button
           onClick={() => {
             setOpen(false);
-            navigate({ to: "/workspaces" });
+            navigate({ to: WORKSPACES_HOME });
           }}
           className="group flex w-full items-center gap-2 border-b border-border/60 px-3 py-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
           aria-label="Back to workspaces dashboard"
@@ -225,7 +180,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
           {!loading &&
             filtered.map((w) => {
               const active = w.id === workspaceId;
-              const name = displayName(w);
+              const name = workspaceLabel(w);
               return (
                 <button
                   key={w.id}
@@ -237,7 +192,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
                       : "text-foreground/85 hover:bg-secondary/70",
                   )}
                 >
-                  <WorkspaceLogo name={name} websiteUrl={w.website_url} size={28} />
+                  <WorkspaceLogo name={name} websiteUrl={w.websiteUrl} size={28} />
 
                   <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{name}</span>
                   {active && (
@@ -252,7 +207,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
           <button
             onClick={() => {
               setOpen(false);
-              navigate({ to: "/workspaces" });
+              navigate({ to: WORKSPACES_HOME });
             }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-foreground/85 transition-colors hover:bg-secondary/70 hover:text-foreground"
           >
@@ -264,7 +219,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
           <button
             onClick={() => {
               setOpen(false);
-              navigate({ to: "/workspaces" });
+              navigate({ to: WORKSPACES_HOME });
             }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
           >

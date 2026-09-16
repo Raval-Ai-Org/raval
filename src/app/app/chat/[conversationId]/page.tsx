@@ -1,19 +1,21 @@
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/seo";
 import { SessionGate } from "@/components/auth/SessionGate";
-import AppShell from "../../AppShell";
+import { LegacyAppRedirect } from "@/components/workspace/LegacyAppRedirect";
 
+// Pre-/w/ link: resolved to the canonical /w/<workspaceId>/app route, or to
+// /projects — never to a guessed workspace (see LegacyAppRedirect).
 export const metadata: Metadata = pageMetadata({
   title: "Conversation · Mellox AI",
-  description: "Continue a conversation with Mellox AI.",
+  description: "Continue a conversation with Ravi, your Mellox AI Marketing Intelligence Layer.",
   path: "/app/chat",
   noindex: true,
 });
 
-export default function ConversationPage() {
+export default function Page() {
   return (
     <SessionGate>
-      <AppShell />
+      <LegacyAppRedirect />
     </SessionGate>
   );
 }

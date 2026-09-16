@@ -12,18 +12,26 @@ import { SuccessMoment } from "@/components/onboarding/SuccessMoment";
 import { AmbientCanvas } from "@/components/onboarding/ui";
 import { UrlStep } from "@/components/onboarding/UrlStep";
 import { normalizeUrl, validUrl } from "@/components/onboarding/url";
-import { emptyDna, type BrandDna } from "@/hooks/use-brand-dna";
+import { emptyDna, saveBrandDnaFor, type BrandDna } from "@/hooks/use-brand-dna";
+import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
+import { workspacePath } from "@/lib/workspace/paths";
 import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { mergeExtractionIntoDna } from "@/lib/brand-dna-merge";
 import type { BrandExtractResult, Discoveries } from "@/lib/brand-extract-events";
 import { readBrandExtractStream } from "@/lib/brand-extract-stream";
-import { buildDesignMd, saveDesignMd } from "@/lib/design-md";
 import { duration, ease } from "@/lib/motion";
 import { useNavigate } from "@/lib/navigation";
 
 type Step = "website" | "scan" | "review" | "done";
+
+/** workspaces_owner_domain_unique: this owner already has the brand's domain. */
+function isDuplicateDomainError(error: { code?: string; message?: string } | null): boolean {
+  return Boolean(
+    error && (error.code === "23505" || /workspaces_owner_domain_unique/.test(error.message ?? "")),
+  );
+}
 
 const STEPS: { id: Exclude<Step, "done">; label: string }[] = [
   { id: "website", label: "Website" },
@@ -63,6 +71,9 @@ function buildBrandDna(
 function Onboarding() {
   const navigate = useNavigate();
   const reduce = useReducedMotionSafe();
+  // Onboarding runs for the workspace in the URL (/w/<id>/onboarding) — never
+  // the last-selected or newest one.
+  const workspace = useWorkspace();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("website");
   const [websiteUrl, setWebsiteUrl] = useState("");
@@ -85,40 +96,28 @@ function Onboarding() {
   const brand: BrandExtractResult = { ...result, ...edits };
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
-        navigate({ to: "/login" });
-        return;
-      }
-      const selectedId = localStorage.getItem("workspace:selected");
-      const query = supabase.from("workspaces").select("id, onboarded_at, website_url");
-      const { data: workspace } = selectedId
-        ? await query.eq("id", selectedId).maybeSingle()
-        : await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (cancelled) return;
-      if (!workspace?.id) {
-        navigate({ to: "/projects" });
-        return;
-      }
-      if (workspace.onboarded_at) {
-        navigate({ to: "/app" });
-        return;
-      }
-      localStorage.setItem("workspace:selected", workspace.id);
-      setWorkspaceId(workspace.id);
-      const recovered = localStorage.getItem(urlKey(workspace.id)) || workspace.website_url || "";
-      if (recovered) {
-        setWebsiteUrl(recovered);
-        setStep("scan");
-      }
-    })();
+    if (workspace.onboarded) {
+      navigate({ to: workspacePath(workspace.id), replace: true });
+      return;
+    }
+    setWorkspaceId(workspace.id);
+    let recovered = "";
+    try {
+      recovered = localStorage.getItem(urlKey(workspace.id)) || "";
+    } catch {
+      /* storage unavailable */
+    }
+    recovered ||= workspace.websiteUrl ?? "";
+    if (recovered) {
+      setWebsiteUrl(recovered);
+      setStep("scan");
+    }
     return () => {
-      cancelled = true;
       scanAbort.current?.abort();
     };
-  }, [navigate]);
+    // The workspace object is stable for this mount (the provider is keyed by id).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.id]);
 
   // Each new step moves focus to its heading, so keyboard and screen-reader
   // users land on the new content instead of a control that no longer exists.
@@ -157,7 +156,18 @@ function Onboarding() {
     setProgress({ stage: "fetch_home", message: "Connecting to your website", pct: 3 });
     let latestPct = 3;
 
-    await supabase.from("workspaces").update({ website_url: url }).eq("id", workspaceId);
+    const { error: siteError } = await supabase
+      .from("workspaces")
+      .update({ website_url: url })
+      .eq("id", workspaceId);
+    if (isDuplicateDomainError(siteError)) {
+      setScanStatus("idle");
+      setStep("website");
+      toast.error("You already have a workspace for this website", {
+        description: "Open it from Workspaces instead of creating a second copy of the brand.",
+      });
+      return;
+    }
 
     try {
       const response = await authedFetch("/api/brand-extract", {
@@ -250,6 +260,11 @@ function Onboarding() {
         onboarded_at: new Date().toISOString(),
       })
       .eq("id", workspaceId);
+    if (isDuplicateDomainError(error)) {
+      setSaving(false);
+      toast.error("You already have a workspace for this website");
+      return;
+    }
     if (error) {
       setSaving(false);
       toast.error("Couldn't finish setup", {
@@ -264,11 +279,8 @@ function Onboarding() {
       extractedAt: scanStatus === "ok" ? Date.now() : null,
       updatedAt: Date.now(),
     };
-    localStorage.setItem(`brand-dna:v3:${workspaceId}`, JSON.stringify(merged));
+    saveBrandDnaFor(workspaceId, merged, true);
     localStorage.removeItem(urlKey(workspaceId));
-    try {
-      saveDesignMd(workspaceId, buildDesignMd(merged));
-    } catch {}
     setSaving(false);
     setStep("done");
   };
@@ -296,16 +308,17 @@ function Onboarding() {
       extractedAt: null,
       updatedAt: Date.now(),
     };
-    localStorage.setItem(`brand-dna:v3:${workspaceId}`, JSON.stringify(partial));
+    saveBrandDnaFor(workspaceId, partial, true);
     localStorage.removeItem(urlKey(workspaceId));
     setSaving(false);
-    navigate({ to: "/app" });
+    navigate({ to: workspacePath(workspaceId) });
   };
 
   const enterApp = () => {
     if (leaving) return;
     setLeaving(true);
-    window.setTimeout(() => navigate({ to: "/app" }), reduce ? 0 : duration.slow * 1000);
+    const target = workspacePath(workspace.id);
+    window.setTimeout(() => navigate({ to: target }), reduce ? 0 : duration.slow * 1000);
   };
 
   const stepMotion = {

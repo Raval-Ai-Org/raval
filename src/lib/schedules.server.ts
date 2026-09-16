@@ -201,12 +201,15 @@ async function runGeoScanJob(job: ClaimedJob, nowIso: string, leased: boolean): 
         .from("geo_scans")
         .select("status, overall_score, previous_scan_id")
         .eq("id", meta.last_scan_id)
+        // meta is user-editable: only this job's own workspace's scans count.
+        .eq("workspace_id", job.workspace_id)
         .maybeSingle();
       if (last?.status === "succeeded" && last.overall_score !== null && last.previous_scan_id) {
         const { data: prev } = await supabaseAdmin
           .from("geo_scans")
           .select("overall_score")
           .eq("id", last.previous_scan_id)
+          .eq("workspace_id", job.workspace_id)
           .maybeSingle();
         if (prev?.overall_score !== null && prev?.overall_score !== undefined) {
           lastScoreDelta = last.overall_score - prev.overall_score;

@@ -5,6 +5,7 @@
 // /integrations/github/callback on this same origin, which saves and verifies
 // the connection and then returns to `returnPath`. Shared by Settings →
 // Connections and AI Visibility's "Connect GitHub" step.
+import { inWorkspace } from "@/lib/workspace/paths";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { startGithubInstall } from "@/lib/connectors.functions";
@@ -29,8 +30,14 @@ export function useGithubInstall(
   const install = useCallback(async () => {
     setInstalling(true);
     try {
+      // Return into THIS workspace, not whichever one is open when GitHub
+      // sends the user back.
       const { url } = await startGithubInstall({
-        data: { workspaceId, returnOrigin: window.location.origin, returnPath },
+        data: {
+          workspaceId,
+          returnOrigin: window.location.origin,
+          returnPath: inWorkspace(workspaceId, returnPath),
+        },
       });
       window.location.assign(url);
     } catch (e) {

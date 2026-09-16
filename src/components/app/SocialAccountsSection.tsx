@@ -5,6 +5,7 @@
 // provider (GET /api/sdr/status), so only platforms that can actually publish
 // are offered. Connections finish in a popup (/app/social/connected), which
 // notifies this view over a BroadcastChannel.
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -26,14 +27,6 @@ import {
   type DistributionPlatformMeta,
 } from "@/lib/distribution-platforms";
 
-function currentWorkspaceId(): string | null {
-  try {
-    return typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
-  } catch {
-    return null;
-  }
-}
-
 function metaFor(platform: string): DistributionPlatformMeta | null {
   return isDistributionPlatform(platform) ? DISTRIBUTION_PLATFORMS[platform] : null;
 }
@@ -50,7 +43,8 @@ const NO_REMOTE_REVOKE = new Set(["linkedin"]);
 type Props = { variant: "studio" | "settings"; onManage?: () => void };
 
 export function SocialAccountsSection({ variant }: Props) {
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  // The workspace on screen: its own connections, never another brand's.
+  const workspaceId = useOptionalWorkspaceId();
   const [status, setStatus] = useState<SdrStatus | null>(null);
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,8 +56,7 @@ export function SocialAccountsSection({ variant }: Props) {
   const connectStartedAt = useRef(0);
 
   const refresh = useCallback(async () => {
-    const id = currentWorkspaceId();
-    setWorkspaceId(id);
+    const id = workspaceId;
     if (!id) {
       setAccounts([]);
       setStatus(null);
@@ -81,7 +74,7 @@ export function SocialAccountsSection({ variant }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     void refresh();
@@ -90,7 +83,6 @@ export function SocialAccountsSection({ variant }: Props) {
   useEffect(() => {
     const onChange = () => void refresh();
     addAppEventListener("connections:changed", onChange);
-    addAppEventListener("workspace:changed", onChange);
     const unsubscribe = subscribeSocialConnect(() => {
       connectStartedAt.current = 0;
       void refresh();
@@ -106,7 +98,6 @@ export function SocialAccountsSection({ variant }: Props) {
     window.addEventListener("focus", onFocus);
     return () => {
       removeAppEventListener("connections:changed", onChange);
-      removeAppEventListener("workspace:changed", onChange);
       unsubscribe();
       window.removeEventListener("focus", onFocus);
     };

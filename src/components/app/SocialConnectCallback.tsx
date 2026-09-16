@@ -4,6 +4,7 @@
 // (via SocialAPI.ai). It finishes the connection server-side (one-time state,
 // tenant check), lets the user pick Facebook Pages when the platform asks, then
 // tells every open Mellox tab over a BroadcastChannel and closes the popup.
+import { isWorkspaceId, workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -27,16 +28,15 @@ type View =
   | { kind: "error"; message: string };
 
 const MAX_PAGES = 5;
-const BACK_HREF = "/workspace?tab=social";
+/** Back to the workspace the connection was started from — never a guessed one. */
+function backHref(workspaceId: string | null): string {
+  return workspaceId && isWorkspaceId(workspaceId)
+    ? workspacePath(workspaceId, "", { tab: "social" })
+    : WORKSPACES_HOME;
+}
 
 function resolveWorkspaceId(): string | null {
-  const pending = readPendingConnect();
-  if (pending) return pending.workspaceId;
-  try {
-    return localStorage.getItem("workspace:selected");
-  } catch {
-    return null;
-  }
+  return readPendingConnect()?.workspaceId ?? null;
 }
 
 function finish(platform: string | null) {
@@ -183,7 +183,7 @@ export function SocialConnectCallback() {
               You can close this window and return to Mellox.
             </p>
             <Button asChild variant="outline" className="w-full">
-              <Link href={BACK_HREF}>Back to Mellox</Link>
+              <Link href={backHref(resolveWorkspaceId())}>Back to Mellox</Link>
             </Button>
           </div>
         ) : null}
@@ -255,7 +255,7 @@ export function SocialConnectCallback() {
                 Close
               </Button>
               <Button asChild className="flex-1">
-                <Link href={BACK_HREF}>Back to Mellox</Link>
+                <Link href={backHref(resolveWorkspaceId())}>Back to Mellox</Link>
               </Button>
             </div>
           </div>

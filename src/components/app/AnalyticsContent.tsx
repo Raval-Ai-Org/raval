@@ -1,5 +1,6 @@
 "use client";
 
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useState, createContext, useContext, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -56,28 +57,9 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
+/** The workspace this page acts on (from the route) — never browser storage. */
 function useActiveWorkspaceId(): string | null {
-  const [id, setId] = useState<string | null>(null);
-  useEffect(() => {
-    const read = () => {
-      try {
-        setId(localStorage.getItem("workspace:selected"));
-      } catch {}
-    };
-    read();
-    const onWorkspaceChanged = (e: Event) => {
-      const detail = (e as CustomEvent<{ id?: string }>).detail;
-      if (detail?.id) setId(detail.id);
-      else read();
-    };
-    window.addEventListener("storage", read);
-    addAppEventListener("workspace:changed", onWorkspaceChanged);
-    return () => {
-      window.removeEventListener("storage", read);
-      removeAppEventListener("workspace:changed", onWorkspaceChanged);
-    };
-  }, []);
-  return id;
+  return useOptionalWorkspaceId();
 }
 
 /* -------------------- Date range (weekly / monthly / quarterly) -------------------- */
@@ -173,10 +155,8 @@ function useAnalyticsSummary(workspaceId: string | null) {
       qc.invalidateQueries({ queryKey: ["analytics-drilldown", workspaceId] });
     };
     addAppEventListener("geo:audit-complete", invalidate);
-    addAppEventListener("workspace:changed", invalidate);
     return () => {
       removeAppEventListener("geo:audit-complete", invalidate);
-      removeAppEventListener("workspace:changed", invalidate);
     };
   }, [qc, workspaceId]);
   return query;

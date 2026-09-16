@@ -146,6 +146,47 @@ export function getStudioState(): State {
   return state;
 }
 
+/*
+ * Workspace isolation: the store is shared by the whole tab, but every session
+ * and job carries the workspace it was created in. Views only ever read their
+ * own workspace's slice through these selectors, and every server call uses
+ * the session's / job's own workspace id — never the page's current one.
+ */
+export function sessionsForWorkspace(s: State, workspaceId: string | null): StudioSession[] {
+  return workspaceId ? s.sessions.filter((x) => x.workspaceId === workspaceId) : [];
+}
+
+export function jobsForWorkspace(s: State, workspaceId: string | null): StudioJob[] {
+  return workspaceId ? s.jobs.filter((j) => j.workspace_id === workspaceId) : [];
+}
+
+/** The open composer session, only if it belongs to this workspace. */
+export function activeSessionForWorkspace(
+  s: State,
+  workspaceId: string | null,
+): StudioSession | null {
+  const active = s.activeId ? s.sessions.find((x) => x.id === s.activeId) : null;
+  return active && active.workspaceId === workspaceId ? active : null;
+}
+
+/**
+ * Entering a workspace: a composer left open for another workspace is
+ * minimized (it keeps generating and saving into ITS workspace, but is never
+ * shown here).
+ */
+export function enterWorkspace(workspaceId: string) {
+  hydrate();
+  const active = state.activeId ? state.sessions.find((x) => x.id === state.activeId) : null;
+  if (active && active.workspaceId !== workspaceId) {
+    setState({
+      activeId: null,
+      sessions: state.sessions.map((x) =>
+        x.id === active.id ? { ...x, window: "minimized" as const } : x,
+      ),
+    });
+  }
+}
+
 /* ───────────────────────── session actions ───────────────────────── */
 
 const CONTROLS_KEY = "studio:last-controls:";
@@ -318,7 +359,9 @@ export async function openJob(jobId: string, workspaceId?: string | null): Promi
   hydrate();
   const ws = workspaceId ?? getActiveWorkspaceId();
   if (!ws) return null;
-  const existing = state.sessions.find((s) => s.job?.id === jobId || s.lastGood?.id === jobId);
+  const existing = state.sessions.find(
+    (s) => s.workspaceId === ws && (s.job?.id === jobId || s.lastGood?.id === jobId),
+  );
   if (existing) {
     focusSession(existing.id);
     void refreshSessionJob(existing.id);
@@ -699,7 +742,7 @@ function upsertJobs(jobs: StudioJob[]) {
   for (const j of jobs) byId.set(j.id, j);
   const merged = [...byId.values()]
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, 25);
+    .slice(0, 60);
   setState({ jobs: merged }, false);
 }
 
@@ -714,7 +757,17 @@ export async function refreshWorkspaceJobs(workspaceId?: string | null) {
   if (!ws) return;
   try {
     const jobs = await studioApi.listJobs(ws);
-    setState({ jobs }, false);
+    // Replace only this workspace's jobs; other workspaces' stay as they were.
+    const own = new Set(jobs.map((j) => j.id));
+    setState(
+      {
+        jobs: [
+          ...jobs.map((j) => ({ ...j, workspace_id: j.workspace_id ?? ws })),
+          ...state.jobs.filter((j) => j.workspace_id !== ws && !own.has(j.id)),
+        ],
+      },
+      false,
+    );
     // Adopt server progress into sessions whose create request is still open.
     for (const s of state.sessions) {
       if (s.workspaceId !== ws) continue;
@@ -756,9 +809,12 @@ async function pollOnce() {
   if (polling) return;
   polling = true;
   try {
-    const ws = getActiveWorkspaceId();
-    // Sessions with a create still in flight: read progress from the list.
-    if (state.sessions.some((s) => s.pendingKey && !s.job)) await refreshWorkspaceJobs(ws);
+    // Sessions with a create still in flight: read progress from each one's
+    // own workspace (the user may have switched since starting it).
+    const pendingWorkspaces = new Set(
+      state.sessions.filter((s) => s.pendingKey && !s.job).map((s) => s.workspaceId),
+    );
+    for (const pendingWs of pendingWorkspaces) await refreshWorkspaceJobs(pendingWs);
 
     const tracked = new Set<string>();
     for (const s of state.sessions) {
@@ -775,19 +831,17 @@ async function pollOnce() {
     }
     // Background jobs (another tab, or a closed session): advance them too so
     // renders finish even when no composer is watching.
-    if (ws) {
-      for (const job of state.jobs.filter(
-        (j) => isActiveJob(j) && !tracked.has(j.id) && j.workspace_id === ws,
-      )) {
-        const pendingCreate = state.sessions.some((s) => s.pendingKey === job.idempotency_key);
-        if (pendingCreate && job.stage !== "render" && job.stage !== "save") continue;
-        try {
-          const next = await studioApi.getJob(ws, job.id);
-          upsertJobs([next]);
-          if (!isActiveJob(next)) emitAppEvent("content:changed");
-        } catch {
-          /* transient */
-        }
+    for (const job of state.jobs.filter(
+      (j) => isActiveJob(j) && !tracked.has(j.id) && Boolean(j.workspace_id),
+    )) {
+      const pendingCreate = state.sessions.some((s) => s.pendingKey === job.idempotency_key);
+      if (pendingCreate && job.stage !== "render" && job.stage !== "save") continue;
+      try {
+        const next = await studioApi.getJob(job.workspace_id, job.id);
+        upsertJobs([next]);
+        if (!isActiveJob(next)) emitAppEvent("content:changed");
+      } catch {
+        /* transient */
       }
     }
   } finally {

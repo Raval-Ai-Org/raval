@@ -1,16 +1,22 @@
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { BASE_URL } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo";
+import { SessionGate } from "@/components/auth/SessionGate";
+import { LegacyAppRedirect } from "@/components/workspace/LegacyAppRedirect";
 
-// Private studio deep-link — must never be indexable. The redirect lands on
-// /app (noindex), so pin the same noindex + canonical here in case a crawler
-// or the redirect chain reads this route's shell directly.
-export const metadata: Metadata = {
+// Pre-/w/ link: resolved to the canonical /w/<workspaceId>/app route, or to
+// /projects — never to a guessed workspace (see LegacyAppRedirect).
+export const metadata: Metadata = pageMetadata({
   title: "Social · Mellox AI",
-  robots: "noindex,nofollow",
-  alternates: { canonical: `${BASE_URL}/app` },
-};
+  description:
+    "Schedule and publish social content for a brand workspace with Ravi, the Mellox AI Marketing Intelligence Layer.",
+  path: "/app/social",
+  noindex: true,
+});
 
-export default function SocialRedirect(): never {
-  redirect("/workspace?tab=social");
+export default function Page() {
+  return (
+    <SessionGate>
+      <LegacyAppRedirect />
+    </SessionGate>
+  );
 }

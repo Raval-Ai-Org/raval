@@ -543,8 +543,12 @@ describe("schedule, cancel, retry", () => {
   it("schedules with stored media copied into the provider library", async () => {
     const at = new Date(Date.now() + 2 * 3600_000).toISOString();
     const { deps, db, provider } = setup({
-      items: [item({ meta: { platform: "instagram", asset_storage_path: "ws-1/post.png" } })],
-      storage: { "ws-1/post.png": new Blob(["png"], { type: "image/png" }) },
+      items: [
+        item({
+          meta: { platform: "instagram", asset_storage_path: "workspace/ws-1/assets/post.png" },
+        }),
+      ],
+      storage: { "workspace/ws-1/assets/post.png": new Blob(["png"], { type: "image/png" }) },
       script: (_r, key) => {
         if (key === "POST /media/upload") return { status: 201, data: { media_id: "media-1" } };
         if (key === "POST /posts") {
@@ -742,5 +746,89 @@ describe("metrics", () => {
       views: 400,
       source: "socialapi",
     });
+  });
+});
+
+describe("workspace isolation (user-editable meta is never trusted across workspaces)", () => {
+  const FOREIGN_PUB = {
+    id: "p-foreign",
+    workspace_id: "ws-2",
+    content_item_id: "item-9",
+    provider: "socialapi",
+    sdr_post_id: "post-of-brand-b",
+    sdr_target_id: "acc_other",
+    status: "pending",
+  };
+
+  it("won't cancel a post id copied from another workspace", async () => {
+    const { deps, provider } = setup({
+      items: [
+        item({
+          status: "scheduled",
+          meta: { platform: "linkedin", socialapi_post_id: "post-of-brand-b" },
+        }),
+      ],
+      seed: { content_publications: [FOREIGN_PUB] },
+    });
+    const out = await cancelHandler({ workspaceId: WS, contentItemId: "item-1" }, deps);
+    expect(out.status).toBe(403);
+    expect(provider.calls).toHaveLength(0);
+  });
+
+  it("won't retry a post id copied from another workspace", async () => {
+    const { deps, provider } = setup({
+      items: [
+        item({
+          status: "failed",
+          meta: { platform: "linkedin", socialapi_post_id: "post-of-brand-b" },
+        }),
+      ],
+      quota: { check: async () => ({ ok: true, used: 0, limit: 60 }), record: async () => {} },
+      seed: { content_publications: [FOREIGN_PUB] },
+    });
+    const out = await retryHandler(
+      { workspaceId: WS, userId: USER, contentItemId: "item-1" },
+      deps,
+    );
+    expect(out.status).toBe(403);
+    expect(provider.calls).toHaveLength(0);
+  });
+
+  it("won't publish-now a scheduled item whose post id belongs to another workspace", async () => {
+    const { deps, provider } = setup({
+      items: [
+        item({
+          status: "scheduled",
+          meta: { platform: "linkedin", socialapi_post_id: "post-of-brand-b" },
+        }),
+      ],
+      seed: { content_publications: [FOREIGN_PUB] },
+    });
+    const out = await publishHandler(
+      { workspaceId: WS, userId: USER, contentItemIds: ["item-1"], selection: { type: "all" } },
+      deps,
+    );
+    expect(out.body.results[0].status).toBe("skipped");
+    expect(provider.calls.filter((c) => c.path.startsWith("/posts/post-of-brand-b"))).toHaveLength(
+      0,
+    );
+  });
+
+  it("won't attach media stored under another workspace's path", async () => {
+    const { deps, provider } = setup({
+      items: [
+        item({
+          meta: { platform: "instagram", asset_storage_path: "workspace/ws-2/assets/secret.png" },
+        }),
+      ],
+      storage: { "workspace/ws-2/assets/secret.png": new Blob(["png"], { type: "image/png" }) },
+    });
+    const out = await publishHandler(
+      { workspaceId: WS, userId: USER, contentItemIds: ["item-1"], selection: { type: "all" } },
+      deps,
+    );
+    expect(out.body.results[0]).toMatchObject({ status: "skipped" });
+    expect(provider.find("POST /media/upload")).toHaveLength(0);
+    expect(provider.calls.filter((c) => c.path === "/posts")).toHaveLength(0);
   });
 });

@@ -1,7 +1,6 @@
 "use client";
 
-import { emitAppEvent } from "@/lib/app-events";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
 import {
   Check,
@@ -11,27 +10,11 @@ import {
   LayoutGrid,
   Loader2,
 } from "@/components/ui/gemini-icons";
-import { supabase } from "@/integrations/supabase/client";
+import { useWorkspaces, workspaceLabel, type WorkspaceSummary } from "@/hooks/use-workspaces";
+import { workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { WorkspaceLogo } from "./WorkspaceLogo";
-
-type Workspace = {
-  id: string;
-  name: string;
-  website_url: string | null;
-  industry: string | null;
-};
-
-function displayName(w: Workspace) {
-  const domain = w.website_url
-    ? w.website_url
-        .replace(/^https?:\/\//i, "")
-        .replace(/\/$/, "")
-        .split("/")[0]
-    : null;
-  return domain || w.name || w.industry || "Workspace";
-}
 
 export function WorkspaceSwitcher({
   workspaceId,
@@ -46,56 +29,24 @@ export function WorkspaceSwitcher({
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [q, setQ] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      const { data } = await supabase
-        .from("workspaces")
-        .select("id, name, website_url, industry")
-        .order("created_at", { ascending: false })
-        .limit(50);
-      if (cancelled) return;
-      setWorkspaces((data ?? []) as Workspace[]);
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
+  const { data, isLoading: loading } = useWorkspaces({ enabled: open });
+  const workspaces = useMemo(() => data ?? [], [data]);
+  const switchingId: string | null = null;
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return workspaces;
-    return workspaces.filter((w) => displayName(w).toLowerCase().includes(needle));
+    return workspaces.filter((w) => workspaceLabel(w).toLowerCase().includes(needle));
   }, [q, workspaces]);
 
-  const pick = (w: Workspace) => {
-    if (w.id === workspaceId || switchingId) {
-      setOpen(false);
-      return;
-    }
-    setSwitchingId(w.id);
-    const name = displayName(w);
-    try {
-      localStorage.setItem("workspace:selected", w.id);
-      localStorage.setItem("workspace:name", name);
-    } catch {}
-    emitAppEvent("workspace:changed", { id: w.id });
+  const pick = (w: WorkspaceSummary) => {
     setOpen(false);
+    if (w.id === workspaceId) return;
     onSwitch?.();
-    // Hard reload to reinitialize all workspace-scoped state (chat, studio, brand DNA).
-    if (typeof window !== "undefined") {
-      window.location.assign("/app");
-    } else {
-      navigate({ to: "/app" });
-    }
+    // The workspace provider is keyed by the route id: navigating remounts
+    // every workspace-scoped surface and drops the old workspace's queries.
+    navigate({ to: workspacePath(w.id) });
   };
 
   return (
@@ -162,7 +113,7 @@ export function WorkspaceSwitcher({
           {!loading &&
             filtered.map((w) => {
               const active = w.id === workspaceId;
-              const name = displayName(w);
+              const name = workspaceLabel(w);
               return (
                 <button
                   key={w.id}
@@ -176,7 +127,7 @@ export function WorkspaceSwitcher({
                       : "text-foreground/85 hover:bg-secondary/70",
                   )}
                 >
-                  <WorkspaceLogo name={name} websiteUrl={w.website_url} size={28} />
+                  <WorkspaceLogo name={name} websiteUrl={w.websiteUrl} size={28} />
 
                   <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{name}</span>
                   {switchingId === w.id ? (
@@ -197,7 +148,7 @@ export function WorkspaceSwitcher({
             onClick={() => {
               setOpen(false);
               onSwitch?.();
-              navigate({ to: "/workspaces" });
+              navigate({ to: WORKSPACES_HOME });
             }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-foreground/85 transition-colors hover:bg-secondary/70 hover:text-foreground"
           >
@@ -210,7 +161,7 @@ export function WorkspaceSwitcher({
             onClick={() => {
               setOpen(false);
               onSwitch?.();
-              navigate({ to: "/workspaces" });
+              navigate({ to: WORKSPACES_HOME });
             }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
           >

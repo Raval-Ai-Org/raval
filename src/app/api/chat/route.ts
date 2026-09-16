@@ -20,14 +20,30 @@ const MessagesSchema = z.object({
   context: z.string().max(6000).optional(),
   /** Model picker choice — an id from CHAT_MODEL_CHOICES, never a raw model name. */
   modelId: z.string().max(40).optional(),
+  /**
+   * The workspace this conversation belongs to, captured when the request
+   * starts. Membership is verified before anything runs, and the brand the
+   * model is told it works for comes from the database for this id.
+   */
+  workspaceId: z.string().uuid(),
 });
 
 export const POST = defineRoute({
   name: "chat",
-  auth: "user",
+  auth: "workspace",
+  workspaceId: ({ body }) => body.workspaceId,
   body: MessagesSchema,
   rateLimit: "chat",
-  handler: async ({ body }) => {
+  handler: async ({ body, supabase, workspaceId }) => {
+    // Anchor the brand identity to the verified workspace, not browser state.
+    const { data: ws } = await supabase
+      .from("workspaces")
+      .select("name, website_url")
+      .eq("id", workspaceId)
+      .maybeSingle();
+    const identity = ws
+      ? `Workspace brand: ${ws.name}${ws.website_url ? ` (${ws.website_url})` : ""}. Only use context for this brand.`
+      : "";
     // Client-supplied "system" turns are dropped: only the server writes system prompts.
     const turns = body.messages
       .filter((m) => m.role !== "system")
@@ -45,7 +61,11 @@ export const POST = defineRoute({
         // chatContextBlock fences it as untrusted data, not instructions.
         {
           role: "system",
-          content: chatContextBlock(wrapUntrusted("brand-dna", body.context, { route: "chat" })),
+          content: chatContextBlock(
+            wrapUntrusted("brand-dna", [identity, body.context].filter(Boolean).join("\n\n"), {
+              route: "chat",
+            }),
+          ),
         },
         ...history,
       ],

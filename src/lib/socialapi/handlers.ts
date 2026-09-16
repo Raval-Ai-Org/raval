@@ -10,6 +10,7 @@
 // Delivery bookkeeping reuses the SDR pipeline tables: one content_publications
 // row per (content item × target account), sdr_post_id = SocialAPI post id,
 // sdr_target_id = account id, provider = 'socialapi'.
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { createHash, randomBytes } from "node:crypto";
 import {
   socialApiErrorResponse,
@@ -798,10 +799,42 @@ type MediaSource = { source_type: "url" | "media_id"; source: string };
 const SERVER_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 const STORAGE_BUCKET = "generated-assets";
 
+/** The item's stored asset path — only when it lies inside the item's own workspace. */
 function storagePathOf(item: any): string | null {
   const p = item?.meta?.asset_storage_path;
-  return typeof p === "string" && p ? p : null;
+  return isWorkspaceStoragePath(p, item?.workspace_id) ? (p as string) : null;
 }
+
+/** meta names a storage path that is not this workspace's (tampered or copied meta). */
+function hasForeignStoragePath(item: any): boolean {
+  const p = item?.meta?.asset_storage_path;
+  return typeof p === "string" && p !== "" && !isWorkspaceStoragePath(p, item?.workspace_id);
+}
+
+/**
+ * A provider post id from item meta is only acted on when this workspace's own
+ * delivery rows for this item recorded it. meta is user-editable; the
+ * SocialAPI key is shared by every workspace, so without this a foreign post
+ * id could be published, moved, cancelled or retried.
+ */
+async function ownsProviderPost(
+  db: any,
+  workspaceId: string,
+  contentItemId: string,
+  postId: string,
+): Promise<boolean> {
+  const { data, error } = await db
+    .from("content_publications")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("content_item_id", contentItemId)
+    .eq("provider", "socialapi")
+    .eq("sdr_post_id", postId)
+    .limit(1);
+  return !error && Array.isArray(data) && data.length > 0;
+}
+
+const FOREIGN_POST = "This item's provider post doesn't belong to this workspace.";
 
 function publicMediaUrl(item: any): string | null {
   const raw = typeof item?.media_url === "string" ? item.media_url : "";
@@ -1035,6 +1068,10 @@ async function distribute(
     // A scheduled item that already has a provider post: publish it now, or
     // move its time — never create a second post.
     if (item.status === "scheduled" && existingPostId) {
+      if (!(await ownsProviderPost(deps.db, args.workspaceId, item.id, existingPostId))) {
+        skip(id, FOREIGN_POST);
+        continue;
+      }
       const outcome =
         kind === "publish"
           ? await publishExistingPost(args.workspaceId, args.userId, item, existingPostId, deps)
@@ -1061,6 +1098,11 @@ async function distribute(
         continue;
       }
       platformData.tiktok = { privacy_level: String(privacy) };
+    }
+
+    if (platform !== "twitter" && hasForeignStoragePath(item)) {
+      skip(id, "The attached media doesn't belong to this workspace.");
+      continue;
     }
 
     const text = String(item.body ?? "");
@@ -1414,6 +1456,9 @@ export async function cancelHandler(
     if (item.status !== "scheduled") {
       return fail(400, "PLATFORM_VALIDATION", "Only scheduled posts can be cancelled");
     }
+    if (!(await ownsProviderPost(deps.db, args.workspaceId, args.contentItemId, postId))) {
+      return fail(403, "PLATFORM_VALIDATION", FOREIGN_POST);
+    }
     const res = await deps.api({
       method: "DELETE",
       path: `/posts/${encodeURIComponent(postId)}`,
@@ -1459,6 +1504,9 @@ export async function retryHandler(
     if (!postId) return fail(400, "PLATFORM_VALIDATION", "This item has no post to retry");
     if (item.status !== "failed" && item.status !== "partial_failed") {
       return fail(400, "PLATFORM_VALIDATION", "Only failed deliveries can be retried");
+    }
+    if (!(await ownsProviderPost(deps.db, args.workspaceId, args.contentItemId, postId))) {
+      return fail(403, "PLATFORM_VALIDATION", FOREIGN_POST);
     }
     if (deps.quota) {
       const q = await deps.quota.check(args.workspaceId, 1);

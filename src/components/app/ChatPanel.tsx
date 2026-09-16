@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { useNavigate } from "@/lib/navigation";
+import { conversationPath, workspacePath } from "@/lib/workspace/paths";
 import {
   ArrowUp,
   Check,
@@ -194,6 +195,8 @@ export function ChatPanel({
     abortRef.current?.abort();
     abortRef.current = null;
   }, []);
+  // Leaving this workspace (the panel is keyed by it) cancels its in-flight reply.
+  useEffect(() => () => abortRef.current?.abort(), []);
   const [clarifying, setClarifying] = useState(false);
   const [modelId, setModelId] = useState(MODELS[0].id);
   const [modelOpen, setModelOpen] = useState(false);
@@ -413,29 +416,47 @@ export function ChatPanel({
     conversationRef.current = data.id;
     preserveMessagesOnRouteRef.current = true;
     skipNextHistoryLoadRef.current = true;
-    navigate({ to: `/app/chat/${data.id}`, replace: true });
+    navigate({ to: conversationPath(workspaceId, data.id), replace: true });
     emitAppEvent("chat:conversation-changed");
     return data.id;
   };
 
   useEffect(() => {
+    let cancelled = false;
     if (conversationId) {
       if (skipNextHistoryLoadRef.current) {
         skipNextHistoryLoadRef.current = false;
         return;
       }
-      supabase
-        .from("chat_messages")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true })
-        .limit(100)
-        .then(({ data }) => {
-          if (data) {
-            setMessages((current) => (current.length === 0 ? (data as any) : current));
-          }
-        });
+      void (async () => {
+        // A conversation only opens inside its own workspace. A link to another
+        // workspace's (or a deleted) conversation must not be reused — new
+        // messages would otherwise attach to it under this workspace.
+        const { data: owned } = await supabase
+          .from("conversations")
+          .select("id")
+          .eq("id", conversationId)
+          .eq("workspace_id", workspaceId)
+          .maybeSingle();
+        if (cancelled) return;
+        if (!owned) {
+          if (conversationRef.current === conversationId) conversationRef.current = null;
+          toast.error("That conversation isn't in this workspace");
+          navigate({ to: workspacePath(workspaceId), replace: true });
+          return;
+        }
+        const { data } = await supabase
+          .from("chat_messages")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: true })
+          .limit(100);
+        if (cancelled || conversationRef.current !== conversationId) return;
+        if (data) {
+          setMessages((current) => (current.length === 0 ? (data as any) : current));
+        }
+      })();
     }
     supabase
       .from("workspaces")
@@ -502,6 +523,9 @@ export function ChatPanel({
         const lines = data.map((a: any) => `- [${a.kind}] ${a.title}: ${a.detail ?? ""}`);
         setCompetitorSummary(lines.join("\n"));
       });
+    return () => {
+      cancelled = true;
+    };
   }, [workspaceId, conversationId]);
 
   useEffect(() => {
@@ -536,13 +560,24 @@ export function ChatPanel({
       }
     };
     const onFocus = () => textareaRef.current?.focus();
+    // A prompt handed over from Command Center for THIS workspace only.
+    try {
+      const key = `chat:prefill:${workspaceId}`;
+      const handed = sessionStorage.getItem(key);
+      if (handed) {
+        sessionStorage.removeItem(key);
+        setInput(handed);
+      }
+    } catch {
+      /* storage unavailable */
+    }
     addAppEventListener("chat:prefill", onPrefill);
     addAppEventListener("chat:focus", onFocus);
     return () => {
       removeAppEventListener("chat:prefill", onPrefill);
       removeAppEventListener("chat:focus", onFocus);
     };
-  }, []);
+  }, [workspaceId]);
 
   // Auto-focus textarea on mount and after streaming completes.
   useEffect(() => {
@@ -567,7 +602,6 @@ export function ChatPanel({
   const summonAgent = (slug: string) => {
     const agent = agentList.find((a) => a.slug === slug);
     if (!agent || !isOn(agent.id)) return false;
-    navigate({ to: `/app/${slug}` as any });
     toast.success(`${agent.role} on it`, { description: agent.missions[0]?.label });
     return true;
   };
@@ -824,6 +858,10 @@ export function ChatPanel({
   };
 
   const runChatStream = async (history: { role: string; content: string }[]) => {
+    // Captured when the request starts: the reply is saved to THIS workspace
+    // and conversation even if the user opens another chat before it finishes.
+    const streamWorkspaceId = workspaceId;
+    const streamConversationId = conversationRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
     setFailedTurn(null);
@@ -845,8 +883,14 @@ export function ChatPanel({
       const res = await authedFetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: recentMessages, context: smartCtx, modelId }),
+        body: JSON.stringify({
+          messages: recentMessages,
+          context: smartCtx,
+          modelId,
+          workspaceId: streamWorkspaceId,
+        }),
         signal: controller.signal,
+        workspaceId: streamWorkspaceId,
       });
 
       if (!res.ok || !res.body) {
@@ -933,7 +977,10 @@ export function ChatPanel({
           const results: Awaited<ReturnType<typeof executeToolCall>>[] = [];
           const suggestions = calls.filter((c) => requiresApproval(c.kind));
           for (const c of calls.filter((c) => !requiresApproval(c.kind))) {
-            const r = await executeToolCall(c, { workspaceId, saveMemory: saveMemoryNote });
+            const r = await executeToolCall(c, {
+              workspaceId: streamWorkspaceId,
+              saveMemory: saveMemoryNote,
+            });
             results.push(r);
             if (!r.ok) toast.error(r.label, r.detail ? { description: r.detail } : undefined);
           }
@@ -952,12 +999,11 @@ export function ChatPanel({
         console.warn("tool parse failed", e);
       }
 
-      const activeConversationId = conversationRef.current;
-      if (activeConversationId) {
+      if (streamConversationId) {
         await supabase.from("chat_messages").insert({
           id: aId,
-          workspace_id: workspaceId,
-          conversation_id: activeConversationId,
+          workspace_id: streamWorkspaceId,
+          conversation_id: streamConversationId,
           user_id: userId,
           role: "assistant",
           kind: "text",

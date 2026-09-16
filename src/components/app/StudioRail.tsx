@@ -1,5 +1,7 @@
 "use client";
 
+import { readBrandDnaFor } from "@/hooks/use-brand-dna";
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -29,7 +31,6 @@ import {
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { getActiveWorkspaceId } from "@/lib/authed-fetch";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { updateContentItem } from "@/lib/content.functions";
@@ -78,20 +79,9 @@ function when(iso: string | null): string {
   return `${d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · ${time}`;
 }
 
-/** Workspace id that follows the switcher. */
+/** The workspace this rail belongs to (from the route; null in previews). */
 function useWorkspaceId(): string | null {
-  const [id, setId] = useState<string | null>(null);
-  useEffect(() => {
-    const sync = () => setId(getActiveWorkspaceId());
-    sync();
-    addAppEventListener("workspace:changed", sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      removeAppEventListener("workspace:changed", sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
-  return id;
+  return useOptionalWorkspaceId();
 }
 
 export function StudioRail(_props: { embedded?: boolean } = {}) {
@@ -174,7 +164,11 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
   }, [load]);
   useVisibleInterval(() => void load(), 60_000);
 
-  const jobs = useStudioStore((s) => s.jobs);
+  const allJobs = useStudioStore((s) => s.jobs);
+  const jobs = useMemo(
+    () => (workspaceId ? allJobs.filter((j) => j.workspace_id === workspaceId) : allJobs),
+    [allJobs, workspaceId],
+  );
   const groups = useMemo(() => groupRows(rows ?? []), [rows]);
 
   return (
@@ -229,28 +223,17 @@ function CreateButton() {
 }
 
 function BrandDnaCta() {
+  const wsId = useWorkspaceId();
   const [filled, setFilled] = useState<number | null>(null);
   useEffect(() => {
     const read = () => {
-      try {
-        const wsId = getActiveWorkspaceId() ?? "";
-        for (const k of wsId
-          ? [`brand-dna:v3:${wsId}`, `brand-dna:v2:${wsId}`, `brand-dna:${wsId}`]
-          : []) {
-          const raw = localStorage.getItem(k);
-          if (!raw) continue;
-          const b = JSON.parse(raw) as Record<string, string | undefined>;
-          setFilled(
-            ["audience", "voice", "values", "doRules", "dontRules"].filter((f) =>
-              (b[f] ?? "").trim(),
-            ).length,
-          );
-          return;
-        }
-        setFilled(0);
-      } catch {
-        setFilled(0);
-      }
+      if (!wsId) return setFilled(0);
+      const b = readBrandDnaFor(wsId) as unknown as Record<string, string | undefined>;
+      setFilled(
+        ["audience", "voice", "values", "doRules", "dontRules"].filter((f) =>
+          String(b[f] ?? "").trim(),
+        ).length,
+      );
     };
     read();
     addAppEventListener("brand-dna:saved", read);
@@ -259,7 +242,7 @@ function BrandDnaCta() {
       removeAppEventListener("brand-dna:saved", read);
       window.removeEventListener("storage", read);
     };
-  }, []);
+  }, [wsId]);
   if (filled === null || filled >= 5) return null;
   return (
     <button
@@ -481,6 +464,9 @@ export function PipelineSection({
   fixture?: boolean;
 }) {
   const reduce = useReducedMotion();
+  // The rows shown here were loaded for this workspace; work started from them
+  // is created in it, whatever page is current when the click resolves.
+  const rowWorkspaceId = useWorkspaceId();
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [creating, setCreating] = useState<Creating[]>([]);
   const [followJob, setFollowJob] = useState<string | null>(null);
@@ -609,7 +595,7 @@ export function PipelineSection({
       }, 4000);
       return;
     }
-    const ws = getActiveWorkspaceId();
+    const ws = rowWorkspaceId;
     try {
       if (!ws) throw new Error("Choose a workspace first.");
       const job = await createPostFromDraft(ws, group.ids[0]);

@@ -3125,6 +3125,41 @@ export type Database = {
           },
         ];
       };
+      workspace_brand_dna: {
+        Row: {
+          created_at: string;
+          dna: Json;
+          updated_at: string;
+          updated_by: string | null;
+          version: number;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          dna?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          dna?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_brand_dna_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_connections: {
         Row: {
           account_avatar_url: string | null;
@@ -3201,6 +3236,68 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      workspace_create_requests: {
+        Row: {
+          created_at: string;
+          idempotency_key: string;
+          user_id: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          idempotency_key: string;
+          user_id: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          idempotency_key?: string;
+          user_id?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_create_requests_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_deletions: {
+        Row: {
+          created_at: string;
+          deleted_by: string | null;
+          domain: string | null;
+          id: string;
+          owner_id: string | null;
+          storage_objects_removed: number;
+          workspace_id: string;
+          workspace_name: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          deleted_by?: string | null;
+          domain?: string | null;
+          id?: string;
+          owner_id?: string | null;
+          storage_objects_removed?: number;
+          workspace_id: string;
+          workspace_name?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          deleted_by?: string | null;
+          domain?: string | null;
+          id?: string;
+          owner_id?: string | null;
+          storage_objects_removed?: number;
+          workspace_id?: string;
+          workspace_name?: string | null;
+        };
+        Relationships: [];
       };
       workspace_invites: {
         Row: {
@@ -3487,6 +3584,8 @@ export type Database = {
           client_status: Database["public"]["Enums"]["client_status"];
           connected_provider: string | null;
           created_at: string;
+          domain: string | null;
+          duplicate_of: string | null;
           first_prompt: string | null;
           goals: string | null;
           id: string;
@@ -3503,6 +3602,8 @@ export type Database = {
           client_status?: Database["public"]["Enums"]["client_status"];
           connected_provider?: string | null;
           created_at?: string;
+          domain?: string | null;
+          duplicate_of?: string | null;
           first_prompt?: string | null;
           goals?: string | null;
           id?: string;
@@ -3519,6 +3620,8 @@ export type Database = {
           client_status?: Database["public"]["Enums"]["client_status"];
           connected_provider?: string | null;
           created_at?: string;
+          domain?: string | null;
+          duplicate_of?: string | null;
           first_prompt?: string | null;
           goals?: string | null;
           id?: string;
@@ -3529,7 +3632,15 @@ export type Database = {
           plan?: string;
           website_url?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "workspaces_duplicate_of_fkey";
+            columns: ["duplicate_of"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
     Views: {
@@ -3575,7 +3686,15 @@ export type Database = {
         Args: { p_bucket_key: string; p_window_seconds: number; p_limit: number; p_cost?: number };
         Returns: { allowed: boolean; current_count: number; reset_at: string }[];
       };
-      create_workspace: { Args: { p_name: string; p_website_url?: string }; Returns: string };
+      create_workspace_for_user: {
+        Args: {
+          p_user_id: string;
+          p_name: string;
+          p_website_url: string;
+          p_idempotency_key: string;
+        };
+        Returns: { workspace_id: string; created: boolean }[];
+      };
       is_workspace_member: { Args: { _workspace_id: string; _user_id: string }; Returns: boolean };
       log_audit: {
         Args: { _workspace_id: string; _action: string; _entity?: string; _payload?: Json };
@@ -3597,6 +3716,33 @@ export type Database = {
           name: string;
           avatar_url: string;
           joined_at: string;
+        }[];
+      };
+      workspace_overview: {
+        Args: never;
+        Returns: {
+          id: string;
+          name: string;
+          website_url: string;
+          domain: string;
+          industry: string;
+          client_status: string;
+          plan: string;
+          role: string;
+          owner_id: string;
+          duplicate_of: string;
+          onboarded_at: string;
+          created_at: string;
+          logo_url: string;
+          pending_approvals: number;
+          draft_count: number;
+          scheduled_count: number;
+          published_count: number;
+          failed_count: number;
+          connected_social_accounts: number;
+          geo_score: number;
+          geo_scanned_at: string;
+          last_activity_at: string;
         }[];
       };
     };

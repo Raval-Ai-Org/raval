@@ -1,5 +1,6 @@
 "use client";
 
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
@@ -53,11 +54,13 @@ function chatPrefill(prompt: string) {
 }
 
 export function useStudioSuggestions() {
+  // Suggestions are for the workspace on screen; loads re-run when it changes.
+  const workspaceId = useOptionalWorkspaceId();
   const [items, setItems] = useState<StudioSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const wsId = typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
+    const wsId = workspaceId;
     if (!wsId) {
       setItems([]);
       setLoading(false);
@@ -203,7 +206,7 @@ export function useStudioSuggestions() {
 
     setItems(out.slice(0, 5));
     setLoading(false);
-  }, []);
+  }, [workspaceId]);
 
   const callAi = useServerFn(refreshSuggestions);
   const [aiItems, setAiItems] = useState<StudioSuggestion[]>([]);
@@ -213,8 +216,7 @@ export function useStudioSuggestions() {
 
   const loadAi = useCallback(
     async (force = false) => {
-      const wsId =
-        typeof window !== "undefined" ? localStorage.getItem("workspace:selected") : null;
+      const wsId = workspaceId;
       if (!wsId || aiLoadingRef.current) return;
       // 15-minute cache. We rebuild `run` from stored `intent`+`prompt` because
       // functions don't survive JSON.stringify — hydrating a raw cached
@@ -301,7 +303,7 @@ export function useStudioSuggestions() {
         aiLoadingRef.current = false;
       }
     },
-    [callAi],
+    [callAi, workspaceId],
   );
 
   useEffect(() => {

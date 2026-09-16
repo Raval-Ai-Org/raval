@@ -113,7 +113,7 @@ export function createMemoryDb(
       }
       const doomed = new Set(matched());
       tables[table] = tableRows(table).filter((r) => !doomed.has(r));
-      return { data: null, error: null };
+      return { data: returning ? [...doomed].map((r) => ({ ...r })) : null, error: null };
     }
 
     const b: any = {

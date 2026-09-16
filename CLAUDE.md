@@ -30,6 +30,35 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
 - **Background work:** no queue service — job rows with leases claimed via
   SKIP LOCKED RPCs, advanced by pg_cron → `/api/public/hooks/*` and `after()`.
 
+## Workspaces (one brand = one isolated workspace)
+
+Decision record [ADR-0014](docs/adr/0014-canonical-workspaces.md).
+
+- **Identity comes from the URL, never storage.**
+  - Workspace pages are `/w/<id>/app/...`; build every link with
+    `src/lib/workspace/paths.ts`.
+  - Components get the workspace from `useWorkspace()` /
+    `useOptionalWorkspaceId()` (`src/components/workspace/WorkspaceProvider.tsx`).
+  - `workspace:last-opened` is a highlight only.
+  - Never fall back to "first/newest/last" workspace.
+- **Home is `/projects`.** Sign-in and app roots land there.
+- **Create, list and delete** only go through
+  `src/server/workspaces/service.server.ts`:
+  - create uses the idempotent, domain-deduplicated
+    `private.create_workspace_for_user`;
+  - list uses `workspace_overview()`;
+  - delete is owner-only and needs `CONFIRM`.
+- **Brand DNA is in `workspace_brand_dna`.** Read and write it via
+  `src/server/fns/brand-dna.ts` or `use-brand-dna.ts`, and load it on the server
+  for AI by the verified workspace id.
+- **Every request that touches workspace data or spends AI** takes an explicit
+  workspace id and verifies it (`auth: "workspace"` / `requireWorkspaceRole`).
+  Async results save to the id captured at request start.
+- **React Query keys** for workspace data include the workspace id; the provider
+  removes them on switch.
+- **Service-role reads of user-editable `meta`** (storage paths, provider ids)
+  must check they belong to the row's workspace (`src/lib/workspace/storage-path.ts`).
+
 ## AI Visibility (GEO / AEO / SEO)
 
 Full reference: [docs/geo-intelligence.md](docs/geo-intelligence.md), decision

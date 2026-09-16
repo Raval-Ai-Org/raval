@@ -1,33 +1,22 @@
 import type { Metadata } from "next";
-import { BASE_URL } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo";
 import { SessionGate } from "@/components/auth/SessionGate";
-import Onboarding from "./OnboardingPage";
+import { LegacyAppRedirect } from "@/components/workspace/LegacyAppRedirect";
 
-export const metadata: Metadata = {
+// Pre-/w/ link: resolved to the canonical /w/<workspaceId>/app route, or to
+// /projects — never to a guessed workspace (see LegacyAppRedirect).
+export const metadata: Metadata = pageMetadata({
   title: "Set Up Your Workspace · Mellox AI",
   description:
-    "Set up your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
-  alternates: { canonical: `${BASE_URL}/onboarding` },
-  robots: "noindex,nofollow",
-  openGraph: {
-    title: "Set Up Your Workspace · Mellox AI",
-    description:
-      "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
-    url: `${BASE_URL}/onboarding`,
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Set Up Your Workspace · Mellox AI",
-    description:
-      "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
-  },
-};
+    "Set up a brand workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+  path: "/onboarding",
+  noindex: true,
+});
 
 export default function Page() {
   return (
     <SessionGate>
-      <Onboarding />
+      <LegacyAppRedirect />
     </SessionGate>
   );
 }

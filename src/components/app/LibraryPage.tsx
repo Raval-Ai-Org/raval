@@ -1,5 +1,6 @@
 "use client";
 
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
@@ -26,7 +27,7 @@ import { PlatformStack, TypeGlyph } from "@/components/studio/studio-ui";
 import { openItemOrJob } from "@/hooks/use-studio";
 import { supabase } from "@/integrations/supabase/client";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
-import { authedFetch, getActiveWorkspaceId } from "@/lib/authed-fetch";
+import { authedFetch } from "@/lib/authed-fetch";
 import { normalizeLibraryAsset, type LibraryAsset } from "@/lib/library";
 import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -103,20 +104,9 @@ function fullDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
-/** Workspace id that follows the switcher. */
+/** The workspace this library belongs to (from the route). */
 function useWorkspaceId(): string | null {
-  const [id, setId] = useState<string | null>(null);
-  useEffect(() => {
-    const sync = () => setId(getActiveWorkspaceId());
-    sync();
-    addAppEventListener("workspace:changed", sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      removeAppEventListener("workspace:changed", sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
-  return id;
+  return useOptionalWorkspaceId();
 }
 
 /**

@@ -41,8 +41,8 @@ function LoginPage() {
   const navigate = useNavigate();
   const ensureWorkspace = useServerFn(ensureAuthWorkspace);
   const nextPath = useMemo(() => {
-    if (typeof window === "undefined") return "/app";
-    return safeNextPath(new URLSearchParams(window.location.search).get("next"), "/app");
+    if (typeof window === "undefined") return "/projects";
+    return safeNextPath(new URLSearchParams(window.location.search).get("next"), "/projects");
   }, []);
 
   const [email, setEmail] = useState("");

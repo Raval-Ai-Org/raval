@@ -142,8 +142,8 @@ const ROUTES: Array<{
     noindex: true,
   },
   {
-    label: "Workspaces (/workspaces)",
-    path: "/workspaces",
+    label: "Workspaces (/projects)",
+    path: "/projects",
     mustContain: [/Clients|Workspaces|client brand/i, /Marketing Intelligence Layer/i],
     noindex: true,
   },

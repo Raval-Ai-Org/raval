@@ -1,5 +1,6 @@
 "use client";
 
+import { DeleteWorkspaceDialog } from "@/components/workspace/DeleteWorkspaceDialog";
 import { addAppEventListener, removeAppEventListener, type AppEvent } from "@/lib/app-events";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
@@ -174,6 +175,7 @@ function DetailsDialog({
     null,
   );
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!open || !workspaceId) return;
@@ -194,7 +196,7 @@ function DetailsDialog({
           </span>,
         ],
         ["Members", <span className="font-medium tabular-nums">{details.memberCount}</span>],
-        ["Your role", <span className="font-medium">{details.isOwner ? "Owner" : "Member"}</span>],
+        ["Your role", <span className="font-medium capitalize">{details.role}</span>],
         ...(details.websiteUrl
           ? [
               ["Website", <span className="truncate font-medium">{details.websiteUrl}</span>] as [
@@ -251,11 +253,38 @@ function DetailsDialog({
           ))}
         </dl>
       )}
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex items-center justify-between gap-2">
+        {details?.isOwner ? (
+          <Button
+            variant="ghost"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setDeleting(true)}
+          >
+            Delete workspace…
+          </Button>
+        ) : (
+          <span />
+        )}
         <Button variant="outline" onClick={() => onOpenChange(false)}>
           Close
         </Button>
       </div>
+      <DeleteWorkspaceDialog
+        workspace={
+          deleting && details
+            ? {
+                id: details.id,
+                name: details.name,
+                domain: details.domain,
+                websiteUrl: details.websiteUrl,
+              }
+            : null
+        }
+        onOpenChange={(v) => {
+          if (!v) setDeleting(false);
+        }}
+        onDeleted={() => onOpenChange(false)}
+      />
     </AppModalShell>
   );
 }

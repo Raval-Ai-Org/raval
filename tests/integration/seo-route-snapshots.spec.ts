@@ -377,7 +377,7 @@ const PUBLIC_ROUTES = ["/", "/login", "/signup", "/reset-password"];
 // shell and agency/projects hubs. They must all stay noindex +
 // self-canonical so future refactors can't leak private tooling into
 // search.
-const PRIVATE_ROUTES = ["/onboarding", "/workspace", "/agency", "/workspaces"];
+const PRIVATE_ROUTES = ["/onboarding", "/workspace", "/agency", "/projects"];
 // Studio-adjacent routes that redirect into /app. We don't snapshot their
 // resolved head (that's covered by /app), but we DO assert the redirect
 // still lands on a noindex private shell so a broken redirect can't leak
@@ -441,7 +441,11 @@ test.describe("SEO route snapshots � approved pitch-deck text", () => {
       // Whatever it lands on must be noindex + branded � never public search.
       expect(snap.robots ?? "").toMatch(/noindex/i);
       expect(snap.ogSiteName).toBe("Mellox AI");
-      expect(snap.canonical ?? "").toMatch(new RegExp(`^${CANONICAL_HOST}/workspace`));
+      // Legacy studio links resolve client-side (to /w/<id>/app or /projects);
+      // the shell they serve is a private, self-canonical app route.
+      expect(snap.canonical ?? "").toMatch(
+        new RegExp(`^${CANONICAL_HOST}/(app|workspace|projects)`),
+      );
 
       assertNoForbidden(snap, `studio redirect ${path}`);
     });

@@ -39,8 +39,8 @@ function AuthCallbackPage() {
   });
 
   const nextPath = useMemo(() => {
-    if (typeof window === "undefined") return "/app";
-    return consumeStoredNextPath("/app");
+    if (typeof window === "undefined") return "/projects";
+    return consumeStoredNextPath("/projects");
   }, []);
 
   useEffect(() => {

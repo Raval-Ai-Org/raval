@@ -6,7 +6,19 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { signOutAndRedirect } from "@/lib/auth";
-import { createWorkspace, ensureAuthWorkspace } from "@/lib/workspaces.functions";
+import { ensureAuthWorkspace, renameWorkspace } from "@/lib/workspaces.functions";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useWorkspaces,
+  useInvalidateWorkspaces,
+  WORKSPACES_QUERY_KEY,
+  type WorkspaceSummary,
+} from "@/hooks/use-workspaces";
+import { useCreateWorkspace, type CreateWorkspaceOutcome } from "@/hooks/use-create-workspace";
+import { DeleteWorkspaceDialog } from "@/components/workspace/DeleteWorkspaceDialog";
+import { normalizeDomain, toWebsiteUrl } from "@/lib/workspace/domain";
+import { onboardingPath, workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
+import { readLastWorkspace } from "@/lib/workspace/last-opened";
 import { Logo } from "@/components/brand/Logo";
 import { SecondaryBrandSymbols } from "@/components/brand/SecondaryBrandSymbols";
 import { Button } from "@/components/ui/button";
@@ -63,17 +75,9 @@ import { pageHead, webPageLd } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 import { usePersona, type PersonaCopy } from "@/hooks/use-persona";
 
-type Workspace = {
-  id: string;
-  name: string;
-  website_url: string | null;
-  industry: string | null;
-  onboarded_at: string | null;
-  created_at: string;
-  client_status: "active" | "onboarding" | "paused";
-};
+type Workspace = WorkspaceSummary;
 
-export type ClientStatus = Workspace["client_status"];
+export type ClientStatus = Workspace["clientStatus"];
 
 const STATUS_META: Record<ClientStatus, { label: string; dot: string; chipText: string }> = {
   active: {
@@ -89,33 +93,32 @@ const STATUS_META: Record<ClientStatus, { label: string; dot: string; chipText: 
   paused: { label: "Paused", dot: "bg-zinc-400", chipText: "text-muted-foreground" },
 };
 
-const SELECTED_KEY = "workspace:selected";
+type StatusFilter = "all" | ClientStatus | "attention";
+
+/** Where opening a workspace lands: its app, or setup if never onboarded. */
+function openHref(w: Pick<Workspace, "id" | "onboarded">): string {
+  return w.onboarded ? workspacePath(w.id) : onboardingPath(w.id);
+}
 
 function ProjectsPage() {
   const navigate = useNavigate();
   const ensureWorkspace = useServerFn(ensureAuthWorkspace);
   const { copy } = usePersona();
-  const [loading, setLoading] = useState(true);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const queryClient = useQueryClient();
+  const invalidateWorkspaces = useInvalidateWorkspaces();
+  const [sessionReady, setSessionReady] = useState(false);
+  const workspacesQuery = useWorkspaces({ enabled: sessionReady });
+  const workspaces = useMemo(() => workspacesQuery.data ?? [], [workspacesQuery.data]);
+  const loading = !sessionReady || workspacesQuery.isLoading;
   const [userEmail, setUserEmail] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
   const [userAvatar, setUserAvatar] = useState<string>("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null);
-
-  const refresh = async () => {
-    const { data, error } = await supabase
-      .from("workspaces")
-      .select("id, name, website_url, industry, onboarded_at, created_at, client_status")
-      .order("created_at", { ascending: false });
-    if (error) {
-      toast.error("Couldn't load clients");
-      return;
-    }
-    setWorkspaces(data ?? []);
-  };
+  const [lastOpened, setLastOpened] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,22 +133,38 @@ function ProjectsPage() {
       const meta = (u.user_metadata ?? {}) as Record<string, any>;
       setUserName(meta.full_name || meta.name || (u.email ? u.email.split("@")[0] : ""));
       setUserAvatar(meta.avatar_url || meta.picture || "");
+      setLastOpened(readLastWorkspace());
       try {
-        await ensureWorkspace();
-      } catch (error) {
-        toast.error("Couldn't prepare your workspace");
+        await ensureWorkspace(); // profile row only — never picks or creates a workspace
+      } catch {
+        /* profile upsert is best effort */
       }
-      await refresh();
-      if (!cancelled) setLoading(false);
+      if (!cancelled) setSessionReady(true);
     })();
     return () => {
       cancelled = true;
     };
   }, [ensureWorkspace, navigate]);
 
+  useEffect(() => {
+    if (workspacesQuery.error) toast.error("Couldn't load workspaces");
+  }, [workspacesQuery.error]);
+
   const openProject = (w: Workspace) => {
-    localStorage.setItem(SELECTED_KEY, w.id);
-    navigate({ to: "/app" });
+    navigate({ to: openHref(w) });
+  };
+
+  /** A create that returned an existing workspace (same brand domain) opens it instead. */
+  const afterCreate = (result: CreateWorkspaceOutcome, then: "onboarding" | "app") => {
+    if (!result.created) {
+      toast.message(`You already have ${result.domain || result.name}`, {
+        description: "Opening the existing workspace instead of creating a duplicate.",
+      });
+      const existing = workspaces.find((w) => w.id === result.id);
+      navigate({ to: existing ? openHref(existing) : workspacePath(result.id) });
+      return;
+    }
+    navigate({ to: then === "onboarding" ? onboardingPath(result.id) : workspacePath(result.id) });
   };
 
   const signOut = async () => {
@@ -154,44 +173,39 @@ function ProjectsPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return workspaces;
-    return workspaces.filter((w) =>
-      [w.name, w.website_url, w.industry].some((v) => v?.toLowerCase().includes(q)),
-    );
-  }, [workspaces, query]);
+    return workspaces.filter((w) => {
+      if (statusFilter === "attention" && w.health === "healthy") return false;
+      if (statusFilter !== "all" && statusFilter !== "attention" && w.clientStatus !== statusFilter)
+        return false;
+      if (!q) return true;
+      return [w.name, w.domain, w.websiteUrl, w.industry].some((v) => v?.toLowerCase().includes(q));
+    });
+  }, [workspaces, query, statusFilter]);
 
   const handleRename = async (id: string, name: string) => {
-    const { error } = await supabase.from("workspaces").update({ name: name.trim() }).eq("id", id);
-    if (error) {
-      toast.error("Couldn't rename");
+    try {
+      await renameWorkspace({ data: { workspaceId: id, name: name.trim() } });
+    } catch (e) {
+      toast.error("Couldn't rename", { description: e instanceof Error ? e.message : undefined });
       return;
     }
-    toast.success("Client renamed");
+    toast.success(`${copy.Noun} renamed`);
     setRenameTarget(null);
-    refresh();
-  };
-
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("workspaces").delete().eq("id", id);
-    if (error) {
-      toast.error("Couldn't remove client");
-      return;
-    }
-    if (localStorage.getItem(SELECTED_KEY) === id) localStorage.removeItem(SELECTED_KEY);
-    toast.success("Client removed");
-    setDeleteTarget(null);
-    refresh();
+    void invalidateWorkspaces();
   };
 
   const handleStatus = async (id: string, status: ClientStatus) => {
-    const prev = workspaces;
-    setWorkspaces((ws) => ws.map((w) => (w.id === id ? { ...w, client_status: status } : w)));
-    const { error } = await supabase
+    const prev = queryClient.getQueryData<Workspace[]>(WORKSPACES_QUERY_KEY);
+    queryClient.setQueryData<Workspace[]>(WORKSPACES_QUERY_KEY, (ws) =>
+      (ws ?? []).map((w) => (w.id === id ? { ...w, clientStatus: status } : w)),
+    );
+    const { data, error } = await supabase
       .from("workspaces")
       .update({ client_status: status })
-      .eq("id", id);
-    if (error) {
-      setWorkspaces(prev);
+      .eq("id", id)
+      .select("id");
+    if (error || !data?.length) {
+      queryClient.setQueryData(WORKSPACES_QUERY_KEY, prev);
       toast.error("Couldn't update status");
       return;
     }
@@ -205,7 +219,7 @@ function ProjectsPage() {
       {/* Top bar */}
       <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-5">
         <Link
-          to="/workspaces"
+          to={WORKSPACES_HOME}
           aria-label="Mellox AI home"
           className="flex h-9 shrink-0 items-center"
         >
@@ -253,20 +267,15 @@ function ProjectsPage() {
           className="mx-auto mt-8 w-full max-w-xl"
         >
           <PasteLinkBar
-            onCreated={(id) => {
-              localStorage.setItem(SELECTED_KEY, id);
-              navigate({ to: "/onboarding" });
-            }}
+            existing={workspaces}
+            onCreated={(result) => afterCreate(result, "onboarding")}
             onOpenAdvanced={() => setDialogOpen(true)}
           />
           <NewProjectDialog
             open={dialogOpen}
             onOpenChange={setDialogOpen}
             copy={copy}
-            onCreated={(id) => {
-              localStorage.setItem(SELECTED_KEY, id);
-              navigate({ to: "/app" });
-            }}
+            onCreated={(result) => afterCreate(result, "app")}
           />
         </motion.div>
       </section>
@@ -283,6 +292,18 @@ function ProjectsPage() {
                 <span className="text-[12px] text-muted-foreground">
                   {workspaces.length} {workspaces.length === 1 ? copy.noun : copy.nounPlural}
                 </span>
+                <select
+                  aria-label="Filter by status"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                  className="h-7 rounded-full border border-border/60 bg-background/60 px-2 text-[12px] text-foreground outline-none"
+                >
+                  <option value="all">All</option>
+                  <option value="attention">Needs attention</option>
+                  <option value="active">Active</option>
+                  <option value="onboarding">Onboarding</option>
+                  <option value="paused">Paused</option>
+                </select>
               </div>
 
               <div className="flex w-full items-center gap-2 sm:w-auto">
@@ -308,10 +329,13 @@ function ProjectsPage() {
               <div className="grid place-items-center rounded-2xl border border-dashed border-border/60 bg-background/40 px-6 py-12 text-center">
                 <Search className="h-5 w-5 text-muted-foreground" />
                 <p className="mt-2 text-[13px] text-muted-foreground">
-                  No {copy.nounPlural} match "{query}"
+                  No {copy.nounPlural} match {query ? `"${query}"` : "this filter"}
                 </p>
                 <button
-                  onClick={() => setQuery("")}
+                  onClick={() => {
+                    setQuery("");
+                    setStatusFilter("all");
+                  }}
                   className="mt-3 text-[12px] font-medium text-foreground underline-offset-4 hover:underline"
                 >
                   Clear search
@@ -325,9 +349,15 @@ function ProjectsPage() {
                       key={w.id}
                       workspace={w}
                       index={i}
+                      lastOpened={w.id === lastOpened}
+                      duplicateOfName={
+                        w.duplicateOf
+                          ? (workspaces.find((x) => x.id === w.duplicateOf)?.name ?? null)
+                          : null
+                      }
                       onOpen={() => openProject(w)}
                       onRename={() => setRenameTarget(w)}
-                      onDelete={() => setDeleteTarget(w)}
+                      onDelete={w.isOwner ? () => setDeleteTarget(w) : undefined}
                       onStatusChange={(s) => handleStatus(w.id, s)}
                     />
                   ))}
@@ -358,27 +388,14 @@ function ProjectsPage() {
         onSave={handleRename}
       />
 
-      {/* Delete confirmation */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{copy.deletePromptTitle}</AlertDialogTitle>
-            <AlertDialogDescription>
-              "{deleteTarget?.name}" and all its data — chats, content, settings — will be
-              permanently removed. This can't be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteTarget && handleDelete(deleteTarget.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete project
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete confirmation — typed CONFIRM, server-side, owner only */}
+      <DeleteWorkspaceDialog
+        workspace={deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        onDeleted={(id) => {
+          if (lastOpened === id) setLastOpened(null);
+        }}
+      />
     </div>
   );
 }
@@ -474,7 +491,7 @@ function AccountMenu({
           </div>
           <div className="text-[12px] text-muted-foreground truncate max-w-full">{email}</div>
           <button
-            onClick={() => navigate({ to: "/app" })}
+            onClick={() => navigate({ to: WORKSPACES_HOME })}
             className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 py-1.5 text-[12px] font-medium text-foreground transition hover:bg-muted"
           >
             <UserCircle2 className="h-3.5 w-3.5" /> Manage your account
@@ -490,13 +507,13 @@ function AccountMenu({
           </DropdownMenuItem>
           <DropdownMenuItem
             className="gap-2.5 rounded-lg py-2 text-[13px]"
-            onSelect={() => navigate({ to: "/onboarding" })}
+            onSelect={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           >
             <UserPlus className="h-4 w-4 text-muted-foreground" /> Add another client
           </DropdownMenuItem>
           <DropdownMenuItem
             className="gap-2.5 rounded-lg py-2 text-[13px]"
-            onSelect={() => navigate({ to: "/app" })}
+            onSelect={() => navigate({ to: WORKSPACES_HOME })}
           >
             <Settings className="h-4 w-4 text-muted-foreground" /> Settings
           </DropdownMenuItem>
@@ -529,6 +546,8 @@ function AccountMenu({
 function ProjectCard({
   workspace,
   index,
+  lastOpened = false,
+  duplicateOfName = null,
   onOpen,
   onRename,
   onDelete,
@@ -536,17 +555,15 @@ function ProjectCard({
 }: {
   workspace: Workspace;
   index: number;
+  lastOpened?: boolean;
+  duplicateOfName?: string | null;
   onOpen: () => void;
   onRename: () => void;
-  onDelete: () => void;
+  /** Absent for non-owners: only the owner can delete a workspace. */
+  onDelete?: () => void;
   onStatusChange: (s: ClientStatus) => void;
 }) {
-  const domain = workspace.website_url
-    ? workspace.website_url
-        .replace(/^https?:\/\//i, "")
-        .replace(/\/$/, "")
-        .split("/")[0]
-    : null;
+  const domain = workspace.domain;
   const initials = (workspace.name || domain || "W").slice(0, 2).toUpperCase();
   const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : null;
   const screenshotUrl = domain
@@ -645,10 +662,23 @@ function ProjectCard({
           {/* Client status chip */}
           <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-[10.5px] font-medium text-foreground/80 backdrop-blur">
             <span
-              className={cn("h-1.5 w-1.5 rounded-full", STATUS_META[workspace.client_status].dot)}
+              className={cn("h-1.5 w-1.5 rounded-full", STATUS_META[workspace.clientStatus].dot)}
             />
-            {STATUS_META[workspace.client_status].label}
+            {STATUS_META[workspace.clientStatus].label}
           </span>
+          {workspace.duplicateOf && (
+            <span
+              className="absolute right-3 top-3 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-medium text-amber-700 backdrop-blur dark:text-amber-300"
+              title={`Same website as ${duplicateOfName ?? "another workspace"}. Review and delete the copy you don't need.`}
+            >
+              Possible duplicate
+            </span>
+          )}
+          {!workspace.duplicateOf && lastOpened && (
+            <span className="absolute right-3 top-3 inline-flex items-center rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground backdrop-blur">
+              Last opened
+            </span>
+          )}
         </div>
       </button>
 
@@ -679,11 +709,12 @@ function ProjectCard({
               <span className="truncate">
                 {domain ||
                   workspace.industry ||
-                  (workspace.onboarded_at ? "Ready to chat" : "Finish setup")}
+                  (workspace.onboarded ? "Ready to chat" : "Finish setup")}
                 {" · "}
-                {formatRelative(workspace.created_at)}
+                {formatRelative(workspace.lastActivityAt)}
               </span>
             </div>
+            <WorkspaceMetrics workspace={workspace} />
           </div>
         </button>
 
@@ -701,9 +732,9 @@ function ProjectCard({
             <DropdownMenuItem onClick={onOpen}>
               <ArrowRight className="mr-2 h-3.5 w-3.5" /> Open project
             </DropdownMenuItem>
-            {workspace.website_url && (
+            {workspace.websiteUrl && (
               <DropdownMenuItem asChild>
-                <a href={workspace.website_url} target="_blank" rel="noreferrer">
+                <a href={workspace.websiteUrl} target="_blank" rel="noreferrer">
                   <ExternalLink className="mr-2 h-3.5 w-3.5" /> Visit website
                 </a>
               </DropdownMenuItem>
@@ -719,22 +750,48 @@ function ProjectCard({
               <DropdownMenuItem key={s} onClick={() => onStatusChange(s)} className="text-[12.5px]">
                 <span className={cn("mr-2 h-2 w-2 rounded-full", STATUS_META[s].dot)} />
                 {STATUS_META[s].label}
-                {workspace.client_status === s && (
+                {workspace.clientStatus === s && (
                   <span className="ml-auto text-[10px] text-muted-foreground">current</span>
                 )}
               </DropdownMenuItem>
             ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={onDelete}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
-            </DropdownMenuItem>
+            {onDelete && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={onDelete}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete…
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
     </motion.div>
+  );
+}
+
+/** This workspace's own numbers — never aggregated with another workspace. */
+function WorkspaceMetrics({ workspace: w }: { workspace: Workspace }) {
+  const items = [
+    w.pendingApprovals ? `${w.pendingApprovals} to approve` : null,
+    w.scheduledCount ? `${w.scheduledCount} scheduled` : null,
+    w.publishedCount ? `${w.publishedCount} published` : null,
+    w.failedCount ? `${w.failedCount} failed` : null,
+    w.geoScore !== null ? `AI visibility ${w.geoScore}` : null,
+  ].filter(Boolean);
+  if (!items.length) return null;
+  return (
+    <div
+      className={cn(
+        "mt-0.5 truncate text-[11px]",
+        w.health === "attention" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
+      )}
+    >
+      {items.join(" · ")}
+    </div>
   );
 }
 
@@ -756,15 +813,16 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 function PasteLinkBar({
+  existing,
   onCreated,
   onOpenAdvanced,
 }: {
-  onCreated: (id: string) => void;
+  existing: Workspace[];
+  onCreated: (result: CreateWorkspaceOutcome) => void;
   onOpenAdvanced: () => void;
 }) {
   const [url, setUrl] = useState("");
-  const [saving, setSaving] = useState(false);
-  const createWorkspaceFn = useServerFn(createWorkspace);
+  const { create, pending: saving } = useCreateWorkspace();
 
   const isValid = useMemo(() => {
     const v = url.trim();
@@ -772,17 +830,18 @@ function PasteLinkBar({
     return /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/.*)?$/i.test(v);
   }, [url]);
 
+  // Same brand already here? Say so before submitting.
+  const already = useMemo(() => {
+    const domain = normalizeDomain(url);
+    return domain ? (existing.find((w) => w.domain === domain && !w.duplicateOf) ?? null) : null;
+  }, [url, existing]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid || saving) return;
-    const cleanUrl = url.trim();
-    const normalizedUrl = /^https?:\/\//i.test(cleanUrl) ? cleanUrl : `https://${cleanUrl}`;
-    let host = "";
-    try {
-      host = new URL(normalizedUrl).hostname.replace(/^www\./i, "");
-    } catch {
-      host = cleanUrl;
-    }
+    const normalizedUrl = toWebsiteUrl(url);
+    if (!normalizedUrl) return;
+    const host = normalizeDomain(normalizedUrl) ?? "";
     const derivedName = host.split(".")[0]
       ? host
           .split(".")[0]
@@ -790,17 +849,12 @@ function PasteLinkBar({
           .replace(/\b\w/g, (c) => c.toUpperCase())
       : "New project";
 
-    setSaving(true);
     try {
-      const data = await createWorkspaceFn({
-        data: { name: derivedName, websiteUrl: normalizedUrl },
-      });
-      toast.success("Project created — let's set it up");
-      onCreated(data as string);
+      const result = await create({ name: derivedName, websiteUrl: normalizedUrl });
+      if (result.created) toast.success("Project created — let's set it up");
+      onCreated(result);
     } catch (error: any) {
       toast.error(error?.message ?? "Couldn't create project");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -856,7 +910,7 @@ function PasteLinkBar({
         <button
           type="submit"
           disabled={!isValid || saving}
-          aria-label="Continue"
+          aria-label={already ? `Open ${already.domain}` : "Continue"}
           className={cn(
             "!mt-0 grid h-11 w-11 shrink-0 place-items-center rounded-full transition",
             isValid && !saving
@@ -871,6 +925,12 @@ function PasteLinkBar({
           )}
         </button>
       </form>
+      {already && (
+        <p className="mt-2 text-center text-[12px] text-muted-foreground" role="status">
+          You already have a workspace for <span className="font-medium">{already.domain}</span>
+          {" — continuing opens it."}
+        </p>
+      )}
     </div>
   );
 }
@@ -885,13 +945,12 @@ function NewProjectDialog({
   children?: React.ReactNode;
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onCreated: (id: string) => void;
+  onCreated: (result: CreateWorkspaceOutcome) => void;
   copy: PersonaCopy;
 }) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
-  const [saving, setSaving] = useState(false);
-  const createWorkspaceFn = useServerFn(createWorkspace);
+  const { create, pending: saving } = useCreateWorkspace();
 
   const reset = () => {
     setName("");
@@ -906,24 +965,20 @@ function NewProjectDialog({
       toast.error(`Give your ${copy.noun} a name`);
       return;
     }
-    setSaving(true);
-    const normalizedUrl = cleanUrl
-      ? /^https?:\/\//i.test(cleanUrl)
-        ? cleanUrl
-        : `https://${cleanUrl}`
-      : undefined;
+    if (saving) return;
+    const normalizedUrl = cleanUrl ? toWebsiteUrl(cleanUrl) : null;
+    if (cleanUrl && !normalizedUrl) {
+      toast.error("Enter a valid website, like yourcompany.com");
+      return;
+    }
     try {
-      const data = await createWorkspaceFn({
-        data: { name: trimmed, websiteUrl: normalizedUrl ?? null },
-      });
-      toast.success(`${copy.Noun} created`);
+      const result = await create({ name: trimmed, websiteUrl: normalizedUrl });
+      if (result.created) toast.success(`${copy.Noun} created`);
       onOpenChange(false);
       reset();
-      onCreated(data as string);
+      onCreated(result);
     } catch (error: any) {
       toast.error(error?.message ?? `Couldn't create ${copy.noun}`);
-    } finally {
-      setSaving(false);
     }
   };
 

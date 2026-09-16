@@ -1,57 +1,43 @@
 import { supabase } from "@/integrations/supabase/client";
-import { onAppEvent } from "@/lib/app-events";
+import { workspaceIdFromPath } from "@/lib/workspace/paths";
 
 // Authenticated fetch for our /api/* server routes.
-// Attaches the Supabase access token as a Bearer header, and the active
-// workspace as `x-workspace-id` so the server can attribute AI spend to it for
-// metering and plan budgets. The server only honours that header after
-// verifying the caller is a member (src/server/route.ts) — it is attribution,
-// never authorization.
+// Attaches the Supabase access token as a Bearer header, and the workspace as
+// `x-workspace-id` so the server can attribute AI spend to it for metering and
+// plan budgets. The server only honours that header after verifying the
+// caller is a member (src/server/route.ts) — it is attribution, never
+// authorization. Routes that act on workspace data take the id in their input
+// and verify it (defineRoute auth: "workspace" / requireWorkspaceRole).
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SELECTED_WORKSPACE_KEY = "workspace:selected";
-
-let activeWorkspaceId: string | null | undefined;
-let subscribed = false;
-
-function readStoredWorkspace(): string | null {
-  try {
-    const raw = window.localStorage.getItem(SELECTED_WORKSPACE_KEY);
-    if (!raw) return null;
-    if (UUID_RE.test(raw)) return raw;
-    const parsed = JSON.parse(raw) as unknown;
-    if (typeof parsed === "string" && UUID_RE.test(parsed)) return parsed;
-    const id = (parsed as { id?: unknown } | null)?.id;
-    return typeof id === "string" && UUID_RE.test(id) ? id : null;
-  } catch {
-    return null;
-  }
-}
-
-/** The workspace the user is currently working in (browser only). */
+/**
+ * The workspace of the page the user is on, read from the canonical URL
+ * (/w/<id>/...) at the moment of the call. There is no cached or stored
+ * "active workspace": a request captures the id when it starts, so switching
+ * workspaces mid-request can never re-point it.
+ */
 export function getActiveWorkspaceId(): string | null {
   if (typeof window === "undefined") return null;
-  if (!subscribed) {
-    subscribed = true;
-    onAppEvent("workspace:changed", (event) => {
-      const id = event.detail?.id ?? null;
-      activeWorkspaceId = id && UUID_RE.test(id) ? id : null;
-    });
-  }
-  if (activeWorkspaceId === undefined) activeWorkspaceId = readStoredWorkspace();
-  return activeWorkspaceId;
+  return workspaceIdFromPath(window.location.pathname);
 }
 
-export async function authedFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+export type AuthedFetchInit = RequestInit & {
+  /** The workspace this request acts for; defaults to the current page's. */
+  workspaceId?: string | null;
+};
+
+export async function authedFetch(input: RequestInfo | URL, init: AuthedFetchInit = {}) {
+  const { workspaceId: explicit, ...rest } = init;
+  // Captured before the first await so a navigation during token refresh
+  // cannot change which workspace this request is attributed to.
+  const workspaceId = explicit !== undefined ? explicit : getActiveWorkspaceId();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  const headers = new Headers(init.headers);
+  const headers = new Headers(rest.headers);
   if (token && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${token}`);
   }
-  const workspaceId = getActiveWorkspaceId();
   if (workspaceId && !headers.has("x-workspace-id")) {
     headers.set("x-workspace-id", workspaceId);
   }
-  return fetch(input, { ...init, headers });
+  return fetch(input, { ...rest, headers });
 }

@@ -42,7 +42,8 @@ export type RateLimitTier =
   | "geo-agent-action"
   | "image"
   | "video"
-  | "share-password";
+  | "share-password"
+  | "workspace-lifecycle";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -88,6 +89,9 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // password two or three times; 10 per 5 minutes is generous for them and
   // useless for a brute-force run.
   "share-password": { limit: 10, windowSeconds: 300, label: "password attempt" },
+  // Creating and deleting workspaces. Retries of one create replay its
+  // idempotency key, so this only bounds genuinely new workspaces and deletes.
+  "workspace-lifecycle": { limit: 20, windowSeconds: 600, label: "workspace change" },
 };
 
 export type RateLimitResult = {

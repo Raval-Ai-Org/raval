@@ -10,13 +10,49 @@ const WORKSPACE_STORAGE_KEYS = [
   "workspace:selected",
   "workspace:name",
   "workspace:website",
+  "workspace:last-opened",
   "pending:invite_token",
   "raval:studioOpen",
   "app:navOpen",
   "chat:width",
   "chat:collapsed",
-  "raval:persona",
+  "profile:persona",
+  "social:connect:pending",
 ] as const;
+
+// Key prefixes that hold one account's workspace data (Brand DNA cache, Studio
+// drafts and jobs, coach briefings, notes, calendars, agent settings…).
+export const ACCOUNT_DATA_PREFIXES = [
+  "brand-dna:",
+  "design-md:",
+  "studio:",
+  "coach:",
+  "notes:",
+  "notes-",
+  "content-calendar:",
+  "calendar:",
+  "geo:",
+  "market-brain:",
+  "agent-",
+  "ai-tokens:",
+  "raval:first-prompt-fired:",
+  "onboarding:",
+  "agency:",
+  "chat:prefill:",
+] as const;
+
+export function isAccountDataKey(key: string): boolean {
+  return ACCOUNT_DATA_PREFIXES.some((p) => key.startsWith(p));
+}
+
+function clearAccountData(store: Storage) {
+  const doomed: string[] = [];
+  for (let i = 0; i < store.length; i++) {
+    const k = store.key(i);
+    if (k && isAccountDataKey(k)) doomed.push(k);
+  }
+  for (const k of doomed) store.removeItem(k);
+}
 
 /**
  * Clear auth session + workspace-scoped caches and hard-redirect to /login.
@@ -36,6 +72,8 @@ export async function signOutAndRedirect(queryClient?: QueryClient) {
   if (typeof window !== "undefined") {
     try {
       for (const key of WORKSPACE_STORAGE_KEYS) window.localStorage.removeItem(key);
+      clearAccountData(window.localStorage);
+      clearAccountData(window.sessionStorage);
       window.sessionStorage.removeItem(AUTH_NEXT_KEY);
     } catch {}
     emitAppEvent("workspace:changed", { id: null });
@@ -43,12 +81,12 @@ export async function signOutAndRedirect(queryClient?: QueryClient) {
   }
 }
 
-export function safeNextPath(value: string | null | undefined, fallback = "/app") {
+export function safeNextPath(value: string | null | undefined, fallback = "/projects") {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return fallback;
   return value;
 }
 
-export function authCallbackUrl(nextPath = "/app") {
+export function authCallbackUrl(nextPath = "/projects") {
   const next = safeNextPath(nextPath);
   if (typeof window !== "undefined") {
     window.sessionStorage.setItem(AUTH_NEXT_KEY, next);
@@ -56,7 +94,7 @@ export function authCallbackUrl(nextPath = "/app") {
   return `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
 }
 
-export function consumeStoredNextPath(fallback = "/app") {
+export function consumeStoredNextPath(fallback = "/projects") {
   if (typeof window === "undefined") return fallback;
   const fromQuery = new URLSearchParams(window.location.search).get("next");
   const fromStorage = window.sessionStorage.getItem(AUTH_NEXT_KEY);
@@ -126,7 +164,7 @@ export function friendlyAuthError(error: unknown) {
   return "Authentication could not be completed. Please try again.";
 }
 
-export async function signInWithGoogle(nextPath = "/app") {
+export async function signInWithGoogle(nextPath = "/projects") {
   // Native Supabase Google OAuth. The browser is redirected to Google, then
   // Supabase returns the user to /auth/callback, which exchanges the PKCE
   // code for a session (see authCallbackUrl).
