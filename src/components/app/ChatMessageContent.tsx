@@ -167,6 +167,7 @@ function ChatMessageContentInner({
               </div>
             );
           },
+          h4: ({ children }) => <h4>{children}</h4>,
           ul: ({ children }) => <ul>{children}</ul>,
           ol: ({ children }) => <ol className="space-y-1.5 [counter-reset:step]">{children}</ol>,
           li: ({ children, ...props }: any) => {

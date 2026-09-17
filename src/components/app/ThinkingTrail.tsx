@@ -16,11 +16,11 @@ import {
 type Step = { id: string; label: string; icon: LucideIcon };
 
 const DEFAULT_STEPS: Step[] = [
-  { id: "route", label: "Routing prompt to the right agent", icon: Workflow },
-  { id: "scan", label: "Scanning your site & signals", icon: Database },
-  { id: "reason", label: "Reasoning across models", icon: Brain },
-  { id: "draft", label: "Drafting the response", icon: Sparkles },
-  { id: "ready", label: "Preparing actions for approval", icon: Rocket },
+  { id: "route", label: "Understanding your request", icon: Workflow },
+  { id: "scan", label: "Reviewing your brand context", icon: Database },
+  { id: "reason", label: "Analyzing the market", icon: Brain },
+  { id: "draft", label: "Structuring recommendations", icon: Sparkles },
+  { id: "ready", label: "Preparing next steps", icon: Rocket },
 ];
 
 /**
@@ -64,8 +64,11 @@ export function ThinkingTrail({
 
       <div className="max-w-[85%] flex-1 rounded-2xl rounded-bl-sm border border-border bg-card/80 px-3.5 py-2.5 backdrop-blur">
         <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin text-aura" />
-          Working
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inset-0 rounded-full bg-[hsl(var(--brand-green))] opacity-60" />
+            <span className="relative h-2.5 w-2.5 rounded-full bg-[hsl(var(--brand-green))]" />
+          </span>
+          Ravi is thinking
           {site ? (
             <span className="normal-case tracking-normal text-foreground/80">
               · {site.replace(/^https?:\/\//, "")}

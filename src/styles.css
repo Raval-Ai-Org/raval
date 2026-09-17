@@ -2167,13 +2167,13 @@ h6 {
 
 /* === User bubble === */
 .chat-bubble-user {
-  max-width: 88%;
+  max-width: min(88%, 38rem);
   padding: var(--chat-space-3) var(--chat-space-4);
   border-radius: var(--chat-radius-bubble);
   border-bottom-right-radius: calc(var(--chat-radius-bubble) - 0.6rem);
-  background: var(--chat-user-bg);
+  background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--muted) / 0.38) 100%);
   color: var(--chat-user-ink);
-  border: 1px solid var(--chat-user-border);
+  border: 1px solid hsl(var(--border) / 0.8);
   font-size: var(--chat-text-base);
   line-height: var(--chat-leading-base);
   letter-spacing: -0.011em;
@@ -2182,9 +2182,90 @@ h6 {
     "cv11" on,
     "kern" on;
   text-wrap: pretty;
-  box-shadow:
-    inset 0 1px 0 hsl(0 0% 100% / 0.05),
-    0 8px 22px -12px hsl(0 0% 0% / 0.55);
+  box-shadow: 0 10px 26px -18px hsl(var(--foreground) / 0.35);
+}
+
+.chat-assistant-shell {
+  width: min(100%, 68rem);
+}
+
+.chat-assistant-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding-left: 0.1rem;
+}
+
+.chat-assistant-avatar {
+  display: grid;
+  place-items: center;
+  height: 1.7rem;
+  width: 1.7rem;
+  border-radius: 0.7rem;
+  border: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--card));
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.08);
+}
+
+.chat-assistant-labels {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.chat-assistant-name {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--chat-ink-muted);
+}
+
+.chat-assistant-role {
+  font-size: 10.5px;
+  color: var(--chat-ink-faint);
+}
+
+.chat-assistant-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--secondary) / 0.7);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--foreground));
+}
+
+.chat-assistant-status-dot {
+  display: inline-block;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: hsl(var(--brand-green));
+  box-shadow: 0 0 0 4px hsl(var(--brand-green) / 0.12);
+  animation: chat-status-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes chat-status-pulse {
+  0%,
+  100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: 0.75; }
+}
+
+.chat-assistant-content {
+  width: min(100%, 68ch);
+  padding: 0.25rem 0.15rem 0.15rem;
+  font-size: var(--chat-text-base);
+  line-height: var(--chat-leading-base);
+  color: var(--chat-ink);
 }
 
 /* === Focus ring used across chat controls — visible in light + dark === */
@@ -2205,6 +2286,50 @@ h6 {
   opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.chat-message-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  margin-top: 0.5rem;
+}
+
+.chat-assistant-shell:hover .chat-message-actions,
+.chat-assistant-shell:focus-within .chat-message-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.chat-message-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.9rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.8);
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.chat-message-action:hover {
+  border-color: hsl(var(--border-strong));
+  background: hsl(var(--secondary) / 0.8);
+}
+
+.chat-message-action:active {
+  transform: translateY(0.5px);
 }
 
 /* === Highlight callouts (TL;DR / Next / Note) === */
@@ -2275,7 +2400,8 @@ h6 {
 
 .chat-md h1,
 .chat-md h2,
-.chat-md h3 {
+.chat-md h3,
+.chat-md h4 {
   font-family: var(--font-sans);
   letter-spacing: -0.01em;
   color: var(--chat-ink);
@@ -2283,8 +2409,19 @@ h6 {
 .chat-md h1 {
   font-size: var(--chat-text-md);
   font-weight: 600;
-  margin: var(--chat-space-3) 0 var(--chat-space-2);
+  margin: calc(var(--chat-space-3) + 0.15rem) 0 var(--chat-space-2);
   line-height: var(--chat-leading-tight);
+}
+.chat-md h2 {
+  font-size: calc(var(--chat-text-md) - 0.1rem);
+  font-weight: 600;
+  margin: calc(var(--chat-space-4) + 0.1rem) 0 var(--chat-space-2);
+}
+.chat-md h3,
+.chat-md h4 {
+  font-size: var(--chat-text-base);
+  font-weight: 600;
+  margin: var(--chat-space-3) 0 var(--chat-space-2);
 }
 
 /* Section eyebrows (### Plan / ### Key points) */
@@ -2316,14 +2453,68 @@ h6 {
 .chat-md ul,
 .chat-md ol {
   margin: 0 0 var(--chat-space-3);
-  padding: 0;
-  list-style: none;
+  padding-left: 1.2rem;
+}
+.chat-md li {
+  margin: 0.2rem 0;
+  line-height: var(--chat-leading-base);
+}
+.chat-md ul {
+  list-style: disc;
+}
+.chat-md ol {
+  list-style: decimal;
 }
 .chat-md ul ul,
 .chat-md ol ol,
 .chat-md ul ol,
 .chat-md ol ul {
   margin: var(--chat-space-1) 0 0;
+  padding-left: 1.1rem;
+}
+.chat-md strong {
+  font-weight: 600;
+  color: var(--chat-ink);
+}
+.chat-md a {
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-color: hsl(var(--foreground) / 0.35);
+}
+.chat-md blockquote {
+  margin: var(--chat-space-3) 0;
+  padding: 0.55rem 0.8rem;
+  border-left: 2px solid hsl(var(--border-strong));
+  background: hsl(var(--muted) / 0.45);
+  border-radius: 0.75rem;
+  color: var(--chat-ink);
+}
+.chat-md hr {
+  margin: var(--chat-space-4) 0;
+  border: 0;
+  border-top: 1px solid hsl(var(--border) / 0.8);
+}
+.chat-md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--chat-space-3) 0;
+  font-size: 12px;
+}
+.chat-md th,
+.chat-md td {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid hsl(var(--border) / 0.8);
+  text-align: left;
+  vertical-align: top;
+}
+.chat-md thead th {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--chat-ink-muted);
+  background: hsl(var(--secondary) / 0.65);
 }
 
 /* Metadata text (timestamps, model names) */

@@ -154,14 +154,43 @@ function ToolResultsRow({ results }: { results: ChatToolResult[] }) {
   );
 }
 
-const SUGGESTIONS: { label: string; icon: any; hint: string }[] = [
-  { label: "Audit my SEO + AEO visibility", icon: Search, hint: "Scan the site & search results" },
+const SUGGESTIONS: { label: string; icon: any; hint: string; prompt: string }[] = [
   {
-    label: "Find Reddit threads to reply to",
-    icon: MessageSquare,
-    hint: "Surface high-intent threads",
+    label: "Understand my biggest marketing opportunity",
+    icon: Search,
+    hint: "Diagnose where momentum is strongest",
+    prompt: "What is the biggest marketing opportunity for my business right now?",
   },
-  { label: "Draft Quora answers linking my site", icon: Bot, hint: "We write, you approve" },
+  {
+    label: "Audit my AI-search visibility",
+    icon: Globe,
+    hint: "Check search visibility and weak spots",
+    prompt: "Audit my AI-search visibility across SEO, AEO, and GEO.",
+  },
+  {
+    label: "Build a 30-day marketing plan",
+    icon: CalendarDays,
+    hint: "Turn signals into a structured plan",
+    prompt: "Build a 30-day marketing plan for my business with the highest-impact actions.",
+  },
+  {
+    label: "Analyze my competitors",
+    icon: MessageSquare,
+    hint: "Compare positioning and traction",
+    prompt: "Analyze my competitors and tell me where we can win.",
+  },
+  {
+    label: "Improve my brand positioning",
+    icon: Sparkles,
+    hint: "Clarify the promise and differentiation",
+    prompt: "Help me sharpen our brand positioning and messaging for my target audience.",
+  },
+  {
+    label: "Create a campaign from my Brand DNA",
+    icon: Bot,
+    hint: "Build a campaign rooted in your brand",
+    prompt: "Create a campaign from my Brand DNA and turn it into a clear next-step plan.",
+  },
 ];
 
 const MODELS: { id: string; label: string; hint: string }[] = [
@@ -216,7 +245,17 @@ export function ChatPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [isNearBottom, setIsNearBottom] = useState(true);
   const dragCounter = useRef(0);
+
+  const scrollToLatest = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    setShowJumpToLatest(false);
+    setIsNearBottom(true);
+  }, []);
 
   const addFiles = async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
@@ -534,13 +573,26 @@ export function ChatPanel({
     if (!container) return;
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (distanceFromBottom < 160) {
+    const nearBottom = distanceFromBottom < 180;
+    setIsNearBottom(nearBottom);
+    setShowJumpToLatest(!nearBottom && messages.length > 0);
+    if (nearBottom) {
       container.scrollTo({
         top: container.scrollHeight,
         behavior: streaming ? "auto" : "smooth",
       });
     }
   }, [messages, streaming]);
+
+  const onChatScroll = () => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    const nearBottom = distanceFromBottom < 180;
+    setIsNearBottom(nearBottom);
+    setShowJumpToLatest(!nearBottom && messages.length > 0);
+  };
 
   // Hero-suggested prompts prefill the composer; ⌘K dispatches chat:focus.
   useEffect(() => {
@@ -857,6 +909,158 @@ export function ChatPanel({
     await runChatStream(history);
   };
 
+  const copyMessage = useCallback(async (content: string) => {
+    const plain = content.replace(/\r\n/g, "\n").trim();
+    if (!plain) return;
+    try {
+      await navigator.clipboard.writeText(plain);
+      toast.success("Response copied");
+    } catch {
+      toast.error("Copy failed", { description: "Clipboard access was blocked." });
+    }
+  }, []);
+
+  const send = async (override?: string) => {
+    const text = (override ?? input).trim();
+    const hasAttachments = attachments.length > 0;
+    if ((!text && !hasAttachments) || streaming || clarifying) return;
+    if (attachments.some((a) => a.status === "reading")) {
+      toast.message("Still reading attachments…");
+      return;
+    }
+
+    // Compose the outgoing user content: attachment context first, then user text.
+    const ctx = attachmentsToContext(attachments);
+    const visibleText =
+      text ||
+      (hasAttachments
+        ? `Please analyze the attached ${attachments.length === 1 ? "file" : "files"}.`
+        : "");
+    const attachSummary = hasAttachments
+      ? `📎 ${attachments.length} file${attachments.length > 1 ? "s" : ""}: ${attachments.map((a) => a.name).join(", ")}`
+      : "";
+    const displayContent = [attachSummary, visibleText].filter(Boolean).join("\n\n");
+    const wireContent = [ctx, visibleText].filter(Boolean).join("\n\n");
+
+    let activeConversationId: string;
+    try {
+      activeConversationId = await ensureConversation(text || visibleText);
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message.includes("not initialized")
+          ? "Chat storage is not initialized"
+          : "Could not start this conversation",
+        {
+          description:
+            error instanceof Error && error.message.includes("not initialized")
+              ? "Apply the latest Supabase migration, then refresh Mellox."
+              : error instanceof Error
+                ? error.message
+                : "Please refresh and try again.",
+        },
+      );
+      return;
+    }
+
+    const userMsg: Msg = {
+      id: crypto.randomUUID(),
+      role: "user",
+      kind: "text",
+      content: displayContent,
+    };
+    setMessages((m) => [...m, userMsg]);
+    setInput("");
+    setAttachments([]);
+
+    recordTokens(Math.ceil(wireContent.length / 4));
+
+    await supabase.from("chat_messages").insert({
+      id: userMsg.id,
+      workspace_id: workspaceId,
+      conversation_id: activeConversationId,
+      user_id: userId,
+      role: "user",
+      kind: "text",
+      content: displayContent,
+      status: "completed",
+    });
+    if (messages.length === 0) {
+      void supabase
+        .from("conversations")
+        .update({ title: titleFromPrompt(text || visibleText) })
+        .eq("id", activeConversationId);
+    }
+    emitAppEvent("chat:conversation-changed");
+
+    // Stash the wire content on the msg for history construction below.
+    (userMsg as any)._wire = wireContent;
+
+    // Detect quick-actions and append an action chip card before clarify/stream.
+    const actions = detectChatActions(text);
+    if (actions.length) {
+      setMessages((m) => [
+        ...m,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          kind: "actions",
+          content: "",
+          payload: { actions },
+        },
+      ]);
+    }
+
+    // Ask clarifying questions before generating a complex result.
+    setClarifying(true);
+    let payload: ClarifyPayload | null = null;
+    try {
+      const cr = await authedFetch("/api/clarify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text, brandContext }),
+      });
+      if (cr.ok) {
+        const j = await cr.json();
+        if (j?.needs_clarification && Array.isArray(j.questions) && j.questions.length) {
+          payload = { rationale: j.rationale, questions: j.questions };
+        }
+      }
+    } catch {}
+
+    if (payload) {
+      const cId = crypto.randomUUID();
+      setMessages((m) => [
+        ...m,
+        {
+          id: cId,
+          role: "assistant",
+          kind: "clarify",
+          content: "",
+          payload: { ...payload, done: false },
+        },
+      ]);
+      // Wait for the user to submit/skip via ClarifyCard handlers.
+      // setClarifying stays true until they act.
+      return;
+    }
+
+    // Nothing to clarify — go straight to the stream.
+    setClarifying(false);
+    const history = [...messages, userMsg]
+      .slice(-12)
+      .map((m) => ({ role: m.role, content: (m as any)._wire || m.content }));
+    await runChatStream(history);
+  };
+
+  const regenerateLatest = useCallback(async () => {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user" && m.kind === "text");
+    if (!lastUser || streaming) return;
+    const prompt = lastUser.content.replace(/\n\s*📎.*$/s, "").trim();
+    if (!prompt) return;
+    setInput(prompt);
+    await send(prompt);
+  }, [messages, streaming, input, attachments, clarifying]);
+
   const runChatStream = async (history: { role: string; content: string }[]) => {
     // Captured when the request starts: the reply is saved to THIS workspace
     // and conversation even if the user opens another chat before it finishes.
@@ -1103,138 +1307,6 @@ export function ChatPanel({
     }, 50);
   };
 
-  const send = async (override?: string) => {
-    const text = (override ?? input).trim();
-    const hasAttachments = attachments.length > 0;
-    if ((!text && !hasAttachments) || streaming || clarifying) return;
-    if (attachments.some((a) => a.status === "reading")) {
-      toast.message("Still reading attachments…");
-      return;
-    }
-
-    // Compose the outgoing user content: attachment context first, then user text.
-    const ctx = attachmentsToContext(attachments);
-    const visibleText =
-      text ||
-      (hasAttachments
-        ? `Please analyze the attached ${attachments.length === 1 ? "file" : "files"}.`
-        : "");
-    const attachSummary = hasAttachments
-      ? `📎 ${attachments.length} file${attachments.length > 1 ? "s" : ""}: ${attachments.map((a) => a.name).join(", ")}`
-      : "";
-    const displayContent = [attachSummary, visibleText].filter(Boolean).join("\n\n");
-    const wireContent = [ctx, visibleText].filter(Boolean).join("\n\n");
-
-    let activeConversationId: string;
-    try {
-      activeConversationId = await ensureConversation(text || visibleText);
-    } catch (error) {
-      toast.error(
-        error instanceof Error && error.message.includes("not initialized")
-          ? "Chat storage is not initialized"
-          : "Could not start this conversation",
-        {
-          description:
-            error instanceof Error && error.message.includes("not initialized")
-              ? "Apply the latest Supabase migration, then refresh Mellox."
-              : error instanceof Error
-                ? error.message
-                : "Please refresh and try again.",
-        },
-      );
-      return;
-    }
-
-    const userMsg: Msg = {
-      id: crypto.randomUUID(),
-      role: "user",
-      kind: "text",
-      content: displayContent,
-    };
-    setMessages((m) => [...m, userMsg]);
-    setInput("");
-    setAttachments([]);
-
-    recordTokens(Math.ceil(wireContent.length / 4));
-
-    await supabase.from("chat_messages").insert({
-      id: userMsg.id,
-      workspace_id: workspaceId,
-      conversation_id: activeConversationId,
-      user_id: userId,
-      role: "user",
-      kind: "text",
-      content: displayContent,
-      status: "completed",
-    });
-    if (messages.length === 0) {
-      void supabase
-        .from("conversations")
-        .update({ title: titleFromPrompt(text || visibleText) })
-        .eq("id", activeConversationId);
-    }
-    emitAppEvent("chat:conversation-changed");
-
-    // Stash the wire content on the msg for history construction below.
-    (userMsg as any)._wire = wireContent;
-
-    // Detect quick-actions and append an action chip card before clarify/stream.
-    const actions = detectChatActions(text);
-    if (actions.length) {
-      setMessages((m) => [
-        ...m,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          kind: "actions",
-          content: "",
-          payload: { actions },
-        },
-      ]);
-    }
-
-    // Ask clarifying questions before generating a complex result.
-    setClarifying(true);
-    let payload: ClarifyPayload | null = null;
-    try {
-      const cr = await authedFetch("/api/clarify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, brandContext }),
-      });
-      if (cr.ok) {
-        const j = await cr.json();
-        if (j?.needs_clarification && Array.isArray(j.questions) && j.questions.length) {
-          payload = { rationale: j.rationale, questions: j.questions };
-        }
-      }
-    } catch {}
-
-    if (payload) {
-      const cId = crypto.randomUUID();
-      setMessages((m) => [
-        ...m,
-        {
-          id: cId,
-          role: "assistant",
-          kind: "clarify",
-          content: "",
-          payload: { ...payload, done: false },
-        },
-      ]);
-      // Wait for the user to submit/skip via ClarifyCard handlers.
-      // setClarifying stays true until they act.
-      return;
-    }
-
-    // Nothing to clarify — go straight to the stream.
-    setClarifying(false);
-    const history = [...messages, userMsg]
-      .slice(-12)
-      .map((m) => ({ role: m.role, content: (m as any)._wire || m.content }));
-    await runChatStream(history);
-  };
-
   const empty = messages.length === 0;
 
   const centered = variant === "centered";
@@ -1248,39 +1320,50 @@ export function ChatPanel({
       }
     >
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-auto scrollbar-thin">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-auto scrollbar-thin"
+        onScroll={onChatScroll}
+      >
         <div className={centered ? "mx-auto w-full max-w-3xl" : ""}>
           {empty ? (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+            <div className="flex h-full flex-col items-center justify-center px-5 pb-8 pt-10 text-center md:px-8">
               <motion.div
-                initial={reducedMotion ? false : { scale: 0.9, opacity: 0 }}
+                initial={reducedMotion ? false : { scale: 0.96, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={
-                  reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 200, damping: 20 }
+                  reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 210, damping: 22 }
                 }
                 className="relative mb-5"
               >
                 <span
-                  className="absolute -inset-6 -z-10 rounded-full blur-3xl opacity-40"
+                  className="absolute -inset-7 -z-10 rounded-full blur-3xl opacity-40"
                   style={{
                     background:
-                      "radial-gradient(50% 50% at 50% 50%, hsl(var(--foreground) / 0.08), transparent 70%)",
+                      "radial-gradient(50% 50% at 50% 50%, hsl(var(--brand-green) / 0.18), transparent 72%)",
                   }}
                   aria-hidden
                 />
-                <div className="relative grid place-items-center rounded-2xl">
-                  <Logo height={36} markOnly />
+                <div className="relative grid place-items-center rounded-2xl border border-border/60 bg-card/80 p-3 shadow-[0_16px_40px_-24px_hsl(var(--brand-green)/0.45)]">
+                  <Logo height={28} markOnly />
                 </div>
               </motion.div>
-              <h2 className="text-[20px] font-semibold tracking-tight text-foreground">
-                How can I help you grow?
-              </h2>
-              <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-muted-foreground">
-                Ask anything about your site — SEO, content, social, ads. Work shows up live on the
-                right.
-              </p>
+
+              <div className="max-w-[38rem]">
+                <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Ravi · Marketing intelligence
+                </p>
+                <h2 className="text-[clamp(1.6rem,2vw,2.3rem)] font-semibold tracking-[-0.04em] text-foreground">
+                  Turn your marketing signals into the next move.
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:text-[14px]">
+                  Ravi connects your brand, market, competitors, and execution so you can diagnose,
+                  plan, and act without jumping between tools.
+                </p>
+              </div>
+
               <div
-                className="mt-6 grid w-full max-w-lg gap-1.5"
+                className="mt-6 grid w-full max-w-2xl gap-2 sm:grid-cols-2"
                 role="listbox"
                 aria-label="Prompt suggestions — use arrow keys to browse, Enter to send"
                 data-suggestion-list
@@ -1316,15 +1399,15 @@ export function ChatPanel({
                       ref={(el) => {
                         suggestionRefs.current[i] = el;
                       }}
-                      initial={reducedMotion ? false : { opacity: 0, y: 6 }}
+                      initial={reducedMotion ? false : { opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={reducedMotion ? { duration: 0 } : { delay: 0.08 + i * 0.05 }}
-                      onClick={() => send(s.label)}
+                      transition={reducedMotion ? { duration: 0 } : { delay: 0.04 + i * 0.045 }}
+                      onClick={() => send(s.prompt)}
                       onFocus={() => setSuggestionFocus(i)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          send(s.label);
+                          send(s.prompt);
                         }
                       }}
                       role="option"
@@ -1332,12 +1415,12 @@ export function ChatPanel({
                       tabIndex={isActive ? 0 : -1}
                       data-suggestion
                       aria-label={`${s.label}. ${s.hint}`}
-                      className="chat-focus group flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2.5 text-left backdrop-blur transition-all hover:-translate-y-0.5 hover:border-foreground/25 hover:bg-card hover:shadow-[0_8px_24px_-14px_hsl(0_0%_0%/0.5)] focus-visible:border-foreground/35 aria-selected:border-foreground/30"
+                      className="chat-focus group flex items-center gap-3 rounded-2xl border border-border/60 bg-card/75 px-3 py-3 text-left backdrop-blur transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-card hover:shadow-[0_12px_28px_-18px_hsl(var(--foreground)/0.28)] focus-visible:border-foreground/30 aria-selected:border-foreground/25"
                     >
-                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-secondary/70 text-muted-foreground transition group-hover:bg-secondary group-hover:text-foreground">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-secondary/80 text-muted-foreground transition group-hover:bg-secondary group-hover:text-foreground">
                         <Icon className="h-3.5 w-3.5" strokeWidth={1.85} aria-hidden />
                       </span>
-                      <span className="flex-1 min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="block truncate font-sans text-[12.5px] font-medium text-foreground">
                           {s.label}
                         </span>
@@ -1345,10 +1428,6 @@ export function ChatPanel({
                           {s.hint}
                         </span>
                       </span>
-                      <ArrowUp
-                        className="h-3 w-3 rotate-45 text-muted-foreground opacity-0 transition group-hover:opacity-100"
-                        aria-hidden
-                      />
                     </motion.button>
                   );
                 })}
@@ -1478,27 +1557,30 @@ export function ChatPanel({
                       key={m.id}
                       layout={!reducedMotion}
                       {...mFade}
-                      className={`flex ${m.role === "user" ? "justify-end" : "flex-col gap-2"}`}
+                      className={`flex ${m.role === "user" ? "justify-end" : "chat-assistant-shell flex-col gap-2"}`}
                     >
                       {m.role !== "user" ? (
-                        <div className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-lg border border-border/60 bg-card">
-                            <Sparkles className="h-3 w-3 text-muted-foreground" />
+                        <div className="chat-assistant-meta">
+                          <div className="chat-assistant-avatar">
+                            <Sparkles className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]" />
                           </div>
-                          <span
-                            style={{
-                              fontFamily: '"Michroma", ui-sans-serif, system-ui, sans-serif',
-                            }}
-                          >
-                            Mellox AI
-                          </span>
+                          <div className="chat-assistant-labels">
+                            <span className="chat-assistant-name">Ravi</span>
+                            <span className="chat-assistant-role">Marketing intelligence</span>
+                          </div>
+                          {streaming && i === messages.length - 1 ? (
+                            <span className="chat-assistant-status">
+                              <span className="chat-assistant-status-dot" aria-hidden />
+                              Analyzing
+                            </span>
+                          ) : null}
                         </div>
                       ) : null}
                       <div
                         className={
                           m.role === "user"
                             ? "chat-bubble-user"
-                            : "px-0.5 text-[14px] leading-[1.7] text-foreground"
+                            : "chat-assistant-content"
                         }
                       >
                         <ChatMessageContent content={m.content} role={m.role} />
@@ -1506,6 +1588,27 @@ export function ChatPanel({
                           <span className="caret-blink" data-chat-shimmer aria-hidden />
                         )}
                       </div>
+
+                      {m.role === "assistant" && !streaming ? (
+                        <div className="chat-message-actions" aria-label="Message actions">
+                          <button
+                            type="button"
+                            className="chat-message-action"
+                            onClick={() => void copyMessage(m.content)}
+                            aria-label="Copy assistant response"
+                          >
+                            Copy
+                          </button>
+                          <button
+                            type="button"
+                            className="chat-message-action"
+                            onClick={() => void regenerateLatest()}
+                            aria-label="Regenerate answer"
+                          >
+                            Regenerate
+                          </button>
+                        </div>
+                      ) : null}
                     </motion.div>
                   );
                 })}
@@ -1523,6 +1626,20 @@ export function ChatPanel({
               {streaming &&
                 (messages[messages.length - 1]?.role !== "assistant" ||
                   !messages[messages.length - 1]?.content) && <ThinkingTrail site={siteUrl} />}
+
+              {showJumpToLatest && (
+                <div className="sticky bottom-4 z-20 flex justify-center pb-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={scrollToLatest}
+                    className="chat-focus inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-[11.5px] font-medium text-foreground shadow-[0_10px_30px_-18px_hsl(var(--foreground)/0.55)] backdrop-blur transition hover:border-foreground/25 hover:bg-card"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                    Jump to latest
+                  </button>
+                </div>
+              )}
+
               {!streaming &&
                 messages.length > 0 &&
                 messages[messages.length - 1]?.role === "assistant" &&
