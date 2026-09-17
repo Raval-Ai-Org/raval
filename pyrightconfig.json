@@ -1,0 +1,16 @@
+{
+  "include": [
+    "backend",
+    "content-engine",
+    "entity-engine",
+    "citation-engine",
+    "competitor-engine",
+    "fix-engine",
+    "opportunity-engine",
+    "seo-engine"
+  ],
+  "extraPaths": [
+    "./backend",
+    "./backend/app"
+  ]
+}

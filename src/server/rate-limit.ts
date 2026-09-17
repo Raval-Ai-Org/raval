@@ -45,7 +45,8 @@ export type RateLimitTier =
   | "ugc-draft"
   | "ugc-render"
   | "share-password"
-  | "workspace-lifecycle";
+  | "workspace-lifecycle"
+  | "firecrawl";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -99,6 +100,9 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // Creating and deleting workspaces. Retries of one create replay its
   // idempotency key, so this only bounds genuinely new workspaces and deletes.
   "workspace-lifecycle": { limit: 20, windowSeconds: 600, label: "workspace change" },
+  // Firecrawl-backed crawls (competitor intelligence): a multi-page crawl plus
+  // a model synthesis call, run synchronously within the request.
+  firecrawl: { limit: 10, windowSeconds: 3600, label: "competitor crawl" },
 };
 
 export type RateLimitResult = {

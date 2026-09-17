@@ -136,6 +136,45 @@ jobs:
       - name: Replay migrations
         run: npm run db:verify
 
+  evals:
+    name: Promptfoo evals (grounding · injection resistance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Live-model quality gate (ADR-0020): calls the real Claude gateway
+    # through evals/providers/*.provider.ts, so a legitimate sampling
+    # variance can occasionally trip a deterministic-looking assertion.
+    # Non-blocking until its false-positive rate is proven low over time —
+    # promote to a required check once that's established, matching the
+    # same caution the `verify` job's lint step gives its warnings backlog.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Needed so the eval providers can `import "@/server/..."` — promptfoo
+      # loads .ts providers directly in Node with tsconfig.json path-alias
+      # resolution, run from the repo root.
+      - name: Install dependencies
+        run: npm ci
+
+      # promptfoo is intentionally NOT a committed devDependency (see
+      # docs/adr/0020-promptfoo-eval-gate.md) — its own dependency tree
+      # (bundled OpenAI Agents SDK, onnxruntime, several cloud-provider
+      # SDKs) is much heavier than this app's runtime needs, so it's fetched
+      # on demand via npx, isolated from the app's own lockfile.
+      - name: Run evals when configured
+        if: ${{ secrets.ANTHROPIC_API_KEY_EVALS != '' }}
+        run: npm run eval
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_EVALS }}
+
   sdr:
     name: SDR service · pytest · ruff
     runs-on: ubuntu-latest

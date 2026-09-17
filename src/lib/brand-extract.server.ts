@@ -24,6 +24,8 @@ import type { BrandExtractEvent } from "@/lib/brand-extract-events";
 import { normalizeHex } from "@/lib/color";
 import { BRAND_EXTRACT_OUTPUT_SCHEMA } from "@/lib/ai/output-schemas";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
+import { firecrawlSearch } from "@/lib/firecrawl-gateway.server";
+import { firecrawlEnabled } from "@/lib/firecrawl-flags.server";
 
 export type Brand = {
   brandName: string;
@@ -140,10 +142,31 @@ function pickSubPages(internal: string[], base: URL, limit = 8): string[] {
   return Array.from(picked).slice(0, limit);
 }
 
+/**
+ * Web search for external brand mentions/competitors/reviews. Tries Firecrawl
+ * first when configured (a real search API, not a scrape-hack); falls
+ * through to the DuckDuckGo HTML scrape below on any Firecrawl failure, empty
+ * result, or when Firecrawl isn't configured — so this function's behavior is
+ * unchanged from before Firecrawl existed unless FIRECRAWL_BASE_URL is set.
+ */
 async function ddgSearch(
   query: string,
   timeoutMs = 6000,
 ): Promise<{ title: string; url: string; snippet: string }[]> {
+  if (firecrawlEnabled()) {
+    try {
+      const results = await firecrawlSearch(query, { limit: 8 });
+      if (results.length) {
+        return results.map((r) => ({
+          title: r.title || r.url,
+          url: r.url,
+          snippet: r.description || "",
+        }));
+      }
+    } catch (error) {
+      console.error("brand-extract firecrawl search failed, falling back to DuckDuckGo", error);
+    }
+  }
   try {
     const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
       headers: { "User-Agent": "Mozilla/5.0 MelloxBrandBot" },

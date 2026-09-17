@@ -61,6 +61,31 @@ export const BRAND_EXTRACT_OUTPUT_SCHEMA = object({
   missing: strList,
 });
 
+export const CAMPAIGN_BRIEF_OUTPUT_SCHEMA = object({
+  theme: str,
+  keyMessage: str,
+  targetAudience: str,
+  callToAction: str,
+  contentIdeas: {
+    type: "array",
+    items: object({ channel: str, idea: str, hook: str }),
+  },
+});
+
+export const COMPETITOR_INTEL_OUTPUT_SCHEMA = object({
+  positioning: str,
+  strengths: strList,
+  weaknesses: strList,
+  targetAudience: str,
+  pricingSignals: str,
+  differentiators: strList,
+  contentThemes: strList,
+  evidence: {
+    type: "array",
+    items: object({ claim: str, source: str }),
+  },
+});
+
 export const COACH_INTENTS = [
   "geo-audit",
   "brand-dna",

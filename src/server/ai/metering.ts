@@ -10,12 +10,13 @@
 import "server-only";
 import { getRequestScope } from "@/server/request-context";
 import { logGuardrailEvent } from "@/server/guardrails/events";
+import { logToHelicone } from "@/server/observability/helicone.server";
 
 export type UsageKind = "text" | "image" | "video" | "search" | "moderation";
 export type UsageStatus = "ok" | "error" | "blocked" | "degraded";
 
 export type UsageEvent = {
-  provider: "openrouter" | "anthropic" | "kie" | "dataforseo";
+  provider: "openrouter" | "anthropic" | "kie" | "dataforseo" | "firecrawl";
   model: string;
   kind?: UsageKind;
   inputTokens?: number;
@@ -92,4 +93,7 @@ export function recordUsage(event: UsageEvent): void {
   void sink(row).catch((error) => {
     console.error("[metering] usage not recorded", error instanceof Error ? error.message : error);
   });
+  // A second, independent sink (self-hosted Helicone observability, ADR-0016).
+  // No-ops when HELICONE_BASE_URL is unset; never throws or blocks the caller.
+  logToHelicone(row);
 }

@@ -1,0 +1,55 @@
+# Campaign Generation eval — exercises the REAL production brief-generation
+# function (src/server/research/campaign-brief.server.ts) via
+# evals/providers/campaign-brief.provider.ts. Needs a real ANTHROPIC_API_KEY.
+#
+# Run: npx --yes promptfoo@latest eval -c evals/campaign-generation.promptfooconfig.yaml
+
+description: "Campaign brief generation — schema conformance + one idea per requested channel"
+
+prompts:
+  - "Write a campaign brief for goal: {{goal}}"
+
+providers:
+  - id: file://evals/providers/campaign-brief.provider.ts
+
+tests:
+  - description: "Grounded brief for a known brand, two channels"
+    vars:
+      brand: file://evals/fixtures/brand-context.json
+      goal: "Drive signups for a new GEO/AEO audit feature"
+      channels: ["email", "social"]
+    assert:
+      - type: is-json
+      - type: javascript
+        value: |
+          typeof output.theme === "string" && output.theme.length > 0 &&
+          typeof output.keyMessage === "string" &&
+          Array.isArray(output.contentIdeas) &&
+          output.contentIdeas.length === 2
+      - type: javascript
+        # Every content idea's channel must be one of the requested ones —
+        # the model must not invent a channel outside the given list.
+        value: |
+          const allowed = new Set(["email", "social"]);
+          output.contentIdeas.every((idea) => allowed.has(idea.channel));
+
+  - description: "Thin/empty brand context degrades to a general brief, not fabricated specifics"
+    vars:
+      brand:
+        brandName: ""
+        oneLiner: ""
+        about: ""
+        audience: ""
+        voice: ""
+        values: ""
+        products: ""
+      goal: "Increase trial signups"
+      channels: ["email"]
+    assert:
+      - type: is-json
+      - type: javascript
+        # With no brand facts supplied, the brief must not invent a specific
+        # product name or price — a cheap proxy for "didn't hallucinate".
+        value: |
+          const text = JSON.stringify(output).toLowerCase();
+          !/\$\d/.test(text);

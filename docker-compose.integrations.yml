@@ -1,0 +1,119 @@
+# Optional self-hosted integrations (Firecrawl, Mastra, Helicone, Trigger.dev
+# — see docs/self-hosted-integrations.md). Entirely opt-in and isolated from
+# the core app stack: the app boots and every existing feature works with
+# none of this running. Bring it up alongside the core stack with:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.integrations.yml up
+#
+# This file provides the local datastores and app-facing services for the
+# optional integrations. Firecrawl and Helicone application code is built from
+# sibling official checkouts; Trigger.dev tasks run from this repository via
+# its CLI and do not replace existing cron/lease workers.
+#
+# Helicone's application services (Jawn, the backend Mellox actually talks
+# to, and the Web dashboard) are Helicone's own code, not a published,
+# versioned Docker image — they are built from a sibling checkout of
+# Helicone's own repository rather than vendored into this repository (see
+# docs/self-hosted-integrations.md for the one-time clone step). Only the
+# well-known, versioned open-source datastores it depends on (ClickHouse,
+# Postgres, MinIO, Mailhog) are pulled as images here. Verify exact
+# ports/env vars against https://docs.helicone.ai/getting-started/self-host
+# for the Helicone version you clone — self-host requirements do change
+# across releases.
+
+services:
+  firecrawl:
+    build:
+      context: ../firecrawl
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3002
+      NUM_WORKERS_PER_QUEUE: ${FIRECRAWL_NUM_WORKERS_PER_QUEUE:-2}
+    ports:
+      - "3002:3002"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  helicone-clickhouse:
+    image: clickhouse/clickhouse-server:24
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ${HELICONE_CLICKHOUSE_PASSWORD:?set in .env}
+    ports:
+      - "18123:8123"
+    volumes:
+      - helicone_clickhouse_data:/var/lib/clickhouse
+
+  helicone-postgres:
+    image: postgres:17.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: helicone
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${HELICONE_POSTGRES_PASSWORD:?set in .env}
+    ports:
+      - "54388:5432"
+    volumes:
+      - helicone_postgres_data:/var/lib/postgresql/data
+
+  helicone-minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9090"
+    environment:
+      MINIO_ROOT_USER: ${HELICONE_MINIO_ROOT_USER:?set in .env}
+      MINIO_ROOT_PASSWORD: ${HELICONE_MINIO_ROOT_PASSWORD:?set in .env}
+    ports:
+      - "9000:9000"
+      - "9090:9090"
+    volumes:
+      - helicone_minio_data:/data
+
+  helicone-mailhog:
+    image: mailhog/mailhog:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # Built from a sibling Helicone checkout — see docs/self-hosted-integrations.md.
+  helicone-jawn:
+    build:
+      context: ../helicone
+      dockerfile: valhalla/jawn/Dockerfile
+    restart: unless-stopped
+    env_file: ../helicone/.env
+    depends_on:
+      - helicone-clickhouse
+      - helicone-postgres
+      - helicone-minio
+    ports:
+      - "8585:8585"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8585/healthcheck >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  helicone-web:
+    build:
+      context: ../helicone
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    env_file: ../helicone/.env
+    depends_on:
+      - helicone-jawn
+    ports:
+      - "3010:3000"
+
+volumes:
+  helicone_clickhouse_data:
+  helicone_postgres_data:
+  helicone_minio_data:

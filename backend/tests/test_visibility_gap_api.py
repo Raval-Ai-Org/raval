@@ -1,0 +1,228 @@
+"""
+API integration tests for Visibility Gap Analysis endpoints (Task 10 Step 5).
+"""
+
+from datetime import datetime, timezone
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from backend.app.database import get_db
+from backend.app.main import app
+from backend.app.models import (
+    AIResponse,
+    Base,
+    Finding,
+    PageResult,
+    Query,
+    QuerySet,
+    Scan,
+    Website,
+)
+
+
+@pytest.fixture
+def test_app_and_db():
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    def override_get_db():
+        db = TestingSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+
+    db = TestingSessionLocal()
+    website = Website(
+        name="Raval AI",
+        url="https://raval.ai",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(website)
+    db.commit()
+    db.refresh(website)
+
+    scan = Scan(
+        website_id=website.id,
+        status="completed",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+
+    finding = Finding(
+        website_id=website.id,
+        scan_id=scan.id,
+        finding_type="unanswered_question",
+        category="content",
+        title="What is GEO Intelligence?",
+        description="Missing clear answer definition for GEO Intelligence.",
+        severity="high",
+        status="open",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+
+    qs = QuerySet(
+        website_id=website.id,
+        scan_id=scan.id,
+        name="API Gap QuerySet",
+        status="ACTIVE",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.add(qs)
+    db.commit()
+    db.refresh(qs)
+
+    q = Query(
+        query_set_id=qs.id,
+        website_id=website.id,
+        query_text="What is GEO Intelligence?",
+        intent="INFORMATIONAL",
+        priority="HIGH",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.add(q)
+    db.commit()
+    db.refresh(q)
+
+    resp = AIResponse(
+        query_id=q.id,
+        query_set_id=qs.id,
+        website_id=website.id,
+        provider="mock",
+        model="mock-ai-search-v1",
+        status="SUCCESS",
+        response_text="General machine learning overview without mentions.",
+        latency_ms=105,
+        request_timestamp=datetime.now(timezone.utc),
+        response_timestamp=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(resp)
+    db.commit()
+    db.refresh(resp)
+
+    website_id = website.id
+    scan_id = scan.id
+    finding_id = finding.id
+    qs_id = qs.id
+    query_id = q.id
+    resp_id = resp.id
+    db.close()
+
+    yield {
+        "client": client,
+        "website_id": website_id,
+        "scan_id": scan_id,
+        "finding_id": finding_id,
+        "query_set_id": qs_id,
+        "query_id": query_id,
+        "response_id": resp_id,
+    }
+
+    app.dependency_overrides.clear()
+
+
+def test_evaluate_response_gaps_endpoint(test_app_and_db):
+    client = test_app_and_db["client"]
+    resp_id = test_app_and_db["response_id"]
+    finding_id = test_app_and_db["finding_id"]
+
+    response = client.post(f"/api/v1/responses/{resp_id}/gaps")
+    assert response.status_code == 200
+    gaps = response.json()
+    assert len(gaps) == 1
+    assert gaps[0]["gap_type"] == "TARGET_ABSENT"
+    assert len(gaps[0]["linked_findings"]) >= 1
+    assert gaps[0]["linked_findings"][0]["finding_id"] == finding_id
+
+
+def test_get_response_gaps_endpoint(test_app_and_db):
+    client = test_app_and_db["client"]
+    resp_id = test_app_and_db["response_id"]
+
+    # Evaluate first
+    client.post(f"/api/v1/responses/{resp_id}/gaps")
+
+    response = client.get(f"/api/v1/responses/{resp_id}/gaps")
+    assert response.status_code == 200
+    gaps = response.json()
+    assert len(gaps) == 1
+
+
+def test_batch_evaluate_query_set_gaps_endpoint(test_app_and_db):
+    client = test_app_and_db["client"]
+    qs_id = test_app_and_db["query_set_id"]
+
+    response = client.post(f"/api/v1/query-sets/{qs_id}/gaps")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["query_set_id"] == qs_id
+    assert data["total_gaps_found"] == 1
+
+
+def test_list_query_set_and_query_gaps_endpoints(test_app_and_db):
+    client = test_app_and_db["client"]
+    resp_id = test_app_and_db["response_id"]
+    qs_id = test_app_and_db["query_set_id"]
+    q_id = test_app_and_db["query_id"]
+
+    # Evaluate first
+    client.post(f"/api/v1/responses/{resp_id}/gaps")
+
+    # List for QuerySet
+    qs_resp = client.get(f"/api/v1/query-sets/{qs_id}/gaps")
+    assert qs_resp.status_code == 200
+    assert len(qs_resp.json()) == 1
+
+    # List for Query
+    q_resp = client.get(f"/api/v1/queries/{q_id}/gaps")
+    assert q_resp.status_code == 200
+    assert len(q_resp.json()) == 1
+
+
+def test_get_gap_detail_endpoint(test_app_and_db):
+    client = test_app_and_db["client"]
+    resp_id = test_app_and_db["response_id"]
+
+    # Evaluate first
+    post_resp = client.post(f"/api/v1/responses/{resp_id}/gaps")
+    gap_id = post_resp.json()[0]["id"]
+
+    response = client.get(f"/api/v1/gaps/{gap_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == gap_id
+    assert data["gap_type"] == "TARGET_ABSENT"
+
+
+def test_get_finding_linked_gaps_endpoint(test_app_and_db):
+    client = test_app_and_db["client"]
+    resp_id = test_app_and_db["response_id"]
+    finding_id = test_app_and_db["finding_id"]
+
+    # Evaluate first
+    client.post(f"/api/v1/responses/{resp_id}/gaps")
+
+    response = client.get(f"/api/v1/findings/{finding_id}/gaps")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["response_id"] == resp_id

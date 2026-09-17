@@ -1,0 +1,46 @@
+# Competitor Intelligence eval — exercises the REAL production synthesis
+# function (src/server/research/competitor-intel.server.ts) via
+# evals/providers/competitor-intel.provider.ts. Deterministic assertions only
+# (schema conformance + grounding against the fixture pages) — no LLM judge,
+# so this is fast and has no flakiness budget to tune. Needs a real
+# ANTHROPIC_API_KEY to run (it calls the real Claude gateway).
+#
+# Run: npx --yes promptfoo@latest eval -c evals/competitor-intel.promptfooconfig.yaml
+
+description: "Competitor Intelligence synthesis — schema conformance + grounding"
+
+prompts:
+  - "Synthesize a competitor profile for {{input.url}}"
+
+providers:
+  - id: file://evals/providers/competitor-intel.provider.ts
+
+tests:
+  - description: "Grounded synthesis from real crawled pages"
+    vars:
+      input: file://evals/fixtures/competitor-pages.json
+    assert:
+      - type: is-json
+      - type: javascript
+        value: |
+          typeof output.positioning === "string" &&
+          Array.isArray(output.strengths) &&
+          Array.isArray(output.weaknesses) &&
+          Array.isArray(output.evidence)
+      - type: javascript
+        # Pricing mentioned in the brief must be a real number from the
+        # crawled pages ($199, $499) — not an invented figure.
+        value: |
+          const signals = (output.pricingSignals || "") + JSON.stringify(output.evidence || []);
+          !/\$\d/.test(signals) || /\$199|\$499/.test(signals);
+      - type: javascript
+        # Every evidence claim's numbers must actually appear in the source
+        # pages — a cheap, deterministic grounding check (mirrors the
+        # verbatim-number-match rule in src/server/geo/fixes/grounding.ts).
+        value: |
+          const sourceText = JSON.stringify(context.vars.input.pages);
+          const evidence = output.evidence || [];
+          evidence.every((e) => {
+            const numbers = (e.claim.match(/\d[\d,.]*/g) || []);
+            return numbers.every((n) => sourceText.includes(n));
+          });

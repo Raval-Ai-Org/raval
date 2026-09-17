@@ -1081,6 +1081,56 @@ export type Database = {
           },
         ];
       };
+      competitor_intelligence_runs: {
+        Row: {
+          competitor_url: string;
+          completed_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          error: string | null;
+          id: string;
+          pages_crawled: Json;
+          result: Json | null;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          competitor_url: string;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          id?: string;
+          pages_crawled?: Json;
+          result?: Json | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          competitor_url?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          id?: string;
+          pages_crawled?: Json;
+          result?: Json | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "competitor_intelligence_runs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       competitor_watches: {
         Row: {
           created_at: string;
