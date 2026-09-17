@@ -4,20 +4,10 @@ import { conversationPath, workspacePath } from "@/lib/workspace/paths";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@/lib/navigation";
-import {
-  MessageSquare,
-  MoreHorizontal,
-  Pencil,
-  Pin,
-  Plus,
-  Search,
-  Trash,
-} from "@/components/icons";
+import { MoreHorizontal, Pencil, Pin, Plus, Search, Trash } from "@/components/icons";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,13 +36,32 @@ type Conversation = {
 
 const TITLE_MAX = 120;
 
-function relativeTime(value: string) {
-  const seconds = Math.max(0, (Date.now() - new Date(value).getTime()) / 1000);
-  if (seconds < 60) return "now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d`;
-  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+/** Pinned first, then Today / Yesterday / Previous 7 days / Previous 30 days / Older. */
+function groupByDate(items: Conversation[]) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = today.getTime();
+  const day = 86_400_000;
+  const order = ["Pinned", "Today", "Yesterday", "Previous 7 days", "Previous 30 days", "Older"];
+  const buckets = new Map<string, Conversation[]>();
+  for (const item of items) {
+    const t = new Date(item.updated_at).getTime();
+    const label = item.is_pinned
+      ? "Pinned"
+      : t >= start
+        ? "Today"
+        : t >= start - day
+          ? "Yesterday"
+          : t >= start - 7 * day
+            ? "Previous 7 days"
+            : t >= start - 30 * day
+              ? "Previous 30 days"
+              : "Older";
+    buckets.set(label, [...(buckets.get(label) ?? []), item]);
+  }
+  return order
+    .filter((label) => buckets.has(label))
+    .map((label) => ({ label, items: buckets.get(label) ?? [] }));
 }
 
 export function RecentChats({
@@ -67,7 +76,6 @@ export function RecentChats({
   const [items, setItems] = useState<Conversation[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   // Rename happens in place in the list rather than in a dialog — it is a
   // one-field edit, and a modal for it would be heavier than the task.
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -113,24 +121,13 @@ export function RecentChats({
     if (renamingId) renameInputRef.current?.select();
   }, [renamingId]);
 
-  const newChat = async () => {
-    if (!workspaceId || creating) return;
-    setCreating(true);
-    try {
-      const { data, error } = await supabase
-        .from("conversations")
-        .insert({ workspace_id: workspaceId, title: "New chat" })
-        .select("id")
-        .single();
-      if (error || !data) {
-        toast.error("Couldn't start a new chat", { description: error?.message });
-        return;
-      }
-      onNavigate?.();
-      navigate({ to: conversationPath(workspaceId, data.id) });
-    } finally {
-      setCreating(false);
-    }
+  // Opens a fresh chat page. The conversation row is created when the first
+  // message is sent, so empty "New chat" entries never pile up in the list.
+  const newChat = () => {
+    if (!workspaceId) return;
+    onNavigate?.();
+    navigate({ to: workspacePath(workspaceId) });
+    emitAppEvent("chat:focus");
   };
 
   const open = (id: string) => {
@@ -189,151 +186,150 @@ export function RecentChats({
     emitAppEvent("chat:conversation-changed");
   };
 
-  return (
-    <div className="space-y-2">
-      <Button
-        size="sm"
-        className="w-full justify-start"
-        onClick={() => void newChat()}
-        loading={creating}
-      >
-        {creating ? null : <Plus className="size-4" />}
-        {creating ? "Starting…" : "New chat"}
-      </Button>
+  const groups = groupByDate(items);
 
-      <label className="flex h-9 items-center gap-2 rounded-lg border border-border bg-surface-2 px-2.5 text-muted-foreground focus-within:border-ring">
+  return (
+    <div className="flex flex-col gap-0.5">
+      <button
+        type="button"
+        onClick={newChat}
+        className="group flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13.5px] font-medium text-foreground transition-colors hover:bg-foreground/[0.06]"
+      >
+        <span className="grid size-5 place-items-center rounded-full bg-primary text-primary-foreground transition-transform group-hover:rotate-90">
+          <Plus className="size-3.5" strokeWidth={2.5} />
+        </span>
+        New chat
+      </button>
+
+      <label className="flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-muted-foreground transition-colors focus-within:bg-foreground/[0.06] hover:bg-foreground/[0.06]">
         <Search className="size-4 shrink-0" aria-hidden />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search conversations"
-          aria-label="Search conversations"
-          className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          placeholder="Search chats"
+          aria-label="Search chats"
+          className="min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground"
         />
       </label>
 
-      {loading ? (
-        <div className="space-y-1 px-1" role="status" aria-label="Loading conversations">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-11 animate-pulse rounded-lg bg-surface-2" />
+      {loading && items.length === 0 ? (
+        <div className="mt-3 space-y-2 px-2.5" role="status" aria-label="Loading chats">
+          {[70, 55, 80, 45].map((w) => (
+            <div
+              key={w}
+              className="h-3.5 animate-pulse rounded-full bg-foreground/[0.07]"
+              style={{ width: `${w}%` }}
+            />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <EmptyState
-          size="sm"
-          icon={MessageSquare}
-          title={query.trim() ? "No matches" : "No conversations yet"}
-          description={
-            query.trim()
-              ? `Nothing matches "${query.trim()}".`
-              : "Start a chat and it will show up here."
-          }
-          action={
-            query.trim() ? (
-              <Button variant="ghost" size="sm" onClick={() => setQuery("")}>
-                Clear search
-              </Button>
-            ) : undefined
-          }
-        />
+        <p className="px-2.5 pt-3 text-[12.5px] text-muted-foreground">
+          {query.trim() ? "No chats found" : "Your chats will show up here"}
+        </p>
       ) : (
-        <ul className="max-h-[min(46vh,28rem)] space-y-0.5 overflow-y-auto pr-0.5 scrollbar-thin">
-          {items.map((conversation) => {
-            const isActive = activeConversationId === conversation.id;
-            const isRenaming = renamingId === conversation.id;
-
-            return (
-              <li key={conversation.id} className="group relative flex items-center">
-                {isRenaming ? (
-                  <input
-                    ref={renameInputRef}
-                    value={draftTitle}
-                    maxLength={TITLE_MAX}
-                    onChange={(event) => setDraftTitle(event.target.value)}
-                    onBlur={() => void commitRename()}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void commitRename();
-                      } else if (event.key === "Escape") {
-                        event.preventDefault();
-                        setRenamingId(null);
-                      }
-                    }}
-                    aria-label="Conversation title"
-                    className="h-11 min-w-0 flex-1 rounded-lg border border-ring bg-surface-3 px-2.5 text-sm font-medium text-foreground outline-none"
-                  />
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => open(conversation.id)}
-                      aria-current={isActive ? "page" : undefined}
-                      className={cn(
-                        "min-w-0 flex-1 rounded-lg px-2.5 py-2 pr-10 text-left transition-colors",
-                        isActive
-                          ? "bg-surface-2 text-foreground"
-                          : "text-muted-foreground hover:bg-surface-2 hover:text-foreground",
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        {conversation.is_pinned ? (
-                          <Pin className="size-3.5 shrink-0 text-primary" aria-label="Pinned" />
-                        ) : (
-                          <MessageSquare className="size-3.5 shrink-0 opacity-70" aria-hidden />
-                        )}
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                          {conversation.title}
-                        </span>
-                      </span>
-                      <span className="mt-0.5 block truncate pl-[22px] text-xs text-muted-foreground/80">
-                        {conversation.preview?.trim() || "No messages yet"} ·{" "}
-                        {relativeTime(conversation.updated_at)}
-                      </span>
-                    </button>
-
-                    {/* 36px hit area rather than the 24px it used to be, and
-                        always reachable: hiding the trigger behind :hover left
-                        touch users with no way to manage a conversation. */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+        groups.map((group) => (
+          <section key={group.label} className="mt-3">
+            <h4 className="px-2.5 pb-1 text-[11.5px] font-medium text-muted-foreground/80">
+              {group.label}
+            </h4>
+            <ul className="flex flex-col gap-px">
+              {group.items.map((conversation) => {
+                const isActive = activeConversationId === conversation.id;
+                const isRenaming = renamingId === conversation.id;
+                return (
+                  <li key={conversation.id} className="group relative">
+                    {isRenaming ? (
+                      <input
+                        ref={renameInputRef}
+                        value={draftTitle}
+                        maxLength={TITLE_MAX}
+                        onChange={(event) => setDraftTitle(event.target.value)}
+                        onBlur={() => void commitRename()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void commitRename();
+                          } else if (event.key === "Escape") {
+                            event.preventDefault();
+                            setRenamingId(null);
+                          }
+                        }}
+                        aria-label="Chat title"
+                        className="h-9 w-full rounded-lg bg-foreground/[0.06] px-2.5 text-[13.5px] text-foreground outline-none ring-1 ring-ring"
+                      />
+                    ) : (
+                      <>
                         <button
                           type="button"
-                          aria-label={`Actions for ${conversation.title}`}
-                          className="absolute right-1 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:opacity-100 data-[state=open]:bg-surface-3 data-[state=open]:text-foreground md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                          onClick={() => open(conversation.id)}
+                          aria-current={isActive ? "page" : undefined}
+                          title={conversation.title}
+                          className={cn(
+                            "flex h-9 w-full items-center rounded-lg px-2.5 text-left text-[13.5px] transition-colors",
+                            isActive
+                              ? "bg-foreground/[0.08] font-medium text-foreground"
+                              : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground",
+                          )}
                         >
-                          <MoreHorizontal className="size-4" aria-hidden />
+                          <span
+                            className={cn(
+                              "min-w-0 flex-1 truncate",
+                              isActive
+                                ? "pr-7"
+                                : "md:group-hover:pr-7 md:group-focus-within:pr-7 max-md:pr-7",
+                            )}
+                          >
+                            {conversation.title}
+                          </span>
                         </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onSelect={() => startRename(conversation)}>
-                          <Pencil className="size-4" />
-                          Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() =>
-                            void update(conversation.id, { is_pinned: !conversation.is_pinned })
-                          }
-                        >
-                          <Pin className="size-4" />
-                          {conversation.is_pinned ? "Unpin" : "Pin to top"}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={() => setPendingDelete(conversation)}
-                        >
-                          <Trash className="size-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={`Options for ${conversation.title}`}
+                              className={cn(
+                                "absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-opacity hover:text-foreground data-[state=open]:text-foreground data-[state=open]:opacity-100",
+                                !isActive &&
+                                  "md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+                              )}
+                            >
+                              <MoreHorizontal className="size-4" aria-hidden />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-40">
+                            <DropdownMenuItem onSelect={() => startRename(conversation)}>
+                              <Pencil className="size-4" />
+                              Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                void update(conversation.id, {
+                                  is_pinned: !conversation.is_pinned,
+                                })
+                              }
+                            >
+                              <Pin className="size-4" />
+                              {conversation.is_pinned ? "Unpin" : "Pin"}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={() => setPendingDelete(conversation)}
+                            >
+                              <Trash className="size-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))
       )}
 
       <AlertDialog

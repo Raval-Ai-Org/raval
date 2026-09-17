@@ -369,13 +369,11 @@ function AppShell() {
         <div className="h-px bg-border/50" />
 
         {/* Recent chats */}
-        <SidebarSection label="Recent">
-          <RecentChats
-            workspaceId={workspaceId}
-            activeConversationId={activeConversationId}
-            onNavigate={() => setNavOpen(false)}
-          />
-        </SidebarSection>
+        <RecentChats
+          workspaceId={workspaceId}
+          activeConversationId={activeConversationId}
+          onNavigate={() => setNavOpen(false)}
+        />
 
         <div className="pt-1">
           <button

@@ -12,8 +12,6 @@ import {
   TrendingUp,
   AlertTriangle,
   Swords,
-  Lightbulb,
-  CalendarRange,
   RefreshCw,
   ArrowUpRight,
   Loader2,
@@ -138,17 +136,25 @@ function cacheKey(wsId: string) {
   return `${CACHE_PREFIX}${wsId}`;
 }
 
-function readCache(wsId: string): CoachBriefing | null {
+/**
+ * The last briefing saved in this browser. With `allowStale` an old one is
+ * returned too, so the panel can show it instantly while a fresh one loads.
+ */
+function readCache(wsId: string, opts?: { allowStale?: boolean }): CoachBriefing | null {
   try {
     const raw = localStorage.getItem(cacheKey(wsId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CoachBriefing;
     if (!parsed.generatedAt) return null;
-    if (Date.now() - new Date(parsed.generatedAt).getTime() > CACHE_TTL_MS) return null;
+    if (!opts?.allowStale && isStale(parsed)) return null;
     return parsed;
   } catch {
     return null;
   }
+}
+
+function isStale(b: CoachBriefing): boolean {
+  return Date.now() - new Date(b.generatedAt).getTime() > CACHE_TTL_MS;
 }
 
 function writeCache(wsId: string, b: CoachBriefing) {
@@ -172,16 +178,18 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
   const requestRef = useRef(0);
   const [clock, setClock] = useState(() => Date.now());
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const [tab, setTab] = useState<
-    "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes"
-  >("today");
+  const [tab, setTab] = useState<"today" | "checklist" | "competitors" | "market" | "notes">(
+    "today",
+  );
   const fetchBriefing = useServerFn(getCoachBriefing);
+  const hasBriefingRef = useRef(false);
+  hasBriefingRef.current = briefing !== null;
 
   const load = useCallback(
-    async (opts?: { force?: boolean }) => {
+    async (opts?: { force?: boolean; background?: boolean }) => {
       if (!workspaceId) return;
       const requestId = ++requestRef.current;
-      if (!opts?.force) {
+      if (!opts?.force && !opts?.background) {
         const cached = readCache(workspaceId);
         if (cached) {
           setBriefing(cached);
@@ -200,6 +208,8 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
         writeCache(workspaceId, b);
       } catch (e) {
         if (requestId !== requestRef.current) return;
+        // A background update that fails keeps showing the saved briefing quietly.
+        if (opts?.background && hasBriefingRef.current) return;
         setError(e instanceof Error ? e.message : "Couldn't load briefing");
       } finally {
         setLoading(false);
@@ -208,16 +218,26 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
     [workspaceId, brandContext, fetchBriefing],
   );
 
-  // Load cached briefing immediately; fetch fresh when panel first opens.
+  // No waiting when the panel opens: show the last saved briefing at once (even
+  // an old one), and prepare a fresh one in the background shortly after the
+  // workspace loads, so it is usually ready before anyone clicks.
+  const prefetchedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!workspaceId) return;
-    const cached = readCache(workspaceId);
-    if (cached) setBriefing(cached);
+    const saved = readCache(workspaceId, { allowStale: true });
+    setBriefing(saved);
+    if (prefetchedRef.current === workspaceId) return;
+    prefetchedRef.current = workspaceId;
+    if (saved && !isStale(saved)) return;
+    const timer = window.setTimeout(() => void load({ force: false, background: true }), 2500);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
+  // Fallback: opened before the background load started.
   useEffect(() => {
-    if ((open || maximized) && !briefing && !loading) void load();
-  }, [open, maximized, briefing, loading, load]);
+    if ((open || maximized) && !briefing && !loading && !error) void load({ background: true });
+  }, [open, maximized, briefing, loading, error, load]);
 
   useEffect(() => {
     if (!briefing?.generatedAt) return;
@@ -286,17 +306,13 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
                 Couldn't refresh your briefing
               </div>
               <div className="mt-0.5 text-[11.5px] leading-snug text-destructive/85">{error}</div>
-              <div className="mt-1 text-[11px] leading-snug text-destructive/70">
-                Tip: check your connection, then retry. If this keeps happening, ask Mellox in chat
-                and I'll run the scan manually.
-              </div>
               <div className="mt-2 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => void load({ force: true })}
                   className="inline-flex items-center gap-1 rounded-md bg-destructive px-2 py-1 text-[11px] font-semibold text-destructive-foreground hover:opacity-90"
                 >
-                  <RefreshCw className="h-3 w-3" aria-hidden="true" /> Retry scan
+                  <RefreshCw className="h-3 w-3" aria-hidden="true" /> Try again
                 </button>
                 <button
                   type="button"
@@ -371,7 +387,7 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-[15px] sm:text-base">Marketing Coach</DialogTitle>
               <DialogDescription className="truncate text-[11.5px]">
-                {focusLabel ? `Today: ${focusLabel}` : "Daily brief, market signals and next plays"}
+                {focusLabel ? `Today: ${focusLabel}` : "Your daily marketing brief"}
               </DialogDescription>
             </div>
             <button
@@ -432,11 +448,7 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
               aria-hidden="true"
             />
             <span className="hidden truncate text-[11px] text-muted-foreground sm:inline">
-              {open
-                ? "· Tap to hide"
-                : focusLabel
-                  ? `· Today: ${focusLabel}`
-                  : "· Daily brief & next plays"}
+              {!open && focusLabel ? `· ${focusLabel}` : ""}
             </span>
           </span>
           {loading && !open && (
@@ -465,7 +477,7 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
 
 /* -------------------- Tabs (a11y) ------------------------- */
 
-type CoachTabId = "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes";
+type CoachTabId = "today" | "checklist" | "competitors" | "market" | "notes";
 
 interface CoachTabDef {
   id: CoachTabId;
@@ -622,8 +634,8 @@ function CoachBody({
   workspaceId: string | null;
   brandKeywords?: string[];
   briefing: CoachBriefing;
-  tab: "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes";
-  onTab: (t: "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes") => void;
+  tab: "today" | "checklist" | "competitors" | "market" | "notes";
+  onTab: (t: "today" | "checklist" | "competitors" | "market" | "notes") => void;
   loading: boolean;
   onRefresh: () => void;
   generatedLabel: string | null;
@@ -639,64 +651,45 @@ function CoachBody({
 
   const tabs: { id: typeof tab; label: string; icon: typeof Target; count?: number }[] = [
     { id: "today", label: "Today", icon: Target },
-    { id: "checklist", label: "Checklist", icon: CheckSquare, count: openCount },
+    { id: "checklist", label: "To-do", icon: CheckSquare, count: openCount },
     { id: "competitors", label: "Competitors", icon: Swords, count: briefing.competitors.length },
     { id: "market", label: "Market", icon: TrendingUp, count: briefing.market.length },
-    { id: "plays", label: "Plays", icon: Lightbulb, count: briefing.plays.length },
-    { id: "week", label: "This week", icon: CalendarRange },
     { id: "notes", label: "Notes", icon: StickyNote },
   ];
 
   return (
     <div className="space-y-3 sm:space-y-4">
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+      <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {briefing.greeting}
-            </div>
+          <div
+            className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground"
+            aria-live="polite"
+            title={
+              briefing.generatedAt ? new Date(briefing.generatedAt).toLocaleString() : undefined
+            }
+          >
+            <span>{briefing.greeting}</span>
             {(generatedLabel || loading) && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full bg-secondary/60 px-1.5 py-[1px] text-[10px] font-medium text-muted-foreground"
-                aria-live="polite"
-                title={
-                  briefing.generatedAt ? new Date(briefing.generatedAt).toLocaleString() : undefined
-                }
-              >
-                <span
-                  className={cn(
-                    "inline-block h-1.5 w-1.5 rounded-full",
-                    loading ? "animate-pulse bg-amber-500" : "bg-emerald-500",
-                  )}
-                />
-                {loading ? "Researching…" : `Updated ${generatedLabel}`}
-              </span>
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{loading ? "Updating…" : `Updated ${generatedLabel}`}</span>
+              </>
             )}
           </div>
-          <div className="mt-1 text-[13.5px] font-semibold leading-snug tracking-[-0.005em] text-foreground sm:text-[14px]">
+          <div className="mt-1 text-[15px] font-semibold leading-snug tracking-[-0.01em] text-foreground">
             {briefing.headline}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1 self-end sm:self-auto">
-          {loading && (
-            <span
-              role="status"
-              aria-live="polite"
-              className="hidden items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground sm:inline-flex"
-            >
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-              Refreshing…
-            </span>
-          )}
+        <div className="flex shrink-0 items-center gap-0.5">
           <button
             type="button"
             onClick={onRefresh}
             disabled={loading}
-            aria-label={loading ? "Refreshing briefing" : "Refresh briefing"}
+            aria-label={loading ? "Updating briefing" : "Update briefing"}
             aria-busy={loading}
-            title={loading ? "Refreshing briefing…" : "Refresh briefing"}
-            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:cursor-wait disabled:opacity-60 disabled:hover:bg-transparent sm:h-7 sm:w-7"
+            title="Update"
+            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:cursor-wait disabled:opacity-60 disabled:hover:bg-transparent"
           >
             {loading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -708,35 +701,18 @@ function CoachBody({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-1.5" aria-label="Briefing summary">
-        <SummaryMetric label="Open tasks" value={openCount} tone="emerald" />
-        <SummaryMetric
-          label="Fresh signals"
-          value={briefing.competitors.length + briefing.market.length}
-          tone="sky"
-        />
-        <SummaryMetric label="Sources" value={briefing.sources.length} tone="violet" />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-secondary/25 px-3 py-2">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[11.5px] font-medium text-foreground">Need a decision?</div>
-          <div className="truncate text-[10.5px] text-muted-foreground">
-            Ask Mellox to turn this brief into your next move.
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() =>
-            fireChat(
-              `Based on today's Marketing Coach briefing, what should I do first and why? Brief headline: ${briefing.headline}`,
-            )
-          }
-          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground px-2.5 py-1.5 text-[10.5px] font-semibold text-background transition hover:opacity-90"
-        >
-          Ask Mellox <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() =>
+          fireChat(
+            `Based on today's Marketing Coach briefing, what should I do first and why? Brief headline: ${briefing.headline}`,
+          )
+        }
+        className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-semibold text-primary-foreground transition hover:brightness-105"
+      >
+        <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+        What should I do first?
+      </button>
 
       {/* Tabs — segmented control with roving-tabindex keyboard nav */}
       <CoachTabs tabs={tabs} value={tab} onChange={onTab} />
@@ -767,9 +743,9 @@ function CoachBody({
             <EmptyState
               icon={Sparkles}
               title="You're all clear for today"
-              body="No new wins or watch-outs since your last scan. Ship the focus above, then check the Checklist or ask Mellox for a fresh sweep."
+              body="Nothing new since your last update."
               action={{
-                label: "Run a fresh scan",
+                label: "Check again",
                 prompt: "Scan my brand, competitors and market and tell me what's changed today.",
                 icon: RefreshCw,
               }}
@@ -801,78 +777,17 @@ function CoachBody({
           icon={Swords}
           tint="rose"
           emptyTitle="No competitor moves yet"
-          empty="Add 3–5 competitors in Brand DNA and I'll track their launches, positioning shifts and content weekly."
+          empty="Add your competitors in Brand DNA to see what they're doing."
           emptyAction={{
             label: "Add competitors",
             prompt: "Help me list my top 5 competitors and what they're doing this month",
             intent: "brand-dna",
           }}
-          emptyHint="Not sure who to add? Ask: “Who are my top competitors?”"
         />
       </TabPanel>
 
       <TabPanel id="market" active={tab === "market"}>
         <MarketBrainPanel workspaceId={workspaceId} brandKeywords={brandKeywords} />
-      </TabPanel>
-
-      <TabPanel id="plays" active={tab === "plays"}>
-        <SectionOrEmpty
-          items={briefing.plays}
-          sources={briefing.sources}
-          icon={Lightbulb}
-          tint="violet"
-          emptyTitle="No plays queued up"
-          empty="Once I have a scan I'll suggest 3 experiments a week tailored to your funnel and channels — copy, campaigns and quick wins."
-          emptyAction={{
-            label: "Suggest experiments",
-            prompt: "Suggest 3 marketing experiments I could run this week",
-            intent: "ideate",
-          }}
-          emptyHint="Each play comes with a hypothesis, effort estimate and success metric."
-        />
-      </TabPanel>
-
-      <TabPanel id="week" active={tab === "week"}>
-        <div className="rounded-xl border border-border/70 bg-secondary/30 p-3">
-          <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            <CalendarRange className="h-3 w-3" aria-hidden="true" /> Strategy this week
-          </div>
-          {briefing.weekPlan.length === 0 ? (
-            <EmptyState
-              icon={CalendarRange}
-              title="No weekly plan yet"
-              body="Run a scan and I'll draft a 5-step plan for the week — sequenced by impact, ready to schedule."
-              action={{
-                label: "Draft this week's plan",
-                prompt: "Draft a 5-step marketing plan for me this week, ordered by impact.",
-                icon: Sparkles,
-              }}
-              tone="soft"
-            />
-          ) : (
-            <ol className="space-y-1.5">
-              {briefing.weekPlan.map((step, i) => (
-                <li key={i} className="flex gap-2 text-[12px] leading-snug text-foreground">
-                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-foreground/10 text-[9.5px] font-semibold text-foreground">
-                    {i + 1}
-                  </span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-          {briefing.weekPlan.length > 0 && (
-            <div className="mt-3 flex justify-end">
-              <button
-                type="button"
-                onClick={() => fireChat("Turn this week's plan into a scheduled content calendar")}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground/80 hover:text-foreground"
-              >
-                Schedule this week <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
-              </button>
-            </div>
-          )}
-        </div>
       </TabPanel>
 
       {workspaceId && (
@@ -884,33 +799,6 @@ function CoachBody({
       {briefing.sources && briefing.sources.length > 0 && (
         <SourcesPanel sources={briefing.sources} />
       )}
-
-      {generatedLabel && (
-        <div className="pt-1 text-right text-[10px] text-muted-foreground/80">
-          Updated {generatedLabel} · Grounded in your site + live web research
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SummaryMetric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "emerald" | "sky" | "violet";
-}) {
-  const toneClass =
-    tone === "emerald" ? "text-emerald-500" : tone === "sky" ? "text-sky-500" : "text-violet-500";
-  return (
-    <div className="rounded-xl border border-border/70 bg-card/60 px-2.5 py-2">
-      <div className={cn("text-base font-semibold leading-none tabular-nums", toneClass)}>
-        {value}
-      </div>
-      <div className="mt-1 truncate text-[10px] font-medium text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -1129,7 +1017,7 @@ const WALKTHROUGH_KEY = "coach:walkthrough:v1";
 const WALKTHROUGH_STEPS: {
   title: string;
   body: string;
-  tab?: "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes";
+  tab?: "today" | "checklist" | "competitors" | "market" | "notes";
 }[] = [
   {
     title: "Meet Mellox, your marketing coach",
@@ -1160,9 +1048,7 @@ const WALKTHROUGH_STEPS: {
 function CoachWalkthrough({
   onJumpTab,
 }: {
-  onJumpTab: (
-    t: "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes",
-  ) => void;
+  onJumpTab: (t: "today" | "checklist" | "competitors" | "market" | "notes") => void;
 }) {
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(false);
