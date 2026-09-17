@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Field, Panel, StepActions } from "./ugc-ui";
 
 const QUICK_REWRITES = [
-  "Make the hook more scroll-stopping",
+  "Make the opening more eye-catching",
   "Shorter and more natural, like a real person talking",
   "More energetic",
   "Make the product demo clearer",

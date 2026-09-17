@@ -7,7 +7,7 @@ import { LegacyAppRedirect } from "@/components/workspace/LegacyAppRedirect";
 // /projects — never to a guessed workspace (see LegacyAppRedirect).
 export const metadata: Metadata = pageMetadata({
   title: "Conversation · Mellox AI",
-  description: "Continue a conversation with Ravi, your Mellox AI Marketing Intelligence Layer.",
+  description: "Continue a conversation with Mellox, your Mellox AI Marketing Intelligence Layer.",
   path: "/app/chat",
   noindex: true,
 });

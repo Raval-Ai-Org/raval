@@ -1,10 +1,10 @@
 "use client";
 
 // Entry points into Studio: the `open:canvas` app event (chat tool calls,
-// command bar, rail, suggestions), ⌘J, and `?studio=<type>&job=<id>` deep
+// command bar, suggestions), ⌘J (opens the Create launcher), and `?studio=<type>&job=<id>` deep
 // links. Everything funnels into the session store.
 import { useEffect } from "react";
-import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { isStudioType, normalizeStudioType, type StudioType } from "@/lib/studio/formats";
 import { detectStudioType } from "@/lib/studio/detect";
 import {
@@ -62,7 +62,7 @@ export function useStudioEntry(workspaceId: string | null) {
         return;
       }
       // With a brief, generate straight away: the user already said what they want.
-      // Without one, open the prompt box with the format pre-selected.
+      // Without one, open the description step for that format.
       const brief = typeof detail.brief === "string" ? detail.brief.trim().slice(0, 4000) : "";
       const type =
         normalizeStudioType(detail.type) ??
@@ -84,7 +84,7 @@ export function useStudioEntry(workspaceId: string | null) {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === "j" || e.key === "J")) {
         e.preventDefault();
-        openComposer();
+        emitAppEvent("open:create-launcher");
       }
     };
 

@@ -51,7 +51,7 @@ export const COPY: Record<Persona, PersonaCopy> = {
     firstHeadline: (n) => `Welcome${n ? `, ${n}` : ""} — add your first client`,
     returningHeadline: (n) => `Which client today${n ? `, ${n}` : ""}?`,
     firstSubhead:
-      "Paste a website link to spin up a real client workspace — we'll set up Brand DNA, AEO/GEO and Ravi in seconds.",
+      "Paste a website link to spin up a real client workspace — we'll set up Brand DNA, AEO/GEO and Mellox in seconds.",
     returningSubhead: "Pick a client brand to work on, or onboard a new one.",
     createCta: "New client",
     createFirstCta: "Create client",
@@ -75,13 +75,13 @@ export const COPY: Record<Persona, PersonaCopy> = {
     firstHeadline: (n) => `Welcome${n ? `, ${n}` : ""} — set up your brand`,
     returningHeadline: (n) => `Which brand today${n ? `, ${n}` : ""}?`,
     firstSubhead:
-      "Paste your website link and we'll set up Brand DNA, AEO/GEO and Ravi around your brand in seconds.",
+      "Paste your website link and we'll set up Brand DNA, AEO/GEO and Mellox around your brand in seconds.",
     returningSubhead: "Open your brand or add another one you run.",
     createCta: "New brand",
     createFirstCta: "Create brand",
     mandatoryTitle: "Set up your brand",
     mandatoryDescription:
-      "Your brand lives in its own workspace with Brand DNA, memory and Ravi. Name it to get started.",
+      "Your brand lives in its own workspace with Brand DNA, memory and Mellox. Name it to get started.",
     normalTitle: "Add a brand",
     normalDescription: "Name the brand and (optionally) attach a website.",
     nameLabel: "Brand name",
@@ -99,7 +99,7 @@ export const COPY: Record<Persona, PersonaCopy> = {
     firstHeadline: (n) => `Welcome${n ? `, ${n}` : ""} — start your first project`,
     returningHeadline: (n) => `Which project today${n ? `, ${n}` : ""}?`,
     firstSubhead:
-      "Paste a website link to spin up a project — Brand DNA, AEO/GEO and Ravi in seconds.",
+      "Paste a website link to spin up a project — Brand DNA, AEO/GEO and Mellox in seconds.",
     returningSubhead: "Pick a project to work on, or start a new one.",
     createCta: "New project",
     createFirstCta: "Create project",

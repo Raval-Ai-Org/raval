@@ -209,8 +209,8 @@ There is no video-model fallback chain.
 
 The UI exposes:
 
-- `ravi-flash`
-- `ravi-pro`
+- `mellox-flash`
+- `mellox-pro`
 
 These are defined in [src/components/app/ChatPanel.tsx](src/components/app/ChatPanel.tsx#L208-L211), but no corresponding backend model-routing implementation was found. They appear to be product aliases/UI state rather than actual model IDs. Backend chat continues to route to `qwen/qwen3-max`.
 

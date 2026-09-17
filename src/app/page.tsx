@@ -118,7 +118,7 @@ const SOFTWARE_APPLICATION_LD = {
   url: `${BASE_URL}/`,
   applicationCategory: "BusinessApplication",
   description:
-    "Mellox AI is the Marketing Intelligence Layer built on your Brand DNA — plan, create and optimize with AEO/GEO intelligence and Ravi, your AI marketing analyst.",
+    "Mellox AI is the Marketing Intelligence Layer built on your Brand DNA — plan, create and optimize with AEO/GEO intelligence and Mellox, your AI marketing analyst.",
   offers: PLANS.map((plan) => ({
     "@type": "Offer",
     name: plan.name,
@@ -153,7 +153,7 @@ const FAQ_LD = {
       name: "What is AEO/GEO and why does it matter?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "AEO (Answer Engine Optimization) and GEO (Generative Engine Optimization) help your content get cited and recommended by AI assistants. Mellox AI's Ravi analyst monitors your visibility and suggests optimizations for ChatGPT, Perplexity, Gemini and Claude.",
+        text: "AEO (Answer Engine Optimization) and GEO (Generative Engine Optimization) help your content get cited and recommended by AI assistants. Mellox AI's Mellox analyst monitors your visibility and suggests optimizations for ChatGPT, Perplexity, Gemini and Claude.",
       },
     },
   ],

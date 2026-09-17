@@ -45,12 +45,12 @@ export function SuggestedActions({
   if (!suggestions.length) return null;
   return (
     <div
-      className="mt-1 flex flex-col gap-2 rounded-xl border border-border/60 bg-card/60 p-3"
+      className="flex max-w-[36rem] flex-col gap-2 rounded-2xl border border-border bg-card p-3"
       role="group"
       aria-label="Suggested actions awaiting your approval"
     >
       <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        Suggested — needs your approval
+        Needs your OK
       </div>
       {suggestions.map((call, i) => {
         const { title, effect } = describeSuggestion(call);
@@ -59,7 +59,7 @@ export function SuggestedActions({
         return (
           <div
             key={`${call.kind}-${i}`}
-            className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-border/50 bg-background/60 px-3 py-2"
+            className="flex flex-wrap items-start justify-between gap-2 rounded-xl bg-muted/50 px-3 py-2.5"
           >
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-medium text-foreground">{title}</div>
@@ -76,16 +76,16 @@ export function SuggestedActions({
                 <button
                   type="button"
                   onClick={() => void approve(i)}
-                  className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[12px] font-medium text-primary-foreground hover:opacity-90"
+                  className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[12px] font-medium text-primary-foreground hover:brightness-105"
                 >
-                  <Check className="h-3.5 w-3.5" aria-hidden /> Approve
+                  <Check className="h-3.5 w-3.5" aria-hidden /> Yes, do it
                 </button>
                 <button
                   type="button"
                   onClick={() => set(i, "dismissed")}
-                  className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[12px] text-muted-foreground hover:text-foreground"
+                  className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-[12px] text-muted-foreground hover:text-foreground"
                 >
-                  <X className="h-3.5 w-3.5" aria-hidden /> Dismiss
+                  <X className="h-3.5 w-3.5" aria-hidden /> No thanks
                 </button>
               </div>
             ) : (

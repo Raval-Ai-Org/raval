@@ -317,9 +317,9 @@ function ActionRow({
             type="button"
             onClick={ask}
             className={cn(ghostBtn, "px-3 py-1.5 text-[12px]")}
-            title="Open this issue in chat with Ravi"
+            title="Open this issue in chat with Mellox"
           >
-            <MessageSquare className="h-3.5 w-3.5" strokeWidth={2.2} /> Ask Ravi
+            <MessageSquare className="h-3.5 w-3.5" strokeWidth={2.2} /> Ask Mellox
           </button>
         </div>
       </div>

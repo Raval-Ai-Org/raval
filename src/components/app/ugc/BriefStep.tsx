@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles } from "@/components/icons";
+import { toast } from "sonner";
+import { RefreshCw, Sparkles, Wand2 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,10 +18,14 @@ import {
   SETTINGS,
   TONES,
 } from "@/lib/ugc/options";
+import { ugcApi } from "@/lib/ugc/client";
 import type { Brief, Product } from "@/lib/ugc/schemas";
+import { cn } from "@/lib/utils";
 import { ChipGroup, Field, Panel, StepActions } from "./ugc-ui";
 
 export function BriefStep({
+  workspaceId,
+  projectId,
   initialBrief,
   product,
   hasConcepts,
@@ -29,6 +34,8 @@ export function BriefStep({
   onGenerate,
   onSkipToConcepts,
 }: {
+  workspaceId: string;
+  projectId: string;
   initialBrief: Brief;
   product: Product;
   hasConcepts: boolean;
@@ -43,6 +50,34 @@ export function BriefStep({
   const setCreator = <K extends keyof Brief["creator"]>(key: K, value: Brief["creator"][K]) =>
     setBrief((b) => ({ ...b, creator: { ...b.creator, [key]: value } }));
   const ctas = CTA_PRESETS[brief.objective];
+  const [writing, setWriting] = useState(false);
+  const [written, setWritten] = useState<string | null>(null);
+  const ours = !!written && brief.instructions.trim() === written.trim();
+
+  const writeNotes = async () => {
+    if (writing) return;
+    const previous = brief.instructions;
+    setWriting(true);
+    try {
+      const { notes } = await ugcApi.writeNotes(
+        workspaceId,
+        projectId,
+        brief,
+        ours ? undefined : brief.instructions,
+      );
+      set("instructions", notes);
+      setWritten(notes);
+      toast.success("Creative notes written", {
+        action: { label: "Undo", onClick: () => set("instructions", previous) },
+      });
+    } catch (e) {
+      toast.error("Couldn't write notes", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    } finally {
+      setWriting(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -103,9 +138,9 @@ export function BriefStep({
 
         <Panel className="space-y-4">
           <h3 className="text-sm font-semibold">Creative</h3>
-          <Field label="UGC format">
+          <Field label="Video style">
             <ChipGroup
-              label="UGC format"
+              label="Video style"
               size="sm"
               options={FORMATS}
               value={brief.format}
@@ -184,13 +219,34 @@ export function BriefStep({
           </Field>
         </div>
         <Field label="Creative notes" htmlFor="ugc-notes" hint="Optional">
-          <Textarea
-            id="ugc-notes"
-            rows={2}
-            value={brief.instructions}
-            onChange={(e) => set("instructions", e.target.value)}
-            placeholder="Anything the ad must include or avoid — e.g. “show it fitting in a gym bag”, “don't mention price”."
-          />
+          <div className="relative">
+            <Textarea
+              id="ugc-notes"
+              rows={brief.instructions.length > 160 ? 8 : 3}
+              value={brief.instructions}
+              readOnly={writing}
+              aria-busy={writing}
+              onChange={(e) => set("instructions", e.target.value)}
+              placeholder="Anything the ad must include or avoid — e.g. “show it fitting in a gym bag”, “don't mention price”."
+              className={cn("pb-12", writing && "opacity-50")}
+            />
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void writeNotes()}
+              loading={writing}
+              className="absolute bottom-2 left-2 h-8 rounded-full px-3 text-xs"
+            >
+              {writing ? null : ours ? <RefreshCw aria-hidden /> : <Wand2 aria-hidden />}
+              {writing
+                ? "Writing…"
+                : ours
+                  ? "Try another"
+                  : brief.instructions.trim()
+                    ? "Improve it"
+                    : "Write it for me"}
+            </Button>
+          </div>
         </Field>
       </Panel>
 

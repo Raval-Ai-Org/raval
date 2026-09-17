@@ -182,7 +182,7 @@ export function IdeasPanel({
         </ul>
       ) : status === "error" ? (
         <div className="rounded-xl border border-border bg-surface-3 px-3.5 py-3 text-sm text-muted-foreground">
-          <p>Ideas aren't available right now. You can still write your own brief.</p>
+          <p>Ideas aren't available right now. You can still write your own.</p>
           <p className="mt-0.5 text-xs">{error}</p>
           <button
             type="button"

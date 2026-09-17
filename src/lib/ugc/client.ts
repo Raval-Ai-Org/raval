@@ -124,6 +124,13 @@ export const ugcApi = {
       workspaceId,
     });
   },
+  writeNotes(workspaceId: string, id: string, brief: Brief, current?: string) {
+    return call<{ notes: string }>(`/api/ugc/projects/${id}/notes`, {
+      method: "POST",
+      workspaceId,
+      body: JSON.stringify({ workspaceId, brief, current: current?.trim() || undefined }),
+    });
+  },
   generateConcepts(workspaceId: string, id: string, durationSec: number) {
     return call<{ project: ProjectView; warnings: string[] }>(`/api/ugc/projects/${id}/concepts`, {
       method: "POST",

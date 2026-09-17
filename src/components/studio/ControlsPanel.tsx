@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { ChevronDown, SlidersHorizontal } from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { PLATFORMS } from "@/lib/social-platforms";
 import { RATIOS, recommendedRatio } from "@/lib/studio/aspect";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import type { StudioControls } from "@/lib/studio/jobs";
@@ -20,13 +19,13 @@ export function describeControls(session: StudioSession): string {
   const format = STUDIO_FORMATS[session.type];
   const parts: string[] = [];
   if (session.type === "article") {
-    parts.push(
-      { short: "Short", standard: "Standard length", long: "In-depth" }[c.length ?? "standard"],
-    );
+    parts.push({ short: "Short", standard: "Medium length", long: "Long" }[c.length ?? "standard"]);
   }
-  if (session.type === "script") parts.push(`${c.durationSec ?? 30}s runtime`);
+  if (session.type === "script") parts.push(`${c.durationSec ?? 30} seconds`);
   if (session.type === "video")
-    parts.push(`${c.durationSec ?? 6}s · ${c.videoResolution ?? "720P"}`);
+    parts.push(
+      `${c.durationSec ?? 6} seconds · ${{ "480P": "Basic", "720P": "HD", "1080P": "Full HD" }[c.videoResolution ?? "720P"]}`,
+    );
   if (session.type === "carousel") parts.push(`${c.slideCount ?? 6} slides`);
   if (
     c.ratio &&
@@ -35,8 +34,8 @@ export function describeControls(session: StudioSession): string {
   ) {
     parts.push(`${RATIOS[c.ratio].label} ${c.ratio}`);
   }
-  if (c.tone) parts.push(`Tone: ${c.tone}`);
-  if (c.cta) parts.push("Custom CTA");
+  if (c.tone) parts.push(`Voice: ${c.tone}`);
+  if (c.cta) parts.push("Custom action");
   return parts.join(" · ") || "Default settings";
 }
 
@@ -77,9 +76,7 @@ export function ControlsPanel({
     <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
       {format.platforms.length ? (
         <div>
-          <FieldLabel hint={format.multiPlatform ? "A native version for each" : "Pick one"}>
-            {format.multiPlatform ? "Platforms" : "Platform"}
-          </FieldLabel>
+          <FieldLabel>{format.multiPlatform ? "Platforms" : "Platform"}</FieldLabel>
           <PlatformPicker
             platforms={format.platforms}
             value={c.platforms}
@@ -101,13 +98,7 @@ export function ControlsPanel({
             <span className="block text-sm font-medium text-foreground">
               {session.type === "carousel" ? "Generate a cover visual" : "Add a generated visual"}
             </span>
-            <span className="block text-xs text-muted-foreground">
-              On-brand, sized for{" "}
-              {c.platforms.length > 1
-                ? "these platforms"
-                : PLATFORMS[c.platforms[0] ?? "instagram"].label}{" "}
-              · 1 image credit
-            </span>
+            <span className="block text-xs text-muted-foreground">Uses 1 image credit</span>
           </span>
           <Switch
             checked={!!c.includeImage}
@@ -126,7 +117,7 @@ export function ControlsPanel({
         >
           <SlidersHorizontal className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium text-foreground">Format settings</span>
+            <span className="block text-sm font-medium text-foreground">More settings</span>
             <span className="block truncate text-xs text-muted-foreground">
               {describeControls(session)}
             </span>
@@ -173,8 +164,8 @@ export function ControlsPanel({
                   onChange={(length) => set({ length })}
                   options={[
                     { value: "short", label: "Short", hint: "~600 words" },
-                    { value: "standard", label: "Standard", hint: "~1,100 words" },
-                    { value: "long", label: "In-depth", hint: "~1,800 words" },
+                    { value: "standard", label: "Medium", hint: "~1,100 words" },
+                    { value: "long", label: "Long", hint: "~1,800 words" },
                   ]}
                 />
               </div>
@@ -183,12 +174,12 @@ export function ControlsPanel({
             {session.type === "script" || session.type === "video" ? (
               <div>
                 <FieldLabel
-                  hint={session.type === "video" ? "Longer clips take longer to render" : undefined}
+                  hint={session.type === "video" ? "Longer videos take longer" : undefined}
                 >
-                  {session.type === "video" ? "Length" : "Runtime"}
+                  Length
                 </FieldLabel>
                 <Segmented
-                  label={session.type === "video" ? "Video length" : "Runtime"}
+                  label="Length"
                   value={c.durationSec ?? (session.type === "video" ? 6 : 30)}
                   onChange={(durationSec) => set({ durationSec })}
                   options={(session.type === "video" ? [4, 6, 8] : [15, 30, 60]).map((v) => ({
@@ -218,24 +209,24 @@ export function ControlsPanel({
             {session.type === "video" ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <FieldLabel>Resolution</FieldLabel>
+                  <FieldLabel>Quality</FieldLabel>
                   <Segmented
-                    label="Resolution"
+                    label="Quality"
                     value={c.videoResolution ?? "720P"}
                     onChange={(videoResolution) => set({ videoResolution })}
                     options={[
-                      { value: "480P", label: "480p" },
-                      { value: "720P", label: "720p" },
-                      { value: "1080P", label: "1080p" },
+                      { value: "480P", label: "Basic" },
+                      { value: "720P", label: "HD" },
+                      { value: "1080P", label: "Full HD" },
                     ]}
                   />
                 </div>
                 <label className="flex items-center justify-between gap-3 self-end rounded-lg bg-surface-2 px-3 py-2">
-                  <span className="text-xs font-medium text-foreground">Generated audio</span>
+                  <span className="text-xs font-medium text-foreground">Sound</span>
                   <Switch
                     checked={c.audio ?? true}
                     onCheckedChange={(audio) => set({ audio })}
-                    aria-label="Generated audio"
+                    aria-label="Sound"
                   />
                 </label>
               </div>
@@ -244,25 +235,25 @@ export function ControlsPanel({
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <FieldLabel htmlFor="studio-tone" hint="Optional">
-                  Tone
+                  Voice
                 </FieldLabel>
                 <input
                   id="studio-tone"
                   value={c.tone ?? ""}
                   onChange={(e) => set({ tone: e.target.value.slice(0, 80) || undefined })}
-                  placeholder="Your Brand DNA voice"
+                  placeholder="e.g. Friendly and relaxed"
                   className={INPUT}
                 />
               </div>
               <div>
                 <FieldLabel htmlFor="studio-cta" hint="Optional">
-                  Call to action
+                  What should people do?
                 </FieldLabel>
                 <input
                   id="studio-cta"
                   value={c.cta ?? ""}
                   onChange={(e) => set({ cta: e.target.value.slice(0, 140) || undefined })}
-                  placeholder="e.g. Book a free consult"
+                  placeholder="e.g. Book a free call"
                   className={INPUT}
                 />
               </div>

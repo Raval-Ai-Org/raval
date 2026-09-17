@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowUpRight, Lightbulb } from "@/components/ui/gemini-icons";
+import { ArrowRight, ArrowUpRight } from "@/components/icons";
 import { BrandLogo, type BrandKey } from "@/components/brand/BrandLogo";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
@@ -62,36 +62,29 @@ export function NextStepSuggestions({
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: 0.15 }}
-      className="ml-10 mt-1"
+      transition={{ duration: 0.3, delay: 0.2 }}
+      className="-mt-2 flex flex-col"
+      aria-label="Follow-up ideas"
     >
-      <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-        <Lightbulb className="h-3 w-3 text-aura" />
-        What's next
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {steps.map((s, i) => (
-          <motion.button
-            key={s.label}
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.05 * i, duration: 0.2 }}
-            onClick={() => onPick(s.prompt)}
-            className="group inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-left text-[11.5px] font-medium text-foreground transition hover:-translate-y-0.5 hover:border-foreground/25 hover:bg-secondary/60"
-          >
-            {s.brand ? (
-              <BrandLogo name={s.brand} brand size={12} />
-            ) : (
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: "hsl(var(--aura-indigo))" }}
-              />
-            )}
-            <span className="truncate">{s.label}</span>
-            <ArrowUpRight className="h-3 w-3 -translate-x-0.5 text-muted-foreground transition group-hover:translate-x-0 group-hover:text-foreground" />
-          </motion.button>
-        ))}
-      </div>
+      {steps.slice(0, 3).map((s, i) => (
+        <motion.button
+          key={s.label}
+          type="button"
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.25 + 0.06 * i, duration: 0.22 }}
+          onClick={() => onPick(s.prompt)}
+          className="group flex w-full items-center gap-3 border-t border-border/60 py-2.5 text-left text-[14px] text-muted-foreground transition-colors first:border-t-0 hover:text-foreground"
+        >
+          {s.brand ? (
+            <BrandLogo name={s.brand} brand size={14} />
+          ) : (
+            <ArrowRight className="size-4 shrink-0 text-muted-foreground/70 transition-colors group-hover:text-primary" />
+          )}
+          <span className="min-w-0 flex-1 truncate">{s.label}</span>
+          <ArrowUpRight className="size-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+        </motion.button>
+      ))}
     </motion.div>
   );
 }

@@ -59,7 +59,7 @@ const FIELDS: {
   {
     key: "dontRules",
     label: "Never do",
-    hint: "Hard no's — Ravi will avoid these forever.",
+    hint: "Hard no's — Mellox will avoid these forever.",
     placeholder: "No hype words. No emoji spam. No competitor bashing.",
     icon: AlertTriangle,
     accent: "red",
@@ -208,7 +208,7 @@ export function BrandDnaEditor({
         </div>
         <LivePostPreview dna={dna} buffer={buffer} workspaceName={workspaceName} />
         <p className="mt-2 px-1 text-[12.5px] leading-5 text-muted-foreground">
-          This is how Ravi will style your posts. Palette, type and layout update as you type.
+          This is how Mellox will style your posts. Palette, type and layout update as you type.
         </p>
       </div>
     </div>

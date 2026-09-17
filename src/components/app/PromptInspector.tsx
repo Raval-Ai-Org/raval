@@ -25,7 +25,7 @@ type Props = {
 /**
  * Prompt Inspector — reveals which Brand DNA fields, style tokens, and
  * platform hints fed into the current post image so users can audit and
- * tune what Ravi is actually looking at.
+ * tune what Mellox is actually looking at.
  */
 export function PromptInspector({
   postBody,

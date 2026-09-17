@@ -34,7 +34,7 @@ function describe(s: StudioSession): { label: string; state: DockState; progress
   if (s.job?.status === "failed" && !s.lastGood)
     return { label: "Couldn't finish — open to retry", state: "failed", progress: 1 };
   if (s.lastGood) return { label: "Ready for review", state: "ready", progress: 1 };
-  return { label: "Brief in progress", state: "draft", progress: 0 };
+  return { label: "Draft", state: "draft", progress: 0 };
 }
 
 /** Minimized Studio work, pinned bottom-right. Generation continues while here. */
@@ -46,7 +46,9 @@ export function StudioDock() {
   // Only this workspace's work: another brand's drafts never dock here.
   const workspaceId = useOptionalWorkspaceId();
   const visible = sessions
-    .filter((s) => s.workspaceId === workspaceId && s.id !== activeId)
+    // Chat-started work is followed in the chat card and the Studio rail, so it
+    // doesn't also float over the page.
+    .filter((s) => s.workspaceId === workspaceId && s.id !== activeId && s.origin !== "chat")
     .slice(0, 4);
 
   return (
@@ -159,7 +161,7 @@ export function DockCard({ session: s }: { session: StudioSession }) {
               type="button"
               onClick={() => discardSession(s.id)}
               aria-label={`Dismiss: ${title}`}
-              title={d.state === "ready" ? "Dismiss — it stays in Needs Approval" : "Dismiss"}
+              title={d.state === "ready" ? "Dismiss — it stays in Review" : "Dismiss"}
               className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               <X className="size-3.5" />

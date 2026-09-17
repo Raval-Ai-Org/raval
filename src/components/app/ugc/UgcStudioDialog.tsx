@@ -50,9 +50,9 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
       onOpenChange={setOpen}
       size="xl"
       Icon={Video}
-      title="UGC Video Ads"
-      description="Product page to creator-style video ad"
-      srDescription="Create AI UGC video ads: product analysis, concepts, script and video generation"
+      title="Creator Video Ads"
+      description="From product link to video ad"
+      srDescription="Create creator-style video ads from your product: ideas, script and video"
       bodyClassName="px-4 pt-4 sm:px-6 sm:pt-5"
     >
       {open ? (

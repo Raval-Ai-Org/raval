@@ -7,7 +7,7 @@ export const BASE_URL =
     ? process.env.NEXT_PUBLIC_APP_URL
     : typeof window !== "undefined"
       ? window.location.origin
-      : "https://raval.ai";
+      : "https://mellox.ai";
 
 export const BRAND_NAME = "Mellox AI";
 // Logo is served from the same domain as the application

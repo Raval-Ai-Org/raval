@@ -313,7 +313,7 @@ function FindingItem({
             type="button"
             onClick={() => onAsk(finding)}
             className={cn(ghostBtn, "h-8 px-2.5 text-[12px]")}
-            title="Ask Ravi about this finding"
+            title="Ask Mellox about this finding"
           >
             <MessageSquare className="h-3.5 w-3.5" />
           </button>

@@ -4005,6 +4005,7 @@ pre {
   --tone-video: 258 64% 56%;
   --tone-script: 170 72% 32%;
   --tone-article: 199 80% 40%;
+  --tone-ugc: 316 78% 46%;
 }
 .dark {
   --tone-social: 70 75% 64%;
@@ -4014,6 +4015,7 @@ pre {
   --tone-video: 258 92% 76%;
   --tone-script: 166 72% 55%;
   --tone-article: 198 92% 64%;
+  --tone-ugc: 316 90% 70%;
 }
 .studio-tone-social {
   --tone: var(--tone-social);
@@ -4035,6 +4037,9 @@ pre {
 }
 .studio-tone-article {
   --tone: var(--tone-article);
+}
+.studio-tone-ugc {
+  --tone: var(--tone-ugc);
 }
 
 @layer components {
@@ -4349,9 +4354,26 @@ pre {
 .studio-enter-blur {
   animation: studio-enter-blur 360ms var(--motion-ease-emphasized) both;
 }
+/* Children arrive one after another. */
+.studio-stagger > * {
+  animation: studio-enter-blur 420ms var(--motion-ease-emphasized) both;
+}
+.studio-stagger > :nth-child(2) {
+  animation-delay: 60ms;
+}
+.studio-stagger > :nth-child(3) {
+  animation-delay: 120ms;
+}
+.studio-stagger > :nth-child(4) {
+  animation-delay: 180ms;
+}
+.studio-stagger > :nth-child(n + 5) {
+  animation-delay: 240ms;
+}
 @media (prefers-reduced-motion: reduce) {
   .studio-reveal,
-  .studio-enter-blur {
+  .studio-enter-blur,
+  .studio-stagger > * {
     animation: none;
   }
 }
@@ -4456,5 +4478,497 @@ pre {
   }
   100% {
     transform: scaleX(0);
+  }
+}
+
+/* =========================================================
+   Mellox chat (src/components/app/ChatPanel.tsx + chat/*)
+   Calm, text-first conversation: no assistant bubble, a soft
+   user bubble, one rounded message box, lime only for action.
+   ========================================================= */
+@layer components {
+  .mx-chat {
+    --mx-radius: 1.5rem;
+    --mx-box-bg: hsl(var(--card));
+    --mx-box-border: hsl(var(--border));
+    --mx-user-bg: hsl(var(--muted));
+    --mx-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .dark .mx-chat {
+    --mx-box-bg: hsl(var(--surface-3));
+    --mx-user-bg: hsl(var(--surface-4));
+  }
+
+  .mx-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border-strong)) transparent;
+  }
+
+  /* ── Greeting + starters ── */
+  .mx-greeting {
+    font-family: var(--font-display);
+    font-size: clamp(1.75rem, 1.2rem + 1.6vw, 2.5rem);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    line-height: 1.15;
+    color: hsl(var(--foreground));
+    text-wrap: balance;
+  }
+  .mx-greeting > span {
+    transition: opacity 0.4s var(--mx-ease);
+  }
+  .mx-starter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 2.25rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card) / 0.6);
+    color: hsl(var(--foreground) / 0.85);
+    font-size: 13.5px;
+    font-weight: 500;
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      color 0.18s ease,
+      transform 0.18s var(--mx-ease);
+  }
+  .mx-starter:hover {
+    background: hsl(var(--card));
+    border-color: hsl(var(--border-strong));
+    color: hsl(var(--foreground));
+    transform: translateY(-1px);
+  }
+
+  /* ── Message box ── */
+  .mx-composer {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--mx-radius);
+    background: var(--mx-box-bg);
+    border: 1px solid var(--mx-box-border);
+    box-shadow:
+      0 1px 2px hsl(var(--foreground) / 0.04),
+      0 8px 28px -12px hsl(var(--foreground) / 0.12);
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.3s var(--mx-ease);
+    cursor: text;
+  }
+  .mx-composer:hover {
+    border-color: hsl(var(--border-strong));
+  }
+  .mx-composer:focus-within {
+    border-color: hsl(var(--primary) / 0.55);
+    box-shadow:
+      0 0 0 3px hsl(var(--primary) / 0.12),
+      0 12px 36px -14px hsl(var(--foreground) / 0.18);
+  }
+  .dark .mx-composer {
+    box-shadow:
+      0 1px 2px hsl(0 0% 0% / 0.5),
+      0 16px 40px -18px hsl(0 0% 0% / 0.8);
+  }
+  .dark .mx-composer:focus-within {
+    box-shadow:
+      0 0 0 3px hsl(var(--primary) / 0.14),
+      0 16px 40px -18px hsl(0 0% 0% / 0.8);
+  }
+  .mx-composer--hero .mx-composer__input {
+    min-height: 4.5rem;
+  }
+  .mx-composer__input {
+    display: block;
+    width: 100%;
+    resize: none;
+    background: transparent;
+    border: 0;
+    outline: none;
+    box-shadow: none;
+    padding: 0.95rem 1.1rem 0.35rem;
+    min-height: 2.75rem;
+    font-size: 16px;
+    line-height: 1.55;
+    color: hsl(var(--foreground));
+    cursor: text;
+  }
+  .mx-composer__input::placeholder {
+    color: hsl(var(--muted-foreground) / 0.85);
+  }
+  .mx-composer__input:focus,
+  .mx-composer__input:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+  .mx-composer__drop {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: inherit;
+    border: 2px dashed hsl(var(--primary) / 0.6);
+    background: hsl(var(--primary-surface) / 0.92);
+    color: hsl(var(--foreground));
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+  .mx-composer[data-dragging] .mx-composer__drop {
+    opacity: 1;
+  }
+
+  .mx-icon-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 1.875rem;
+    height: 1.875rem;
+    flex-shrink: 0;
+    border-radius: 0.6rem;
+    color: hsl(var(--muted-foreground));
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease,
+      transform 0.15s ease;
+  }
+  .mx-icon-btn:hover:not(:disabled) {
+    background: hsl(var(--foreground) / 0.07);
+    color: hsl(var(--foreground));
+  }
+  .mx-icon-btn:active:not(:disabled) {
+    transform: scale(0.92);
+  }
+  .mx-icon-btn:disabled {
+    opacity: 0.45;
+  }
+  .mx-icon-btn:focus-visible,
+  .mx-model-btn:focus-visible,
+  .mx-send:focus-visible,
+  .mx-offer:focus-visible,
+  .mx-pill-btn:focus-visible,
+  .mx-starter:focus-visible,
+  .mx-jump:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  .mx-model-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    height: 2rem;
+    padding: 0 0.6rem;
+    border-radius: 0.6rem;
+    font-size: 13px;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+  .mx-model-btn:hover,
+  .mx-model-btn[data-state="open"] {
+    background: hsl(var(--foreground) / 0.07);
+    color: hsl(var(--foreground));
+  }
+
+  .mx-send {
+    display: grid;
+    place-items: center;
+    width: 2.125rem;
+    height: 2.125rem;
+    border-radius: 0.75rem;
+    background: hsl(var(--foreground) / 0.1);
+    color: hsl(var(--muted-foreground));
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      box-shadow 0.25s var(--mx-ease);
+  }
+  .mx-send:disabled {
+    cursor: default;
+  }
+  .mx-send.is-ready {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 6px 18px -8px hsl(var(--primary) / 0.7);
+  }
+  .mx-send.is-ready:hover {
+    filter: brightness(1.06);
+  }
+  .mx-send.is-streaming {
+    background: hsl(var(--foreground));
+    color: hsl(var(--background));
+  }
+
+  .mx-composer-fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 2rem;
+    pointer-events: none;
+    background: linear-gradient(to bottom, transparent, hsl(var(--background)));
+  }
+  .mx-jump {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 0.75rem);
+    translate: -50% 0;
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    box-shadow: 0 8px 24px -10px hsl(var(--foreground) / 0.3);
+    z-index: 2;
+  }
+  .mx-jump:hover {
+    background: hsl(var(--muted));
+  }
+
+  /* ── Messages ── */
+  .mx-user-bubble {
+    max-width: min(85%, 36rem);
+    padding: 0.65rem 1rem;
+    border-radius: 1.25rem;
+    border-bottom-right-radius: 0.4rem;
+    background: var(--mx-user-bg);
+    color: hsl(var(--foreground));
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .mx-assistant {
+    font-size: 15.5px;
+    line-height: 1.7;
+    color: hsl(var(--foreground));
+  }
+  .mx-assistant .chat-md {
+    font-size: 15.5px;
+    line-height: 1.7;
+  }
+  .mx-assistant .chat-md p {
+    margin-bottom: 0.85em;
+  }
+  .mx-assistant .chat-md ul,
+  .mx-assistant .chat-md ol {
+    margin: 0.4em 0 0.9em;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35em;
+  }
+  /* A soft dot at the end of text that is still arriving. */
+  .mx-assistant.is-typing .chat-md > :last-child:not(ul, ol)::after,
+  .mx-assistant.is-typing .chat-md > :is(ul, ol):last-child > li:last-child > span:last-child::after {
+    content: "";
+    display: inline-block;
+    width: 0.5em;
+    height: 0.5em;
+    margin-left: 0.3em;
+    border-radius: 999px;
+    background: hsl(var(--primary));
+    vertical-align: middle;
+    animation: mx-caret 1s ease-in-out infinite;
+  }
+  @keyframes mx-caret {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.35;
+      transform: scale(0.7);
+    }
+  }
+
+  .mx-msg-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.125rem;
+    min-height: 1.875rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .mx-msg-actions.is-visible,
+  .group\/user:hover .mx-msg-actions,
+  .group\/user:focus-within .mx-msg-actions,
+  .group\/assistant:hover .mx-msg-actions,
+  .group\/assistant:focus-within .mx-msg-actions {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .mx-msg-actions {
+      opacity: 1;
+    }
+  }
+
+  /* Hover actions under the user's bubble shouldn't push the reply down. */
+  .group\/user > .mx-msg-actions {
+    margin-bottom: -0.75rem;
+  }
+
+  .mx-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border-radius: 1rem;
+    border: 1px solid hsl(var(--danger-border));
+    background: hsl(var(--danger-surface));
+  }
+
+  /* ── Offers (buttons under a reply) ── */
+  .mx-offer {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 100%;
+    height: 2.25rem;
+    padding: 0 0.75rem 0 0.3rem;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font-size: 13px;
+    font-weight: 500;
+    transition:
+      border-color 0.18s ease,
+      background-color 0.18s ease,
+      transform 0.18s var(--mx-ease),
+      box-shadow 0.2s ease;
+  }
+  .mx-offer:hover:not(:disabled) {
+    border-color: hsl(var(--border-strong));
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px -12px hsl(var(--foreground) / 0.35);
+  }
+  .mx-offer:disabled {
+    cursor: default;
+  }
+  .mx-offer__icon {
+    display: grid;
+    place-items: center;
+    width: 1.625rem;
+    height: 1.625rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: hsl(var(--muted));
+    color: hsl(var(--foreground) / 0.8);
+  }
+  .mx-offer--primary {
+    border-color: hsl(var(--primary-border));
+    background: hsl(var(--primary-surface));
+  }
+  .mx-offer--primary .mx-offer__icon,
+  .mx-offer.is-done .mx-offer__icon {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .mx-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    height: 2rem;
+    padding: 0 0.8rem;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      filter 0.15s ease;
+  }
+  .mx-pill-btn:hover:not(:disabled) {
+    background: hsl(var(--muted));
+    border-color: hsl(var(--border-strong));
+  }
+  .mx-pill-btn--primary {
+    border-color: transparent;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+  .mx-pill-btn--primary:hover:not(:disabled) {
+    background: hsl(var(--primary));
+    border-color: transparent;
+    filter: brightness(1.07);
+  }
+
+  /* ── Studio progress card ── */
+  .mx-task {
+    box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.4s var(--mx-ease);
+  }
+  .mx-task[data-state="ready"] {
+    box-shadow: 0 14px 34px -20px hsl(var(--primary) / 0.7);
+  }
+
+  /* ── Presence mark + shimmer label ── */
+  .mx-pulse {
+    color: hsl(var(--primary));
+  }
+  .mx-pulse__orbit {
+    opacity: 0;
+    background: conic-gradient(from 0deg, transparent 0 70%, hsl(var(--primary) / 0.55) 100%);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+    transition: opacity 0.3s ease;
+  }
+  .mx-pulse[data-active="true"] .mx-pulse__orbit {
+    opacity: 1;
+  }
+  .mx-pulse[data-active="false"] {
+    color: hsl(var(--muted-foreground) / 0.7);
+  }
+
+  .mx-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted-foreground)) 0%,
+      hsl(var(--muted-foreground)) 38%,
+      hsl(var(--foreground)) 50%,
+      hsl(var(--muted-foreground)) 62%,
+      hsl(var(--muted-foreground)) 100%
+    );
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: mx-shimmer 2.2s linear infinite;
+  }
+  @keyframes mx-shimmer {
+    from {
+      background-position: 125% 0;
+    }
+    to {
+      background-position: -125% 0;
+    }
+  }
+
+  :root[data-chat-motion="reduced"] .mx-shimmer,
+  :root[data-chat-motion="reduced"] .mx-assistant.is-typing .chat-md *::after {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mx-shimmer,
+    .mx-assistant.is-typing .chat-md *::after {
+      animation: none;
+    }
   }
 }

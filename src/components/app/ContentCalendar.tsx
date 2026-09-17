@@ -655,7 +655,7 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
       title="Content Calendar"
       description={
         entries.length === 0
-          ? "Tell Ravi about your brand and get a full posting plan in one click."
+          ? "Tell Mellox about your brand and get a full posting plan in one click."
           : `${entries.length} ${entries.length === 1 ? "post" : "posts"} planned · drag any post to reschedule.`
       }
       headerAccessory={
@@ -2419,7 +2419,7 @@ function EmptyState({
         </div>
         <h3 className="text-[16px] font-semibold">Your calendar is empty</h3>
         <p className="mx-auto mt-1 max-w-sm text-[12.5px] text-muted-foreground">
-          Describe your brand and goals on the right and Ravi will draft a full multi-channel plan
+          Describe your brand and goals on the right and Mellox will draft a full multi-channel plan
           with hooks, captions and hashtags — ready to schedule.
         </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">

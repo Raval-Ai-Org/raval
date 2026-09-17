@@ -106,7 +106,7 @@ export function ClarifyCard({ payload, onSubmit, onSkip, done, submittedAnswers 
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-      className="ml-10 max-w-[88%] overflow-hidden rounded-2xl rounded-bl-sm border border-border bg-card/80 backdrop-blur shadow-[0_8px_30px_-12px_rgba(0,0,0,0.4)]"
+      className="w-full max-w-[36rem] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_10px_30px_-18px_hsl(var(--foreground)/0.35)]"
     >
       {/* Header */}
       <div

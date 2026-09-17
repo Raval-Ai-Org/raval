@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion, type TargetAndTransition } from "framer-motion";
 import {
   Brain,
   Camera,
   Check,
   Compass,
-  LayoutTemplate,
   ListTree,
   Minus,
   Palette,
@@ -21,15 +20,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
-import { PLATFORMS } from "@/lib/social-platforms";
-import { RATIOS } from "@/lib/studio/aspect";
-import { readBrandPayload } from "@/lib/studio/client";
 import { STUDIO_FORMATS, type StageId, type StudioType } from "@/lib/studio/formats";
-import { GOALS } from "@/lib/studio/jobs";
 import type { StudioSession } from "@/lib/studio/session-store";
-import { getTemplate, type StudioTemplate } from "@/lib/studio/templates";
+import { getTemplate } from "@/lib/studio/templates";
 import { PreviewSkeleton } from "./previews/PreviewSkeleton";
-import { formatElapsed, PlatformStack, TypeGlyph, useElapsed } from "./studio-ui";
+import { formatElapsed, useElapsed } from "./studio-ui";
 
 /** Typical seconds per format — paces the progress bar, never shown as a promise. */
 const TYPICAL_SECONDS: Record<StudioType, number> = {
@@ -68,91 +63,20 @@ const STAGE_MOTION: Record<StageId, { animate: TargetAndTransition; duration: nu
 };
 
 const CANVAS_CAPTION: Record<StageId, string> = {
-  context: "Gathering brand signals",
-  angle: "Choosing the angle",
-  outline: "Laying out the structure",
+  context: "Reading your brand",
+  angle: "Picking the idea",
+  outline: "Planning it out",
   writing: "Writing the draft",
-  brief: "Composing the shot",
+  brief: "Planning the look",
   captions: "Matching the captions",
-  render: "Developing the visual",
+  render: "Creating the image",
   save: "Saving to your Library",
   polish: "Final polish",
 };
 
-function listPlatforms(session: StudioSession): string {
-  const names = session.controls.platforms.map((p) => PLATFORMS[p].label);
-  if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
-
-/** One honest sentence about what the current stage is actually doing. */
-export function stageNarration(
-  id: StageId | undefined,
-  session: StudioSession,
-  brandName?: string,
-) {
-  const c = session.controls;
-  const ratio = c.ratio ? `${RATIOS[c.ratio].label.toLowerCase()} ${c.ratio}` : "";
-  const goal = GOALS.find((g) => g.id === session.goal)?.label.toLowerCase();
-  const template = getTemplate(session.template);
-  switch (id) {
-    case "context":
-      return brandName
-        ? `Pulling ${brandName}'s voice, audience and recent posts so nothing sounds generic.`
-        : "Reading your workspace and recent posts so nothing sounds generic.";
-    case "angle":
-      return session.type === "script"
-        ? "Testing openings until one earns the first two seconds."
-        : session.type === "ad"
-          ? "Picking distinct angles worth testing against each other."
-          : `Weighing angles against your ${goal ? `${goal} ` : ""}goal and what you've posted lately.`;
-    case "outline":
-      return template
-        ? `Shaping it as ${template.label.toLowerCase()}: ${template.beats.join(" → ")}.`
-        : session.type === "carousel"
-          ? `Mapping ${c.slideCount ?? 6} slides: a hook, the value, then the call to action.`
-          : "Structuring the argument into sections and key takeaways.";
-    case "writing":
-      if (session.type === "article")
-        return `Writing the full piece — ${{ short: "about 600", standard: "about 1,100", long: "about 1,800" }[c.length ?? "standard"]} words.`;
-      if (session.type === "script")
-        return `Writing beats timed to a ${c.durationSec ?? 30}-second runtime.`;
-      if (session.type === "carousel")
-        return "Writing each slide and the caption that carries them.";
-      if (session.type === "ad")
-        return "Writing primary text, headlines and CTAs for each variant.";
-      return c.platforms.length > 1
-        ? `Writing a native version for ${listPlatforms(session)}.`
-        : `Writing for ${listPlatforms(session) || "your feed"}.`;
-    case "brief":
-      return session.type === "video"
-        ? "Planning shots, motion and pacing from your brief."
-        : "Turning your brief into art direction: subject, light, composition.";
-    case "captions":
-      return `Writing captions that match the ${session.type === "video" ? "footage" : "visual"}.`;
-    case "render":
-      return session.type === "video"
-        ? `Rendering ${c.durationSec ?? 6}s of ${c.videoResolution?.toLowerCase() ?? "720p"} video${ratio ? `, ${ratio}` : ""}. This is the long part.`
-        : `Rendering a ${ratio || "sized"} visual in your brand's look.`;
-    case "save":
-      return "Saving the file to your Library so it's ready to post.";
-    case "polish":
-      return session.type === "carousel"
-        ? "Laying out the slides in your brand style."
-        : session.type === "article"
-          ? "Editing for clarity, flow and scannable structure."
-          : session.type === "script"
-            ? "Trimming lines until everything fits the runtime."
-            : "Checking character limits and where each platform folds the text.";
-    default:
-      return "Getting started.";
-  }
-}
-
 /**
- * Generation as a visible creative process. On the left, the plan: where
- * Mellox is, what it's doing right now, what it has decided so far, and
- * what's next. On the right, the result taking shape stage by stage.
+ * Generation progress: the stages on the left, the result taking shape on
+ * the right.
  *
  * This whole view re-renders every second (the timer), so every swap in it
  * is enter-only — an exit animation interrupted by a re-render can strand.
@@ -179,10 +103,6 @@ export function GenerationProgress({
   const stage = stages[stageIndex];
   const startedAt = job ? Date.parse(job.created_at) : session.updatedAt;
   const elapsed = useElapsed(startedAt);
-  const brandName = useMemo(() => {
-    const b = readBrandPayload(session.workspaceId);
-    return typeof b?.brandName === "string" && b.brandName.trim() ? b.brandName.trim() : undefined;
-  }, [session.workspaceId]);
   const template = getTemplate(session.template);
   const [confirmCancel, setConfirmCancel] = useState(false);
   useEffect(() => {
@@ -204,34 +124,21 @@ export function GenerationProgress({
       {/* ── The plan ── */}
       <div className="order-2 flex min-h-0 flex-col px-5 pb-5 pt-5 @3xl/composer:order-none @3xl/composer:overflow-y-auto @3xl/composer:px-8 @3xl/composer:pb-6 @3xl/composer:pt-8">
         <div className="flex items-center justify-between gap-3">
-          <p className="ui-eyebrow">
-            <span className="relative flex size-1.5">
+          <h2 className="flex items-center gap-2.5 text-[1.375rem] font-semibold leading-tight tracking-tight text-foreground">
+            <span className="relative flex size-2">
               {!reduce ? (
                 <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-50" />
               ) : null}
-              <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
+              <span className="relative inline-flex size-2 rounded-full bg-primary" />
             </span>
-            {starting ? "Starting" : `Creating your ${format.noun}`}
-          </p>
+            Creating your {format.noun}
+          </h2>
           <span
             className="font-mono text-xs tabular-nums text-muted-foreground"
             aria-label={`Elapsed ${elapsed} seconds`}
           >
             {formatElapsed(elapsed)}
           </span>
-        </div>
-
-        <div className="mt-3 min-h-[5.5rem]" aria-live="polite">
-          <div key={stage?.id ?? "start"} className="studio-enter-blur">
-            <h2 className="text-balance text-[1.375rem] font-semibold leading-tight tracking-tight text-foreground">
-              {starting ? "Warming up" : (stage?.label ?? "Getting started")}
-            </h2>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              {starting
-                ? "Sending your brief and settings to Mellox."
-                : stageNarration(stage?.id, session, brandName)}
-            </p>
-          </div>
         </div>
 
         {/* Segmented progress: done stages fill, the current one advances at a typical pace. */}
@@ -337,13 +244,6 @@ export function GenerationProgress({
           })}
         </ol>
 
-        <GenerationFeed
-          session={session}
-          stageIndex={starting ? -1 : stageIndex}
-          brandName={brandName}
-          template={template}
-        />
-
         <AnimatePresence>
           {slow ? (
             <motion.p
@@ -351,36 +251,10 @@ export function GenerationProgress({
               animate={{ opacity: 1, height: "auto" }}
               className="mt-5 text-xs leading-relaxed text-muted-foreground"
             >
-              Taking longer than usual — it's still working. Keep working elsewhere; you'll be told
-              when it's ready.
+              Taking longer than usual. You can keep working — we'll tell you when it's ready.
             </motion.p>
           ) : null}
         </AnimatePresence>
-
-        {session.brief ? (
-          <figure className="mt-7 border-l-2 border-primary/50 pl-3.5">
-            <figcaption className="ui-eyebrow">Your brief</figcaption>
-            <blockquote className="mt-2 line-clamp-3 text-sm leading-relaxed text-foreground/85">
-              {session.brief}
-            </blockquote>
-            <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <TypeGlyph type={session.type} size="sm" className="size-5 [&_svg]:size-3" />
-              {template ? template.label : format.label}
-              {session.controls.platforms.length ? (
-                <>
-                  <span aria-hidden>·</span>
-                  <PlatformStack platforms={session.controls.platforms} size={18} />
-                </>
-              ) : null}
-              {session.controls.ratio && format.ratios.length ? (
-                <>
-                  <span aria-hidden>·</span>
-                  <span className="tabular-nums">{session.controls.ratio}</span>
-                </>
-              ) : null}
-            </div>
-          </figure>
-        ) : null}
 
         <div className="mt-auto pt-7">
           {confirmCancel ? (
@@ -415,7 +289,7 @@ export function GenerationProgress({
             >
               <Button variant="outline" size="sm" onClick={onMinimize}>
                 <Minus />
-                Keep working
+                Run in background
               </Button>
               <Button
                 variant="ghost"
@@ -427,9 +301,6 @@ export function GenerationProgress({
                 <X />
                 Cancel
               </Button>
-              <span className="hidden text-xs text-muted-foreground @7xl/composer:inline">
-                Lands in Needs Approval
-              </span>
             </motion.div>
           )}
         </div>
@@ -457,7 +328,7 @@ export function GenerationProgress({
             <span className="font-medium text-foreground">
               {stage
                 ? stage.id === "render" && session.type === "video"
-                  ? "Rendering frames"
+                  ? "Creating the video"
                   : CANVAS_CAPTION[stage.id]
                 : "Warming up"}
             </span>
@@ -467,143 +338,5 @@ export function GenerationProgress({
         </div>
       </div>
     </div>
-  );
-}
-
-type Note = { key: string; icon: LucideIcon; label: string; text?: string };
-
-/**
- * "Mellox's notes": what has actually been decided so far, from the job's
- * real output — never invented. The next decision shows as typing.
- */
-function GenerationFeed({
-  session,
-  stageIndex,
-  brandName,
-  template,
-}: {
-  session: StudioSession;
-  stageIndex: number;
-  brandName?: string;
-  template: StudioTemplate | null;
-}) {
-  const reduce = useReducedMotion();
-  const format = STUDIO_FORMATS[session.type];
-  const out = session.job?.output ?? {};
-  const ids = format.stages.map((s) => s.id);
-  const current = stageIndex >= 0 ? ids[stageIndex] : undefined;
-  const c = session.controls;
-
-  const notes: Note[] = [
-    {
-      key: "brand",
-      icon: Brain,
-      label: brandName ? `Using ${brandName}'s voice` : "Reading your workspace",
-    },
-  ];
-  if (template)
-    notes.push({
-      key: "template",
-      icon: LayoutTemplate,
-      label: `Template · ${template.label}`,
-      text: template.beats.join(" → "),
-    });
-  if (out.angle)
-    notes.push({ key: "angle", icon: Compass, label: "Angle chosen", text: out.angle });
-  const title = out.article?.title ?? out.script?.title ?? out.title;
-  if (title) notes.push({ key: "title", icon: PenLine, label: "Headline", text: `“${title}”` });
-  const hook =
-    out.script?.hook ??
-    out.slides?.[0]?.heading ??
-    out.ads?.[0]?.primaryText ??
-    out.variants?.[0]?.body.split("\n").find((l) => l.trim());
-  if (hook)
-    notes.push({
-      key: "hook",
-      icon: Sparkles,
-      label: session.type === "carousel" ? "First slide" : "Opening line",
-      text: `“${hook}”`,
-    });
-  const concept = out.concept ?? out.visualConcept;
-  if (concept)
-    notes.push({ key: "concept", icon: Palette, label: "Visual concept", text: concept });
-  if (current === "render") {
-    const where = c.platforms[0] ? ` for ${PLATFORMS[c.platforms[0]].label}` : "";
-    notes.push({
-      key: "render",
-      icon: Camera,
-      label: `Rendering ${c.ratio ?? format.ratios[0] ?? ""}${where}`.trim(),
-    });
-  }
-
-  const next =
-    stageIndex < 0
-      ? "Starting up"
-      : !out.angle && ids.includes("angle")
-        ? "Choosing an angle"
-        : !title && !hook
-          ? session.type === "image" || session.type === "video"
-            ? "Planning the visual and captions"
-            : "Drafting the copy"
-          : format.media !== "none" && !concept && ids.includes("render") && current !== "render"
-            ? "Composing the visual"
-            : "Polishing the details";
-
-  return (
-    <section data-no-rhythm aria-label="What Mellox has decided" className="mt-7">
-      <h3 className="ui-eyebrow mb-3">Mellox's notes</h3>
-      <ul className="space-y-2.5">
-        {notes.map((n) => (
-          <motion.li
-            key={n.key}
-            initial={reduce ? { opacity: 0 } : { opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: duration.slow, ease: ease.emphasized }}
-            className="flex gap-2.5"
-          >
-            <span className="studio-glyph mt-px grid size-6 shrink-0 place-items-center rounded-lg">
-              <n.icon className="size-3.5" />
-            </span>
-            <span className="min-w-0 flex-1 text-xs leading-5">
-              <span className="block font-medium text-foreground">{n.label}</span>
-              {n.text ? (
-                <span
-                  className="studio-reveal line-clamp-2 block text-muted-foreground"
-                  style={
-                    {
-                      "--reveal-duration": `${Math.min(1.6, 0.4 + n.text.length * 0.012)}s`,
-                      animationDelay: "150ms",
-                    } as React.CSSProperties
-                  }
-                >
-                  {n.text}
-                </span>
-              ) : null}
-            </span>
-          </motion.li>
-        ))}
-        <motion.li
-          key={`next-${next}`}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: duration.base }}
-          className="flex items-center gap-2.5 text-xs text-muted-foreground"
-        >
-          <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-surface-2">
-            <span className="flex gap-[3px]">
-              {[0, 1, 2].map((i) => (
-                <motion.span
-                  key={i}
-                  className="size-1 rounded-full bg-muted-foreground"
-                  animate={reduce ? undefined : { opacity: [0.25, 1, 0.25], y: [0, -1.5, 0] }}
-                  transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }}
-                />
-              ))}
-            </span>
-          </span>
-          {next}…
-        </motion.li>
-      </ul>
-    </section>
   );
 }

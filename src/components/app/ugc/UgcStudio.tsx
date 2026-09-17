@@ -75,7 +75,7 @@ export function UgcStudio({
   if (catalogError) {
     return (
       <ErrorState
-        title="UGC video ads are unavailable"
+        title="Creator video ads aren't available right now"
         description={catalogError}
         onRetry={loadCatalog}
       />
@@ -136,7 +136,7 @@ function UgcHome({
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="max-w-lg">
             <h3 className="text-lg font-semibold tracking-tight">
-              Turn a product page into a UGC video ad
+              Turn a product page into a creator video ad
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
               Mellox reads your product, writes grounded concepts and a creator script, then films
@@ -381,7 +381,7 @@ function ProjectEditor({
     });
 
   const keepConcepts = (brief: Brief) =>
-    guard("saving", "Couldn't save the brief.", async () => {
+    guard("saving", "Couldn't save the details.", async () => {
       if (!project) return;
       applyBriefToSettings(brief);
       setProject(await ugcApi.updateProject(workspaceId, project.id, { brief }));
@@ -422,7 +422,7 @@ function ProjectEditor({
     });
 
   const startRender = () =>
-    guard("render", "Couldn't start the render.", async () => {
+    guard("render", "Couldn't start the video.", async () => {
       if (!project || !settings) return;
       const { render } = await ugcApi.startRender(workspaceId, {
         projectId: project.id,
@@ -510,6 +510,8 @@ function ProjectEditor({
         ) : step === "brief" && project ? (
           <StepFrame key="brief" stepKey="brief">
             <BriefStep
+              workspaceId={workspaceId}
+              projectId={project.id}
               initialBrief={project.brief}
               product={project.product}
               hasConcepts={project.concepts.length > 0}

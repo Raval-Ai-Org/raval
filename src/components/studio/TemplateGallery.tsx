@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { toast } from "sonner";
-import { Check, X } from "@/components/icons";
+import { Check, PenLine, X } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { ease } from "@/lib/motion";
 import type { StudioType } from "@/lib/studio/formats";
@@ -279,6 +279,112 @@ export function TemplateThumb({
         </div>
       );
       break;
+    case "chat":
+      body = (
+        <div className="absolute inset-[12%] flex flex-col justify-center gap-[10%]">
+          {[
+            { side: "start", w: "62%" },
+            { side: "end", w: "48%" },
+            { side: "start", w: "40%" },
+          ].map((b, i) => (
+            <motion.span
+              key={i}
+              className={cn(
+                "h-3 rounded-full",
+                b.side === "end"
+                  ? "self-end rounded-br-sm bg-[hsl(var(--tone)/0.45)]"
+                  : "self-start rounded-bl-sm bg-foreground/[0.12]",
+              )}
+              style={{ width: b.w }}
+              variants={v(
+                { opacity: 1, scale: 1 },
+                {
+                  opacity: [0, 1],
+                  scale: [0.6, 1],
+                  transition: { delay: i * 0.28, duration: 0.35, ease: ease.emphasized },
+                },
+              )}
+            />
+          ))}
+        </div>
+      );
+      break;
+    case "countdown":
+      body = (
+        <div className="absolute inset-0 flex items-center justify-center gap-1.5">
+          {["0", "3", ":", "5", "9"].map((d, i) =>
+            d === ":" ? (
+              <span key={i} className="text-[15px] font-bold text-[hsl(var(--tone))]">
+                :
+              </span>
+            ) : (
+              <motion.span
+                key={i}
+                className="grid h-8 w-6 place-items-center rounded-md bg-surface-3 text-[15px] font-bold tabular-nums text-foreground shadow-1 ring-1 ring-[hsl(var(--tone)/0.3)]"
+                variants={v(
+                  { rotateX: 0 },
+                  {
+                    rotateX: [0, -90, 0],
+                    transition: { delay: 0.1 + i * 0.12, duration: 0.5, ease: ease.emphasized },
+                  },
+                )}
+              >
+                {d}
+              </motion.span>
+            ),
+          )}
+        </div>
+      );
+      break;
+    case "play":
+      body = (
+        <div className="absolute inset-[10%] overflow-hidden rounded-lg bg-foreground/[0.08]">
+          <div className="absolute inset-0 grid place-items-center">
+            <motion.span
+              className="grid size-8 place-items-center rounded-full bg-[hsl(var(--tone))] shadow-2"
+              variants={v(
+                { scale: 1 },
+                { scale: [1, 1.18, 1], transition: { duration: 0.6, ease: ease.emphasized } },
+              )}
+            >
+              <span className="ml-0.5 size-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-white" />
+            </motion.span>
+          </div>
+          <span className="absolute inset-x-[8%] bottom-[12%] h-1 rounded-full bg-foreground/15">
+            <motion.span
+              className="absolute inset-y-0 left-0 rounded-full bg-[hsl(var(--tone))]"
+              variants={v(
+                { width: "30%" },
+                { width: ["0%", "100%"], transition: { duration: 1.4, ease: "linear" } },
+              )}
+            />
+          </span>
+        </div>
+      );
+      break;
+    case "grid":
+      body = (
+        <div className="absolute inset-[12%] grid grid-cols-3 gap-[6%]">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <motion.span
+              key={i}
+              className={cn(
+                "rounded-md",
+                i === 1 || i === 5 ? "bg-[hsl(var(--tone)/0.4)]" : "bg-foreground/[0.1]",
+              )}
+              variants={v(
+                { scale: 1, opacity: 1 },
+                {
+                  scale: [0.4, 1],
+                  opacity: [0, 1],
+                  transition: { delay: i * 0.08, duration: 0.35, ease: ease.emphasized },
+                },
+              )}
+            />
+          ))}
+        </div>
+      );
+      break;
   }
 
   return (
@@ -343,17 +449,24 @@ export function TemplateCard({
   footer?: React.ReactNode;
   className?: string;
 }) {
-  const [active, setActive] = useState(false);
+  const [hover, setHover] = useState(false);
+  // Each card acts itself out once as it arrives, in a gentle wave.
+  const [intro, setIntro] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => setIntro(false), 900 + index * 120);
+    return () => window.clearTimeout(t);
+  }, [index]);
+
   return (
     <motion.button
       type="button"
       role="radio"
       aria-checked={!!selected}
       onClick={onPick}
-      onMouseEnter={() => setActive(true)}
-      onMouseLeave={() => setActive(false)}
-      onFocus={() => setActive(true)}
-      onBlur={() => setActive(false)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.045, type: "spring", stiffness: 320, damping: 28 }}
@@ -368,7 +481,7 @@ export function TemplateCard({
         className,
       )}
     >
-      <TemplateThumb layout={t.thumb} play={active || !!selected} />
+      <TemplateThumb layout={t.thumb} play={hover || intro || !!selected} />
       <span className="mt-2 px-1 text-[13px] font-semibold leading-tight text-foreground">
         {t.label}
       </span>
@@ -385,21 +498,32 @@ export function TemplateCard({
   );
 }
 
+const INITIAL_VISIBLE = 5;
+
 /**
- * "Start from a template" on the brief step. Picking one fills the brief with
- * blanks to complete, applies its settings, and selects the first blank.
+ * Templates on the description step: an animated grid. Picking one fills the
+ * description with blanks to complete, applies its settings, and selects the
+ * first blank. "Write my own" just puts the cursor in the box.
  */
 export function TemplateGallery({
   session,
   textareaRef,
+  onWriteOwn,
   className,
 }: {
   session: StudioSession;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  onWriteOwn?: () => void;
   className?: string;
 }) {
   const templates = templatesFor(session.type);
+  const [showAll, setShowAll] = useState(false);
   if (!templates.length) return null;
+
+  const selectedIndex = templates.findIndex((t) => t.id === session.template);
+  const visible =
+    showAll || selectedIndex >= INITIAL_VISIBLE ? templates : templates.slice(0, INITIAL_VISIBLE);
+  const hidden = templates.length - visible.length;
 
   const pick = (t: StudioTemplate) => {
     if (t.id === session.template) return;
@@ -410,12 +534,13 @@ export function TemplateGallery({
       const el = textareaRef.current;
       if (!el) return;
       el.focus();
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
       const blank = firstBlank(t.starter);
       if (blank) el.setSelectionRange(blank[0], blank[1]);
     });
     if (previous && !isTemplateStarter(previous)) {
       toast(`Using “${t.label}”`, {
-        description: "Your brief was replaced with the template.",
+        description: "Your text was replaced with the template.",
         action: { label: "Undo", onClick: () => restoreTemplateState(session.id, prev) },
       });
     }
@@ -423,29 +548,52 @@ export function TemplateGallery({
 
   return (
     <section data-no-rhythm aria-labelledby="studio-templates" className={className}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 id="studio-templates" className="text-xs font-medium text-foreground">
-          Start from a template{" "}
-          <span className="font-normal text-muted-foreground">· optional</span>
-        </h3>
-        <span className="text-[11px] text-muted-foreground">Proven structures Mellox follows</span>
-      </div>
+      <h3 id="studio-templates" className="mb-2.5 text-xs font-medium text-foreground">
+        Start with a template
+      </h3>
       <div
         role="radiogroup"
         aria-label="Templates"
-        className="-mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-2 pt-1 [scrollbar-width:thin]"
+        className="grid grid-cols-2 gap-2.5 @2xl/composer:grid-cols-3"
       >
-        {templates.map((t, i) => (
+        {onWriteOwn ? (
+          <motion.button
+            type="button"
+            onClick={onWriteOwn}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 320, damping: 28 }}
+            whileTap={{ scale: 0.97 }}
+            className="flex min-h-[150px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border-strong bg-surface-2/40 p-3 text-center transition-colors hover:border-primary-border hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+          >
+            <span className="grid size-9 place-items-center rounded-full bg-surface-3 text-muted-foreground ring-1 ring-border">
+              <PenLine className="size-4" />
+            </span>
+            <span className="text-[13px] font-semibold text-foreground">Write my own</span>
+            <span className="text-[11px] text-muted-foreground">Start from a blank box</span>
+          </motion.button>
+        ) : null}
+        {visible.map((t, i) => (
           <TemplateCard
             key={t.id}
             template={t}
             type={session.type}
             selected={t.id === session.template}
-            index={i}
+            index={i + 1}
             onPick={() => pick(t)}
+            className="w-full"
           />
         ))}
       </div>
+      {hidden > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="mt-2.5 w-full rounded-xl py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+        >
+          Show {hidden} more template{hidden === 1 ? "" : "s"}
+        </button>
+      ) : null}
     </section>
   );
 }

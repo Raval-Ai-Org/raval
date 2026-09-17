@@ -35,7 +35,7 @@ export function AiVisibilityDialog({ workspaceId }: { workspaceId: string | null
       takePendingGeoRun(); // handled here; don't replay it on a later mount
       requestRun();
     };
-    // "Ask Ravi" and "Add it in Brand DNA" hand off to another surface —
+    // "Ask Mellox" and "Add it in Brand DNA" hand off to another surface —
     // close so that surface is visible instead of hidden behind this modal.
     const closeFn = () => setOpen(false);
     addAppEventListener("open:ai-visibility", openFn);

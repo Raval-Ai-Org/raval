@@ -16,6 +16,7 @@ import type { StudioIdea } from "@/lib/studio/ideas";
 import type { MediaOutput, StudioJob, StudioJobOutput } from "@/lib/studio/jobs";
 import type { SessionStep, StudioSession } from "@/lib/studio/session-store";
 import { ComposerBody } from "./StudioComposer";
+import { CreateLauncher } from "./CreateLauncher";
 import { DockCard } from "./StudioDock";
 import type { ReviewRow } from "./ReviewPanel";
 
@@ -440,7 +441,6 @@ const SCENES: Scene[] = [
   { id: "live-carousel", label: "Live run · Carousel", live: "carousel" },
   { id: "live-script", label: "Live run · Script", live: "script" },
   { id: "live-video", label: "Live run · Video", live: "video" },
-  { id: "start", label: "Start", make: () => session("social", "start") },
   {
     id: "brief-social",
     label: "Brief · Social",
@@ -952,6 +952,14 @@ export function StudioLab() {
             Replay
           </button>
         ) : null}
+        <button
+          type="button"
+          onClick={() => emitAppEvent("open:create-launcher")}
+          className="h-8 rounded-md border border-input px-3 text-sm"
+        >
+          Open Create
+        </button>
+        <CreateLauncher />
         <span className="text-xs text-muted-foreground">Sample data · dev only</span>
       </div>
       {current.library ? (

@@ -36,13 +36,7 @@ import { duration, ease } from "@/lib/motion";
 import { updateContentItem } from "@/lib/content.functions";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { isActiveJob, type StudioJob } from "@/lib/studio/jobs";
-import {
-  cancelSession,
-  getStudioState,
-  openComposer,
-  openJob,
-  useStudioStore,
-} from "@/lib/studio/session-store";
+import { cancelSession, getStudioState, openJob, useStudioStore } from "@/lib/studio/session-store";
 import { openItemOrJob } from "@/hooks/use-studio";
 import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import {
@@ -202,7 +196,7 @@ function CreateButton() {
   return (
     <button
       type="button"
-      onClick={() => openComposer()}
+      onClick={() => emitAppEvent("open:create-launcher")}
       aria-label="Create something new"
       className="group flex min-h-14 w-full items-center gap-3 rounded-xl border border-border bg-surface-3 px-3 text-left shadow-1 relative overflow-hidden transition-[border-color,box-shadow,translate] duration-[--motion-duration-base] hover:-translate-y-px hover:border-primary-border hover:shadow-[0_14px_34px_-18px_hsl(var(--primary)/0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
     >
@@ -212,7 +206,7 @@ function CreateButton() {
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium text-foreground">Create</span>
         <span className="block truncate text-xs text-muted-foreground">
-          Posts, visuals, video, articles
+          Video, pictures, text, ads
         </span>
       </span>
       <kbd className="hidden rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground ring-1 ring-border sm:inline">
@@ -807,7 +801,7 @@ export function PipelineSection({
             icon={Sparkles}
             text="Approve a draft or create something new, and it shows here while Mellox makes it."
             action={
-              <Button size="sm" onClick={() => openComposer()}>
+              <Button size="sm" onClick={() => emitAppEvent("open:create-launcher")}>
                 <Wand2 />
                 Create
               </Button>
@@ -845,7 +839,7 @@ export function PipelineSection({
           }
           action={
             active === "review" ? (
-              <Button size="sm" onClick={() => openComposer()}>
+              <Button size="sm" onClick={() => emitAppEvent("open:create-launcher")}>
                 <Wand2 />
                 Create something
               </Button>

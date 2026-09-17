@@ -115,7 +115,7 @@ export function GenerateStep({
     remaining !== null && remaining < model.videoUnits
       ? "Your plan's monthly video allowance is used up."
       : spendLeft !== null && spendLeft < usd
-        ? "This render would pass your plan's monthly AI spend limit."
+        ? "This video would go over your plan's monthly limit."
         : allowance && allowance.activeRenders >= allowance.maxConcurrent
           ? `${allowance.activeRenders} renders are already in progress. Wait for one to finish.`
           : null;

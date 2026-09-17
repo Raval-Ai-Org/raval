@@ -1,15 +1,15 @@
 {
   "path": "/workspace",
   "title": "Workspace · Mellox AI",
-  "description": "Your Marketing Intelligence Layer with Ravi for planning, creating, optimizing and growing marketing for the active brand.",
+  "description": "Your Marketing Intelligence Layer with Mellox for planning, creating, optimizing and growing marketing for the active brand.",
   "ogTitle": "Workspace · Mellox AI",
-  "ogDescription": "Your Marketing Intelligence Layer with Ravi for planning, creating, optimizing and growing marketing for the active brand.",
+  "ogDescription": "Your Marketing Intelligence Layer with Mellox for planning, creating, optimizing and growing marketing for the active brand.",
   "ogType": "website",
   "ogSiteName": "Mellox AI",
   "ogUrl": "https://raval.ai/workspace",
   "twitterCard": "summary_large_image",
   "twitterTitle": "Workspace · Mellox AI",
-  "twitterDescription": "Your Marketing Intelligence Layer with Ravi for planning, creating, optimizing and growing marketing for the active brand.",
+  "twitterDescription": "Your Marketing Intelligence Layer with Mellox for planning, creating, optimizing and growing marketing for the active brand.",
   "canonical": "https://raval.ai/workspace",
   "hreflang": [],
   "robots": "noindex,nofollow",
@@ -45,5 +45,5 @@
       "inLanguage": "en"
     }
   ],
-  "approvedPhrasesPresent": ["Marketing Intelligence Layer", "Ravi", "Mellox AI"]
+  "approvedPhrasesPresent": ["Marketing Intelligence Layer", "Mellox", "Mellox AI"]
 }

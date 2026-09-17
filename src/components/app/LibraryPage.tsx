@@ -26,7 +26,7 @@ import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { PlatformStack, TypeGlyph } from "@/components/studio/studio-ui";
 import { openItemOrJob } from "@/hooks/use-studio";
 import { supabase } from "@/integrations/supabase/client";
-import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
 import { normalizeLibraryAsset, type LibraryAsset } from "@/lib/library";
 import { duration, ease } from "@/lib/motion";
@@ -414,7 +414,7 @@ export function LibraryPage({
           className="studio-cta hidden rounded-full @2xl/library:inline-flex"
           onClick={() => {
             onClose?.();
-            openComposer();
+            emitAppEvent("open:create-launcher");
           }}
         >
           <Wand2 />
@@ -658,7 +658,7 @@ export function LibraryPage({
                     <Button
                       onClick={() => {
                         onClose?.();
-                        openComposer();
+                        emitAppEvent("open:create-launcher");
                       }}
                     >
                       <Sparkles className="size-4" />
@@ -1167,7 +1167,7 @@ function MediaDetail({ asset, onCreate }: { asset: LibraryAsset; onCreate: () =>
           ) : null}
           <dt className="text-muted-foreground">Source</dt>
           <dd className="text-foreground">
-            {asset.metadata?.source === "ugc" ? "UGC video ad" : "Generated in Studio"}
+            {asset.metadata?.source === "ugc" ? "Creator video ad" : "Made in Studio"}
           </dd>
         </dl>
 

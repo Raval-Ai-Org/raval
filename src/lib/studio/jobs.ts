@@ -28,12 +28,12 @@ export const StudioTypeSchema = z.enum([
 ]);
 
 export const GOALS = [
-  { id: "awareness", label: "Awareness" },
-  { id: "engagement", label: "Engagement" },
-  { id: "leads", label: "Leads" },
-  { id: "launch", label: "Launch" },
-  { id: "education", label: "Education" },
-  { id: "offer", label: "Offer" },
+  { id: "awareness", label: "Reach more people" },
+  { id: "engagement", label: "Get comments & likes" },
+  { id: "leads", label: "Get new customers" },
+  { id: "launch", label: "Announce something" },
+  { id: "education", label: "Teach something" },
+  { id: "offer", label: "Promote a deal" },
 ] as const;
 
 export type GoalId = (typeof GOALS)[number]["id"];
@@ -72,7 +72,7 @@ export const REFINE_PRESETS = [
   },
   {
     id: "hook",
-    label: "Punchier hook",
+    label: "Better opening",
     instruction: "Rewrite the opening so it stops the scroll — specific, surprising, no clichés.",
   },
   {
@@ -89,12 +89,12 @@ export const REFINE_PRESETS = [
   },
   {
     id: "cta",
-    label: "Stronger CTA",
+    label: "Clearer next step",
     instruction: "End with one clear, low-friction call to action that fits the goal.",
   },
   {
     id: "tone",
-    label: "Warmer tone",
+    label: "Friendlier",
     instruction: "Keep the substance but make the voice warmer and more human.",
   },
 ] as const;

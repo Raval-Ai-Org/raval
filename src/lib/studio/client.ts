@@ -5,7 +5,7 @@
 import { authedFetch } from "@/lib/authed-fetch";
 import type { StudioType } from "./formats";
 import type { StudioIdea } from "./ideas";
-import type { CreateJobInput, StudioJob } from "./jobs";
+import type { CreateJobInput, GoalId, StudioControls, StudioJob } from "./jobs";
 
 export class StudioApiError extends Error {
   constructor(
@@ -84,6 +84,31 @@ export const studioApi = {
       { method: "POST", body: JSON.stringify(args) },
     );
   },
+  writePrompt(args: {
+    workspaceId: string;
+    type: StudioType;
+    brand: Record<string, unknown> | null;
+    current?: string;
+    template?: string;
+    goal?: GoalId;
+    controls?: Partial<StudioControls>;
+    avoid?: string[];
+  }) {
+    return call<WrittenPrompt>("/api/studio/prompt", {
+      method: "POST",
+      body: JSON.stringify(args),
+    });
+  },
+};
+
+/** "Write it for me" result (mirrors the server's WrittenPrompt). */
+export type WrittenPrompt = {
+  title: string;
+  prompt: string;
+  why: string;
+  basedOn: string;
+  signal: string | null;
+  goal?: GoalId;
 };
 
 /** Brand DNA fields worth sending to the server (drops heavy/provenance data). */

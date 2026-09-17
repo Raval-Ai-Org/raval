@@ -31,7 +31,7 @@ const APPROVED_PHRASES = [
   "Brand DNA",
   "AEO",
   "GEO",
-  "Ravi",
+  "Mellox",
   "Mellox AI",
 ];
 

@@ -1,55 +1,36 @@
 "use client";
 
+// The Mellox chat. Layout: a centered greeting with the message box in the
+// middle of the page for a new chat; once a message is sent the box glides to
+// the bottom and the conversation fills the space above it.
+//
+// Control model — nothing opens over the conversation by itself:
+//   - "Make me a …" requests (chat-intent.ts) start in the Studio side panel at
+//     once and show a live progress card here.
+//   - Anything else the reply offers to open is a button under that reply.
+//   - Changes to data (memory, drafts, audits) wait for approval.
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { useNavigate } from "@/lib/navigation";
 import { conversationPath, workspacePath } from "@/lib/workspace/paths";
-import {
-  ArrowUp,
-  Check,
-  ChevronDown,
-  File as FileIcon,
-  FileImage,
-  FileSpreadsheet,
-  FileText,
-  Globe,
-  Bot,
-  Loader2,
-  MessageSquare,
-  Paperclip,
-  Plus,
-  RefreshCw,
-  Search,
-  Sparkles,
-  Stop,
-  X,
-} from "@/components/icons";
+import { ArrowDown } from "@/components/icons";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import {
   classify as classifyAttachment,
   extractAttachment,
   attachmentsToContext,
-  niceSize,
   MAX_FILE_BYTES,
   MAX_TOTAL_BYTES,
   type Attachment,
 } from "@/lib/file-extract";
-import { recordTokens, routePromptToAgent, useAgentToggles } from "@/hooks/use-agent-toggles";
-import { agentList } from "@/lib/agents";
-import { BrandLogo, type BrandKey } from "@/components/brand/BrandLogo";
-import { Switch } from "@/components/ui/switch";
-import { Logo } from "@/components/brand/Logo";
-import { ThinkingTrail } from "@/components/app/ThinkingTrail";
+import { recordTokens } from "@/hooks/use-agent-toggles";
 import { NextStepSuggestions } from "@/components/app/NextStepSuggestions";
 import { ClarifyCard, type ClarifyPayload } from "@/components/app/ClarifyCard";
 import { useBrandDna } from "@/hooks/use-brand-dna";
-import { ChatMessageContent } from "@/components/app/ChatMessageContent";
-import { buildSmartChatContext, type CtxSources } from "@/lib/ai/context-select";
-import { useTheme } from "@/hooks/use-theme";
+import { buildSmartChatContext } from "@/lib/ai/context-select";
 import { useChatPrefs } from "@/hooks/use-chat-prefs";
 import {
   startPreviewPlan,
@@ -57,166 +38,107 @@ import {
   stopPreviewPlan,
   planFromPrompt,
 } from "@/lib/preview-stages";
-
-import { detectChatActions, runChatAction, type ChatAction } from "@/lib/chat-actions";
-import type { ChatToolResult } from "@/lib/chat-tools";
+import { detectChatActions, type ChatAction } from "@/lib/chat-actions";
+import type { ChatToolCall, ChatToolResult } from "@/lib/chat-tools";
 import { SuggestedActions } from "@/components/app/SuggestedActions";
+import { detectCreateIntent } from "@/lib/chat-intent";
+import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import {
-  Zap as ZapIcon,
-  Wand2,
-  BookOpen,
-  CalendarDays,
-  ArrowUpRight,
-  CheckCircle2,
-  AlertTriangle,
-} from "@/components/ui/gemini-icons";
+  getStudioState,
+  startInBackground,
+  subscribe as subscribeStudio,
+} from "@/lib/studio/session-store";
+import { cn } from "@/lib/utils";
+import { ChatComposer, CHAT_MODELS, type ChatComposerHandle } from "./chat/ChatComposer";
+import { ChatGreeting, ChatStarters, type Starter } from "./chat/ChatEmptyState";
+import { AssistantMessage, ErrorMessage, NoticeMessage, UserMessage } from "./chat/ChatMessages";
+import { ChatOffers } from "./chat/ChatOffers";
+import { StudioTaskCard, type StudioTaskPayload } from "./chat/StudioTaskCard";
+import { ThinkingIndicator } from "./chat/ThinkingIndicator";
+
+type MsgKind = "text" | "clarify" | "actions" | "notice" | "error" | "studio";
 
 type Msg = {
   id: string;
   role: "user" | "assistant" | "system";
-  kind: "text" | "approval" | "progress" | "reminder" | "clarify" | "actions" | "notice" | "error";
+  kind: MsgKind;
   content: string;
   status?: "sending" | "streaming" | "completed" | "failed" | "cancelled";
   payload?: any;
+  /** Created in this session (animates in); history rows appear without motion. */
+  live?: boolean;
 };
 
-function ActionChips({ actions }: { actions: ChatAction[] }) {
-  if (!actions?.length) return null;
-  const iconFor = (a: ChatAction) => {
-    if (a.kind === "audit") return ZapIcon;
-    if (a.kind === "memory") return BookOpen;
-    if (a.kind === "calendar") return CalendarDays;
-    return Wand2;
-  };
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="ml-10 mt-1 flex flex-wrap gap-1.5"
-    >
-      {actions.map((a, i) => {
-        const Icon = iconFor(a);
-        return (
-          <motion.button
-            key={a.label}
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.04 * i }}
-            onClick={() => {
-              const r = runChatAction(a);
-              if (r.toast) toast.success(r.toast);
-            }}
-            className="group inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-secondary/45 px-2.5 py-1 text-left text-[11.5px] font-medium text-foreground transition hover:border-foreground/30 hover:bg-secondary"
-            title={a.hint}
-          >
-            <Icon className="h-3 w-3 text-[hsl(var(--brand-blue))]" />
-            <span className="truncate">{a.label}</span>
-            <ArrowUpRight className="h-3 w-3 -translate-x-0.5 text-muted-foreground transition group-hover:translate-x-0 group-hover:text-foreground" />
-          </motion.button>
-        );
-      })}
-    </motion.div>
-  );
+type ActionsPayload = {
+  offers?: ChatToolCall[];
+  suggestions?: ChatToolCall[];
+  actions?: ChatAction[];
+};
+
+/** Stored rows → messages. Studio cards are stored as kind "progress" with payload.studio. */
+function fromRow(row: any): Msg | null {
+  if (row.kind === "progress" && row.payload?.studio) {
+    return {
+      id: row.id,
+      role: "assistant",
+      kind: "studio",
+      content: "",
+      payload: row.payload.studio,
+    };
+  }
+  if (row.kind !== "text") return null;
+  return { id: row.id, role: row.role, kind: "text", content: row.content ?? "" };
 }
 
-function ToolResultsRow({ results }: { results: ChatToolResult[] }) {
-  if (!results?.length) return null;
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="ml-10 mt-1 flex flex-wrap gap-1.5"
-    >
-      {results.map((r, i) => (
-        <motion.div
-          key={r.kind + i}
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.04 * i }}
-          className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium ${
-            r.ok
-              ? "border-primary-border bg-primary-surface text-foreground"
-              : "border-amber-500/40 bg-amber-500/10 text-foreground"
-          }`}
-          title={r.detail}
-        >
-          {r.ok ? (
-            <CheckCircle2 className="h-3 w-3 text-[hsl(var(--brand-green))]" />
-          ) : (
-            <AlertTriangle className="h-3 w-3 text-amber-500" />
-          )}
-          <span className="truncate">{r.label}</span>
-        </motion.div>
-      ))}
-    </motion.div>
-  );
+function isDesktop() {
+  return typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
 }
 
-const SUGGESTIONS: { label: string; icon: any; hint: string; prompt: string }[] = [
-  {
-    label: "Understand my biggest marketing opportunity",
-    icon: Search,
-    hint: "Diagnose where momentum is strongest",
-    prompt: "What is the biggest marketing opportunity for my business right now?",
-  },
-  {
-    label: "Audit my AI-search visibility",
-    icon: Globe,
-    hint: "Check search visibility and weak spots",
-    prompt: "Audit my AI-search visibility across SEO, AEO, and GEO.",
-  },
-  {
-    label: "Build a 30-day marketing plan",
-    icon: CalendarDays,
-    hint: "Turn signals into a structured plan",
-    prompt: "Build a 30-day marketing plan for my business with the highest-impact actions.",
-  },
-  {
-    label: "Analyze my competitors",
-    icon: MessageSquare,
-    hint: "Compare positioning and traction",
-    prompt: "Analyze my competitors and tell me where we can win.",
-  },
-  {
-    label: "Improve my brand positioning",
-    icon: Sparkles,
-    hint: "Clarify the promise and differentiation",
-    prompt: "Help me sharpen our brand positioning and messaging for my target audience.",
-  },
-  {
-    label: "Create a campaign from my Brand DNA",
-    icon: Bot,
-    hint: "Build a campaign rooted in your brand",
-    prompt: "Create a campaign from my Brand DNA and turn it into a clear next-step plan.",
-  },
-];
-
-const MODELS: { id: string; label: string; hint: string }[] = [
-  { id: "ravi-flash", label: "Ravi Flash", hint: "Fast · everyday ops" },
-  { id: "ravi-pro", label: "Ravi Pro", hint: "Deeper reasoning" },
-];
+/** Resolves with the job id once the session's create request returns (or null after a wait). */
+function waitForJobId(sessionId: string, timeoutMs = 12_000): Promise<string | null> {
+  return new Promise((resolve) => {
+    const read = () => {
+      const s = getStudioState().sessions.find((x) => x.id === sessionId);
+      if (!s) return { done: true, id: null };
+      if (s.job?.id) return { done: true, id: s.job.id };
+      if (!s.pendingKey && s.error) return { done: true, id: null };
+      return { done: false, id: null };
+    };
+    const first = read();
+    if (first.done) return resolve(first.id);
+    let unsub: () => void = () => {};
+    const timer = window.setTimeout(() => {
+      unsub();
+      resolve(null);
+    }, timeoutMs);
+    unsub = subscribeStudio(() => {
+      const r = read();
+      if (r.done) {
+        window.clearTimeout(timer);
+        unsub();
+        resolve(r.id);
+      }
+    }) as () => void;
+  });
+}
 
 export function ChatPanel({
   workspaceId,
   conversationId = null,
-  variant = "rail",
   mobileAccessory,
 }: {
   workspaceId: string;
   conversationId?: string | null;
+  /** Kept for callers; the chat always uses the centered layout. */
   variant?: "rail" | "centered";
   mobileAccessory?: ReactNode;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  // Held so the composer's stop button can actually interrupt the request.
-  // Before this, the button rendered a stop icon, was deliberately left
-  // enabled during streaming, and called send() — which returns immediately
-  // while `streaming` is true. Clicking it did nothing at all.
+  const [historyLoading, setHistoryLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const [failedTurn, setFailedTurn] = useState<{ role: string; content: string }[] | null>(null);
 
@@ -227,9 +149,7 @@ export function ChatPanel({
   // Leaving this workspace (the panel is keyed by it) cancels its in-flight reply.
   useEffect(() => () => abortRef.current?.abort(), []);
   const [clarifying, setClarifying] = useState(false);
-  const [modelId, setModelId] = useState(MODELS[0].id);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [adaptive, setAdaptive] = useState(false);
+  const [modelId, setModelId] = useState(CHAT_MODELS[0].id);
   const [siteUrl, setSiteUrl] = useState<string | null>(null);
   const [wsStats, setWsStats] = useState<{
     pending: number;
@@ -239,22 +159,37 @@ export function ChatPanel({
   } | null>(null);
   const [coachSummary, setCoachSummary] = useState<string | null>(null);
   const [competitorSummary, setCompetitorSummary] = useState<string | null>(null);
-  const model = MODELS.find((m) => m.id === modelId)!;
   const scrollRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<ChatComposerHandle>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [dragging, setDragging] = useState(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-  const [isNearBottom, setIsNearBottom] = useState(true);
-  const dragCounter = useRef(0);
+  const nearBottomRef = useRef(true);
 
-  const scrollToLatest = useCallback(() => {
+  // Model choice is remembered per browser.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("chat:model");
+      if (saved && CHAT_MODELS.some((m) => m.id === saved)) setModelId(saved);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const changeModel = (id: string) => {
+    setModelId(id);
+    try {
+      localStorage.setItem("chat:model", id);
+    } catch {
+      /* storage unavailable */
+    }
+  };
+
+  const scrollToLatest = useCallback((behavior: ScrollBehavior = "smooth") => {
     const container = scrollRef.current;
     if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    container.scrollTo({ top: container.scrollHeight, behavior });
+    nearBottomRef.current = true;
     setShowJumpToLatest(false);
-    setIsNearBottom(true);
   }, []);
 
   const addFiles = async (fileList: FileList | File[]) => {
@@ -264,11 +199,13 @@ export function ChatPanel({
     const staged: Attachment[] = [];
     for (const f of files) {
       if (f.size > MAX_FILE_BYTES) {
-        toast.error(`${f.name}: exceeds ${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB`);
+        toast.error(`${f.name} is too big`, {
+          description: `Files can be up to ${Math.floor(MAX_FILE_BYTES / 1024 / 1024)} MB.`,
+        });
         continue;
       }
       if (running + f.size > MAX_TOTAL_BYTES) {
-        toast.error("Attachment total exceeds 40MB — remove some files");
+        toast.error("Too many files", { description: "Remove some files and try again." });
         break;
       }
       running += f.size;
@@ -296,7 +233,7 @@ export function ChatPanel({
             x.id === att.id ? { ...x, status: "error", error: e?.message ?? "Failed to read" } : x,
           ),
         );
-        toast.error(`${att.name}: ${e?.message ?? "Failed to read"}`);
+        toast.error(`Couldn't read ${att.name}`, { description: e?.message });
       }
     }
   };
@@ -304,42 +241,10 @@ export function ChatPanel({
   const removeAttachment = (id: string) =>
     setAttachments((prev) => prev.filter((a) => a.id !== id));
 
-  const onDragEnter = (e: React.DragEvent) => {
-    if (!e.dataTransfer?.types?.includes("Files")) return;
-    e.preventDefault();
-    dragCounter.current += 1;
-    setDragging(true);
-  };
-  const onDragLeave = (e: React.DragEvent) => {
-    dragCounter.current -= 1;
-    if (dragCounter.current <= 0) {
-      dragCounter.current = 0;
-      setDragging(false);
-    }
-  };
-  const onDragOver = (e: React.DragEvent) => {
-    if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
-  };
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current = 0;
-    setDragging(false);
-    if (e.dataTransfer?.files?.length) void addFiles(e.dataTransfer.files);
-  };
-
-  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(e.clipboardData?.files ?? []);
-    if (files.length) {
-      e.preventDefault();
-      void addFiles(files);
-    }
-  };
-
   const navigate = useNavigate();
   const conversationRef = useRef<string | null>(conversationId);
   const preserveMessagesOnRouteRef = useRef(false);
   const skipNextHistoryLoadRef = useRef(false);
-  const { isOn } = useAgentToggles();
   const { dna, save: saveDna } = useBrandDna(workspaceId);
   const dnaRef = useRef(dna);
   // Used by an APPROVED "save to memory" suggestion from a chat reply.
@@ -378,7 +283,9 @@ export function ChatPanel({
       const res = await syncMemoryFromChat(workspaceId, current, saveDna, conversationRef.current);
       lastSyncedLiveCountRef.current = liveCount;
       if (res.added > 0) {
-        toast.success(`Memory updated · ${res.added} new insight${res.added > 1 ? "s" : ""}`);
+        toast.success(
+          `Remembered ${res.added} new thing${res.added > 1 ? "s" : ""} about your brand`,
+        );
       }
     } catch (e) {
       console.warn("memory sync failed", e);
@@ -387,26 +294,7 @@ export function ChatPanel({
     }
   };
 
-  const { theme, toggle: toggleTheme } = useTheme();
-  const { density, toggleDensity, reducedMotion, toggleReducedMotion } = useChatPrefs();
-
-  // Roving-focus index for empty-state suggestions (keyboard nav).
-  const [suggestionFocus, setSuggestionFocus] = useState(0);
-  const suggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  // Motion-aware transitions: when reduced-motion is on we suppress
-  // framer-motion enter animations entirely (no opacity/translate runs).
-  const mFade = useMemo(
-    () =>
-      reducedMotion
-        ? { initial: false as const, animate: { opacity: 1, y: 0 }, transition: { duration: 0 } }
-        : {
-            initial: { opacity: 0, y: 8 },
-            animate: { opacity: 1, y: 0 },
-            transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] as any },
-          },
-    [reducedMotion],
-  );
+  const { reducedMotion } = useChatPrefs();
 
   useEffect(() => {
     conversationRef.current = conversationId;
@@ -416,7 +304,14 @@ export function ChatPanel({
   }, [conversationId]);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+    void supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+      const meta = (data.user?.user_metadata ?? {}) as Record<string, unknown>;
+      const name = [meta.full_name, meta.name, meta.first_name].find(
+        (v): v is string => typeof v === "string" && v.trim().length > 0,
+      );
+      setUserName(name ?? null);
+    });
   }, []);
 
   const titleFromPrompt = (prompt: string) => {
@@ -465,37 +360,42 @@ export function ChatPanel({
     if (conversationId) {
       if (skipNextHistoryLoadRef.current) {
         skipNextHistoryLoadRef.current = false;
-        return;
+      } else {
+        setHistoryLoading(true);
+        void (async () => {
+          // A conversation only opens inside its own workspace. A link to another
+          // workspace's (or a deleted) conversation must not be reused — new
+          // messages would otherwise attach to it under this workspace.
+          const { data: owned } = await supabase
+            .from("conversations")
+            .select("id")
+            .eq("id", conversationId)
+            .eq("workspace_id", workspaceId)
+            .maybeSingle();
+          if (cancelled) return;
+          if (!owned) {
+            setHistoryLoading(false);
+            if (conversationRef.current === conversationId) conversationRef.current = null;
+            toast.error("That conversation isn't in this workspace");
+            navigate({ to: workspacePath(workspaceId), replace: true });
+            return;
+          }
+          const { data } = await supabase
+            .from("chat_messages")
+            .select("*")
+            .eq("workspace_id", workspaceId)
+            .eq("conversation_id", conversationId)
+            .order("created_at", { ascending: true })
+            .limit(100);
+          if (cancelled || conversationRef.current !== conversationId) return;
+          setHistoryLoading(false);
+          if (data) {
+            const rows = data.map(fromRow).filter((m): m is Msg => m !== null);
+            setMessages((current) => (current.length === 0 ? rows : current));
+            requestAnimationFrame(() => scrollToLatest("auto"));
+          }
+        })();
       }
-      void (async () => {
-        // A conversation only opens inside its own workspace. A link to another
-        // workspace's (or a deleted) conversation must not be reused — new
-        // messages would otherwise attach to it under this workspace.
-        const { data: owned } = await supabase
-          .from("conversations")
-          .select("id")
-          .eq("id", conversationId)
-          .eq("workspace_id", workspaceId)
-          .maybeSingle();
-        if (cancelled) return;
-        if (!owned) {
-          if (conversationRef.current === conversationId) conversationRef.current = null;
-          toast.error("That conversation isn't in this workspace");
-          navigate({ to: workspacePath(workspaceId), replace: true });
-          return;
-        }
-        const { data } = await supabase
-          .from("chat_messages")
-          .select("*")
-          .eq("workspace_id", workspaceId)
-          .eq("conversation_id", conversationId)
-          .order("created_at", { ascending: true })
-          .limit(100);
-        if (cancelled || conversationRef.current !== conversationId) return;
-        if (data) {
-          setMessages((current) => (current.length === 0 ? (data as any) : current));
-        }
-      })();
     }
     supabase
       .from("workspaces")
@@ -567,32 +467,33 @@ export function ChatPanel({
     };
   }, [workspaceId, conversationId]);
 
+  /* ───────────── scrolling: stay with the reply while it's written ───────────── */
+
   useEffect(() => {
     messagesRef.current = messages;
-    const container = scrollRef.current;
-    if (!container) return;
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    const nearBottom = distanceFromBottom < 180;
-    setIsNearBottom(nearBottom);
-    setShowJumpToLatest(!nearBottom && messages.length > 0);
-    if (nearBottom) {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: streaming ? "auto" : "smooth",
-      });
-    }
-  }, [messages, streaming]);
+  }, [messages]);
 
   const onChatScroll = () => {
-    const container = scrollRef.current;
-    if (!container) return;
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    const nearBottom = distanceFromBottom < 180;
-    setIsNearBottom(nearBottom);
-    setShowJumpToLatest(!nearBottom && messages.length > 0);
+    const c = scrollRef.current;
+    if (!c) return;
+    const near = c.scrollHeight - c.scrollTop - c.clientHeight < 140;
+    nearBottomRef.current = near;
+    setShowJumpToLatest(!near && messagesRef.current.length > 0);
   };
+
+  const showingConversation = messages.length > 0 || historyLoading;
+  // Text reveals smoothly after state updates, so follow the content's size,
+  // not just the message list.
+  useEffect(() => {
+    const el = contentRef.current;
+    const c = scrollRef.current;
+    if (!el || !c || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (nearBottomRef.current) c.scrollTop = c.scrollHeight;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [showingConversation]);
 
   // Hero-suggested prompts prefill the composer; ⌘K dispatches chat:focus.
   useEffect(() => {
@@ -608,10 +509,10 @@ export function ChatPanel({
       }
       if (text !== null) {
         setInput(text);
-        if (focus) textareaRef.current?.focus();
+        if (focus) composerRef.current?.focus();
       }
     };
-    const onFocus = () => textareaRef.current?.focus();
+    const onFocus = () => composerRef.current?.focus();
     // A prompt handed over from Command Center for THIS workspace only.
     try {
       const key = `chat:prefill:${workspaceId}`;
@@ -631,32 +532,12 @@ export function ChatPanel({
     };
   }, [workspaceId]);
 
-  // Auto-focus textarea on mount and after streaming completes.
   useEffect(() => {
-    textareaRef.current?.focus();
+    composerRef.current?.focus();
   }, []);
   useEffect(() => {
-    if (!streaming) textareaRef.current?.focus();
+    if (!streaming) composerRef.current?.focus();
   }, [streaming]);
-
-  // Auto-grow the composer up to 5 lines, then scroll.
-  useEffect(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    const lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 24;
-    const maxH = lineHeight * 5 + 20; // 5 lines + vertical padding
-    const next = Math.min(ta.scrollHeight, maxH);
-    ta.style.height = `${next}px`;
-    ta.style.overflowY = ta.scrollHeight > maxH ? "auto" : "hidden";
-  }, [input]);
-
-  const summonAgent = (slug: string) => {
-    const agent = agentList.find((a) => a.slug === slug);
-    if (!agent || !isOn(agent.id)) return false;
-    toast.success(`${agent.role} on it`, { description: agent.missions[0]?.label });
-    return true;
-  };
 
   // Compact brand context for the planner.
   const brandContext = (() => {
@@ -901,6 +782,45 @@ export function ChatPanel({
     return buildSmartChatContext("", ctxSources, 3000);
   }, [ctxSources]);
 
+  /* ───────────── Studio: start work from the chat ───────────── */
+
+  const persistStudioCard = async (msg: Msg, conversation: string) => {
+    const task = msg.payload as StudioTaskPayload;
+    const jobId = task.sessionId ? await waitForJobId(task.sessionId) : null;
+    await supabase.from("chat_messages").insert({
+      id: msg.id,
+      workspace_id: task.workspaceId,
+      conversation_id: conversation,
+      user_id: userId,
+      role: "assistant",
+      kind: "progress",
+      content: `Studio: ${STUDIO_FORMATS[task.type]?.label ?? task.type}`,
+      payload: { studio: { ...task, jobId } },
+      status: "completed",
+    });
+    if (jobId) {
+      setMessages((m) =>
+        m.map((x) => (x.id === msg.id ? { ...x, payload: { ...x.payload, jobId } } : x)),
+      );
+    }
+  };
+
+  const addStudioCard = (task: Omit<StudioTaskPayload, "jobId">, conversation: string | null) => {
+    const card: Msg = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      kind: "studio",
+      content: "",
+      payload: { ...task, jobId: null },
+      live: true,
+    };
+    setMessages((m) => [...m, card]);
+    if (conversation) void persistStudioCard(card, conversation);
+    // The Studio side panel is part of the page on larger screens; on phones
+    // it would cover the chat, so it stays closed and the card shows progress.
+    if (isDesktop()) emitAppEvent("open:studio");
+  };
+
   const retryFailedTurn = async () => {
     const history = failedTurn;
     if (!history || streaming) return;
@@ -909,23 +829,20 @@ export function ChatPanel({
     await runChatStream(history);
   };
 
-  const copyMessage = useCallback(async (content: string) => {
-    const plain = content.replace(/\r\n/g, "\n").trim();
-    if (!plain) return;
-    try {
-      await navigator.clipboard.writeText(plain);
-      toast.success("Response copied");
-    } catch {
-      toast.error("Copy failed", { description: "Clipboard access was blocked." });
+  const pickStarter = (s: Starter) => {
+    if (s.prompt) return void send(s.prompt);
+    if (s.prefill) {
+      setInput(s.prefill);
+      requestAnimationFrame(() => composerRef.current?.focus());
     }
-  }, []);
+  };
 
   const send = async (override?: string) => {
     const text = (override ?? input).trim();
     const hasAttachments = attachments.length > 0;
     if ((!text && !hasAttachments) || streaming || clarifying) return;
     if (attachments.some((a) => a.status === "reading")) {
-      toast.message("Still reading attachments…");
+      toast.message("Still reading your files…");
       return;
     }
 
@@ -967,10 +884,13 @@ export function ChatPanel({
       role: "user",
       kind: "text",
       content: displayContent,
+      live: true,
     };
+    const priorMessages = messagesRef.current;
     setMessages((m) => [...m, userMsg]);
     setInput("");
     setAttachments([]);
+    requestAnimationFrame(() => scrollToLatest());
 
     recordTokens(Math.ceil(wireContent.length / 4));
 
@@ -984,7 +904,7 @@ export function ChatPanel({
       content: displayContent,
       status: "completed",
     });
-    if (messages.length === 0) {
+    if (priorMessages.length === 0) {
       void supabase
         .from("conversations")
         .update({ title: titleFromPrompt(text || visibleText) })
@@ -995,73 +915,110 @@ export function ChatPanel({
     // Stash the wire content on the msg for history construction below.
     (userMsg as any)._wire = wireContent;
 
-    // Detect quick-actions and append an action chip card before clarify/stream.
-    const actions = detectChatActions(text);
-    if (actions.length) {
+    // "Make me a …": start it in Studio now. No composer pop-up, no model round trip.
+    const intent = !hasAttachments ? detectCreateIntent(text) : null;
+    if (intent) {
+      const format = STUDIO_FORMATS[intent.type];
+      const sessionId = startInBackground({
+        workspaceId,
+        type: intent.type,
+        brief: intent.brief,
+        origin: "chat",
+      });
+      if (sessionId) {
+        const ack: Msg = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          kind: "text",
+          content: `On it — I'm making your ${format.noun} in Studio. ${format.estimate}, and you can keep chatting while it works.`,
+          live: true,
+        };
+        setMessages((m) => [...m, ack]);
+        void supabase.from("chat_messages").insert({
+          id: ack.id,
+          workspace_id: workspaceId,
+          conversation_id: activeConversationId,
+          user_id: userId,
+          role: "assistant",
+          kind: "text",
+          content: ack.content,
+          status: "completed",
+        });
+        addStudioCard(
+          { sessionId, type: intent.type, brief: intent.brief, workspaceId },
+          activeConversationId,
+        );
+        return;
+      }
+    }
+
+    // Ask clarifying questions only when a conversation starts; follow-ups
+    // already have the context and should get an answer straight away.
+    let payload: ClarifyPayload | null = null;
+    if (priorMessages.filter((m) => m.role === "user").length === 0 && text.length > 0) {
+      setClarifying(true);
+      try {
+        const cr = await authedFetch("/api/clarify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: text, brandContext }),
+        });
+        if (cr.ok) {
+          const j = await cr.json();
+          if (j?.needs_clarification && Array.isArray(j.questions) && j.questions.length) {
+            payload = { rationale: j.rationale, questions: j.questions };
+          }
+        }
+      } catch {
+        /* answer without clarifying */
+      }
+    }
+
+    if (payload) {
       setMessages((m) => [
         ...m,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          kind: "actions",
-          content: "",
-          payload: { actions },
-        },
-      ]);
-    }
-
-    // Ask clarifying questions before generating a complex result.
-    setClarifying(true);
-    let payload: ClarifyPayload | null = null;
-    try {
-      const cr = await authedFetch("/api/clarify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, brandContext }),
-      });
-      if (cr.ok) {
-        const j = await cr.json();
-        if (j?.needs_clarification && Array.isArray(j.questions) && j.questions.length) {
-          payload = { rationale: j.rationale, questions: j.questions };
-        }
-      }
-    } catch {}
-
-    if (payload) {
-      const cId = crypto.randomUUID();
-      setMessages((m) => [
-        ...m,
-        {
-          id: cId,
-          role: "assistant",
           kind: "clarify",
           content: "",
           payload: { ...payload, done: false },
+          live: true,
         },
       ]);
       // Wait for the user to submit/skip via ClarifyCard handlers.
-      // setClarifying stays true until they act.
       return;
     }
 
-    // Nothing to clarify — go straight to the stream.
     setClarifying(false);
-    const history = [...messages, userMsg]
+    const history = [...priorMessages, userMsg]
+      .filter((m) => m.kind === "text")
+      .slice(-12)
+      .map((m) => ({ role: m.role, content: (m as any)._wire || m.content }));
+    await runChatStream(history, detectChatActions(text));
+  };
+
+  /** Answer the last question again, replacing the reply shown after it. */
+  const regenerateLatest = async () => {
+    if (streaming || clarifying) return;
+    const current = messagesRef.current;
+    const lastUserIdx = current
+      .map((m) => m.role === "user" && m.kind === "text")
+      .lastIndexOf(true);
+    if (lastUserIdx === -1) return;
+    const kept = current.slice(0, lastUserIdx + 1);
+    setMessages(kept);
+    const history = kept
+      .filter((m) => m.kind === "text")
       .slice(-12)
       .map((m) => ({ role: m.role, content: (m as any)._wire || m.content }));
     await runChatStream(history);
   };
 
-  const regenerateLatest = useCallback(async () => {
-    const lastUser = [...messages].reverse().find((m) => m.role === "user" && m.kind === "text");
-    if (!lastUser || streaming) return;
-    const prompt = lastUser.content.replace(/\n\s*📎.*$/s, "").trim();
-    if (!prompt) return;
-    setInput(prompt);
-    await send(prompt);
-  }, [messages, streaming, input, attachments, clarifying]);
-
-  const runChatStream = async (history: { role: string; content: string }[]) => {
+  const runChatStream = async (
+    history: { role: string; content: string }[],
+    detectedActions: ChatAction[] = [],
+  ) => {
     // Captured when the request starts: the reply is saved to THIS workspace
     // and conversation even if the user opens another chat before it finishes.
     const streamWorkspaceId = workspaceId;
@@ -1070,15 +1027,13 @@ export function ChatPanel({
     abortRef.current = controller;
     setFailedTurn(null);
     setStreaming(true);
-    emitAppEvent("chat:working", { label: "Agents working on your site…" });
-    // Drive the rich preview stages from the latest user message.
+    emitAppEvent("chat:working", { label: "Mellox is thinking…" });
     const lastUser = [...history].reverse().find((h) => h.role === "user")?.content ?? "";
     if (lastUser) {
       const plan = planFromPrompt(lastUser, { siteUrl, brand: dna.brandName });
       startPreviewPlan(plan);
     }
     try {
-      const { buildSmartChatContext } = await import("@/lib/ai/context-select");
       const smartCtx = buildSmartChatContext(lastUser, ctxSources, 2500);
       // The server summarises older turns (history-summary.server.ts); the
       // client only sends the recent window, within the route's 40-turn cap.
@@ -1101,19 +1056,24 @@ export function ChatPanel({
         const errorPayload = await res.json().catch(() => null);
         const detail =
           typeof errorPayload?.error === "string" ? errorPayload.error : "Please try again.";
-        if (res.status === 429) {
-          toast.error("Rate limit hit", { description: detail });
-        } else if (res.status === 402) {
-          toast.error("AI credits exhausted", { description: detail });
-        } else if (res.status === 401 || res.status === 503) {
-          toast.error("AI provider is not configured", { description: detail });
-        } else {
-          toast.error("AI request failed", { description: detail });
-        }
+        const reason =
+          res.status === 429
+            ? "You're sending messages quickly. Wait a moment and try again."
+            : res.status === 402
+              ? "You've used all your AI credits for now."
+              : res.status === 401 || res.status === 503
+                ? "The AI service isn't set up yet."
+                : detail;
         setFailedTurn(history);
         setMessages((m) => [
           ...m,
-          { id: crypto.randomUUID(), role: "assistant", kind: "error", content: detail },
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            kind: "error",
+            content: reason,
+            live: true,
+          },
         ]);
         setStreaming(false);
         emitAppEvent("chat:idle");
@@ -1126,7 +1086,10 @@ export function ChatPanel({
       let acc = "";
       let truncated = false;
       const aId = crypto.randomUUID();
-      setMessages((m) => [...m, { id: aId, role: "assistant", kind: "text", content: "" }]);
+      setMessages((m) => [
+        ...m,
+        { id: aId, role: "assistant", kind: "text", content: "", status: "streaming", live: true },
+      ]);
       while (true) {
         if (controller.signal.aborted) {
           await reader.cancel().catch(() => {});
@@ -1150,7 +1113,9 @@ export function ChatPanel({
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) {
               acc += delta;
-              setMessages((m) => m.map((x) => (x.id === aId ? { ...x, content: acc } : x)));
+              // Hide an action tag while it is still being written.
+              const visible = acc.replace(/\[\[action:[^\]]*(?:\]\]|$)/g, "");
+              setMessages((m) => m.map((x) => (x.id === aId ? { ...x, content: visible } : x)));
             }
           } catch {
             buf = line + "\n" + buf;
@@ -1159,51 +1124,42 @@ export function ChatPanel({
         }
       }
       if (truncated) {
-        acc +=
-          "\n\n_(This reply was cut off at the length limit — say “continue” to pick up where it stopped.)_";
-        setMessages((m) => m.map((x) => (x.id === aId ? { ...x, content: acc } : x)));
+        acc += "\n\n_(This reply hit the length limit. Say “continue” to get the rest.)_";
       }
       recordTokens(Math.ceil(acc.length / 4));
 
-      // Chat-first: parse any [[action:...]] tags out of the assistant message,
-      // strip them from what we render, run them, and append a "what I did" chip row.
+      // Action tags become buttons and approval cards under the reply.
+      // Nothing is opened or run here.
+      let offers: ChatToolCall[] = [];
+      let suggestions: ChatToolCall[] = [];
       try {
-        const { parseToolCalls, executeToolCall, requiresApproval } =
-          await import("@/lib/chat-tools");
+        const { parseToolCalls, requiresApproval } = await import("@/lib/chat-tools");
         const { calls, cleaned } = parseToolCalls(acc);
-        if (cleaned !== acc) {
-          setMessages((m) => m.map((x) => (x.id === aId ? { ...x, content: cleaned } : x)));
-          acc = cleaned;
-        }
-        if (calls.length) {
-          // Approval boundary: navigation runs now; anything that changes data
-          // or spends money becomes a suggestion the user approves.
-          const results: Awaited<ReturnType<typeof executeToolCall>>[] = [];
-          const suggestions = calls.filter((c) => requiresApproval(c.kind));
-          for (const c of calls.filter((c) => !requiresApproval(c.kind))) {
-            const r = await executeToolCall(c, {
-              workspaceId: streamWorkspaceId,
-              saveMemory: saveMemoryNote,
-            });
-            results.push(r);
-            if (!r.ok) toast.error(r.label, r.detail ? { description: r.detail } : undefined);
-          }
-          setMessages((m) => [
-            ...m,
-            {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              kind: "actions",
-              content: "",
-              payload: { results: results.length ? results : undefined, suggestions },
-            },
-          ]);
-        }
+        acc = cleaned;
+        suggestions = calls.filter((c) => requiresApproval(c.kind));
+        offers = calls.filter((c) => !requiresApproval(c.kind));
       } catch (e) {
         console.warn("tool parse failed", e);
       }
+      setMessages((m) =>
+        m.map((x) => (x.id === aId ? { ...x, content: acc, status: "completed" } : x)),
+      );
+      if (offers.length || suggestions.length || detectedActions.length) {
+        const payload: ActionsPayload = { offers, suggestions, actions: detectedActions };
+        setMessages((m) => [
+          ...m,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            kind: "actions",
+            content: "",
+            payload,
+            live: true,
+          },
+        ]);
+      }
 
-      if (streamConversationId) {
+      if (streamConversationId && acc.trim()) {
         await supabase.from("chat_messages").insert({
           id: aId,
           workspace_id: streamWorkspaceId,
@@ -1222,18 +1178,19 @@ export function ChatPanel({
         // The user stopped it. Keep whatever streamed in and say so, rather
         // than reporting a connection failure they caused deliberately.
         setMessages((m) => [
-          ...m,
+          ...m.map((x) => (x.status === "streaming" ? { ...x, status: "cancelled" as const } : x)),
           {
             id: crypto.randomUUID(),
             role: "assistant",
             kind: "notice",
             content: "Stopped.",
+            live: true,
           },
         ]);
       } else {
         setFailedTurn(history);
         setMessages((m) => [
-          ...m,
+          ...m.filter((x) => !(x.status === "streaming" && !x.content)),
           {
             id: crypto.randomUUID(),
             role: "assistant",
@@ -1241,12 +1198,16 @@ export function ChatPanel({
             content:
               (error as Error)?.message?.trim() ||
               "The connection dropped before the reply finished.",
+            live: true,
           },
         ]);
       }
     } finally {
       abortRef.current = null;
       setStreaming(false);
+      setMessages((m) =>
+        m.map((x) => (x.status === "streaming" ? { ...x, status: "completed" as const } : x)),
+      );
       emitAppEvent("chat:idle");
       completePreviewPlan("All done", "Your update is ready");
       // Background memory extraction — only if enough new turns since last sync.
@@ -1283,7 +1244,9 @@ export function ChatPanel({
       role: "user",
       kind: "text",
       content: userClarification,
+      live: true,
     };
+    const prior = messagesRef.current;
     setMessages((m) => [...m, synthetic]);
     const activeConversationId = await ensureConversation();
     await supabase.from("chat_messages").insert({
@@ -1297,538 +1260,269 @@ export function ChatPanel({
       status: "completed",
     });
 
-    // Rebuild history from current state + new turn.
-    setTimeout(async () => {
-      const history = [...messages, synthetic]
-        .filter((m) => m.kind === "text")
-        .slice(-14)
-        .map((m) => ({ role: m.role, content: m.content }));
-      await runChatStream(history);
-    }, 50);
+    const history = [...prior, synthetic]
+      .filter((m) => m.kind === "text")
+      .slice(-14)
+      .map((m) => ({ role: m.role, content: (m as any)._wire || m.content }));
+    await runChatStream(history);
   };
 
-  const empty = messages.length === 0;
+  const skipClarify = (msgId: string) => {
+    setMessages((arr) =>
+      arr.map((x) =>
+        x.id === msgId ? { ...x, payload: { ...x.payload, done: true, submitted: {} } } : x,
+      ),
+    );
+    setClarifying(false);
+    const history = messagesRef.current
+      .filter((x) => x.kind === "text")
+      .slice(-12)
+      .map((x) => ({ role: x.role, content: (x as any)._wire || x.content }));
+    void runChatStream(history);
+  };
 
-  const centered = variant === "centered";
+  const executeOffer = async (call: ChatToolCall): Promise<ChatToolResult> => {
+    const { executeToolCall } = await import("@/lib/chat-tools");
+    return executeToolCall(call, { workspaceId, saveMemory: saveMemoryNote });
+  };
+
+  /* ───────────── render ───────────── */
+
+  const empty = messages.length === 0 && !historyLoading;
+  const last = messages[messages.length - 1];
+  const lastTextIdx = messages
+    .map((m) => m.kind === "text" && m.role === "assistant")
+    .lastIndexOf(true);
+  const waitingForWords =
+    clarifying && !messages.some((m) => m.kind === "clarify" && !m.payload?.done)
+      ? true
+      : streaming && (last?.role !== "assistant" || (last.kind === "text" && !last.content));
+  const lastUserText = [...messages].reverse().find((m) => m.role === "user")?.content;
+  const showNextSteps =
+    !streaming &&
+    !clarifying &&
+    last?.role === "assistant" &&
+    ((last.kind === "text" && !!last.content) || last.kind === "actions");
+
+  const placeholder = attachments.length
+    ? "Ask something about your files…"
+    : empty
+      ? "How can Mellox help today?"
+      : "Reply to Mellox…";
+
+  const layoutTransition = reducedMotion
+    ? { duration: 0 }
+    : { type: "spring" as const, stiffness: 260, damping: 32, mass: 0.9 };
 
   return (
-    <div
-      className={
-        centered
-          ? "flex h-full flex-col bg-transparent"
-          : "flex h-full flex-col bg-gradient-to-b from-background via-background to-background/60"
-      }
-    >
-      {/* Messages */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-auto scrollbar-thin"
-        onScroll={onChatScroll}
-      >
-        <div className={centered ? "mx-auto w-full max-w-3xl" : ""}>
+    <LayoutGroup id="mellox-chat">
+      <div className="mx-chat relative flex h-full min-h-0 flex-col">
+        {/* Conversation (or the greeting above the centered message box) */}
+        <div
+          ref={scrollRef}
+          onScroll={onChatScroll}
+          className={cn(
+            "mx-scroll min-h-0 overflow-y-auto overscroll-contain",
+            empty ? "flex flex-[1_1_0%] flex-col justify-end pb-7" : "flex-1",
+          )}
+        >
           {empty ? (
-            <div className="flex h-full flex-col items-center justify-center px-5 pb-8 pt-10 text-center md:px-8">
-              <motion.div
-                initial={reducedMotion ? false : { scale: 0.96, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={
-                  reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 210, damping: 22 }
-                }
-                className="relative mb-5"
-              >
-                <span
-                  className="absolute -inset-7 -z-10 rounded-full blur-3xl opacity-40"
-                  style={{
-                    background:
-                      "radial-gradient(50% 50% at 50% 50%, hsl(var(--brand-green) / 0.18), transparent 72%)",
-                  }}
-                  aria-hidden
-                />
-                <div className="relative grid place-items-center rounded-2xl border border-border/60 bg-card/80 p-3 shadow-[0_16px_40px_-24px_hsl(var(--brand-green)/0.45)]">
-                  <Logo height={28} markOnly />
-                </div>
-              </motion.div>
-
-              <div className="max-w-[38rem]">
-                <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Ravi · Marketing intelligence
-                </p>
-                <h2 className="text-[clamp(1.6rem,2vw,2.3rem)] font-semibold tracking-[-0.04em] text-foreground">
-                  Turn your marketing signals into the next move.
-                </h2>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:text-[14px]">
-                  Ravi connects your brand, market, competitors, and execution so you can diagnose,
-                  plan, and act without jumping between tools.
-                </p>
-              </div>
-
-              <div
-                className="mt-6 grid w-full max-w-2xl gap-2 sm:grid-cols-2"
-                role="listbox"
-                aria-label="Prompt suggestions — use arrow keys to browse, Enter to send"
-                data-suggestion-list
-                onKeyDown={(e) => {
-                  if (e.key === "ArrowDown" || e.key === "ArrowRight") {
-                    e.preventDefault();
-                    const next = (suggestionFocus + 1) % SUGGESTIONS.length;
-                    setSuggestionFocus(next);
-                    suggestionRefs.current[next]?.focus();
-                  } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
-                    e.preventDefault();
-                    const next = (suggestionFocus - 1 + SUGGESTIONS.length) % SUGGESTIONS.length;
-                    setSuggestionFocus(next);
-                    suggestionRefs.current[next]?.focus();
-                  } else if (e.key === "Home") {
-                    e.preventDefault();
-                    setSuggestionFocus(0);
-                    suggestionRefs.current[0]?.focus();
-                  } else if (e.key === "End") {
-                    e.preventDefault();
-                    const last = SUGGESTIONS.length - 1;
-                    setSuggestionFocus(last);
-                    suggestionRefs.current[last]?.focus();
-                  }
-                }}
-              >
-                {SUGGESTIONS.map((s, i) => {
-                  const Icon = s.icon;
-                  const isActive = i === suggestionFocus;
-                  return (
-                    <motion.button
-                      key={s.label}
-                      ref={(el) => {
-                        suggestionRefs.current[i] = el;
-                      }}
-                      initial={reducedMotion ? false : { opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={reducedMotion ? { duration: 0 } : { delay: 0.04 + i * 0.045 }}
-                      onClick={() => send(s.prompt)}
-                      onFocus={() => setSuggestionFocus(i)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          send(s.prompt);
-                        }
-                      }}
-                      role="option"
-                      aria-selected={isActive}
-                      tabIndex={isActive ? 0 : -1}
-                      data-suggestion
-                      aria-label={`${s.label}. ${s.hint}`}
-                      className="chat-focus group flex items-center gap-3 rounded-2xl border border-border/60 bg-card/75 px-3 py-3 text-left backdrop-blur transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-card hover:shadow-[0_12px_28px_-18px_hsl(var(--foreground)/0.28)] focus-visible:border-foreground/30 aria-selected:border-foreground/25"
-                    >
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-secondary/80 text-muted-foreground transition group-hover:bg-secondary group-hover:text-foreground">
-                        <Icon className="h-3.5 w-3.5" strokeWidth={1.85} aria-hidden />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-sans text-[12.5px] font-medium text-foreground">
-                          {s.label}
-                        </span>
-                        <span className="block truncate font-sans text-[11px] text-muted-foreground">
-                          {s.hint}
-                        </span>
-                      </span>
-                    </motion.button>
-                  );
-                })}
-              </div>
-            </div>
+            <ChatGreeting name={userName} brand={dna.brandName} reducedMotion={reducedMotion} />
           ) : (
-            <div className="space-y-5 px-4 py-5 md:space-y-6 md:px-8 md:py-6">
-              <AnimatePresence initial={false}>
-                {messages.map((m, i) => {
-                  if (m.kind === "clarify" && m.payload) {
-                    return (
-                      <motion.div
-                        key={m.id}
-                        layout={!reducedMotion}
-                        initial={reducedMotion ? false : { opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={reducedMotion ? { opacity: 1 } : { opacity: 0 }}
-                        transition={{ duration: reducedMotion ? 0 : 0.25 }}
-                        className="flex gap-3"
-                      >
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-card">
-                          <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-                        </div>
-                        <ClarifyCard
-                          payload={m.payload}
-                          done={!!m.payload.done}
-                          submittedAnswers={m.payload.submitted}
-                          onSubmit={(answers) => continueAfterClarify(m.id, answers, m.payload)}
-                          onSkip={() => {
-                            setMessages((arr) =>
-                              arr.map((x) =>
-                                x.id === m.id
-                                  ? { ...x, payload: { ...x.payload, done: true, submitted: {} } }
-                                  : x,
-                              ),
-                            );
-                            setClarifying(false);
-                            const history = [...messages]
-                              .filter((x) => x.kind === "text")
-                              .slice(-12)
-                              .map((x) => ({ role: x.role, content: x.content }));
-                            runChatStream(history);
-                          }}
-                        />
-                      </motion.div>
-                    );
-                  }
-                  if (
-                    m.kind === "actions" &&
-                    (m.payload?.actions || m.payload?.results || m.payload?.suggestions?.length)
-                  ) {
-                    return (
-                      <motion.div
-                        key={m.id}
-                        layout={!reducedMotion}
-                        initial={reducedMotion ? false : { opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={reducedMotion ? { opacity: 1 } : { opacity: 0 }}
-                        transition={{ duration: reducedMotion ? 0 : 0.2 }}
-                      >
-                        {m.payload?.results ? <ToolResultsRow results={m.payload.results} /> : null}
-                        {m.payload?.actions ? <ActionChips actions={m.payload.actions} /> : null}
-                        {m.payload?.suggestions?.length ? (
-                          <SuggestedActions
-                            suggestions={m.payload.suggestions}
-                            execute={async (call) => {
-                              const { executeToolCall } = await import("@/lib/chat-tools");
-                              return executeToolCall(call, {
-                                workspaceId,
-                                saveMemory: saveMemoryNote,
-                              });
-                            }}
-                          />
-                        ) : null}
-                      </motion.div>
-                    );
-                  }
-
-                  if (m.kind === "notice") {
-                    return (
-                      <motion.div key={m.id} layout={!reducedMotion} {...mFade}>
-                        <p className="pl-10 text-xs text-muted-foreground">{m.content}</p>
-                      </motion.div>
-                    );
-                  }
-
-                  if (m.kind === "error") {
-                    const isLast = i === messages.length - 1;
-                    return (
-                      <motion.div key={m.id} layout={!reducedMotion} {...mFade}>
-                        <div
-                          role="alert"
-                          className="ml-10 flex flex-col gap-2 rounded-xl border border-danger-border bg-danger-surface px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div className="flex min-w-0 items-start gap-2.5">
-                            <AlertTriangle
-                              className="mt-px size-4 shrink-0 text-danger"
-                              aria-hidden
-                            />
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-foreground">
-                                That reply didn&rsquo;t finish
-                              </p>
-                              <p className="mt-0.5 break-words text-xs text-muted-foreground">
-                                {m.content}
-                              </p>
-                            </div>
-                          </div>
-                          {isLast && failedTurn ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="shrink-0 self-start sm:self-auto"
-                              onClick={() => void retryFailedTurn()}
-                            >
-                              <RefreshCw className="size-4" />
-                              Try again
-                            </Button>
-                          ) : null}
-                        </div>
-                      </motion.div>
-                    );
-                  }
-
+            <div
+              ref={contentRef}
+              className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-4 pb-12 pt-6 md:px-6 md:pt-10"
+            >
+              {historyLoading && messages.length === 0 ? <HistorySkeleton /> : null}
+              {messages.map((m, i) => {
+                const animate = !!m.live && !reducedMotion;
+                if (m.kind === "clarify" && m.payload) {
                   return (
                     <motion.div
                       key={m.id}
-                      layout={!reducedMotion}
-                      {...mFade}
-                      className={`flex ${m.role === "user" ? "justify-end" : "chat-assistant-shell flex-col gap-2"}`}
+                      initial={animate ? { opacity: 0, y: 10 } : false}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
                     >
-                      {m.role !== "user" ? (
-                        <div className="chat-assistant-meta">
-                          <div className="chat-assistant-avatar">
-                            <Sparkles className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]" />
-                          </div>
-                          <div className="chat-assistant-labels">
-                            <span className="chat-assistant-name">Ravi</span>
-                            <span className="chat-assistant-role">Marketing intelligence</span>
-                          </div>
-                          {streaming && i === messages.length - 1 ? (
-                            <span className="chat-assistant-status">
-                              <span className="chat-assistant-status-dot" aria-hidden />
-                              Analyzing
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      <div
-                        className={
-                          m.role === "user"
-                            ? "chat-bubble-user"
-                            : "chat-assistant-content"
-                        }
-                      >
-                        <ChatMessageContent content={m.content} role={m.role} />
-                        {streaming && m.role === "assistant" && i === messages.length - 1 && (
-                          <span className="caret-blink" data-chat-shimmer aria-hidden />
-                        )}
-                      </div>
-
-                      {m.role === "assistant" && !streaming ? (
-                        <div className="chat-message-actions" aria-label="Message actions">
-                          <button
-                            type="button"
-                            className="chat-message-action"
-                            onClick={() => void copyMessage(m.content)}
-                            aria-label="Copy assistant response"
-                          >
-                            Copy
-                          </button>
-                          <button
-                            type="button"
-                            className="chat-message-action"
-                            onClick={() => void regenerateLatest()}
-                            aria-label="Regenerate answer"
-                          >
-                            Regenerate
-                          </button>
-                        </div>
-                      ) : null}
+                      <ClarifyCard
+                        payload={m.payload}
+                        done={!!m.payload.done}
+                        submittedAnswers={m.payload.submitted}
+                        onSubmit={(answers) => void continueAfterClarify(m.id, answers, m.payload)}
+                        onSkip={() => skipClarify(m.id)}
+                      />
                     </motion.div>
                   );
-                })}
-              </AnimatePresence>
-              {clarifying && !messages.some((m) => m.kind === "clarify" && !m.payload?.done) && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="ml-10 flex items-center gap-2 text-[11.5px]"
-                >
-                  <span className="composer-pulse-dot" aria-hidden />
-                  <span className="composer-shimmer-text font-medium">Reading your prompt…</span>
-                </motion.div>
-              )}
-              {streaming &&
-                (messages[messages.length - 1]?.role !== "assistant" ||
-                  !messages[messages.length - 1]?.content) && <ThinkingTrail site={siteUrl} />}
-
-              {showJumpToLatest && (
-                <div className="sticky bottom-4 z-20 flex justify-center pb-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={scrollToLatest}
-                    className="chat-focus inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-[11.5px] font-medium text-foreground shadow-[0_10px_30px_-18px_hsl(var(--foreground)/0.55)] backdrop-blur transition hover:border-foreground/25 hover:bg-card"
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" />
-                    Jump to latest
-                  </button>
-                </div>
-              )}
-
-              {!streaming &&
-                messages.length > 0 &&
-                messages[messages.length - 1]?.role === "assistant" &&
-                messages[messages.length - 1]?.content && (
-                  <NextStepSuggestions
-                    lastUserMessage={
-                      [...messages].reverse().find((m) => m.role === "user")?.content
+                }
+                if (m.kind === "studio" && m.payload) {
+                  return <StudioTaskCard key={m.id} task={m.payload as StudioTaskPayload} />;
+                }
+                if (m.kind === "actions") {
+                  const p = (m.payload ?? {}) as ActionsPayload;
+                  return (
+                    <div key={m.id} className="-mt-3 flex flex-col gap-3">
+                      <ChatOffers
+                        offers={p.offers}
+                        actions={p.actions}
+                        execute={executeOffer}
+                        onStudioStarted={(result, call) =>
+                          addStudioCard(
+                            {
+                              sessionId: result.sessionId ?? null,
+                              type:
+                                getStudioState().sessions.find((s) => s.id === result.sessionId)
+                                  ?.type ?? "social",
+                              brief: call.params.brief || call.params.prompt || "",
+                              workspaceId,
+                            },
+                            conversationRef.current,
+                          )
+                        }
+                      />
+                      {p.suggestions?.length ? (
+                        <SuggestedActions suggestions={p.suggestions} execute={executeOffer} />
+                      ) : null}
+                    </div>
+                  );
+                }
+                if (m.kind === "notice") return <NoticeMessage key={m.id} content={m.content} />;
+                if (m.kind === "error") {
+                  return (
+                    <ErrorMessage
+                      key={m.id}
+                      content={m.content}
+                      onRetry={
+                        i === messages.length - 1 && failedTurn
+                          ? () => void retryFailedTurn()
+                          : undefined
+                      }
+                    />
+                  );
+                }
+                if (m.role === "user") {
+                  return (
+                    <UserMessage
+                      key={m.id}
+                      content={m.content}
+                      animate={animate}
+                      onEdit={(t) => {
+                        setInput(t);
+                        requestAnimationFrame(() => composerRef.current?.focus());
+                      }}
+                    />
+                  );
+                }
+                // An empty reply that hasn't started yet shows the thinking row instead.
+                if (m.status === "streaming" && !m.content) return null;
+                return (
+                  <AssistantMessage
+                    key={m.id}
+                    content={m.content}
+                    streaming={m.status === "streaming"}
+                    isLast={i === lastTextIdx}
+                    reducedMotion={reducedMotion}
+                    animate={animate}
+                    onRetry={
+                      i === lastTextIdx && !streaming ? () => void regenerateLatest() : undefined
                     }
-                    onPick={(p) => send(p)}
-                    workspaceId={workspaceId}
-                    brandContext={chatContext}
                   />
-                )}
+                );
+              })}
+
+              <AnimatePresence>
+                {waitingForWords ? (
+                  <ThinkingIndicator
+                    key="thinking"
+                    label={clarifying ? "Reading your message" : undefined}
+                  />
+                ) : null}
+              </AnimatePresence>
+
+              {showNextSteps ? (
+                <NextStepSuggestions
+                  lastUserMessage={lastUserText}
+                  onPick={(p) => void send(p)}
+                  workspaceId={workspaceId}
+                  brandContext={chatContext}
+                />
+              ) : null}
             </div>
+          )}
+        </div>
+
+        {/* Message box — centered for a new chat, pinned to the bottom after */}
+        <motion.div
+          layout="position"
+          transition={layoutTransition}
+          className="relative z-10 mx-auto w-full max-w-3xl shrink-0 px-3 md:px-6"
+        >
+          <AnimatePresence>
+            {showJumpToLatest && !empty ? (
+              <motion.button
+                key="jump"
+                type="button"
+                initial={{ opacity: 0, y: 8, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.9 }}
+                transition={{ duration: 0.18 }}
+                onClick={() => scrollToLatest()}
+                aria-label="Scroll to latest message"
+                className="mx-jump"
+              >
+                <ArrowDown className="size-4" />
+              </motion.button>
+            ) : null}
+          </AnimatePresence>
+          {!empty ? <div className="mx-composer-fade" aria-hidden /> : null}
+          {mobileAccessory ? <div className="mb-2">{mobileAccessory}</div> : null}
+          <ChatComposer
+            ref={composerRef}
+            hero={empty}
+            value={input}
+            onChange={setInput}
+            onSend={() => void send()}
+            onStop={stopStreaming}
+            onAddFiles={(f) => void addFiles(f)}
+            onRemoveAttachment={removeAttachment}
+            attachments={attachments}
+            streaming={streaming}
+            busy={clarifying}
+            modelId={modelId}
+            onModelChange={changeModel}
+            placeholder={placeholder}
+          />
+        </motion.div>
+
+        {/* Starters under the centered box, or a quiet note under the bottom one */}
+        <div
+          className={cn(
+            "shrink-0 px-3 md:px-6",
+            empty
+              ? "flex flex-[1_1_0%] flex-col items-center pt-5"
+              : "pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2",
+          )}
+        >
+          {empty ? (
+            <ChatStarters onPick={pickStarter} reducedMotion={reducedMotion} />
+          ) : (
+            <p className="text-center text-[11.5px] text-muted-foreground/80">
+              Mellox can make mistakes. Check important details.
+            </p>
           )}
         </div>
       </div>
+    </LayoutGroup>
+  );
+}
 
-      {/* Composer */}
-      <div
-        className={
-          centered
-            ? `shrink-0 px-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] ${mobileAccessory ? "pt-1" : "pt-3"} md:px-4`
-            : "shrink-0 px-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] pt-3 md:px-4"
-        }
-      >
-        {mobileAccessory && <div className="mx-auto mb-2 w-full max-w-2xl">{mobileAccessory}</div>}
-        <div
-          className={`${centered ? "mx-auto w-full max-w-3xl" : ""} relative`}
-          onDragEnter={onDragEnter}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-        >
-          <div
-            className={`prompt-pill px-2.5 py-2 transition ${dragging ? "ring-2 ring-primary/60 ring-offset-2 ring-offset-background" : ""}`}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.length) void addFiles(e.target.files);
-                e.currentTarget.value = "";
-              }}
-            />
-
-            {attachments.length > 0 && (
-              <div className="mb-2 flex flex-wrap gap-1.5 px-2 pt-1">
-                {attachments.map((a) => {
-                  const Icon =
-                    a.kind === "image"
-                      ? FileImage
-                      : a.kind === "xlsx"
-                        ? FileSpreadsheet
-                        : a.kind === "pdf" || a.kind === "docx" || a.kind === "text"
-                          ? FileText
-                          : FileIcon;
-                  const tint =
-                    a.kind === "image"
-                      ? "text-fuchsia-400"
-                      : a.kind === "xlsx"
-                        ? "text-success"
-                        : a.kind === "pdf"
-                          ? "text-danger"
-                          : a.kind === "docx"
-                            ? "text-info"
-                            : "text-muted-foreground";
-                  return (
-                    <div
-                      key={a.id}
-                      className={`group relative flex items-center gap-2 rounded-lg border pl-1 pr-1.5 py-1 text-[11.5px] ${
-                        a.status === "error"
-                          ? "border-destructive/50 bg-destructive/10"
-                          : "border-border/70 bg-card"
-                      }`}
-                      title={a.status === "error" ? a.error : `${a.name} · ${niceSize(a.size)}`}
-                    >
-                      {a.preview ? (
-                        <img src={a.preview} alt="" className="h-7 w-7 rounded-md object-cover" />
-                      ) : (
-                        <span
-                          className={`grid h-7 w-7 place-items-center rounded-md bg-secondary ${tint}`}
-                        >
-                          {a.status === "reading" ? (
-                            <span className="composer-skel-chip h-4 w-4" aria-hidden />
-                          ) : (
-                            <Icon className="h-3.5 w-3.5" />
-                          )}
-                        </span>
-                      )}
-                      <div className="flex min-w-0 flex-col leading-tight">
-                        <span className="max-w-[160px] truncate font-medium text-foreground">
-                          {a.name}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {a.status === "reading"
-                            ? "Reading…"
-                            : a.status === "error"
-                              ? "Failed"
-                              : `${a.kind.toUpperCase()} · ${niceSize(a.size)}`}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeAttachment(a.id)}
-                        aria-label={`Remove ${a.name}`}
-                        className="ml-1 grid h-5 w-5 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="prompt-chip chat-focus shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                data-icon-only="true"
-                aria-label="Attach file"
-                title="Attach files — PDF, DOCX, XLSX, images, code, text (max 20MB each)"
-              >
-                <Plus size={22} />
-              </button>
-
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  // Enter sends. Shift+Enter (and Ctrl/Cmd+Enter) insert a newline
-                  // so multi-line prompts stay easy to compose. IME composition
-                  // (Japanese/Chinese/Korean input) is respected — never intercept
-                  // Enter while the user is confirming a candidate.
-                  const composing =
-                    (e.nativeEvent as KeyboardEvent).isComposing || e.keyCode === 229;
-                  if (
-                    e.key === "Enter" &&
-                    !e.shiftKey &&
-                    !e.ctrlKey &&
-                    !e.metaKey &&
-                    !e.altKey &&
-                    !composing
-                  ) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-                onPaste={onPaste}
-                placeholder={
-                  attachments.length ? "Add a question about the file(s)…" : "Ask Mellox AI"
-                }
-                rows={1}
-                aria-keyshortcuts="Enter Shift+Enter"
-                title="Enter to send · Shift+Enter for new line"
-                className="flex-1 resize-none bg-transparent px-2 py-2 text-[16px] leading-6 outline-none placeholder:text-muted-foreground placeholder:font-normal disabled:cursor-not-allowed disabled:opacity-60 min-h-[40px] self-center"
-              />
-
-              <button
-                type="button"
-                onClick={() => (streaming ? stopStreaming() : send())}
-                disabled={!streaming && !input.trim() && !attachments.length}
-                aria-label={streaming ? "Stop generating" : "Send message"}
-                title={streaming ? "Stop generating" : "Send message"}
-                className="prompt-send chat-focus shrink-0"
-              >
-                {streaming ? <Stop size={16} /> : <ArrowUp size={20} />}
-              </button>
-            </div>
-          </div>
-          {dragging && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/60 bg-primary-surface backdrop-blur-sm">
-              <div className="flex items-center gap-2 rounded-full bg-background/90 px-4 py-1.5 text-[12px] font-medium text-foreground shadow-lg">
-                <Paperclip className="h-3.5 w-3.5" />
-                Drop to attach · PDF · DOCX · XLSX · images · code
-              </div>
-            </div>
-          )}
-        </div>
-        <p className="mt-1.5 flex items-center justify-center gap-1 text-center text-[10.5px] leading-none text-muted-foreground/60">
-          <span>{model.label}</span>
-          <span aria-hidden>·</span>
-          <span>Enter to send</span>
-        </p>
+function HistorySkeleton() {
+  return (
+    <div className="flex flex-col gap-7" aria-hidden>
+      <div className="ml-auto h-10 w-1/2 animate-pulse rounded-2xl bg-muted" />
+      <div className="space-y-2.5">
+        <div className="h-3 w-11/12 animate-pulse rounded-full bg-muted" />
+        <div className="h-3 w-4/5 animate-pulse rounded-full bg-muted" />
+        <div className="h-3 w-3/5 animate-pulse rounded-full bg-muted" />
       </div>
     </div>
   );

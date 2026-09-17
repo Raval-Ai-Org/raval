@@ -23,7 +23,7 @@ const briefing = {
   focus: {
     title: "Focus",
     why: "Ship the clearest move.",
-    action: { label: "Ask Ravi", prompt: "Help me", intent: "market" },
+    action: { label: "Ask Mellox", prompt: "Help me", intent: "market" },
   },
   wins: [],
   risks: [],
@@ -342,7 +342,7 @@ test.describe("Market Brain UI", () => {
     await openMarketBrain(page, context);
     await scan(page);
     const alert = page.getByTestId("market-brain-error");
-    await expect(alert).toContainText("Trend data is ready, but Ravi's analysis failed");
+    await expect(alert).toContainText("Trend data is ready, but Mellox's analysis failed");
     await expect(alert).toContainText("cut off before completion");
     await expect(page.getByText("Measured signal")).toBeVisible();
 
@@ -433,7 +433,7 @@ test.describe("Market Brain UI", () => {
       firstClock ?? "",
     );
 
-    await expect(page.getByText(/Ravi is analyzing your market/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Mellox is analyzing your market/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('[aria-current="step"]')).toContainText("Analysis");
     await expect(page.getByText("Market pulse")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("market-brain-pending")).toHaveCount(0);

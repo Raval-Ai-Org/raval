@@ -7,7 +7,7 @@
  *
  * The canvas used to fetch a random Pexels stock video, rotate it on a
  * 45–90 second random timer, and fall back — when the request failed — to an
- * MDN tutorial clip of a flower, tagged `provider: "Raval AI"`. On top of the
+ * MDN tutorial clip of a flower, tagged `provider: "Mellox AI"`. On top of the
  * video sat eight stacked overlay layers and two permanently-animating 500px
  * `blur(64px)` blobs. The first thing a user saw of Mellox was therefore
  * unbranded stock footage, or a blurry flower, running a constant GPU cost.

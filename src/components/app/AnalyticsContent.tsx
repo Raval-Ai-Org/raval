@@ -599,7 +599,7 @@ function OverviewPanel() {
             ) : (
               <>
                 This is your <b>AI CMO</b> view. Once you connect your site, Google &amp; Meta
-                accounts, Ravi 1.0 will summarize what moved this {rangeLabel} and recommend the
+                accounts, Mellox 1.0 will summarize what moved this {rangeLabel} and recommend the
                 next 3 moves.
               </>
             )}
@@ -1056,7 +1056,7 @@ function SocialPanel() {
               the queue below or shuffle from the calendar.
             </>
           ) : (
-            <>Ask Ravi to draft a week and schedule it — items will appear here automatically.</>
+            <>Ask Mellox to draft a week and schedule it — items will appear here automatically.</>
           )
         }
         ask={upcoming.length ? "Plan next week's social posts" : "Draft this week's content plan"}
@@ -1144,7 +1144,7 @@ function ContentPanel() {
             </>
           ) : (
             <>
-              Ask Ravi to draft an article, brief or post — new items land here as they're created.
+              Ask Mellox to draft an article, brief or post — new items land here as they're created.
             </>
           )
         }
@@ -1193,7 +1193,7 @@ function ContentPanel() {
           </ul>
         ) : (
           <p className="text-[12px] text-muted-foreground">
-            No drafts yet. Anything Ravi generates lands here first.
+            No drafts yet. Anything Mellox generates lands here first.
           </p>
         )}
       </Section>

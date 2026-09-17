@@ -31,7 +31,6 @@ import {
   Share2,
   Sparkles,
   Users,
-  Video,
   type LucideIcon,
 } from "@/components/icons";
 import {
@@ -80,6 +79,9 @@ const AiVisibilityDialog = lazy(() =>
 );
 const UgcStudioDialog = lazy(() =>
   import("@/components/app/ugc/UgcStudioDialog").then((m) => ({ default: m.UgcStudioDialog })),
+);
+const CreateLauncher = lazy(() =>
+  import("@/components/studio/CreateLauncher").then((m) => ({ default: m.CreateLauncher })),
 );
 const CompetitorWatchButton = lazy(() =>
   import("@/components/app/CompetitorWatchButton").then((m) => ({
@@ -408,16 +410,6 @@ function AppShell() {
             accent: "hsl(var(--brand-blue))",
             onClick: () => emitAppEvent("open:content-calendar"),
           })}
-          {sidebarAction({
-            icon: Video,
-            label: "UGC Video Ads",
-            hint: "New",
-            accent: "hsl(var(--brand))",
-            onClick: () => {
-              emitAppEvent("open:ugc-studio");
-              setNavOpen(false);
-            },
-          })}
         </SidebarSection>
 
         <div className="h-px bg-border/50" />
@@ -558,11 +550,6 @@ function AppShell() {
                   icon: Sparkles,
                   label: "AI Visibility",
                   onClick: () => emitAppEvent("open:ai-visibility"),
-                },
-                {
-                  icon: Video,
-                  label: "UGC Video Ads",
-                  onClick: () => emitAppEvent("open:ugc-studio"),
                 },
                 {
                   icon: BarChart3,
@@ -840,6 +827,7 @@ function AppShell() {
                 </ShareDialog>
                 <AiVisibilityDialog workspaceId={workspaceId} />
                 <UgcStudioDialog workspaceId={workspaceId} />
+                <CreateLauncher />
               </Suspense>
             </div>
           </motion.div>

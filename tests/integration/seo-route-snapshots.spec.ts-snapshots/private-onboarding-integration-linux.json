@@ -1,15 +1,15 @@
 {
   "path": "/onboarding",
   "title": "Onboard a client � Mellox AI",
-  "description": "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+  "description": "Add a new brand to your Mellox AI workspace and let Mellox build its Brand DNA, AEO/GEO baseline and first week of content.",
   "ogTitle": "Onboard a client � Mellox AI",
-  "ogDescription": "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+  "ogDescription": "Add a new brand to your Mellox AI workspace and let Mellox build its Brand DNA, AEO/GEO baseline and first week of content.",
   "ogType": "website",
   "ogSiteName": "Mellox AI",
   "ogUrl": "https://raval.ai/onboarding",
   "twitterCard": "summary_large_image",
   "twitterTitle": "Onboard a client � Mellox AI",
-  "twitterDescription": "Add a new brand to your Mellox AI workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+  "twitterDescription": "Add a new brand to your Mellox AI workspace and let Mellox build its Brand DNA, AEO/GEO baseline and first week of content.",
   "canonical": "https://raval.ai/onboarding",
   "hreflang": [],
   "robots": "noindex,nofollow",
@@ -45,5 +45,5 @@
       "inLanguage": "en"
     }
   ],
-  "approvedPhrasesPresent": ["Brand DNA", "AEO", "GEO", "Ravi", "Mellox AI"]
+  "approvedPhrasesPresent": ["Brand DNA", "AEO", "GEO", "Mellox", "Mellox AI"]
 }

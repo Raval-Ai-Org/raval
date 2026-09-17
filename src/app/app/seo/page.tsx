@@ -8,7 +8,7 @@ import { LegacyAppRedirect } from "@/components/workspace/LegacyAppRedirect";
 export const metadata: Metadata = pageMetadata({
   title: "AI Visibility · Mellox AI",
   description:
-    "SEO, AEO and GEO visibility for a brand workspace with Ravi, the Mellox AI Marketing Intelligence Layer.",
+    "SEO, AEO and GEO visibility for a brand workspace with Mellox, the Mellox AI Marketing Intelligence Layer.",
   path: "/app/seo",
   noindex: true,
 });

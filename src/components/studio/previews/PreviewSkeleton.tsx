@@ -675,7 +675,7 @@ function Signals({
   const items: { key: string; label: React.ReactNode }[] = [
     {
       key: "brand",
-      label: brandName === "Your brand" ? "Workspace context" : `${brandName} voice`,
+      label: brandName === "Your brand" ? "Brand voice" : `${brandName} voice`,
     },
     ...(template ? [{ key: "template", label: `Template · ${template.label}` }] : []),
     ...(goal ? [{ key: "goal", label: `Goal · ${goal}` }] : []),

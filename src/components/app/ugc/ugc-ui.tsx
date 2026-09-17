@@ -102,10 +102,10 @@ export function ChipGroup<T extends string>({
 
 export const STEPS = [
   { id: "product", label: "Product" },
-  { id: "brief", label: "Brief" },
-  { id: "concepts", label: "Concepts" },
+  { id: "brief", label: "Details" },
+  { id: "concepts", label: "Ideas" },
   { id: "script", label: "Script" },
-  { id: "generate", label: "Generate" },
+  { id: "generate", label: "Create video" },
 ] as const;
 export type StepId = (typeof STEPS)[number]["id"];
 

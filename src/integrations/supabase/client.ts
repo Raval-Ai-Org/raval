@@ -36,7 +36,7 @@ function createSupabaseClient() {
       "[Supabase] .env contains placeholder values (YOUR_PROJECT_REF etc.). " +
       "The dev server will start and /login will load, but authentication will " +
       "silently fail because the Supabase client is pointed at a non-existent " +
-      "project. Fix: edit raval/.env and replace the placeholders with real " +
+      "project. Fix: edit the project .env and replace the placeholders with real " +
       "credentials from 1Password or a teammate. Then restart `npm run dev`.";
     console.error(message);
     throw new Error(message);

@@ -19,9 +19,16 @@ describe("studio templates", () => {
     for (const id of ids) expect(id.length).toBeLessThanOrEqual(40);
   });
 
-  it("cover every format with at least four templates", () => {
+  it("cover every format with at least eight templates", () => {
     for (const type of STUDIO_TYPE_ORDER) {
-      expect(templatesFor(type).length).toBeGreaterThanOrEqual(4);
+      expect(templatesFor(type).length).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it("keep user-facing template words free of jargon", () => {
+    const jargon = /\b(CTA|hook|b-roll|POV|variant|listicle|beats?)\b/i;
+    for (const t of STUDIO_TEMPLATES) {
+      for (const text of [t.label, t.tagline, ...t.beats]) expect(text).not.toMatch(jargon);
     }
   });
 
@@ -54,7 +61,7 @@ describe("studio templates", () => {
     expect(templateDirective(undefined)).toBeNull();
     expect(templateDirective("nope")).toBeNull();
     const d = templateDirective("carousel-myth-fact");
-    expect(d).toContain("Follow this structure in order: Hook → Myth → Fact");
+    expect(d).toContain("Follow this structure in order: Opening → Myth → Fact");
   });
 
   it("accept a template on the job intent, and still accept none", () => {

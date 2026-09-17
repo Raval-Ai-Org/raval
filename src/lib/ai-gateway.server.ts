@@ -33,8 +33,8 @@ export const DEGRADED_TEXT_MODEL = FAST_CHAT_MODEL;
 
 /** The chat model picker's allow-list: the browser sends an id, never a model. */
 export const CHAT_MODEL_CHOICES: Record<string, string> = {
-  "ravi-flash": FAST_CHAT_MODEL,
-  "ravi-pro": CHAT_MODEL,
+  "mellox-flash": FAST_CHAT_MODEL,
+  "mellox-pro": CHAT_MODEL,
 };
 
 const REFERER = getAppUrl();

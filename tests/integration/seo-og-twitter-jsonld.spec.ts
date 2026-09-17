@@ -24,7 +24,7 @@ const DECK_TERMS = [
   /Brand DNA/i,
   /AEO/i,
   /GEO/i,
-  /Ravi/i,
+  /Mellox/i,
   /visible inside LLMs/i,
 ];
 
@@ -182,7 +182,7 @@ test.describe("JSON-LD structured data � pitch-deck messaging", () => {
     expect(app!.url).toBe(`${CANONICAL_HOST}/`);
     expect(String(app!.description)).toMatch(/Brand DNA/i);
     expect(String(app!.description)).toMatch(/AEO|GEO/i);
-    expect(String(app!.description)).toMatch(/Ravi/i);
+    expect(String(app!.description)).toMatch(/Mellox/i);
     assertNoForbidden(String(app!.description), "SoftwareApplication.description");
 
     const offers = app!.offers as Array<Record<string, unknown>> | undefined;
@@ -202,7 +202,7 @@ test.describe("JSON-LD structured data � pitch-deck messaging", () => {
     }
   });
 
-  test("landing page FAQPage covers deck concepts (AEO/GEO, Ravi, Brand DNA)", async ({
+  test("landing page FAQPage covers deck concepts (AEO/GEO, Mellox, Brand DNA)", async ({
     request,
   }) => {
     const html = await fetchHtml(request, "/");
@@ -222,7 +222,7 @@ test.describe("JSON-LD structured data � pitch-deck messaging", () => {
     expect(answerBlob).toMatch(/Marketing Intelligence Layer/i);
     expect(answerBlob).toMatch(/Brand DNA/i);
     expect(answerBlob).toMatch(/AEO\/GEO|AEO|GEO/i);
-    expect(answerBlob).toMatch(/Ravi/i);
+    expect(answerBlob).toMatch(/Mellox/i);
     expect(answerBlob).toMatch(/ChatGPT|Perplexity|Gemini|Claude/i);
 
     // Every question must have a schema-valid Answer node.

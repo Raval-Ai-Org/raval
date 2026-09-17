@@ -29,7 +29,7 @@ const DECK_TERMS = [
   /Brand DNA/i,
   /AEO/i,
   /GEO/i,
-  /Ravi/i,
+  /Mellox/i,
   /visible inside LLMs/i,
 ];
 
@@ -126,7 +126,7 @@ const ROUTES: Array<{
   {
     label: "Workspace (/workspace)",
     path: "/workspace",
-    mustContain: [/Workspace/i, /Ravi/i],
+    mustContain: [/Workspace/i, /Mellox/i],
     noindex: true,
   },
   {

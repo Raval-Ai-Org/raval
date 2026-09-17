@@ -420,7 +420,7 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
                     Brand DNA
                   </span>
                   <span className="text-[10.5px] text-muted-foreground">
-                    What Ravi knows about you
+                    What Mellox knows about you
                   </span>
                 </div>
               </div>
@@ -716,7 +716,7 @@ function OverviewHero({
       </h2>
       <p className="mt-1.5 max-w-[62ch] text-[13.5px] leading-relaxed text-muted-foreground">
         {dna.oneLiner ||
-          "Click any tile to customize your brand identity. Ravi uses this to write, design and post on your behalf."}
+          "Click any tile to customize your brand identity. Mellox uses this to write, design and post on your behalf."}
       </p>
 
       {(connectedUrl || chips.length > 0) && (
@@ -1725,10 +1725,10 @@ function TileEditor({
     identity: { title: "Brand identity", subtitle: "Name, industry, business model and about." },
     typography: {
       title: "Typography",
-      subtitle: "Display and body fonts Ravi uses in every post.",
+      subtitle: "Display and body fonts Mellox uses in every post.",
     },
     colors: { title: "Colors", subtitle: "The palette that anchors every design." },
-    voice: { title: "Voice & essentials", subtitle: "The 5 inputs Ravi uses to write like you." },
+    voice: { title: "Voice & essentials", subtitle: "The 5 inputs Mellox uses to write like you." },
     headline: { title: "Tagline & positioning", subtitle: "The story behind what you sell." },
     audience: { title: "Audience", subtitle: "Who you're for — segments and tags." },
     competitors: {
@@ -1941,7 +1941,7 @@ const NAV_META: {
     icon: ShieldCheck,
     desc: "5-item checklist + preview",
     headline: "Brand DNA essentials",
-    subhead: "The 5 inputs Ravi uses to write and design every post — with a live style preview.",
+    subhead: "The 5 inputs Mellox uses to write and design every post — with a live style preview.",
   },
   {
     key: "competitors",

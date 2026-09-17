@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 const SERIES_COLORS = ["#10b981", "#0ea5e9", "#8b5cf6", "#f59e0b", "#f43f5e"];
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
-function askRavi(prompt: string) {
+function askMellox(prompt: string) {
   emitAppEvent("chat:prefill", prompt);
   emitAppEvent("chat:focus");
 }
@@ -469,13 +469,13 @@ function ActionsList({ intelligence }: { intelligence: Intelligence }) {
               <button
                 type="button"
                 onClick={() =>
-                  askRavi(
+                  askMellox(
                     `Help me execute this marketing move from Market Brain: "${item.action}". Why it matters: ${item.reason}`,
                   )
                 }
                 className="mt-2 inline-flex min-h-8 items-center gap-1 rounded-full border border-border/70 px-2.5 text-[11px] font-semibold text-foreground/85 transition hover:bg-secondary hover:text-foreground"
               >
-                <MessageSquarePlus className="h-3 w-3" aria-hidden="true" /> Ask Ravi to plan it
+                <MessageSquarePlus className="h-3 w-3" aria-hidden="true" /> Ask Mellox to plan it
               </button>
             </div>
           </div>

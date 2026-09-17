@@ -79,7 +79,7 @@ type PexelsVideo = {
   creatorName: string;
   creatorUrl: string;
   pexelsUrl: string;
-  provider: "Pexels" | "Raval AI";
+  provider: "Pexels" | "Mellox AI";
   category: string;
   query: string;
   cachedAt: string;
@@ -183,10 +183,10 @@ function buildFallbackVideo(category: Category): PexelsVideo {
   return {
     id: Date.now() + Math.floor(Math.random() * 100000),
     videoUrl: selected,
-    creatorName: "Raval AI",
-    creatorUrl: "https://raval.ai",
-    pexelsUrl: "https://raval.ai",
-    provider: "Raval AI",
+    creatorName: "Mellox AI",
+    creatorUrl: "https://mellox.ai",
+    pexelsUrl: "https://mellox.ai",
+    provider: "Mellox AI",
     category: category.name,
     query: category.queries[0],
     cachedAt: new Date().toISOString(),

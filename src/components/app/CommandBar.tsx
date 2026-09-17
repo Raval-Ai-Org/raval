@@ -22,12 +22,13 @@ import {
   Bot,
   Zap,
   CornerDownLeft,
-  Video,
+  UserCircle2,
 } from "@/components/brand/icons";
 import { agentList } from "@/lib/agents";
 import { useAgentToggles } from "@/hooks/use-agent-toggles";
 import { emit } from "@/lib/activity-bus";
 import { STUDIO_FORMATS, STUDIO_TYPE_ORDER } from "@/lib/studio/formats";
+import { UGC_ENTRY } from "@/lib/studio/ugc-entry";
 import { TYPE_ICON } from "@/components/studio/studio-ui";
 
 const ROUTES = [
@@ -82,7 +83,6 @@ const QUICK_PROMPTS = [
 ] as const;
 
 const WORKSPACE_ACTIONS = [
-  { id: "ugc-studio", label: "Create a UGC video ad", icon: Video, event: "open:ugc-studio" },
   { id: "brand-dna", label: "Open Brand DNA memory", icon: Brain, event: "open:brand-dna" },
   { id: "tasks", label: "Open Tasks & alerts", icon: CheckSquare, event: "open:tasks" },
   { id: "autopilot", label: "Open Automations", icon: Bot, event: "open:autopilot" },
@@ -278,6 +278,24 @@ export function CommandBar() {
                   </Command.Item>
                 );
               })}
+              <Command.Item
+                value={`create ugc ${UGC_ENTRY.label} ${UGC_ENTRY.description}`}
+                onSelect={() => {
+                  setOpen(false);
+                  emitAppEvent("open:ugc-studio");
+                  emit({ kind: "nav", title: "Opened Studio · Creator video ad" });
+                }}
+                className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm data-[selected=true]:bg-secondary"
+              >
+                <UserCircle2 className="h-4 w-4 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">
+                  Create {UGC_ENTRY.noun.toLowerCase()}
+                  <span className="ml-1.5 text-xs text-muted-foreground">
+                    {UGC_ENTRY.description}
+                  </span>
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+              </Command.Item>
             </Command.Group>
 
             <Command.Group

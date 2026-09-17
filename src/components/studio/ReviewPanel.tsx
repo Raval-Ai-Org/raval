@@ -342,7 +342,7 @@ export function ReviewPanel({
       setEditing(false);
       emitAppEvent("content:changed");
       toast.success("Changes saved", {
-        description: approvable ? undefined : "Edited work goes back to Needs Approval.",
+        description: approvable ? undefined : "Edited work goes back for approval.",
       });
       return true;
     } catch (e) {
@@ -677,7 +677,8 @@ export function ReviewPanel({
           : {
               key: "media",
               state: "fail",
-              label: media.kind === "video" ? "Video didn't render" : "Visual didn't render",
+              label:
+                media.kind === "video" ? "Video couldn't be created" : "Image couldn't be created",
               action: (
                 <button
                   type="button"
@@ -961,7 +962,7 @@ export function ReviewPanel({
                   className={TOOL}
                   onClick={() => void generate(session.id, { kind: "regenerate" })}
                   disabled={revising || locked}
-                  title="Same brief, a fresh take"
+                  title="Same description, a new version"
                 >
                   <RefreshCw />
                   <span className="hidden sm:inline">New take</span>

@@ -187,7 +187,7 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
                 What is changing in your market?
               </h2>
               <p className="mt-1 max-w-[52ch] text-[12px] leading-relaxed text-muted-foreground">
-                Ravi turns measured search interest into your next marketing move.
+                Mellox turns measured search interest into your next marketing move.
               </p>
             </div>
             <motion.button

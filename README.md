@@ -129,8 +129,8 @@ Full details on what's in the file, what each value does, and what to do if a se
 Cross-platform — same commands on Linux, macOS, and Windows PowerShell.
 
 ```bash
-git clone https://github.com/Raval-Ai-Org/raval.git
-cd raval
+git clone https://github.com/Mellox-AI/mellox.git
+cd mellox
 npm run setup                    # creates .env from .env.example if missing
 # Edit .env — replace the YOUR_* placeholders with real credentials.
 # Get the values from a teammate (Junaid) or from 1Password.

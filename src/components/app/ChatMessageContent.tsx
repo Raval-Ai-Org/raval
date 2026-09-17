@@ -129,11 +129,7 @@ function ChatMessageContentInner({
         </div>
       );
     }
-    return (
-      <div className="whitespace-pre-wrap break-words font-medium tracking-[-0.005em]">
-        {content}
-      </div>
-    );
+    return <div className="whitespace-pre-wrap break-words">{content}</div>;
   }
 
   return (

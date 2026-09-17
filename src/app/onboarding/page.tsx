@@ -8,7 +8,7 @@ import { LegacyAppRedirect } from "@/components/workspace/LegacyAppRedirect";
 export const metadata: Metadata = pageMetadata({
   title: "Set Up Your Workspace · Mellox AI",
   description:
-    "Set up a brand workspace and let Ravi build its Brand DNA, AEO/GEO baseline and first week of content.",
+    "Set up a brand workspace and let Mellox build its Brand DNA, AEO/GEO baseline and first week of content.",
   path: "/onboarding",
   noindex: true,
 });

@@ -287,7 +287,7 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
               </div>
               <div className="mt-0.5 text-[11.5px] leading-snug text-destructive/85">{error}</div>
               <div className="mt-1 text-[11px] leading-snug text-destructive/70">
-                Tip: check your connection, then retry. If this keeps happening, ask Ravi in chat
+                Tip: check your connection, then retry. If this keeps happening, ask Mellox in chat
                 and I'll run the scan manually.
               </div>
               <div className="mt-2 flex items-center gap-2">
@@ -307,7 +307,7 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
                   }
                   className="text-[11px] font-medium text-destructive/85 underline underline-offset-2 hover:text-destructive"
                 >
-                  Ask Ravi instead
+                  Ask Mellox instead
                 </button>
               </div>
             </div>
@@ -722,7 +722,7 @@ function CoachBody({
         <div className="min-w-0 flex-1">
           <div className="truncate text-[11.5px] font-medium text-foreground">Need a decision?</div>
           <div className="truncate text-[10.5px] text-muted-foreground">
-            Ask Ravi to turn this brief into your next move.
+            Ask Mellox to turn this brief into your next move.
           </div>
         </div>
         <button
@@ -734,7 +734,7 @@ function CoachBody({
           }
           className="inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground px-2.5 py-1.5 text-[10.5px] font-semibold text-background transition hover:opacity-90"
         >
-          Ask Ravi <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+          Ask Mellox <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
         </button>
       </div>
 
@@ -767,7 +767,7 @@ function CoachBody({
             <EmptyState
               icon={Sparkles}
               title="You're all clear for today"
-              body="No new wins or watch-outs since your last scan. Ship the focus above, then check the Checklist or ask Ravi for a fresh sweep."
+              body="No new wins or watch-outs since your last scan. Ship the focus above, then check the Checklist or ask Mellox for a fresh sweep."
               action={{
                 label: "Run a fresh scan",
                 prompt: "Scan my brand, competitors and market and tell me what's changed today.",
@@ -1132,7 +1132,7 @@ const WALKTHROUGH_STEPS: {
   tab?: "today" | "checklist" | "competitors" | "market" | "plays" | "week" | "notes";
 }[] = [
   {
-    title: "Meet Ravi, your marketing coach",
+    title: "Meet Mellox, your marketing coach",
     body: "Every morning I scan your brand, competitors and market — then pull the signals that matter into one place.",
     tab: "today",
   },

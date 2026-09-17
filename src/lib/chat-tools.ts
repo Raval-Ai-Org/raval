@@ -8,18 +8,24 @@
 //   [[action:save-memory title="Brand uses 'workspace' not 'team'" body="..."]]
 //   [[action:schedule title="Weekly newsletter" when="2026-07-02T09:00:00Z" canvas="email" channel="email"]]
 //
-// THE APPROVAL BOUNDARY: tags are parsed out of model output, and model output
+// NOTHING RUNS BY ITSELF. Tags are parsed out of model output, and model output
 // can be steered by text the model read (scraped pages, competitor copy, files).
-// So only NAVIGATION tags run automatically. Anything that changes data or
-// spends money — `save-memory` (persists into every later prompt), `schedule`
-// (creates content), `audit` (a billable crawl) — is shown as a suggestion the
-// user approves or dismisses, one action at a time. An approved `schedule`
-// creates a `pending` draft in the approval queue; it never schedules or
-// publishes anything by itself.
+// Opening a window over the conversation is also a poor experience. So:
+//   - Navigation tags (`open-*`) become buttons under the reply; the user clicks
+//     to open that part of the app.
+//   - `open-studio` becomes a "Create in Studio" button that starts the work in
+//     the Studio side panel (no composer pop-up). When the USER's own message
+//     asked to make something, the chat starts it directly (chat-intent.ts).
+//   - Anything that changes data or spends money — `save-memory` (persists into
+//     every later prompt), `schedule` (creates content), `audit` (a billable
+//     crawl) — is a suggestion the user approves or dismisses. An approved
+//     `schedule` creates a `pending` draft in the approval queue; it never
+//     schedules or publishes anything by itself.
 
 import { emitAppEvent } from "@/lib/app-events";
 import { normalizeStudioType, STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { supabase } from "@/integrations/supabase/client";
+import { detectStudioType } from "@/lib/studio/detect";
 
 export type ChatToolKind =
   | "audit"
@@ -45,6 +51,8 @@ export interface ChatToolResult {
   label: string;
   ok: boolean;
   detail?: string;
+  /** Studio session started by this action (open-studio), for the chat's progress card. */
+  sessionId?: string;
 }
 
 const KNOWN_KINDS = new Set<ChatToolKind>([
@@ -61,7 +69,7 @@ const KNOWN_KINDS = new Set<ChatToolKind>([
   "schedule",
 ]);
 
-/** Actions that change data or spend money: shown for approval, never auto-run. */
+/** Actions that change data or spend money: shown for approval with an explanation. */
 const GATED_KINDS = new Set<ChatToolKind>(["audit", "save-memory", "schedule"]);
 
 export function requiresApproval(kind: ChatToolKind): boolean {
@@ -88,6 +96,37 @@ export function describeSuggestion(call: ChatToolCall): { title: string; effect:
       };
     default:
       return { title: call.kind, effect: "" };
+  }
+}
+
+/** Button text and short description for a navigation / create offer. */
+export function describeOffer(call: ChatToolCall): { label: string; hint?: string } {
+  switch (call.kind) {
+    case "open-studio": {
+      const canvas = resolveCanvas(call.params.canvas);
+      return call.params.brief || call.params.prompt
+        ? {
+            label: canvas ? `Create ${STUDIO_FORMATS[canvas].noun} in Studio` : "Create in Studio",
+            hint: (call.params.brief || call.params.prompt).slice(0, 140),
+          }
+        : { label: "Open Create" };
+    }
+    case "open-memory":
+      return { label: "Open Brand DNA" };
+    case "open-calendar":
+      return { label: "Open content calendar" };
+    case "open-clients":
+      return { label: "Open client portal" };
+    case "open-visibility":
+      return { label: "Open AI Visibility" };
+    case "open-competitor":
+      return { label: "Open Competitor Watch" };
+    case "open-coach":
+      return { label: "Open Marketing Coach" };
+    case "open-operations":
+      return { label: "Open Operations" };
+    default:
+      return { label: call.kind };
   }
 }
 
@@ -154,16 +193,28 @@ export async function executeToolCall(
       return { kind: call.kind, ok: true, label: "Running AI visibility audit" };
     }
     case "open-studio": {
-      const canvas = resolveCanvas(call.params.canvas) ?? "social";
-      const brief = (call.params.brief || call.params.prompt || "").slice(0, 4000);
-      // The brief travels with the event; the composer opens on it for review
-      // before anything is generated.
-      emitAppEvent("open:canvas", { type: canvas, brief: brief || undefined });
+      const brief = (call.params.brief || call.params.prompt || "").trim().slice(0, 4000);
+      const canvas =
+        resolveCanvas(call.params.canvas) ?? (brief ? detectStudioType(brief) : null) ?? "social";
+      if (brief.length < 3) {
+        emitAppEvent("open:create-launcher");
+        return { kind: call.kind, ok: true, label: "Opened Create" };
+      }
+      // Clicked by the user: start in the Studio side panel, no composer pop-up.
+      const { startInBackground } = await import("@/lib/studio/session-store");
+      const sessionId = startInBackground({
+        workspaceId: ctx.workspaceId,
+        type: canvas,
+        brief,
+        origin: "chat",
+      });
+      if (!sessionId) return { kind: call.kind, ok: false, label: "Couldn't start in Studio" };
+      emitAppEvent("open:studio");
       return {
         kind: call.kind,
         ok: true,
-        label: `Opening Studio · ${STUDIO_FORMATS[canvas].label}`,
-        detail: brief ? "brief prefilled" : undefined,
+        label: `Creating ${STUDIO_FORMATS[canvas].noun} in Studio`,
+        sessionId,
       };
     }
     case "open-memory": {
@@ -171,7 +222,7 @@ export async function executeToolCall(
       return { kind: call.kind, ok: true, label: "Opening Memory" };
     }
     case "open-calendar": {
-      emitAppEvent("open:analytics", { tab: "calendar" });
+      emitAppEvent("open:content-calendar");
       return { kind: call.kind, ok: true, label: "Opening Content Calendar" };
     }
     case "open-clients": {

@@ -25,8 +25,8 @@ import {
 } from "./jobs";
 
 export type ComposerWindow = "open" | "maximized" | "minimized";
-/** start → pick a format (or an idea); intent → brief + settings; then generate → review. */
-export type SessionStep = "start" | "intent" | "generating" | "review";
+/** intent → description + settings; then generating → review. Formats are picked in the Create launcher. */
+export type SessionStep = "intent" | "generating" | "review";
 
 export type StudioSession = {
   id: string;
@@ -49,6 +49,8 @@ export type StudioSession = {
   pendingKind: "generate" | "regenerate" | "refine" | null;
   error: string | null;
   window: ComposerWindow;
+  /** Where the work started. Chat-started work shows in the chat and rail, not the dock. */
+  origin?: "chat" | "studio";
   createdAt: number;
   updatedAt: number;
 };
@@ -114,6 +116,8 @@ function hydrate() {
         ...state,
         sessions: sessions.map((s) => ({
           ...s,
+          // Sessions saved on the retired start screen resume on the description.
+          step: (s.step as string) === "start" ? "intent" : s.step,
           window: s.window === "minimized" ? "minimized" : "minimized",
         })),
         activeId: null,
@@ -294,18 +298,17 @@ export function openComposer(
     });
     return null;
   }
-  // Without a format (⌘J, the rail's Create button) Studio opens on the start
-  // screen so the choice of format and idea comes first.
+  // The format is chosen before a composer opens (Create launcher, chat, links);
+  // without one, fall back to the last format used.
   const type = opts.type ?? storedLastType() ?? "social";
-  // With a brief there's work to do: callers generate straight away. Without
-  // one, Studio opens on the prompt box with the format pre-selected.
-  const step: SessionStep = opts.brief ? "intent" : "start";
+  const step: SessionStep = "intent";
 
   // Reuse an untouched session instead of stacking empty ones.
   const reusable = state.sessions.find(
     (s) =>
       s.workspaceId === workspaceId &&
-      (step === "start" ? s.step === "start" : s.type === type && s.step === "intent") &&
+      s.type === type &&
+      s.step === step &&
       !s.brief.trim() &&
       !s.job,
   );
@@ -351,6 +354,47 @@ export function openComposer(
     .filter((s) => s.id !== session.id)
     .map((s) => (s.window === "minimized" ? s : { ...s, window: "minimized" as const }));
   setState({ sessions: [session, ...others].slice(0, MAX_SESSIONS), activeId: session.id });
+  return session.id;
+}
+
+/**
+ * Start creating without opening the composer — the chat's "make me a …" path.
+ * The session is created minimized (the Studio rail and the chat card show its
+ * progress), an open composer is left alone, and generation starts at once.
+ * Returns the session id, or null when there is no workspace or brief.
+ */
+export function startInBackground(opts: {
+  workspaceId: string;
+  type: StudioType;
+  brief: string;
+  goal?: GoalId;
+  platforms?: PlatformId[];
+  origin?: StudioSession["origin"];
+}): string | null {
+  hydrate();
+  const brief = opts.brief.trim().slice(0, 4000);
+  if (!opts.workspaceId || brief.length < 3) return null;
+  const now = Date.now();
+  const session: StudioSession = {
+    id: `s-${now.toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    workspaceId: opts.workspaceId,
+    type: opts.type,
+    step: "intent",
+    brief,
+    goal: opts.goal,
+    controls: defaultControls(opts.type, opts.platforms),
+    job: null,
+    lastGood: null,
+    pendingKey: null,
+    pendingKind: null,
+    error: null,
+    window: "minimized",
+    origin: opts.origin ?? "chat",
+    createdAt: now,
+    updatedAt: now,
+  };
+  setState({ sessions: [session, ...state.sessions].slice(0, MAX_SESSIONS) });
+  void generate(session.id, { kind: "generate" });
   return session.id;
 }
 
@@ -522,11 +566,6 @@ export function chooseType(
       seed.template ?? (s.type === type && templateFits(s.template, type) ? s.template : undefined),
     error: null,
   }));
-}
-
-/** Brief → start screen, to pick a different format. */
-export function backToStart(id: string) {
-  patchSession(id, (s) => (s.job || s.lastGood ? {} : { step: "start", error: null }));
 }
 
 export function backToBrief(id: string) {

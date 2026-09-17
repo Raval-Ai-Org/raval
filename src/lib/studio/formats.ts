@@ -5,7 +5,8 @@ import { IMAGE_RATIOS, VIDEO_RATIOS, type AspectRatio } from "./aspect";
 
 export type StudioType = "social" | "image" | "carousel" | "video" | "article" | "script" | "ad";
 
-export type StudioGroup = "posts" | "visuals" | "video" | "longform";
+/** How Create groups formats by what they produce: video, picture, text, or ads. */
+export type StudioGroup = "video" | "picture" | "text" | "ads";
 
 export type StageId =
   "context" | "angle" | "outline" | "writing" | "brief" | "render" | "save" | "captions" | "polish";
@@ -19,6 +20,8 @@ export type StudioFormat = {
   /** Singular noun for sentences: "Your carousel is ready". */
   noun: string;
   description: string;
+  /** A few words for compact pickers. */
+  tagline: string;
   /** content_items.kind the output is stored as. */
   kind: "post" | "image" | "carousel" | "video" | "blog" | "script" | "ad";
   agent: "echo" | "spark" | "scout";
@@ -46,19 +49,20 @@ const SOCIAL_PLATFORMS: PlatformId[] = [
 ];
 
 export const STUDIO_GROUPS: { id: StudioGroup; label: string; types: StudioType[] }[] = [
-  { id: "posts", label: "Posts", types: ["social", "carousel"] },
-  { id: "visuals", label: "Visuals", types: ["image", "ad"] },
   { id: "video", label: "Video", types: ["video", "script"] },
-  { id: "longform", label: "Long-form", types: ["article"] },
+  { id: "picture", label: "Picture", types: ["image", "carousel"] },
+  { id: "text", label: "Text", types: ["social", "article"] },
+  { id: "ads", label: "Ads", types: ["ad"] },
 ];
 
 export const STUDIO_FORMATS: Record<StudioType, StudioFormat> = {
   social: {
     id: "social",
-    group: "posts",
+    group: "text",
     label: "Social post",
     noun: "post",
-    description: "Native copy for each platform, with an optional visual.",
+    description: "Text written for each social platform, with an optional image.",
+    tagline: "Captions for your social channels",
     kind: "post",
     agent: "echo",
     platforms: SOCIAL_PLATFORMS,
@@ -68,19 +72,20 @@ export const STUDIO_FORMATS: Record<StudioType, StudioFormat> = {
     media: "optional-image",
     estimate: "About 20 seconds",
     stages: [
-      { id: "context", label: "Reading your brand and recent posts" },
-      { id: "angle", label: "Choosing a fresh angle" },
-      { id: "writing", label: "Writing a native version per platform" },
-      { id: "polish", label: "Checking limits and polishing" },
+      { id: "context", label: "Reading your brand" },
+      { id: "angle", label: "Picking the best idea" },
+      { id: "writing", label: "Writing a version for each platform" },
+      { id: "polish", label: "Final checks" },
     ],
-    placeholder: "What should this post make people think, feel, or do?",
+    placeholder: "e.g. Tell people about our new summer menu and invite them to visit this weekend",
   },
   carousel: {
     id: "carousel",
-    group: "posts",
+    group: "picture",
     label: "Carousel",
     noun: "carousel",
-    description: "A swipeable multi-slide story with a hook, value, and a CTA.",
+    description: "Several slides people swipe through, with a caption.",
+    tagline: "Swipeable slides",
     kind: "carousel",
     agent: "echo",
     platforms: ["instagram", "linkedin", "facebook"],
@@ -90,19 +95,20 @@ export const STUDIO_FORMATS: Record<StudioType, StudioFormat> = {
     media: "optional-image",
     estimate: "About 30 seconds",
     stages: [
-      { id: "context", label: "Reading your brand and recent posts" },
-      { id: "outline", label: "Structuring the slide story" },
+      { id: "context", label: "Reading your brand" },
+      { id: "outline", label: "Planning the slides" },
       { id: "writing", label: "Writing slides and caption" },
-      { id: "polish", label: "Designing slides" },
+      { id: "polish", label: "Designing the slides" },
     ],
-    placeholder: "What should someone understand after the last slide?",
+    placeholder: "e.g. 5 simple ways to save money on your energy bill",
   },
   image: {
     id: "image",
-    group: "visuals",
+    group: "picture",
     label: "Image post",
     noun: "image",
-    description: "An on-brand visual first, with captions written to match it.",
+    description: "An image in your brand style, with a matching caption.",
+    tagline: "An image with a caption",
     kind: "image",
     agent: "spark",
     platforms: SOCIAL_PLATFORMS,
@@ -113,19 +119,20 @@ export const STUDIO_FORMATS: Record<StudioType, StudioFormat> = {
     estimate: "Usually under a minute",
     stages: [
       { id: "context", label: "Reading your brand" },
-      { id: "brief", label: "Building the creative brief" },
+      { id: "brief", label: "Planning the image" },
       { id: "captions", label: "Writing captions to match" },
-      { id: "render", label: "Rendering the visual" },
+      { id: "render", label: "Creating the image" },
       { id: "save", label: "Saving to your Library" },
     ],
-    placeholder: "Describe the idea or moment the visual should capture.",
+    placeholder: "e.g. Our iced coffee on a sunny café table, with a caption about the heatwave",
   },
   ad: {
     id: "ad",
-    group: "visuals",
-    label: "Ad creative",
+    group: "ads",
+    label: "Ad",
     noun: "ad",
-    description: "Paid-social copy variants to test, with a visual sized for the placement.",
+    description: "Ad text and an image, in a few versions to test.",
+    tagline: "Ad copy and a visual to test",
     kind: "ad",
     agent: "spark",
     platforms: ["facebook", "instagram", "linkedin"],
@@ -135,20 +142,21 @@ export const STUDIO_FORMATS: Record<StudioType, StudioFormat> = {
     media: "image",
     estimate: "About a minute",
     stages: [
-      { id: "context", label: "Reading your brand and offer" },
-      { id: "angle", label: "Choosing test angles" },
-      { id: "writing", label: "Writing ad variants" },
-      { id: "render", label: "Rendering the ad visual" },
+      { id: "context", label: "Reading your brand" },
+      { id: "angle", label: "Picking ideas to test" },
+      { id: "writing", label: "Writing ad versions" },
+      { id: "render", label: "Creating the ad image" },
       { id: "save", label: "Saving to your Library" },
     ],
-    placeholder: "What are you promoting, and what should people do after seeing it?",
+    placeholder: "e.g. 20% off our online course for small business owners, ends Friday",
   },
   video: {
     id: "video",
     group: "video",
-    label: "Video post",
+    label: "AI video",
     noun: "video",
-    description: "A short generated video with platform captions.",
+    description: "A short AI-made video with captions.",
+    tagline: "A short AI video",
     kind: "video",
     agent: "spark",
     platforms: ["instagram", "tiktok", "youtube", "linkedin", "facebook", "twitter"],
@@ -159,19 +167,20 @@ export const STUDIO_FORMATS: Record<StudioType, StudioFormat> = {
     estimate: "Usually 1–3 minutes",
     stages: [
       { id: "context", label: "Reading your brand" },
-      { id: "brief", label: "Planning the shots" },
+      { id: "brief", label: "Planning the scenes" },
       { id: "captions", label: "Writing captions" },
-      { id: "render", label: "Rendering the video" },
+      { id: "render", label: "Creating the video" },
       { id: "save", label: "Saving to your Library" },
     ],
-    placeholder: "What happens in the video, and what should viewers take away?",
+    placeholder: "e.g. A slow close-up of our handmade candle being lit in a cosy room",
   },
   script: {
     id: "script",
     group: "video",
-    label: "Short-form script",
-    noun: "script",
-    description: "A Reel, TikTok, or Shorts script: hook, beats, on-screen text, CTA.",
+    label: "Video script",
+    noun: "video script",
+    description: "What to say and show in a Reel, TikTok or Short.",
+    tagline: "What to say and show in a short video",
     kind: "script",
     agent: "spark",
     platforms: ["instagram", "tiktok", "youtube"],
@@ -181,19 +190,20 @@ export const STUDIO_FORMATS: Record<StudioType, StudioFormat> = {
     media: "none",
     estimate: "About 20 seconds",
     stages: [
-      { id: "context", label: "Reading your brand and recent posts" },
-      { id: "angle", label: "Finding the hook" },
-      { id: "writing", label: "Writing the beats" },
-      { id: "polish", label: "Tightening for time" },
+      { id: "context", label: "Reading your brand" },
+      { id: "angle", label: "Writing the opening" },
+      { id: "writing", label: "Writing the scenes" },
+      { id: "polish", label: "Fitting it to time" },
     ],
-    placeholder: "What's the one idea this video should land in under a minute?",
+    placeholder: "e.g. A 30-second video showing 3 quick tips for better sleep",
   },
   article: {
     id: "article",
-    group: "longform",
-    label: "Article",
+    group: "text",
+    label: "Blog article",
     noun: "article",
-    description: "A structured, readable blog article with a title, outline, and takeaways.",
+    description: "A full blog article with a title and clear sections.",
+    tagline: "A blog article",
     kind: "blog",
     agent: "spark",
     platforms: [],
@@ -203,12 +213,12 @@ export const STUDIO_FORMATS: Record<StudioType, StudioFormat> = {
     media: "none",
     estimate: "About 45 seconds",
     stages: [
-      { id: "context", label: "Reading your brand and published work" },
-      { id: "outline", label: "Outlining the argument" },
+      { id: "context", label: "Reading your brand" },
+      { id: "outline", label: "Planning the sections" },
       { id: "writing", label: "Writing the article" },
-      { id: "polish", label: "Editing for clarity" },
+      { id: "polish", label: "Editing" },
     ],
-    placeholder: "What question does this article answer for your audience?",
+    placeholder: "e.g. How to choose the right running shoes as a beginner",
   },
 };
 

@@ -6,7 +6,7 @@ import type { MetadataRoute } from "next";
 const ORIGIN = (
   process.env.APP_URL ||
   process.env.NEXT_PUBLIC_APP_URL ||
-  "https://raval.ai"
+  "https://mellox.ai"
 ).replace(/\/+$/, "");
 
 export default function robots(): MetadataRoute.Robots {

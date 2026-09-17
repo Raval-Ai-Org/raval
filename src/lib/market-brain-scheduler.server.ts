@@ -107,7 +107,7 @@ export async function ensureMarketBrainSchedule(
     workspace_id: args.workspaceId,
     title: MARKET_BRAIN_TITLE,
     task_type: MARKET_BRAIN_TASK_TYPE,
-    agent: "ravi",
+    agent: "mellox",
     cadence: "daily",
     timezone: "UTC",
     next_run_at: nextRunAt(DAILY_COLLECTION_INTERVAL_MS),

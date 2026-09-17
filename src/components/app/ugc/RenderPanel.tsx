@@ -191,14 +191,8 @@ export function RenderPanel({
                 title={
                   render.status === "cancelled" ? "Render cancelled" : "This render didn't work"
                 }
-                description={
-                  render.errorMessage ?? "The video provider couldn't finish this render."
-                }
-                detail={
-                  render.allowanceReturned
-                    ? "Your video allowance for this render was returned."
-                    : undefined
-                }
+                description={render.errorMessage ?? "The video couldn't be finished."}
+                detail={render.allowanceReturned ? "Your video credit was returned." : undefined}
                 onRetry={onRegenerate}
                 retryLabel="Try again"
               />

@@ -33,7 +33,7 @@ const COPY: Record<ScanPhase, { title: string; footnote: string; activity: strin
     ],
   },
   analyzing: {
-    title: "Ravi is analyzing your market…",
+    title: "Mellox is analyzing your market…",
     footnote: "Trend data collected. Analysis usually takes under a minute.",
     activity: [
       "Separating measured evidence from interpretation…",
@@ -284,7 +284,7 @@ function ProgressBar({ value }: { value: number }) {
 /**
  * Placeholder for the result layout while a scan runs: the whole layout during
  * collection, or just the summary / detail slots around the already-visible
- * trend chart while Ravi analyzes it.
+ * trend chart while Mellox analyzes it.
  */
 export function ResultsSkeleton({
   variant = "full",
