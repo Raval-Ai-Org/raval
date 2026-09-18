@@ -1,8 +1,16 @@
 "use client";
 
+// AnalyticsContent — the unified analytics surface (ADR-0015). Sections:
+//   Overview        every source side by side (never blended)
+//   Website         Google Analytics 4
+//   Search          Google Search Console
+//   Content         Mellox content pipeline + social performance
+//   AI Visibility   Mellox scan score
+//   Insights        deterministic changes + cached AI explanations
+//   Automations     background agents
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
-import { useEffect, useState, createContext, useContext, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@/lib/use-server-fn";
 import {
@@ -13,31 +21,18 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
   Legend,
 } from "recharts";
 import {
-  Sparkles,
   TrendingUp,
   TrendingDown,
-  Search,
-  Share2,
-  Users,
   ArrowUpRight,
-  Activity,
   AlertCircle,
-  AlertTriangle,
-  Info,
-  ChevronDown,
   FileText,
   RefreshCcw,
   WifiOff,
   Loader2,
-} from "@/components/ui/gemini-icons";
+} from "@/components/icons";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -56,93 +51,31 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { AiVisibilityPanel } from "@/components/app/analytics/AiVisibilityPanel";
+import { useAnalyticsInvalidation } from "@/components/app/analytics/hooks";
+import { InsightsPanel } from "@/components/app/analytics/InsightsPanel";
+import { OverviewPanel } from "@/components/app/analytics/OverviewPanel";
+import { AnalyticsRangeProvider, RangeBar, useAnalyticsRange } from "@/components/app/analytics/range";
+import { SearchPanel } from "@/components/app/analytics/SearchPanel";
+import { SourceBadge } from "@/components/app/analytics/ui";
+import { WebsitePanel } from "@/components/app/analytics/WebsitePanel";
 
-/** The workspace this page acts on (from the route) — never browser storage. */
 function useActiveWorkspaceId(): string | null {
   return useOptionalWorkspaceId();
 }
-
-/* -------------------- Date range (weekly / monthly / quarterly) -------------------- */
-
-export type RangeDays = 7 | 30 | 90;
-const RANGE_STORAGE_KEY = "analytics:range-days";
-const RANGE_OPTIONS: { label: string; sub: string; value: RangeDays }[] = [
-  { label: "Weekly", sub: "7d", value: 7 },
-  { label: "Monthly", sub: "30d", value: 30 },
-  { label: "Quarterly", sub: "90d", value: 90 },
-];
-
-const RangeContext = createContext<{ days: RangeDays; setDays: (d: RangeDays) => void }>({
-  days: 30,
-  setDays: () => {},
-});
-
-function RangeProvider({ children }: { children: React.ReactNode }) {
-  const [days, setDaysState] = useState<RangeDays>(30);
-  useEffect(() => {
-    const raw = Number(localStorage.getItem(RANGE_STORAGE_KEY));
-    if (raw === 7 || raw === 30 || raw === 90) setDaysState(raw);
-  }, []);
-  const value = useMemo(
-    () => ({
-      days,
-      setDays: (d: RangeDays) => {
-        setDaysState(d);
-        try {
-          localStorage.setItem(RANGE_STORAGE_KEY, String(d));
-        } catch {
-          /* ignore */
-        }
-      },
-    }),
-    [days],
-  );
-  return <RangeContext.Provider value={value}>{children}</RangeContext.Provider>;
-}
-
+/** The shared analytics range, plus its length in days for day-based widgets. */
 function useRangeDays() {
-  return useContext(RangeContext);
-}
-
-function RangePicker() {
-  const { days, setDays } = useRangeDays();
-  return (
-    <div
-      role="tablist"
-      aria-label="Date range"
-      className="inline-flex items-center rounded-full border border-border bg-card/80 p-0.5 text-[11.5px]"
-    >
-      {RANGE_OPTIONS.map((opt) => {
-        const active = days === opt.value;
-        return (
-          <button
-            key={opt.value}
-            role="tab"
-            aria-selected={active}
-            onClick={() => setDays(opt.value)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium transition ${
-              active
-                ? "bg-foreground text-background shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span>{opt.label}</span>
-            <span className={active ? "opacity-70" : "opacity-60"}>· {opt.sub}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
+  return useAnalyticsRange();
 }
 
 function useAnalyticsSummary(workspaceId: string | null) {
-  const { days } = useRangeDays();
+  const { range, key } = useRangeDays();
   const fetcher = useServerFn(getAnalyticsSummary);
   const qc = useQueryClient();
   const query = useQuery<AnalyticsSummary>({
-    queryKey: ["analytics-summary", workspaceId, days],
+    queryKey: ["analytics-summary", workspaceId, key],
     enabled: !!workspaceId,
-    queryFn: () => fetcher({ data: { workspaceId: workspaceId as string, days } }),
+    queryFn: () => fetcher({ data: { workspaceId: workspaceId as string, range } }),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     retry: 2,
@@ -165,10 +98,10 @@ function useAnalyticsSummary(workspaceId: string | null) {
 type DrillTarget = { dimension: "channel" | "agent" | "kind"; value: string } | null;
 
 function useDrilldown(workspaceId: string | null, target: DrillTarget) {
-  const { days } = useRangeDays();
+  const { range, key } = useRangeDays();
   const fetcher = useServerFn(getAnalyticsDrilldown);
   return useQuery<DrilldownItem[]>({
-    queryKey: ["analytics-drilldown", workspaceId, target?.dimension, target?.value, days],
+    queryKey: ["analytics-drilldown", workspaceId, target?.dimension, target?.value, key],
     enabled: !!workspaceId && !!target,
     queryFn: () =>
       fetcher({
@@ -176,7 +109,7 @@ function useDrilldown(workspaceId: string | null, target: DrillTarget) {
           workspaceId: workspaceId as string,
           dimension: (target as { dimension: "channel" | "agent" | "kind" }).dimension,
           value: (target as { value: string }).value,
-          days,
+          range,
           limit: 100,
         },
       }),
@@ -300,7 +233,7 @@ function DrilldownDialog({
   onClose: () => void;
 }) {
   const { data, isLoading, error, isFetching, refetch } = useDrilldown(workspaceId, target);
-  const { days } = useRangeDays();
+  const { label } = useRangeDays();
   const open = !!target;
   return (
     <Dialog
@@ -315,7 +248,7 @@ function DrilldownDialog({
             {target?.dimension}: {target?.value}
           </DialogTitle>
           <DialogDescription>
-            Content items in the last {days} days for this {target?.dimension}.
+            Content items for this {target?.dimension} · {label}.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto">
@@ -451,34 +384,24 @@ function PanelIntro({
 export function AnalyticsContent({
   tab,
   onTabChange,
-  showHeader = true,
 }: {
   tab: AnalyticsTab;
   onTabChange: (t: AnalyticsTab) => void;
+  /** Kept for callers; the range bar always shows. */
   showHeader?: boolean;
 }) {
+  useAnalyticsInvalidation();
   return (
-    <RangeProvider>
-      <div className="mx-auto w-full max-w-6xl space-y-5 p-3 pb-16 sm:p-5 lg:p-6">
-        {showHeader && (
-          <motion.header {...fade(0)} className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Everything your AI team is moving — across organic, AI, social, and content.
-              </p>
+    <AnalyticsRangeProvider>
+      <div className="mx-auto w-full max-w-6xl space-y-4 p-3 pb-16 sm:p-5 lg:p-6">
+        <div className="flex flex-col gap-2">
+          <AnalyticsTabs value={tab} onChange={onTabChange} />
+          {tab !== "automations" && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <RangeBar />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <RangePicker />
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/80 px-3 py-1.5 text-[11px] text-muted-foreground">
-                <Activity className="h-3 w-3 text-aura" />
-                Auto-updated
-              </div>
-            </div>
-          </motion.header>
-        )}
-
-        <AnalyticsTabs value={tab} onChange={onTabChange} />
+          )}
+        </div>
 
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -489,592 +412,219 @@ export function AnalyticsContent({
             transition={{ duration: 0.22, ease: EASE }}
             className="space-y-5"
           >
-            {tab === "overview" && <OverviewPanel />}
-            {tab === "organic" && <OrganicPanel />}
-            {tab === "social" && <SocialPanel />}
+            {tab === "overview" && <OverviewPanel onTabChange={onTabChange} />}
+            {tab === "website" && <WebsitePanel />}
+            {tab === "search" && <SearchPanel />}
             {tab === "content" && <ContentPanel />}
-            {tab === "audience" && <AudiencePanel />}
+            {tab === "ai-visibility" && <AiVisibilityPanel />}
+            {tab === "insights" && <InsightsPanel />}
             {tab === "automations" && <AutomationsTabPanel />}
           </motion.div>
         </AnimatePresence>
       </div>
-    </RangeProvider>
+    </AnalyticsRangeProvider>
   );
 }
 
-/* -------------------- Overview -------------------- */
+/* -------------------- Content (Mellox) -------------------- */
 
-function OverviewPanel() {
+function ContentPanel() {
   const workspaceId = useActiveWorkspaceId();
   const query = useAnalyticsSummary(workspaceId);
-  const { data, isLoading } = query;
-  const { days } = useRangeDays();
-  const rangeLabel = days === 7 ? "week" : days === 30 ? "month" : "quarter";
-
+  const { data } = query;
+  const { days, label } = useRangeDays();
   const [drill, setDrill] = useState<DrillTarget>(null);
-
   const t = data?.totals;
   const d = data?.deltas;
-  const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}`);
   const pct = (n: number | undefined) => (n === undefined ? "—" : `${n > 0 ? "+" : ""}${n}%`);
-
-  const liveKpis = [
+  const kpis = [
+    { label: "Created", value: t?.items ?? 0, delta: pct(d?.items), positive: (d?.items ?? 0) >= 0 },
     {
-      label: "Content items",
-      value: fmt(t?.items ?? 0),
-      delta: pct(d?.items),
-      positive: (d?.items ?? 0) >= 0,
-    },
-    {
-      label: `Published (${days}d)`,
-      value: fmt(t?.published ?? 0),
+      label: "Published",
+      value: t?.published ?? 0,
       delta: pct(d?.published),
       positive: (d?.published ?? 0) >= 0,
     },
+    { label: "Scheduled", value: t?.scheduled ?? 0, delta: `${t?.pending ?? 0} in review`, positive: true },
     {
-      label: "Scheduled",
-      value: fmt(t?.scheduled ?? 0),
-      delta: `${t?.pending ?? 0} pending`,
-      positive: true,
-    },
-    {
-      label: "Approvals waiting",
-      value: fmt(data?.approvals.pending ?? 0),
+      label: "Waiting for approval",
+      value: data?.approvals.pending ?? 0,
       delta: `${data?.approvals.approved ?? 0} approved`,
       positive: (data?.approvals.pending ?? 0) === 0,
     },
   ];
-
   const series = (data?.daily ?? []).map((row) => ({
     day: row.day,
-    organic: row.created,
-    ai: row.published,
+    created: row.created,
+    published: row.published,
   }));
+  const drafts = data?.drafts ?? [];
+  const upcoming = data?.upcoming ?? [];
+  const stages = [
+    { label: "Draft", n: t?.drafts ?? 0 },
+    { label: "In review", n: t?.pending ?? 0 },
+    { label: "Approved", n: t?.approved ?? 0 },
+    { label: "Scheduled", n: t?.scheduled ?? 0 },
+    { label: "Published", n: t?.published ?? 0 },
+  ];
 
-  return (
-    <>
-      <SystemDesignCard />
-      <PanelState query={query} skeletonRows={4}>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {liveKpis.map((k, i) => {
-            const Up = k.positive ? TrendingUp : TrendingDown;
-            return (
-              <motion.div
-                key={k.label}
-                {...fade(i + 1)}
-                className="group rounded-2xl border border-border bg-card/70 p-4 backdrop-blur transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm"
-              >
-                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  {k.label}
-                </div>
-                <div className="mt-2 text-2xl font-semibold tabular-nums">
-                  {isLoading && !data ? "—" : k.value}
-                </div>
+  const barList = (
+    rows: Array<{ key: string; count: number }>,
+    dimension: "channel" | "agent",
+  ) => {
+    const max = rows[0]?.count || 1;
+    return (
+      <ul className="divide-y divide-border/60">
+        {rows.slice(0, 8).map((r) => (
+          <li key={r.key}>
+            <button
+              onClick={() => setDrill({ dimension, value: r.key })}
+              className="flex w-full items-center gap-3 py-2 text-left text-[12.5px] transition hover:bg-muted/40"
+            >
+              <span className="w-28 shrink-0 truncate font-medium capitalize">{r.key}</span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                 <div
-                  className={`mt-1 inline-flex items-center gap-1 text-[11.5px] font-medium ${k.positive ? "text-success" : "text-destructive"}`}
-                >
-                  <Up className="h-3 w-3" /> {k.delta}
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-
-        <motion.section
-          {...fade(5)}
-          className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-aura/5 via-card/80 to-card p-5"
-        >
-          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-aura/15 blur-3xl" />
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-aura">
-            <Sparkles className="h-3.5 w-3.5" /> This {rangeLabel}, in plain English
-          </div>
-          <p className="mt-3 text-[14.5px] leading-relaxed text-foreground/90">
-            {data && t ? (
-              <>
-                You have <b>{t.items}</b> content items in the last {days} days —{" "}
-                <b>{t.published}</b> published, <b>{t.scheduled}</b> scheduled, and{" "}
-                <b>{data.approvals.pending}</b> awaiting your approval. Connect your site, Google
-                &amp; Meta accounts to unlock organic and AI-citation tracking.
-              </>
-            ) : (
-              <>
-                This is your <b>AI CMO</b> view. Once you connect your site, Google &amp; Meta
-                accounts, Mellox 1.0 will summarize what moved this {rangeLabel} and recommend the
-                next 3 moves.
-              </>
-            )}
-          </p>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {[
-              "Run a Brand DNA scan on my website",
-              "Draft this week's content plan",
-              "Show me which AI assistants cite my brand",
-            ].map((p) => (
-              <button
-                key={p}
-                onClick={() => emitAppEvent("chat:prefill", p)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-[12px] font-medium text-foreground/85 backdrop-blur transition hover:-translate-y-0.5 hover:border-foreground/30 hover:text-foreground"
-              >
-                {p} <ArrowUpRight className="h-3 w-3" />
-              </button>
-            ))}
-          </div>
-        </motion.section>
-
-        <motion.div {...fade(6)}>
-          <Section
-            title="Content created vs published"
-            subtitle={`Daily activity over the last ${days} days, from your workspace`}
-          >
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={series} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" opacity={0.4} />
-                  <XAxis
-                    dataKey="day"
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    allowDecimals={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 10,
-                      fontSize: 12,
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line
-                    type="monotone"
-                    dataKey="organic"
-                    name={data ? "Created" : "Organic"}
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="ai"
-                    name={data ? "Published" : "AI referrals"}
-                    stroke="hsl(var(--aura))"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </Section>
-        </motion.div>
-
-        {data && data.byChannel.length > 0 && (
-          <motion.div {...fade(7)}>
-            <Section title="Content by channel" subtitle="Click a channel to see the items">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {data.byChannel.slice(0, 8).map((c, i) => {
-                  const hues = [217, 270, 38, 142, 0, 190, 320, 95];
-                  const hue = hues[i % hues.length];
-                  return (
-                    <button
-                      key={c.channel}
-                      onClick={() => setDrill({ dimension: "channel", value: c.channel })}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-card/70 p-3 text-left transition hover:-translate-y-0.5 hover:border-foreground/25 hover:shadow-sm"
-                    >
-                      <div
-                        className="grid h-9 w-9 place-items-center rounded-lg text-white"
-                        style={{
-                          background: `linear-gradient(135deg, hsl(${hue} 75% 60%), hsl(${hue} 80% 45%))`,
-                        }}
-                      >
-                        <FileText className="h-4 w-4" strokeWidth={2.2} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[10.5px] uppercase tracking-wider text-muted-foreground truncate">
-                          {c.channel}
-                        </div>
-                        <div className="text-sm font-semibold tabular-nums">{c.count}</div>
-                      </div>
-                    </button>
-                  );
-                })}
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${(r.count / max) * 100}%` }}
+                />
               </div>
-            </Section>
-          </motion.div>
-        )}
-
-        {data && data.byAgent.length > 0 && (
-          <motion.div {...fade(8)}>
-            <Section title="Content by agent" subtitle="Click an agent to see what they created">
-              <ul className="divide-y divide-border/60">
-                {data.byAgent.slice(0, 10).map((a) => {
-                  const max = data.byAgent[0]?.count || 1;
-                  const pct = Math.round((a.count / max) * 100);
-                  return (
-                    <li key={a.agent}>
-                      <button
-                        onClick={() => setDrill({ dimension: "agent", value: a.agent })}
-                        className="flex w-full items-center gap-3 py-2.5 text-left text-[12.5px] transition hover:bg-muted/40"
-                      >
-                        <span className="w-28 shrink-0 truncate font-medium capitalize">
-                          {a.agent}
-                        </span>
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full bg-primary"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">
-                          {a.count}
-                        </span>
-                        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Section>
-          </motion.div>
-        )}
-
-        {data && data.recent.length > 0 && (
-          <motion.div {...fade(8)}>
-            <Section title="Recent activity" subtitle="Latest items created by your agents">
-              <ul className="divide-y divide-border/60">
-                {data.recent.map((r) => (
-                  <li
-                    key={r.id}
-                    className="flex items-center justify-between gap-3 py-2.5 text-[12.5px]"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">{r.title ?? "Untitled item"}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {r.agent} · {r.channel ?? "no channel"} ·{" "}
-                        {new Date(r.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                    <span className="shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-[10.5px] uppercase tracking-wider text-muted-foreground">
-                      {r.status}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          </motion.div>
-        )}
-      </PanelState>
-
-      <DrilldownDialog workspaceId={workspaceId} target={drill} onClose={() => setDrill(null)} />
-    </>
-  );
-}
-
-/* -------------------- System design card -------------------- */
-
-function SystemDesignCard() {
-  const [open, setOpen] = useState(false);
-  return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card/50">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-card/80 sm:px-5"
-      >
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-[hsl(var(--brand-blue)/0.25)] to-[hsl(var(--brand-green)/0.25)]">
-            <Sparkles className="h-3.5 w-3.5 text-foreground/80" />
-          </span>
-          <div>
-            <div className="text-[12.5px] font-semibold">How this works</div>
-            <div className="text-[11px] text-muted-foreground">
-              System design & user flow — no jargon
-            </div>
-          </div>
-        </div>
-        <ChevronDown
-          className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: EASE }}
-            className="overflow-hidden"
-          >
-            <div className="space-y-4 border-t border-border/60 px-4 py-4 sm:px-5">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  User flow
-                </div>
-                <ol className="mt-2 grid gap-2 text-[12.5px] sm:grid-cols-2">
-                  {[
-                    ["1. Sign in", "We load your workspace."],
-                    [
-                      "2. Talk in Chat",
-                      "Brainstorm freely. Chat never runs ads, posts, or scans on its own.",
-                    ],
-                    [
-                      "3. Open Analytics",
-                      "Click the Analytics button to see Organic, Social, Content and Audience.",
-                    ],
-                    [
-                      "4. Run Automations",
-                      "Toggle agents on/off from the Automations tab inside Analytics.",
-                    ],
-                  ].map(([t, d]) => (
-                    <li key={t} className="rounded-xl border border-border/60 bg-background/40 p-3">
-                      <div className="font-medium">{t}</div>
-                      <div className="text-muted-foreground">{d}</div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-              <p className="text-[11.5px] text-muted-foreground">
-                Rule: <b>Chat is advisory only.</b> Anything that spends money, posts publicly, or
-                changes your site only runs when you click a button here or toggle an automation.
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </section>
-  );
-}
-
-/* -------------------- Organic -------------------- */
-
-function OrganicPanel() {
-  const workspaceId = useActiveWorkspaceId();
-  const query = useAnalyticsSummary(workspaceId);
-  const { data, isLoading } = query;
-  const audit = data?.latestAudit;
-  const subs = audit?.subscores ?? {};
-  // Category keys from AI Visibility scans; legacy single-page audit keys as fallback.
-  const scoreCards = [
-    { label: "SEO", keys: ["technical", "crawl"], color: "#2D7EF8" },
-    { label: "AEO", keys: ["content", "structured_data", "schema"], color: "#F59E0B" },
-    { label: "GEO", keys: ["ai_access", "ai-access"], color: "#EF4444" },
-  ].map((s) => {
-    const key = s.keys.find((k) => typeof subs[k] === "number");
-    return { ...s, key: s.label, score: Math.round(key ? (subs[key] as number) : 0) };
-  });
-
-  const actions = audit?.topActions ?? [];
+              <span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">
+                {r.count}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
+  };
 
   return (
     <PanelState query={query} skeletonRows={3}>
-      <PanelIntro
-        tone="blue"
-        headline={
-          audit
-            ? `Your visibility score is ${audit.score}/100.`
-            : "Run a Visibility scan to see how AI engines read your site."
-        }
-        sentence={
-          audit ? (
-            <>
-              Last scan checked {audit.url ?? "your site"} and flagged <b>{actions.length}</b>{" "}
-              improvements to raise SEO, AEO and GEO. Fix the top ones to move up.
-            </>
-          ) : (
-            <>
-              Open the AI Visibility panel and enter your URL — we'll scan it with 60+ checks and
-              store the score here.
-            </>
-          )
-        }
-        ask={
-          audit
-            ? "Draft a plan to fix the top 3 visibility issues"
-            : "Run a visibility audit on my website"
-        }
-      />
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Section
-          title="Latest visibility scores"
-          subtitle={audit ? new Date(audit.created_at).toLocaleString() : "No audit yet"}
-        >
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            {scoreCards.map((s) => {
-              const c = 2 * Math.PI * 32;
-              return (
-                <div
-                  key={s.label}
-                  className="rounded-xl border border-border/60 bg-background/40 p-3 text-center"
-                >
-                  <svg width="84" height="84" viewBox="0 0 84 84" className="mx-auto">
-                    <circle
-                      cx="42"
-                      cy="42"
-                      r="32"
-                      stroke="hsl(var(--border))"
-                      strokeWidth="7"
-                      fill="none"
-                    />
-                    <circle
-                      cx="42"
-                      cy="42"
-                      r="32"
-                      stroke={s.color}
-                      strokeWidth="7"
-                      fill="none"
-                      strokeDasharray={c}
-                      strokeDashoffset={c - (c * s.score) / 100}
-                      strokeLinecap="round"
-                      transform="rotate(-90 42 42)"
-                    />
-                    <text
-                      x="42"
-                      y="47"
-                      textAnchor="middle"
-                      className="fill-foreground"
-                      style={{ fontSize: 18, fontWeight: 600 }}
-                    >
-                      {s.score}
-                    </text>
-                  </svg>
-                  <div className="mt-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    {s.label}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {!audit && !isLoading && (
-            <button
-              onClick={() => emitAppEvent("open:ai-visibility")}
-              className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-3 py-2 text-[12px] font-medium hover:border-foreground/30"
-            >
-              Run first visibility audit <ArrowUpRight className="h-3 w-3" />
-            </button>
-          )}
-        </Section>
-
-        <Section title="Sub-scores" subtitle="Per-section breakdown of the latest scan">
-          {audit ? (
-            <ul className="space-y-3">
-              {Object.entries(subs).map(([k, v]) => (
-                <li key={k}>
-                  <div className="mb-1 flex items-center justify-between text-[12.5px]">
-                    <span className="font-medium capitalize">{k.replace(/[-_]/g, " ")}</span>
-                    <span className="tabular-nums text-muted-foreground">
-                      {Math.round(v as number)}/100
-                    </span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all"
-                      style={{ width: `${Math.round(v as number)}%` }}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[12px] text-muted-foreground">
-              No audit stored yet. Run one to populate this panel.
-            </p>
-          )}
-        </Section>
+      <div className="flex items-center gap-2">
+        <SourceBadge source="mellox" />
+        <span className="text-[11px] text-muted-foreground">{label}</span>
       </div>
-
-      <Section title="Top actions from the last audit" subtitle="Ranked by impact on AI visibility">
-        {actions.length ? (
-          <ul className="space-y-2">
-            {actions.map((a) => {
-              const Icon =
-                a.priority === "high" ? AlertCircle : a.priority === "med" ? AlertTriangle : Info;
-              const color =
-                a.priority === "high"
-                  ? "text-destructive"
-                  : a.priority === "med"
-                    ? "text-warning"
-                    : "text-muted-foreground";
-              return (
-                <li
-                  key={a.id}
-                  className="flex items-start gap-2.5 rounded-lg border border-border/70 bg-background/40 p-2.5"
-                >
-                  <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${color}`} />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[12.5px] font-medium leading-snug">{a.title}</div>
-                    <div className="text-[11px] text-muted-foreground">{a.detail}</div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="text-[12px] text-muted-foreground">
-            Once your first scan runs, the highest-impact fixes will appear here.
-          </p>
-        )}
-      </Section>
-    </PanelState>
-  );
-}
-
-function SocialPanel() {
-  const workspaceId = useActiveWorkspaceId();
-  const query = useAnalyticsSummary(workspaceId);
-  const { data } = query;
-  const { days } = useRangeDays();
-  const upcoming = data?.upcoming ?? [];
-  const byChannel = data?.byChannel ?? [];
-  const totals = data?.totals;
-
-  const kpis = [
-    { label: "Scheduled posts", value: String(totals?.scheduled ?? 0) },
-    { label: `Published (${days}d)`, value: String(totals?.published ?? 0) },
-
-    { label: "Upcoming posts", value: String(upcoming.length) },
-    { label: "Channels in use", value: String(byChannel.length) },
-  ];
-
-  return (
-    <PanelState query={query} skeletonRows={2}>
-      <PanelIntro
-        tone="violet"
-        headline={
-          upcoming.length ? `${upcoming.length} scheduled posts queued.` : "No scheduled posts yet."
-        }
-        sentence={
-          upcoming.length ? (
-            <>
-              Your next post goes out {new Date(upcoming[0].next_run_at).toLocaleString()}. Review
-              the queue below or shuffle from the calendar.
-            </>
-          ) : (
-            <>Ask Mellox to draft a week and schedule it — items will appear here automatically.</>
-          )
-        }
-        ask={upcoming.length ? "Plan next week's social posts" : "Draft this week's content plan"}
-      />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {kpis.map((k) => (
-          <div key={k.label} className="rounded-2xl border border-border bg-card/70 p-4">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              {k.label}
-            </div>
-            <div className="mt-2 text-xl font-semibold tabular-nums">{k.value}</div>
-          </div>
-        ))}
+        {kpis.map((k, i) => {
+          const Up = k.positive ? TrendingUp : TrendingDown;
+          return (
+            <motion.div
+              key={k.label}
+              {...fade(i + 1)}
+              className="rounded-2xl border border-border bg-card/70 p-4"
+            >
+              <div className="text-[11px] text-muted-foreground">{k.label}</div>
+              <div className="mt-2 text-2xl font-semibold tabular-nums">{k.value}</div>
+              <div
+                className={`mt-1 inline-flex items-center gap-1 text-[11.5px] font-medium ${k.positive ? "text-success" : "text-destructive"}`}
+              >
+                <Up className="h-3 w-3" aria-hidden /> {k.delta}
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
+
+      <Section title="Created vs published" subtitle="Per day, from your workspace">
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={series} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+              <CartesianGrid
+                stroke="hsl(var(--border))"
+                strokeDasharray="3 3"
+                vertical={false}
+                opacity={0.5}
+              />
+              <XAxis
+                dataKey="day"
+                stroke="hsl(var(--muted-foreground))"
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                minTickGap={20}
+              />
+              <YAxis
+                stroke="hsl(var(--muted-foreground))"
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                allowDecimals={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: 10,
+                  fontSize: 12,
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Line
+                type="monotone"
+                dataKey="created"
+                name="Created"
+                stroke="hsl(var(--primary))"
+                strokeWidth={2}
+                dot={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="published"
+                name="Published"
+                stroke="hsl(var(--muted-foreground))"
+                strokeDasharray="4 3"
+                strokeWidth={2}
+                dot={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </Section>
 
       <SocialPerformance workspaceId={workspaceId} days={days} />
 
-      <Section title="Upcoming runs" subtitle="Next scheduled posts and automations">
+      <Section title="Pipeline" subtitle="Content by stage in this period">
+        <div className="flex items-center justify-between gap-2 overflow-x-auto">
+          {stages.map((s, i) => (
+            <div key={s.label} className="flex flex-1 items-center gap-2">
+              <div
+                className={`grid h-7 min-w-7 place-items-center rounded-full px-2 text-[11px] font-semibold ${s.n > 0 ? "bg-primary text-primary-foreground" : "border border-border bg-background text-muted-foreground"}`}
+              >
+                {s.n}
+              </div>
+              <span
+                className={`whitespace-nowrap text-[12px] ${s.n > 0 ? "text-foreground" : "text-muted-foreground"}`}
+              >
+                {s.label}
+              </span>
+              {i < stages.length - 1 && <div className="h-px min-w-3 flex-1 bg-border" />}
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {data && (data.byChannel.length > 0 || data.byAgent.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {data.byChannel.length > 0 && (
+            <Section title="By channel" subtitle="Click to see the items">
+              {barList(
+                data.byChannel.map((c) => ({ key: c.channel, count: c.count })),
+                "channel",
+              )}
+            </Section>
+          )}
+          {data.byAgent.length > 0 && (
+            <Section title="By agent" subtitle="Click to see what each made">
+              {barList(
+                data.byAgent.map((a) => ({ key: a.agent, count: a.count })),
+                "agent",
+              )}
+            </Section>
+          )}
+        </div>
+      )}
+
+      <Section title="Coming up" subtitle="Next scheduled posts">
         {upcoming.length ? (
           <ul className="divide-y divide-border">
             {upcoming.map((p) => {
@@ -1085,7 +635,7 @@ function SocialPanel() {
                   className="flex items-center justify-between gap-3 py-2.5 text-[12.5px]"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="w-16 shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    <span className="w-12 shrink-0 text-[11px] font-medium uppercase text-muted-foreground">
                       {when.toLocaleDateString(undefined, { weekday: "short" })}
                     </span>
                     <span className="rounded-md border border-border/60 bg-background/40 px-2 py-0.5 text-[10.5px] text-muted-foreground">
@@ -1094,129 +644,54 @@ function SocialPanel() {
                     <span className="truncate font-medium">{p.title}</span>
                   </div>
                   <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} ·{" "}
-                    {p.cadence}
+                    {when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </span>
                 </li>
               );
             })}
           </ul>
         ) : (
-          <p className="text-[12px] text-muted-foreground">
-            Nothing scheduled. Create a content item with a schedule to see it here.
-          </p>
+          <p className="text-[12px] text-muted-foreground">Nothing scheduled.</p>
         )}
       </Section>
-    </PanelState>
-  );
-}
 
-/* -------------------- Content -------------------- */
-
-function ContentPanel() {
-  const workspaceId = useActiveWorkspaceId();
-  const query = useAnalyticsSummary(workspaceId);
-  const { data } = query;
-  const drafts = data?.drafts ?? [];
-  const totals = data?.totals;
-  const stages = [
-    { label: "Draft", n: totals?.drafts ?? 0 },
-    { label: "In review", n: totals?.pending ?? 0 },
-    { label: "Approved", n: totals?.approved ?? 0 },
-    { label: "Scheduled", n: totals?.scheduled ?? 0 },
-    { label: "Published", n: totals?.published ?? 0 },
-  ];
-
-  return (
-    <PanelState query={query} skeletonRows={2}>
-      <PanelIntro
-        tone="green"
-        headline={
-          drafts.length
-            ? `${drafts.length} pieces are moving through the pipeline.`
-            : "No drafts in flight yet."
-        }
-        sentence={
-          drafts.length ? (
-            <>
-              Focus on approvals to keep publishing momentum. <b>{totals?.pending ?? 0}</b> pieces
-              are awaiting review.
-            </>
-          ) : (
-            <>
-              Ask Mellox to draft an article, brief or post — new items land here as they're created.
-            </>
-          )
-        }
-        ask={drafts.length ? "Move the top 3 drafts through approval" : "Draft an AEO landing page"}
-      />
-      <Section title="Pipeline" subtitle="Counts by stage across your workspace">
-        <div className="flex items-center justify-between gap-2 overflow-x-auto">
-          {stages.map((s, i) => (
-            <div key={s.label} className="flex flex-1 items-center gap-2">
-              <div
-                className={`grid h-7 min-w-7 place-items-center rounded-full px-2 text-[11px] font-semibold ${s.n > 0 ? "bg-primary text-primary-foreground" : "border border-border bg-background text-muted-foreground"}`}
-              >
-                {s.n}
-              </div>
-              <span
-                className={`text-[12px] ${s.n > 0 ? "text-foreground" : "text-muted-foreground"}`}
-              >
-                {s.label}
-              </span>
-              {i < stages.length - 1 && <div className="h-px flex-1 bg-border" />}
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Section title="Drafts" subtitle={`${drafts.length} pieces in flight`}>
+      <Section title="Drafts" subtitle={`${drafts.length} in progress`}>
         {drafts.length ? (
           <ul className="divide-y divide-border">
-            {drafts.map((d) => (
-              <li key={d.id} className="flex items-center gap-3 py-2.5 text-[12.5px]">
-                <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />
+            {drafts.map((dr) => (
+              <li key={dr.id} className="flex items-center gap-3 py-2.5 text-[12.5px]">
+                <FileText className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{d.title ?? "Untitled"}</div>
+                  <div className="truncate font-medium">{dr.title ?? "Untitled"}</div>
                   <div className="text-[11px] text-muted-foreground">
-                    {d.words} words · {d.kind}
-                    {d.channel ? ` · ${d.channel}` : ""}
+                    {dr.words} words · {dr.kind}
+                    {dr.channel ? ` · ${dr.channel}` : ""}
                   </div>
                 </div>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10.5px] capitalize ${d.status === "approved" ? "bg-success/20 text-success" : d.status === "scheduled" ? "bg-primary-surface text-primary" : "bg-muted text-muted-foreground"}`}
-                >
-                  {d.status.replace("_", " ")}
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10.5px] capitalize text-muted-foreground">
+                  {dr.status.replace("_", " ")}
                 </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-[12px] text-muted-foreground">
-            No drafts yet. Anything Mellox generates lands here first.
-          </p>
+          <>
+            <p className="text-[12px] text-muted-foreground">No drafts in this period.</p>
+            <button
+              onClick={() => {
+                emitAppEvent("chat:prefill", "Draft this week's content plan");
+                emitAppEvent("chat:focus");
+              }}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-[12px] font-medium text-foreground/85 transition hover:border-foreground/30"
+            >
+              Plan this week&apos;s content <ArrowUpRight className="h-3 w-3" aria-hidden />
+            </button>
+          </>
         )}
       </Section>
+
+      <DrilldownDialog workspaceId={workspaceId} target={drill} onClose={() => setDrill(null)} />
     </PanelState>
-  );
-}
-
-/* -------------------- Audience -------------------- */
-
-function AudiencePanel() {
-  // No audience data source is connected, so nothing is shown as measured.
-  // (This panel used to render invented segments, geography and session
-  // counts as if they were real.)
-  return (
-    <Section title="Audience" subtitle="Who your content reaches">
-      <div className="rounded-xl border border-dashed border-border p-6 text-center">
-        <p className="text-[13px] font-medium">No audience data connected yet</p>
-        <p className="mx-auto mt-1 max-w-md text-[12px] text-muted-foreground">
-          Audience segments, geography and session metrics appear here once a web or social
-          analytics source is connected. Until then Mellox AI won&apos;t estimate them.
-        </p>
-      </div>
-    </Section>
   );
 }
 

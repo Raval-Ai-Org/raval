@@ -46,7 +46,10 @@ export type RateLimitTier =
   | "ugc-render"
   | "share-password"
   | "workspace-lifecycle"
-  | "firecrawl";
+  | "firecrawl"
+  | "analytics"
+  | "analytics-sync"
+  | "analytics-insights";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -103,6 +106,13 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // Firecrawl-backed crawls (competitor intelligence): a multi-page crawl plus
   // a model synthesis call, run synchronously within the request.
   firecrawl: { limit: 10, windowSeconds: 3600, label: "competitor crawl" },
+  // Analytics reports: database reads, plus an occasional Google Data API call
+  // to fill the GA4 users cache for a custom range.
+  analytics: { limit: 60, windowSeconds: 60, label: "analytics report" },
+  // "Sync now": each run spends the property's Google API quota.
+  "analytics-sync": { limit: 6, windowSeconds: 3600, label: "analytics sync" },
+  // AI insights refresh — one metered model call per new set of changes.
+  "analytics-insights": { limit: 10, windowSeconds: 3600, label: "insight refresh" },
 };
 
 export type RateLimitResult = {

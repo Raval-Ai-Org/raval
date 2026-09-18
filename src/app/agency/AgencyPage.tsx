@@ -85,6 +85,7 @@ import {
 } from "recharts";
 import { TILE_BY_ID, type QueueItem, type CanvasType } from "@/lib/studio";
 import { Rocket } from "@/components/ui/gemini-icons";
+import { MelloxLoader } from "@/components/ui/page-loader";
 
 type Client = {
   id: string;
@@ -1778,8 +1779,12 @@ ${recent.length ? `<h2>Recently shipped</h2><ul>${recent.map((r) => `<li><span c
       />
 
       {loading && (
-        <div className="pointer-events-none fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
-          Loading your day…
+        <div
+          role="status"
+          className="pointer-events-none fixed bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border/60 bg-background/90 py-1.5 pl-1.5 pr-3.5 text-[12px] shadow-sm backdrop-blur"
+        >
+          <MelloxLoader size={22} />
+          <span className="mx-loader__label font-medium">Loading your day…</span>
         </div>
       )}
     </div>

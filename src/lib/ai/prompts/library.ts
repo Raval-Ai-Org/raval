@@ -9,6 +9,7 @@
 
 import {
   ACTION_TAGS,
+  ANALYTICS_RULES,
   FMT_CHAT,
   FMT_EXECUTIVE,
   FMT_JSON_STRICT,
@@ -51,6 +52,7 @@ export function chatSystem(): string {
     RULE_UNTRUSTED_DATA,
     FMT_CHAT,
     PRODUCT_SURFACE,
+    ANALYTICS_RULES,
     ACTION_TAGS,
   );
 }

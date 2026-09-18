@@ -97,7 +97,7 @@ export function runChatAction(action: ChatAction, prompt?: string): { toast?: st
       emitAppEvent("open:brand-dna");
       return { toast: "Opening Memory" };
     case "calendar":
-      emitAppEvent("open:analytics", { tab: "calendar" });
+      emitAppEvent("open:content-calendar");
       return { toast: "Opening Content Calendar" };
   }
 }

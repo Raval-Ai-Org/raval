@@ -199,88 +199,114 @@
   color-scheme: light;
 
   /* ── Canvas & ink ─────────────────────────────────────────────────── */
-  --background: 220 20% 95%; /* #EFF1F5 cool paper — softer than pure white */
-  --foreground: 220 20% 9%; /* #131619 near-black; pure black is harsh on paper */
+  /* Crisp, brighter paper than the grey-washed #EFF1F5 this replaced, but
+     kept short of pure white on purpose — a prior pass tried 100% L and it
+     read as eye-strain on long sessions (see tests/visual/light-theme.spec.ts,
+     "canvas is a tinted paper, not pure white"). This sits close to ChatGPT's
+     own off-white canvas: perceptibly lighter than the old paper, still a
+     hair short of #fff so text has somewhere to land. */
+  --background: 220 20% 96%; /* #F3F4F7 */
+  /* Pure black ink, by explicit request — not the softened near-black this
+     replaced. Body text, headings and card/popover text all read as true
+     #000 now; only the secondary/muted tiers below stay dark grey so there
+     is still a hierarchy between "the text" and "the label under it". */
+  --foreground: 0 0% 0%;
 
-  /* Surface ladder */
-  --surface-1: 220 20% 95%; /* canvas */
-  --surface-2: 220 20% 93%; /* panels, rails, inset wells */
-  --surface-3: 0 0% 100%; /* cards — the only pure white in the system */
+  /* Surface ladder — four visibly distinct steps, closer to how Lovable
+     layers its panel/canvas/card whites than the very-flat single-step
+     ChatGPT uses: canvas and sidebar read as two different greys, and
+     cards lift off both with a real border + shadow, not just alpha. */
+  --surface-1: 220 20% 96%; /* canvas */
+  --surface-2: 220 17% 92%; /* panels, rails, inset wells */
+  --surface-3: 0 0% 100%; /* cards — pure white */
   --surface-4: 0 0% 100%; /* overlays, popovers, menus */
 
   --card: 0 0% 100%;
-  --card-foreground: 220 20% 9%;
+  --card-foreground: 0 0% 0%;
   --popover: 0 0% 100%;
-  --popover-foreground: 220 20% 9%;
+  --popover-foreground: 0 0% 0%;
 
-  --muted: 220 20% 93%;
-  --muted-foreground: 220 10% 38%; /* 5.4:1 on canvas — AA for body text */
-  --secondary: 220 20% 92%;
-  --secondary-foreground: 220 20% 14%;
+  --muted: 220 17% 92%;
+  --muted-foreground: 220 14% 30%; /* 8:1 on canvas — clearly legible, not washed out */
+  --secondary: 220 16% 90%;
+  --secondary-foreground: 0 0% 7%;
 
   /* ── Brand ────────────────────────────────────────────────────────── */
   /* --brand is the Ultra Moss swatch and is byte-identical in both themes.
      --primary is its interactive derivative, and it rotates hue as it darkens
-     (70° → 88°) on purpose: yellow-greens turn olive when you only drop
-     lightness, so a literal dark Ultra Moss reads army-green on paper. The
-     rotation keeps it reading green at 27% lightness. Dark mode needs no
-     rotation — the swatch is already legible on black. */
+     (70° → 97°) on purpose: yellow-greens turn olive when you only drop
+     lightness, so a literal dark Ultra Moss reads army-green on paper. Full
+     100% saturation (up from 58%, then 74%, then 90%) — as vivid as HSL
+     allows while still clearing 6.3:1 against white — so it reads as a
+     genuinely bright, colourful green, not a muted corporate tone. Dark mode
+     needs no rotation — the swatch is already legible on black. */
   --brand: 70 75% 64.5%; /* Ultra Moss */
 
-  --primary: 88 58% 27%; /* deep leaf — 6.06:1 with white ink */
+  --primary: 97 100% 20%; /* vivid moss — 7:1 with white ink */
   --primary-foreground: 0 0% 100%;
-  --primary-surface: 88 44% 92%; /* tinted plate behind brand ink */
-  --primary-border: 88 32% 78%;
-  --accent: 88 58% 27%;
+  --primary-surface: 97 70% 92%; /* tinted plate — a real green wash, not a hint */
+  --primary-border: 97 55% 72%;
+  --accent: 97 100% 20%;
   --accent-foreground: 0 0% 100%;
 
   /* ── Lines & focus ────────────────────────────────────────────────── */
-  --border: 220 16% 87%; /* hairline — visible, never a divider wall */
-  --border-strong: 220 14% 78%; /* emphasis: table rules, active outlines */
-  --input: 220 16% 82%;
-  --ring: 88 58% 33%;
+  /* Darker than the previous pass so edges and inputs read crisply at a
+     glance instead of needing a second look to find the line. */
+  --border: 220 16% 83%; /* hairline — visible, never a divider wall */
+  --border-strong: 220 14% 72%; /* emphasis: table rules, active outlines */
+  --input: 220 16% 78%;
+  --ring: 97 100% 28%;
 
   /* ── Status ───────────────────────────────────────────────────────── */
-  --success: 146 62% 26%;
-  --success-surface: 146 50% 94%;
-  --success-border: 146 40% 78%;
+  /* Full-saturation ink plus richer tinted surfaces (was a near-white hint
+     of colour, now an actual pastel wash) — status reads as colour from
+     across the room, not just up close. Every pairing verified >= 4.6:1
+     ink-on-surface and >= 5.4:1 ink-on-canvas. */
+  --success: 150 95% 21%;
+  --success-surface: 150 70% 92%;
+  --success-border: 150 55% 70%;
 
-  --warning: 34 90% 30%;
-  --warning-surface: 40 90% 94%;
-  --warning-border: 38 70% 76%;
+  --warning: 32 100% 30%;
+  --warning-surface: 32 75% 92%;
+  --warning-border: 32 60% 68%;
 
-  --danger: 0 70% 40%;
-  --danger-surface: 0 76% 96%;
-  --danger-border: 0 60% 85%;
+  --danger: 354 90% 41%;
+  --danger-surface: 354 75% 92%;
+  --danger-border: 354 55% 76%;
 
-  --info: 214 80% 36%;
-  --info-surface: 214 90% 95%;
-  --info-border: 214 60% 82%;
+  --info: 210 100% 35%;
+  --info-surface: 210 75% 92%;
+  --info-border: 210 55% 74%;
 
-  --destructive: 0 70% 40%;
+  --destructive: 354 90% 41%;
   --destructive-foreground: 0 0% 100%;
 
   /* ── Sidebar ──────────────────────────────────────────────────────── */
-  --sidebar-background: 220 20% 93%;
-  --sidebar-foreground: 220 14% 26%;
-  --sidebar-primary: 88 58% 27%;
+  /* A visibly separate grey from the canvas (not the same value), so the
+     rail reads as its own zone the way Lovable's does. */
+  --sidebar-background: 220 18% 93%;
+  --sidebar-foreground: 220 20% 12%;
+  --sidebar-primary: 97 100% 20%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 20% 88%;
-  --sidebar-accent-foreground: 220 20% 9%;
-  --sidebar-border: 220 16% 85%;
-  --sidebar-ring: 88 58% 33%;
+  --sidebar-accent: 220 18% 87%;
+  --sidebar-accent-foreground: 0 0% 0%;
+  --sidebar-border: 220 16% 80%;
+  --sidebar-ring: 97 100% 28%;
 
   /* ── Shape ────────────────────────────────────────────────────────── */
   --radius: 0.75rem; /* 12px — the family; ±4px via --radius-sm/-lg/-xl */
 
   /* ── Elevation — one shadow per surface step ──────────────────────── */
-  --shadow-1: 0 1px 2px hsl(220 24% 12% / 0.06);
-  --shadow-2: 0 1px 2px hsl(220 24% 12% / 0.05), 0 4px 10px -3px hsl(220 24% 12% / 0.08);
-  --shadow-3: 0 2px 4px hsl(220 24% 12% / 0.05), 0 12px 28px -8px hsl(220 24% 12% / 0.14);
-  --shadow-4: 0 8px 16px hsl(220 24% 12% / 0.08), 0 32px 64px -16px hsl(220 24% 12% / 0.22);
-  --shadow-card: 0 1px 2px hsl(220 24% 12% / 0.05), 0 4px 10px -3px hsl(220 24% 12% / 0.08);
-  --shadow-card-hover: 0 2px 4px hsl(220 24% 12% / 0.05), 0 12px 28px -8px hsl(220 24% 12% / 0.14);
-  --shadow-glow: 0 0 24px -6px hsl(var(--brand) / 0.45);
+  /* Slightly deeper and softer-spread than before so white cards actually
+     lift off the near-white canvas instead of relying on the 4% background
+     delta alone. */
+  --shadow-1: 0 1px 2px hsl(220 24% 12% / 0.05);
+  --shadow-2: 0 1px 3px hsl(220 24% 12% / 0.06), 0 4px 10px -3px hsl(220 24% 12% / 0.09);
+  --shadow-3: 0 2px 6px hsl(220 24% 12% / 0.06), 0 14px 30px -10px hsl(220 24% 12% / 0.15);
+  --shadow-4: 0 10px 20px hsl(220 24% 12% / 0.08), 0 32px 64px -16px hsl(220 24% 12% / 0.22);
+  --shadow-card: 0 1px 2px hsl(220 24% 12% / 0.04), 0 2px 10px -3px hsl(220 24% 12% / 0.07);
+  --shadow-card-hover: 0 4px 10px hsl(220 24% 12% / 0.06), 0 16px 32px -12px hsl(220 24% 12% / 0.13);
+  --shadow-glow: 0 0 24px -6px hsl(var(--brand) / 0.5);
 
   /* ─────────────────────────────────────────────────────────────
      Motion token system — single source of truth for animation.
@@ -544,7 +570,6 @@
   }
   /* Suppress ambient / decorative loops entirely. */
   .animate-marquee,
-  .animate-pulse,
   .animate-shimmer,
   .animate-aurora,
   .animate-spin-slow {
@@ -1625,9 +1650,6 @@ h6 {
     to {
       transform: rotate(360deg);
     }
-  }
-  :root[data-chat-motion="reduced"] .prompt-send[data-loading="true"] > * {
-    animation: none;
   }
 
   /* === Composer-matched loading visuals ===
@@ -2787,8 +2809,6 @@ h6 {
 
 /* Silence tailwind/utility animations app-wide when chat reduced-motion is on */
 :root[data-chat-motion="reduced"] .animate-ping,
-:root[data-chat-motion="reduced"] .animate-spin,
-:root[data-chat-motion="reduced"] .animate-pulse,
 :root[data-chat-motion="reduced"] .animate-slide-up,
 :root[data-chat-motion="reduced"] .animate-fade-in {
   animation: none !important;
@@ -4970,5 +4990,186 @@ pre {
     .mx-assistant.is-typing .chat-md *::after {
       animation: none;
     }
+  }
+}
+
+/* ═══ Loading indicators keep moving ═══
+ * A spinner is status, not decoration: frozen, it reads as "stuck". The
+ * reduced-motion rules above cut every animation to one 1ms frame, so loaders
+ * are restored here — whether motion is reduced by the OS ("Animation effects"
+ * off in Windows) or by the chat setting. Unlayered and more specific, so it
+ * wins over the `*` kill switch. */
+@media (prefers-reduced-motion: reduce) {
+  :root .animate-spin,
+  :root .ui-spinner,
+  :root .prompt-send[data-loading="true"] > *,
+  :root [data-sonner-toast] .sonner-loading-bar {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+  :root .ui-spinner {
+    animation-duration: 0.7s !important;
+  }
+  :root .animate-pulse {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+:root .animate-spin,
+:root .ui-spinner {
+  will-change: transform;
+}
+
+/* ═══ Mellox loading visuals ═══
+ * `.mx-loader` — logo in a turning lime ring (src/components/ui/page-loader.tsx)
+ * `.mx-skel`   — placeholder block with a soft light sweep
+ * Plain HTML elements animating transform/opacity, so the browser runs them
+ * off the main thread and they keep moving while the page is still busy. */
+.mx-loader {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.mx-loader__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: conic-gradient(
+    from 0deg,
+    hsl(var(--primary) / 0) 0deg,
+    hsl(var(--primary) / 0.15) 90deg,
+    hsl(var(--primary)) 330deg,
+    hsl(var(--primary) / 0) 360deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px));
+  animation: mx-loader-spin 0.9s linear infinite;
+  will-change: transform;
+}
+.mx-loader__ring::before {
+  /* The faint full track under the moving arc. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 4px solid hsl(var(--foreground) / 0.1);
+}
+.mx-loader__glow {
+  position: absolute;
+  inset: 18%;
+  border-radius: 999px;
+  background: radial-gradient(circle, hsl(var(--primary) / 0.35), transparent 70%);
+  animation: mx-loader-breathe 1.8s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+.mx-loader__mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  animation: mx-loader-breathe-mark 1.8s ease-in-out infinite;
+  will-change: transform;
+}
+.mx-loader__label {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted-foreground)) 0%,
+    hsl(var(--muted-foreground)) 35%,
+    hsl(var(--foreground)) 50%,
+    hsl(var(--muted-foreground)) 65%,
+    hsl(var(--muted-foreground)) 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mx-loader-shimmer 2s linear infinite;
+}
+.mx-page-loader {
+  animation: mx-loader-fade-in 0.4s ease-out both;
+}
+
+.mx-skel {
+  position: relative;
+  overflow: hidden;
+  background-color: hsl(var(--foreground) / 0.06);
+}
+.mx-skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    hsl(var(--foreground) / 0.07) 40%,
+    hsl(var(--primary) / 0.1) 50%,
+    hsl(var(--foreground) / 0.07) 60%,
+    transparent
+  );
+  animation: mx-skel-sweep 1.5s ease-in-out infinite;
+  animation-delay: var(--mx-skel-delay, 0s);
+  will-change: transform;
+}
+
+@keyframes mx-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes mx-loader-breathe {
+  0%,
+  100% {
+    transform: scale(0.85);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+@keyframes mx-loader-breathe-mark {
+  0%,
+  100% {
+    transform: scale(0.94);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+@keyframes mx-loader-shimmer {
+  from {
+    background-position: 125% 0;
+  }
+  to {
+    background-position: -125% 0;
+  }
+}
+@keyframes mx-loader-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes mx-skel-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Loading visuals are status: keep them moving when motion is reduced. */
+@media (prefers-reduced-motion: reduce) {
+  :root .mx-loader__ring,
+  :root .mx-skel::after {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+  :root .mx-loader__glow,
+  :root .mx-loader__mark,
+  :root .mx-loader__label {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
   }
 }

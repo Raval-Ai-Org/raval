@@ -15,6 +15,7 @@ import { Globe, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
+import { GoogleConnectCard } from "@/components/app/analytics/GoogleConnectCard";
 import { CONNECTOR_PROVIDERS } from "@/lib/connectors/types";
 
 type SettingsSection = "connections" | "preferences";
@@ -342,6 +343,14 @@ function SettingsDialog({
 
         <TabsContent value="connections" className="mt-5 space-y-6">
           <SocialAccountsSection variant="settings" />
+          {workspaceId && (
+            <div className="border-t border-border/70 pt-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Analytics
+              </p>
+              <GoogleConnectCard />
+            </div>
+          )}
           <div className="border-t border-border/70 pt-5">
             <p className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Website sources

@@ -72,8 +72,8 @@ export function conversationIdFromPath(pathname: string): string | null {
 
 const LEGACY_TABS: Record<string, string> = {
   content: "content",
-  social: "social",
-  seo: "organic",
+  social: "content",
+  seo: "search",
   analytics: "overview",
 };
 

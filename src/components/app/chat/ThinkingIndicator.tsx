@@ -18,8 +18,9 @@ export function MelloxPulse({ active, className }: { active: boolean; className?
     >
       <motion.span
         className="mx-pulse__orbit absolute inset-0 rounded-full"
-        animate={active && !reduce ? { rotate: 360 } : { rotate: 0 }}
-        transition={active && !reduce ? { duration: 2.4, ease: "linear", repeat: Infinity } : {}}
+        // The orbit is a loading signal, so it keeps turning with reduced motion.
+        animate={active ? { rotate: 360 } : { rotate: 0 }}
+        transition={active ? { duration: 2.4, ease: "linear", repeat: Infinity } : {}}
       />
       <motion.span
         className="mx-pulse__core relative grid size-[18px] place-items-center"

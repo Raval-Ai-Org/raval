@@ -2,6 +2,10 @@ import "server-only";
 import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { addDays, RangeInputSchema, resolveRange, todayIn } from "@/lib/analytics/ranges";
+import { rateLimitFor } from "@/server/rate-limit";
+import { requireWorkspaceRole } from "@/server/workspace-access.server";
+import { roleAtLeast } from "@/server/api-auth";
 
 const uuid = z.string().uuid();
 
@@ -66,26 +70,46 @@ function pctDelta(curr: number, prev: number) {
 }
 
 export const getAnalyticsSummary = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("analytics")])
   .inputValidator((data) =>
-    z.object({ workspaceId: uuid, days: z.number().int().min(7).max(90).optional() }).parse(data),
+    z
+      .object({
+        workspaceId: uuid,
+        days: z.number().int().min(7).max(90).optional(),
+        range: RangeInputSchema.optional(),
+      })
+      .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const days = data.days ?? 14;
-    const now = new Date();
-    const since = new Date(now.getTime() - days * 86_400_000);
-    const prevSince = new Date(now.getTime() - days * 2 * 86_400_000);
+    await requireWorkspaceRole(context, data.workspaceId, "viewer");
+    // Calendar window (UTC) from the shared range model; `days` is the legacy input.
+    const range = resolveRange(
+      data.range ?? {
+        preset: data.days && data.days <= 7 ? "7d" : data.days && data.days > 30 ? "90d" : "28d",
+      },
+      todayIn("UTC"),
+    );
+    const days = range.current.days;
+    const now = new Date(`${range.current.to}T23:59:59.999Z`);
+    const since = new Date(`${range.current.from}T00:00:00Z`);
+    const prevSince = new Date(`${range.previous.from}T00:00:00Z`);
 
     const { data: rows, error } = await context.supabase
       .from("content_items")
       .select("id, title, status, channel, agent, kind, body, created_at, scheduled_at, updated_at")
       .eq("workspace_id", data.workspaceId)
       .gte("created_at", prevSince.toISOString())
+      .lte("created_at", now.toISOString())
       .order("created_at", { ascending: false })
-      .limit(1000);
+      .limit(2000);
     if (error) throw new Error(error.message);
 
-    const items = rows ?? [];
+    const sinceMs = since.getTime();
+    // Totals and breakdowns cover the selected window only; the previous
+    // window of the same length is used for the deltas and nothing else.
+    const inWindow = (rows ?? []).filter((r) => new Date(r.created_at).getTime() >= sinceMs);
+    const inPrev = (rows ?? []).filter((r) => new Date(r.created_at).getTime() < sinceMs);
+    const items = inWindow;
 
     const totals = {
       items: items.length,
@@ -96,10 +120,6 @@ export const getAnalyticsSummary = createServerFn({ method: "POST" })
       published: items.filter((r) => r.status === "published").length,
     };
 
-    const sinceMs = since.getTime();
-    const inWindow = items.filter((r) => new Date(r.created_at).getTime() >= sinceMs);
-    const inPrev = items.filter((r) => new Date(r.created_at).getTime() < sinceMs);
-
     const deltas = {
       items: pctDelta(inWindow.length, inPrev.length),
       published: pctDelta(
@@ -109,10 +129,8 @@ export const getAnalyticsSummary = createServerFn({ method: "POST" })
     };
 
     const buckets = new Map<string, { created: number; scheduled: number; published: number }>();
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86_400_000);
-      const key = d.toISOString().slice(0, 10);
-      buckets.set(key, { created: 0, scheduled: 0, published: 0 });
+    for (let i = 0; i < days; i++) {
+      buckets.set(addDays(range.current.from, i), { created: 0, scheduled: 0, published: 0 });
     }
     for (const r of inWindow) {
       const key = (r.created_at as string).slice(0, 10);
@@ -153,7 +171,9 @@ export const getAnalyticsSummary = createServerFn({ method: "POST" })
       .from("approvals")
       .select("status")
       .eq("workspace_id", data.workspaceId)
-      .limit(500);
+      .gte("created_at", since.toISOString())
+      .lte("created_at", now.toISOString())
+      .limit(1000);
     const approvals = {
       pending: (approvalRows ?? []).filter((r) => r.status === "pending").length,
       approved: (approvalRows ?? []).filter((r) => r.status === "approved").length,
@@ -268,7 +288,7 @@ export type DrilldownItem = {
 };
 
 export const getAnalyticsDrilldown = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("analytics")])
   .inputValidator((data) =>
     z
       .object({
@@ -276,13 +296,21 @@ export const getAnalyticsDrilldown = createServerFn({ method: "POST" })
         dimension: z.enum(["channel", "agent", "kind"]),
         value: z.string().min(1).max(200),
         days: z.number().int().min(7).max(90).optional(),
+        range: RangeInputSchema.optional(),
         limit: z.number().int().min(1).max(200).optional(),
       })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const days = data.days ?? 14;
-    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    await requireWorkspaceRole(context, data.workspaceId, "viewer");
+    const range = resolveRange(
+      data.range ?? {
+        preset: data.days && data.days <= 7 ? "7d" : data.days && data.days > 30 ? "90d" : "28d",
+      },
+      todayIn("UTC"),
+    );
+    const since = `${range.current.from}T00:00:00Z`;
+    const until = `${addDays(range.current.to, 1)}T00:00:00Z`;
     const column =
       data.dimension === "channel" ? "channel" : data.dimension === "agent" ? "agent" : "kind";
     const q = context.supabase
@@ -290,6 +318,7 @@ export const getAnalyticsDrilldown = createServerFn({ method: "POST" })
       .select("id, title, status, channel, agent, kind, body, created_at, updated_at")
       .eq("workspace_id", data.workspaceId)
       .gte("created_at", since)
+      .lt("created_at", until)
       .order("created_at", { ascending: false })
       .limit(data.limit ?? 50);
     const { data: rows, error } =
@@ -306,4 +335,91 @@ export const getAnalyticsDrilldown = createServerFn({ method: "POST" })
       updated_at: r.updated_at as string,
       words: typeof r.body === "string" ? r.body.trim().split(/\s+/).filter(Boolean).length : 0,
     })) satisfies DrilldownItem[];
+  });
+
+/* ------------------------------------------------------------------ */
+/* Unified analytics (ADR-0015)                                       */
+/* ------------------------------------------------------------------ */
+// Each section reads one data source through the caller's RLS client. The
+// report shapes live in src/lib/analytics/types.ts; nothing here mixes GA4
+// sessions, Search Console clicks and AI Visibility scores.
+
+const ReportSection = z.enum(["overview", "website", "search", "ai-visibility", "mellox"]);
+export type AnalyticsReportSection = z.infer<typeof ReportSection>;
+
+export const getAnalyticsReport = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("analytics")])
+  .inputValidator((data) =>
+    z.object({ workspaceId: uuid, section: ReportSection, range: RangeInputSchema }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await requireWorkspaceRole(context, data.workspaceId, "viewer");
+    const read = await import("@/server/analytics/read.server");
+    const db = context.supabase;
+    switch (data.section) {
+      case "overview":
+        return {
+          section: "overview" as const,
+          report: await read.getOverviewReport(db, data.workspaceId, data.range),
+        };
+      case "website":
+        return {
+          section: "website" as const,
+          report: await read.getWebsiteReport(db, data.workspaceId, data.range),
+        };
+      case "search":
+        return {
+          section: "search" as const,
+          report: await read.getSearchReport(db, data.workspaceId, data.range),
+        };
+      case "ai-visibility":
+        return {
+          section: "ai-visibility" as const,
+          report: await read.getAiVisibilityReport(db, data.workspaceId, data.range),
+        };
+      case "mellox":
+        return {
+          section: "mellox" as const,
+          report: await read.getMelloxKpis(db, data.workspaceId, data.range),
+        };
+    }
+  });
+
+export const getAnalyticsInsights = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("analytics")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, range: RangeInputSchema }).parse(data))
+  .handler(async ({ data, context }) => {
+    const role = await requireWorkspaceRole(context, data.workspaceId, "viewer");
+    const { getInsightsView } = await import("@/server/analytics/insights.server");
+    return getInsightsView(
+      context.supabase,
+      data.workspaceId,
+      data.range,
+      roleAtLeast(role, "editor"),
+    );
+  });
+
+export const refreshAnalyticsInsights = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("analytics-insights")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, range: RangeInputSchema }).parse(data))
+  .handler(async ({ data, context }) => {
+    // Spends AI: editor or above; metered against the verified workspace.
+    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const { generateInsights } = await import("@/server/analytics/insights.server");
+    return generateInsights(context.supabase, data.workspaceId, data.range);
+  });
+
+/**
+ * A compact, source-labelled snapshot for the Mellox chat context (28 days vs
+ * the previous 28). Plain text; the chat route wraps it as untrusted data.
+ */
+export const getAnalyticsChatContext = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("analytics")])
+  .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))
+  .handler(async ({ data, context }): Promise<{ text: string }> => {
+    await requireWorkspaceRole(context, data.workspaceId, "viewer");
+    const { getOverviewReport } = await import("@/server/analytics/read.server");
+    const { buildChatContext } = await import("@/lib/analytics/chat-context");
+    const report = await getOverviewReport(context.supabase, data.workspaceId, { preset: "28d" });
+    return { text: buildChatContext(report) };
   });

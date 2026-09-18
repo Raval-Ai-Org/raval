@@ -8,41 +8,21 @@
 // production they default to supabaseAdmin + callSdr + server-only env.
 
 import "server-only";
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { decryptWithKey, encryptWithKey, readEncryptionKey } from "@/server/crypto/secret-box.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { callSdr } from "@/lib/sdr.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // ─── Secret encryption (app-layer, AES-256-GCM; mirrors the SDR's Fernet posture) ──
-function getEncryptionKey(): Buffer {
-  const raw = process.env.SDR_SECRET_ENCRYPTION_KEY;
-  if (!raw) throw new Error("SDR_SECRET_ENCRYPTION_KEY not set (server-only env)");
-  const key = Buffer.from(raw, "base64");
-  if (key.length !== 32)
-    throw new Error("SDR_SECRET_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
-  return key;
-}
+const SDR_KEY_ENV = "SDR_SECRET_ENCRYPTION_KEY";
 
 export function encryptSecret(plaintext: string): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", getEncryptionKey(), iv);
-  const enc = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  return `v1:${iv.toString("base64url")}:${cipher.getAuthTag().toString("base64url")}:${enc.toString("base64url")}`;
+  return encryptWithKey(plaintext, readEncryptionKey(SDR_KEY_ENV));
 }
 
 export function decryptSecret(payload: string): string {
-  const [ver, ivB64, tagB64, ctB64] = payload.split(":");
-  if (ver !== "v1") throw new Error("Unknown secret format");
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    getEncryptionKey(),
-    Buffer.from(ivB64, "base64url"),
-  );
-  decipher.setAuthTag(Buffer.from(tagB64, "base64url"));
-  return Buffer.concat([
-    decipher.update(Buffer.from(ctB64, "base64url")),
-    decipher.final(),
-  ]).toString("utf8");
+  return decryptWithKey(payload, readEncryptionKey(SDR_KEY_ENV));
 }
 
 // ─── Provisioning ─────────────────────────────────────────────────────────────

@@ -34,6 +34,8 @@ export type AppEventMap = {
   "connections:changed": undefined;
   "post-image:cached": { postId: string; size?: string; removed?: boolean };
   "geo:audit-complete": undefined;
+  /** Analytics data or insights changed (sync finished, insight refreshed, Google connected). */
+  "analytics:changed": undefined;
   "gen:queue:changed": undefined;
 
   // ── Chat ────────────────────────────────────────────────────────────

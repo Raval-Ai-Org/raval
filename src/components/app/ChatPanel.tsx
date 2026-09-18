@@ -31,6 +31,9 @@ import { NextStepSuggestions } from "@/components/app/NextStepSuggestions";
 import { ClarifyCard, type ClarifyPayload } from "@/components/app/ClarifyCard";
 import { useBrandDna } from "@/hooks/use-brand-dna";
 import { buildSmartChatContext } from "@/lib/ai/context-select";
+import { useQuery } from "@tanstack/react-query";
+import { getAnalyticsChatContext } from "@/lib/analytics.functions";
+import { useServerFn } from "@/lib/use-server-fn";
 import { useChatPrefs } from "@/hooks/use-chat-prefs";
 import {
   startPreviewPlan,
@@ -550,6 +553,19 @@ export function ChatPanel({
     return bits.join(" | ");
   })();
 
+  // Analytics snapshot (source-labelled: GA4, Search Console, AI Visibility,
+  // Mellox). Refreshed when analytics data changes; only sent when relevant.
+  const fetchAnalyticsContext = useServerFn(getAnalyticsChatContext);
+  const { data: analyticsContext } = useQuery({
+    queryKey: ["analytics", workspaceId, "chat-context"],
+    enabled: !!workspaceId,
+    queryFn: () => fetchAnalyticsContext({ data: { workspaceId } }),
+    staleTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  const analyticsText = analyticsContext?.text ?? "";
+
   // Structured context sources — selection happens per-turn based on the
   // last user message so we never send irrelevant blocks.
   const ctxSources = useMemo(() => {
@@ -746,6 +762,38 @@ export function ChatPanel({
       ]);
     }
 
+    // Analytics (every line names its data source)
+    if (analyticsText)
+      push(
+        "analytics",
+        "Analytics",
+        analyticsText,
+        [
+          "analytics",
+          "traffic",
+          "visits",
+          "visitors",
+          "sessions",
+          "users",
+          "clicks",
+          "impressions",
+          "ctr",
+          "ranking",
+          "position",
+          "seo",
+          "google",
+          "search",
+          "conversions",
+          "performance",
+          "results",
+          "visibility",
+          "drop",
+          "growth",
+          "why",
+        ],
+        { maxChars: 1200 },
+      );
+
     // Coach briefing
     if (coachSummary)
       push(
@@ -774,7 +822,7 @@ export function ChatPanel({
       website: siteUrl || dna.websiteUrl || undefined,
       sections,
     } satisfies import("@/lib/ai/context-select").CtxSources;
-  }, [dna, siteUrl, wsStats, coachSummary, competitorSummary]);
+  }, [dna, siteUrl, wsStats, coachSummary, competitorSummary, analyticsText]);
 
   // Flat context kept for downstream callers that expected a single string
   // (planner, agent-tasks, etc.). Uses a generic query so all sections score.

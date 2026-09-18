@@ -111,7 +111,14 @@ BEGIN
       ('mellox-ops-watch',       '*/5 * * * *',  '/api/public/hooks/ops-watch'),
       -- Resumes AI Visibility site scans whose worker lease expired (restarts,
       -- deploys, crawls that yielded at their time budget). Max 3 per run.
-      ('mellox-geo-scans',       '* * * * *',    '/api/public/hooks/geo-scans')
+      ('mellox-geo-scans',       '* * * * *',    '/api/public/hooks/geo-scans'),
+      -- Advances GEO Engineer agent runs (leased; resumes after yields).
+      ('mellox-geo-agents',      '* * * * *',    '/api/public/hooks/geo-agents'),
+      -- Advances UGC video renders (submit → poll → persist).
+      ('mellox-ugc-renders',     '* * * * *',    '/api/public/hooks/ugc-renders'),
+      -- Google Analytics 4 + Search Console: enqueues daily incremental syncs
+      -- and resumes initial 180-day backfills.
+      ('mellox-analytics-sync',  '*/10 * * * *', '/api/public/hooks/analytics-sync')
     ) AS t(jobname, schedule, path)
   LOOP
     IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = v_job.jobname) THEN

@@ -23,6 +23,7 @@ import { emitAppEvent } from "@/lib/app-events";
 import { isWorkspaceId, WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { rememberLastWorkspace } from "@/lib/workspace/last-opened";
 import { ErrorState } from "@/components/ui/empty-state";
+import { MelloxLoader } from "@/components/ui/page-loader";
 
 export type WorkspaceRole = "owner" | "admin" | "editor" | "viewer";
 
@@ -206,14 +207,11 @@ export function WorkspaceLoading() {
       <div className="hidden w-[48px] flex-none border-r border-border/60 sm:block" />
       <div className="flex min-w-0 flex-1 flex-col bg-background">
         <div className="flex h-14 items-center px-4">
-          <div className="h-4 w-40 animate-pulse rounded bg-surface-2" />
+          <div className="mx-skel h-4 w-40 rounded" />
         </div>
-        <div className="flex flex-1 flex-col items-center justify-end gap-4 p-6">
-          <div className="w-full max-w-2xl space-y-3">
-            <div className="h-4 w-2/3 animate-pulse rounded bg-surface-2" />
-            <div className="h-4 w-1/2 animate-pulse rounded bg-surface-2" />
-          </div>
-          <div className="h-14 w-full max-w-2xl animate-pulse rounded-2xl bg-surface-2" />
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 p-6">
+          <MelloxLoader />
+          <span className="mx-loader__label text-[14px] font-medium">Opening your workspace…</span>
         </div>
       </div>
     </div>

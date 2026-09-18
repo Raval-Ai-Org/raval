@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoader } from "@/components/ui/page-loader";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -207,7 +208,7 @@ function SharePage() {
     );
   };
 
-  if (loading) return <FullPage title="Loading…" body="Fetching what's been shared with you." />;
+  if (loading) return <PageLoader label="Loading…" />;
   if (error) return <FullPage title="Can't open this share" body={error} />;
   if (!share) return <FullPage title="Not found" body="" />;
 

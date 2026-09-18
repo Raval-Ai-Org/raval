@@ -58,6 +58,15 @@ const Schema = z.object({
   GITHUB_CLIENT_SECRET: z.string().optional(),
   GITHUB_INSTALL_VERIFICATION: z.enum(["oauth", "install_window", ""]).optional(),
   GITHUB_ALLOWED_RETURN_ORIGINS: z.string().optional(),
+  // Google Analytics 4 + Search Console connector (docs/google-analytics-connector.md).
+  // A web OAuth client separate from the Supabase sign-in client. Server-only.
+  GOOGLE_ANALYTICS_CLIENT_ID: z.string().optional(),
+  GOOGLE_ANALYTICS_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_ANALYTICS_REDIRECT_URI: optionalUrl,
+  // base64 of 32 random bytes — encrypts Google refresh/access tokens at rest.
+  GOOGLE_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  GOOGLE_ALLOWED_RETURN_ORIGINS: z.string().optional(),
+  FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED: z.string().optional(),
   // AI Visibility rendering fallback + fix verification.
   FEATURE_FLAG_GEO_RENDERING_ENABLED: z.string().optional(),
   GEO_RENDER_EXECUTABLE: z.string().optional(),
@@ -136,6 +145,17 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
       );
     }
   }
+  if (env.GOOGLE_ANALYTICS_CLIENT_ID || env.GOOGLE_ANALYTICS_CLIENT_SECRET) {
+    for (const name of ["GOOGLE_ANALYTICS_CLIENT_ID", "GOOGLE_ANALYTICS_CLIENT_SECRET"]) {
+      if (!env[name]) errors.push(`${name} is required when the Google Analytics connector is configured`);
+    }
+    const key = env.GOOGLE_TOKEN_ENCRYPTION_KEY ?? "";
+    if (!key) {
+      errors.push("GOOGLE_TOKEN_ENCRYPTION_KEY is required when the Google Analytics connector is configured");
+    } else if (Buffer.from(key, "base64").length !== 32) {
+      errors.push("GOOGLE_TOKEN_ENCRYPTION_KEY must be base64 of exactly 32 bytes");
+    }
+  }
   if ((env.DISTRIBUTION_PROVIDER ?? "").toLowerCase() === "socialapi" && !env.SOCIALAPI_API_KEY) {
     errors.push("SOCIALAPI_API_KEY is required when DISTRIBUTION_PROVIDER is socialapi");
   }
@@ -147,7 +167,7 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
   // A provider secret in a NEXT_PUBLIC_* variable is inlined into the browser bundle.
   for (const name of Object.keys(env)) {
     if (
-      /^NEXT_PUBLIC_.*(SOCIALAPI|SDR_ADMIN|SERVICE_ROLE|GITHUB_APP_PRIVATE|GITHUB_WEBHOOK|GITHUB_CLIENT_SECRET)/i.test(
+      /^NEXT_PUBLIC_.*(SOCIALAPI|SDR_ADMIN|SERVICE_ROLE|GITHUB_APP_PRIVATE|GITHUB_WEBHOOK|GITHUB_CLIENT_SECRET|GOOGLE_ANALYTICS_CLIENT_SECRET|GOOGLE_TOKEN_ENCRYPTION|GOOGLE_CLIENT_SECRET)/i.test(
         name,
       ) &&
       env[name]

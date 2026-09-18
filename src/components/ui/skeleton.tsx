@@ -14,13 +14,7 @@ function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>)
       role="status"
       aria-busy="true"
       aria-live="polite"
-      className={cn(
-        "relative overflow-hidden rounded-md bg-muted/60",
-        "before:absolute before:inset-0 before:-translate-x-full",
-        "before:animate-[skeleton-shimmer_1.6s_ease-in-out_infinite]",
-        "before:bg-[linear-gradient(90deg,transparent,hsl(var(--foreground)/0.06),transparent)]",
-        className,
-      )}
+      className={cn("mx-skel rounded-md", className)}
       {...props}
     />
   );

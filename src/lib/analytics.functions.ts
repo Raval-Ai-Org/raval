@@ -15,3 +15,15 @@ export const getAnalyticsSummary = serverFn<typeof Handlers.getAnalyticsSummary>
 export const getAnalyticsDrilldown = serverFn<typeof Handlers.getAnalyticsDrilldown>(
   "analytics/getAnalyticsDrilldown",
 );
+export const getAnalyticsReport = serverFn<typeof Handlers.getAnalyticsReport>(
+  "analytics/getAnalyticsReport",
+);
+export const getAnalyticsInsights = serverFn<typeof Handlers.getAnalyticsInsights>(
+  "analytics/getAnalyticsInsights",
+);
+export const refreshAnalyticsInsights = serverFn<typeof Handlers.refreshAnalyticsInsights>(
+  "analytics/refreshAnalyticsInsights",
+);
+export const getAnalyticsChatContext = serverFn<typeof Handlers.getAnalyticsChatContext>(
+  "analytics/getAnalyticsChatContext",
+);

@@ -81,6 +81,22 @@ export function isGeoProbesEnabled(workspaceId?: string): boolean {
   return isTruthy((process.env.FEATURE_FLAG_GEO_AI_PROBES_ENABLED ?? "").trim().toLowerCase());
 }
 
+/**
+ * Google Analytics 4 + Search Console connector. On whenever the OAuth client
+ * id is set, unless FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED=false;
+ * FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED_WS_<id> overrides per workspace.
+ */
+export function isGoogleAnalyticsEnabled(workspaceId?: string): boolean {
+  if (!process.env.GOOGLE_ANALYTICS_CLIENT_ID?.trim()) return false;
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return isTruthy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED ?? "").trim().toLowerCase());
+}
+
 /** Is the real SDR distribution path enabled? Off by default. */
 export function isSdrEnabled(): boolean {
   const v = process.env[ENV_FEATURE_SDR];

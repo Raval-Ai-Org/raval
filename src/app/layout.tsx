@@ -47,7 +47,7 @@ export const viewport: Viewport = {
   // renders a different colour than the page it frames.
   themeColor: [
     { color: "#000000", media: "(prefers-color-scheme: dark)" },
-    { color: "#f1f3f6", media: "(prefers-color-scheme: light)" },
+    { color: "#f3f4f7", media: "(prefers-color-scheme: light)" },
   ],
 };
 

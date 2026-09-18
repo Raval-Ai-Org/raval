@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PageLoader } from "@/components/ui/page-loader";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -34,22 +35,7 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
   if (!ready) {
     // A visible, accessible loading state instead of a blank screen while the
     // session is checked (it lives in localStorage, so the check is client-side).
-    return (
-      <div
-        className="flex min-h-screen items-center justify-center bg-background"
-        role="status"
-        aria-live="polite"
-      >
-        <div className="flex flex-col items-center gap-3">
-          {/* The track was `border-muted`, which on the light canvas is within
-              two lightness points of the background — only the moving arc was
-              visible, so the spinner read as a flickering sliver rather than a
-              ring. `border-border-strong` holds its shape in both themes. */}
-          <div className="size-8 animate-spin rounded-full border-2 border-border-strong border-t-primary" />
-          <span className="text-sm text-muted-foreground">Loading your workspace…</span>
-        </div>
-      </div>
-    );
+    return <PageLoader label="Loading your workspace…" />;
   }
   return <>{children}</>;
 }

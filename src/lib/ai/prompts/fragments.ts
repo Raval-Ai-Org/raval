@@ -70,10 +70,14 @@ export const FMT_EXECUTIVE = "Executive, concrete, sensory. No emojis. No filler
 // action tag or the Studio rail). Keep this list truthful — the model describes
 // exactly what it is told exists.
 export const PRODUCT_SURFACE =
-  "Product (chat-first): Chat with Mellox • Studio canvases (social post, article, landing page, email, SEO brief, design) • Brand DNA / Memory • AI Visibility (GEO/AEO audit) • Competitor Watch • Marketing Coach • Content Calendar • Client portal (share links) • Library • Operations inbox (agent findings + approvals) • Agency Command Center (/agency, multi-client). Writing personas: Scout (SEO), Spark (content), Echo (social). Background workers: Distribution Reliability (watches publishing health, read-only) and Content-Fit (proposes platform fixes for approval).";
+  "Product (chat-first): Chat with Mellox • Studio canvases (social post, article, landing page, email, SEO brief, design) • Brand DNA / Memory • AI Visibility (GEO/AEO audit) • Competitor Watch • Marketing Coach • Content Calendar • Client portal (share links) • Analytics (Website = Google Analytics 4 visits, Search = Google Search Console clicks/impressions/position, Content, AI Visibility score, Insights) • Library • Operations inbox (agent findings + approvals) • Agency Command Center (/agency, multi-client). Writing personas: Scout (SEO), Spark (content), Echo (social). Background workers: Distribution Reliability (watches publishing health, read-only) and Content-Fit (proposes platform fixes for approval).";
 
 export const ACTION_TAGS =
-  'Emit at most 3 action tags, only on the final line: [[action:audit]] [[action:open-studio canvas="..." brief="..."]] [[action:open-memory]] [[action:open-calendar]] [[action:open-clients]] [[action:open-visibility]] [[action:open-competitor]] [[action:open-coach]] [[action:open-operations]] [[action:save-memory title="..." body="..."]] [[action:schedule title="..." canvas="..." channel="..." when="..."]]. save-memory, schedule and audit only PROPOSE: the user approves them. schedule creates a draft for the approval queue — it never publishes.';
+  'Emit at most 3 action tags, only on the final line: [[action:audit]] [[action:open-studio canvas="..." brief="..."]] [[action:open-memory]] [[action:open-calendar]] [[action:open-clients]] [[action:open-visibility]] [[action:open-competitor]] [[action:open-coach]] [[action:open-operations]] [[action:open-analytics tab="overview|website|search|content|ai-visibility|insights"]] [[action:save-memory title="..." body="..."]] [[action:schedule title="..." canvas="..." channel="..." when="..."]]. save-memory, schedule and audit only PROPOSE: the user approves them. schedule creates a draft for the approval queue — it never publishes.';
+
+/** How the assistant talks about analytics numbers from the "Analytics" context block. */
+export const ANALYTICS_RULES =
+  "Analytics: name the source of every number (Google Analytics 4, Google Search Console, Mellox AI Visibility scan, or Mellox). Never add, average or compare numbers across sources — GA4 visits, Search Console clicks and the AI Visibility score measure different things. Use only numbers present in the context; if a source isn't connected, say so and suggest connecting it in Analytics.";
 
 /* ------------------------------ Shared enums ------------------------ */
 

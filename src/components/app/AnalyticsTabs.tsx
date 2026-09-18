@@ -2,41 +2,53 @@
 
 import { motion } from "framer-motion";
 import {
-  LayoutDashboard,
-  Search,
-  Share2,
   FileText,
-  PieChart as PieIcon,
+  Globe,
+  LayoutDashboard,
+  Lightbulb,
+  Search,
   Settings2,
-} from "@/components/ui/gemini-icons";
+  Target,
+} from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 export type AnalyticsTab =
-  "overview" | "organic" | "social" | "content" | "audience" | "automations";
+  | "overview"
+  | "website"
+  | "search"
+  | "content"
+  | "ai-visibility"
+  | "insights"
+  | "automations";
 
 export const TABS: {
   id: AnalyticsTab;
   label: string;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   blurb: string;
 }[] = [
-  {
-    id: "overview",
-    label: "Overview",
-    icon: LayoutDashboard,
-    blurb: "The 30-second snapshot of everything.",
-  },
-  { id: "organic", label: "Search", icon: Search, blurb: "How people find you on Google & AI." },
-  { id: "social", label: "Social", icon: Share2, blurb: "Posts, reach, and what's scheduled." },
-  { id: "content", label: "Content", icon: FileText, blurb: "Drafts moving toward publish." },
-  { id: "audience", label: "Audience", icon: PieIcon, blurb: "Who's visiting and where from." },
-  {
-    id: "automations",
-    label: "Automations",
-    icon: Settings2,
-    blurb: "Background helpers you've turned on.",
-  },
+  { id: "overview", label: "Overview", icon: LayoutDashboard, blurb: "Every source at a glance." },
+  { id: "website", label: "Website", icon: Globe, blurb: "Visits to your site · Google Analytics 4" },
+  { id: "search", label: "Search", icon: Search, blurb: "Google Search results · Search Console" },
+  { id: "content", label: "Content", icon: FileText, blurb: "What you make and post in Mellox" },
+  { id: "ai-visibility", label: "AI Visibility", icon: Target, blurb: "Mellox scan score for AI answers" },
+  { id: "insights", label: "Insights", icon: Lightbulb, blurb: "What changed and what to do next" },
+  { id: "automations", label: "Automations", icon: Settings2, blurb: "Background helpers you've turned on" },
 ];
+
+/** Old ?tab= values keep working. */
+const LEGACY: Record<string, AnalyticsTab> = {
+  organic: "ai-visibility",
+  social: "content",
+  audience: "website",
+  geo: "ai-visibility",
+};
+
+export function normalizeAnalyticsTab(value: string | null | undefined): AnalyticsTab | null {
+  if (!value) return null;
+  if (TABS.some((t) => t.id === value)) return value as AnalyticsTab;
+  return LEGACY[value] ?? null;
+}
 
 export function AnalyticsTabs({
   value,
@@ -45,16 +57,17 @@ export function AnalyticsTabs({
   value: AnalyticsTab;
   onChange: (t: AnalyticsTab) => void;
 }) {
-  const active = TABS.find((t) => t.id === value);
   return (
-    <div className="sticky top-0 z-20 -mx-3 mb-4 border-b border-border/70 bg-background/85 px-3 pt-2 pb-3 backdrop-blur-xl sm:-mx-5 sm:px-5">
-      <nav className="scrollbar-thin flex items-center gap-1 overflow-x-auto">
+    <div className="sticky top-0 z-20 -mx-3 border-b border-border/70 bg-background/85 px-3 pb-2.5 pt-2 backdrop-blur-xl sm:-mx-5 sm:px-5">
+      <nav role="tablist" aria-label="Analytics sections" className="scrollbar-thin flex items-center gap-1 overflow-x-auto">
         {TABS.map((t) => {
           const isActive = value === t.id;
           const Icon = t.icon;
           return (
             <button
               key={t.id}
+              role="tab"
+              aria-selected={isActive}
               onClick={() => onChange(t.id)}
               title={t.blurb}
               className={cn(
@@ -66,30 +79,15 @@ export function AnalyticsTabs({
                 <motion.span
                   layoutId="analytics-tab"
                   transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                  className="absolute inset-0 -z-10 rounded-full bg-card ring-1 ring-border/80 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_14px_-6px_hsl(var(--brand-blue)/0.35)]"
+                  className="absolute inset-0 -z-10 rounded-full bg-card shadow-sm ring-1 ring-border/80"
                 />
               )}
-              <Icon
-                className={cn("h-3.5 w-3.5", isActive && "text-[hsl(var(--brand-blue))]")}
-                strokeWidth={2.2}
-              />
+              <Icon className={cn("h-3.5 w-3.5", isActive && "text-primary")} />
               {t.label}
             </button>
           );
         })}
       </nav>
-
-      {active && (
-        <motion.p
-          key={active.id}
-          initial={{ opacity: 0, y: -2 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-          className="mt-2 pl-1 text-[11.5px] text-muted-foreground"
-        >
-          {active.blurb}
-        </motion.p>
-      )}
     </div>
   );
 }

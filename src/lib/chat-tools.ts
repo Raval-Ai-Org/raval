@@ -37,6 +37,7 @@ export type ChatToolKind =
   | "open-competitor"
   | "open-coach"
   | "open-operations"
+  | "open-analytics"
   | "save-memory"
   | "schedule";
 
@@ -65,6 +66,7 @@ const KNOWN_KINDS = new Set<ChatToolKind>([
   "open-competitor",
   "open-coach",
   "open-operations",
+  "open-analytics",
   "save-memory",
   "schedule",
 ]);
@@ -125,9 +127,29 @@ export function describeOffer(call: ChatToolCall): { label: string; hint?: strin
       return { label: "Open Marketing Coach" };
     case "open-operations":
       return { label: "Open Operations" };
+    case "open-analytics": {
+      const tab = analyticsTabParam(call.params.tab);
+      return { label: tab ? `Open Analytics · ${ANALYTICS_TAB_LABELS[tab]}` : "Open Analytics" };
+    }
     default:
       return { label: call.kind };
   }
+}
+
+const ANALYTICS_TAB_LABELS = {
+  overview: "Overview",
+  website: "Website",
+  search: "Search",
+  content: "Content",
+  "ai-visibility": "AI Visibility",
+  insights: "Insights",
+} as const;
+
+/** Only known analytics tabs; anything else opens the Overview. */
+function analyticsTabParam(value: string | undefined): keyof typeof ANALYTICS_TAB_LABELS | null {
+  return value && Object.prototype.hasOwnProperty.call(ANALYTICS_TAB_LABELS, value)
+    ? (value as keyof typeof ANALYTICS_TAB_LABELS)
+    : null;
 }
 
 const MAX_CALLS_PER_REPLY = 3;
@@ -244,6 +266,11 @@ export async function executeToolCall(
     case "open-operations": {
       emitAppEvent("open:operations");
       return { kind: call.kind, ok: true, label: "Opening Operations inbox" };
+    }
+    case "open-analytics": {
+      const tab = analyticsTabParam(call.params.tab);
+      emitAppEvent("open:analytics", tab ? { tab } : undefined);
+      return { kind: call.kind, ok: true, label: "Opening Analytics" };
     }
     case "save-memory": {
       const title = (call.params.title || "Note").slice(0, 120);

@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizeAnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { ensureGeoRunCapture } from "@/lib/geo/pending-run";
 import { Link, useRouterState, useNavigate } from "@/lib/navigation";
@@ -203,20 +204,14 @@ function AppShell() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const VALID_TABS = new Set([
-      "overview",
-      "organic",
-      "social",
-      "content",
-      "audience",
-      "automations",
-    ]);
-    const isValidTab = (t: unknown): t is string => typeof t === "string" && VALID_TABS.has(t);
+    // Current tab ids, plus legacy ones (organic/social/audience) mapped to their new home.
+    const isValidTab = (t: unknown): t is string =>
+      typeof t === "string" && normalizeAnalyticsTab(t) !== null;
 
     const openWith = (tab?: string) => {
       // Silently drop unknown tab values so a malformed deep-link doesn't
       // pollute the URL with garbage. The modal still opens on the default tab.
-      const clean = isValidTab(tab) ? tab : undefined;
+      const clean = isValidTab(tab) ? (normalizeAnalyticsTab(tab) ?? undefined) : undefined;
       if (clean) {
         const url = new URL(window.location.href);
         url.searchParams.set("tab", clean);

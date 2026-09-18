@@ -558,6 +558,470 @@ export type Database = {
           },
         ];
       };
+      analytics_ga4_daily: {
+        Row: {
+          bounced_sessions: number;
+          date: string;
+          engaged_sessions: number;
+          key_events: number;
+          new_users: number;
+          screen_page_views: number;
+          session_duration_seconds: number;
+          sessions: number;
+          source_id: string;
+          synced_at: string;
+          total_users: number;
+          workspace_id: string;
+        };
+        Insert: {
+          bounced_sessions?: number;
+          date: string;
+          engaged_sessions?: number;
+          key_events?: number;
+          new_users?: number;
+          screen_page_views?: number;
+          session_duration_seconds?: number;
+          sessions?: number;
+          source_id: string;
+          synced_at?: string;
+          total_users?: number;
+          workspace_id: string;
+        };
+        Update: {
+          bounced_sessions?: number;
+          date?: string;
+          engaged_sessions?: number;
+          key_events?: number;
+          new_users?: number;
+          screen_page_views?: number;
+          session_duration_seconds?: number;
+          sessions?: number;
+          source_id?: string;
+          synced_at?: string;
+          total_users?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "analytics_ga4_daily_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "analytics_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "analytics_ga4_daily_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      analytics_ga4_dimension_daily: {
+        Row: {
+          date: string;
+          dimension: string;
+          key_events: number;
+          screen_page_views: number;
+          sessions: number;
+          source_id: string;
+          synced_at: string;
+          total_users: number;
+          value: string;
+          workspace_id: string;
+        };
+        Insert: {
+          date: string;
+          dimension: string;
+          key_events?: number;
+          screen_page_views?: number;
+          sessions?: number;
+          source_id: string;
+          synced_at?: string;
+          total_users?: number;
+          value: string;
+          workspace_id: string;
+        };
+        Update: {
+          date?: string;
+          dimension?: string;
+          key_events?: number;
+          screen_page_views?: number;
+          sessions?: number;
+          source_id?: string;
+          synced_at?: string;
+          total_users?: number;
+          value?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "analytics_ga4_dimension_daily_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "analytics_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "analytics_ga4_dimension_daily_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      analytics_ga4_period_totals: {
+        Row: {
+          date_from: string;
+          date_to: string;
+          fetched_at: string;
+          source_id: string;
+          total_users: number;
+          workspace_id: string;
+        };
+        Insert: {
+          date_from: string;
+          date_to: string;
+          fetched_at?: string;
+          source_id: string;
+          total_users?: number;
+          workspace_id: string;
+        };
+        Update: {
+          date_from?: string;
+          date_to?: string;
+          fetched_at?: string;
+          source_id?: string;
+          total_users?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "analytics_ga4_period_totals_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "analytics_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "analytics_ga4_period_totals_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      analytics_gsc_daily: {
+        Row: {
+          clicks: number;
+          date: string;
+          impressions: number;
+          position_weighted: number;
+          source_id: string;
+          synced_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          clicks?: number;
+          date: string;
+          impressions?: number;
+          position_weighted?: number;
+          source_id: string;
+          synced_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          clicks?: number;
+          date?: string;
+          impressions?: number;
+          position_weighted?: number;
+          source_id?: string;
+          synced_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "analytics_gsc_daily_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "analytics_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "analytics_gsc_daily_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      analytics_gsc_dimension_daily: {
+        Row: {
+          clicks: number;
+          date: string;
+          dimension: string;
+          impressions: number;
+          position_weighted: number;
+          source_id: string;
+          synced_at: string;
+          value: string;
+          workspace_id: string;
+        };
+        Insert: {
+          clicks?: number;
+          date: string;
+          dimension: string;
+          impressions?: number;
+          position_weighted?: number;
+          source_id: string;
+          synced_at?: string;
+          value: string;
+          workspace_id: string;
+        };
+        Update: {
+          clicks?: number;
+          date?: string;
+          dimension?: string;
+          impressions?: number;
+          position_weighted?: number;
+          source_id?: string;
+          synced_at?: string;
+          value?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "analytics_gsc_dimension_daily_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "analytics_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "analytics_gsc_dimension_daily_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      analytics_insights: {
+        Row: {
+          created_at: string;
+          fingerprint: string;
+          id: string;
+          insights: Json;
+          model: string | null;
+          range_key: string;
+          signals: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          fingerprint: string;
+          id?: string;
+          insights?: Json;
+          model?: string | null;
+          range_key: string;
+          signals?: Json;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          fingerprint?: string;
+          id?: string;
+          insights?: Json;
+          model?: string | null;
+          range_key?: string;
+          signals?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "analytics_insights_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      analytics_sources: {
+        Row: {
+          account_name: string | null;
+          backfill_completed_at: string | null;
+          connection_id: string;
+          created_at: string;
+          currency: string | null;
+          display_name: string;
+          external_id: string;
+          id: string;
+          kind: string;
+          last_error: string | null;
+          last_synced_at: string | null;
+          last_synced_date: string | null;
+          selected_by: string | null;
+          site_host: string | null;
+          status: string;
+          time_zone: string | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          account_name?: string | null;
+          backfill_completed_at?: string | null;
+          connection_id: string;
+          created_at?: string;
+          currency?: string | null;
+          display_name: string;
+          external_id: string;
+          id?: string;
+          kind: string;
+          last_error?: string | null;
+          last_synced_at?: string | null;
+          last_synced_date?: string | null;
+          selected_by?: string | null;
+          site_host?: string | null;
+          status?: string;
+          time_zone?: string | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_name?: string | null;
+          backfill_completed_at?: string | null;
+          connection_id?: string;
+          created_at?: string;
+          currency?: string | null;
+          display_name?: string;
+          external_id?: string;
+          id?: string;
+          kind?: string;
+          last_error?: string | null;
+          last_synced_at?: string | null;
+          last_synced_date?: string | null;
+          selected_by?: string | null;
+          site_host?: string | null;
+          status?: string;
+          time_zone?: string | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "analytics_sources_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "analytics_sources_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      analytics_sync_runs: {
+        Row: {
+          attempts: number;
+          completed_at: string | null;
+          created_at: string;
+          cursor_date: string;
+          cursor_step: number;
+          error_code: string | null;
+          error_message: string | null;
+          failures: number;
+          id: string;
+          lease_until: string | null;
+          locked_by: string | null;
+          max_attempts: number;
+          next_attempt_at: string;
+          range_end: string;
+          range_start: string;
+          requested_by: string | null;
+          rows_written: number;
+          source_id: string;
+          started_at: string | null;
+          status: string;
+          trigger: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attempts?: number;
+          completed_at?: string | null;
+          created_at?: string;
+          cursor_date: string;
+          cursor_step?: number;
+          error_code?: string | null;
+          error_message?: string | null;
+          failures?: number;
+          id?: string;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          range_end: string;
+          range_start: string;
+          requested_by?: string | null;
+          rows_written?: number;
+          source_id: string;
+          started_at?: string | null;
+          status?: string;
+          trigger: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempts?: number;
+          completed_at?: string | null;
+          created_at?: string;
+          cursor_date?: string;
+          cursor_step?: number;
+          error_code?: string | null;
+          error_message?: string | null;
+          failures?: number;
+          id?: string;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          range_end?: string;
+          range_start?: string;
+          requested_by?: string | null;
+          rows_written?: number;
+          source_id?: string;
+          started_at?: string | null;
+          status?: string;
+          trigger?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "analytics_sync_runs_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "analytics_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "analytics_sync_runs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       api_rate_limits: {
         Row: {
           bucket_key: string;
@@ -1187,6 +1651,7 @@ export type Database = {
           created_at: string;
           expires_at: string;
           id: string;
+          pkce_verifier_enc: string | null;
           provider: string;
           return_origin: string | null;
           return_path: string | null;
@@ -1199,6 +1664,7 @@ export type Database = {
           created_at?: string;
           expires_at: string;
           id?: string;
+          pkce_verifier_enc?: string | null;
           provider: string;
           return_origin?: string | null;
           return_path?: string | null;
@@ -1211,6 +1677,7 @@ export type Database = {
           created_at?: string;
           expires_at?: string;
           id?: string;
+          pkce_verifier_enc?: string | null;
           provider?: string;
           return_origin?: string | null;
           return_path?: string | null;
@@ -2581,6 +3048,60 @@ export type Database = {
           },
           {
             foreignKeyName: "geo_verifications_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      google_oauth_credentials: {
+        Row: {
+          access_token_enc: string | null;
+          access_token_expires_at: string | null;
+          connection_id: string;
+          created_at: string;
+          email: string | null;
+          google_sub: string | null;
+          refresh_token_enc: string;
+          scopes: string[];
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          access_token_enc?: string | null;
+          access_token_expires_at?: string | null;
+          connection_id: string;
+          created_at?: string;
+          email?: string | null;
+          google_sub?: string | null;
+          refresh_token_enc: string;
+          scopes?: string[];
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          access_token_enc?: string | null;
+          access_token_expires_at?: string | null;
+          connection_id?: string;
+          created_at?: string;
+          email?: string | null;
+          google_sub?: string | null;
+          refresh_token_enc?: string;
+          scopes?: string[];
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "google_oauth_credentials_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: true;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "google_oauth_credentials_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -3998,10 +4519,44 @@ export type Database = {
           month_saved_usd: number;
         }[];
       };
+      analytics_ga4_dimension_totals: {
+        Args: {
+          p_source_id: string;
+          p_dimension: string;
+          p_from: string;
+          p_to: string;
+          p_limit?: number;
+        };
+        Returns: {
+          value: string;
+          sessions: number;
+          screen_page_views: number;
+          key_events: number;
+        }[];
+      };
+      analytics_gsc_dimension_totals: {
+        Args: {
+          p_source_id: string;
+          p_dimension: string;
+          p_from: string;
+          p_to: string;
+          p_limit?: number;
+        };
+        Returns: {
+          value: string;
+          clicks: number;
+          impressions: number;
+          position_weighted: number;
+        }[];
+      };
       call_app_hook: { Args: { p_path: string }; Returns: number };
       capture_ai_usage_reservation: {
         Args: { p_id: string; p_actual_cost_usd?: number; p_latency_ms?: number };
         Returns: boolean;
+      };
+      claim_analytics_sync_runs: {
+        Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
+        Returns: Database["public"]["Tables"]["analytics_sync_runs"]["Row"][];
       };
       claim_due_scheduled_jobs: {
         Args: {

@@ -245,11 +245,13 @@ function ProjectsPage() {
           transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
           className="font-display mt-4 text-[40px] leading-[1.05] tracking-tight sm:text-[52px]"
         >
-          {loading
-            ? `Loading your ${copy.nounPlural}…`
-            : workspaces.length === 0
-              ? copy.firstHeadline(userName ? userName.split(" ")[0] : undefined)
-              : copy.returningHeadline(userEmail ? userEmail.split("@")[0] : undefined)}
+          {loading ? (
+            <span className="mx-loader__label">{`Loading your ${copy.nounPlural}…`}</span>
+          ) : workspaces.length === 0 ? (
+            copy.firstHeadline(userName ? userName.split(" ")[0] : undefined)
+          ) : (
+            copy.returningHeadline(userEmail ? userEmail.split("@")[0] : undefined)
+          )}
         </motion.h1>
         <motion.p
           initial={{ opacity: 0 }}
@@ -374,7 +376,8 @@ function ProjectsPage() {
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="h-[210px] animate-pulse rounded-2xl border border-border/60 bg-background/40"
+                className="mx-skel h-[210px] rounded-2xl border border-border/60"
+                style={{ ["--mx-skel-delay" as string]: `${i * 0.12}s` }}
               />
             ))}
           </div>
