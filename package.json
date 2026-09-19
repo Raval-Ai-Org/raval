@@ -9,7 +9,7 @@
     "dev": "next dev -p 8080",
     "build": "next build",
     "build:dev": "next build",
-    "start": "node .next/standalone/server.js",
+    "start": "node scripts/start-production.mjs",
     "preview": "next build && next start -p 8080",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
