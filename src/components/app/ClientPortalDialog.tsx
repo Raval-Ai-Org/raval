@@ -80,6 +80,9 @@ type EventRow = {
   actor_name: string | null;
   actor_email: string | null;
   marketer_decision: string;
+  actor_type?: "client" | "team";
+  marketer_read_at?: string | null;
+  client_read_at?: string | null;
   created_at: string;
 };
 
@@ -295,6 +298,8 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
   const [shares, setShares] = useState<ShareRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
 
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
@@ -316,6 +321,25 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    const channel = supabase
+      .channel(`client-events-inbox:${workspaceId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "client_events" },
+        () => void refresh(),
+      )
+      .subscribe();
+    const interval = window.setInterval(() => {
+      if (!document.hidden) void refresh();
+    }, 30_000);
+    return () => {
+      window.clearInterval(interval);
+      void supabase.removeChannel(channel);
+    };
+  }, [refresh, workspaceId]);
 
   const decide = async (eventId: string, decision: "accepted" | "dismissed" | "applied") => {
     setBusy(eventId);
@@ -359,7 +383,30 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
     }
   };
 
-  const pending = events.filter((e) => e.marketer_decision === "pending" && e.kind !== "viewed");
+  const reply = async (shareId: string) => {
+    if (!replyText.trim()) return;
+    setBusy(`reply:${shareId}`);
+    try {
+      const r = await authedFetch("/api/shares?action=reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shareId, body: replyText.trim() }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      setReplyText("");
+      setReplyTo(null);
+      toast.success("Reply sent to the client");
+      refresh();
+    } catch (e: any) {
+      toast.error("Couldn't send reply", { description: e?.message });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const pending = events.filter(
+    (e) => e.actor_type !== "team" && e.marketer_decision === "pending" && e.kind !== "viewed",
+  );
   const recent = events
     .filter((e) => e.marketer_decision !== "pending" || e.kind === "viewed")
     .slice(0, 20);
@@ -479,7 +526,34 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
                             </Button>
                           </>
                         )}
+                        {share && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setReplyTo(replyTo === share.id ? null : share.id)}
+                          >
+                            Reply
+                          </Button>
+                        )}
                       </div>
+                      {share && replyTo === share.id && (
+                        <div className="mt-2 flex gap-2">
+                          <Textarea
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            rows={2}
+                            placeholder="Reply to the client"
+                            className="text-[12px]"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => reply(share.id)}
+                            disabled={!replyText.trim() || busy === `reply:${share.id}`}
+                          >
+                            Send
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -900,17 +974,43 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
     }
   };
 
+  const reactivate = async (shareId: string) => {
+    setBusy(shareId);
+    try {
+      const r = await authedFetch("/api/shares?action=reactivate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shareId }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const { url } = await r.json();
+      await navigator.clipboard.writeText(url);
+      toast.success("Share reactivated — secure link copied");
+      refresh();
+    } catch (e: any) {
+      toast.error("Couldn't reactivate", { description: e?.message });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const copyLink = async (s: ShareRow) => {
-    // We only have slug — token isn't returned after create, so we can only re-show the public URL skeleton.
-    // For revisiting an existing share, marketers should preview-as-client from the share creation success screen.
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    const url = `${baseUrl}/share/${s.slug}`;
+    const r = await authedFetch("/api/shares?action=link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shareId: s.id }),
+    });
+    if (!r.ok) {
+      toast.error("Couldn't generate a secure link");
+      return;
+    }
+    const { url } = await r.json();
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(s.id);
       setTimeout(() => setCopiedId(null), 1500);
     } catch {}
-    toast.info("Slug copied — add the original ?t=… token to open as client");
+    toast.success("Secure portal link copied");
   };
 
   if (loading && shares.length === 0) {
@@ -978,7 +1078,7 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </Button>
-              {s.status === "active" && (
+              {s.status === "active" ? (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -987,6 +1087,16 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
                   title="Revoke share"
                 >
                   <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => reactivate(s.id)}
+                  disabled={busy === s.id}
+                  title="Reactivate share"
+                >
+                  Reactivate
                 </Button>
               )}
             </div>

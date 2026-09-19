@@ -22,6 +22,7 @@ import {
   X,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { DownloadAssetButton } from "@/components/app/DownloadAssetButton";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { PlatformStack, TypeGlyph } from "@/components/studio/studio-ui";
 import { openItemOrJob } from "@/hooks/use-studio";
@@ -742,11 +743,19 @@ function StatusBadge({ status, className }: { status: string; className?: string
 function PostCard({ group, thumb, onOpen }: { group: Group; thumb?: string; onOpen: () => void }) {
   const legacy = group.type === "legacy";
   const type = (legacy ? "article" : group.type) as StudioType;
+  const downloadName = `mellox-${group.mediaType ?? "asset"}-${new Date().toISOString().slice(0, 10)}`;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
       className={cn(
         `studio-tone-${type} group flex h-full w-full flex-col overflow-hidden rounded-2xl bg-surface-3 text-left shadow-1 ring-1 ring-border/70`,
         "transition-[box-shadow,translate] duration-[--motion-duration-base] ease-[--motion-ease-emphasized] hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-18px_hsl(var(--tone)/0.5)]",
@@ -778,6 +787,11 @@ function PostCard({ group, thumb, onOpen }: { group: Group; thumb?: string; onOp
           </span>
         )}
         <StatusBadge status={group.status} className="absolute left-2.5 top-2.5" />
+        {thumb ? (
+          <span className="absolute right-2.5 top-2.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            <DownloadAssetButton url={thumb} filename={downloadName} compact className="bg-black/55 text-white backdrop-blur hover:bg-black/75" />
+          </span>
+        ) : null}
       </span>
       <span className="flex min-w-0 flex-1 flex-col p-3">
         <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
@@ -791,16 +805,24 @@ function PostCard({ group, thumb, onOpen }: { group: Group; thumb?: string; onOp
           <span className="ml-auto shrink-0 tabular-nums">{ago(group.createdAt)}</span>
         </span>
       </span>
-    </button>
+    </div>
   );
 }
 
 function MediaCard({ asset, onOpen }: { asset: LibraryAsset; onOpen: () => void }) {
   const kind = mediaKind(asset);
+  const downloadName = `mellox-${kind}-${new Date().toISOString().slice(0, 10)}`;
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
       aria-label={`Open ${kind}: ${asset.name}`}
       className="group relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-surface-2 shadow-1 ring-1 ring-border/70 transition-[box-shadow,translate] duration-[--motion-duration-base] hover:-translate-y-0.5 hover:shadow-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
     >
@@ -832,12 +854,15 @@ function MediaCard({ asset, onOpen }: { asset: LibraryAsset; onOpen: () => void 
         {kind === "video" ? <VideoIcon className="size-3" /> : <ImageIcon className="size-3" />}
         {kind === "video" ? "Video" : "Image"}
       </span>
+      <span className="absolute right-2.5 top-2.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <DownloadAssetButton url={asset.url} filename={downloadName} mimeType={asset.mimeType} compact className="bg-black/55 text-white backdrop-blur hover:bg-black/75" />
+      </span>
       {asset.createdAt ? (
         <span className="absolute inset-x-0 bottom-0 translate-y-1 bg-gradient-to-t from-black/60 to-transparent px-2.5 pb-2 pt-6 text-left text-[11px] text-white opacity-0 transition-[opacity,translate] duration-[--motion-duration-base] group-hover:translate-y-0 group-hover:opacity-100">
           {ago(asset.createdAt)}
         </span>
       ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -849,10 +874,18 @@ function ListRow({ item, thumb, onOpen }: { item: Item; thumb?: string; onOpen: 
       : item.group.type
     : mediaStudioType(item.asset);
   const kind = isPost ? item.group.mediaType : mediaKind(item.asset);
+  const downloadName = `mellox-${isPost ? item.group.mediaType ?? "asset" : kind}-${new Date().toISOString().slice(0, 10)}`;
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
       className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors first:rounded-t-2xl last:rounded-b-2xl hover:bg-surface-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/55"
     >
       <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border/60">
@@ -889,7 +922,14 @@ function ListRow({ item, thumb, onOpen }: { item: Item; thumb?: string; onOpen: 
       <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
         {item.createdAt ? ago(item.createdAt) : ""}
       </span>
-    </button>
+      <DownloadAssetButton
+        url={thumb}
+        filename={downloadName}
+        mimeType={isPost ? undefined : item.asset.mimeType}
+        compact
+        className="shrink-0"
+      />
+    </div>
   );
 }
 
@@ -1090,12 +1130,12 @@ function PostDetail({
             Copy caption
           </Button>
           {thumb ? (
-            <Button variant="outline" asChild>
-              <a href={thumb} download target="_blank" rel="noreferrer">
-                <Download />
-                Download {group.mediaType === "video" ? "video" : "image"}
-              </a>
-            </Button>
+            <DownloadAssetButton
+              url={thumb}
+              filename={`mellox-${group.mediaType ?? "asset"}-${new Date().toISOString().slice(0, 10)}`}
+            >
+              Download {group.mediaType === "video" ? "video" : "image"}
+            </DownloadAssetButton>
           ) : null}
         </div>
       </div>
@@ -1173,12 +1213,12 @@ function MediaDetail({ asset, onCreate }: { asset: LibraryAsset; onCreate: () =>
 
         <div className="mt-6 flex flex-wrap gap-2">
           {asset.url ? (
-            <Button className="studio-cta" asChild>
-              <a href={asset.url} download target="_blank" rel="noreferrer">
-                <Download />
-                Download
-              </a>
-            </Button>
+            <DownloadAssetButton
+              url={asset.url}
+              filename={`mellox-${kind}-${new Date().toISOString().slice(0, 10)}`}
+              mimeType={asset.mimeType}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            />
           ) : null}
           <Button variant="outline" onClick={copyLink} disabled={!asset.url}>
             <LinkIcon />

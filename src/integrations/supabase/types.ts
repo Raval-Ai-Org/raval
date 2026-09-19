@@ -1306,6 +1306,7 @@ export type Database = {
       };
       client_events: {
         Row: {
+          actor_type: string;
           actor_email: string | null;
           actor_name: string | null;
           body: string | null;
@@ -1316,10 +1317,13 @@ export type Database = {
           marketer_decided_at: string | null;
           marketer_decided_by: string | null;
           marketer_decision: string;
+          marketer_read_at: string | null;
+          client_read_at: string | null;
           meta: Json;
           share_id: string;
         };
         Insert: {
+          actor_type?: string;
           actor_email?: string | null;
           actor_name?: string | null;
           body?: string | null;
@@ -1330,10 +1334,13 @@ export type Database = {
           marketer_decided_at?: string | null;
           marketer_decided_by?: string | null;
           marketer_decision?: string;
+          marketer_read_at?: string | null;
+          client_read_at?: string | null;
           meta?: Json;
           share_id: string;
         };
         Update: {
+          actor_type?: string;
           actor_email?: string | null;
           actor_name?: string | null;
           body?: string | null;
@@ -1344,6 +1351,8 @@ export type Database = {
           marketer_decided_at?: string | null;
           marketer_decided_by?: string | null;
           marketer_decision?: string;
+          marketer_read_at?: string | null;
+          client_read_at?: string | null;
           meta?: Json;
           share_id?: string;
         };

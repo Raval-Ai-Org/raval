@@ -20,6 +20,16 @@ const renameWorkspaceSchema = z.object({
   workspaceId: uuidSchema,
   name: z.string().trim().min(1).max(120),
 });
+const memberMutationSchema = z.object({ workspaceId: uuidSchema, userId: uuidSchema });
+const memberRoleSchema = memberMutationSchema.extend({
+  role: z.enum(["admin", "editor", "viewer"]),
+});
+const inviteSchema = z.object({
+  workspaceId: uuidSchema,
+  email: z.string().trim().email().max(254),
+  role: z.enum(["admin", "editor", "viewer"]),
+});
+const inviteIdSchema = z.object({ workspaceId: uuidSchema, inviteId: uuidSchema });
 
 export const renameWorkspace = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -263,4 +273,69 @@ export const getWorkspaceMemberProfiles = createServerFn({ method: "GET" })
       role: String(member.role),
       joined_at: member.created_at,
     }));
+  });
+
+export const createWorkspaceInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => inviteSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await requireWorkspaceRole(context, data.workspaceId, "admin");
+    const { data: invite, error } = await context.supabase
+      .from("workspace_invites")
+      .upsert(
+        {
+          workspace_id: data.workspaceId,
+          email: data.email.toLowerCase(),
+          role: data.role,
+          invited_by: context.userId,
+        },
+        { onConflict: "workspace_id,email" },
+      )
+      .select("id, token, email, role")
+      .single();
+    if (error || !invite) throw new Error("Could not create invite");
+    return invite;
+  });
+
+export const revokeWorkspaceInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => inviteIdSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await requireWorkspaceRole(context, data.workspaceId, "admin");
+    const { error } = await context.supabase
+      .from("workspace_invites")
+      .delete()
+      .eq("id", data.inviteId)
+      .eq("workspace_id", data.workspaceId);
+    if (error) throw new Error("Could not revoke invite");
+    return { ok: true };
+  });
+
+export const updateWorkspaceMemberRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => memberRoleSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await requireWorkspaceRole(context, data.workspaceId, "owner");
+    const { data: updated, error } = await context.supabase
+      .from("workspace_members")
+      .update({ role: data.role })
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId)
+      .select("user_id, role");
+    if (error || !updated?.length) throw new Error("Could not change member role");
+    return updated[0];
+  });
+
+export const removeWorkspaceMember = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => memberMutationSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await requireWorkspaceRole(context, data.workspaceId, "owner");
+    const { error } = await context.supabase
+      .from("workspace_members")
+      .delete()
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId);
+    if (error) throw new Error("Could not remove member");
+    return { ok: true };
   });

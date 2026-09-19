@@ -5,7 +5,6 @@ import { useAppEvent } from "@/hooks/use-app-event";
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
-  Bot,
   Plus,
   Trash2,
   Search,
@@ -16,7 +15,6 @@ import {
   Mail,
   Calendar,
   Repeat,
-  Check,
   Wand2,
 } from "@/components/brand/icons";
 import {
@@ -28,10 +26,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { useAgentToggles } from "@/hooks/use-agent-toggles";
-import { agentList } from "@/lib/agents";
 import { useServerFn } from "@/lib/use-server-fn";
 import {
   listScheduledJobs,
@@ -43,9 +37,6 @@ import {
 } from "@/lib/schedules.functions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-const PILL =
-  "group relative inline-flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-card/70 px-2.5 sm:px-3 text-[12px] font-medium text-foreground/80 backdrop-blur-md transition-[transform,box-shadow,background-color,border-color,color] duration-200 ease-out hover:-translate-y-px hover:border-foreground/20 hover:bg-card hover:text-foreground hover:shadow-[0_4px_12px_-6px_rgba(0,0,0,0.12)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 // Segment style — borderless inner button used inside the unified Status Cluster.
 const SEG =
@@ -61,8 +52,6 @@ import { BrandDnaButton } from "./BrandDnaPanel";
 export { BrandDnaButton };
 
 /* ───────────────────────── SCHEDULE ───────────────────────── */
-
-const AGENT_ICONS: Record<string, any> = { seo: Search, content: FileText, social: Share2 };
 
 type Cadence = "once" | "hourly" | "daily" | "weekly";
 type TaskType = "social-post" | "content-gen" | "seo-audit" | "crm-message" | "custom";
@@ -535,133 +524,6 @@ export function ScheduleButton({ workspaceId }: { workspaceId: string | null }) 
   );
 }
 
-/* ───────────────────────── 24/7 AUTOPILOT ───────────────────────── */
-
-export function AutopilotButton() {
-  const { activeCount, total, set, setAll, isOn } = useAgentToggles();
-  const allOn = activeCount === total;
-  const anyOn = activeCount > 0;
-  const [open, setOpen] = useState(false);
-  useOpenOnEvent("open:autopilot", setOpen);
-
-  const [cadence, setCadence] = useState<Record<string, string>>({});
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("agent-cadence");
-      if (raw) setCadence(JSON.parse(raw));
-    } catch {}
-  }, []);
-  const updateCadence = (id: string, v: string) => {
-    setCadence((c) => {
-      const next = { ...c, [id]: v };
-      try {
-        localStorage.setItem("agent-cadence", JSON.stringify(next));
-      } catch {}
-      return next;
-    });
-  };
-  const CADENCES = ["Live", "Hourly", "Daily 9am", "Weekly Mon"];
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          className={cn(PILL, anyOn && "border-emerald-500/40")}
-          title="24/7 agents running for you"
-          aria-label={`Autopilot — ${activeCount} of ${total} agents active`}
-        >
-          <span className="relative flex h-2 w-2" aria-hidden>
-            {anyOn && (
-              <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500 opacity-75" />
-            )}
-            <span
-              className={cn(
-                "relative h-2 w-2 rounded-full",
-                anyOn ? "bg-emerald-500" : "bg-muted-foreground",
-              )}
-            />
-          </span>
-          <Bot className="h-3.5 w-3.5" aria-hidden />
-          <span className="hidden sm:inline tabular-nums">
-            {activeCount}/{total} <span className="text-muted-foreground">24/7</span>
-          </span>
-        </button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Bot className="h-4 w-4 text-aura" /> 24/7 Agents
-          </DialogTitle>
-          <DialogDescription>
-            Always-on agents that watch, react and ship while you sleep. Pick a cadence for each.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
-          <div>
-            <div className="text-[13px] font-semibold">Master autopilot</div>
-            <div className="text-[11.5px] text-muted-foreground">
-              {anyOn ? "Running — pause everything." : "Paused — wake the team."}
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant={allOn ? "outline" : "default"}
-            onClick={() => setAll(!allOn)}
-            className="gap-1.5"
-          >
-            {allOn ? (
-              <>
-                <Pause className="h-3.5 w-3.5" /> Pause all
-              </>
-            ) : (
-              <>
-                <Play className="h-3.5 w-3.5" /> Run all
-              </>
-            )}
-          </Button>
-        </div>
-        <div className="mt-2 space-y-1.5 max-h-[50vh] overflow-auto pr-1">
-          {agentList.map((a) => {
-            const on = isOn(a.id);
-            const c = cadence[a.id] ?? "Live";
-            return (
-              <div key={a.id} className="rounded-lg border border-border bg-card/60 p-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[12.5px] font-medium">{a.role}</div>
-                    <div className="truncate text-[11px] text-muted-foreground">
-                      {a.missions[0]?.label ?? ""}
-                    </div>
-                  </div>
-                  <Switch checked={on} onCheckedChange={(v) => set(a.id, v)} />
-                </div>
-                {on && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {CADENCES.map((label) => (
-                      <button
-                        key={label}
-                        onClick={() => updateCadence(a.id, label)}
-                        className={cn(
-                          "rounded-full border px-2 py-0.5 text-[10.5px] transition",
-                          c === label
-                            ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground",
-                        )}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 /* ───────────────────────── BAR ───────────────────────── */
 
 export function TopBarActions({ workspaceId }: { workspaceId: string | null }) {
@@ -675,8 +537,6 @@ export function TopBarActions({ workspaceId }: { workspaceId: string | null }) {
       <BrandDnaButton workspaceId={workspaceId} />
       <span className="mx-0.5 h-3.5 w-px bg-border/60" />
       <ScheduleButton workspaceId={workspaceId} />
-      <span className="mx-0.5 h-3.5 w-px bg-border/60" />
-      <AutopilotButton />
     </motion.div>
   );
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createHash, randomBytes } from "crypto";
-import { jsonError } from "@/server/api-auth";
+import { checkWorkspaceMembership, jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { checkOutput } from "@/server/guardrails/output-check";
 import { moderateImage } from "@/server/guardrails/moderation";
@@ -42,6 +42,10 @@ const DecideSchema = z.object({
 });
 
 const RevokeSchema = z.object({ shareId: z.string().uuid() });
+const ReplySchema = z.object({
+  shareId: z.string().uuid(),
+  body: z.string().trim().min(1).max(4000),
+});
 
 const ListSchema = z.object({ workspaceId: z.string().uuid() });
 
@@ -186,7 +190,7 @@ export const POST = defineRoute({
         const { data: ev } = await supabase
           .from("client_events")
           .select(
-            "id, share_id, item_id, kind, body, actor_name, actor_email, marketer_decision, created_at",
+            "id, share_id, item_id, kind, body, actor_name, actor_email, actor_type, marketer_decision, marketer_read_at, client_read_at, created_at",
           )
           .in("share_id", ids)
           .order("created_at", { ascending: false })
@@ -198,6 +202,17 @@ export const POST = defineRoute({
 
     if (action === "revoke") {
       const { shareId } = RevokeSchema.parse(await request.json());
+      const { data: share } = await supabase
+        .from("client_shares")
+        .select("workspace_id")
+        .eq("id", shareId)
+        .maybeSingle();
+      const access = await checkWorkspaceMembership(
+        { ok: true, userId, claims: {} as never, supabase },
+        share?.workspace_id,
+        { minRole: "editor" },
+      );
+      if (!access.ok) return access.response;
       const { error } = await supabase
         .from("client_shares")
         .update({ status: "revoked" })
@@ -206,14 +221,85 @@ export const POST = defineRoute({
       return Response.json({ ok: true });
     }
 
+    if (action === "reactivate" || action === "link") {
+      const { shareId } = RevokeSchema.parse(await request.json());
+      const { data: share } = await supabase
+        .from("client_shares")
+        .select("workspace_id, slug")
+        .eq("id", shareId)
+        .maybeSingle();
+      const access = await checkWorkspaceMembership(
+        { ok: true, userId, claims: {} as never, supabase },
+        share?.workspace_id,
+        { minRole: "editor" },
+      );
+      if (!access.ok) return access.response;
+      const token = makeToken();
+      const { error } = await supabase
+        .from("client_shares")
+        .update({
+          token_hash: sha256(token),
+          ...(action === "reactivate" ? { status: "active" } : {}),
+        })
+        .eq("id", shareId);
+      if (error) return jsonError(500, error.message);
+      return Response.json({
+        ok: true,
+        url: `${new URL(request.url).origin}/share/${share?.slug}?t=${token}`,
+      });
+    }
+
+    if (action === "reply") {
+      const { shareId, body } = ReplySchema.parse(await request.json());
+      const { data: share } = await supabase
+        .from("client_shares")
+        .select("workspace_id")
+        .eq("id", shareId)
+        .maybeSingle();
+      const access = await checkWorkspaceMembership(
+        { ok: true, userId, claims: {} as never, supabase },
+        share?.workspace_id,
+        { minRole: "editor" },
+      );
+      if (!access.ok) return access.response;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("id", userId)
+        .maybeSingle();
+      const { error } = await supabase.from("client_events").insert({
+        share_id: shareId,
+        kind: "replied",
+        body,
+        actor_name: profile?.name ?? "Team",
+        actor_type: "team",
+        meta: {},
+      });
+      if (error) return jsonError(500, error.message);
+      return Response.json({ ok: true });
+    }
+
     if (action === "decide") {
       const { eventId, decision } = DecideSchema.parse(await request.json());
+      const { data: target } = await supabase
+        .from("client_events")
+        .select("share_id, client_shares(workspace_id)")
+        .eq("id", eventId)
+        .maybeSingle();
+      const targetWorkspace = (target as any)?.client_shares?.workspace_id;
+      const access = await checkWorkspaceMembership(
+        { ok: true, userId, claims: {} as never, supabase },
+        targetWorkspace,
+        { minRole: "editor" },
+      );
+      if (!access.ok) return access.response;
       const { data: ev, error: evErr } = await supabase
         .from("client_events")
         .update({
           marketer_decision: decision,
           marketer_decided_at: new Date().toISOString(),
           marketer_decided_by: userId,
+          marketer_read_at: new Date().toISOString(),
         })
         .eq("id", eventId)
         .select("id, share_id, item_id, kind, body")
@@ -239,6 +325,12 @@ export const POST = defineRoute({
 
     // Default: create
     const body = CreateSchema.parse(await request.json());
+    const access = await checkWorkspaceMembership(
+      { ok: true, userId, claims: {} as never, supabase },
+      body.workspaceId,
+      { minRole: "editor" },
+    );
+    if (!access.ok) return access.response;
 
     // Output guardrails before anything reaches a client portal (proposal D):
     // shared content is checked for personal data, unsubstantiated/medical/

@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 import { createSupabaseFetch } from "./fetch";
 import type { Database } from "./types";
 
@@ -42,17 +42,36 @@ function createSupabaseClient() {
     throw new Error(message);
   }
 
-  return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  const client = createBrowserClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: {
       fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
     },
-    auth: {
-      storage: typeof window !== "undefined" ? localStorage : undefined,
-      persistSession: true,
-      autoRefreshToken: true,
-      flowType: "pkce",
-    },
   });
+
+  if (typeof window !== "undefined") {
+    try {
+      const projectRef = new URL(SUPABASE_URL).hostname.split(".")[0];
+      const legacy = window.localStorage.getItem(`sb-${projectRef}-auth-token`);
+      if (legacy && !document.cookie.includes(`sb-${projectRef}-auth-token`)) {
+        const parsed: unknown = JSON.parse(legacy);
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          "access_token" in parsed &&
+          "refresh_token" in parsed &&
+          typeof parsed.access_token === "string" &&
+          typeof parsed.refresh_token === "string"
+        ) {
+          void client.auth.setSession({
+            access_token: parsed.access_token,
+            refresh_token: parsed.refresh_token,
+          });
+        }
+      }
+    } catch {}
+  }
+
+  return client;
 }
 
 let _supabase: ReturnType<typeof createSupabaseClient> | undefined;

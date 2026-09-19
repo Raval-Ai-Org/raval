@@ -6,14 +6,11 @@ import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check,
-  X,
   MessageSquare,
   ThumbsUp,
   ThumbsDown,
   Lightbulb,
-  Loader2,
   Lock,
-  ExternalLink,
   Sparkles,
 } from "@/components/ui/gemini-icons";
 import { Logo } from "@/components/brand/Logo";
@@ -45,6 +42,16 @@ type ShareInfo = {
   passwordRequired?: boolean;
 };
 
+type PortalEvent = {
+  id: string;
+  item_id: string | null;
+  kind: string;
+  body: string | null;
+  actor_name: string | null;
+  actor_type: "client" | "team";
+  created_at: string;
+};
+
 export function FullPage({ title, body }: { title: string; body: string }) {
   return (
     <div className="min-h-dvh bg-background grid place-items-center px-4">
@@ -66,6 +73,7 @@ function SharePage() {
   const [locked, setLocked] = useState(false);
   const [share, setShare] = useState<ShareInfo | null>(null);
   const [items, setItems] = useState<Item[]>([]);
+  const [events, setEvents] = useState<PortalEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [identity, setIdentity] = useState<{ name: string; email: string }>({
@@ -106,6 +114,7 @@ function SharePage() {
       }
       setShare(data.share);
       setItems(data.items ?? []);
+      setEvents(data.events ?? []);
       if (data.locked) {
         setLocked(true);
         return;
@@ -195,6 +204,18 @@ function SharePage() {
       toast.error("Couldn't send — try again");
       return;
     }
+    setEvents((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        item_id: payload.itemId ?? null,
+        kind,
+        body: payload.body ?? null,
+        actor_name: identity.name || null,
+        actor_type: "client",
+        created_at: new Date().toISOString(),
+      },
+    ]);
     toast.success(
       kind === "approved"
         ? "Approved — sent to marketer for confirmation"
@@ -320,6 +341,40 @@ function SharePage() {
         )}
 
         {/* Items */}
+        {events.length > 0 && (
+          <section className="rounded-2xl border border-border/60 bg-card p-5 sm:p-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold">Conversation</h2>
+              <span className="text-[11px] text-muted-foreground">{events.length} messages</span>
+            </div>
+            <div className="space-y-3">
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className={cn(
+                    "rounded-xl px-3.5 py-3 text-[13px]",
+                    event.actor_type === "team"
+                      ? "bg-secondary"
+                      : "bg-[hsl(var(--brand-blue)/0.08)]",
+                  )}
+                >
+                  <div className="mb-1 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {event.actor_name ?? "Client"}
+                    </span>
+                    <time dateTime={event.created_at}>
+                      {new Date(event.created_at).toLocaleString()}
+                    </time>
+                  </div>
+                  <p className="whitespace-pre-wrap">
+                    {event.body ?? event.kind.replaceAll("_", " ")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <div className="space-y-4">
           <AnimatePresence>
             {items.map((it, idx) => (

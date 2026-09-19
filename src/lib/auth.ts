@@ -1,6 +1,9 @@
 import { emitAppEvent } from "@/lib/app-events";
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { safeNextPath } from "@/lib/redirects";
+
+export { safeNextPath } from "@/lib/redirects";
 
 const AUTH_NEXT_KEY = "raval:auth-next";
 
@@ -55,7 +58,7 @@ function clearAccountData(store: Storage) {
 }
 
 /**
- * Clear auth session + workspace-scoped caches and hard-redirect to /login.
+ * Clear auth session + workspace-scoped caches and hard-redirect to the public home.
  * Hard navigation drops every in-memory store (React state, router context,
  * query cache) so the next signed-in user starts with fresh workspace context.
  */
@@ -77,13 +80,8 @@ export async function signOutAndRedirect(queryClient?: QueryClient) {
       window.sessionStorage.removeItem(AUTH_NEXT_KEY);
     } catch {}
     emitAppEvent("workspace:changed", { id: null });
-    window.location.replace("/login");
+    window.location.replace("/");
   }
-}
-
-export function safeNextPath(value: string | null | undefined, fallback = "/projects") {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return fallback;
-  return value;
 }
 
 export function authCallbackUrl(nextPath = "/projects") {

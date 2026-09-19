@@ -226,6 +226,8 @@ function LivePostPreview({
   buffer: Record<FieldKey, string>;
   workspaceName?: string | null;
 }) {
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
+
   // Deterministic seed → same visual language as the image generator.
   const seedKey = `preview:${dna.brandName || workspaceName || "brand"}`;
   const vis = useMemo(
@@ -280,10 +282,12 @@ function LivePostPreview({
             color: "#fff",
           }}
         >
-          {dna.logoUrl ? (
+          {dna.logoUrl && failedLogoUrl !== dna.logoUrl ? (
             <img
               src={dna.logoUrl}
               alt={brandName}
+              referrerPolicy="no-referrer"
+              onError={() => setFailedLogoUrl(dna.logoUrl)}
               className="h-full w-full rounded-full object-cover"
             />
           ) : (

@@ -85,7 +85,6 @@ export type AppEventMap = {
   "open:ugc-studio": { projectId?: string } | undefined;
   /** The "Create" launcher: pick a category (Video/Picture/Text/Ads), then a format. */
   "open:create-launcher": undefined;
-  "open:autopilot": undefined;
   "open:client-portal": undefined;
   "open:command-bar": undefined;
   "open:competitor-watch": undefined;

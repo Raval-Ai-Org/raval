@@ -129,6 +129,7 @@ const BRAND_FIELDS = [
   "colors",
   "fonts",
   "logoUrl",
+  "faviconUrl",
   "websiteUrl",
   "mission",
   "positioning",

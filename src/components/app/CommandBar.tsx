@@ -14,8 +14,6 @@ import {
   Target,
   Lightbulb,
   BarChart3,
-  Users,
-  Power,
   Sparkles,
   ArrowRight,
   MessageSquare,
@@ -26,8 +24,6 @@ import {
   CornerDownLeft,
   UserCircle2,
 } from "@/components/brand/icons";
-import { agentList } from "@/lib/agents";
-import { useAgentToggles } from "@/hooks/use-agent-toggles";
 import { emit } from "@/lib/activity-bus";
 import { STUDIO_FORMATS, STUDIO_TYPE_ORDER } from "@/lib/studio/formats";
 import { UGC_ENTRY } from "@/lib/studio/ugc-entry";
@@ -83,13 +79,6 @@ const ROUTES = [
     search: undefined,
     analyticsTab: "content",
   },
-  {
-    to: "/app",
-    label: "Analytics · Automations",
-    icon: Bot,
-    search: undefined,
-    analyticsTab: "automations",
-  },
 ] as const;
 
 const QUICK_PROMPTS = [
@@ -101,7 +90,6 @@ const QUICK_PROMPTS = [
 const WORKSPACE_ACTIONS = [
   { id: "brand-dna", label: "Open Brand DNA memory", icon: Brain, event: "open:brand-dna" },
   { id: "tasks", label: "Open Tasks & alerts", icon: CheckSquare, event: "open:tasks" },
-  { id: "autopilot", label: "Open Automations", icon: Bot, event: "open:autopilot" },
   { id: "operations", label: "Open Operations inbox", icon: Bot, event: "open:operations" },
   { id: "usage", label: "Open Plan & usage", icon: CheckSquare, event: "open:usage" },
 ] as const;
@@ -111,7 +99,6 @@ export function CommandBar() {
   const [value, setValue] = useState("");
   const navigate = useNavigate();
   const workspaceId = useOptionalWorkspaceId();
-  const { isOn, set, setAll } = useAgentToggles();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -151,11 +138,6 @@ export function CommandBar() {
   const fireEvent = (name: (typeof WORKSPACE_ACTIONS)[number]["event"]) => {
     setOpen(false);
     emitAppEvent(name);
-  };
-
-  const toggle = (id: string, on: boolean) => {
-    set(id, on);
-    setOpen(false);
   };
 
   if (!open) return null;
@@ -329,51 +311,6 @@ export function CommandBar() {
                   <span className="flex-1">{w.label}</span>
                 </Command.Item>
               ))}
-            </Command.Group>
-
-            <Command.Group
-              heading="Agents"
-              className="px-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              {agentList.map((a) => {
-                const on = isOn(a.id);
-                return (
-                  <Command.Item
-                    key={a.id}
-                    value={`toggle ${a.name} ${a.role}`}
-                    onSelect={() => toggle(a.id, !on)}
-                    className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm data-[selected=true]:bg-secondary"
-                  >
-                    <Power className={`h-4 w-4 ${on ? "text-success" : "text-muted-foreground"}`} />
-                    <span className="flex-1">
-                      {on ? "Pause" : "Activate"} <span className="font-medium">{a.name}</span>
-                      <span className="ml-1.5 text-xs text-muted-foreground">{a.role}</span>
-                    </span>
-                  </Command.Item>
-                );
-              })}
-              <Command.Item
-                value="all agents on"
-                onSelect={() => {
-                  setAll(true);
-                  setOpen(false);
-                }}
-                className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm data-[selected=true]:bg-secondary"
-              >
-                <Power className="h-4 w-4 text-success" />
-                <span>Activate all agents</span>
-              </Command.Item>
-              <Command.Item
-                value="all agents off pause"
-                onSelect={() => {
-                  setAll(false);
-                  setOpen(false);
-                }}
-                className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm data-[selected=true]:bg-secondary"
-              >
-                <Power className="h-4 w-4 text-muted-foreground" />
-                <span>Pause all agents</span>
-              </Command.Item>
             </Command.Group>
           </Command.List>
           <div className="flex items-center justify-between border-t border-border bg-card/50 px-3 py-2 text-[11px] text-muted-foreground">

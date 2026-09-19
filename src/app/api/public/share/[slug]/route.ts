@@ -160,6 +160,22 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     .eq("visible", true)
     .order("position", { ascending: true });
 
+  const { data: events } = await supabaseAdmin
+    .from("client_events")
+    .select(
+      "id, item_id, kind, body, actor_name, actor_email, actor_type, marketer_decision, marketer_read_at, client_read_at, created_at",
+    )
+    .eq("share_id", (share as any).id)
+    .order("created_at", { ascending: true })
+    .limit(200);
+
+  await supabaseAdmin
+    .from("client_events")
+    .update({ client_read_at: new Date().toISOString() })
+    .eq("share_id", (share as any).id)
+    .eq("actor_type", "team")
+    .is("client_read_at", null);
+
   // Fire-and-forget view track
   await supabaseAdmin
     .from("client_shares")
@@ -184,6 +200,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
       passwordRequired,
     },
     items: items ?? [],
+    events: events ?? [],
   });
 }
 
@@ -252,6 +269,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ slug: stri
     body: body.body ?? null,
     actor_name: body.actorName ?? null,
     actor_email: body.actorEmail ?? null,
+    actor_type: "client",
     meta: {},
   });
   if (insErr) return json(500, { error: insErr.message });

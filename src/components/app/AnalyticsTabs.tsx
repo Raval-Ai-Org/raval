@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Lightbulb,
   Search,
-  Settings2,
   Target,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
@@ -18,8 +17,7 @@ export type AnalyticsTab =
   | "search"
   | "content"
   | "ai-visibility"
-  | "insights"
-  | "automations";
+  | "insights";
 
 export const TABS: {
   id: AnalyticsTab;
@@ -33,7 +31,6 @@ export const TABS: {
   { id: "content", label: "Content", icon: FileText, blurb: "What you make and post in Mellox" },
   { id: "ai-visibility", label: "AI Visibility", icon: Target, blurb: "Mellox scan score for AI answers" },
   { id: "insights", label: "Insights", icon: Lightbulb, blurb: "What changed and what to do next" },
-  { id: "automations", label: "Automations", icon: Settings2, blurb: "Background helpers you've turned on" },
 ];
 
 /** Old ?tab= values keep working. */

@@ -123,9 +123,9 @@ test.describe("Client share end-to-end", () => {
     const missing = await request.get(`${BASE}/api/public/share/${slug}`);
     expect(missing.status()).toBe(401);
 
-    // --- GET: bad token → 401 ---
+    // --- GET: bad token → 404 (same response as an unknown share) ---
     const bad = await request.get(`${BASE}/api/public/share/${slug}?t=not-the-token`);
-    expect(bad.status()).toBe(401);
+    expect(bad.status()).toBe(404);
 
     // --- GET: valid token → 200 + expected shape ---
     const ok = await request.get(`${BASE}/api/public/share/${slug}?t=${token}`);
@@ -137,11 +137,11 @@ test.describe("Client share end-to-end", () => {
     expect(okBody.share.allowApprovals).toBe(true);
     expect(okBody.items.length).toBeGreaterThan(0);
 
-    // --- POST approve: wrong token → 401 ---
+    // --- POST approve: wrong token → 404 (same anti-enumeration response) ---
     const badPost = await request.post(`${BASE}/api/public/share/${slug}`, {
       data: { token: "wrong-token", kind: "approved" },
     });
-    expect(badPost.status()).toBe(401);
+    expect(badPost.status()).toBe(404);
 
     // --- POST approve: valid token → 200 ---
     const goodPost = await request.post(`${BASE}/api/public/share/${slug}`, {

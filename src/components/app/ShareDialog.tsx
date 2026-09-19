@@ -33,7 +33,13 @@ import {
   UserPlus,
 } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
-import { getWorkspaceMemberProfiles } from "@/lib/workspaces.functions";
+import {
+  createWorkspaceInvite,
+  getWorkspaceMemberProfiles,
+  removeWorkspaceMember,
+  revokeWorkspaceInvite,
+  updateWorkspaceMemberRole,
+} from "@/lib/workspaces.functions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -90,7 +96,7 @@ export function ShareDialog({
   }, []);
 
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"editor" | "viewer">("editor");
+  const [role, setRole] = useState<"admin" | "editor" | "viewer">("editor");
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [inviting, setInviting] = useState(false);
@@ -98,6 +104,7 @@ export function ShareDialog({
   const [copied, setCopied] = useState<string | null>(null);
   const [access, setAccess] = useState<"workspace" | "invite-only">("invite-only");
   const [isOwner, setIsOwner] = useState(false);
+  const [canManageInvites, setCanManageInvites] = useState(false);
   const getWorkspaceMemberProfilesFn = useServerFn(getWorkspaceMemberProfiles);
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
@@ -132,6 +139,9 @@ export function ShareDialog({
       setMembers(rows);
       setInvites((ires.data as Invite[]) ?? []);
       setIsOwner(!!me && wres.data?.owner_id === me.id);
+      setCanManageInvites(
+        !!me && rows.some((row) => row.user_id === me.id && ["owner", "admin"].includes(row.role)),
+      );
     } catch (e: any) {
       toast.error("Could not load members", { description: e?.message });
     } finally {
@@ -157,24 +167,7 @@ export function ShareDialog({
     }
     setInviting(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not signed in");
-      const { data, error } = await supabase
-        .from("workspace_invites")
-        .upsert(
-          {
-            workspace_id: workspaceId,
-            email: trimmed,
-            role,
-            invited_by: user.id,
-          },
-          { onConflict: "workspace_id,email" },
-        )
-        .select("id, token, email, role")
-        .single();
-      if (error) throw error;
+      const data = await createWorkspaceInvite({ data: { workspaceId, email: trimmed, role } });
       const link = `${baseUrl}/app?invite_token=${data.token}`;
       try {
         await navigator.clipboard.writeText(link);
@@ -198,8 +191,9 @@ export function ShareDialog({
   const revoke = async (id: string) => {
     const prev = invites;
     setInvites((xs) => xs.filter((x) => x.id !== id));
-    const { error } = await supabase.from("workspace_invites").delete().eq("id", id);
-    if (error) {
+    try {
+      await revokeWorkspaceInvite({ data: { workspaceId: workspaceId!, inviteId: id } });
+    } catch {
       setInvites(prev);
       return toast.error("Could not revoke invite");
     }
@@ -210,16 +204,26 @@ export function ShareDialog({
     if (!workspaceId) return;
     const prev = members;
     setMembers((xs) => xs.filter((m) => m.user_id !== userId));
-    const { error } = await supabase
-      .from("workspace_members")
-      .delete()
-      .eq("workspace_id", workspaceId)
-      .eq("user_id", userId);
-    if (error) {
+    try {
+      await removeWorkspaceMember({ data: { workspaceId, userId } });
+    } catch {
       setMembers(prev);
       return toast.error("Could not remove member");
     }
     toast.success("Member removed");
+  };
+
+  const changeRole = async (userId: string, nextRole: "admin" | "editor" | "viewer") => {
+    if (!workspaceId) return;
+    const previous = members;
+    setMembers((rows) => rows.map((m) => (m.user_id === userId ? { ...m, role: nextRole } : m)));
+    try {
+      await updateWorkspaceMemberRole({ data: { workspaceId, userId, role: nextRole } });
+      toast.success("Role updated");
+    } catch (e: any) {
+      setMembers(previous);
+      toast.error("Could not change role", { description: e?.message });
+    }
   };
 
   const copy = async (text: string, key: string) => {
@@ -266,7 +270,7 @@ export function ShareDialog({
                     if (e.key === "Enter") invite();
                   }}
                   placeholder="name@company.com"
-                  disabled={!isOwner || inviting}
+                  disabled={!canManageInvites || inviting}
                   aria-label="Teammate email"
                   className="h-9 bg-background/60 pl-8 text-[12.5px]"
                 />
@@ -274,7 +278,7 @@ export function ShareDialog({
               <Select
                 value={role}
                 onValueChange={(v) => setRole(v as any)}
-                disabled={!isOwner || inviting}
+                disabled={!canManageInvites || inviting}
               >
                 <SelectTrigger
                   className="h-9 w-[112px] bg-background/60 text-[12px]"
@@ -288,6 +292,11 @@ export function ShareDialog({
                       <Pencil className="h-3 w-3" /> Editor
                     </span>
                   </SelectItem>
+                  <SelectItem value="admin">
+                    <span className="flex items-center gap-1.5">
+                      <Shield className="h-3 w-3" /> Admin
+                    </span>
+                  </SelectItem>
                   <SelectItem value="viewer">
                     <span className="flex items-center gap-1.5">
                       <Eye className="h-3 w-3" /> Viewer
@@ -297,7 +306,7 @@ export function ShareDialog({
               </Select>
               <Button
                 onClick={invite}
-                disabled={inviting || !email.trim() || !isOwner}
+                disabled={inviting || !email.trim() || !canManageInvites}
                 className="btn-aura h-9 rounded-md px-3.5 text-[12px] font-semibold"
               >
                 {inviting ? (
@@ -312,7 +321,7 @@ export function ShareDialog({
               </Button>
             </div>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              {isOwner ? (
+              {canManageInvites ? (
                 <>
                   <span className="font-medium text-foreground/80">Editors</span> can create and
                   edit content · <span className="font-medium text-foreground/80">Viewers</span>{" "}
@@ -395,10 +404,31 @@ export function ShareDialog({
                         <div className="truncate text-[11px] text-muted-foreground">{m.email}</div>
                       )}
                     </div>
-                    <span className="flex items-center gap-1 text-[11px] capitalize text-muted-foreground">
-                      <RoleIcon className={cn("h-3 w-3", roleTone(m.role))} />
-                      {m.role}
-                    </span>
+                    {isOwner && !m.isYou && m.role !== "owner" ? (
+                      <Select
+                        value={m.role}
+                        onValueChange={(value) =>
+                          changeRole(m.user_id, value as "admin" | "editor" | "viewer")
+                        }
+                      >
+                        <SelectTrigger
+                          className="h-7 w-[94px] text-[11px]"
+                          aria-label={`Role for ${m.name ?? "member"}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="editor">Editor</SelectItem>
+                          <SelectItem value="viewer">Viewer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="flex items-center gap-1 text-[11px] capitalize text-muted-foreground">
+                        <RoleIcon className={cn("h-3 w-3", roleTone(m.role))} />
+                        {m.role}
+                      </span>
+                    )}
                     {isOwner && !m.isYou && m.role !== "owner" && (
                       <button
                         onClick={() => removeMember(m.user_id)}
@@ -454,7 +484,7 @@ export function ShareDialog({
                             </span>
                           )}
                         </button>
-                        {isOwner && (
+                        {canManageInvites && (
                           <button
                             onClick={() => revoke(inv.id)}
                             title="Revoke invite"

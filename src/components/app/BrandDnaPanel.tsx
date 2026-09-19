@@ -1213,8 +1213,11 @@ function Tile({
 
 function LogoTilePreviewLarge({ dna }: { dna: BrandDna }) {
   const primary = dna.colors[0]?.hex;
-  const [errored, setErrored] = useState(false);
-  const src = errored ? dna.faviconUrl : dna.logoUrl || dna.faviconUrl;
+  const sources = [dna.logoUrl, dna.faviconUrl].filter((value): value is string => Boolean(value));
+  const sourceKey = sources.join("|");
+  const [failures, setFailures] = useState({ key: "", count: 0 });
+  const failedCount = failures.key === sourceKey ? failures.count : 0;
+  const src = sources[failedCount];
   const initials = (dna.brandName || "?")
     .trim()
     .split(/\s+/)
@@ -1230,7 +1233,8 @@ function LogoTilePreviewLarge({ dna }: { dna: BrandDna }) {
         <img
           src={src}
           alt={dna.brandName}
-          onError={() => setErrored(true)}
+          referrerPolicy="no-referrer"
+          onError={() => setFailures({ key: sourceKey, count: failedCount + 1 })}
           className="max-h-[70%] max-w-[70%] object-contain"
         />
       ) : (
@@ -2120,8 +2124,11 @@ function LogoTile({
   loading: boolean;
   size?: number;
 }) {
-  const [errored, setErrored] = useState(false);
-  const src = !errored ? url || fallback : fallback;
+  const sources = [url, fallback].filter((value): value is string => Boolean(value));
+  const sourceKey = sources.join("|");
+  const [failures, setFailures] = useState({ key: "", count: 0 });
+  const failedCount = failures.key === sourceKey ? failures.count : 0;
+  const src = sources[failedCount];
   const initials = (name || "?")
     .trim()
     .split(/\s+/)
@@ -2137,7 +2144,8 @@ function LogoTile({
         <img
           src={src}
           alt={name}
-          onError={() => setErrored(true)}
+          referrerPolicy="no-referrer"
+          onError={() => setFailures({ key: sourceKey, count: failedCount + 1 })}
           className="h-[78%] w-[78%] object-contain"
           draggable={false}
         />
@@ -2521,8 +2529,11 @@ function LogoTilePreview({
   name: string;
   dark?: boolean;
 }) {
-  const [errored, setErrored] = useState(false);
-  const src = !errored ? logo || fallback : fallback;
+  const sources = [logo, fallback].filter((value): value is string => Boolean(value));
+  const sourceKey = sources.join("|");
+  const [failures, setFailures] = useState({ key: "", count: 0 });
+  const failedCount = failures.key === sourceKey ? failures.count : 0;
+  const src = sources[failedCount];
   const initials = (name || "?")
     .trim()
     .split(/\s+/)
@@ -2539,7 +2550,8 @@ function LogoTilePreview({
           <img
             src={src}
             alt={name}
-            onError={() => setErrored(true)}
+            referrerPolicy="no-referrer"
+            onError={() => setFailures({ key: sourceKey, count: failedCount + 1 })}
             className="h-12 w-12 object-contain sm:h-16 sm:w-16"
           />
         ) : (

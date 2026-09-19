@@ -1173,9 +1173,9 @@ export function ApprovalCard({
         </div>
       ) : stage === "ready" ? (
         <div className="flex items-center gap-1 px-3 pb-3 pt-1">
-          <span className="inline-flex items-center gap-1 rounded-full bg-success-surface px-2 py-0.5 text-[10px] font-semibold text-success ring-1 ring-success-border">
-            <Check className="size-3" strokeWidth={3} />
-            Not posted yet
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-success-surface px-1 py-px text-[8px] font-semibold leading-tight text-success ring-1 ring-success-border">
+            <Check className="size-2.5" strokeWidth={3} />
+            Not posted
           </span>
           <div className="ml-auto flex items-center gap-1">
             <button

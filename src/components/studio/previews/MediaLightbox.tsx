@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { Download, X } from "@/components/icons";
+import { X } from "@/components/icons";
+import { DownloadAssetButton } from "@/components/app/DownloadAssetButton";
 import { cn } from "@/lib/utils";
 import { duration, ease, spring } from "@/lib/motion";
 import { RATIOS, type AspectRatio } from "@/lib/studio/aspect";
@@ -86,17 +87,12 @@ export function MediaLightbox({
                         {zoom ? <ZoomOut className="size-4" /> : <ZoomIn className="size-4" />}
                       </button>
                     ) : null}
-                    <a
-                      href={media.url}
-                      download
-                      target="_blank"
-                      rel="noreferrer"
+                    <DownloadAssetButton
+                      url={media.url}
+                      filename={`mellox-${media.kind}-${new Date().toISOString().slice(0, 10)}`}
+                      compact
                       className={CONTROL}
-                      aria-label="Download"
-                      title="Download"
-                    >
-                      <Download className="size-4" />
-                    </a>
+                    />
                     <DialogPrimitive.Close
                       className={CONTROL}
                       aria-label="Close"

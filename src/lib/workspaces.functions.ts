@@ -31,3 +31,15 @@ export const listWorkspaces = serverFn<typeof Handlers.listWorkspaces>("workspac
 export const deleteWorkspace = serverFn<typeof Handlers.deleteWorkspace>(
   "workspaces/deleteWorkspace",
 );
+export const createWorkspaceInvite = serverFn<typeof Handlers.createWorkspaceInvite>(
+  "workspaces/createWorkspaceInvite",
+);
+export const revokeWorkspaceInvite = serverFn<typeof Handlers.revokeWorkspaceInvite>(
+  "workspaces/revokeWorkspaceInvite",
+);
+export const updateWorkspaceMemberRole = serverFn<typeof Handlers.updateWorkspaceMemberRole>(
+  "workspaces/updateWorkspaceMemberRole",
+);
+export const removeWorkspaceMember = serverFn<typeof Handlers.removeWorkspaceMember>(
+  "workspaces/removeWorkspaceMember",
+);

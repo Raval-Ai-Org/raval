@@ -23,6 +23,7 @@ import {
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { DeliveryView } from "@/components/app/DeliveryView";
+import { DownloadAssetButton } from "@/components/app/DownloadAssetButton";
 import { StudioDestinationPicker } from "@/components/app/StudioDestinationPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
@@ -833,12 +834,11 @@ export function ReviewPanel({
             Copy {session.type === "article" ? "article" : "text"}
           </Button>
           {mediaReady ? (
-            <Button size="lg" asChild>
-              <a href={media!.url} download target="_blank" rel="noreferrer">
-                <Download />
-                Download
-              </a>
-            </Button>
+            <DownloadAssetButton
+              url={media!.url}
+              filename={`mellox-${media!.kind}-${new Date().toISOString().slice(0, 10)}`}
+              className="h-10 justify-center bg-primary px-4 text-primary-foreground hover:bg-primary/90"
+            />
           ) : (
             <Button
               variant="outline"
@@ -979,17 +979,11 @@ export function ReviewPanel({
                 </button>
                 {mediaReady ? (
                   <>
-                    <a
-                      href={media!.url}
-                      download
-                      target="_blank"
-                      rel="noreferrer"
-                      className={TOOL_ICON}
-                      aria-label="Download"
-                      title="Download"
-                    >
-                      <Download />
-                    </a>
+                    <DownloadAssetButton
+                      url={media!.url}
+                      filename={`mellox-${media!.kind}-${new Date().toISOString().slice(0, 10)}`}
+                      compact
+                    />
                     <button
                       type="button"
                       className={TOOL_ICON}

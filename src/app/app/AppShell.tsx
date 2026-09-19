@@ -20,7 +20,6 @@ import {
   ArrowLeft,
   BarChart3,
   BookOpen,
-  Bot,
   Brain,
   Building2,
   Calendar as CalendarIcon,
@@ -431,12 +430,6 @@ function AppShell() {
             onClick: () => emitAppEvent("open:schedule"),
           })}
           {sidebarAction({
-            icon: Bot,
-            label: "Automations",
-            accent: "rgb(16 185 129)",
-            onClick: () => emitAppEvent("open:autopilot"),
-          })}
-          {sidebarAction({
             icon: Radio,
             label: "Competitors",
             hint: "Alerts",
@@ -688,9 +681,9 @@ function AppShell() {
               through the header hit four controls nobody could see. Those
               actions live in the sidebar and the Share menu below. */}
 
-            {/* Mounted, not displayed: the Schedule and Autopilot dialogs live
-              in here and their open:schedule / open:autopilot listeners have to
-              stay attached, while the visible triggers are in the sidebar.
+            {/* Mounted, not displayed: the Schedule dialog lives in here and
+              its open:schedule listener has to stay attached, while the
+              visible trigger is in the sidebar.
               `hidden` (display:none) keeps React mounted and the listeners
               live, and — unlike the `sr-only aria-hidden` this used to use —
               takes the triggers out of the tab order instead of leaving a row

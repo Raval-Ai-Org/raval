@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { BASE_URL } from "@/lib/seo";
+import { createSupabaseServerClient } from "@/integrations/supabase/server";
+import { LandingGate } from "./LandingGate";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
@@ -165,9 +168,19 @@ const NAV = [
   { href: "#pricing", label: "Pricing" },
 ];
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) redirect("/projects");
+
   return (
     <>
+      <LandingGate />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(SOFTWARE_APPLICATION_LD) }}

@@ -7,7 +7,6 @@
 //   Content         Mellox content pipeline + social performance
 //   AI Visibility   Mellox scan score
 //   Insights        deterministic changes + cached AI explanations
-//   Automations     background agents
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useEffect, useState } from "react";
@@ -43,7 +42,6 @@ import {
 } from "@/lib/analytics.functions";
 import { AnalyticsTabs, type AnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { SocialPerformance } from "@/components/app/SocialPerformance";
-import { AgentManagementPanel } from "@/components/app/AgentManagementPanel";
 import {
   Dialog,
   DialogContent,
@@ -138,7 +136,6 @@ function PanelSkeleton({ rows = 3 }: { rows?: number }) {
     </div>
   );
 }
-
 function isNetworkError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err ?? "");
   return /network|fetch|failed to fetch|offline|timeout/i.test(msg);
@@ -396,11 +393,9 @@ export function AnalyticsContent({
       <div className="mx-auto w-full max-w-6xl space-y-4 p-3 pb-16 sm:p-5 lg:p-6">
         <div className="flex flex-col gap-2">
           <AnalyticsTabs value={tab} onChange={onTabChange} />
-          {tab !== "automations" && (
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <RangeBar />
-            </div>
-          )}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <RangeBar />
+          </div>
         </div>
 
         <AnimatePresence mode="wait" initial={false}>
@@ -418,7 +413,6 @@ export function AnalyticsContent({
             {tab === "content" && <ContentPanel />}
             {tab === "ai-visibility" && <AiVisibilityPanel />}
             {tab === "insights" && <InsightsPanel />}
-            {tab === "automations" && <AutomationsTabPanel />}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -695,24 +689,3 @@ function ContentPanel() {
   );
 }
 
-/* -------------------- Automations -------------------- */
-
-function AutomationsTabPanel() {
-  return (
-    <>
-      <PanelIntro
-        tone="green"
-        headline="Toggle background helpers on and off."
-        sentence={
-          <>
-            Each one runs on a schedule so you don't have to. Switch any on and pick how often it
-            should work.
-          </>
-        }
-      />
-      <div className="rounded-2xl border border-border bg-card/40 p-1">
-        <AgentManagementPanel />
-      </div>
-    </>
-  );
-}

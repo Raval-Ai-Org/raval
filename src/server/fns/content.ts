@@ -204,7 +204,7 @@ export const updateContentItem = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: current, error: readError } = await context.supabase
       .from("content_items")
-      .select("status, meta")
+      .select("status, body, meta")
       .eq("id", data.id)
       .single();
     if (readError || !current) throw new Error(readError?.message ?? "Content item not found");
@@ -217,6 +217,18 @@ export const updateContentItem = createServerFn({ method: "POST" })
     // instead of replacing so one writer never erases another's keys; a `null`
     // value removes a key.
     if (data.patch.meta) patch.meta = mergeMeta(current.meta, data.patch.meta);
+
+    if (hasMeaningfulContentChange(patch) && !requestedStatus) {
+      const existingMeta = mergeMeta(current.meta, {});
+      const editMeta: Record<string, unknown> = {
+        edited_at: new Date().toISOString(),
+        edited_by: context.userId,
+      };
+      if (!("original_content" in existingMeta) && typeof current.body === "string") {
+        editMeta.original_content = current.body;
+      }
+      patch.meta = mergeMeta(patch.meta ?? current.meta, editMeta);
+    }
 
     if (
       currentStatus === "approved" &&

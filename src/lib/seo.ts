@@ -2,12 +2,24 @@
 // The application domain is now configurable via APP_URL environment variable
 // to support both local development and production deployments.
 
-export const BASE_URL =
-  typeof process.env.NEXT_PUBLIC_APP_URL === "string" && process.env.NEXT_PUBLIC_APP_URL
-    ? process.env.NEXT_PUBLIC_APP_URL
-    : typeof window !== "undefined"
-      ? window.location.origin
-      : "https://mellox.ai";
+const DEFAULT_BASE_URL = "https://mellox.ai";
+
+function resolveBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configured) {
+    try {
+      const url = new URL(configured);
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        return url.origin;
+      }
+    } catch {
+      // Use the production origin when an optional deployment value is invalid.
+    }
+  }
+  return typeof window !== "undefined" ? window.location.origin : DEFAULT_BASE_URL;
+}
+
+export const BASE_URL = resolveBaseUrl();
 
 export const BRAND_NAME = "Mellox AI";
 // Logo is served from the same domain as the application
