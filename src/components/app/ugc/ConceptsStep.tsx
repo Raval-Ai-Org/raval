@@ -147,7 +147,7 @@ export function ConceptsStep({
                         name={`hook-${concept.id}`}
                         checked={h === hook}
                         onChange={() => setHooks((s) => ({ ...s, [concept.id]: h }))}
-                        className="mt-0.5 accent-[hsl(var(--primary))]"
+                        className="mt-0.5 size-4 shrink-0 accent-[hsl(var(--primary))]"
                       />
                       <span>“{h}”</span>
                     </label>
@@ -178,7 +178,7 @@ export function ConceptsStep({
                 ) : null}
 
                 <Button
-                  className="mt-auto"
+                  className="mt-auto min-h-10 whitespace-normal text-center"
                   variant={selected ? "default" : "outline"}
                   onClick={() => onChoose(concept, hook)}
                 >

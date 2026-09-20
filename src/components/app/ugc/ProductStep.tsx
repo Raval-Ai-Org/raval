@@ -25,10 +25,10 @@ import { cn } from "@/lib/utils";
 import { Field, motionPreset, Panel, StepActions } from "./ugc-ui";
 
 const EXTRACT_STAGES = [
-  "Opening the product page…",
+  "Understanding your brand…",
   "Reading product details…",
-  "Pulling out facts you can claim…",
-  "Picking product photos…",
+  "Finding the strongest claims…",
+  "Preparing your concept…",
 ];
 
 export const EMPTY_PRODUCT: Product = {
@@ -47,18 +47,24 @@ export const EMPTY_PRODUCT: Product = {
 
 export function ProductStep({
   workspaceId,
+  workspaceWebsite,
+  workspaceName,
   initialProduct,
   initialReferences,
   saving,
   onContinue,
 }: {
   workspaceId: string;
+  workspaceWebsite?: string | null;
+  workspaceName?: string | null;
   initialProduct: Product | null;
   initialReferences: ReferenceImageView[];
   saving: boolean;
   onContinue: (product: Product, references: ReferenceImageView[]) => void;
 }) {
-  const [url, setUrl] = useState(initialProduct?.url ?? "");
+  const [url, setUrl] = useState(initialProduct?.url ?? workspaceWebsite ?? "");
+  const [showAdditionalWebsite, setShowAdditionalWebsite] = useState(false);
+  const [additionalWebsite, setAdditionalWebsite] = useState("");
   const [product, setProduct] = useState<Product | null>(initialProduct);
   const [references, setReferences] = useState<ReferenceImageView[]>(initialReferences);
   const [extracting, setExtracting] = useState(false);
@@ -81,8 +87,14 @@ export function ProductStep({
     return () => window.clearInterval(id);
   }, [extracting]);
 
+  useEffect(() => {
+    if (!initialProduct?.url) {
+      setUrl(workspaceWebsite ?? "");
+    }
+  }, [initialProduct?.url, workspaceWebsite]);
+
   const extract = async () => {
-    const value = url.trim();
+    const value = (additionalWebsite || url || workspaceWebsite || "").trim();
     if (!value) return;
     setExtracting(true);
     setExtractError(null);
@@ -154,20 +166,46 @@ export function ProductStep({
         />
         <div className="relative space-y-3">
           <div>
-            <h3 className="text-base font-semibold tracking-tight">What are we advertising?</h3>
+            <h3 className="text-base font-semibold tracking-tight">What do you want to promote?</h3>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Paste a product page. Mellox reads it and keeps the ad to what's really true about
-              your product.
+              Mellox can use your workspace context automatically and refine from a product page
+              when you have one.
             </p>
           </div>
+
+          {workspaceWebsite ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-full border border-border/70 bg-surface-3/60 px-3 py-1.5 text-xs text-muted-foreground">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
+                <span className="truncate">Using workspace context</span>
+              </span>
+              <span className="min-w-0 truncate font-medium text-foreground">
+                {workspaceName ?? workspaceWebsite.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-full border border-dashed border-border bg-surface-3/40 px-3 py-2 text-xs text-muted-foreground">
+              <span className="min-w-0 truncate">No workspace website connected</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setShowAdditionalWebsite(true)}
+              >
+                Add website
+              </Button>
+            </div>
+          )}
+
           <form
-            className="flex flex-col gap-2 sm:flex-row"
+            className="flex flex-col gap-2 sm:flex-row sm:items-center"
             onSubmit={(e) => {
               e.preventDefault();
               void extract();
             }}
           >
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               <Globe
                 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
                 aria-hidden
@@ -175,7 +213,7 @@ export function ProductStep({
               <Input
                 aria-label="Product page URL"
                 inputMode="url"
-                placeholder="https://yourstore.com/products/…"
+                placeholder={workspaceWebsite ?? "https://yourstore.com/products/…"}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 className="h-11 pl-9"
@@ -185,21 +223,65 @@ export function ProductStep({
             <Button
               type="submit"
               size="lg"
-              className="h-11"
-              disabled={!url.trim() || extracting}
+              className="h-11 shrink-0"
+              disabled={(!url.trim() && !workspaceWebsite) || extracting}
               loading={extracting}
             >
               {extracting ? null : <Sparkles aria-hidden />}
               {product?.url ? "Re-read page" : "Analyze product"}
             </Button>
           </form>
+
+          {showAdditionalWebsite ? (
+            <div className="rounded-xl border border-border/70 bg-surface-3/40 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <label
+                  htmlFor="ugc-additional-website"
+                  className="text-xs font-medium text-foreground/90"
+                >
+                  Additional website
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdditionalWebsite(false);
+                    setAdditionalWebsite("");
+                  }}
+                  className="text-xs text-muted-foreground transition hover:text-foreground"
+                >
+                  Remove
+                </button>
+              </div>
+              <Input
+                id="ugc-additional-website"
+                aria-label="Additional website"
+                inputMode="url"
+                value={additionalWebsite}
+                onChange={(e) => setAdditionalWebsite(e.target.value)}
+                placeholder="https://example.com/product-or-campaign"
+                className="h-10"
+              />
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                For a specific product, campaign or landing page.
+              </p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAdditionalWebsite(true)}
+              className="inline-flex items-center gap-2 self-start text-xs font-medium text-muted-foreground transition hover:text-foreground"
+            >
+              <Plus className="size-3.5" aria-hidden /> Add website
+            </button>
+          )}
+
           {!product && !extracting ? (
             <button
               type="button"
               onClick={() => setProduct({ ...EMPTY_PRODUCT })}
               className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
-              No product page? Enter the details yourself
+              Enter details manually instead
             </button>
           ) : null}
           {extractError ? (

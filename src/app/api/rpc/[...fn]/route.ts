@@ -50,8 +50,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ fn: string
     const known = knownErrorResponse(error);
     if (known) return known;
     console.error(`[rpc] ${moduleName}/${fnName}`, error);
-    // Handlers throw user-facing messages ("Workspace not found"), so the
-    // message is passed through rather than replaced with a generic one.
-    return json(500, { error: error instanceof Error ? error.message : "Request failed" });
+    return json(500, { error: "Request failed" });
   }
 }

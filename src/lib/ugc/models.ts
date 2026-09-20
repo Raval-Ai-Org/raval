@@ -13,7 +13,13 @@
 export type UgcAspectRatio = "9:16" | "1:1" | "16:9" | "4:3" | "3:4";
 export type UgcResolution = "480p" | "720p" | "1080p";
 export type UgcModelKey =
-  "veo-3-1-fast" | "veo-3-1-quality" | "veo-3-1-lite" | "seedance-2" | "seedance-2-fast";
+  | "veo-3-1-fast"
+  | "veo-3-1-quality"
+  | "veo-3-1-lite"
+  | "seedance-2"
+  | "seedance-2-fast"
+  | "kling-3"
+  | "grok-imagine";
 
 /**
  * How product images reach the model:
@@ -27,7 +33,7 @@ export type ReferenceMode = "references" | "first_frame";
 export type UgcModel = {
   key: UgcModelKey;
   provider: "kie";
-  family: "veo" | "seedance";
+  family: "veo" | "seedance" | "kling" | "grok";
   /** Kie `model` field. */
   providerModel: string;
   /** Kie `input.model` tier for Veo 3.1 (veo3 | veo3_fast | veo3_lite). */
@@ -126,7 +132,7 @@ export const UGC_MODELS: Record<UgcModelKey, UgcModel> = {
     family: "seedance",
     providerModel: "bytedance/seedance-2",
     displayName: "Seedance 2.0",
-    tier: "premium",
+    tier: "standard",
     description:
       "Longer takes up to 15 seconds, square video, and up to 9 product photos for accurate packaging.",
     durations: range(4, 15),
@@ -157,10 +163,46 @@ export const UGC_MODELS: Record<UgcModelKey, UgcModel> = {
     pricing: { unit: "second", credits: { "480p": 11.7, "720p": 24.8 } },
     enabledByDefault: true,
   },
+  "kling-3": {
+    key: "kling-3",
+    provider: "kie",
+    family: "kling",
+    providerModel: "kling-3.0/video",
+    displayName: "Kling 3.0",
+    tier: "premium",
+    description: "Controlled cinematic motion, action and multi-shot storytelling.",
+    durations: [5, 10],
+    aspectRatios: ["9:16", "16:9", "1:1"],
+    resolutions: ["720p", "1080p"],
+    defaultResolution: "1080p",
+    nativeAudio: true,
+    spokenDialogue: true,
+    images: { mode: "references", max: 4 },
+    pricing: { unit: "video", credits: { "720p": 100, "1080p": 180 } },
+    enabledByDefault: true,
+  },
+  "grok-imagine": {
+    key: "grok-imagine",
+    provider: "kie",
+    family: "grok",
+    providerModel: "grok-imagine/image-to-video",
+    displayName: "Grok Imagine Video",
+    tier: "draft",
+    description: "Fast, low-cost image animation and creative variations.",
+    durations: [5, 10],
+    aspectRatios: ["9:16", "1:1", "16:9"],
+    resolutions: ["480p", "720p"],
+    defaultResolution: "720p",
+    nativeAudio: false,
+    spokenDialogue: false,
+    images: { mode: "first_frame", max: 1 },
+    pricing: { unit: "video", credits: { "480p": 12, "720p": 24 } },
+    enabledByDefault: true,
+  },
 };
 
 export const UGC_MODEL_KEYS = Object.keys(UGC_MODELS) as UgcModelKey[];
-export const DEFAULT_UGC_MODEL: UgcModelKey = "veo-3-1-fast";
+export const DEFAULT_UGC_MODEL: UgcModelKey = "seedance-2";
 
 export function isUgcModelKey(value: unknown): value is UgcModelKey {
   return typeof value === "string" && value in UGC_MODELS;

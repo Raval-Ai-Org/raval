@@ -4,6 +4,19 @@ AI-native marketing platform — brand-grounded content, SEO/GEO/AEO, and social
 media distribution from one workspace. Next.js App Router (React 19) with a
 Supabase (PostgreSQL) backend.
 
+## Documentation
+
+The authoritative technical and product documentation index is
+[docs/README.md](docs/README.md). Start there for architecture, API, database,
+AI, security, deployment, development, and operations references. Feature ADRs
+and specifications remain under [docs/adr](docs/adr/) and
+[docs/specs](docs/specs/); the canonical pages identify when those documents
+are historical, planning material, or current implementation guidance.
+
+The repository is a multi-runtime workspace rather than a single `src/` app.
+See [the repository layout](docs/repository-layout.md) for ownership boundaries,
+active runtimes, and rules for safely organizing packages.
+
 ## Project layout
 
 The app runs on the Next.js App Router.

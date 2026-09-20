@@ -16,6 +16,7 @@ import {
   productDisplayName,
   scriptWordCount,
 } from "./prompt";
+import { routeVideo } from "./router";
 import { BriefSchema, ProductSchema, ScriptSchema, StartRenderBody } from "./schemas";
 
 const product = ProductSchema.parse({
@@ -131,6 +132,27 @@ describe("model registry", () => {
         true,
       );
     }
+  });
+});
+
+describe("automatic video router", () => {
+  const enabled = UGC_MODEL_KEYS;
+
+  it("uses Seedance for a visual product social concept without speech", () => {
+    const visualScript = { ...script, scenes: script.scenes.map((scene) => ({ ...scene, dialogue: "" })) };
+    expect(
+      routeVideo({ product, brief, script: visualScript, platform: "reels", durationSec: 8, referenceCount: 1, brand: {} }, enabled),
+    ).toMatchObject({ model: "seedance-2" });
+  });
+
+  it("uses Veo for spoken human content and Kling for cinematic motion", () => {
+    expect(routeVideo({ product, brief, script, platform: "reels", durationSec: 8, referenceCount: 0, brand: {} }, enabled).model).toBe("veo-3-1-quality");
+    const cinematic = { ...script, scenes: script.scenes.map((scene) => ({ ...scene, dialogue: "", action: "complex camera movement through an action sequence" })) };
+    expect(routeVideo({ product, brief, script: cinematic, platform: "reels", durationSec: 10, referenceCount: 0, brand: {}, requestedModel: "auto" }, enabled).model).toBe("kling-3");
+  });
+
+  it("honours an available advanced override", () => {
+    expect(routeVideo({ product, brief, script, platform: "reels", durationSec: 8, referenceCount: 1, brand: {}, requestedModel: "grok-imagine" }, enabled).model).toBe("grok-imagine");
   });
 });
 

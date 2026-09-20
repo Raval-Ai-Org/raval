@@ -3,7 +3,12 @@
 > **This document is a TEMPLATE. The real values live in 1Password (or Bitwarden).**
 > **Do NOT commit the real values to this file. It exists so you know which values to share.**
 
-When a new team member joins, they need these values in their local `raval/.env` file. The fastest way to share them is via 1Password — but this file documents what's needed so you don't miss anything.
+When a new team member joins, they need these values in their local `.env` file. The fastest way to share them is via 1Password — but this file documents what's needed so you don't miss anything.
+
+> **Current-state note:** The canonical configuration reference is
+> [configuration.md](configuration.md). This historical credential handoff
+> template is retained for operational context and must contain names only, not
+> real credentials or test-account details.
 
 ---
 
@@ -15,10 +20,10 @@ When a new team member joins, they need these values in their local `raval/.env`
 # As the team lead (Junaid), run this on YOUR machine:
 op item create \
   --category="Secure Note" \
-  --title="RavalAI local dev .env" \
+  --title="Mellox AI local dev .env" \
   --vault="Engineering" \
   --generate-password=long \
-  notes="$(cat raval/.env)"
+  notes="$(cat .env)"
 
 # This creates a 1Password item with the .env contents as a note.
 # Then share that item with Zian.
@@ -26,17 +31,17 @@ op item create \
 
 ### Manual share (no 1Password CLI)
 
-1. Open `raval/.env` in your editor
+1. Open `.env` in your editor
 2. Copy the entire contents
 3. Paste into a 1Password Secure Note titled "RavalAI local dev .env"
-4. Share the item with Zian (1Password → Share → enter Zian's email)
+4. Share the item through the team's approved password-manager process
 
 ### Teammate's setup procedure
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/Raval-Ai-Org/raval.git
-cd raval
+git clone <approved-repository-url>
+cd <repository-directory>
 
 # 2. Run setup (creates .env from .env.example with placeholders)
 npm run setup
@@ -45,10 +50,10 @@ npm run setup
 # (in VS Code: code .env)
 
 # 4. Replace each placeholder with the real value from 1Password
-#    (open the "RavalAI local dev .env" item in 1Password, copy each line)
+#    (open the "Mellox AI local dev .env" item in 1Password, copy each line)
 #    Required keys (see .env.example for the full list):
-#      VITE_SUPABASE_URL
-#      VITE_SUPABASE_PUBLISHABLE_KEY
+#      NEXT_PUBLIC_SUPABASE_URL
+#      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 #      SUPABASE_URL
 #      SUPABASE_PUBLISHABLE_KEY
 #      SUPABASE_SERVICE_ROLE_KEY
@@ -61,9 +66,8 @@ npm run setup
 npm run setup        # should say "✓ .env has real values"
 npm run dev          # predev check should pass, Vite should start
 
-# 6. Test login
-# Open http://localhost:8080/login
-# Use: junaidsajjad2298@gmail.com / Junaid@1234
+# 6. Test login with an approved test account managed outside this repository.
+# Never place the email or password in documentation.
 ```
 
 ---
@@ -74,12 +78,12 @@ This section explains what each value is for, so you know what you're sharing.
 
 | Key                             | What it is                               | Where to find it                                                 | Sensitivity                            |
 | ------------------------------- | ---------------------------------------- | ---------------------------------------------------------------- | -------------------------------------- |
-| `VITE_SUPABASE_URL`             | Your Supabase project URL                | Supabase Dashboard → Project Settings → API                      | Public (safe to share)                 |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase key                | Supabase Dashboard → Project Settings → API → "Publishable key"  | Public                                 |
-| `SUPABASE_URL`                  | Same as VITE_SUPABASE_URL (server-side)  | Same                                                             | Public                                 |
-| `SUPABASE_PUBLISHABLE_KEY`      | Same as VITE_ version (server-side)      | Same                                                             | Public                                 |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Browser-safe Supabase project URL       | Supabase Dashboard → Project Settings → API                      | Public (safe to share)                 |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase key           | Supabase Dashboard → Project Settings → API → "Publishable key"  | Public                                 |
+| `SUPABASE_URL`                  | Server-side Supabase project URL        | Same                                                             | Configuration                          |
+| `SUPABASE_PUBLISHABLE_KEY`      | Server-side publishable key             | Same                                                             | Configuration                          |
 | `SUPABASE_SERVICE_ROLE_KEY`     | **Server-only admin key — bypasses RLS** | Supabase Dashboard → Project Settings → API → "Service role key" | **CRITICAL — never expose to browser** |
-| `SDR_BASE_URL`                  | URL of the deployed SDR service          | AWS Lightsail IP or `sdr.raval.ai`                               | Semi-public                            |
+| `SDR_BASE_URL`                  | URL of the deployed SDR service          | Approved deployment configuration                                | Semi-public                            |
 | `SDR_ADMIN_TOKEN`               | Admin token to mint workspace API keys   | Set by you in SDR `.env`                                         | **CRITICAL**                           |
 | `SDR_SECRET_ENCRYPTION_KEY`     | AES key for encrypting tokens at rest    | Generated via `Fernet.generate_key()`                            | **CRITICAL**                           |
 | `CRON_SECRET`                   | Secret for cron job auth                 | Set by you                                                       | Semi-sensitive                         |

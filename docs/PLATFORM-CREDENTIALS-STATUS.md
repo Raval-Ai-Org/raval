@@ -23,7 +23,7 @@
 - **Rate limit:** 100 posts/day per member
 - **Callback URL(s) to register in LinkedIn Dev Portal:**
   - `https://sdr.raval.ai/api/v1/oauth/linkedin/callback` (production)
-  - `https://spice-carlo-cure-commonwealth.trycloudflare.com/api/v1/oauth/linkedin/callback` (development)
+  - `<development-sdr-base-url>/api/v1/oauth/linkedin/callback` (development)
   - `http://localhost:8000/api/v1/oauth/linkedin/callback` (local)
 
 ## Meta (Facebook + Instagram) — credentials stored, App Review pending ⏳
@@ -42,7 +42,7 @@
   - `business_management` — access business portfolio
 - **Callback URL(s) to register in Meta Dev Portal** (one set, used for BOTH Facebook and Instagram):
   - `https://sdr.raval.ai/api/v1/oauth/facebook/callback` (production)
-  - `https://spice-carlo-cure-commonwealth.trycloudflare.com/api/v1/oauth/facebook/callback` (development)
+  - `<development-sdr-base-url>/api/v1/oauth/facebook/callback` (development)
   - `http://localhost:8000/api/v1/oauth/facebook/callback` (local)
 - **Instagram account requirement:** The Instagram account you want to post to must be a **Business** or **Creator** account, and must be **linked to a Facebook Page** in the Instagram app's settings.
 - **App Review timeline:** 5-7 business days after submission. Provide screencast videos showing RavalAI's flow for each scope.
@@ -65,7 +65,7 @@
 ```bash
 # 1. Run SDR (when ready, see Phase 4 of CLIENT-LAUNCH-PLAN.md)
 # 2. Visit http://localhost:8080/app/social in your browser
-# 3. Log in with junaidsajjad2298@gmail.com / Junaid@1234
+# 3. Log in with an approved test account managed outside this repository.
 # 4. Click "Connect LinkedIn" (or Facebook/Instagram if those are approved)
 # 5. You'll be redirected to the platform's consent screen
 # 6. Click "Authorize"

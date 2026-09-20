@@ -7,31 +7,29 @@ Mellox uses Supabase Auth as the only authentication authority. The browser star
 Use one Google Web application client for the Supabase Google provider. Add these authorized JavaScript origins:
 
 - `http://localhost:8080`
-- `https://raval.ai`
-- `https://raval-production-c901.up.railway.app`
+- `<production-app-origin>`
 
 Add this authorized redirect URI exactly:
 
-- `https://slcmqbbjzyztqyucauol.supabase.co/auth/v1/callback`
+- `https://<supabase-project-ref>.supabase.co/auth/v1/callback`
 
 The redirect URI is the Supabase Auth callback, not the Mellox `/auth/callback` route. Do not add a trailing slash or query string.
 
 ## Supabase Auth
 
-In Supabase Dashboard for project `slcmqbbjzyztqyucauol`:
+In the Supabase Dashboard for the approved deployment project:
 
 1. Open **Authentication > Sign In / Providers > Google**.
 2. Enable Google.
 3. Paste the Google Client ID and Client Secret into the provider fields.
 4. Set **Authentication > URL Configuration > Site URL** to the public production domain users will open. Until a custom domain is attached, use `https://raval-production-c901.up.railway.app`.
-5. Add these **Additional Redirect URLs**:
+5. Add these **Additional Redirect URLs** (with the approved production origin):
    - `http://localhost:8080/auth/callback`
-   - `https://raval.ai/auth/callback`
-   - `https://raval-production-c901.up.railway.app/auth/callback`
+   - `<production-app-origin>/auth/callback`
 6. Save the provider and URL configuration.
 
 The Google Cloud **authorized redirect URI** remains the Supabase callback
-(`https://slcmqbbjzyztqyucauol.supabase.co/auth/v1/callback`). Do not replace it
+(`https://<supabase-project-ref>.supabase.co/auth/v1/callback`). Do not replace it
 with the Railway URL. Supabase redirects from Google to the app callback after
 it validates the provider response.
 

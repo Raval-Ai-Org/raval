@@ -45,6 +45,7 @@ export function BriefStep({
   onSkipToConcepts: (brief: Brief) => void;
 }) {
   const [brief, setBrief] = useState<Brief>(initialBrief);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const set = <K extends keyof Brief>(key: K, value: Brief[K]) =>
     setBrief((b) => ({ ...b, [key]: value }));
   const setCreator = <K extends keyof Brief["creator"]>(key: K, value: Brief["creator"][K]) =>
@@ -137,7 +138,17 @@ export function BriefStep({
         </Panel>
 
         <Panel className="space-y-4">
-          <h3 className="text-sm font-semibold">Creative</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold">Creative</h3>
+            <button
+              type="button"
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
+            >
+              {showAdvanced ? "Hide advanced" : "Advanced"}
+            </button>
+          </div>
+
           <Field label="Video style">
             <ChipGroup
               label="Video style"
@@ -170,56 +181,61 @@ export function BriefStep({
               ))}
             </select>
           </Field>
+
+          {showAdvanced ? (
+            <div className="space-y-4 border-t border-border/60 pt-4">
+              <div>
+                <h4 className="text-sm font-semibold">Creator on camera</h4>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  An AI-generated everyday creator — not a real person or influencer.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Presenter">
+                  <ChipGroup
+                    label="Presenter"
+                    size="sm"
+                    options={CREATOR_GENDERS}
+                    value={brief.creator.gender}
+                    onChange={(v) => setCreator("gender", v)}
+                  />
+                </Field>
+                <Field label="Age">
+                  <ChipGroup
+                    label="Age"
+                    size="sm"
+                    options={CREATOR_AGES}
+                    value={brief.creator.age}
+                    onChange={(v) => setCreator("age", v)}
+                  />
+                </Field>
+                <Field label="Energy">
+                  <ChipGroup
+                    label="Energy"
+                    size="sm"
+                    options={CREATOR_VIBES}
+                    value={brief.creator.vibe}
+                    onChange={(v) => setCreator("vibe", v)}
+                  />
+                </Field>
+                <Field label="Setting">
+                  <ChipGroup
+                    label="Setting"
+                    size="sm"
+                    options={SETTINGS}
+                    value={brief.creator.setting}
+                    onChange={(v) => setCreator("setting", v)}
+                  />
+                </Field>
+              </div>
+            </div>
+          ) : null}
         </Panel>
       </div>
 
       <Panel className="space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold">Creator on camera</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            An AI-generated everyday creator — not a real person or influencer.
-          </p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Presenter">
-            <ChipGroup
-              label="Presenter"
-              size="sm"
-              options={CREATOR_GENDERS}
-              value={brief.creator.gender}
-              onChange={(v) => setCreator("gender", v)}
-            />
-          </Field>
-          <Field label="Age">
-            <ChipGroup
-              label="Age"
-              size="sm"
-              options={CREATOR_AGES}
-              value={brief.creator.age}
-              onChange={(v) => setCreator("age", v)}
-            />
-          </Field>
-          <Field label="Energy">
-            <ChipGroup
-              label="Energy"
-              size="sm"
-              options={CREATOR_VIBES}
-              value={brief.creator.vibe}
-              onChange={(v) => setCreator("vibe", v)}
-            />
-          </Field>
-          <Field label="Setting">
-            <ChipGroup
-              label="Setting"
-              size="sm"
-              options={SETTINGS}
-              value={brief.creator.setting}
-              onChange={(v) => setCreator("setting", v)}
-            />
-          </Field>
-        </div>
         <Field label="Creative notes" htmlFor="ugc-notes" hint="Optional">
-          <div className="relative">
+          <div className="space-y-2">
             <Textarea
               id="ugc-notes"
               rows={brief.instructions.length > 160 ? 8 : 3}
@@ -228,24 +244,26 @@ export function BriefStep({
               aria-busy={writing}
               onChange={(e) => set("instructions", e.target.value)}
               placeholder="Anything the ad must include or avoid — e.g. “show it fitting in a gym bag”, “don't mention price”."
-              className={cn("pb-12", writing && "opacity-50")}
+              className={cn(writing && "opacity-50")}
             />
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => void writeNotes()}
-              loading={writing}
-              className="absolute bottom-2 left-2 h-8 rounded-full px-3 text-xs"
-            >
-              {writing ? null : ours ? <RefreshCw aria-hidden /> : <Wand2 aria-hidden />}
-              {writing
-                ? "Writing…"
-                : ours
-                  ? "Try another"
-                  : brief.instructions.trim()
-                    ? "Improve it"
-                    : "Write it for me"}
-            </Button>
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void writeNotes()}
+                loading={writing}
+                className="h-8 rounded-full px-3 text-xs"
+              >
+                {writing ? null : ours ? <RefreshCw aria-hidden /> : <Wand2 aria-hidden />}
+                {writing
+                  ? "Writing…"
+                  : ours
+                    ? "Try another"
+                    : brief.instructions.trim()
+                      ? "Improve it"
+                      : "Write it for me"}
+              </Button>
+            </div>
           </div>
         </Field>
       </Panel>

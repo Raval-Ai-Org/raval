@@ -203,11 +203,11 @@ export function RenderPanel({
 
       <div className="space-y-3">
         <Panel className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold">{render.modelName}</span>
-            <RenderStatusChip status={render.status} />
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <span className="min-w-0 truncate text-sm font-semibold">{render.modelName}</span>
+            <RenderStatusChip status={render.status} className="shrink-0" />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="flex flex-wrap gap-x-1.5 text-xs text-muted-foreground">
             {render.durationSec}s · {render.aspectRatio} · {render.resolution}
             {render.status === "succeeded" && render.actualCostUsd != null
               ? ` · ${formatUsd(render.actualCostUsd)}`
@@ -247,7 +247,7 @@ export function RenderPanel({
               >
                 <Megaphone aria-hidden /> Use in a post
               </Button>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -294,7 +294,7 @@ export function RenderPanel({
           ) : null}
 
           {!active ? (
-            <div className="grid grid-cols-2 gap-2 border-t border-border/60 pt-3">
+            <div className="grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-2">
               <Button variant="outline" size="sm" onClick={onRegenerate} loading={regenerating}>
                 {regenerating ? null : <RefreshCw aria-hidden />} Regenerate
               </Button>
@@ -315,7 +315,7 @@ export function RenderPanel({
                     type="button"
                     onClick={() => onSelectRender(r)}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors hover:bg-surface-3",
+                      "flex min-w-0 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors hover:bg-surface-3",
                       r.id === render.id && "bg-surface-3",
                     )}
                   >
@@ -323,7 +323,7 @@ export function RenderPanel({
                     <span className="min-w-0 flex-1 truncate">
                       {r.modelName} · {r.durationSec}s
                     </span>
-                    <RenderStatusChip status={r.status} />
+                    <RenderStatusChip status={r.status} className="shrink-0" />
                   </button>
                 </li>
               ))}

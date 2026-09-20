@@ -15,7 +15,7 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { useNavigate } from "@/lib/navigation";
-import { conversationPath, workspacePath } from "@/lib/workspace/paths";
+import { workspacePath } from "@/lib/workspace/paths";
 import { ArrowDown } from "@/components/icons";
 import { toast } from "sonner";
 import {
@@ -353,7 +353,6 @@ export function ChatPanel({
     conversationRef.current = data.id;
     preserveMessagesOnRouteRef.current = true;
     skipNextHistoryLoadRef.current = true;
-    navigate({ to: conversationPath(workspaceId, data.id), replace: true });
     emitAppEvent("chat:conversation-changed");
     return data.id;
   };

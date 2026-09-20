@@ -143,7 +143,7 @@ export const StartRenderBody = z.object({
   projectId: uuid,
   /** Client-generated per click; a double submit returns the same render. */
   idempotencyKey: z.string().min(8).max(100),
-  model: z.enum(UGC_MODEL_KEYS as [string, ...string[]]),
+  model: z.union([z.literal("auto"), z.enum(UGC_MODEL_KEYS as [string, ...string[]])]).default("auto"),
   durationSec: z.number().int().min(4).max(15),
   aspectRatio: z.enum(["9:16", "1:1", "16:9", "4:3", "3:4"]),
   resolution: z.enum(["480p", "720p", "1080p"]),

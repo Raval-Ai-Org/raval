@@ -5,6 +5,7 @@ import { AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Trash2, Video } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { emitAppEvent } from "@/lib/app-events";
@@ -261,6 +262,7 @@ function ProjectEditor({
   onCreated: (id: string) => void;
   onExit: () => void;
 }) {
+  const workspace = useWorkspace();
   const [project, setProject] = useState<ProjectView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [step, setStep] = useState<StepId>("product");
@@ -293,8 +295,8 @@ function ProjectEditor({
     const model = catalog.models.find((m) => m.key === catalog.defaultModel) ?? catalog.models[0];
     if (!model) return;
     const preset = platformPreset(project?.brief.platform ?? "tiktok");
-    setSettings(
-      coerceSettings(
+    setSettings({
+      ...coerceSettings(
         model,
         {
           model: model.key,
@@ -305,10 +307,14 @@ function ProjectEditor({
         },
         preset.aspectRatio,
       ),
-    );
+      model: "auto",
+    });
   }, [catalog, project, settings]);
 
-  const model = catalog?.models.find((m) => m.key === settings?.model);
+  const model =
+    catalog?.models.find((m) => m.key === settings?.model) ??
+    catalog?.models.find((m) => m.key === "seedance-2") ??
+    catalog?.models[0];
   const durationSec = settings?.durationSec ?? 8;
 
   const guard = async <T,>(
@@ -501,6 +507,8 @@ function ProjectEditor({
           <StepFrame key="product" stepKey="product">
             <ProductStep
               workspaceId={workspaceId}
+              workspaceWebsite={workspace.websiteUrl}
+              workspaceName={workspace.name}
               initialProduct={project?.product ?? null}
               initialReferences={project?.references ?? []}
               saving={busy === "saving"}

@@ -34,12 +34,14 @@ export function Field({
   className?: string;
 }) {
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <div className="flex items-baseline justify-between gap-3">
-        <label htmlFor={htmlFor} className="text-xs font-medium text-foreground/90">
+    <div className={cn("min-w-0 space-y-1.5", className)}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <label htmlFor={htmlFor} className="min-w-0 text-xs font-medium text-foreground/90">
           {label}
         </label>
-        {hint ? <span className="text-[11px] text-muted-foreground">{hint}</span> : null}
+        {hint ? (
+          <span className="min-w-0 text-right text-[11px] text-muted-foreground">{hint}</span>
+        ) : null}
       </div>
       {children}
     </div>
@@ -256,7 +258,7 @@ export function StepActions({
   return (
     <div
       className={cn(
-        "sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border/60 bg-background/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6",
+        "sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6",
         className,
       )}
     >

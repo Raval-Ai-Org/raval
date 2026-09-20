@@ -5,8 +5,9 @@
 import "server-only";
 import { createKieTask, getKieTask, KieGatewayError, pickVideoUrl } from "@/lib/kie-gateway.server";
 import type { UgcModel } from "@/lib/ugc/models";
+import { checkVideoResult } from "@/lib/ugc/quality";
 import { log } from "@/server/observability/logger";
-import { kieUsdPerCredit } from "../models.server";
+import { kieUsdPerCredit, providerModelId } from "../models.server";
 import type {
   ProviderCheck,
   ProviderFailure,
@@ -95,13 +96,14 @@ export const kieVideoProvider: VideoProvider = {
   async submit(req: VideoRenderRequest): Promise<SubmitResult> {
     const input = buildKieInput(req);
     try {
+      const providerModel = providerModelId(req.model);
       const { taskId } = await createKieTask({
-        model: req.model.providerModel,
+        model: providerModel,
         input,
         callBackUrl: req.callbackUrl,
       });
       const { prompt: _prompt, image_urls: _i, reference_image_urls: _r, ...request } = input;
-      return { ok: true, taskId, request: { model: req.model.providerModel, ...request } };
+      return { ok: true, taskId, request: { model: providerModel, ...request } };
     } catch (error) {
       const failure = kieFailure(error);
       log.warn("ugc.kie.submit_failed", { model: req.model.key, ...failure });
@@ -148,7 +150,7 @@ export const kieVideoProvider: VideoProvider = {
         record.creditsConsumed != null
           ? Math.round(record.creditsConsumed * kieUsdPerCredit() * 1_000_000) / 1_000_000
           : null,
-      meta,
+      meta: { ...meta, qualityCheck: checkVideoResult(videoUrl) },
     };
   },
 };

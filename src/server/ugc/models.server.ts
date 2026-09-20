@@ -7,8 +7,9 @@
 //   UGC_PRICE_<KEY>_<RES>_CREDITS=65         Kie credits per video/second at a resolution
 //   UGC_VIDEO_UNITS_<KEY>=2                  monthly video quota units per render
 //   KIE_USD_PER_CREDIT=0.005                 Kie credit → USD
-//   UGC_DEFAULT_MODEL=veo-3-1-fast
+//   UGC_DEFAULT_MODEL=seedance-2
 //   UGC_MAX_CONCURRENT_RENDERS=3             live renders per workspace
+//   KIE_UGC_MODEL_KLING_3=kling-3.0/video    server-side KIE id override
 import "server-only";
 import {
   DEFAULT_UGC_MODEL,
@@ -41,6 +42,11 @@ function envBool(name: string): boolean | undefined {
 
 export function kieUsdPerCredit(): number {
   return envNumber("KIE_USD_PER_CREDIT") ?? 0.005;
+}
+
+/** Provider ids stay configurable without exposing them to the browser. */
+export function providerModelId(model: UgcModel): string {
+  return process.env[`KIE_UGC_MODEL_${envKey(model.key)}`]?.trim() || model.providerModel;
 }
 
 export function maxConcurrentRenders(): number {

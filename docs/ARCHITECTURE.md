@@ -1,4 +1,10 @@
-# Raval AI Search Intelligence
+# Historical architecture: Raval AI Search Intelligence
+
+> This document describes an earlier architecture and is retained as a
+> historical design record. For the current Mellox AI implementation, use
+> [architecture-overview.md](architecture-overview.md),
+> [backend.md](backend.md), and [codebase.md](codebase.md).
+
 # System Architecture
 
 ## 1. Architecture Overview

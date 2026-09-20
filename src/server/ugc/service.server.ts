@@ -12,7 +12,8 @@ import type { UserSupabaseClient } from "@/integrations/supabase/client.user.ser
 import type { Json } from "@/integrations/supabase/types";
 import { checkRenderSettings, isUgcModelKey, UGC_MODELS, usableImageCount } from "@/lib/ugc/models";
 import { platformPreset } from "@/lib/ugc/options";
-import { buildVideoPrompt } from "@/lib/ugc/prompt";
+import { buildModelPrompt } from "@/lib/ugc/prompt-adapters";
+import { routeVideo } from "@/lib/ugc/router";
 import {
   ACTIVE_RENDER_STATUSES,
   BriefSchema,
@@ -39,6 +40,7 @@ import {
   estimateRender,
   isModelEnabled,
   maxConcurrentRenders,
+  providerModelId,
 } from "./models.server";
 import { kieVideoProvider } from "./providers/kie.server";
 import type { RenderRow } from "./store";
@@ -528,11 +530,23 @@ export async function startRender(
   const ctx = await projectContext(db, input.workspaceId, input.projectId);
   if (!ctx.script)
     throw new HttpError(400, "Choose a concept and finish the script before generating.");
-  if (!isUgcModelKey(input.model) || !isModelEnabled(input.model)) {
-    throw new HttpError(400, "That video model isn't available.");
-  }
-  const model = UGC_MODELS[input.model];
   const refs = await ownedImageAssetIds(input.workspaceId, input.referenceAssetIds);
+  const requestedModel = isUgcModelKey(input.model) ? input.model : "auto";
+  const route = routeVideo(
+    {
+      product: ctx.product,
+      brief: ctx.brief,
+      script: ctx.script,
+      platform: ctx.brief.platform,
+      durationSec: input.durationSec,
+      referenceCount: refs.length,
+      brand: ctx.brand,
+      requestedModel,
+    },
+    enabledModels().map((candidate) => candidate.key),
+  );
+  if (!isModelEnabled(route.model)) throw new HttpError(400, "No suitable video model is available.");
+  const model = UGC_MODELS[route.model];
   const imageCount = usableImageCount(model, refs.length);
   const settings = {
     model: model.key,
@@ -554,8 +568,8 @@ export async function startRender(
     estCostUsd: estimate.usd,
     provider: "kie",
     model: model.providerVariant
-      ? `${model.providerModel}:${model.providerVariant}`
-      : model.providerModel,
+      ? `${providerModelId(model)}:${model.providerVariant}`
+      : providerModelId(model),
     route: "ugc/renders:create",
     sourceId: `${input.workspaceId}:${input.idempotencyKey}`,
     ttlSeconds: RESERVATION_TTL_SECONDS,
@@ -573,7 +587,7 @@ export async function startRender(
 
   const brandVoice =
     typeof ctx.brand.voice === "string" && ctx.brand.voice.trim() ? ctx.brand.voice : undefined;
-  const prompt = buildVideoPrompt({
+  const prompt = buildModelPrompt({
     product: ctx.product,
     brief: ctx.brief,
     script: ctx.script,
@@ -594,7 +608,7 @@ export async function startRender(
       idempotency_key: input.idempotencyKey,
       model_key: model.key,
       provider: kieVideoProvider.id,
-      provider_model: model.providerModel,
+      provider_model: providerModelId(model),
       provider_variant: model.providerVariant ?? null,
       generation_type: kieVideoProvider.generationType(model, imageCount),
       duration_sec: settings.durationSec,
@@ -611,6 +625,7 @@ export async function startRender(
         language: ctx.brief.language,
         estCredits: estimate.credits,
         videoUnits: estimate.units,
+        routing: { reason: route.reason, signals: route.signals, strategy: route.strategy },
       },
       prompt,
       reservation_id: reservation.id,

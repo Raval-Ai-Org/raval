@@ -1,4 +1,13 @@
-# RavalAI Client Launch Plan
+# Historical client launch plan: RavalAI
+
+> This dated launch plan is retained for project history and is not the
+> authoritative current-state guide. Use [../../social.md](../../social.md),
+> [../../deployment-guide.md](../../deployment-guide.md), and
+> [../../configuration.md](../../configuration.md) for Mellox AI behavior.
+>
+> Security cleanup: environment-specific project identifiers, tunnel URLs, and
+> account details must not be copied into repository documentation. The current
+> values are intentionally omitted here.
 
 > **Status:** Active | **Author:** Muhammad-Junaid-Sajjad | **Date:** 2026-08-27
 > **Target launch:** End of September 2026 (~late Sep 2026)
@@ -28,15 +37,15 @@ This document is the **single source of truth** for everything that must happen 
 | Component                               | Status | Evidence                                                  |
 | --------------------------------------- | ------ | --------------------------------------------------------- |
 | RavalAI app boots                       | ✅     | `npm run dev` → http://localhost:8080, HTTP 200           |
-| Login with `junaidsajjad2298@gmail.com` | ✅     | e2e test 1, 12.5s                                         |
+| Login with an approved test account | ✅     | e2e test evidence                                         |
 | All major routes load                   | ✅     | e2e test 2, 8/8 routes                                    |
 | Hydration warnings resolved             | ✅     | commit `50469ed`                                          |
 | `/studio` → `/app/social` redirect      | ✅     | 307 verified                                              |
 | Vitest unit tests                       | ✅     | 115/115 in 5.88s                                          |
 | Live e2e tests                          | ✅     | 7/7 in 2.6 min                                            |
-| Supabase auth + workspace               | ✅     | real Supabase project `smdravaoaeqdajmnrlpr`              |
+| Supabase auth + workspace               | ✅     | verified in the then-current test environment             |
 | SDR proxy from RavalAI                  | ✅     | `/api/sdr/accounts` returns 401 (auth-protected)          |
-| SDR tunnel live                         | ✅     | `https://spice-carlo-cure-commonwealth.trycloudflare.com` |
+| SDR tunnel live                         | ✅     | verified in the then-current test environment             |
 | LinkedIn OAuth code                     | ✅     | `app/api/accounts.py` lines for `linkedin`                |
 | X/Twitter OAuth code                    | ✅     | `app/api/accounts.py` lines for `twitter`                 |
 | Facebook OAuth code                     | ✅     | `app/api/accounts.py` lines for `facebook`                |

@@ -507,7 +507,7 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
   const scope = getRequestScope();
 
   // Time-to-first-byte timeout only — we don't want to cut a healthy long stream.
-  const upstream = await fetchWithTimeout(
+  let upstream = await fetchWithTimeout(
     `${OPENROUTER_BASE}/chat/completions`,
     { method: "POST", headers: headers(key), body: JSON.stringify(body) },
     {
@@ -515,6 +515,21 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
       onTransportError: transportError("AI provider did not respond in time. Please retry."),
     },
   );
+
+  // OpenRouter can retire or temporarily remove a model without notice. Keep
+  // chat usable when that happens instead of surfacing a provider 404.
+  if (upstream.status === 404 && model !== FAST_CHAT_MODEL) {
+    model = FAST_CHAT_MODEL;
+    body.model = model;
+    upstream = await fetchWithTimeout(
+      `${OPENROUTER_BASE}/chat/completions`,
+      { method: "POST", headers: headers(key), body: JSON.stringify(body) },
+      {
+        timeoutMs: STREAM_TIMEOUT_MS,
+        onTransportError: transportError("AI provider did not respond in time. Please retry."),
+      },
+    );
+  }
 
   if (!upstream.ok || !upstream.body) {
     const text = await upstream.text().catch(() => "");

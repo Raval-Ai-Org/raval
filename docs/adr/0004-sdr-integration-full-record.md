@@ -46,7 +46,7 @@ RavalAI: /api/public/hooks/sdr → verify → upsert content_publications → ag
 
 ---
 
-## 2. Data model (live-verified on the old Supabase project `smdravaoaeqdajmnrlpr`)
+## 2. Data model (live-verified on a historical Supabase test project; identifier omitted)
 
 - **`workspace_sdr`** — workspace_id PK/FK, sdr_workspace_id, encrypted_api_key, webhook_secret, sdr_base_url, status, timestamps. RLS: service-role only. **Live row verified** (`workspace_id`, `status: active`).
 - **`content_publications`** — id, workspace_id, content_item_id, sdr_post_id, sdr_target_id, platform, account_id, status (`pending|publishing|published|failed|retrying|cancelled|partial_failed`), platform_post_id, platform_post_url, error_category, last_error, attempt, delivered_at, timestamps. UNIQUE(content_item_id, sdr_target_id). RLS: workspace members read, service-role write.
@@ -96,7 +96,9 @@ Migrations: `20260809000001_add_workspace_sdr.sql`, `20260809000002_add_content_
 ### 🔒 On hold (integration hold — see ADR-0005/integration-hold)
 
 - Live Vercel deployment is missing (`raval-mu.vercel.app` → `DEPLOYMENT_NOT_FOUND`). Needs dashboard-side check (or ask Zian).
-- Zian's `ad052bc` re-pointed Supabase to a **new, empty project** `slcmqbbjzyztqyucauol`; his migration set excludes the SDR migrations. Decision pending: keep old project `smdravaoaeqdajmnrlpr` (recommended) vs provision the new one.
+- A historical change re-pointed Supabase to a new, empty project; its identifier
+   and the older project identifier are intentionally omitted. Decision status
+   must be verified from current deployment configuration.
 
 ---
 
@@ -105,7 +107,8 @@ Migrations: `20260809000001_add_workspace_sdr.sql`, `20260809000002_add_content_
 - RavalAI: **vitest 115/115** (28 files) — unit/contract/integration.
 - SDR: **221/221** pytest.
 - Playwright e2e: **4/6** (US1 ×2, US5, US3); 2 generation-gated.
-- **Live:** SDR `/healthz` healthy (DB/Redis/workers); live publish through SDR dryrun returns job accepted → published; real-login + SDR proxy + OAuth-start 200 on `smdravaoaeqdajmnrlpr`.
+- **Historical live check:** SDR `/healthz` and dry-run publishing were healthy in
+   the then-current environment. Current provider health must be verified at deploy time.
 
 ## References
 

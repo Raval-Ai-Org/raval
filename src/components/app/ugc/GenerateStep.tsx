@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, Check, Image as ImageIcon, Mic, Video, Zap } from "@/components/icons";
+import { useState } from "react";
+import { AlertTriangle, Check, Video, Zap } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AllowanceView, ModelView, ReferenceImageView } from "@/lib/ugc/schemas";
@@ -86,6 +87,8 @@ export function GenerateStep({
   onBack: () => void;
   onGenerate: () => void;
 }) {
+  const [advanced, setAdvanced] = useState(false);
+
   if (loadingModels) {
     return (
       <div className="grid gap-3 md:grid-cols-3">
@@ -95,7 +98,10 @@ export function GenerateStep({
       </div>
     );
   }
-  const model = models.find((m) => m.key === settings.model) ?? models[0];
+  const model =
+    models.find((m) => m.key === settings.model) ??
+    models.find((m) => m.key === "seedance-2") ??
+    models[0];
   if (!model) {
     return (
       <Panel className="text-sm text-muted-foreground">
@@ -130,58 +136,41 @@ export function GenerateStep({
 
   return (
     <div className="space-y-4">
-      <div role="radiogroup" aria-label="Video model" className="grid gap-3 md:grid-cols-3">
-        {models.map((m) => {
-          const selected = m.key === model.key;
-          const from = Math.min(...Object.values(m.pricing.usd));
-          return (
-            <button
-              key={m.key}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => onChange(coerceSettings(m, settings))}
-              className={cn(
-                "flex flex-col gap-2 rounded-2xl bg-surface-2/70 p-4 text-left ring-1 transition-[box-shadow,background-color]",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
-                selected ? "ring-2 ring-primary/80" : "ring-border/60 hover:bg-surface-2",
-              )}
+      <Panel className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold">Automatic video direction</p>
+          <p className="text-xs text-muted-foreground">
+            Mellox weighs realism, motion, references, audio, platform and cost for every render.
+            The best model is selected automatically.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setAdvanced((open) => !open)}>
+          {advanced ? "Hide advanced settings" : "Advanced settings"}
+        </Button>
+      </Panel>
+
+      {advanced ? (
+        <Panel>
+          <Field label="Model override" hint="Auto is recommended for most social videos.">
+            <select
+              value={settings.model}
+              onChange={(event) => {
+                const next = models.find((candidate) => candidate.key === event.target.value);
+                if (next) onChange(coerceSettings(next, settings));
+                else onChange({ ...settings, model: "auto" });
+              }}
+              className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm sm:max-w-sm"
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold">{m.displayName}</span>
-                {selected ? (
-                  <Check className="size-4 text-primary" aria-hidden />
-                ) : (
-                  <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    {TIER_LABEL[m.tier]}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs leading-relaxed text-muted-foreground">{m.description}</p>
-              <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <Video className="size-3" aria-hidden />
-                  {m.durations[0]}–{m.durations[m.durations.length - 1]}s
-                </span>
-                {m.nativeAudio ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Mic className="size-3" aria-hidden /> Voice
-                  </span>
-                ) : null}
-                {m.images ? (
-                  <span className="inline-flex items-center gap-1">
-                    <ImageIcon className="size-3" aria-hidden />
-                    {m.images.mode === "references" ? `${m.images.max} photos` : "Opening photo"}
-                  </span>
-                ) : null}
-                <span className="ml-auto tabular-nums">
-                  from {formatUsd(m.pricing.unit === "video" ? from : from * m.durations[0])}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+              <option value="auto">Auto - Mellox chooses</option>
+              {models.map((candidate) => (
+                <option key={candidate.key} value={candidate.key}>
+                  {candidate.displayName} - {TIER_LABEL[candidate.tier]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </Panel>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <Panel className="space-y-4">
@@ -283,7 +272,7 @@ export function GenerateStep({
           </div>
           <dl className="grid grid-cols-[1fr_auto] gap-y-1.5 text-xs">
             <dt className="text-muted-foreground">Model</dt>
-            <dd>{model.displayName}</dd>
+            <dd>{settings.model === "auto" ? "Automatic routing" : model.displayName}</dd>
             <dt className="text-muted-foreground">Video</dt>
             <dd className="tabular-nums">
               {settings.durationSec}s · {settings.aspectRatio} · {settings.resolution}

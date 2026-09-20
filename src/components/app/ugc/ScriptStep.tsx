@@ -105,8 +105,8 @@ export function ScriptStep({
               return (
                 <li key={scene.id}>
                   <Panel className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <span className="grid size-6 place-items-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
                           {i + 1}
                         </span>
@@ -118,7 +118,7 @@ export function ScriptStep({
                               : `Beat ${i + 1}`}
                         </span>
                         {t ? (
-                          <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[10.5px] tabular-nums text-muted-foreground">
+                          <span className="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-[10.5px] tabular-nums text-muted-foreground">
                             {t.start}–{t.end}s
                           </span>
                         ) : null}
@@ -297,7 +297,7 @@ export function ScriptStep({
               ))}
             </div>
             <form
-              className="flex gap-2"
+              className="flex flex-col gap-2 sm:flex-row"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (instruction.trim()) onRewrite(script, instruction.trim());
@@ -307,7 +307,7 @@ export function ScriptStep({
                 value={instruction}
                 onChange={(e) => setInstruction(e.target.value)}
                 placeholder="Or say what to change…"
-                className="h-9"
+                className="h-9 min-w-0 flex-1"
                 disabled={rewriting}
               />
               <Button
@@ -315,6 +315,7 @@ export function ScriptStep({
                 variant="secondary"
                 loading={rewriting}
                 disabled={!instruction.trim()}
+                className="shrink-0"
               >
                 Go
               </Button>
