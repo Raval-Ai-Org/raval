@@ -61,6 +61,7 @@ export async function exchangeCode(code: string): Promise<WebflowTokenSet> {
         client_id: config.clientId,
         client_secret: config.clientSecret,
         code,
+        grant_type: "authorization_code",
         redirect_uri: config.redirectUri,
       }),
       cache: "no-store",
@@ -72,8 +73,17 @@ export async function exchangeCode(code: string): Promise<WebflowTokenSet> {
     },
   );
   const body = await response.json().catch(() => null);
-  if (!response.ok || typeof body?.access_token !== "string")
-    throw new WebflowApiError(502, "Webflow authorization could not be completed.");
+  if (!response.ok || typeof body?.access_token !== "string") {
+    const code = typeof body?.code === "string" ? body.code : undefined;
+    const status = response.status >= 400 ? response.status : 502;
+    throw new WebflowApiError(
+      status,
+      code
+        ? `Webflow authorization could not be completed (${code}).`
+        : "Webflow authorization could not be completed.",
+      code,
+    );
+  }
   return {
     accessToken: body.access_token,
     refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : null,
