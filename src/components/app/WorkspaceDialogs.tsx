@@ -15,6 +15,7 @@ import { Globe, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
+import { WebflowConnector } from "@/components/app/connectors/WebflowConnector";
 import { GoogleConnectCard } from "@/components/app/analytics/GoogleConnectCard";
 import { CONNECTOR_PROVIDERS } from "@/lib/connectors/types";
 
@@ -342,6 +343,18 @@ function SettingsDialog({
         </TabsList>
 
         <TabsContent value="connections" className="mt-5 space-y-6">
+          <div className="rounded-2xl border border-border/70 bg-gradient-to-br from-card/80 via-card/45 to-primary/[0.04] px-4 py-4 sm:px-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
+              Integrations
+            </p>
+            <h3 className="mt-1 text-lg font-semibold tracking-tight">
+              Connect the tools your marketing intelligence works with.
+            </h3>
+            <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
+              Connect a website source, codebase, or analytics account. Mellox only shows resources
+              that the connected account can actually access.
+            </p>
+          </div>
           <SocialAccountsSection variant="settings" />
           {workspaceId && (
             <div className="border-t border-border/70 pt-5">
@@ -352,44 +365,25 @@ function SettingsDialog({
             </div>
           )}
           <div className="border-t border-border/70 pt-5">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Website sources
-            </p>
-            <p className="mb-3 text-[12px] text-muted-foreground">
-              The code behind your website. AI Visibility uses it to open fix pull requests you
-              review — only when you approve a specific fix.
-            </p>
+            <div className="mb-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Development &amp; Website
+              </p>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                Connect the live site and the code that powers it. These are independent sources;
+                use either one or both.
+              </p>
+            </div>
             {workspaceId ? (
-              <GitHubConnector workspaceId={workspaceId} />
+              <div className="grid items-start gap-4 xl:grid-cols-2">
+                <GitHubConnector workspaceId={workspaceId} />
+                <WebflowConnector workspaceId={workspaceId} />
+              </div>
             ) : (
               <p className="text-[13px] text-muted-foreground">
                 Select a workspace to manage connections.
               </p>
             )}
-          </div>
-          <div className="border-t border-border/70 pt-5">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Other website platforms
-            </p>
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {CONNECTOR_PROVIDERS.filter((p) => p.availability === "coming_soon").map((p) => (
-                <li
-                  key={p.id}
-                  className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/40 px-3 py-2.5"
-                >
-                  <div className="grid h-9 w-9 place-items-center rounded-lg bg-secondary">
-                    <Globe className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-medium">{p.name}</div>
-                    <p className="truncate text-[11.5px] text-muted-foreground">{p.tagline}</p>
-                  </div>
-                  <span className="whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    Not available yet
-                  </span>
-                </li>
-              ))}
-            </ul>
           </div>
         </TabsContent>
 

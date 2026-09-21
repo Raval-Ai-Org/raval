@@ -13,7 +13,13 @@ import type { SourceView } from "@/lib/connectors/types";
 import { presentSource, SOURCE_COLS, type SourceRow } from "./present";
 
 export type SiteSourceContext = {
-  source: SourceView;
+  source: SourceView | null;
+  webflowSite: {
+    siteId: string;
+    name: string;
+    domain: string | null;
+    connectionId: string;
+  } | null;
   /** Capabilities available now vs. planned. */
   capabilities: { inspect: true; proposeChanges: boolean };
 };
@@ -33,10 +39,32 @@ export async function getSiteSourceContext(
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (error || !data) return null;
+  let webflowSite: SiteSourceContext["webflowSite"] = null;
+  const webflowDb = supabase as unknown as { from: (table: string) => any };
+  const { data: wf } = await webflowDb
+    .from("webflow_sites")
+    .select("site_id, site_name, domain, connection_id")
+    .eq("workspace_id", workspaceId)
+    .eq("selected", true)
+    .eq("status", "active")
+    .maybeSingle();
+  if (wf?.domain && wf.domain.toLowerCase().replace(/^www\./, "") === normalized) {
+    webflowSite = {
+      siteId: wf.site_id,
+      name: wf.site_name,
+      domain: wf.domain ?? null,
+      connectionId: wf.connection_id,
+    };
+  }
+  if (error) return null;
+  if (!data)
+    return webflowSite
+      ? { source: null, webflowSite, capabilities: { inspect: true, proposeChanges: false } }
+      : null;
   const row = data as unknown as SourceRow;
   return {
     source: presentSource(row),
+    webflowSite,
     // Pull requests for AI Visibility fixes: src/server/geo/fixes/service.server.ts.
     // Changes are only proposed once the repository is proven to build this host.
     capabilities: {

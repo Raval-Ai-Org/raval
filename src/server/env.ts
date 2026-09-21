@@ -67,6 +67,11 @@ const Schema = z.object({
   GOOGLE_TOKEN_ENCRYPTION_KEY: z.string().optional(),
   GOOGLE_ALLOWED_RETURN_ORIGINS: z.string().optional(),
   FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED: z.string().optional(),
+  // Webflow Data API OAuth connector. All three values are server-only.
+  WEBFLOW_CLIENT_ID: z.string().optional(),
+  WEBFLOW_CLIENT_SECRET: z.string().optional(),
+  WEBFLOW_REDIRECT_URI: z.string().optional(),
+  WEBFLOW_TOKEN_ENCRYPTION_KEY: z.string().optional(),
   // AI Visibility rendering fallback + fix verification.
   FEATURE_FLAG_GEO_RENDERING_ENABLED: z.string().optional(),
   GEO_RENDER_EXECUTABLE: z.string().optional(),
@@ -147,11 +152,14 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
   }
   if (env.GOOGLE_ANALYTICS_CLIENT_ID || env.GOOGLE_ANALYTICS_CLIENT_SECRET) {
     for (const name of ["GOOGLE_ANALYTICS_CLIENT_ID", "GOOGLE_ANALYTICS_CLIENT_SECRET"]) {
-      if (!env[name]) errors.push(`${name} is required when the Google Analytics connector is configured`);
+      if (!env[name])
+        errors.push(`${name} is required when the Google Analytics connector is configured`);
     }
     const key = env.GOOGLE_TOKEN_ENCRYPTION_KEY ?? "";
     if (!key) {
-      errors.push("GOOGLE_TOKEN_ENCRYPTION_KEY is required when the Google Analytics connector is configured");
+      errors.push(
+        "GOOGLE_TOKEN_ENCRYPTION_KEY is required when the Google Analytics connector is configured",
+      );
     } else if (Buffer.from(key, "base64").length !== 32) {
       errors.push("GOOGLE_TOKEN_ENCRYPTION_KEY must be base64 of exactly 32 bytes");
     }

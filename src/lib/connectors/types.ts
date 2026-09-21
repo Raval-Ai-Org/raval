@@ -65,8 +65,8 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProviderMeta[] = [
     id: "webflow",
     name: "Webflow",
     tagline: "CMS collections and page settings",
-    availability: "coming_soon",
-    capabilities: ["source_read", "publish"],
+    availability: "available",
+    capabilities: ["source_read"],
   },
   {
     id: "shopify",

@@ -17,6 +17,7 @@ import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
 import * as schedules from "./schedules";
 import * as workspaces from "./workspaces";
+import * as webflow from "./webflow";
 
 // Registry the /api/rpc/[...fn] route dispatches against. Keys mirror the paths
 // the client stubs in src/lib/*.functions.ts were generated with.
@@ -37,6 +38,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   insights,
   schedules,
   workspaces,
+  webflow,
 };
 
 function isServerFn(value: unknown): value is AnyServerFn {
