@@ -1,6 +1,16 @@
 import "server-only";
 import { recordUsage } from "@/server/ai/metering";
 import { unitPrice } from "@/server/ai/pricing";
+import {
+  DataForSeoError,
+  dataForSeoRequest as postDataForSeo,
+  isRecord,
+  stringValue,
+} from "./client.server";
+
+// Re-exported so existing importers of this module keep working after the
+// transport moved to client.server.ts.
+export { DataForSeoError };
 
 export type GoogleTrendsInput = {
   keywords: string[];
@@ -51,19 +61,6 @@ export type GoogleTrendsData = {
   regionalInterest: RegionalInterest[];
 };
 
-export class DataForSeoError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly code?: number,
-    /** Transport-level failure (timeout, network, HTTP 429/5xx) worth retrying later. */
-    public readonly transient = false,
-  ) {
-    super(message);
-    this.name = "DataForSeoError";
-  }
-}
-
 type DataForSeoItem = {
   type?: unknown;
   data?: unknown;
@@ -76,16 +73,6 @@ const GOOGLE_TRENDS_TASK_POST_URL =
   "https://api.dataforseo.com/v3/keywords_data/google_trends/explore/task_post";
 const GOOGLE_TRENDS_TASK_GET_URL =
   "https://api.dataforseo.com/v3/keywords_data/google_trends/explore/task_get/";
-const REQUEST_TIMEOUT_MS = 15_000;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
 function numberArray(value: unknown): number[] {
   return Array.isArray(value)
     ? value.filter((item): item is number => typeof item === "number")
@@ -249,51 +236,12 @@ export type GoogleTrendsTask = {
   data?: GoogleTrendsData;
 };
 
-function credentials(): { login: string; password: string } {
-  const login = process.env.DATAFORSEO_LOGIN;
-  const password = process.env.DATAFORSEO_PASSWORD;
-  if (!login || !password) throw new DataForSeoError("DataForSEO is not configured", 503);
-  return { login, password };
-}
-
-async function dataForSeoRequest(
+function dataForSeoRequest(
   url: string,
   init: RequestInit,
   fetchImpl: typeof fetch,
 ): Promise<unknown> {
-  const { login, password } = credentials();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetchImpl(url, {
-      ...init,
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${login}:${password}`).toString("base64")}`,
-        "Content-Type": "application/json",
-        ...(init.headers ?? {}),
-      },
-      signal: controller.signal,
-    });
-    const payload: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
-      const message = isRecord(payload) ? stringValue(payload.status_message) : undefined;
-      throw new DataForSeoError(
-        `DataForSEO request failed (HTTP ${response.status}${message ? `: ${message}` : ""})`,
-        502,
-        response.status,
-        response.status === 429 || response.status >= 500,
-      );
-    }
-    return payload;
-  } catch (error) {
-    if (error instanceof DataForSeoError) throw error;
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new DataForSeoError("DataForSEO request timed out", 504, undefined, true);
-    }
-    throw new DataForSeoError("Unable to reach DataForSEO", 502, undefined, true);
-  } finally {
-    clearTimeout(timer);
-  }
+  return postDataForSeo(url, init, fetchImpl);
 }
 
 export async function createGoogleTrendsTask(

@@ -104,6 +104,72 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
 - Dimension scores (`src/lib/geo/dimensions.ts`) are derived from the stored
   rule summaries; every rule id must be mapped (a test enforces it).
 
+## Backlink Growth (buying real placements)
+
+Mellox **buys** backlinks; it does not analyse someone else's. A user picks the
+page they want to rank and the sites to appear on, Mellox writes the brief, buys
+the placement through a fulfilment provider, then fetches the published page to
+prove the link is really there. The user never needs a provider account and
+never sees one.
+
+- Route `/w/<id>/app/backlinks` (renders `AppModalShell` over `AppShell`, which
+  owns the viewport); sidebar entry in **Intelligence**. UI in
+  `src/components/app/links/`, RPC `src/server/fns/links.ts`, stubs
+  `src/lib/links.functions.ts`.
+- **Mellox owns the provider credential** (`RIXOT_API_KEY`) — never ask a user
+  to paste a token or connect their own account. Without it the surface reports
+  itself unavailable instead of failing at the moment someone tries to buy.
+- `src/server/links/rixot/client.server.ts` is the only file that reads the key
+  or talks to the provider. **Its POSTs are never retried**: the provider has no
+  idempotency key on its order call and no way to remove a basket item, so a
+  repeat is money that cannot be recovered.
+- Two invariants shape everything (both stated in the migration header):
+  - **Basket exclusivity** — one provider account and one basket are shared by
+    every workspace, and the pay call charges for the whole basket. So exactly
+    one order cycle may touch the provider at a time, enforced by the lease row
+    `provider_basket_lock` with a fencing token that every write carries.
+  - **No blind retry** — an unknown POST outcome is resolved by *reading* the
+    basket. An unknown order resolves by items appearing; an unknown pay by
+    items disappearing.
+- Anything the runner cannot resolve with certainty quarantines the lock and
+  halts the queue (`needs_operator`). A stuck queue is recoverable; an
+  unattributed charge is not.
+- The money decisions are pure and tested in `src/lib/links/basket.ts`
+  (`preflightVerdict`, `payVerdict`); `reconcile.server.ts` is only the database
+  half. Paying requires pinned basket ids, set equality both ways, and a total
+  matching to the cent.
+- **Credits**: `workspace_credit_ledger` is append-only (a trigger refuses
+  UPDATE and DELETE even for `service_role`); `apply_credit_entry` is idempotent
+  on `(workspace_id, idempotency_key)`, and keys derive from row ids only.
+  Held at checkout, captured at payment, refunded per line if a placement never
+  appears. Top-ups go through Stripe (`src/server/billing/stripe.server.ts`);
+  with no Stripe key the packs show disabled rather than breaking.
+- **Pricing is server-side only** (`src/lib/links/pricing.ts` + env
+  `MELLOX_LINK_MARGIN`, `MELLOX_CREDITS_PER_USD`). The browser's total is
+  checked against the server's at checkout, never trusted.
+- **Relevance is Mellox's own read, labelled as such.** The provider catalog has
+  no dependable category, so `src/lib/links/rank.ts` ranks on figures it really
+  returns (domain rating, referring domains, ranking keywords, price) and
+  `match.server.ts` fetches a sample page for Claude to judge topical fit. Never
+  invent a score the data cannot support; file hosts and throwaway TLDs are
+  refused outright.
+- **A placement only counts once verification says so.** The provider saying
+  "published" is not proof. `link_order_lines_live_needs_proof` refuses `live`
+  in the database without a real check, mirroring `backlink_opportunities`.
+  Verification (`src/lib/backlinks/verify.ts` + `src/server/backlinks/
+  verify.server.ts`, through `safeFetch`) is deliberately conservative: a bot
+  wall, truncated body or client-rendered page is `unreachable`, never
+  `missing`, and a link is only `lost` after two consecutive misses a day apart.
+- Attribution from the provider's link list is `(target, keyword, donor, cost)`,
+  which is **not a key**. A tie is recorded as `ambiguous` and the word reaches
+  the user rather than being smoothed over.
+- Background work: `/api/public/hooks/link-orders` every minute (advance one
+  cycle, poll links, verify, refund) and `/api/public/hooks/link-catalog` daily
+  (mirror the catalog into `rixot_donors`).
+- Live checks: `tests/live/links.live.ts`. Everything in it is a GET and spends
+  nothing; the one test that really buys a placement is gated behind
+  `LINKS_LIVE_BUY=yes`.
+
 ## Website source connectors (GitHub)
 
 Full reference: [docs/github-connector.md](docs/github-connector.md), decision

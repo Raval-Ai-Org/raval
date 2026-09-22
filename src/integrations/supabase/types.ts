@@ -1247,6 +1247,371 @@ export type Database = {
           },
         ];
       };
+      backlink_campaigns: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          goal: string;
+          id: string;
+          name: string;
+          site_host: string | null;
+          status: string;
+          target_count: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          goal?: string;
+          id?: string;
+          name: string;
+          site_host?: string | null;
+          status?: string;
+          target_count?: number;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          goal?: string;
+          id?: string;
+          name?: string;
+          site_host?: string | null;
+          status?: string;
+          target_count?: number;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "backlink_campaigns_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      backlink_discovery_runs: {
+        Row: {
+          cache_key: string;
+          campaign_id: string | null;
+          competitors: string[];
+          completed_at: string | null;
+          cost_usd: number;
+          created_at: string;
+          created_by: string | null;
+          error: string | null;
+          expires_at: string;
+          found: number;
+          id: string;
+          provider: Json;
+          site_host: string;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          cache_key: string;
+          campaign_id?: string | null;
+          competitors?: string[];
+          completed_at?: string | null;
+          cost_usd?: number;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          expires_at?: string;
+          found?: number;
+          id?: string;
+          provider?: Json;
+          site_host: string;
+          status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          cache_key?: string;
+          campaign_id?: string | null;
+          competitors?: string[];
+          completed_at?: string | null;
+          cost_usd?: number;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          expires_at?: string;
+          found?: number;
+          id?: string;
+          provider?: Json;
+          site_host?: string;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "backlink_discovery_runs_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "backlink_campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "backlink_discovery_runs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      backlink_events: {
+        Row: {
+          actor: string | null;
+          at: string;
+          detail: Json;
+          id: string;
+          opportunity_id: string;
+          type: string;
+          workspace_id: string;
+        };
+        Insert: {
+          actor?: string | null;
+          at?: string;
+          detail?: Json;
+          id?: string;
+          opportunity_id: string;
+          type: string;
+          workspace_id: string;
+        };
+        Update: {
+          actor?: string | null;
+          at?: string;
+          detail?: Json;
+          id?: string;
+          opportunity_id?: string;
+          type?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "backlink_events_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "backlink_opportunities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "backlink_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      backlink_opportunities: {
+        Row: {
+          ai: Json | null;
+          anchor_found: string | null;
+          campaign_id: string;
+          competitor_hits: number;
+          created_at: string;
+          created_by: string | null;
+          discovery_run_id: string | null;
+          evidence: Json;
+          first_live_at: string | null;
+          id: string;
+          is_nofollow: boolean | null;
+          kind: string;
+          live_url: string | null;
+          method: string | null;
+          outreach: Json | null;
+          rank: number | null;
+          score: number;
+          source_domain: string;
+          source_title: string | null;
+          source_url: string | null;
+          spam_score: number | null;
+          status: string;
+          suggested_anchor: string | null;
+          target_url: string | null;
+          updated_at: string;
+          verification: string;
+          verified_at: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          ai?: Json | null;
+          anchor_found?: string | null;
+          campaign_id: string;
+          competitor_hits?: number;
+          created_at?: string;
+          created_by?: string | null;
+          discovery_run_id?: string | null;
+          evidence?: Json;
+          first_live_at?: string | null;
+          id?: string;
+          is_nofollow?: boolean | null;
+          kind: string;
+          live_url?: string | null;
+          method?: string | null;
+          outreach?: Json | null;
+          rank?: number | null;
+          score?: number;
+          source_domain: string;
+          source_title?: string | null;
+          source_url?: string | null;
+          spam_score?: number | null;
+          status?: string;
+          suggested_anchor?: string | null;
+          target_url?: string | null;
+          updated_at?: string;
+          verification?: string;
+          verified_at?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          ai?: Json | null;
+          anchor_found?: string | null;
+          campaign_id?: string;
+          competitor_hits?: number;
+          created_at?: string;
+          created_by?: string | null;
+          discovery_run_id?: string | null;
+          evidence?: Json;
+          first_live_at?: string | null;
+          id?: string;
+          is_nofollow?: boolean | null;
+          kind?: string;
+          live_url?: string | null;
+          method?: string | null;
+          outreach?: Json | null;
+          rank?: number | null;
+          score?: number;
+          source_domain?: string;
+          source_title?: string | null;
+          source_url?: string | null;
+          spam_score?: number | null;
+          status?: string;
+          suggested_anchor?: string | null;
+          target_url?: string | null;
+          updated_at?: string;
+          verification?: string;
+          verified_at?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "backlink_opportunities_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "backlink_campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "backlink_opportunities_discovery_run_id_fkey";
+            columns: ["discovery_run_id"];
+            isOneToOne: false;
+            referencedRelation: "backlink_discovery_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "backlink_opportunities_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      backlink_verifications: {
+        Row: {
+          anchor_found: string | null;
+          checked_at: string;
+          checked_by: string | null;
+          checked_url: string;
+          error: string | null;
+          expected_target: string;
+          http_status: number | null;
+          id: string;
+          is_nofollow: boolean | null;
+          link_found: boolean | null;
+          opportunity_id: string;
+          result: string;
+          workspace_id: string;
+        };
+        Insert: {
+          anchor_found?: string | null;
+          checked_at?: string;
+          checked_by?: string | null;
+          checked_url: string;
+          error?: string | null;
+          expected_target: string;
+          http_status?: number | null;
+          id?: string;
+          is_nofollow?: boolean | null;
+          link_found?: boolean | null;
+          opportunity_id: string;
+          result: string;
+          workspace_id: string;
+        };
+        Update: {
+          anchor_found?: string | null;
+          checked_at?: string;
+          checked_by?: string | null;
+          checked_url?: string;
+          error?: string | null;
+          expected_target?: string;
+          http_status?: number | null;
+          id?: string;
+          is_nofollow?: boolean | null;
+          link_found?: boolean | null;
+          opportunity_id?: string;
+          result?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "backlink_verifications_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "backlink_opportunities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "backlink_verifications_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_customers: {
+        Row: {
+          created_at: string;
+          stripe_customer_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          stripe_customer_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          stripe_customer_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_customers_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       chat_messages: {
         Row: {
           content: string;
@@ -1306,10 +1671,11 @@ export type Database = {
       };
       client_events: {
         Row: {
-          actor_type: string;
           actor_email: string | null;
           actor_name: string | null;
+          actor_type: string;
           body: string | null;
+          client_read_at: string | null;
           created_at: string;
           id: string;
           item_id: string | null;
@@ -1318,15 +1684,15 @@ export type Database = {
           marketer_decided_by: string | null;
           marketer_decision: string;
           marketer_read_at: string | null;
-          client_read_at: string | null;
           meta: Json;
           share_id: string;
         };
         Insert: {
-          actor_type?: string;
           actor_email?: string | null;
           actor_name?: string | null;
+          actor_type?: string;
           body?: string | null;
+          client_read_at?: string | null;
           created_at?: string;
           id?: string;
           item_id?: string | null;
@@ -1335,15 +1701,15 @@ export type Database = {
           marketer_decided_by?: string | null;
           marketer_decision?: string;
           marketer_read_at?: string | null;
-          client_read_at?: string | null;
           meta?: Json;
           share_id: string;
         };
         Update: {
-          actor_type?: string;
           actor_email?: string | null;
           actor_name?: string | null;
+          actor_type?: string;
           body?: string | null;
+          client_read_at?: string | null;
           created_at?: string;
           id?: string;
           item_id?: string | null;
@@ -1352,7 +1718,6 @@ export type Database = {
           marketer_decided_by?: string | null;
           marketer_decision?: string;
           marketer_read_at?: string | null;
-          client_read_at?: string | null;
           meta?: Json;
           share_id?: string;
         };
@@ -3165,6 +3530,339 @@ export type Database = {
           },
         ];
       };
+      link_order_events: {
+        Row: {
+          actor: string | null;
+          at: string;
+          detail: Json;
+          id: string;
+          line_id: string | null;
+          order_id: string;
+          type: string;
+          workspace_id: string;
+        };
+        Insert: {
+          actor?: string | null;
+          at?: string;
+          detail?: Json;
+          id?: string;
+          line_id?: string | null;
+          order_id: string;
+          type: string;
+          workspace_id: string;
+        };
+        Update: {
+          actor?: string | null;
+          at?: string;
+          detail?: Json;
+          id?: string;
+          line_id?: string | null;
+          order_id?: string;
+          type?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "link_order_events_line_id_fkey";
+            columns: ["line_id"];
+            isOneToOne: false;
+            referencedRelation: "link_order_lines";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "link_order_events_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "link_orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "link_order_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      link_order_lines: {
+        Row: {
+          attribution: string;
+          attribution_detail: Json;
+          consecutive_missing: number;
+          created_at: string;
+          credits_price: number;
+          donor_domain: string;
+          donor_id: number;
+          first_live_at: string | null;
+          give_up_at: string | null;
+          id: string;
+          lost_at: string | null;
+          next_check_at: string | null;
+          opportunity_id: string | null;
+          order_id: string;
+          provider_basket_id: number | null;
+          provider_cost_usd: number | null;
+          provider_link_id: number | null;
+          provider_order_content_id: number | null;
+          published_at: string | null;
+          published_url: string | null;
+          settled: string;
+          status: string;
+          unit_price_usd: number;
+          updated_at: string;
+          verification: string;
+          verified_at: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          attribution?: string;
+          attribution_detail?: Json;
+          consecutive_missing?: number;
+          created_at?: string;
+          credits_price: number;
+          donor_domain: string;
+          donor_id: number;
+          first_live_at?: string | null;
+          give_up_at?: string | null;
+          id?: string;
+          lost_at?: string | null;
+          next_check_at?: string | null;
+          opportunity_id?: string | null;
+          order_id: string;
+          provider_basket_id?: number | null;
+          provider_cost_usd?: number | null;
+          provider_link_id?: number | null;
+          provider_order_content_id?: number | null;
+          published_at?: string | null;
+          published_url?: string | null;
+          settled?: string;
+          status?: string;
+          unit_price_usd: number;
+          updated_at?: string;
+          verification?: string;
+          verified_at?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          attribution?: string;
+          attribution_detail?: Json;
+          consecutive_missing?: number;
+          created_at?: string;
+          credits_price?: number;
+          donor_domain?: string;
+          donor_id?: number;
+          first_live_at?: string | null;
+          give_up_at?: string | null;
+          id?: string;
+          lost_at?: string | null;
+          next_check_at?: string | null;
+          opportunity_id?: string | null;
+          order_id?: string;
+          provider_basket_id?: number | null;
+          provider_cost_usd?: number | null;
+          provider_link_id?: number | null;
+          provider_order_content_id?: number | null;
+          published_at?: string | null;
+          published_url?: string | null;
+          settled?: string;
+          status?: string;
+          unit_price_usd?: number;
+          updated_at?: string;
+          verification?: string;
+          verified_at?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "link_order_lines_donor_id_fkey";
+            columns: ["donor_id"];
+            isOneToOne: false;
+            referencedRelation: "rixot_donors";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "link_order_lines_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "backlink_opportunities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "link_order_lines_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "link_orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "link_order_lines_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      link_orders: {
+        Row: {
+          attempt_count: number;
+          balance_before_usd: number | null;
+          campaign_id: string | null;
+          charged_is_estimated: boolean;
+          checkout_at: string | null;
+          content_mode: string;
+          created_at: string;
+          created_by: string | null;
+          credit_rate: number;
+          credits_captured: number;
+          credits_held: number;
+          credits_refunded: number;
+          failure_code: string | null;
+          id: string;
+          idempotency_key: string;
+          in_flight_since: string | null;
+          keyword: string;
+          language: string;
+          last_error: string | null;
+          lease_until: string | null;
+          line_count: number;
+          lock_token: string | null;
+          locked_by: string | null;
+          needs_operator: boolean;
+          next_attempt_at: string | null;
+          operator_note: string | null;
+          order_post_attempts: number;
+          ordered_at: string | null;
+          own_content: string | null;
+          own_title: string | null;
+          paid_at: string | null;
+          pay_post_attempts: number;
+          provider_basket_ids: number[];
+          provider_charged_usd: number | null;
+          provider_order_content_ids: number[];
+          provider_total_usd: number | null;
+          quoted_usd: number;
+          recommendations: string | null;
+          request_fingerprint: string | null;
+          settled_at: string | null;
+          status: string;
+          substate: string | null;
+          target_url: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attempt_count?: number;
+          balance_before_usd?: number | null;
+          campaign_id?: string | null;
+          charged_is_estimated?: boolean;
+          checkout_at?: string | null;
+          content_mode?: string;
+          created_at?: string;
+          created_by?: string | null;
+          credit_rate?: number;
+          credits_captured?: number;
+          credits_held?: number;
+          credits_refunded?: number;
+          failure_code?: string | null;
+          id?: string;
+          idempotency_key: string;
+          in_flight_since?: string | null;
+          keyword: string;
+          language?: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          line_count?: number;
+          lock_token?: string | null;
+          locked_by?: string | null;
+          needs_operator?: boolean;
+          next_attempt_at?: string | null;
+          operator_note?: string | null;
+          order_post_attempts?: number;
+          ordered_at?: string | null;
+          own_content?: string | null;
+          own_title?: string | null;
+          paid_at?: string | null;
+          pay_post_attempts?: number;
+          provider_basket_ids?: number[];
+          provider_charged_usd?: number | null;
+          provider_order_content_ids?: number[];
+          provider_total_usd?: number | null;
+          quoted_usd?: number;
+          recommendations?: string | null;
+          request_fingerprint?: string | null;
+          settled_at?: string | null;
+          status?: string;
+          substate?: string | null;
+          target_url: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempt_count?: number;
+          balance_before_usd?: number | null;
+          campaign_id?: string | null;
+          charged_is_estimated?: boolean;
+          checkout_at?: string | null;
+          content_mode?: string;
+          created_at?: string;
+          created_by?: string | null;
+          credit_rate?: number;
+          credits_captured?: number;
+          credits_held?: number;
+          credits_refunded?: number;
+          failure_code?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          in_flight_since?: string | null;
+          keyword?: string;
+          language?: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          line_count?: number;
+          lock_token?: string | null;
+          locked_by?: string | null;
+          needs_operator?: boolean;
+          next_attempt_at?: string | null;
+          operator_note?: string | null;
+          order_post_attempts?: number;
+          ordered_at?: string | null;
+          own_content?: string | null;
+          own_title?: string | null;
+          paid_at?: string | null;
+          pay_post_attempts?: number;
+          provider_basket_ids?: number[];
+          provider_charged_usd?: number | null;
+          provider_order_content_ids?: number[];
+          provider_total_usd?: number | null;
+          quoted_usd?: number;
+          recommendations?: string | null;
+          request_fingerprint?: string | null;
+          settled_at?: string | null;
+          status?: string;
+          substate?: string | null;
+          target_url?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "link_orders_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "backlink_campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "link_orders_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       market_intelligence_cache: {
         Row: {
           analysis_key: string;
@@ -3357,6 +4055,181 @@ export type Database = {
           persona_set_at?: string | null;
         };
         Relationships: [];
+      };
+      provider_basket_lock: {
+        Row: {
+          acquired_at: string | null;
+          holder: string | null;
+          lease_until: string | null;
+          order_id: string | null;
+          phase: string | null;
+          provider: string;
+          quarantine_reason: string | null;
+          quarantined: boolean;
+          quarantined_at: string | null;
+          released_at: string | null;
+          renewed_at: string | null;
+          takeover_count: number;
+          token: string | null;
+        };
+        Insert: {
+          acquired_at?: string | null;
+          holder?: string | null;
+          lease_until?: string | null;
+          order_id?: string | null;
+          phase?: string | null;
+          provider: string;
+          quarantine_reason?: string | null;
+          quarantined?: boolean;
+          quarantined_at?: string | null;
+          released_at?: string | null;
+          renewed_at?: string | null;
+          takeover_count?: number;
+          token?: string | null;
+        };
+        Update: {
+          acquired_at?: string | null;
+          holder?: string | null;
+          lease_until?: string | null;
+          order_id?: string | null;
+          phase?: string | null;
+          provider?: string;
+          quarantine_reason?: string | null;
+          quarantined?: boolean;
+          quarantined_at?: string | null;
+          released_at?: string | null;
+          renewed_at?: string | null;
+          takeover_count?: number;
+          token?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "provider_basket_lock_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "link_orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      rixot_donors: {
+        Row: {
+          backlinks: number | null;
+          cat: string | null;
+          delisted_at: string | null;
+          dfs_rank: number | null;
+          domain: string;
+          domain_hidden: boolean;
+          dr: number | null;
+          ext: string | null;
+          first_seen_at: string;
+          id: number;
+          last_seen_at: string;
+          page: string | null;
+          price_usd: number;
+          referring_domains: number | null;
+          top100: number | null;
+          topic: Json | null;
+          topic_checked_at: string | null;
+        };
+        Insert: {
+          backlinks?: number | null;
+          cat?: string | null;
+          delisted_at?: string | null;
+          dfs_rank?: number | null;
+          domain: string;
+          domain_hidden?: boolean;
+          dr?: number | null;
+          ext?: string | null;
+          first_seen_at?: string;
+          id: number;
+          last_seen_at?: string;
+          page?: string | null;
+          price_usd?: number;
+          referring_domains?: number | null;
+          top100?: number | null;
+          topic?: Json | null;
+          topic_checked_at?: string | null;
+        };
+        Update: {
+          backlinks?: number | null;
+          cat?: string | null;
+          delisted_at?: string | null;
+          dfs_rank?: number | null;
+          domain?: string;
+          domain_hidden?: boolean;
+          dr?: number | null;
+          ext?: string | null;
+          first_seen_at?: string;
+          id?: number;
+          last_seen_at?: string;
+          page?: string | null;
+          price_usd?: number;
+          referring_domains?: number | null;
+          top100?: number | null;
+          topic?: Json | null;
+          topic_checked_at?: string | null;
+        };
+        Relationships: [];
+      };
+      rixot_link_sightings: {
+        Row: {
+          claim_method: string | null;
+          claimed_at: string | null;
+          claimed_by: string | null;
+          cost_usd: number | null;
+          first_seen_at: string;
+          keyword: string | null;
+          last_seen_at: string;
+          link_id: number;
+          published_host: string | null;
+          published_url: string | null;
+          raw: Json;
+          status: string | null;
+          target_url: string | null;
+          unclaimed_reason: string | null;
+        };
+        Insert: {
+          claim_method?: string | null;
+          claimed_at?: string | null;
+          claimed_by?: string | null;
+          cost_usd?: number | null;
+          first_seen_at?: string;
+          keyword?: string | null;
+          last_seen_at?: string;
+          link_id: number;
+          published_host?: string | null;
+          published_url?: string | null;
+          raw?: Json;
+          status?: string | null;
+          target_url?: string | null;
+          unclaimed_reason?: string | null;
+        };
+        Update: {
+          claim_method?: string | null;
+          claimed_at?: string | null;
+          claimed_by?: string | null;
+          cost_usd?: number | null;
+          first_seen_at?: string;
+          keyword?: string | null;
+          last_seen_at?: string;
+          link_id?: number;
+          published_host?: string | null;
+          published_url?: string | null;
+          raw?: Json;
+          status?: string | null;
+          target_url?: string | null;
+          unclaimed_reason?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rixot_link_sightings_claimed_by_fkey";
+            columns: ["claimed_by"];
+            isOneToOne: false;
+            referencedRelation: "link_order_lines";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       scheduled_jobs: {
         Row: {
@@ -3650,6 +4523,44 @@ export type Database = {
           },
           {
             foreignKeyName: "social_usage_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      stripe_events: {
+        Row: {
+          error: string | null;
+          id: string;
+          payload: Json;
+          processed_at: string | null;
+          received_at: string;
+          type: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          error?: string | null;
+          id: string;
+          payload?: Json;
+          processed_at?: string | null;
+          received_at?: string;
+          type: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          error?: string | null;
+          id?: string;
+          payload?: Json;
+          processed_at?: string | null;
+          received_at?: string;
+          type?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "stripe_events_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -3961,6 +4872,123 @@ export type Database = {
           },
         ];
       };
+      webflow_oauth_credentials: {
+        Row: {
+          access_token_enc: string;
+          access_token_expires_at: string | null;
+          connection_id: string;
+          created_at: string;
+          refresh_token_enc: string | null;
+          scopes: string[];
+          updated_at: string;
+          webflow_user_email: string | null;
+          webflow_user_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          access_token_enc: string;
+          access_token_expires_at?: string | null;
+          connection_id: string;
+          created_at?: string;
+          refresh_token_enc?: string | null;
+          scopes?: string[];
+          updated_at?: string;
+          webflow_user_email?: string | null;
+          webflow_user_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          access_token_enc?: string;
+          access_token_expires_at?: string | null;
+          connection_id?: string;
+          created_at?: string;
+          refresh_token_enc?: string | null;
+          scopes?: string[];
+          updated_at?: string;
+          webflow_user_email?: string | null;
+          webflow_user_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "webflow_oauth_credentials_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: true;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "webflow_oauth_credentials_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      webflow_sites: {
+        Row: {
+          connection_id: string;
+          created_at: string;
+          domain: string | null;
+          id: string;
+          last_error: string | null;
+          last_synced_at: string | null;
+          preview_url: string | null;
+          selected: boolean;
+          site_id: string;
+          site_name: string;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          connection_id: string;
+          created_at?: string;
+          domain?: string | null;
+          id?: string;
+          last_error?: string | null;
+          last_synced_at?: string | null;
+          preview_url?: string | null;
+          selected?: boolean;
+          site_id: string;
+          site_name: string;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          connection_id?: string;
+          created_at?: string;
+          domain?: string | null;
+          id?: string;
+          last_error?: string | null;
+          last_synced_at?: string | null;
+          preview_url?: string | null;
+          selected?: boolean;
+          site_id?: string;
+          site_name?: string;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "webflow_sites_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "webflow_sites_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_agent_settings: {
         Row: {
           agents_paused: boolean;
@@ -4127,6 +5155,111 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "workspace_create_requests_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_credit_balances: {
+        Row: {
+          available: number;
+          held: number;
+          lifetime_spent: number;
+          lifetime_topped_up: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          available?: number;
+          held?: number;
+          lifetime_spent?: number;
+          lifetime_topped_up?: number;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          available?: number;
+          held?: number;
+          lifetime_spent?: number;
+          lifetime_topped_up?: number;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_credit_balances_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_credit_ledger: {
+        Row: {
+          actor: string | null;
+          balance_after: number;
+          created_at: string;
+          delta_available: number;
+          delta_held: number;
+          held_after: number;
+          id: number;
+          idempotency_key: string;
+          kind: string;
+          line_id: string | null;
+          order_id: string | null;
+          reason: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          actor?: string | null;
+          balance_after: number;
+          created_at?: string;
+          delta_available: number;
+          delta_held: number;
+          held_after: number;
+          id?: number;
+          idempotency_key: string;
+          kind: string;
+          line_id?: string | null;
+          order_id?: string | null;
+          reason?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          actor?: string | null;
+          balance_after?: number;
+          created_at?: string;
+          delta_available?: number;
+          delta_held?: number;
+          held_after?: number;
+          id?: number;
+          idempotency_key?: string;
+          kind?: string;
+          line_id?: string | null;
+          order_id?: string | null;
+          reason?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_credit_ledger_line_id_fkey";
+            columns: ["line_id"];
+            isOneToOne: false;
+            referencedRelation: "link_order_lines";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "workspace_credit_ledger_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "link_orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "workspace_credit_ledger_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -4516,6 +5649,15 @@ export type Database = {
     };
     Functions: {
       accept_workspace_invite: { Args: { _token: string }; Returns: string };
+      acquire_provider_lock: {
+        Args: {
+          p_provider: string;
+          p_holder: string;
+          p_order_id?: string;
+          p_lease_seconds?: number;
+        };
+        Returns: Json;
+      };
       ai_usage_summary: {
         Args: { p_scope_key: string };
         Returns: {
@@ -4558,6 +5700,7 @@ export type Database = {
           position_weighted: number;
         }[];
       };
+      apply_credit_entry: { Args: { p: Json }; Returns: Json };
       call_app_hook: { Args: { p_path: string }; Returns: number };
       capture_ai_usage_reservation: {
         Args: { p_id: string; p_actual_cost_usd?: number; p_latency_ms?: number };
@@ -4588,6 +5731,10 @@ export type Database = {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["geo_verifications"]["Row"][];
       };
+      claim_link_orders: {
+        Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_order_id?: string };
+        Returns: Database["public"]["Tables"]["link_orders"]["Row"][];
+      };
       claim_ugc_renders: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["ugc_renders"]["Row"][];
@@ -4613,14 +5760,25 @@ export type Database = {
       my_workspace_role: { Args: { _workspace_id: string }; Returns: string };
       prune_geo_agent_runs: { Args: never; Returns: Json };
       prune_operational_logs: { Args: never; Returns: Json };
+      quarantine_provider_lock: {
+        Args: { p_provider: string; p_reason: string };
+        Returns: boolean;
+      };
       record_ai_usage: { Args: { p_event: Json }; Returns: number };
       release_ai_usage_reservation: { Args: { p_id: string; p_reason?: string }; Returns: boolean };
       release_expired_ai_usage_reservations: { Args: never; Returns: number };
+      release_provider_lock: { Args: { p_provider: string; p_token: string }; Returns: boolean };
+      renew_provider_lock: {
+        Args: { p_provider: string; p_token: string; p_phase?: string; p_lease_seconds?: number };
+        Returns: boolean;
+      };
       reserve_ai_usage: { Args: { p_request: Json }; Returns: Json };
       set_persona_once: {
         Args: { _persona: string };
         Returns: { persona: string; persona_set_at: string }[];
       };
+      sweep_rixot_donors: { Args: { p_before: string }; Returns: number };
+      upsert_rixot_donors: { Args: { p_rows: Json }; Returns: number };
       workspace_member_profiles: {
         Args: { _workspace_id: string };
         Returns: {

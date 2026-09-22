@@ -40,18 +40,27 @@ const SOURCE_ICON: Record<DataSource, React.ComponentType<{ className?: string }
   geo: Target,
 };
 
-export function SourceBadge({ source, className }: { source: DataSource; className?: string }) {
+export function SourceBadge({
+  source,
+  short,
+  className,
+}: {
+  source: DataSource;
+  /** The abbreviated name, for tight spots like a hero card's corner. */
+  short?: boolean;
+  className?: string;
+}) {
   const Icon = SOURCE_ICON[source];
   return (
     <span
       title={DATA_SOURCES[source].hint}
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/60 px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground",
+        "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-border/70 bg-background/60 px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground",
         className,
       )}
     >
       <Icon className="h-3 w-3" aria-hidden />
-      {DATA_SOURCES[source].label}
+      {short ? DATA_SOURCES[source].short : DATA_SOURCES[source].label}
     </span>
   );
 }
@@ -72,7 +81,12 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={cn("rounded-2xl border border-border bg-card/60 p-4 sm:p-5", className)}>
+    // data-no-rhythm: the global "section + section" baseline rule would add a
+    // top margin to the second card of every two-column grid row.
+    <section
+      data-no-rhythm
+      className={cn("rounded-2xl border border-border bg-card/60 p-4 sm:p-5", className)}
+    >
       <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-[13px] font-semibold tracking-tight">{title}</h3>
@@ -168,6 +182,87 @@ export function KpiTile({ kpi, onAsk }: { kpi: Kpi; onAsk?: (kpi: Kpi) => void }
   );
 }
 
+/** A bare, full-width trend line — shape only, no axes, no labels. */
+export function MiniSpark({ values, className }: { values: number[]; className?: string }) {
+  if (values.length < 2) return null;
+  const w = 240;
+  const h = 40;
+  const min = Math.min(...values);
+  const span = Math.max(1, Math.max(...values) - min);
+  const pts = values.map((v, i) => [
+    (i * w) / (values.length - 1),
+    h - 2 - ((v - min) / span) * (h - 6),
+  ]);
+  const d = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const id = `spark-${values.length}-${Math.round(min)}-${Math.round(span)}`;
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      aria-hidden
+      className={cn("h-full w-full text-primary", className)}
+    >
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${d} L ${w},${h} L 0,${h} Z`} fill={`url(#${id})`} />
+      <path
+        d={d}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+/**
+ * The one number a section is about: big value, change, and a bare sparkline.
+ * Used at the top of Overview so the headline reads before anything else.
+ */
+export function HeroStat({
+  kpi,
+  caption,
+  points,
+  action,
+}: {
+  kpi: Kpi;
+  caption: string;
+  points?: SeriesPoint[];
+  action?: React.ReactNode;
+}) {
+  const spec = METRICS[kpi.key];
+  const values = (points ?? []).map((p) => p.value ?? 0);
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-card/70 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium text-muted-foreground">{spec.label}</div>
+          <div className="mt-1 text-[32px] font-semibold leading-none tracking-tight tabular-nums">
+            {formatMetric(kpi.key, kpi.value)}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <DeltaChip metric={kpi.key} c={kpi.comparison} />
+            <span className="text-[11px] text-muted-foreground">{caption}</span>
+          </div>
+        </div>
+        {action}
+      </div>
+      {values.length > 1 && (
+        <div className="pointer-events-none mt-4 h-12 opacity-80">
+          <MiniSpark values={values} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function KpiGrid({ kpis, onAsk }: { kpis: Kpi[]; onAsk?: (kpi: Kpi) => void }) {
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
@@ -200,86 +295,88 @@ export function TrendChart({
   const spec = METRICS[metric];
   const hasPrevious = showPrevious && points.some((p) => p.previous !== null);
   return (
-    <div style={{ height }} className="w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={points} margin={{ top: 6, right: 6, left: -12, bottom: 0 }}>
-          <defs>
-            <linearGradient id={`fill-${metric}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.22} />
-              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid
-            stroke="hsl(var(--border))"
-            strokeDasharray="3 3"
-            vertical={false}
-            opacity={0.5}
-          />
-          <XAxis
-            dataKey="date"
-            tickFormatter={shortDate}
-            stroke="hsl(var(--muted-foreground))"
-            fontSize={10.5}
-            tickLine={false}
-            axisLine={false}
-            minTickGap={24}
-          />
-          <YAxis
-            stroke="hsl(var(--muted-foreground))"
-            fontSize={10.5}
-            tickLine={false}
-            axisLine={false}
-            width={44}
-            reversed={!spec.higherIsBetter}
-            allowDecimals={spec.format !== "count"}
-            tickFormatter={(v: number) => formatMetric(metric, v)}
-            domain={spec.format === "position" ? ["auto", "auto"] : [0, "auto"]}
-          />
-          <Tooltip
-            cursor={{ stroke: "hsl(var(--muted-foreground))", strokeDasharray: "3 3" }}
-            content={({ active, payload }) => {
-              if (!active || !payload?.length) return null;
-              const p = payload[0].payload as SeriesPoint;
-              return (
-                <div className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11.5px] shadow-md">
-                  <div className="font-medium">
-                    {shortDate(p.date)}: {formatMetric(metric, p.value)}
-                  </div>
-                  {hasPrevious && (
-                    <div className="text-muted-foreground">
-                      {shortDate(p.previousDate)}: {formatMetric(metric, p.previous)}
-                    </div>
-                  )}
-                </div>
-              );
-            }}
-          />
-          {hasPrevious && (
-            <Line
-              type="monotone"
-              dataKey="previous"
-              name="Previous period"
+    <div className="w-full">
+      <div style={{ height }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={points} margin={{ top: 6, right: 6, left: -4, bottom: 0 }}>
+            <defs>
+              <linearGradient id={`fill-${metric}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid
+              stroke="hsl(var(--border))"
+              strokeDasharray="3 3"
+              vertical={false}
+              opacity={0.5}
+            />
+            <XAxis
+              dataKey="date"
+              tickFormatter={shortDate}
               stroke="hsl(var(--muted-foreground))"
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
+              fontSize={10.5}
+              tickLine={false}
+              axisLine={false}
+              minTickGap={24}
+            />
+            <YAxis
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={10.5}
+              tickLine={false}
+              axisLine={false}
+              width={52}
+              reversed={!spec.higherIsBetter}
+              allowDecimals={spec.format !== "count"}
+              tickFormatter={(v: number) => formatMetric(metric, v)}
+              domain={spec.format === "position" ? ["auto", "auto"] : [0, "auto"]}
+            />
+            <Tooltip
+              cursor={{ stroke: "hsl(var(--muted-foreground))", strokeDasharray: "3 3" }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const p = payload[0].payload as SeriesPoint;
+                return (
+                  <div className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11.5px] shadow-md">
+                    <div className="font-medium">
+                      {shortDate(p.date)}: {formatMetric(metric, p.value)}
+                    </div>
+                    {hasPrevious && (
+                      <div className="text-muted-foreground">
+                        {shortDate(p.previousDate)}: {formatMetric(metric, p.previous)}
+                      </div>
+                    )}
+                  </div>
+                );
+              }}
+            />
+            {hasPrevious && (
+              <Line
+                type="monotone"
+                dataKey="previous"
+                name="Previous period"
+                stroke="hsl(var(--muted-foreground))"
+                strokeDasharray="4 4"
+                strokeWidth={1.5}
+                dot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            )}
+            <Area
+              type="monotone"
+              dataKey="value"
+              name="This period"
+              stroke="hsl(var(--primary))"
+              strokeWidth={2}
+              fill={`url(#fill-${metric})`}
               dot={false}
               connectNulls
-              isAnimationActive={false}
+              activeDot={{ r: 4, strokeWidth: 2, stroke: "hsl(var(--card))" }}
             />
-          )}
-          <Area
-            type="monotone"
-            dataKey="value"
-            name="This period"
-            stroke="hsl(var(--primary))"
-            strokeWidth={2}
-            fill={`url(#fill-${metric})`}
-            dot={false}
-            connectNulls
-            activeDot={{ r: 4, strokeWidth: 2, stroke: "hsl(var(--card))" }}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
       {hasPrevious && (
         <div className="mt-1 flex items-center gap-3 text-[10.5px] text-muted-foreground">
           <span className="inline-flex items-center gap-1">

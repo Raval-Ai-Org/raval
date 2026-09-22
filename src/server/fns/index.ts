@@ -15,6 +15,7 @@ import * as geoAgent from "./geo-agent";
 import * as geoFixes from "./geo-fixes";
 import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
+import * as links from "./links";
 import * as schedules from "./schedules";
 import * as workspaces from "./workspaces";
 import * as webflow from "./webflow";
@@ -36,6 +37,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "geo-fixes": geoFixes,
   "google-analytics": googleAnalytics,
   insights,
+  links,
   schedules,
   workspaces,
   webflow,

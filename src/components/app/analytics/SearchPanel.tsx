@@ -7,7 +7,6 @@ import { Segmented } from "@/components/app/geo/geo-ui";
 import type { MetricKey } from "@/lib/analytics/metrics";
 import { formatWindow } from "@/lib/analytics/ranges";
 import type { RankedRow, SearchReport } from "@/lib/analytics/types";
-import { GoogleConnectCard } from "./GoogleConnectCard";
 import { useAnalyticsReport } from "./hooks";
 import { ReportError, ReportSkeleton, SourceGate } from "./SourceGate";
 import { askMellox, Card, fmt, KpiGrid, kpiPrompt, PageLink, RankedTable, TrendChart } from "./ui";
@@ -111,8 +110,6 @@ export function SearchPanel() {
             />
           </Card>
         </div>
-
-        <GoogleConnectCard compact />
       </div>
     </SourceGate>
   );

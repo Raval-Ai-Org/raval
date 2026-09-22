@@ -78,6 +78,16 @@ const Schema = z.object({
   GEO_RENDER_WS_ENDPOINT: z.string().optional(),
   GEO_RENDER_NO_SANDBOX: z.string().optional(),
   GEO_FIX_VERIFY_DELAYS: z.string().optional(),
+  // Link marketplace — Rixot fulfilment. Server-only; it can spend real money.
+  RIXOT_API_KEY: z.string().optional(),
+  RIXOT_BASE_URL: optionalUrl,
+  // Pricing. The browser never supplies an amount; these are the only inputs.
+  MELLOX_LINK_MARGIN: z.coerce.number().min(1).max(10).optional(),
+  MELLOX_CREDITS_PER_USD: z.coerce.number().int().min(1).max(10000).optional(),
+  MELLOX_LINK_MAX_ORDER_USD: z.coerce.number().min(1).optional(),
+  // Stripe — credit top-ups. Server-only. Never expose as NEXT_PUBLIC_*.
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
   // Operations — optional.
   REDIS_URL: z.string().optional(),
   SENTRY_DSN: optionalUrl,
@@ -175,7 +185,7 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
   // A provider secret in a NEXT_PUBLIC_* variable is inlined into the browser bundle.
   for (const name of Object.keys(env)) {
     if (
-      /^NEXT_PUBLIC_.*(SOCIALAPI|SDR_ADMIN|SERVICE_ROLE|GITHUB_APP_PRIVATE|GITHUB_WEBHOOK|GITHUB_CLIENT_SECRET|GOOGLE_ANALYTICS_CLIENT_SECRET|GOOGLE_TOKEN_ENCRYPTION|GOOGLE_CLIENT_SECRET)/i.test(
+      /^NEXT_PUBLIC_.*(SOCIALAPI|SDR_ADMIN|SERVICE_ROLE|GITHUB_APP_PRIVATE|GITHUB_WEBHOOK|GITHUB_CLIENT_SECRET|GOOGLE_ANALYTICS_CLIENT_SECRET|GOOGLE_TOKEN_ENCRYPTION|GOOGLE_CLIENT_SECRET|RIXOT_API|STRIPE_SECRET|STRIPE_WEBHOOK)/i.test(
         name,
       ) &&
       env[name]

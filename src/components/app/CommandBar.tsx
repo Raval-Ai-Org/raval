@@ -11,7 +11,6 @@ import {
   Search,
   FileText,
   Globe,
-  Target,
   Lightbulb,
   BarChart3,
   Sparkles,
@@ -57,13 +56,6 @@ const ROUTES = [
     icon: Search,
     search: undefined,
     analyticsTab: "search",
-  },
-  {
-    to: "/app",
-    label: "Analytics · AI Visibility",
-    icon: Target,
-    search: undefined,
-    analyticsTab: "ai-visibility",
   },
   {
     to: "/app",

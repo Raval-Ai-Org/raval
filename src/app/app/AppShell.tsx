@@ -24,6 +24,7 @@ import {
   Building2,
   Calendar as CalendarIcon,
   ChevronDown,
+  Link2,
   PanelRightOpen,
   Plus,
   Radio,
@@ -147,6 +148,7 @@ function AppShell() {
   // analytics refresh instantly when chat/agents create or modify rows.
   useRealtimeContent(workspaceId);
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
   const activeConversationId = conversationIdFromPath(path);
   const isMobile = useIsMobile();
   const [navOpen, setNavOpen] = useState(false);
@@ -417,6 +419,13 @@ function AppShell() {
               emitAppEvent("open:ai-visibility");
               setNavOpen(false);
             },
+          })}
+          {sidebarAction({
+            icon: Link2,
+            label: "Backlinks",
+            hint: "SEO",
+            accent: "hsl(var(--brand-green))",
+            onClick: () => navigate({ to: workspacePath(workspaceId, "backlinks") }),
           })}
           {sidebarAction({
             icon: Brain,

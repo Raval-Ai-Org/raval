@@ -103,7 +103,11 @@ function relative(iso: string | null): string {
 }
 
 function connectedDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function useConnect() {
@@ -113,7 +117,7 @@ function useConnect() {
     mutationFn: async () => {
       const url = new URL(window.location.href);
       url.searchParams.delete("tab");
-      const returnPath = `${url.pathname}?tab=${new URL(window.location.href).searchParams.get("tab") || "website"}`;
+      const returnPath = `${url.pathname}?tab=${new URL(window.location.href).searchParams.get("tab") || "overview"}`;
       const { url: authUrl } = await start({
         data: { workspaceId: ws.id, returnOrigin: window.location.origin, returnPath },
       });
@@ -202,7 +206,7 @@ function RunStatus({ source }: { source: AnalyticsSourceView }) {
   );
 }
 
-function SourcePicker({
+export function SourcePicker({
   kind,
   view,
   canChoose,
@@ -293,7 +297,10 @@ function SourcePicker({
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
           {current ? (
             <div className="mt-3 space-y-1.5">
-              <div className="truncate rounded-lg border border-border/70 bg-secondary/60 px-2.5 py-2 text-[12px] font-semibold" title={current.externalId}>
+              <div
+                className="truncate rounded-lg border border-border/70 bg-secondary/60 px-2.5 py-2 text-[12px] font-semibold"
+                title={current.externalId}
+              >
                 {current.displayName}
               </div>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
@@ -446,24 +453,43 @@ export function GoogleConnectCard({
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[15px] font-semibold tracking-tight">Google data connections</h2>
-                <span className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                  conn?.status === "active" ? "border-success/25 bg-success/10 text-success" : "border-border/70 bg-card/70 text-muted-foreground",
-                )}>
-                  {conn?.status === "active" ? <ShieldCheck className="size-3" aria-hidden /> : <Clock className="size-3" aria-hidden />}
+                <h2 className="text-[15px] font-semibold tracking-tight">
+                  Google data connections
+                </h2>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                    conn?.status === "active"
+                      ? "border-success/25 bg-success/10 text-success"
+                      : "border-border/70 bg-card/70 text-muted-foreground",
+                  )}
+                >
+                  {conn?.status === "active" ? (
+                    <ShieldCheck className="size-3" aria-hidden />
+                  ) : (
+                    <Clock className="size-3" aria-hidden />
+                  )}
                   {conn?.status === "active" ? "Read-only access" : "Not connected"}
                 </span>
               </div>
               {conn ? (
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                   {conn.status === "active" ? (
-                    <span className="inline-flex items-center gap-1"><CheckCircle className="size-3 text-success" aria-hidden /> Connected account</span>
+                    <span className="inline-flex items-center gap-1">
+                      <CheckCircle className="size-3 text-success" aria-hidden /> Connected account
+                    </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="size-3" aria-hidden /> Needs attention</span>
+                    <span className="inline-flex items-center gap-1 text-destructive">
+                      <AlertTriangle className="size-3" aria-hidden /> Needs attention
+                    </span>
                   )}
-                  <span className="inline-flex min-w-0 items-center gap-1 truncate"><Mail className="size-3" aria-hidden /> {conn.email}</span>
-                  <span className="inline-flex items-center gap-1"><Clock className="size-3" aria-hidden /> Connected {connectedDate(conn.connectedAt)}</span>
+                  <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                    <Mail className="size-3" aria-hidden /> {conn.email}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="size-3" aria-hidden /> Connected{" "}
+                    {connectedDate(conn.connectedAt)}
+                  </span>
                 </div>
               ) : (
                 <p className="text-[11.5px] text-muted-foreground">
@@ -517,8 +543,8 @@ export function GoogleConnectCard({
         <div className="flex items-start gap-2 border-t border-border/70 bg-amber-500/5 p-4 text-[12px] text-amber-200/90 sm:p-5">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <p>
-          Google isn&apos;t set up on this Mellox server yet. An admin needs to add the Google OAuth
-          settings.
+            Google isn&apos;t set up on this Mellox server yet. An admin needs to add the Google
+            OAuth settings.
           </p>
         </div>
       ) : !conn ? (

@@ -141,7 +141,6 @@ const ANALYTICS_TAB_LABELS = {
   website: "Website",
   search: "Search",
   content: "Content",
-  "ai-visibility": "AI Visibility",
   insights: "Insights",
 } as const;
 

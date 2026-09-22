@@ -49,7 +49,14 @@ export type RateLimitTier =
   | "firecrawl"
   | "analytics"
   | "analytics-sync"
-  | "analytics-insights";
+  | "analytics-insights"
+  | "backlinks"
+  | "backlinks-verify"
+  | "links-browse"
+  | "links-match"
+  | "links-brief"
+  | "links-checkout"
+  | "billing-checkout";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -113,6 +120,22 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   "analytics-sync": { limit: 6, windowSeconds: 3600, label: "analytics sync" },
   // AI insights refresh — one metered model call per new set of changes.
   "analytics-insights": { limit: 10, windowSeconds: 3600, label: "insight refresh" },
+  // Reading a stored backlink report — no provider call, so this is generous.
+  backlinks: { limit: 60, windowSeconds: 60, label: "backlink report" },
+  // Link checks fetch third-party pages from our IP; keep the footprint small.
+  "backlinks-verify": { limit: 60, windowSeconds: 3600, label: "link check" },
+  // Browsing the mirrored placement catalog — a database read.
+  "links-browse": { limit: 90, windowSeconds: 60, label: "placement search" },
+  // Each match run reads up to two dozen third-party pages and spends model
+  // calls to judge them, so it is the real cost control on discovery.
+  "links-match": { limit: 20, windowSeconds: 3600, label: "placement match" },
+  // Writing or rewriting the article brief spends a model call.
+  "links-brief": { limit: 30, windowSeconds: 3600, label: "article brief" },
+  // Checkout commits credits and starts a provider cycle. Tight on purpose:
+  // a user has no legitimate reason to place many orders a minute.
+  "links-checkout": { limit: 10, windowSeconds: 3600, label: "placement order" },
+  // Opening a Stripe checkout session.
+  "billing-checkout": { limit: 10, windowSeconds: 3600, label: "credit purchase" },
 };
 
 export type RateLimitResult = {
