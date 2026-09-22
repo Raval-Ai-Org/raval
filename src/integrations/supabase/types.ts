@@ -1921,6 +1921,7 @@ export type Database = {
       };
       competitor_intelligence_runs: {
         Row: {
+          competitor_id: string | null;
           competitor_url: string;
           completed_at: string | null;
           created_at: string;
@@ -1934,6 +1935,7 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          competitor_id?: string | null;
           competitor_url: string;
           completed_at?: string | null;
           created_at?: string;
@@ -1947,6 +1949,7 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          competitor_id?: string | null;
           competitor_url?: string;
           completed_at?: string | null;
           created_at?: string;
@@ -1961,7 +1964,77 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "competitor_intelligence_runs_competitor_id_fkey";
+            columns: ["competitor_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_competitors";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "competitor_intelligence_runs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      competitor_updates: {
+        Row: {
+          competitor_id: string;
+          detected_at: string;
+          fingerprint: string;
+          id: string;
+          kind: string;
+          published_at: string | null;
+          read_at: string | null;
+          significance: string;
+          source_title: string | null;
+          source_url: string | null;
+          summary: string | null;
+          title: string;
+          workspace_id: string;
+        };
+        Insert: {
+          competitor_id: string;
+          detected_at?: string;
+          fingerprint: string;
+          id?: string;
+          kind?: string;
+          published_at?: string | null;
+          read_at?: string | null;
+          significance?: string;
+          source_title?: string | null;
+          source_url?: string | null;
+          summary?: string | null;
+          title: string;
+          workspace_id: string;
+        };
+        Update: {
+          competitor_id?: string;
+          detected_at?: string;
+          fingerprint?: string;
+          id?: string;
+          kind?: string;
+          published_at?: string | null;
+          read_at?: string | null;
+          significance?: string;
+          source_title?: string | null;
+          source_url?: string | null;
+          summary?: string | null;
+          title?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "competitor_updates_competitor_id_fkey";
+            columns: ["competitor_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_competitors";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "competitor_updates_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -1971,6 +2044,7 @@ export type Database = {
       };
       competitor_watches: {
         Row: {
+          competitor_id: string | null;
           created_at: string;
           created_by: string | null;
           enabled: boolean;
@@ -1984,6 +2058,7 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          competitor_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           enabled?: boolean;
@@ -1997,6 +2072,7 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          competitor_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           enabled?: boolean;
@@ -2010,6 +2086,13 @@ export type Database = {
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "competitor_watches_competitor_id_fkey";
+            columns: ["competitor_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_competitors";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "competitor_watches_workspace_id_fkey";
             columns: ["workspace_id"];
@@ -5056,6 +5139,92 @@ export type Database = {
           },
         ];
       };
+      workspace_competitors: {
+        Row: {
+          attempt_count: number;
+          confidence: number;
+          created_at: string;
+          created_by: string | null;
+          discovery_sources: Json;
+          domain: string;
+          id: string;
+          lease_until: string | null;
+          locked_by: string | null;
+          name: string;
+          next_check_at: string | null;
+          profile: Json | null;
+          profile_error: string | null;
+          profile_status: string;
+          profile_updated_at: string | null;
+          rationale: string | null;
+          relationship: string;
+          source: string;
+          status: string;
+          updated_at: string;
+          updates_checked_at: string | null;
+          url: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          attempt_count?: number;
+          confidence?: number;
+          created_at?: string;
+          created_by?: string | null;
+          discovery_sources?: Json;
+          domain: string;
+          id?: string;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          name: string;
+          next_check_at?: string | null;
+          profile?: Json | null;
+          profile_error?: string | null;
+          profile_status?: string;
+          profile_updated_at?: string | null;
+          rationale?: string | null;
+          relationship?: string;
+          source?: string;
+          status?: string;
+          updated_at?: string;
+          updates_checked_at?: string | null;
+          url?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          attempt_count?: number;
+          confidence?: number;
+          created_at?: string;
+          created_by?: string | null;
+          discovery_sources?: Json;
+          domain?: string;
+          id?: string;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          name?: string;
+          next_check_at?: string | null;
+          profile?: Json | null;
+          profile_error?: string | null;
+          profile_status?: string;
+          profile_updated_at?: string | null;
+          rationale?: string | null;
+          relationship?: string;
+          source?: string;
+          status?: string;
+          updated_at?: string;
+          updates_checked_at?: string | null;
+          url?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_competitors_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_connections: {
         Row: {
           account_avatar_url: string | null;
@@ -5709,6 +5878,15 @@ export type Database = {
       claim_analytics_sync_runs: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["analytics_sync_runs"]["Row"][];
+      };
+      claim_competitor_jobs: {
+        Args: {
+          p_worker: string;
+          p_max?: number;
+          p_lease_seconds?: number;
+          p_competitor_id?: string;
+        };
+        Returns: Database["public"]["Tables"]["workspace_competitors"]["Row"][];
       };
       claim_due_scheduled_jobs: {
         Args: {

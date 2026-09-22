@@ -7,8 +7,7 @@ import { rateLimitFor } from "@/server/rate-limit";
 import { selectClaudeModel } from "@/lib/anthropic-gateway.server";
 import { cache, digest } from "@/server/cache/store";
 import { fetchPublicText } from "@/server/safe-fetch";
-import { firecrawlSearch } from "@/lib/firecrawl-gateway.server";
-import { firecrawlEnabled } from "@/lib/firecrawl-flags.server";
+import { webSearch, webAnswer } from "@/server/research/web-search.server";
 import {
   synthesizeCoachBriefing,
   type CoachBriefing,
@@ -61,52 +60,40 @@ async function fetchHtml(url: string, timeoutMs = 7000): Promise<string> {
 
 type SearchResult = { title: string; url: string; snippet: string };
 
-// Tries Firecrawl's real search API first when configured; falls through to
-// the DuckDuckGo HTML scrape below on any failure, empty result, or when
-// Firecrawl isn't configured — unchanged behavior unless FIRECRAWL_BASE_URL
-// is set (mirrors the identical fallback in src/lib/brand-extract.server.ts).
-async function ddgSearch(query: string, limit = 6, timeoutMs = 6000): Promise<SearchResult[]> {
-  if (firecrawlEnabled()) {
-    try {
-      const results = await firecrawlSearch(query, { limit });
-      if (results.length) {
-        return results.map((r) => ({
-          title: r.title || r.url,
-          url: r.url,
-          snippet: r.description || "",
-        }));
-      }
-    } catch (error) {
-      console.error("coach firecrawl search failed, falling back to DuckDuckGo", error);
-    }
-  }
-  try {
-    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
-      headers: { "User-Agent": "Mozilla/5.0 MelloxCoachBot" },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!res.ok) return [];
-    const html = await res.text();
-    const out: SearchResult[] = [];
-    const re =
-      /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
-    for (const m of html.matchAll(re)) {
-      let url = m[1];
-      const ud = url.match(/[?&]uddg=([^&]+)/);
-      if (ud) {
-        try {
-          url = decodeURIComponent(ud[1]);
-        } catch {}
-      }
-      const title = stripHtml(m[2], 200);
-      const snippet = stripHtml(m[3], 320);
-      if (title && url.startsWith("http")) out.push({ title, url, snippet });
-      if (out.length >= limit) break;
-    }
-    return out;
-  } catch {
-    return [];
-  }
+// Web research goes through the shared provider ladder (Tavily → Firecrawl →
+// DuckDuckGo) in src/server/research/web-search.server.ts. This file used to
+// carry its own copy of that ladder, byte-identical to the one in
+// brand-extract.server.ts; both now call the same function so the Coach and
+// Brand DNA can never disagree about what the web says.
+async function searchWeb(query: string, limit = 6, timeoutMs = 6000): Promise<SearchResult[]> {
+  const sources = await webSearch(query, { limit, timeoutMs, route: "coach.research" });
+  return sources.map((source) => ({
+    title: source.title,
+    url: source.url,
+    snippet: source.snippet,
+  }));
+}
+
+// The week's market movement, asked as a question. Tavily can return a short
+// grounded summary with it; with any other provider the answer is empty and
+// Claude reasons from the sources alone, which is the intended arrangement —
+// the provider supplies information, Mellox supplies the intelligence.
+async function trendResearch(seed: string): Promise<{ answer: string; results: SearchResult[] }> {
+  const { answer, sources } = await webAnswer(`What is changing in the ${seed} market right now?`, {
+    limit: 5,
+    topic: "news",
+    days: 30,
+    timeoutMs: 8000,
+    route: "coach.trends",
+  });
+  return {
+    answer,
+    results: sources.map((source) => ({
+      title: source.title,
+      url: source.url,
+      snippet: source.snippet,
+    })),
+  };
 }
 
 function extractMeta(html: string) {
@@ -132,6 +119,8 @@ type CoachResearch = {
   compResults: SearchResult[];
   reviewResults: SearchResult[];
   trendResults: SearchResult[];
+  /** A short grounded market summary when the provider can produce one. */
+  trendAnswer: string;
 };
 
 async function loadResearch(
@@ -152,17 +141,19 @@ async function loadResearch(
   let brandSeed = workspaceName || "";
   const seed = brandSeed || hostname;
 
-  const [homeHtml, aboutHtml, compResults, reviewResults, trendResults] = await Promise.all([
+  const [homeHtml, aboutHtml, compResults, reviewResults, trends] = await Promise.all([
     // Fetch homepage
     siteUrl ? fetchHtml(siteUrl, 7000) : Promise.resolve(""),
     // Fetch about page as bonus signal
     siteUrl ? fetchHtml(new URL("/about", siteUrl).toString(), 5000) : Promise.resolve(""),
     // Competitor discovery
-    seed ? ddgSearch(`${seed} competitors alternatives`, 6) : Promise.resolve([]),
+    seed ? searchWeb(`${seed} competitors alternatives`, 6) : Promise.resolve([]),
     // Reviews / customer voice
-    seed ? ddgSearch(`${seed} review OR "vs" OR complaint`, 5) : Promise.resolve([]),
-    // Market trend
-    seed ? ddgSearch(`${seed} industry trends 2026`, 5) : Promise.resolve([]),
+    seed ? searchWeb(`${seed} review OR "vs" OR complaint`, 5) : Promise.resolve([]),
+    // Market trend — asked as a question so the provider can return a grounded
+    // summary alongside the sources. Recent coverage only: a two-year-old
+    // trend piece is worse than none for a weekly briefing.
+    seed ? trendResearch(seed) : Promise.resolve({ answer: "", results: [] }),
   ]);
 
   let siteText = "";
@@ -185,9 +176,17 @@ async function loadResearch(
     }
   }
 
-  const research = { siteText, siteMeta, brandSeed, compResults, reviewResults, trendResults };
+  const research: CoachResearch = {
+    siteText,
+    siteMeta,
+    brandSeed,
+    compResults,
+    reviewResults,
+    trendResults: trends.results,
+    trendAnswer: trends.answer,
+  };
   // A total miss (site down, search blocked) is not cached: the next open retries.
-  if (siteText || compResults.length || reviewResults.length || trendResults.length) {
+  if (siteText || compResults.length || reviewResults.length || trends.results.length) {
     await cache.set(key, research, RESEARCH_TTL_SECONDS);
   }
   return research;
@@ -318,7 +317,7 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
     }
 
     /* 3. Scrape the site and search the web (cached, tolerant) */
-    const { siteText, siteMeta, brandSeed, compResults, reviewResults, trendResults } =
+    const { siteText, siteMeta, brandSeed, compResults, reviewResults, trendResults, trendAnswer } =
       await loadResearch(data.workspaceId, siteUrl, workspaceName);
 
     /* 4-6. Build the prompt, call Claude, and normalize — extracted to
@@ -339,6 +338,7 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
       compResults,
       reviewResults,
       trendResults,
+      trendAnswer,
     };
     const { briefing, hasContent } = marketingCoachWorkflowEnabled()
       ? await (

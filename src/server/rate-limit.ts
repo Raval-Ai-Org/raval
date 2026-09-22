@@ -1,6 +1,6 @@
 // rate-limit.ts — per-user spend controls for the metered AI endpoints.
 //
-// Every route under /api that calls OpenRouter, Anthropic, KIE or DataForSEO
+// Every route under /api that calls OpenRouter, Anthropic, KIE or Tavily
 // bills real money per call. Authentication alone does not bound that: one
 // signed-up user could previously loop /api/generate-video (Veo 3.1, billed per
 // video) all night. This module is the volume cap that sits next to the
@@ -47,6 +47,9 @@ export type RateLimitTier =
   | "share-password"
   | "workspace-lifecycle"
   | "firecrawl"
+  | "web-research"
+  | "competitor-discovery"
+  | "competitor-profile"
   | "analytics"
   | "analytics-sync"
   | "analytics-insights"
@@ -113,6 +116,14 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // Firecrawl-backed crawls (competitor intelligence): a multi-page crawl plus
   // a model synthesis call, run synchronously within the request.
   firecrawl: { limit: 10, windowSeconds: 3600, label: "competitor crawl" },
+  // Ad-hoc web research (chat grounding, Studio research briefs). One Tavily
+  // search each, heavily cached, so this bounds a script rather than a person.
+  "web-research": { limit: 30, windowSeconds: 3600, label: "web research" },
+  // Competitor discovery: several searches plus a classification model call.
+  // Deliberately tight — a workspace discovers its market once, not hourly.
+  "competitor-discovery": { limit: 6, windowSeconds: 3600, label: "competitor discovery" },
+  // Profiling or re-checking one competitor: page fetches plus a synthesis call.
+  "competitor-profile": { limit: 20, windowSeconds: 3600, label: "competitor research" },
   // Analytics reports: database reads, plus an occasional Google Data API call
   // to fill the GA4 users cache for a custom range.
   analytics: { limit: 60, windowSeconds: 60, label: "analytics report" },

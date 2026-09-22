@@ -4,19 +4,15 @@ import { isMissingRpc } from "@/lib/schedules.server";
 import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
-  pollGoogleTrendsCollection,
-  requestGoogleTrendsCollection,
-} from "@/lib/dataforseo/google-trends-collection.server";
+  pollMarketSignalsCollection,
+  requestMarketSignalsCollection,
+} from "@/lib/market-signals-collection.server";
 import { analyzeMarketCollection } from "@/lib/market-intelligence.server";
 
 export type MarketBrainScheduleConfig = {
   workspaceId: string;
   keywords: string[];
   location?: string | null;
-  language?: string | null;
-  timeRange?: string;
-  dateFrom?: string;
-  dateTo?: string;
 };
 
 const DAILY_COLLECTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -62,10 +58,6 @@ function scheduleMeta(args: MarketBrainScheduleConfig): Record<string, unknown> 
     schedule_key: buildScheduleKey(args.workspaceId, args.keywords, args.location),
     keywords: normalizeKeywords(args.keywords),
     location: args.location ?? null,
-    language: args.language ?? null,
-    time_range: args.timeRange ?? null,
-    date_from: args.dateFrom ?? null,
-    date_to: args.dateTo ?? null,
   };
 }
 
@@ -130,31 +122,20 @@ function stringArray(value: unknown): string[] {
 }
 
 async function runMarketBrainJob(job: MarketBrainJob): Promise<"completed" | "pending" | "failed"> {
-  const started = await requestGoogleTrendsCollection(
+  const started = await requestMarketSignalsCollection(
     {
       keywords: stringArray(job.meta.keywords),
       location: stringValue(job.meta.location),
-      language: stringValue(job.meta.language),
-      dateFrom: stringValue(job.meta.date_from),
-      dateTo: stringValue(job.meta.date_to),
-      timeRange: stringValue(job.meta.time_range) as
-        | "past_hour"
-        | "past_4_hours"
-        | "past_day"
-        | "past_7_days"
-        | "past_30_days"
-        | "past_90_days"
-        | "past_12_months"
-        | "past_5_years"
-        | "2004_present"
-        | undefined,
     },
     job.workspace_id,
+    "market-brain.scheduled",
   );
 
+  // In normal operation the search already ran inline above; poll only covers
+  // the rare crash-recovery "pending" row (see market-signals-collection.server.ts).
   const result =
     started.collectionId && started.state === "pending"
-      ? await pollGoogleTrendsCollection(started.collectionId, job.workspace_id)
+      ? await pollMarketSignalsCollection(started.collectionId, job.workspace_id)
       : started;
   if (!result.collectionId || result.state === "failed") return "failed";
   if (result.state === "pending") return "pending";
@@ -207,7 +188,7 @@ export async function runDueMarketBrainCollections(
     let status: "completed" | "pending" | "failed" = "failed";
     let errorMessage: string | null = null;
     try {
-      // Attribute the job's DataForSEO + Claude spend to its workspace.
+      // Attribute the job's Tavily search + Claude spend to its workspace.
       status = await runWithScope(
         { workspaceId: job.workspace_id, route: "market-brain.scheduled" },
         () => runMarketBrainJob(job),

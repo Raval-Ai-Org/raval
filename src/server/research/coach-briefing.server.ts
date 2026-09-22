@@ -95,6 +95,12 @@ export type CoachSynthesisInput = {
   compResults: CoachSearchResult[];
   reviewResults: CoachSearchResult[];
   trendResults: CoachSearchResult[];
+  /**
+   * A short grounded market summary from the research provider, when it can
+   * produce one. Evidence like any other snippet — fenced as untrusted and
+   * never treated as more authoritative than the sources behind it.
+   */
+  trendAnswer?: string;
 };
 
 // The output schema requires every field, so "not applicable" arrives as "".
@@ -134,6 +140,7 @@ export async function synthesizeCoachBriefing(
 ): Promise<CoachSynthesisResult> {
   const { today, dayName, siteUrl, brandSeed, model, signals, brandContext } = input;
   const { siteText, siteMeta, compResults, reviewResults, trendResults } = input;
+  const trendAnswer = input.trendAnswer ?? "";
 
   const cited: { label: string; url: string }[] = [];
   const pushCited = (items: { title: string; url: string }[], tag: string) => {
@@ -171,6 +178,7 @@ export async function synthesizeCoachBriefing(
           competitors: compResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
           reviews: reviewResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
           trends: trendResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
+          trendSummary: trendAnswer,
         }),
         { maxChars: 3500, route: "coach" },
       ),

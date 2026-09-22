@@ -411,8 +411,11 @@ export const saveMonitor = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }): Promise<GeoMonitor> => {
     await requireEditor(context, data.workspaceId);
-    const { isGeoProbesEnabled } = await import("@/lib/feature-flags");
-    const probes = data.probes && isGeoProbesEnabled(data.workspaceId);
+    const [{ isGeoProbesEnabled }, { tavilyEnabled }] = await Promise.all([
+      import("@/lib/feature-flags"),
+      import("@/lib/tavily-flags.server"),
+    ]);
+    const probes = data.probes && (isGeoProbesEnabled(data.workspaceId) || tavilyEnabled());
     const [{ assertPublicUrl }, { normalizeUrl }] = await Promise.all([
       import("@/server/safe-fetch"),
       import("@/lib/crawl/html"),
@@ -475,9 +478,10 @@ export const getGeoSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))
   .handler(async ({ data, context }) => {
-    const [{ getPlanLimits }, { isGeoProbesEnabled }] = await Promise.all([
+    const [{ getPlanLimits }, { isGeoProbesEnabled }, { tavilyEnabled }] = await Promise.all([
       import("@/server/plans"),
       import("@/lib/feature-flags"),
+      import("@/lib/tavily-flags.server"),
     ]);
     const { data: ws, error } = await context.supabase
       .from("workspaces")
@@ -491,6 +495,8 @@ export const getGeoSettings = createServerFn({ method: "POST" })
       plan: limits.id,
       planLabel: limits.label,
       maxPages: limits.geoMaxPages,
-      probesAvailable: isGeoProbesEnabled(data.workspaceId),
+      // True when either half of the probe stage can run: the paid AI probes,
+      // or the search-based citation pass.
+      probesAvailable: isGeoProbesEnabled(data.workspaceId) || tavilyEnabled(),
     };
   });

@@ -9,7 +9,7 @@ export type ScanPhase = "starting" | "collecting" | "analyzing";
 
 const STEPS: { phase: ScanPhase; label: string }[] = [
   { phase: "starting", label: "Started" },
-  { phase: "collecting", label: "Google Trends" },
+  { phase: "collecting", label: "Web search" },
   { phase: "analyzing", label: "Analysis" },
 ];
 
@@ -22,19 +22,18 @@ const COPY: Record<ScanPhase, { title: string; footnote: string; activity: strin
     activity: ["Preparing the scan for your keywords and market…"],
   },
   collecting: {
-    title: "Market data is still being collected",
-    footnote:
-      "We'll update this automatically. Collection usually takes 1–3 minutes — you can keep working.",
+    title: "Searching the web for market signals…",
+    footnote: "Usually takes a few seconds — you can keep working.",
     activity: [
-      "Requesting Google Trends data for your keywords…",
-      "Reading search interest over the last 12 months…",
-      "Mapping regional demand across your market…",
-      "Checking related searches and rising topics…",
+      "Searching recent coverage for your keywords…",
+      "Reading article titles, dates and sources…",
+      "Filtering out low-quality and duplicate sources…",
+      "Collecting the sources Mellox will read…",
     ],
   },
   analyzing: {
     title: "Mellox is analyzing your market…",
-    footnote: "Trend data collected. Analysis usually takes under a minute.",
+    footnote: "Sources collected. Analysis usually takes under a minute.",
     activity: [
       "Separating measured evidence from interpretation…",
       "Connecting the signals to your business context…",
@@ -46,11 +45,11 @@ const COPY: Record<ScanPhase, { title: string; footnote: string; activity: strin
 
 // Estimated progress per phase, easing toward each phase's ceiling so the bar
 // keeps moving without ever claiming completion before the result arrives.
-// Collection usually takes 1-3 min; analysis ~35-40s.
+// Collection is a Tavily search (a few seconds); analysis ~35-40s.
 function estimateProgress(phase: ScanPhase, phaseElapsedMs: number): number {
   const ease = (tauMs: number) => 1 - Math.exp(-phaseElapsedMs / tauMs);
   if (phase === "starting") return 3 + 7 * ease(1_500);
-  if (phase === "collecting") return 10 + 52 * ease(50_000);
+  if (phase === "collecting") return 10 + 52 * ease(6_000);
   return 64 + 32 * ease(22_000);
 }
 
@@ -379,10 +378,10 @@ export function PendingNotice({ onCheck }: { onCheck: () => void }) {
       </span>
       <div className="min-w-0 flex-1">
         <div className="text-[12.5px] font-semibold text-foreground">
-          Google Trends is still processing this scan.
+          This market scan is still running.
         </div>
         <div className="mt-0.5 text-[11px] text-muted-foreground">
-          It's taking longer than usual. Check again in a minute — no new scan will be started.
+          It's taking longer than usual. Check again in a moment — no new scan will be started.
         </div>
       </div>
       <button

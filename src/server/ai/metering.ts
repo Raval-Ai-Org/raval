@@ -16,7 +16,7 @@ export type UsageKind = "text" | "image" | "video" | "search" | "moderation";
 export type UsageStatus = "ok" | "error" | "blocked" | "degraded";
 
 export type UsageEvent = {
-  provider: "openrouter" | "anthropic" | "kie" | "dataforseo" | "firecrawl";
+  provider: "openrouter" | "anthropic" | "kie" | "firecrawl" | "tavily";
   model: string;
   kind?: UsageKind;
   inputTokens?: number;

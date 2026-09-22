@@ -27,12 +27,13 @@ import {
 } from "@/lib/market-brain-store";
 import { cn } from "@/lib/utils";
 import {
-  computeTrendMetrics,
+  computeSignalMetrics,
   InsightTabs,
   KpiStrip,
+  overallDirection,
   PulseSummary,
   Reveal,
-  TrendChart,
+  SignalsFeed,
   TrendExtras,
 } from "./MarketBrainInsights";
 import { PendingNotice, ResultsSkeleton, ScanProgress } from "./MarketBrainProgress";
@@ -155,7 +156,8 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
   const hasResults = Boolean(trendData || intelligence);
   const refreshing = running && snap.staleResults;
   const analyzingFresh = running && phase === "analyzing" && !intelligence && Boolean(trendData);
-  const metrics = useMemo(() => (trendData ? computeTrendMetrics(trendData) : null), [trendData]);
+  const metrics = useMemo(() => (trendData ? computeSignalMetrics(trendData) : null), [trendData]);
+  const direction = useMemo(() => overallDirection(intelligence), [intelligence]);
   const fresh = snap.freshUntil ? new Date(snap.freshUntil).getTime() > now : false;
   const showSetup = snap.hydrated && !hasResults && !running && !snap.pending;
   const displayLens = snap.resultLens ?? inputLens();
@@ -187,7 +189,8 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
                 What is changing in your market?
               </h2>
               <p className="mt-1 max-w-[52ch] text-[12px] leading-relaxed text-muted-foreground">
-                Mellox turns measured search interest into your next marketing move.
+                Mellox reads recent web coverage of your market and turns it into your next
+                marketing move.
               </p>
             </div>
             <motion.button
@@ -323,7 +326,7 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
                     <Reveal key={`pulse-${intelligence.generatedAt}`}>
                       <PulseSummary
                         intelligence={intelligence}
-                        direction={metrics?.direction ?? null}
+                        direction={direction}
                         completedAt={snap.completedAt}
                       />
                     </Reveal>
@@ -338,7 +341,7 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
                 )}
                 {trendData && (
                   <Reveal index={2}>
-                    <TrendChart trendData={trendData} />
+                    <SignalsFeed trendData={trendData} />
                   </Reveal>
                 )}
               </div>

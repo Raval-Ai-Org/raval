@@ -6,6 +6,7 @@ import * as brandDna from "./brand-dna";
 import * as campaignGeneration from "./campaign-generation";
 import * as coach from "./coach";
 import * as competitorIntel from "./competitor-intel";
+import * as competitors from "./competitors";
 import * as competitorWatch from "./competitor-watch";
 import * as connectors from "./connectors";
 import * as content from "./content";
@@ -28,6 +29,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "campaign-generation": campaignGeneration,
   coach,
   "competitor-intel": competitorIntel,
+  competitors,
   "competitor-watch": competitorWatch,
   connectors,
   content,

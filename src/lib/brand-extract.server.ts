@@ -24,8 +24,7 @@ import type { BrandExtractEvent } from "@/lib/brand-extract-events";
 import { normalizeHex } from "@/lib/color";
 import { BRAND_EXTRACT_OUTPUT_SCHEMA } from "@/lib/ai/output-schemas";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
-import { firecrawlSearch } from "@/lib/firecrawl-gateway.server";
-import { firecrawlEnabled } from "@/lib/firecrawl-flags.server";
+import { webSearch } from "@/server/research/web-search.server";
 
 export type Brand = {
   brandName: string;
@@ -143,58 +142,22 @@ function pickSubPages(internal: string[], base: URL, limit = 8): string[] {
 }
 
 /**
- * Web search for external brand mentions/competitors/reviews. Tries Firecrawl
- * first when configured (a real search API, not a scrape-hack); falls
- * through to the DuckDuckGo HTML scrape below on any Firecrawl failure, empty
- * result, or when Firecrawl isn't configured — so this function's behavior is
- * unchanged from before Firecrawl existed unless FIRECRAWL_BASE_URL is set.
+ * Web search for external brand mentions/competitors/reviews. Delegates to the
+ * shared provider ladder (Tavily → Firecrawl → DuckDuckGo) in
+ * src/server/research/web-search.server.ts. This file used to carry its own
+ * copy of that ladder, byte-identical to the one in fns/coach.ts; one
+ * implementation means onboarding and the Coach can never see a different web.
  */
 async function ddgSearch(
   query: string,
   timeoutMs = 6000,
 ): Promise<{ title: string; url: string; snippet: string }[]> {
-  if (firecrawlEnabled()) {
-    try {
-      const results = await firecrawlSearch(query, { limit: 8 });
-      if (results.length) {
-        return results.map((r) => ({
-          title: r.title || r.url,
-          url: r.url,
-          snippet: r.description || "",
-        }));
-      }
-    } catch (error) {
-      console.error("brand-extract firecrawl search failed, falling back to DuckDuckGo", error);
-    }
-  }
-  try {
-    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
-      headers: { "User-Agent": "Mozilla/5.0 MelloxBrandBot" },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!res.ok) return [];
-    const html = await res.text();
-    const out: { title: string; url: string; snippet: string }[] = [];
-    const re =
-      /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
-    for (const m of html.matchAll(re)) {
-      let url = m[1];
-      // DDG wraps with /l/?uddg=...
-      const udMatch = url.match(/[?&]uddg=([^&]+)/);
-      if (udMatch) {
-        try {
-          url = decodeURIComponent(udMatch[1]);
-        } catch {}
-      }
-      const title = stripHtml(m[2], 200);
-      const snippet = stripHtml(m[3], 320);
-      if (title && url.startsWith("http")) out.push({ title, url, snippet });
-      if (out.length >= 8) break;
-    }
-    return out;
-  } catch {
-    return [];
-  }
+  const sources = await webSearch(query, { limit: 8, timeoutMs, route: "brand-extract.search" });
+  return sources.map((source) => ({
+    title: source.title,
+    url: source.url,
+    snippet: source.snippet,
+  }));
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

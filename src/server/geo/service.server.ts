@@ -27,6 +27,8 @@ import { assertPublicUrl } from "@/server/safe-fetch";
 import { getDefaultFetcher, siteHost } from "./crawler.server";
 import { presentScan, SCAN_VIEW_COLS } from "./present";
 import { runGeoProbes } from "./probes.server";
+import { runCombinedProbes, runGeoCitationProbes } from "./citation-probes.server";
+import { tavilyEnabled } from "@/lib/tavily-flags.server";
 import { createRenderer, getRenderingAvailability } from "./render.server";
 import {
   advanceScan,
@@ -124,7 +126,14 @@ export async function createScan(input: CreateScanInput): Promise<ScanRow> {
     maxPages:
       input.mode === "full" ? limits.geoMaxPages : input.mode === "targeted" ? urls!.length + 1 : 1,
     maxDepth: input.mode === "full" ? 5 : 0,
-    probes: input.mode === "full" && input.probes === true && isGeoProbesEnabled(input.workspaceId),
+    // Two independent halves answer "do AI engines know us": paid model probes
+    // (flagged off by default) and a search-based citation pass. The scan runs
+    // the probe stage when either is available, so the AI search dimension has
+    // real data on a server that has never enabled the paid probes.
+    probes:
+      input.mode === "full" &&
+      input.probes === true &&
+      (isGeoProbesEnabled(input.workspaceId) || tavilyEnabled()),
     maxRenders: defaultMaxRenders(input.mode, urls?.length),
     ...(urls ? { urls } : {}),
   };
@@ -179,7 +188,13 @@ async function runSlice(scan: ScanRow, deadline: number): Promise<SliceResult> {
         fetcher,
         worker: WORKER,
         deadline,
-        probes: scan.config?.probes ? runGeoProbes : undefined,
+        probes: scan.config?.probes
+          ? (row, context) =>
+              runCombinedProbes(row, context, {
+                ai: isGeoProbesEnabled(scan.workspace_id) ? runGeoProbes : undefined,
+                search: tavilyEnabled() ? runGeoCitationProbes : undefined,
+              })
+          : undefined,
         render: rendering.available ? createRenderer(fetcher) : undefined,
         renderUnavailableReason: rendering.available ? undefined : rendering.reason,
         log: (message, detail) => console.error(message, detail),

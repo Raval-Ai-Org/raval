@@ -4,6 +4,11 @@ export const MARKET_STORAGE_TIMEOUT_MS = 8_000;
 // (typically 34-38s) + cache write. The client waits slightly longer than this so
 // the server's structured timeout response always reaches it.
 export const MARKET_INTELLIGENCE_ROUTE_TIMEOUT_MS = 90_000;
+// Overall bound for /api/market/trends: storage reads + one Tavily search
+// (default 20s, plus the Firecrawl/DuckDuckGo fallback rungs when it fails)
+// resolved inline in the same request — there is no async provider task to
+// poll for anymore, so this bound covers the whole scan, not just a status check.
+export const MARKET_SCAN_ROUTE_TIMEOUT_MS = 45_000;
 
 export class MarketTimeoutError extends Error {
   readonly code = "timeout";

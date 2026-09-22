@@ -9,25 +9,16 @@ import { useSyncExternalStore } from "react";
 import type { ScanPhase } from "@/components/app/MarketBrainProgress";
 import { authedFetch } from "@/lib/authed-fetch";
 
-export type TrendPoint = {
-  timestamp: number;
-  date: string;
-  values: number[];
-  averages?: number[];
-  missingData?: boolean;
+export type MarketSource = {
+  title: string;
+  url: string;
+  snippet: string;
+  domain: string;
+  publishedDate: string | null;
 };
 export type TrendData = {
   keywords: string[];
-  interestOverTime: TrendPoint[];
-  regionalInterest: { geoId: string; geoName: string; values: number[] }[];
-  relatedQueries: { query: string; value: string; kind: "top" | "rising" }[];
-  relatedTopics: {
-    topicId: string;
-    topicTitle: string;
-    topicType: string;
-    value: string;
-    kind: "top" | "rising";
-  }[];
+  sources: MarketSource[];
 };
 export type Priority = "high" | "medium" | "low";
 export type Intelligence = {
@@ -118,21 +109,21 @@ type LatestResponse = {
   freshUntil: string | null;
 };
 
-// Each scan/poll request returns quickly (the server only reads state or asks
-// DataForSEO for task status), so it keeps a short bound.
-const SCAN_REQUEST_TIMEOUT_MS = 20_000;
+// A scan now runs its Tavily search inline (server bounds it at 45s and
+// answers with a structured timeout), so this waits just past that; a poll
+// request only re-reads stored state and returns quickly.
+const SCAN_REQUEST_TIMEOUT_MS = 50_000;
 // The analysis request runs one Claude generation (~35-40s measured); the server
 // bounds it at 90s and answers with a structured timeout, so wait just past that.
 const INTELLIGENCE_REQUEST_TIMEOUT_MS = 95_000;
-// DataForSEO's standard queue usually finishes a Google Trends task in 1-3 min.
-// Keep polling (backing off) for that long; after it, the scan stays pending and
-// "Check status" resumes it without creating a new provider task.
-const PENDING_POLL_BUDGET_MS = 4 * 60_000;
+// A scan almost always finishes inside the POST above. This only covers the
+// crash-recovery "pending" case (see market-signals-collection.server.ts): a
+// short backoff, not the multi-minute Google Trends wait this used to be.
+const PENDING_POLL_BUDGET_MS = 30_000;
 
 function pollDelay(elapsedMs: number): number {
-  if (elapsedMs < 30_000) return 2_500;
-  if (elapsedMs < 90_000) return 5_000;
-  return 10_000;
+  if (elapsedMs < 10_000) return 2_000;
+  return 5_000;
 }
 
 export class MarketRequestError extends Error {
@@ -447,7 +438,7 @@ async function followCollection(
         tone: "error",
         message:
           withDetail(
-            "Google Trends collection failed:",
+            "Market scan failed:",
             collection.retryAfterSeconds
               ? `${collection.error?.message ?? "unknown error"} — retry available in ${collection.retryAfterSeconds}s`
               : collection.error?.message,
@@ -458,7 +449,7 @@ async function followCollection(
     return;
   }
   if (collection.state === "no_data") {
-    const message = `Google Trends found no measurable search interest for “${lens.keywords.join(", ")}” in ${lens.location}. Try broader keywords or another market.`;
+    const message = `No recent web coverage was found for “${lens.keywords.join(", ")}” in ${lens.location}. Try broader keywords or another market.`;
     // A previous result is still the latest measured data: keep showing it.
     endRun(run, { noData: !hasResult, notice: { tone: "info", message } });
     return;
@@ -535,7 +526,6 @@ export async function startMarketScan(workspaceId: string, lens: MarketLens): Pr
         workspaceId,
         keywords: lens.keywords,
         location: lens.location,
-        language: "en",
       }),
     })) as ApiResult;
     if (!run.isCurrent()) return;

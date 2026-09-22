@@ -29,8 +29,6 @@ const Schema = z.object({
   UGC_DEFAULT_MODEL: z.string().optional(),
   UGC_MAX_CONCURRENT_RENDERS: z.coerce.number().int().min(1).max(20).optional(),
   FEATURE_FLAG_UGC_VIDEO_ENABLED: z.string().optional(),
-  DATAFORSEO_LOGIN: z.string().optional(),
-  DATAFORSEO_PASSWORD: z.string().optional(),
   PEXELS_API_KEY: z.string().optional(),
   UNSPLASH_ACCESS_KEY: z.string().optional(),
   // Distribution (SDR) — required only when the flag is on.
@@ -88,6 +86,13 @@ const Schema = z.object({
   // Stripe — credit top-ups. Server-only. Never expose as NEXT_PUBLIC_*.
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  // Tavily (web research) — server-only. Never expose as NEXT_PUBLIC_*.
+  // Unset means every research surface degrades to its prior behaviour and
+  // reports itself unavailable rather than failing when someone asks.
+  TAVILY_API_KEY: z.string().optional(),
+  TAVILY_BASE_URL: optionalUrl,
+  TAVILY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).optional(),
+  TAVILY_MAX_RETRIES: z.coerce.number().int().min(0).max(5).optional(),
   // Operations — optional.
   REDIS_URL: z.string().optional(),
   SENTRY_DSN: optionalUrl,
@@ -111,6 +116,7 @@ const REQUIRED_IN_PRODUCTION = [
 
 const RECOMMENDED = [
   "ANTHROPIC_API_KEY",
+  "TAVILY_API_KEY",
   "KIE_API_KEY",
   "REDIS_URL",
   "SENTRY_DSN",
@@ -185,7 +191,7 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
   // A provider secret in a NEXT_PUBLIC_* variable is inlined into the browser bundle.
   for (const name of Object.keys(env)) {
     if (
-      /^NEXT_PUBLIC_.*(SOCIALAPI|SDR_ADMIN|SERVICE_ROLE|GITHUB_APP_PRIVATE|GITHUB_WEBHOOK|GITHUB_CLIENT_SECRET|GOOGLE_ANALYTICS_CLIENT_SECRET|GOOGLE_TOKEN_ENCRYPTION|GOOGLE_CLIENT_SECRET|RIXOT_API|STRIPE_SECRET|STRIPE_WEBHOOK)/i.test(
+      /^NEXT_PUBLIC_.*(SOCIALAPI|SDR_ADMIN|SERVICE_ROLE|GITHUB_APP_PRIVATE|GITHUB_WEBHOOK|GITHUB_CLIENT_SECRET|GOOGLE_ANALYTICS_CLIENT_SECRET|GOOGLE_TOKEN_ENCRYPTION|GOOGLE_CLIENT_SECRET|RIXOT_API|STRIPE_SECRET|STRIPE_WEBHOOK|TAVILY_API)/i.test(
         name,
       ) &&
       env[name]

@@ -104,6 +104,46 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
 - Dimension scores (`src/lib/geo/dimensions.ts`) are derived from the stored
   rule summaries; every rule id must be mapped (a test enforces it).
 
+## Web intelligence and Competitors
+
+Decision record [ADR-0022](docs/adr/0022-tavily-web-intelligence.md).
+
+- **One way to search the web:** `webSearch` / `webAnswer` /
+  `webSearchMany` in `src/server/research/web-search.server.ts`. It is a
+  quality ladder — Tavily, then Firecrawl, then the legacy DuckDuckGo scrape —
+  and it never throws: no sources is a fact, not an error. Never add another
+  search path.
+- **Tavily lives in one file.** `src/lib/tavily-gateway.server.ts` is the only
+  place that reads `TAVILY_API_KEY` or talks to `api.tavily.com`; the key goes
+  in a header, never a URL or a log. Any user-supplied domain or URL passes
+  `assertPublicUrl` before it enters a request body, because Tavily fetches on
+  its own infrastructure. Flag: `src/lib/tavily-flags.server.ts`.
+- **Division of labour:** Tavily discovers across the open web; Firecrawl
+  crawls one known site and is preferred wherever it is configured;
+  `safeFetch` is for anything this process fetches itself. Tavily `/extract`
+  is a fallback for reading pages, never a crawler.
+- **Selective by construction.** `src/lib/research/triggers.ts` decides, with
+  pure string work, whether chat or a Studio brief needs live information.
+  Plain creative and "about my own data" requests must never search.
+- **Source rules are shared and browser-safe** (`src/lib/research/sources.ts`):
+  normalise, dedupe with a per-host cap, refuse file hosts and throwaway TLDs.
+  A claim that came from the web carries its URL, or it is not shown.
+- **Competitors are one entity.** `workspace_competitors` (+
+  `competitor_updates`) is canonical; `competitor_watches` and
+  `competitor_intelligence_runs` hang off it by `competitor_id`. Engines in
+  `src/server/competitors/` (discovery → profile → updates), RPC
+  `src/server/fns/competitors.ts`, UI `src/components/app/competitors/` at
+  `/w/<id>/app/competitors`.
+  - **Grounding:** discovery may only classify companies a search really
+    returned, and an update may only reference a supplied result. Never let a
+    model introduce a company or an event of its own.
+  - **Discovery never tracks anyone.** It writes suggestions; a person accepts
+    them, because tracking is what costs money on every later sweep.
+  - **Updates are deduped by fingerprint** (unique index), and the recency
+    window is derived from `updates_checked_at`, never a fixed sweep.
+  - Background work is leased (`claim_competitor_jobs`) and advanced by the
+    **existing** `competitor-watch` cron hook — do not add a cron job.
+
 ## Backlink Growth (buying real placements)
 
 Mellox **buys** backlinks; it does not analyse someone else's. A user picks the

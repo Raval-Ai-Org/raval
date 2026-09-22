@@ -1,8 +1,8 @@
 // pricing.ts — estimated provider cost per call, in USD.
 //
 // Order of authority when metering a call:
-//   1. a cost the provider returns itself (OpenRouter `usage.cost`,
-//      DataForSEO `cost`) — exact, always preferred;
+//   1. a cost the provider returns itself (OpenRouter `usage.cost`) — exact,
+//      always preferred;
 //   2. this table × the provider-reported token usage;
 //   3. a flat per-unit estimate (KIE images/videos).
 // Every figure can be overridden with an env var, so a price change is a
@@ -34,7 +34,12 @@ const UNIT_PRICES: Record<string, number> = {
   "kie:image": 0.04,
   "kie:image:premium": 0.08,
   "kie:video": 1.5,
-  "dataforseo:task": 0.002,
+  // Tavily bills per API credit: 1 for a basic search, 2 for an advanced one,
+  // and 1 per 5 extracted URLs. These are the per-credit list rates converted
+  // to per-call, so a plan change is AI_PRICE_TAVILY_SEARCH_UNIT, not a deploy.
+  "tavily:search": 0.008,
+  "tavily:search:advanced": 0.016,
+  "tavily:extract": 0.0016,
 };
 
 function envKey(id: string): string {

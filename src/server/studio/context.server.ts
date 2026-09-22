@@ -84,15 +84,19 @@ async function loadWorkspaceSnapshot(
       { data: [], error: null } as never,
       "schedule",
     ),
+    // competitor_updates is the researched feed (a launch, a price change, a
+    // repositioning), already filtered for significance. The legacy
+    // competitor_alerts table held raw page diffs, which made most of what
+    // reached a prompt noise.
     settle(
       db
-        .from("competitor_alerts")
-        .select("title, detail, severity, detected_at")
+        .from("competitor_updates")
+        .select("title, summary, significance, detected_at")
         .eq("workspace_id", workspaceId)
         .order("detected_at", { ascending: false })
         .limit(5),
       { data: [], error: null } as never,
-      "competitor alerts",
+      "competitor updates",
     ),
     settle(
       db
@@ -154,7 +158,7 @@ async function loadWorkspaceSnapshot(
     ].slice(0, 6),
     risingQueries: [...new Set([...rising, ...(intelligence?.relatedQueries ?? [])])].slice(0, 8),
     competitorMoves: alertRows
-      .map((a) => [str(a.title), str(a.detail)].filter(Boolean).join(": ").slice(0, 240))
+      .map((a) => [str(a.title), str(a.summary)].filter(Boolean).join(": ").slice(0, 240))
       .filter(Boolean),
     insights: insightRows.map((i) => (str(i.body) ?? "").slice(0, 240)).filter(Boolean),
   };

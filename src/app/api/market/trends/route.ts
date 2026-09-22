@@ -1,13 +1,15 @@
 import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import {
-  pollGoogleTrendsCollection,
-  requestGoogleTrendsCollection,
-} from "@/lib/dataforseo/google-trends-collection.server";
+  pollMarketSignalsCollection,
+  requestMarketSignalsCollection,
+} from "@/lib/market-signals-collection.server";
 import { ensureMarketBrainSchedule } from "@/lib/market-brain-scheduler.server";
 import {
   marketFailure,
   marketLog,
+  MARKET_SCAN_ROUTE_TIMEOUT_MS,
+  MarketTimeoutError,
   operationId,
   withMarketTimeout,
 } from "@/lib/market-reliability.server";
@@ -25,32 +27,6 @@ const BodySchema = z.object({
   workspaceId: z.string().uuid(),
   keywords: z.array(keyword).min(1).max(5),
   location: z.string().trim().min(1).max(200).optional(),
-  language: z
-    .string()
-    .trim()
-    .regex(/^[a-z]{2,3}(?:-[A-Z]{2})?$/)
-    .optional(),
-  dateFrom: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  dateTo: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  timeRange: z
-    .enum([
-      "past_hour",
-      "past_4_hours",
-      "past_day",
-      "past_7_days",
-      "past_30_days",
-      "past_90_days",
-      "past_12_months",
-      "past_5_years",
-      "2004_present",
-    ])
-    .optional(),
 });
 
 const PollQuerySchema = z.object({
@@ -63,7 +39,7 @@ export const POST = defineRoute({
   auth: "workspace",
   body: BodySchema,
   workspaceId: ({ body }) => body.workspaceId,
-  // Each scan is a billed DataForSEO query and feeds a billed analysis; shares
+  // Each scan is a billed Tavily search and feeds a billed analysis; shares
   // the per-workspace "audit" bucket with /api/market/intelligence.
   rateLimit: ({ userId, workspaceId }) => ({ tier: "audit", subject: `${userId}:${workspaceId}` }),
   handler: async ({ body }) => {
@@ -72,40 +48,27 @@ export const POST = defineRoute({
     marketLog("workspace resolved", { operation, workspaceId: body.workspaceId });
 
     try {
-      const result = await requestGoogleTrendsCollection(
-        {
-          keywords: body.keywords,
-          location: body.location,
-          language: body.language,
-          dateFrom: body.dateFrom,
-          dateTo: body.dateTo,
-          timeRange: body.timeRange,
-        },
-        body.workspaceId,
-        operation,
+      // The search itself now runs inline here (Tavily answers within the
+      // request; there is no provider task to create and poll for), so the
+      // whole scan is bounded the same way the intelligence route bounds its
+      // Claude call.
+      const result = await withMarketTimeout(
+        requestMarketSignalsCollection(
+          { keywords: body.keywords, location: body.location },
+          body.workspaceId,
+          operation,
+        ),
+        MARKET_SCAN_ROUTE_TIMEOUT_MS,
+        "Market scan took too long. Please retry.",
       );
       marketLog("keywords generated", { operation, count: body.keywords.length });
-      const schedulePayload: {
-        workspaceId: string;
-        keywords: string[];
-        location?: string | null;
-        language?: string | null;
-        dateFrom?: string;
-        dateTo?: string;
-        timeRange?: string;
-      } = {
-        workspaceId: body.workspaceId,
-        keywords: body.keywords,
-        location: body.location ?? null,
-      };
-
-      if (body.language) schedulePayload.language = body.language;
-      if (body.dateFrom) schedulePayload.dateFrom = body.dateFrom;
-      if (body.dateTo) schedulePayload.dateTo = body.dateTo;
-      if (body.timeRange) schedulePayload.timeRange = body.timeRange;
 
       await withMarketTimeout(
-        ensureMarketBrainSchedule(schedulePayload),
+        ensureMarketBrainSchedule({
+          workspaceId: body.workspaceId,
+          keywords: body.keywords,
+          location: body.location ?? null,
+        }),
         5_000,
         "Market schedule registration timed out",
       ).catch((error) => {
@@ -122,10 +85,14 @@ export const POST = defineRoute({
       });
       return Response.json({
         success: result.state !== "failed",
-        source: "google_trends",
+        source: "tavily_market_signals",
         ...result,
       });
     } catch (error) {
+      if (error instanceof MarketTimeoutError) {
+        marketLog("scan request timed out", { operation, message: error.message });
+        return marketFailure(504, { message: error.message, code: error.code });
+      }
       marketLog("scan request failed", {
         operation,
         reason: error instanceof Error ? error.message : "unknown",
@@ -149,7 +116,7 @@ export const GET = defineRoute({
     marketLog("poll request received", { operation });
 
     try {
-      const result = await pollGoogleTrendsCollection(collectionId, query.workspaceId, operation);
+      const result = await pollMarketSignalsCollection(collectionId, query.workspaceId, operation);
       marketLog("poll response returned", {
         operation,
         state: result.state,
@@ -158,7 +125,7 @@ export const GET = defineRoute({
       });
       return Response.json({
         success: result.state !== "failed",
-        source: "google_trends",
+        source: "tavily_market_signals",
         ...result,
       });
     } catch (error) {

@@ -23,7 +23,7 @@ export const POST = defineRoute({
   auth: "workspace",
   body: BodySchema,
   workspaceId: ({ body }) => body.workspaceId,
-  // DataForSEO queries plus a Claude analysis, both billed per run, scoped to
+  // A Tavily search plus a Claude analysis, both billed per run, scoped to
   // the validated user+workspace.
   rateLimit: ({ userId, workspaceId }) => ({ tier: "audit", subject: `${userId}:${workspaceId}` }),
   handler: async ({ body }) => {

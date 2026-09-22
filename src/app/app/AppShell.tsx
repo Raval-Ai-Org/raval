@@ -262,6 +262,15 @@ function AppShell() {
     };
   }, []);
 
+  // The chat's "Open Competitors" button and any other caller reach the full
+  // surface through this event, because navigating needs the router and the
+  // workspace id, which only live here.
+  useEffect(() => {
+    const onOpenCompetitors = () => navigate({ to: workspacePath(workspaceId, "competitors") });
+    addAppEventListener("open:competitors", onOpenCompetitors);
+    return () => removeAppEventListener("open:competitors", onOpenCompetitors);
+  }, [navigate, workspaceId]);
+
   useEffect(() => {
     setChatOpen(false);
   }, [path]);
@@ -441,10 +450,10 @@ function AppShell() {
           {sidebarAction({
             icon: Radio,
             label: "Competitors",
-            hint: "Alerts",
+            hint: "Who you're up against",
             accent: "hsl(var(--brand-green))",
             onClick: () => {
-              emitAppEvent("open:competitor-watch");
+              navigate({ to: workspacePath(workspaceId, "competitors") });
               setNavOpen(false);
             },
           })}
@@ -564,7 +573,7 @@ function AppShell() {
                 {
                   icon: Radio,
                   label: "Competitors",
-                  onClick: () => emitAppEvent("open:competitor-watch"),
+                  onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
                 },
               ].map(({ icon: Icon, label, onClick }) => (
                 <Tooltip key={label}>

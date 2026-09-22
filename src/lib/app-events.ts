@@ -87,7 +87,10 @@ export type AppEventMap = {
   "open:create-launcher": undefined;
   "open:client-portal": undefined;
   "open:command-bar": undefined;
+  /** Opens the alert bell's popover (the quick "what changed" glance). */
   "open:competitor-watch": undefined;
+  /** Navigates to the full Competitors surface at /w/<id>/app/competitors. */
+  "open:competitors": undefined;
   "open:content-calendar": undefined;
   "open:details": undefined;
   "open:marketing-coach": undefined;

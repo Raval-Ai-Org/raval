@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
+import { BrandDnaCompetitorsCallout } from "@/components/app/competitors/BrandDnaCompetitorsCallout";
 import { Input } from "@/components/ui/input";
 import {
   useBrandDna,
@@ -3125,6 +3126,9 @@ function CompetitorsTab({ dna, save }: { dna: BrandDna; save: (n: Partial<BrandD
           <Plus className="h-3.5 w-3.5" /> Add competitor
         </Button>
       </div>
+      {/* The same companies live in the researched Competitors surface; this
+          is the way across, and the way to have Mellox find them for you. */}
+      <BrandDnaCompetitorsCallout />
       {dna.competitors.length === 0 && (
         <EmptyAction onClick={add} label="Track your first competitor" />
       )}

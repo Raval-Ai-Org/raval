@@ -73,6 +73,12 @@ export const CAMPAIGN_BRIEF_OUTPUT_SCHEMA = object({
 });
 
 export const COMPETITOR_INTEL_OUTPUT_SCHEMA = object({
+  // "Who are they / what do they do" — the questions the Competitors surface
+  // has to answer on the card, before any strategic interpretation.
+  summary: str,
+  products: strList,
+  targetCustomers: str,
+  companyFacts: strList,
   positioning: str,
   strengths: strList,
   weaknesses: strList,
@@ -83,6 +89,43 @@ export const COMPETITOR_INTEL_OUTPUT_SCHEMA = object({
   evidence: {
     type: "array",
     items: object({ claim: str, source: str }),
+  },
+});
+
+// Competitor discovery: the model only ever *classifies* candidates that a
+// web search actually returned, so every property is about a company already
+// named in the evidence. "unknown" and 0 confidence are the honest answers
+// when the snippets do not support a judgement.
+export const COMPETITOR_DISCOVERY_OUTPUT_SCHEMA = object({
+  competitors: {
+    type: "array",
+    items: object({
+      name: str,
+      domain: str,
+      relationship: { type: "string", enum: ["direct", "indirect", "alternative", "unknown"] },
+      confidence: { type: "number" },
+      rationale: str,
+      whatTheyDo: str,
+    }),
+  },
+});
+
+// The "what changed recently" filter. The model decides which of the supplied
+// news items is a real, meaningful move and which is noise; it never writes an
+// item that was not in the evidence.
+export const COMPETITOR_UPDATES_OUTPUT_SCHEMA = object({
+  updates: {
+    type: "array",
+    items: object({
+      sourceIndex: { type: "number" },
+      kind: {
+        type: "string",
+        enum: ["launch", "pricing", "positioning", "funding", "campaign", "content"],
+      },
+      significance: { type: "string", enum: ["major", "notable"] },
+      title: str,
+      summary: str,
+    }),
   },
 });
 

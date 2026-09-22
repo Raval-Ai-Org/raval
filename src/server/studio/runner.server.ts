@@ -760,13 +760,50 @@ export async function createStudioJob(args: {
   return presentJob(fresh ?? job);
 }
 
+/**
+ * Add current web sources to the context when the brief is the kind that ages
+ * badly without them — trends, statistics, industry developments, competitor
+ * comparisons. A caption, a hook or a visual idea never triggers this, and a
+ * failed or unconfigured search simply leaves the context as it was.
+ */
+async function withLiveResearch(ctx: StudioContext, input: CreateJobInput): Promise<StudioContext> {
+  const brief = [input.intent?.brief, input.intent?.goal].filter(Boolean).join(" ").trim();
+  if (!brief) return ctx;
+  try {
+    const [{ briefNeedsResearch }, { webSearch }, { formatSourcesForPrompt }] = await Promise.all([
+      import("@/lib/research/triggers"),
+      import("@/server/research/web-search.server"),
+      import("@/lib/research/sources"),
+    ]);
+    if (!briefNeedsResearch(brief)) return ctx;
+    const sources = await webSearch(`${ctx.brandName} ${brief}`.trim().slice(0, 300), {
+      limit: 5,
+      route: "studio.research",
+    });
+    if (!sources.length) return ctx;
+    return {
+      ...ctx,
+      liveResearch: {
+        summary: formatSourcesForPrompt(sources, 4_000),
+        sources: sources.map((source) => ({ title: source.title, url: source.url })),
+      },
+    };
+  } catch (error) {
+    console.error("[studio] live research failed, generating without sources", error);
+    return ctx;
+  }
+}
+
 async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent: JobRow | null) {
   const type = job.type;
   const format = STUDIO_FORMATS[type];
   const platforms = platformsFor(type, input.controls.platforms);
   const controls = { ...input.controls, platforms };
 
-  const ctx = await loadStudioContext(client, job.workspace_id, input.brand ?? null);
+  const base = await loadStudioContext(client, job.workspace_id, input.brand ?? null);
+  // Research is per-brief, so it cannot live in the 60s workspace context
+  // cache. Most briefs skip it entirely and cost nothing.
+  const ctx = await withLiveResearch(base, input);
 
   const mediaOnly = !!input.refine && input.refine.target === "media" && !!parent;
   const previousAngle = parent?.output?.angle ?? null;

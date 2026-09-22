@@ -9,6 +9,7 @@ import { BrandReveal, type BrandEdits } from "@/components/onboarding/BrandRevea
 import { SCAN_PHASES, advancePhase } from "@/components/onboarding/phases";
 import { ScanStage, type ScanProgress, type ScanStatus } from "@/components/onboarding/ScanStage";
 import { SuccessMoment } from "@/components/onboarding/SuccessMoment";
+import { CompetitorStep } from "@/components/onboarding/CompetitorStep";
 import { AmbientCanvas } from "@/components/onboarding/ui";
 import { UrlStep } from "@/components/onboarding/UrlStep";
 import { normalizeUrl, validUrl } from "@/components/onboarding/url";
@@ -24,7 +25,7 @@ import { readBrandExtractStream } from "@/lib/brand-extract-stream";
 import { duration, ease } from "@/lib/motion";
 import { useNavigate } from "@/lib/navigation";
 
-type Step = "website" | "scan" | "review" | "done";
+type Step = "website" | "scan" | "review" | "competitors" | "done";
 
 /** workspaces_owner_domain_unique: this owner already has the brand's domain. */
 function isDuplicateDomainError(error: { code?: string; message?: string } | null): boolean {
@@ -37,12 +38,14 @@ const STEPS: { id: Exclude<Step, "done">; label: string }[] = [
   { id: "website", label: "Website" },
   { id: "scan", label: "Scan" },
   { id: "review", label: "Brand DNA" },
+  { id: "competitors", label: "Competitors" },
 ];
 
 const STEP_WIDTH: Record<Step, string> = {
   website: "max-w-2xl",
   scan: "max-w-[460px]",
   review: "max-w-6xl",
+  competitors: "max-w-2xl",
   done: "max-w-xl",
 };
 
@@ -282,7 +285,9 @@ function Onboarding() {
     saveBrandDnaFor(workspaceId, merged, true);
     localStorage.removeItem(urlKey(workspaceId));
     setSaving(false);
-    setStep("done");
+    // Brand DNA is saved, so discovery finally has a business to search
+    // around. It is its own step: a slow search must never hold up the reveal.
+    setStep("competitors");
   };
 
   const skip = async () => {
@@ -400,6 +405,14 @@ function Onboarding() {
                     onContinue={() => void finish()}
                     onRescan={rescan}
                     onChangeUrl={() => setStep("website")}
+                  />
+                )}
+                {step === "competitors" && workspaceId && (
+                  <CompetitorStep
+                    workspaceId={workspaceId}
+                    reduce={reduce}
+                    headingRef={headingRef}
+                    onContinue={() => setStep("done")}
                   />
                 )}
                 {step === "done" && (

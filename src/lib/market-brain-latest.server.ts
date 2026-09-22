@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { CACHE_TTL_MS, STALE_PENDING_MS } from "@/lib/dataforseo/google-trends-collection.server";
-import type { GoogleTrendsData } from "@/lib/dataforseo/google-trends.server";
+import { CACHE_TTL_MS, STALE_PENDING_MS } from "@/lib/market-signals-collection.server";
+import type { MarketSignalsData } from "@/server/research/market-signals.server";
 import {
   MarketIntelligenceSchema,
   type MarketIntelligence,
@@ -19,7 +19,7 @@ export type LatestMarketBrain = {
     location: string | null;
     completedAt: string;
     /** null when the latest finished scan found no measurable interest. */
-    data: GoogleTrendsData | null;
+    data: MarketSignalsData | null;
   } | null;
   intelligence: MarketIntelligence | null;
   /** A scan still running (e.g. started before the panel was closed). */
@@ -172,7 +172,7 @@ export async function getLatestMarketBrain(workspaceId: string): Promise<LatestM
           location: completed.location,
           completedAt: completed.completed_at,
           data: isRecord(completed.normalized_result)
-            ? (completed.normalized_result as GoogleTrendsData)
+            ? (completed.normalized_result as MarketSignalsData)
             : null,
         }
       : null,

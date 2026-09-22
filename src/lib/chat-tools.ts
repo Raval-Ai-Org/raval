@@ -122,7 +122,7 @@ export function describeOffer(call: ChatToolCall): { label: string; hint?: strin
     case "open-visibility":
       return { label: "Open AI Visibility" };
     case "open-competitor":
-      return { label: "Open Competitor Watch" };
+      return { label: "Open Competitors" };
     case "open-coach":
       return { label: "Open Marketing Coach" };
     case "open-operations":
@@ -255,8 +255,8 @@ export async function executeToolCall(
       return { kind: call.kind, ok: true, label: "Opening AI Visibility" };
     }
     case "open-competitor": {
-      emitAppEvent("open:competitor-watch");
-      return { kind: call.kind, ok: true, label: "Opening Competitor Watch" };
+      emitAppEvent("open:competitors");
+      return { kind: call.kind, ok: true, label: "Opening Competitors" };
     }
     case "open-coach": {
       emitAppEvent("open:marketing-coach");
