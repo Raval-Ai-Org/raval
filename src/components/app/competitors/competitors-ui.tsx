@@ -9,23 +9,12 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Chip, TONE, hostOf, relativeTime } from "@/components/app/geo/geo-ui";
-import {
-  ExternalLink,
-  FileText,
-  Globe,
-  Megaphone,
-  Rocket,
-  Sparkles,
-  Tag,
-  Target,
-  Wallet,
-} from "@/components/icons";
+import { SiteIcon } from "@/components/app/surface/SiteIcon";
+import { ExternalLink, Tag } from "@/components/icons";
 import {
   RELATIONSHIP_LABELS,
-  UPDATE_KIND_LABELS,
   type CompetitorRelationship,
   type CompetitorSourceLink,
-  type CompetitorUpdateKind,
 } from "@/lib/competitors.functions";
 
 export { hostOf, relativeTime };
@@ -41,65 +30,9 @@ export function RelationshipChip({ relationship }: { relationship: CompetitorRel
   return <Chip tone={RELATIONSHIP_TONE[relationship]}>{RELATIONSHIP_LABELS[relationship]}</Chip>;
 }
 
-const KIND_ICON: Record<CompetitorUpdateKind, React.ComponentType<{ className?: string }>> = {
-  launch: Rocket,
-  pricing: Wallet,
-  positioning: Target,
-  funding: Sparkles,
-  campaign: Megaphone,
-  content: FileText,
-  site_change: Globe,
-};
-
-export function UpdateKindBadge({
-  kind,
-  significance,
-}: {
-  kind: CompetitorUpdateKind;
-  significance: "major" | "notable";
-}) {
-  const Icon = KIND_ICON[kind];
-  return (
-    <Chip tone={significance === "major" ? "primary" : "muted"}>
-      <Icon className="h-3 w-3" />
-      {UPDATE_KIND_LABELS[kind]}
-    </Chip>
-  );
-}
-
-/**
- * The site's own icon, from the public favicon service. Decorative: it never
- * carries meaning on its own, and a failure quietly leaves the monogram.
- */
+/** The site's own icon (shared with Backlinks). */
 export function SiteMark({ domain, size = 32 }: { domain: string; size?: number }) {
-  const [failed, setFailed] = React.useState(false);
-  const letter =
-    domain
-      .replace(/^www\./, "")
-      .charAt(0)
-      .toUpperCase() || "?";
-  return (
-    <span
-      className="grid shrink-0 place-items-center overflow-hidden rounded-lg bg-muted text-[13px] font-semibold text-muted-foreground ring-1 ring-border/60"
-      style={{ height: size, width: size }}
-    >
-      {failed ? (
-        letter
-      ) : (
-        /* A third-party favicon, not an app asset: no next/image optimisation. */
-        <img
-          src={`https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(domain)}`}
-          alt=""
-          aria-hidden
-          width={size}
-          height={size}
-          loading="lazy"
-          onError={() => setFailed(true)}
-          className="h-full w-full object-contain"
-        />
-      )}
-    </span>
-  );
+  return <SiteIcon domain={domain} size={size} />;
 }
 
 /** Where a claim came from. Clicking it opens the page it was read from. */
@@ -132,10 +65,7 @@ export function SourceChips({
   const shown = sources.slice(0, limit);
   const extra = sources.length - shown.length;
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        Sources
-      </span>
+    <div className="flex flex-wrap items-center gap-1.5" aria-label="Sources">
       {shown.map((source) => (
         <SourceChip key={source.url} source={source} />
       ))}
@@ -157,10 +87,8 @@ export function Field({
   if (!value?.trim()) return null;
   return (
     <div className={cn("min-w-0", className)}>
-      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <p className="mt-0.5 text-[13px] leading-relaxed text-foreground/90">{value}</p>
+      <div className="text-[12px] font-medium text-muted-foreground">{label}</div>
+      <p className="mt-1 text-[13.5px] leading-relaxed text-foreground/90">{value}</p>
     </div>
   );
 }
@@ -180,10 +108,8 @@ export function FieldList({
   if (!items.length) return null;
   return (
     <div className="min-w-0">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <ul className="mt-1 space-y-1">
+      <div className="text-[12px] font-medium text-muted-foreground">{label}</div>
+      <ul className="mt-1.5 space-y-1">
         {items.slice(0, max).map((item) => (
           <li key={item} className="flex gap-1.5 text-[13px] leading-relaxed text-foreground/90">
             <Icon className="mt-[3px] h-3 w-3 shrink-0 text-muted-foreground" />
@@ -198,7 +124,10 @@ export function FieldList({
 export function Card({ children, className, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("rounded-2xl border border-border/60 bg-card p-4 shadow-sm", className)}
+      className={cn(
+        "rounded-[20px] border border-border/50 bg-surface-3 p-4 dark:border-white/[0.06] dark:bg-white/[0.035] sm:p-5",
+        className,
+      )}
       {...rest}
     >
       {children}

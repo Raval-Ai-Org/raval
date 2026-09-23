@@ -1,15 +1,12 @@
 "use client";
 
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Sparkles } from "@/components/ui/gemini-icons";
 import { takePendingGeoRun } from "@/lib/geo/pending-run";
 import type { FindingsFilter } from "@/components/app/geo/FindingsTab";
-
-const GeoAeoPanel = lazy(() =>
-  import("@/components/app/GeoAeoPanel").then((m) => ({ default: m.GeoAeoPanel })),
-);
+import { GeoAeoPanel } from "@/components/app/GeoAeoPanel";
 
 /**
  * Global "AI Visibility" popup — Mellox's GEO / AEO / SEO intelligence surface.
@@ -69,30 +66,21 @@ export function AiVisibilityDialog({ workspaceId }: { workspaceId: string | null
       size="xl"
       Icon={Sparkles}
       title="AI Visibility"
-      description="Scan, fix and track how AI engines see your site"
       srDescription="AI visibility intelligence: site scans, findings, page evidence and monitoring"
-      bodyClassName="px-4 py-4 sm:px-6 sm:py-5"
+      bodyClassName="overflow-hidden"
     >
-      <Suspense
-        fallback={
-          <div className="grid place-items-center py-24 text-sm text-muted-foreground">
-            Loading AI visibility…
-          </div>
-        }
-      >
-        {workspaceId ? (
-          <GeoAeoPanel
-            workspaceId={workspaceId}
-            autoRunToken={runToken}
-            onAutoRunHandled={() => setRunToken(0)}
-            initialFindings={initialFindings}
-          />
-        ) : (
-          <div className="grid place-items-center py-24 text-sm text-muted-foreground">
-            Select a workspace to run a scan.
-          </div>
-        )}
-      </Suspense>
+      {workspaceId ? (
+        <GeoAeoPanel
+          workspaceId={workspaceId}
+          autoRunToken={runToken}
+          onAutoRunHandled={() => setRunToken(0)}
+          initialFindings={initialFindings}
+        />
+      ) : (
+        <div className="grid place-items-center py-24 text-sm text-muted-foreground">
+          Select a workspace to run a scan.
+        </div>
+      )}
     </AppModalShell>
   );
 }

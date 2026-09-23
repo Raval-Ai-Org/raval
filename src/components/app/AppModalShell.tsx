@@ -1,24 +1,26 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "@/components/ui/gemini-icons";
 import { cn } from "@/lib/utils";
 
-type Size = "sm" | "md" | "lg" | "xl";
+type Size = "sm" | "md" | "lg" | "xl" | "2xl";
 
 /** Standard (windowed) sizes. Large surfaces open as a comfortable medium window and can be maximized. */
 const SIZE_MAP: Record<Size, string> = {
   sm: "w-[calc(100vw-24px)] max-w-[560px] h-auto max-h-[86dvh]",
   md: "w-[calc(100vw-24px)] max-w-[760px] h-auto max-h-[88dvh]",
-  lg: "w-[calc(100vw-24px)] max-w-[920px] h-[min(86dvh,860px)]",
-  xl: "w-[calc(100vw-24px)] max-w-[1040px] h-[min(88dvh,900px)]",
+  lg: "w-[calc(100vw-24px)] max-w-[920px] h-[min(86dvh,860px)] max-sm:h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none",
+  xl: "w-[calc(100vw-24px)] max-w-[1040px] h-[min(88dvh,900px)] max-sm:h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none",
+  "2xl":
+    "w-[calc(100vw-24px)] max-w-[1240px] h-[min(92dvh,960px)] max-sm:h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none",
 };
 
 const iconBtn =
-  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40";
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--ds-well-bg-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40";
 
 function MaximizeIcon({ className }: { className?: string }) {
   return (
@@ -80,7 +82,6 @@ export function AppModalShell({
   onOpenChange,
   title,
   description,
-  eyebrow,
   Icon,
   headerAccessory,
   size = "md",
@@ -96,7 +97,6 @@ export function AppModalShell({
   onOpenChange: (v: boolean) => void;
   title: ReactNode;
   description?: ReactNode;
-  eyebrow?: ReactNode;
   Icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   headerAccessory?: ReactNode;
   size?: Size;
@@ -110,8 +110,9 @@ export function AppModalShell({
   srDescription?: string;
 }) {
   const [maximized, setMaximized] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
   // Big workspaces (lg/xl) can become a full page; small forms stay popups.
-  const canMaximize = allowMaximize ?? (size === "lg" || size === "xl");
+  const canMaximize = allowMaximize ?? (size === "lg" || size === "xl" || size === "2xl");
   useEffect(() => {
     if (!open) setMaximized(false);
   }, [open]);
@@ -139,6 +140,12 @@ export function AppModalShell({
 
             <DialogPrimitive.Content
               asChild
+              // Focus the window itself, not its first button: otherwise the
+              // maximize control opens wearing a focus ring.
+              onOpenAutoFocus={(e) => {
+                e.preventDefault();
+                contentRef.current?.focus({ preventScroll: true });
+              }}
               onEscapeKeyDown={(e) => {
                 if (disableClose) e.preventDefault();
                 else if (maximized) {
@@ -155,6 +162,9 @@ export function AppModalShell({
               }}
             >
               <motion.div
+                ref={contentRef}
+                tabIndex={-1}
+                data-mellox-app
                 // Centering lives in the animated transform so the animation never
                 // fights a CSS translate (which caused off-centre popups).
                 // Centred with plain CSS (inset-0 + m-auto); the animation only fades,
@@ -170,11 +180,11 @@ export function AppModalShell({
                 transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
                 style={{ transformOrigin: "center" }}
                 className={cn(
-                  "fixed inset-0 z-50 flex flex-col overflow-hidden bg-background transition-[width,height,max-width,max-height,border-radius] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
+                  "ds-glow fixed inset-0 z-50 flex flex-col overflow-hidden bg-background outline-none transition-[width,height,max-width,max-height,border-radius] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
                   maximized
                     ? "m-0 h-dvh w-screen max-w-none rounded-none"
                     : cn(
-                        "m-auto rounded-2xl border border-border/60 shadow-[0_32px_96px_-32px_rgba(0,0,0,0.55),0_0_0_1px_hsl(var(--border)/0.4)] ring-1 ring-white/[0.03]",
+                        "ds-window m-auto",
                         SIZE_MAP[size],
                         (size === "sm" || size === "md") && "h-fit",
                       ),
@@ -194,7 +204,7 @@ export function AppModalShell({
                 {/* Header */}
                 <header
                   className={cn(
-                    "relative z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3 backdrop-blur sm:gap-3 sm:px-5",
+                    "relative z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/50 bg-background/60 px-3 backdrop-blur-xl sm:gap-3 sm:px-5",
                     maximized && "sm:px-8",
                   )}
                 >
@@ -210,17 +220,12 @@ export function AppModalShell({
                     </button>
                   )}
                   {Icon && (
-                    <span className="hidden h-8 w-8 shrink-0 place-items-center rounded-lg bg-secondary ring-1 ring-border/60 min-[420px]:grid">
-                      <Icon className="h-4 w-4 text-foreground/80" strokeWidth={2.2} />
+                    <span className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20 min-[420px]:grid">
+                      <Icon className="h-4 w-4" strokeWidth={2.2} />
                     </span>
                   )}
                   <div className="min-w-0 flex-1">
-                    {eyebrow && (
-                      <div className="truncate text-[10px] font-medium uppercase leading-none tracking-[0.14em] text-muted-foreground">
-                        {eyebrow}
-                      </div>
-                    )}
-                    <h2 className="truncate text-[14px] font-semibold leading-tight tracking-tight text-foreground">
+                    <h2 className="truncate text-[15px] font-semibold leading-tight tracking-tight text-foreground">
                       {title}
                     </h2>
                     {description && (

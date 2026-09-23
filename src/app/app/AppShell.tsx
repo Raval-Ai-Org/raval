@@ -1,5 +1,6 @@
 "use client";
 
+import { OpeningPill } from "@/components/ui/page-loader";
 import { normalizeAnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { ensureGeoRunCapture } from "@/lib/geo/pending-run";
@@ -74,6 +75,9 @@ const PublishDialog = lazy(() =>
 );
 const ShareDialog = lazy(() =>
   import("@/components/app/ShareDialog").then((m) => ({ default: m.ShareDialog })),
+);
+const ClientPortalDialog = lazy(() =>
+  import("@/components/app/ClientPortalDialog").then((m) => ({ default: m.ClientPortalDialog })),
 );
 const AiVisibilityDialog = lazy(() =>
   import("@/components/app/AiVisibilityDialog").then((m) => ({ default: m.AiVisibilityDialog })),
@@ -302,10 +306,10 @@ function AppShell() {
           opts.onClick();
           setNavOpen(false);
         }}
-        className="group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-secondary/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="group relative flex w-full items-center gap-3 rounded-full px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-[var(--ds-well-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         <span
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-secondary/40 text-muted-foreground transition-colors group-hover:bg-secondary group-hover:text-foreground"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground transition-colors group-hover:bg-primary/12 group-hover:text-primary"
           style={opts.accent ? { color: opts.accent } : undefined}
         >
           <Icon className="h-4 w-4" strokeWidth={1.9} aria-hidden />
@@ -387,9 +391,9 @@ function AppShell() {
               setNavOpen(false);
               emitAppEvent("open:library");
             }}
-            className="group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-secondary/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="group relative flex w-full items-center gap-3 rounded-full px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-[var(--ds-well-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-secondary/40 text-muted-foreground transition-colors group-hover:bg-secondary group-hover:text-foreground">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground transition-colors group-hover:bg-primary/12 group-hover:text-primary">
               <BookOpen className="h-4 w-4" aria-hidden />
             </span>
             <span className="flex-1 truncate leading-none">Library</span>
@@ -487,14 +491,14 @@ function AppShell() {
   );
 
   return (
-    <div className="flex h-[100dvh] w-full bg-sidebar text-foreground">
+    <div data-mellox-app className="flex h-[100dvh] w-full bg-sidebar text-foreground">
       <h1 className="sr-only">Mellox AI Workspace</h1>
 
       {/* Full-height left rail: sidebar OR collapsed icon rail. Sits alongside header + main, Qwen/ChatGPT style. */}
       {!navOpen && (
         <aside
           aria-label="Sidebar rail"
-          className="flex h-full w-[48px] flex-none flex-col items-center border-r border-border/60 bg-sidebar py-3"
+          className="flex h-full w-[48px] flex-none flex-col items-center border-r border-border/50 bg-sidebar py-3 sm:w-[56px]"
         >
           {/* Brand mark — always visible; goes to workspace home. */}
           <div className="group relative mb-3 h-9 w-9">
@@ -502,7 +506,7 @@ function AppShell() {
               to={homeHref}
               aria-label="Mellox AI — workspace home"
               title="Workspace home"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <Logo height={26} markOnly />
             </Link>
@@ -513,7 +517,7 @@ function AppShell() {
                     type="button"
                     onClick={() => setNavOpen(true)}
                     aria-label="Open sidebar"
-                    className="absolute inset-0 grid place-items-center rounded-xl bg-secondary text-foreground opacity-0 shadow-sm ring-1 ring-border/70 transition-all duration-200 group-hover:opacity-100 hover:bg-secondary hover:text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className="absolute inset-0 grid place-items-center rounded-full bg-secondary text-foreground opacity-0 shadow-sm ring-1 ring-border/70 transition-all duration-200 group-hover:opacity-100 hover:bg-secondary hover:text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     <PanelRightOpen className="h-[18px] w-[18px]" strokeWidth={1.9} />
                   </button>
@@ -536,7 +540,7 @@ function AppShell() {
                     type="button"
                     onClick={() => setNavOpen(true)}
                     aria-label="New Chat"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)] transition hover:-translate-y-px hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     <Plus className="h-[18px] w-[18px]" aria-hidden />
                   </button>
@@ -582,11 +586,11 @@ function AppShell() {
                       type="button"
                       onClick={onClick}
                       aria-label={label}
-                      className="group flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="group flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-primary/12 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     >
                       <Icon
-                        className="h-[18px] w-[18px] transition-transform group-hover:scale-[1.08]"
-                        strokeWidth={1.8}
+                        className="h-5 w-5 transition-transform group-hover:scale-[1.08]"
+                        strokeWidth={1.9}
                       />
                     </button>
                   </TooltipTrigger>
@@ -829,6 +833,7 @@ function AppShell() {
                 <ShareDialog workspaceId={workspaceId}>
                   <span data-share-trigger className="hidden" aria-hidden />
                 </ShareDialog>
+                <ClientPortalDialog workspaceId={workspaceId} />
                 <AiVisibilityDialog workspaceId={workspaceId} />
                 <UgcStudioDialog workspaceId={workspaceId} />
                 <CreateLauncher />
@@ -853,7 +858,7 @@ function AppShell() {
 
       <CommandBar />
       <StudioDock />
-      <Suspense fallback={null}>
+      <Suspense fallback={<OpeningPill />}>
         {analyticsOpen && (
           <AnalyticsModal
             open={analyticsOpen}

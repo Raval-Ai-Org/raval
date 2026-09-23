@@ -115,7 +115,13 @@ export function ContentItemDialog() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
-          <Button size="sm" variant="ghost" onClick={() => void remove()} disabled={!item || busy}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void remove()}
+            disabled={!item}
+            loading={busy}
+          >
             <Trash />
             Delete
           </Button>
@@ -137,11 +143,11 @@ export function ContentItemDialog() {
                 size="sm"
                 variant="outline"
                 onClick={() => void decide("rejected")}
-                disabled={busy}
+                loading={busy}
               >
                 Discard
               </Button>
-              <Button size="sm" onClick={() => void decide("approved")} disabled={busy}>
+              <Button size="sm" onClick={() => void decide("approved")} loading={busy}>
                 <Check />
                 Approve
               </Button>

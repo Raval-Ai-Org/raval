@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
@@ -336,7 +337,6 @@ function ManageDialog({
       onOpenChange={onOpenChange}
       size="xl"
       Icon={Radio}
-      eyebrow="Intelligence"
       title="Competitor watch"
       description={
         watches.length > 0
@@ -468,6 +468,9 @@ function ManageDialog({
                       className="rounded-md px-2 py-1 text-[11px] font-medium text-foreground/70 transition hover:bg-secondary hover:text-foreground disabled:opacity-40"
                       title={w.enabled ? "Pause" : "Resume"}
                     >
+                      {busyId === w.id ? (
+                        <Spinner className="mr-1 inline h-3 w-3 animate-spin" aria-hidden />
+                      ) : null}
                       {w.enabled ? "Pause" : "Resume"}
                     </button>
                     <button
@@ -478,7 +481,11 @@ function ManageDialog({
                       aria-label="Remove"
                       title="Remove"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      {busyId === w.id ? (
+                        <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
                     </button>
                   </div>
                 </li>

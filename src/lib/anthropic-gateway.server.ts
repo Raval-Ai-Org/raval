@@ -1,4 +1,5 @@
 import "server-only";
+import { humanizeText } from "@/lib/ai/humanize-text";
 import { safeParseJson } from "@/lib/ai/json";
 import { fetchWithRetry, UpstreamError } from "@/server/upstream";
 import { BudgetExceededError, checkBudget } from "@/server/ai/budget";
@@ -220,10 +221,19 @@ export async function claudeTextCompletion(opts: ClaudeTextOpts): Promise<Claude
   }
 
   const parts = response?.content ?? [];
-  const text = parts
-    .map((part: any) => (part?.type === "text" ? part.text : ""))
-    .join("")
-    .trim();
+  // Em dash is the clearest "AI voice" tell in generated prose; strip it here
+  // so every caller (claudeTextPrompt, claudeJsonPrompt, claudeSchemaPrompt)
+  // gets clean output for free. Safe even for JSON-schema output: this only
+  // touches em/en-dash characters inside string content, never structural
+  // JSON syntax. claudeToolLoop (code/patch generation) calls its own
+  // transport directly and never passes through here, so this never touches
+  // generated code.
+  const text = humanizeText(
+    parts
+      .map((part: any) => (part?.type === "text" ? part.text : ""))
+      .join("")
+      .trim(),
+  );
 
   const stopReason: unknown = response?.stop_reason;
   const truncated = stopReason === "max_tokens";

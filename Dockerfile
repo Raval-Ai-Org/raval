@@ -36,8 +36,12 @@ ENV REDIS_URL=
 # Pages are rendered only when their server HTML is an empty client-side app
 # shell, and every request the browser makes is fulfilled through Mellox's
 # SSRF-guarded fetcher. Enable with FEATURE_FLAG_GEO_RENDERING_ENABLED=true.
+#
+# python3 + exiftool for generated-image metadata finalization
+# (src/server/assets/image-metadata.server.ts, vendor/image-metadata-toolkit).
+# On by default (FEATURE_FLAG_ASSET_METADATA_ENABLED); fails open if missing.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends chromium fonts-liberation \
+  && apt-get install -y --no-install-recommends chromium fonts-liberation python3 libimage-exiftool-perl \
   && rm -rf /var/lib/apt/lists/*
 ENV GEO_RENDER_EXECUTABLE=/usr/bin/chromium
 
@@ -47,6 +51,7 @@ RUN groupadd --system --gid 1001 nodejs \
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/vendor ./vendor
 
 USER nextjs
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

@@ -655,8 +655,8 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
       title="Content Calendar"
       description={
         entries.length === 0
-          ? "Tell Mellox about your brand and get a full posting plan in one click."
-          : `${entries.length} ${entries.length === 1 ? "post" : "posts"} planned · drag any post to reschedule.`
+          ? undefined
+          : `${entries.length} ${entries.length === 1 ? "post" : "posts"} planned`
       }
       headerAccessory={
         <Button
@@ -1347,11 +1347,11 @@ function Generator({
   return (
     <section className="space-y-3 border-b border-border p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-6 w-6 place-items-center rounded-md bg-primary-surface text-primary">
+        <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/12 text-primary">
           <Wand2 className="h-3.5 w-3.5" />
         </span>
         <div className="flex-1">
-          <h3 className="text-[12.5px] font-semibold">Generate with AI</h3>
+          <h3 className="text-[12.5px] font-semibold">Plan with Mellox</h3>
           <p className="text-[10.5px] text-muted-foreground">
             Tell us about your brand. We do the rest.
           </p>
@@ -1366,8 +1366,8 @@ function Generator({
         className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-[12.5px] outline-none focus:border-primary"
       />
 
-      <div className="flex items-center justify-between rounded-lg bg-muted/40 px-2.5 py-1.5 text-[11px]">
-        <span className="text-muted-foreground">
+      <div className="flex items-center justify-between gap-2 rounded-xl bg-[var(--ds-well-bg)] px-3 py-2 text-[11.5px]">
+        <span className="min-w-0 text-muted-foreground">
           <b className="text-foreground tabular-nums">{postsPerWeek}</b> posts/week ·{" "}
           <b className="text-foreground tabular-nums">{days}</b> days ·{" "}
           <b className="text-foreground tabular-nums">{channels.length}</b> channels
@@ -1375,9 +1375,9 @@ function Generator({
         <button
           type="button"
           onClick={() => setShowAdvanced((v) => !v)}
-          className="text-[11px] font-medium text-primary hover:underline"
+          className="shrink-0 whitespace-nowrap text-[11.5px] font-medium text-primary hover:underline"
         >
-          {showAdvanced ? "Hide" : "Customize"}
+          {showAdvanced ? "Hide" : "Change"}
         </button>
       </div>
 
@@ -1448,7 +1448,7 @@ function Generator({
         ) : (
           <Sparkles className="mr-1.5 h-3.5 w-3.5" />
         )}
-        {loading ? "Drafting your plan…" : "Generate my plan"}
+        {loading ? "Drafting your plan…" : "Plan my posts"}
       </Button>
     </section>
   );
@@ -2414,37 +2414,20 @@ function EmptyState({
   return (
     <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
       <div className="w-full max-w-md text-center">
-        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-primary-foreground shadow-[0_12px_32px_-12px_hsl(var(--brand-blue)/0.7)]">
-          <CalendarDays className="h-7 w-7" />
+        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20">
+          <CalendarDays className="h-6 w-6" />
         </div>
-        <h3 className="text-[16px] font-semibold">Your calendar is empty</h3>
-        <p className="mx-auto mt-1 max-w-sm text-[12.5px] text-muted-foreground">
-          Describe your brand and goals on the right and Mellox will draft a full multi-channel plan
-          with hooks, captions and hashtags — ready to schedule.
+        <h3 className="ds-page-title">Your calendar is empty</h3>
+        <p className="mx-auto mt-1.5 max-w-sm text-[13.5px] text-muted-foreground">
+          Describe your brand on the right and Mellox plans your posts.
         </p>
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-          <Button
-            size="sm"
-            onClick={onOpenGenerator}
-            className="gap-1.5 bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] text-primary-foreground shadow-[0_8px_24px_-8px_hsl(var(--brand-blue)/0.7)] hover:opacity-95"
-          >
-            <Sparkles className="h-3.5 w-3.5" /> Generate my plan
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          <Button onClick={onOpenGenerator} className="gap-1.5">
+            <Sparkles className="h-4 w-4" /> Plan my posts
           </Button>
-          <Button size="sm" variant="outline" onClick={onNewBlank} className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" /> Start blank post
+          <Button variant="outline" onClick={onNewBlank} className="gap-1.5">
+            <Plus className="h-4 w-4" /> New post
           </Button>
-        </div>
-        <div className="mt-6 grid grid-cols-3 gap-2 text-left">
-          {[
-            { t: "Multi-channel", d: "IG · LinkedIn · X · TikTok · Email" },
-            { t: "Ready captions", d: "Hook + body + hashtags" },
-            { t: "Drag to move", d: "Reschedule across days & channels" },
-          ].map((f) => (
-            <div key={f.t} className="rounded-xl border border-border bg-card p-2.5">
-              <div className="text-[11px] font-semibold">{f.t}</div>
-              <div className="mt-0.5 text-[10.5px] text-muted-foreground">{f.d}</div>
-            </div>
-          ))}
         </div>
       </div>
     </div>

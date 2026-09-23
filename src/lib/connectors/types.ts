@@ -58,7 +58,7 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProviderMeta[] = [
     id: "wordpress",
     name: "WordPress",
     tagline: "Pages, posts and SEO metadata",
-    availability: "coming_soon",
+    availability: "available",
     capabilities: ["source_read", "publish"],
   },
   {
@@ -88,7 +88,7 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProviderMeta[] = [
 export type ConnectionStatus = "active" | "suspended" | "revoked" | "error";
 
 /** How Mellox confirmed the person who connected controls the external account. */
-export type ConnectionVerification = "oauth" | "install_window";
+export type ConnectionVerification = "oauth" | "install_window" | "application_password";
 
 export type ConnectionView = {
   id: string;
@@ -181,12 +181,12 @@ export type ConnectorsOverview = {
   providers: readonly ConnectorProviderMeta[];
   /** Server configuration state per available provider (no secrets). */
   configured: Record<
-    "github",
+    "github" | "wordpress",
     {
       ready: boolean;
       installVerification: ConnectionVerification | "unavailable";
       issues: string[];
-      diagnostic: GitHubDiagnostic;
+      diagnostic?: GitHubDiagnostic;
     }
   >;
   connections: ConnectionView[];

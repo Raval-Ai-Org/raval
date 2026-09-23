@@ -77,6 +77,11 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
               <DialogPrimitive.Content
                 asChild
                 aria-describedby={undefined}
+                // Focus the window, not its first button (no ring on open).
+                onOpenAutoFocus={(e) => {
+                  e.preventDefault();
+                  (e.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
+                }}
                 onEscapeKeyDown={(e) => {
                   const t = e.target as HTMLElement | null;
                   if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) {
@@ -88,6 +93,8 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
                 }}
               >
                 <motion.div
+                  tabIndex={-1}
+                  data-mellox-app
                   initial={{ opacity: 0, y: 14, scale: 0.985 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{
@@ -98,10 +105,10 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
                   }}
                   transition={spring.surface}
                   className={cn(
-                    "pointer-events-auto relative flex flex-col overflow-hidden bg-background shadow-4 outline-none",
+                    "ds-glow pointer-events-auto relative flex flex-col overflow-hidden bg-background outline-none",
                     isMobile
                       ? "h-dvh w-screen"
-                      : "h-[min(92vh,900px)] w-[min(96vw,1280px)] rounded-[20px] ring-1 ring-border/80",
+                      : "ds-window h-[min(92dvh,960px)] w-[min(calc(100vw-24px),1240px)]",
                   )}
                 >
                   <DialogPrimitive.Title className="sr-only">Library</DialogPrimitive.Title>

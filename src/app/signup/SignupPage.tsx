@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { Link, useNavigate } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
 import { motion } from "framer-motion";
@@ -144,6 +145,13 @@ function SignupPage() {
           Already have an account?{" "}
           <Link
             to="/login"
+            // Keep where the person was going (e.g. an invite link) when they
+            // switch between sign in and sign up.
+            onClick={(e) => {
+              if (nextPath === "/projects") return;
+              e.preventDefault();
+              navigate({ to: "/login", search: { next: nextPath } });
+            }}
             className="font-semibold text-primary underline-offset-4 hover:underline"
           >
             Sign in
@@ -264,7 +272,13 @@ function SignupPage() {
             disabled={resendLoading || emailLoading}
             className="mt-3 text-xs font-semibold text-primary underline-offset-4 hover:underline disabled:opacity-50"
           >
-            {resendLoading ? "Sending…" : "Resend confirmation email"}
+            {resendLoading ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Spinner className="h-3 w-3 animate-spin" aria-hidden /> Sending…
+              </span>
+            ) : (
+              "Resend confirmation email"
+            )}
           </button>
         </motion.div>
       )}

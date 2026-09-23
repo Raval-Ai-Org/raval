@@ -1,18 +1,21 @@
 "use client";
 // CompetitorsPanel.tsx — the Competitors surface.
 //
-// Three tabs for the three questions: who they are (Competitors), what changed
-// (Updates), and who else might matter (Discover). Everything is one entity
-// underneath, so a competitor added by hand, found by search or carried over
-// from Brand DNA lands in the same place.
+// Three pages for the three questions: who they are (Competitors), what
+// changed (Updates), and who else might matter (Discover). Everything is one
+// entity underneath, so a competitor added by hand, found by search or carried
+// over from Brand DNA lands in the same place.
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { EmptyState } from "@/components/ui/empty-state";
-import { ErrorState } from "@/components/ui/empty-state";
+import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, Compass, Search, Spinner, Users } from "@/components/icons";
-import { primaryBtn } from "@/components/app/geo/geo-ui";
+import { Bell, Compass, Plus, Search, Spinner, Users } from "@/components/icons";
+import { ghostBtn, primaryBtn } from "@/components/app/geo/geo-ui";
+import {
+  SurfaceLayout,
+  SurfacePage,
+  type SurfaceNavItem,
+} from "@/components/app/surface/SurfaceLayout";
 import {
   useAddCompetitor,
   useCompetitorOverview,
@@ -28,18 +31,6 @@ import { DiscoverTab } from "./DiscoverTab";
 import { UpdatesFeed } from "./UpdatesFeed";
 
 type TabId = "competitors" | "updates" | "discover";
-
-const TAB_ICON: Record<TabId, React.ComponentType<{ className?: string }>> = {
-  competitors: Users,
-  updates: Bell,
-  discover: Compass,
-};
-
-const TAB_LABEL: Record<TabId, string> = {
-  competitors: "Competitors",
-  updates: "Updates",
-  discover: "Discover",
-};
 
 export function CompetitorsPanel({ workspaceId }: { workspaceId: string | null }) {
   if (!workspaceId) {
@@ -77,11 +68,15 @@ function Panel({ workspaceId }: { workspaceId: string }) {
 
   if (overview.isLoading) {
     return (
-      <div className="space-y-3 px-1 pb-2" aria-busy>
-        <Skeleton className="h-11 w-72 rounded-full" />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Skeleton className="h-44 w-full rounded-2xl" />
-          <Skeleton className="h-44 w-full rounded-2xl" />
+      <div className="flex h-full" aria-busy>
+        <div className="hidden w-[216px] shrink-0 space-y-2 border-r border-border/60 p-4 md:block">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full rounded-full" />
+          ))}
+        </div>
+        <div className="grid flex-1 content-start gap-3 p-7 sm:grid-cols-2">
+          <Skeleton className="h-48 w-full rounded-[22px]" />
+          <Skeleton className="h-48 w-full rounded-[22px]" />
         </div>
       </div>
     );
@@ -99,9 +94,48 @@ function Panel({ workspaceId }: { workspaceId: string }) {
 
   if (!data) return null;
 
+  const findButton = (full?: boolean) => (
+    <button
+      type="button"
+      onClick={() => {
+        setOpenId(null);
+        setTab("discover");
+        if (data.researchAvailable) discover.mutate();
+      }}
+      disabled={discover.isPending || !data.researchAvailable}
+      className={cn(primaryBtn, "h-10 px-4 text-[13px]", full && "w-full")}
+    >
+      {discover.isPending ? (
+        <Spinner className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Search className="h-3.5 w-3.5" />
+      )}
+      {discover.isPending ? "Looking" : "Find competitors"}
+    </button>
+  );
+
+  const nav: SurfaceNavItem<TabId>[] = [
+    { id: "competitors", label: "Competitors", icon: Users, count: data.competitors.length },
+    {
+      id: "updates",
+      label: "Updates",
+      icon: Bell,
+      count: data.unreadUpdates,
+      highlight: true,
+    },
+    {
+      id: "discover",
+      label: "Discover",
+      icon: Compass,
+      count: data.suggestions.length,
+      highlight: true,
+    },
+  ];
+
+  let page: React.ReactNode;
   if (selected) {
-    return (
-      <section aria-label="Competitor details" className="px-1 pb-2">
+    page = (
+      <SurfacePage>
         <CompetitorDetail
           competitor={selected}
           updates={data.updates.filter((update) => update.competitorId === selected.id)}
@@ -113,114 +147,92 @@ function Panel({ workspaceId }: { workspaceId: string }) {
           }}
           refreshing={refresh.isPending}
         />
-      </section>
+      </SurfacePage>
+    );
+  } else if (tab === "competitors") {
+    page = (
+      <SurfacePage
+        title="Competitors"
+        actions={
+          data.competitors.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setTab("discover")}
+              className={cn(ghostBtn, "h-9 px-3.5 text-[12.5px]")}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add
+            </button>
+          )
+        }
+      >
+        {data.competitors.length ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {data.competitors.map((competitor) => (
+              <CompetitorCard
+                key={competitor.id}
+                competitor={competitor}
+                onOpen={() => setOpenId(competitor.id)}
+                onRefresh={() => refresh.mutate({ competitorId: competitor.id })}
+                refreshing={refresh.isPending && refresh.variables?.competitorId === competitor.id}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={Users}
+            title="No competitors yet"
+            description="We can find them from your Brand DNA, or you can add one."
+            action={findButton()}
+          />
+        )}
+      </SurfacePage>
+    );
+  } else if (tab === "updates") {
+    page = (
+      <SurfacePage title="Updates">
+        <UpdatesFeed
+          updates={data.updates}
+          unread={data.unreadUpdates}
+          onMarkRead={() => markRead.mutate(null)}
+          hasCompetitors={data.competitors.length > 0}
+        />
+      </SurfacePage>
+    );
+  } else {
+    page = (
+      <SurfacePage title="Discover">
+        <DiscoverTab
+          suggestions={data.suggestions}
+          researchAvailable={data.researchAvailable}
+          discovering={discover.isPending}
+          onDiscover={() => discover.mutate()}
+          onTrack={(id) => setStatus.mutate({ competitorId: id, status: "tracked" })}
+          onIgnore={(id) => setStatus.mutate({ competitorId: id, status: "ignored" })}
+          onAdd={(url) => add.mutate({ url })}
+          adding={add.isPending}
+          busyId={setStatus.isPending ? (setStatus.variables?.competitorId ?? null) : null}
+        />
+      </SurfacePage>
     );
   }
 
-  const counts: Record<TabId, number | undefined> = {
-    competitors: data.competitors.length || undefined,
-    updates: data.unreadUpdates || undefined,
-    discover: data.suggestions.length || undefined,
-  };
-
   return (
-    <section aria-label="Competitors" className="space-y-4 px-1 pb-2">
-      <Tabs value={tab} onValueChange={(value) => setTab(value as TabId)}>
-        <div className="sticky -top-4 z-20 -mx-1 overflow-x-auto bg-background/85 px-1 py-2 backdrop-blur-md [scrollbar-width:none] sm:-top-5 [&::-webkit-scrollbar]:hidden">
-          <TabsList className="h-11 gap-0.5 rounded-full border border-border/60 bg-muted/60 p-1 shadow-sm">
-            {(["competitors", "updates", "discover"] as const).map((id) => {
-              const Icon = TAB_ICON[id];
-              return (
-                <TabsTrigger
-                  key={id}
-                  value={id}
-                  className="gap-1.5 rounded-full px-3.5 text-[12.5px] transition-all duration-200 data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-border/60"
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {TAB_LABEL[id]}
-                  {typeof counts[id] === "number" && (
-                    <span className="tabular-nums text-muted-foreground">{counts[id]}</span>
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
+    <section aria-label="Competitors" className="h-full">
+      <SurfaceLayout
+        label="Competitors"
+        items={nav}
+        value={selected ? "competitors" : tab}
+        onChange={(id) => {
+          setOpenId(null);
+          setTab(id);
+        }}
+        railTop={data.researchAvailable ? findButton(true) : undefined}
+      >
+        <div key={`${tab}-${openId ?? ""}`} className="animate-in fade-in duration-300">
+          {page}
         </div>
-
-        <TabsContent
-          value="competitors"
-          className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
-        >
-          {data.competitors.length ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {data.competitors.map((competitor) => (
-                <CompetitorCard
-                  key={competitor.id}
-                  competitor={competitor}
-                  onOpen={() => setOpenId(competitor.id)}
-                  onRefresh={() => refresh.mutate({ competitorId: competitor.id })}
-                  refreshing={
-                    refresh.isPending && refresh.variables?.competitorId === competitor.id
-                  }
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={Users}
-              title="No competitors yet"
-              description="We can look for them using what we already know about your business, or you can add one yourself."
-              action={
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTab("discover");
-                    if (data.researchAvailable) discover.mutate();
-                  }}
-                  disabled={discover.isPending}
-                  className={cn(primaryBtn, "h-9 px-4 text-[13px]")}
-                >
-                  {discover.isPending ? (
-                    <Spinner className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Search className="h-3.5 w-3.5" />
-                  )}
-                  Find my competitors
-                </button>
-              }
-            />
-          )}
-        </TabsContent>
-
-        <TabsContent
-          value="updates"
-          className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
-        >
-          <UpdatesFeed
-            updates={data.updates}
-            unread={data.unreadUpdates}
-            onMarkRead={() => markRead.mutate(null)}
-            hasCompetitors={data.competitors.length > 0}
-          />
-        </TabsContent>
-
-        <TabsContent
-          value="discover"
-          className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
-        >
-          <DiscoverTab
-            suggestions={data.suggestions}
-            researchAvailable={data.researchAvailable}
-            discovering={discover.isPending}
-            onDiscover={() => discover.mutate()}
-            onTrack={(id) => setStatus.mutate({ competitorId: id, status: "tracked" })}
-            onIgnore={(id) => setStatus.mutate({ competitorId: id, status: "ignored" })}
-            onAdd={(url) => add.mutate({ url })}
-            adding={add.isPending}
-            busyId={setStatus.isPending ? (setStatus.variables?.competitorId ?? null) : null}
-          />
-        </TabsContent>
-      </Tabs>
+      </SurfaceLayout>
     </section>
   );
 }

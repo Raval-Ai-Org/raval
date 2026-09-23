@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { pageMetadata, webPageLd } from "@/lib/seo";
 import AgencyHQ from "./AgencyPage";
 
-const TITLE = "Agency · Mellox AI";
+const TITLE = "Command Center · Mellox AI";
 const DESCRIPTION =
-  "Manage all clients at once. Approvals, schedules, activity and combined analytics — one Marketing Intelligence Layer across every brand.";
+  "Run every client from one place: review, schedule, health and results across all your brands.";
 
 export const metadata: Metadata = pageMetadata({
   title: TITLE,

@@ -305,7 +305,8 @@
   --shadow-3: 0 2px 6px hsl(220 24% 12% / 0.06), 0 14px 30px -10px hsl(220 24% 12% / 0.15);
   --shadow-4: 0 10px 20px hsl(220 24% 12% / 0.08), 0 32px 64px -16px hsl(220 24% 12% / 0.22);
   --shadow-card: 0 1px 2px hsl(220 24% 12% / 0.04), 0 2px 10px -3px hsl(220 24% 12% / 0.07);
-  --shadow-card-hover: 0 4px 10px hsl(220 24% 12% / 0.06), 0 16px 32px -12px hsl(220 24% 12% / 0.13);
+  --shadow-card-hover:
+    0 4px 10px hsl(220 24% 12% / 0.06), 0 16px 32px -12px hsl(220 24% 12% / 0.13);
   --shadow-glow: 0 0 24px -6px hsl(var(--brand) / 0.5);
 
   /* ─────────────────────────────────────────────────────────────
@@ -2278,8 +2279,14 @@ h6 {
 
 @keyframes chat-status-pulse {
   0%,
-  100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.25); opacity: 0.75; }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.75;
+  }
 }
 
 .chat-assistant-content {
@@ -2316,7 +2323,9 @@ h6 {
   gap: 0.45rem;
   opacity: 0;
   transform: translateY(4px);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
   pointer-events: none;
   margin-top: 0.5rem;
 }
@@ -2342,7 +2351,10 @@ h6 {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
 }
 
 .chat-message-action:hover {
@@ -4788,7 +4800,11 @@ pre {
   }
   /* A soft dot at the end of text that is still arriving. */
   .mx-assistant.is-typing .chat-md > :last-child:not(ul, ol)::after,
-  .mx-assistant.is-typing .chat-md > :is(ul, ol):last-child > li:last-child > span:last-child::after {
+  .mx-assistant.is-typing
+    .chat-md
+    > :is(ul, ol):last-child
+    > li:last-child
+    > span:last-child::after {
     content: "";
     display: inline-block;
     width: 0.5em;
@@ -4946,7 +4962,11 @@ pre {
   .mx-pulse__orbit {
     opacity: 0;
     background: conic-gradient(from 0deg, transparent 0 70%, hsl(var(--primary) / 0.55) 100%);
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+    -webkit-mask: radial-gradient(
+      farthest-side,
+      transparent calc(100% - 2px),
+      #000 calc(100% - 1.5px)
+    );
     mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
     transition: opacity 0.3s ease;
   }
@@ -5042,7 +5062,11 @@ pre {
     hsl(var(--primary)) 330deg,
     hsl(var(--primary) / 0) 360deg
   );
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px));
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 4px),
+    #000 calc(100% - 3.5px)
+  );
   mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px));
   animation: mx-loader-spin 0.9s linear infinite;
   will-change: transform;
@@ -5171,5 +5195,249 @@ pre {
   :root .mx-loader__label {
     animation-duration: 2s !important;
     animation-iteration-count: infinite !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Mellox surface system (docs/design-system.md)
+ *
+ * The one look every in-app surface shares: soft tiles on a calm canvas, pill
+ * controls, a quiet navigation rail and a lime glow that marks Mellox. Values
+ * live here once; components use the `ds-*` utilities or SurfaceLayout.
+ *
+ *   ds-window        a popup window (radius, hairline, depth)
+ *   ds-glow          the Mellox lime halo behind a window or hero
+ *   ds-tile          the basic content surface
+ *   ds-tile-hover    a tile that reacts to hover (cards that open something)
+ *   ds-well          a soft inset fill: segmented controls, chips, quiet rows
+ *   ds-page-title    the one heading at the top of a page
+ *   ds-label         small uppercase label above a group
+ *   ds-enter         how a page or panel arrives
+ *
+ * The public landing page does not use these, and in-app shape overrides are
+ * scoped to pages that render [data-mellox-app], so it is never affected.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --ds-radius-window: 28px;
+  --ds-radius-tile: 20px;
+  --ds-radius-well: 16px;
+  --ds-tile-bg: hsl(0 0% 100%);
+  --ds-tile-border: hsl(220 16% 83% / 0.65);
+  --ds-tile-border-hover: hsl(var(--primary) / 0.45);
+  --ds-well-bg: hsl(220 20% 20% / 0.05);
+  --ds-well-bg-hover: hsl(220 20% 20% / 0.08);
+  --ds-window-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.6) inset, 0 24px 80px -24px hsl(220 30% 10% / 0.35),
+    0 0 0 1px hsl(220 16% 83% / 0.7);
+  --ds-glow: hsl(var(--primary) / 0.1);
+  --ds-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dark {
+  --ds-tile-bg: hsl(0 0% 100% / 0.035);
+  --ds-tile-border: hsl(0 0% 100% / 0.07);
+  --ds-well-bg: hsl(0 0% 100% / 0.05);
+  --ds-well-bg-hover: hsl(0 0% 100% / 0.08);
+  --ds-window-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.05) inset, 0 32px 96px -32px hsl(0 0% 0% / 0.8),
+    0 0 0 1px hsl(0 0% 100% / 0.07);
+  --ds-glow: hsl(var(--primary) / 0.09);
+}
+
+@utility ds-window {
+  border-radius: var(--ds-radius-window);
+  background-color: hsl(var(--background));
+  box-shadow: var(--ds-window-shadow);
+}
+@utility ds-glow {
+  background-image:
+    radial-gradient(60% 42% at 12% 0%, var(--ds-glow), transparent 70%),
+    radial-gradient(40% 32% at 100% 100%, hsl(var(--primary) / 0.04), transparent 70%);
+}
+@utility ds-tile {
+  border-radius: var(--ds-radius-tile);
+  border: 1px solid var(--ds-tile-border);
+  background-color: var(--ds-tile-bg);
+}
+@utility ds-tile-hover {
+  transition:
+    border-color 200ms var(--ds-ease),
+    transform 200ms var(--ds-ease),
+    box-shadow 200ms var(--ds-ease);
+  &:hover {
+    border-color: var(--ds-tile-border-hover);
+    box-shadow: 0 12px 32px -18px hsl(var(--primary) / 0.35);
+  }
+}
+@utility ds-well {
+  border-radius: var(--ds-radius-well);
+  background-color: var(--ds-well-bg);
+}
+@utility ds-page-title {
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: hsl(var(--foreground));
+}
+@utility ds-label {
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+@utility ds-enter {
+  animation: ds-enter 320ms var(--ds-ease) both;
+}
+@keyframes ds-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-enter {
+    animation: none;
+  }
+}
+
+/* In the app, every Button is a pill (Gemini/ChatGPT-style). Unlayered so it
+ * outranks per-instance radius utilities; opt out with data-shape="square". */
+:root:has([data-mellox-app]) [data-slot="button"]:not([data-shape="square"]) {
+  border-radius: 9999px;
+}
+
+/* ═══ A loading signal never freezes ═══════════════════════════════════════
+ * Reduced motion removes decoration — floats, aurora, marquee, entrance
+ * motion. It must not remove the cue that work is happening: a spinner or
+ * progress light that stops looks stuck, which is worse than any motion.
+ *
+ * The blanket kill-switches above cut every animation to a single 1ms frame,
+ * and several loaders also switch themselves off with `animation: none`. Each
+ * loader below is restored with its own authored timing. `:root` plus
+ * `!important` beat both, including the chat's own "reduce motion" switch.
+ *
+ * Adding a loader? If it means "working", list it here.
+ */
+@media (prefers-reduced-motion: reduce) {
+  /* Studio: light travelling around a working item, progress glint, weave. */
+  :root .studio-ring::before {
+    animation: studio-orbit 2.4s linear infinite !important;
+  }
+  :root .studio-ring-slow::before {
+    animation-duration: 6s !important;
+  }
+  :root .studio-progress-fill::after {
+    animation: studio-glint 1.6s ease-in-out infinite !important;
+  }
+  :root .studio-weave {
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      hsl(var(--primary) / 0.1) 42%,
+      hsl(var(--primary) / 0.18) 50%,
+      hsl(var(--primary) / 0.1) 58%,
+      transparent 80%
+    );
+    background-color: transparent;
+    animation: studio-weave 2.4s ease infinite !important;
+  }
+  :root .studio-develop {
+    animation: studio-develop 10s ease-in-out infinite !important;
+  }
+  :root .studio-develop::after {
+    animation: studio-exposure 3.6s ease infinite !important;
+  }
+  :root .studio-flow {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--primary)) 45%,
+      hsl(var(--tone-video)) 60%,
+      transparent 100%
+    );
+    background-color: transparent;
+    animation: studio-flow 1.9s ease infinite !important;
+  }
+
+  /* Generic sweeps and dots. */
+  :root .shimmer::after {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
+  :root .live-dot {
+    animation-duration: 1.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+  :root .pulse-dot::after {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
+  :root .rv-live-dot {
+    animation-duration: 1.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+  :root .rv-shimmer {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  /* Chat "working" cues. The chat's own "reduce motion" switch is seeded from the
+   OS and quietens decoration (caret, entrance motion); it must not stop these. */
+  :root .mx-shimmer {
+    animation: mx-shimmer 2.2s linear infinite !important;
+  }
+  :root .composer-skel::after {
+    animation: composer-shimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+  }
+  :root .composer-skel-chip::after {
+    animation: composer-shimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+  }
+  :root .composer-pulse-dot::after {
+    animation: composer-pulse-ring 1.6s ease-out infinite !important;
+  }
+  :root .chat-assistant-status-dot {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  /* Anything that declares itself busy or a progress bar. */
+  :root [aria-busy="true"] .animate-spin,
+  :root [role="progressbar"] .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+/* The Spinner icon always turns, whatever classes it is given. A static
+ * spinner is always a bug; this also covers it under reduced motion. */
+@keyframes mx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+[data-icon="spinner"] {
+  animation: mx-spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root [data-icon="spinner"] {
+    animation: mx-spin 0.9s linear infinite !important;
+  }
+}
+
+/* Lazy-panel loading pill: invisible for the first moments so quick loads never flash it. */
+.mx-opening-pill {
+  animation: mx-loader-fade-in 0.25s ease 0.4s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root .mx-opening-pill {
+    animation-duration: 0.25s !important;
+    animation-delay: 0.4s !important;
+    animation-iteration-count: 1 !important;
   }
 }

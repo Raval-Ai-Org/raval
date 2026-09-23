@@ -17,6 +17,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Check } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 
 /** Matches the house easing used across the geo surfaces. */
 export const EASE = [0.22, 1, 0.36, 1] as const;
@@ -57,7 +58,12 @@ export function Card({
   as?: "div" | "section" | "article" | "li";
 }) {
   return (
-    <Tag className={cn("rounded-2xl border border-border bg-card shadow-1", className)}>
+    <Tag
+      className={cn(
+        "rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035]",
+        className,
+      )}
+    >
       {children}
     </Tag>
   );
@@ -105,21 +111,9 @@ export function Section({
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
-export const btnPrimary = cn(
-  "inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5",
-  "text-[14px] font-medium text-primary-foreground shadow-1 transition-all",
-  "hover:shadow-2 hover:brightness-110 active:scale-[0.98]",
-  "disabled:pointer-events-none disabled:opacity-40",
-  focusRing,
-);
+export const btnPrimary = cn(dsPrimaryBtn, "gap-2 px-5 py-2.5 text-[14px]");
 
-export const btnGhost = cn(
-  "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-card px-4 py-2",
-  "text-[13.5px] font-medium text-foreground transition-colors",
-  "hover:bg-secondary active:scale-[0.98]",
-  "disabled:pointer-events-none disabled:opacity-40",
-  focusRing,
-);
+export const btnGhost = cn(dsGhostBtn, "gap-2 px-4 py-2 text-[13.5px]");
 
 export const btnQuiet = cn(
   "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] text-muted-foreground",

@@ -12,14 +12,16 @@
  * `blur(64px)` blobs. The first thing a user saw of Mellox was therefore
  * unbranded stock footage, or a blurry flower, running a constant GPU cost.
  *
- * It is now drawn from the design tokens: no network request, no rotation, no
- * infinite animation, and it reads as Mellox in both themes.
+ * It is now `AuthShowcase`: a light stage that plays short scenes of the
+ * product itself, drawn as interface cards. No network request, and a still
+ * scene for reduced motion.
  */
 
 import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { Logo } from "@/components/brand/Logo";
+import { AuthShowcase } from "@/components/auth/AuthShowcase";
 import { duration, ease } from "@/lib/motion";
 
 export function AuthShell({
@@ -40,7 +42,7 @@ export function AuthShell({
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <div className="relative z-10 mx-auto grid min-h-dvh w-full max-w-[1440px] lg:grid-cols-2">
         <aside className="relative hidden p-3 lg:block">
-          <BrandCanvas reduce={reduce} />
+          <AuthShowcase reduce={reduce} />
         </aside>
 
         <section className="relative flex items-center justify-center px-5 py-10 sm:px-8">
@@ -87,76 +89,3 @@ export const authRow = {
   hidden: { opacity: 1, y: 0 },
   show: { opacity: 1, y: 0 },
 };
-
-const PROOF_POINTS = [
-  "Grounded in your Brand DNA",
-  "Answer- and generative-engine optimisation",
-  "Publishing across every channel",
-];
-
-function BrandCanvas({ reduce }: { reduce: boolean }) {
-  return (
-    <div className="absolute inset-3 overflow-hidden rounded-[28px] bg-[hsl(220_28%_7%)]">
-      {/* Mesh: two brand-tinted pools and one deep well. Static gradients, so
-          there is nothing to animate and nothing to download. */}
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background: [
-            "radial-gradient(80% 60% at 12% 8%, hsl(var(--brand) / 0.30) 0%, transparent 60%)",
-            "radial-gradient(70% 55% at 88% 78%, hsl(var(--primary) / 0.55) 0%, transparent 62%)",
-            "radial-gradient(120% 100% at 50% 120%, hsl(220 28% 4%) 0%, transparent 70%)",
-          ].join(","),
-        }}
-      />
-
-      {/* One slow breath, on opacity only — no blur to re-rasterise each frame. */}
-      {!reduce && (
-        <motion.div
-          aria-hidden
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(55% 45% at 70% 25%, hsl(var(--brand) / 0.22) 0%, transparent 65%)",
-          }}
-          animate={{ opacity: [0.55, 1, 0.55] }}
-          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-        />
-      )}
-
-      {/* Dot grid, masked to the centre so the edges stay clean. */}
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-[0.14]"
-        style={{
-          backgroundImage: "radial-gradient(hsl(0 0% 100% / 0.5) 1px, transparent 1px)",
-          backgroundSize: "22px 22px",
-          maskImage: "radial-gradient(ellipse 70% 60% at 50% 45%, #000 30%, transparent 85%)",
-          WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 45%, #000 30%, transparent 85%)",
-        }}
-      />
-
-      <div className="relative flex h-full flex-col justify-between p-10">
-        <Logo height={28} className="[&_span]:text-white [&_div]:text-white" />
-
-        <div>
-          <p className="max-w-[22ch] font-display text-[2rem] font-semibold leading-[1.15] tracking-tight text-white">
-            The marketing intelligence layer.
-          </p>
-          <ul className="mt-7 space-y-3">
-            {PROOF_POINTS.map((point) => (
-              <li key={point} className="flex items-center gap-2.5 text-sm text-white/72">
-                <span
-                  aria-hidden
-                  className="size-1.5 shrink-0 rounded-full bg-brand shadow-[0_0_10px_hsl(var(--brand)/0.8)]"
-                />
-                {point}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-}

@@ -1,12 +1,34 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, Check, Video, Zap } from "@/components/icons";
+import { motion } from "framer-motion";
+import {
+  AlertTriangle,
+  Check,
+  Clock,
+  Cpu,
+  Gauge,
+  ImagePlus,
+  Sparkles,
+  Video,
+  Wallet,
+} from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AllowanceView, ModelView, ReferenceImageView } from "@/lib/ugc/schemas";
 import { cn } from "@/lib/utils";
-import { ChipGroup, Field, formatUsd, Panel, StepActions } from "./ugc-ui";
+import {
+  ChipGroup,
+  ChoiceTile,
+  CreatorSilhouette,
+  Disclosure,
+  formatUsd,
+  motionPreset,
+  Panel,
+  PhoneFrame,
+  RatioShape,
+  SectionLabel,
+  StepActions,
+} from "./ugc-ui";
 
 export type RenderSettingsState = {
   model: string;
@@ -17,11 +39,11 @@ export type RenderSettingsState = {
 };
 
 const RATIO_LABEL: Record<string, string> = {
-  "9:16": "9:16 Vertical",
-  "1:1": "1:1 Square",
-  "16:9": "16:9 Landscape",
+  "9:16": "Vertical",
+  "1:1": "Square",
+  "16:9": "Wide",
   "4:3": "4:3",
-  "3:4": "3:4 Portrait",
+  "3:4": "Portrait",
 };
 
 const TIER_LABEL: Record<ModelView["tier"], string> = {
@@ -72,6 +94,7 @@ export function GenerateStep({
   loadingModels,
   settings,
   references,
+  hook,
   generating,
   onChange,
   onBack,
@@ -82,19 +105,21 @@ export function GenerateStep({
   loadingModels: boolean;
   settings: RenderSettingsState;
   references: ReferenceImageView[];
+  hook?: string;
   generating: boolean;
   onChange: (next: RenderSettingsState) => void;
   onBack: () => void;
   onGenerate: () => void;
 }) {
-  const [advanced, setAdvanced] = useState(false);
-
   if (loadingModels) {
     return (
-      <div className="grid gap-3 md:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-36 rounded-2xl" />
-        ))}
+      <div className="grid gap-5 lg:grid-cols-[250px_1fr]">
+        <Skeleton className="aspect-[9/16] rounded-[26px]" />
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-[20px]" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -113,18 +138,18 @@ export function GenerateStep({
   const refs = usableRefs(model, settings.referenceIds);
   const durations = allowedDurations(model, refs.length);
   const usd = estimateUsd(model, settings.resolution, settings.durationSec);
-  const remaining = allowance
-    ? Math.max(0, allowance.videos.limit - allowance.videos.used - allowance.videos.held)
-    : null;
+  const used = allowance ? allowance.videos.used + allowance.videos.held : 0;
+  const remaining = allowance ? Math.max(0, allowance.videos.limit - used) : null;
   const spendLeft = allowance ? allowance.spend.monthlyLimitUsd - allowance.spend.monthUsd : null;
   const blockReason =
     remaining !== null && remaining < model.videoUnits
-      ? "Your plan's monthly video allowance is used up."
+      ? "Your monthly videos are used up."
       : spendLeft !== null && spendLeft < usd
-        ? "This video would go over your plan's monthly limit."
+        ? "This would go over your monthly limit."
         : allowance && allowance.activeRenders >= allowance.maxConcurrent
-          ? `${allowance.activeRenders} renders are already in progress. Wait for one to finish.`
+          ? "Wait for a video in progress to finish."
           : null;
+  const mainRef = references.find((r) => refs.includes(r.assetId));
 
   const toggleRef = (id: string) => {
     const has = settings.referenceIds.includes(id);
@@ -135,94 +160,133 @@ export function GenerateStep({
   };
 
   return (
-    <div className="space-y-4">
-      <Panel className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold">Automatic video direction</p>
-          <p className="text-xs text-muted-foreground">
-            Mellox weighs realism, motion, references, audio, platform and cost for every render.
-            The best model is selected automatically.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => setAdvanced((open) => !open)}>
-          {advanced ? "Hide advanced settings" : "Advanced settings"}
-        </Button>
-      </Panel>
+    <div className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
+        {/* Preview + summary */}
+        <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">
+          <div
+            className={cn(
+              "mx-auto",
+              settings.aspectRatio === "16:9" || settings.aspectRatio === "4:3"
+                ? "w-full max-w-[250px]"
+                : settings.aspectRatio === "1:1"
+                  ? "w-52"
+                  : "w-44 lg:w-full lg:max-w-[200px]",
+            )}
+          >
+            <PhoneFrame ratio={settings.aspectRatio}>
+              {mainRef?.url ? (
+                <motion.img
+                  key={mainRef.assetId}
+                  initial={{ opacity: 0, scale: 1.1 }}
+                  animate={{ opacity: 0.55, scale: 1 }}
+                  transition={motionPreset.slow}
+                  src={mainRef.url}
+                  alt=""
+                  className="absolute inset-0 size-full! object-cover"
+                />
+              ) : null}
+              <div className="absolute inset-0 bg-[radial-gradient(110%_60%_at_50%_0%,hsl(var(--primary)/0.3),transparent_60%)]" />
+              <div className="absolute inset-x-[22%] bottom-0 top-[30%]">
+                <CreatorSilhouette />
+              </div>
+              <span className="absolute left-2.5 top-4 rounded-full bg-black/55 px-2 py-0.5 text-[9.5px] font-medium tabular-nums backdrop-blur">
+                {settings.durationSec}s · {settings.resolution}
+              </span>
+              {hook ? (
+                <p className="absolute inset-x-2.5 bottom-3 rounded-lg bg-black/70 px-2 py-1.5 text-center text-[11px] font-semibold leading-snug backdrop-blur">
+                  {hook}
+                </p>
+              ) : null}
+            </PhoneFrame>
+          </div>
 
-      {advanced ? (
-        <Panel>
-          <Field label="Model override" hint="Auto is recommended for most social videos.">
-            <select
-              value={settings.model}
-              onChange={(event) => {
-                const next = models.find((candidate) => candidate.key === event.target.value);
-                if (next) onChange(coerceSettings(next, settings));
-                else onChange({ ...settings, model: "auto" });
-              }}
-              className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm sm:max-w-sm"
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <Stat icon={Clock} value={`${settings.durationSec}s`} label="Length" />
+            <Stat icon={Wallet} value={formatUsd(usd)} label="Est. cost" />
+            <Stat icon={Video} value={remaining === null ? "—" : String(remaining)} label="Left" />
+          </div>
+          {allowance ? (
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-[var(--ds-well-bg-hover)]"
+              aria-hidden
             >
-              <option value="auto">Auto - Mellox chooses</option>
-              {models.map((candidate) => (
-                <option key={candidate.key} value={candidate.key}>
-                  {candidate.displayName} - {TIER_LABEL[candidate.tier]}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </Panel>
-      ) : null}
+              <motion.div
+                className="h-full rounded-full bg-primary"
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${Math.min(100, (used / Math.max(1, allowance.videos.limit)) * 100)}%`,
+                }}
+                transition={motionPreset.slow}
+              />
+            </div>
+          ) : null}
+        </aside>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <Panel className="space-y-4">
-          <Field
-            label="Duration"
-            hint={
-              refs.length && model.imageDurations ? "Fixed when product photos are used" : undefined
-            }
-          >
-            <ChipGroup
-              label="Duration"
-              options={model.durations.map((d) => ({
-                id: String(d),
-                label: `${d}s`,
-                disabled: !durations.includes(d),
-              }))}
-              value={String(settings.durationSec)}
-              onChange={(v) => onChange({ ...settings, durationSec: Number(v) })}
-              size="sm"
-            />
-          </Field>
-          <Field label="Aspect ratio">
-            <ChipGroup
-              label="Aspect ratio"
-              options={model.aspectRatios.map((r) => ({ id: r, label: RATIO_LABEL[r] ?? r }))}
-              value={settings.aspectRatio}
-              onChange={(v) => onChange({ ...settings, aspectRatio: v })}
-              size="sm"
-            />
-          </Field>
-          <Field label="Quality">
-            <ChipGroup
-              label="Quality"
-              options={model.resolutions.map((r) => ({
-                id: r,
-                label: `${r} · ${formatUsd(estimateUsd(model, r, settings.durationSec))}`,
-              }))}
-              value={settings.resolution}
-              onChange={(v) => onChange({ ...settings, resolution: v })}
-              size="sm"
-            />
-          </Field>
-          <Field
-            label="Product photos"
-            hint={
-              model.images
-                ? model.images.mode === "references"
-                  ? `Up to ${model.images.max} keep the product accurate`
-                  : "The first selected photo opens the video"
-                : "This model doesn't take photos"
-            }
-          >
+        <div className="min-w-0 space-y-5">
+          <div className="space-y-2.5">
+            <SectionLabel icon={Video}>Shape</SectionLabel>
+            <div
+              role="radiogroup"
+              aria-label="Shape"
+              className="grid grid-cols-3 gap-2 sm:grid-cols-5"
+            >
+              {model.aspectRatios.map((r) => (
+                <ChoiceTile
+                  key={r}
+                  selected={settings.aspectRatio === r}
+                  onSelect={() => onChange({ ...settings, aspectRatio: r })}
+                  label={RATIO_LABEL[r] ?? r}
+                  sublabel={r}
+                  visual={<RatioShape ratio={r} />}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div className="space-y-2.5">
+              <SectionLabel icon={Clock}>Length</SectionLabel>
+              <ChipGroup
+                label="Length"
+                options={model.durations.map((d) => ({
+                  id: String(d),
+                  label: `${d}s`,
+                  disabled: !durations.includes(d),
+                }))}
+                value={String(settings.durationSec)}
+                onChange={(v) => onChange({ ...settings, durationSec: Number(v) })}
+                size="sm"
+              />
+            </div>
+            <div className="space-y-2.5">
+              <SectionLabel icon={Gauge}>Quality</SectionLabel>
+              <ChipGroup
+                label="Quality"
+                options={model.resolutions.map((r) => ({
+                  id: r,
+                  label: `${r} · ${formatUsd(estimateUsd(model, r, settings.durationSec))}`,
+                }))}
+                value={settings.resolution}
+                onChange={(v) => onChange({ ...settings, resolution: v })}
+                size="sm"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <SectionLabel
+              icon={ImagePlus}
+              trailing={
+                model.images ? (
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
+                    {refs.length}/{model.images.max}
+                  </span>
+                ) : null
+              }
+            >
+              Photos
+            </SectionLabel>
             {references.length ? (
               <ul className="flex flex-wrap gap-2">
                 {references.map((ref) => {
@@ -231,106 +295,103 @@ export function GenerateStep({
                     Boolean(model.images) && (on || refs.length < (model.images?.max ?? 0));
                   return (
                     <li key={ref.assetId}>
-                      <button
+                      <motion.button
                         type="button"
+                        whileTap={{ scale: 0.94 }}
                         aria-pressed={on}
                         disabled={!selectable && !on}
                         onClick={() => toggleRef(ref.assetId)}
                         className={cn(
-                          "relative block size-16 overflow-hidden rounded-xl ring-2 transition",
-                          on ? "ring-primary" : "opacity-50 ring-transparent hover:opacity-80",
+                          "relative block size-16 overflow-hidden rounded-2xl ring-2 transition sm:size-[72px]",
+                          on ? "ring-primary" : "opacity-45 ring-transparent hover:opacity-80",
                           "disabled:cursor-not-allowed",
                         )}
                         aria-label={on ? `Don't use ${ref.filename}` : `Use ${ref.filename}`}
                       >
                         {ref.url ? (
-                          <img src={ref.url} alt="" className="size-full object-cover" />
+                          <img src={ref.url} alt="" className="size-full! object-cover" />
                         ) : null}
                         {on ? (
                           <span className="absolute right-1 top-1 grid size-4 place-items-center rounded-full bg-primary text-primary-foreground">
                             <Check className="size-3" aria-hidden />
                           </span>
                         ) : null}
-                      </button>
+                      </motion.button>
                     </li>
                   );
                 })}
               </ul>
             ) : (
-              <p className="flex items-start gap-2 text-xs text-muted-foreground">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                No product photos — the product will be generated from the description. Go back to
-                Product to add one.
+              <p className="flex items-center gap-2 rounded-full bg-[var(--ds-well-bg)] px-3 py-1.5 text-xs text-muted-foreground">
+                <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+                No photos — add one in Product for an accurate look.
               </p>
             )}
-          </Field>
-        </Panel>
-
-        <Panel className="space-y-3 lg:sticky lg:top-0 lg:self-start">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Zap className="size-4 text-primary" aria-hidden /> This render
+            {!model.images && references.length ? (
+              <p className="text-[11px] text-muted-foreground">This model doesn't use photos.</p>
+            ) : null}
           </div>
-          <dl className="grid grid-cols-[1fr_auto] gap-y-1.5 text-xs">
-            <dt className="text-muted-foreground">Model</dt>
-            <dd>{settings.model === "auto" ? "Automatic routing" : model.displayName}</dd>
-            <dt className="text-muted-foreground">Video</dt>
-            <dd className="tabular-nums">
-              {settings.durationSec}s · {settings.aspectRatio} · {settings.resolution}
-            </dd>
-            <dt className="text-muted-foreground">Uses</dt>
-            <dd className="tabular-nums">
-              {model.videoUnits} video{model.videoUnits === 1 ? "" : "s"} of your plan
-            </dd>
-            <dt className="text-muted-foreground">Estimated cost</dt>
-            <dd className="tabular-nums">{formatUsd(usd)}</dd>
-          </dl>
-          {allowance ? (
-            <div className="space-y-1.5 rounded-xl bg-surface-3/50 p-3">
-              <div className="flex justify-between text-[11.5px]">
-                <span className="text-muted-foreground">Monthly videos</span>
-                <span className="tabular-nums">
-                  {allowance.videos.used + allowance.videos.held} / {allowance.videos.limit}
-                </span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-surface-3" aria-hidden>
-                <div
-                  className="h-full rounded-full bg-primary"
-                  style={{
-                    width: `${Math.min(100, ((allowance.videos.used + allowance.videos.held) / Math.max(1, allowance.videos.limit)) * 100)}%`,
-                  }}
-                />
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                {allowance.videos.held
-                  ? `${allowance.videos.held} held for renders in progress. `
-                  : ""}
-                Failed renders are returned automatically.
-              </p>
-            </div>
-          ) : null}
-          {blockReason ? (
-            <p role="alert" className="flex gap-1.5 text-xs text-danger">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-              {blockReason}
-            </p>
-          ) : null}
-        </Panel>
+
+          <Disclosure
+            label="Model"
+            icon={Cpu}
+            badge={
+              <span className="rounded-full bg-[var(--ds-well-bg)] px-2 py-0.5 text-[11px] text-muted-foreground">
+                {settings.model === "auto" ? "Auto" : model.displayName}
+              </span>
+            }
+          >
+            <select
+              aria-label="Model"
+              value={settings.model}
+              onChange={(event) => {
+                const next = models.find((candidate) => candidate.key === event.target.value);
+                if (next) onChange(coerceSettings(next, settings));
+                else onChange({ ...settings, model: "auto" });
+              }}
+              className="h-9 w-full rounded-full border border-border bg-[var(--ds-well-bg)] px-3 text-sm sm:max-w-sm"
+            >
+              <option value="auto">Auto (recommended)</option>
+              {models.map((candidate) => (
+                <option key={candidate.key} value={candidate.key}>
+                  {candidate.displayName} · {TIER_LABEL[candidate.tier]}
+                </option>
+              ))}
+            </select>
+          </Disclosure>
+        </div>
       </div>
 
       <StepActions>
         <Button variant="ghost" onClick={onBack} className="mr-auto">
-          Back to script
+          Back
         </Button>
+        {blockReason ? (
+          <span role="alert" className="flex items-center gap-1.5 text-xs text-danger">
+            <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+            {blockReason}
+          </span>
+        ) : null}
         <Button
           size="lg"
           onClick={onGenerate}
           loading={generating}
           disabled={Boolean(blockReason) || generating}
         >
-          {generating ? null : <Video aria-hidden />}
-          Generate video
+          {generating ? null : <Sparkles aria-hidden />}
+          Create video
         </Button>
       </StepActions>
+    </div>
+  );
+}
+
+function Stat({ icon: Icon, value, label }: { icon: typeof Clock; value: string; label: string }) {
+  return (
+    <div className="rounded-2xl bg-[var(--ds-well-bg)] px-1 py-2">
+      <Icon className="mx-auto size-3.5 text-primary" aria-hidden />
+      <p className="mt-1 text-sm font-semibold tabular-nums">{value}</p>
+      <p className="text-[10px] text-muted-foreground">{label}</p>
     </div>
   );
 }

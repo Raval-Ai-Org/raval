@@ -151,6 +151,11 @@ export function buildVideoPrompt(input: PromptInput): string {
     `CAMERA & LOOK: ${CAMERA_BY_TONE[brief.tone]}. Realistic smartphone footage, true-to-life colour, no cinematic grading, no film look, no slow-motion, no drone or crane shots.`,
   );
   lines.push(`PERFORMANCE: ${TONE_DIRECTION[brief.tone]}.`);
+  if (aspectRatio === "9:16" || aspectRatio === "3:4") {
+    lines.push(
+      "FRAMING: keep the creator's face and the product in the centre of the frame, clear of the top and bottom edges where the app's buttons and captions sit.",
+    );
+  }
   lines.push("");
 
   const productLine = [
@@ -169,6 +174,7 @@ export function buildVideoPrompt(input: PromptInput): string {
   }
   productLine.push(
     "Show the product clearly, in focus and well lit, held naturally in hand or in use. It is the only branded product in the video.",
+    "Hands look natural, and the product keeps the same size, shape and label in every shot: it never morphs, melts, duplicates or changes colour.",
   );
   lines.push(productLine.join(" "));
   if (facts.length)

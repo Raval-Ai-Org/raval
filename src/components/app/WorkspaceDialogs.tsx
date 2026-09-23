@@ -12,14 +12,34 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { renameWorkspace, getWorkspaceDetails } from "@/lib/workspaces.functions";
 import { Globe, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BarChart, Monitor, Moon, SlidersHorizontal, Sun, Users } from "@/components/icons";
+import { useTheme } from "@/hooks/use-theme";
+import { cn } from "@/lib/utils";
+import {
+  GroupLabel,
+  SurfaceLayout,
+  SurfacePage,
+  Tile,
+  type SurfaceNavItem,
+} from "@/components/app/surface/SurfaceLayout";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
 import { WebflowConnector } from "@/components/app/connectors/WebflowConnector";
+import { WordPressConnector } from "@/components/app/connectors/WordPressConnector";
 import { GoogleConnectCard } from "@/components/app/analytics/GoogleConnectCard";
-import { CONNECTOR_PROVIDERS } from "@/lib/connectors/types";
 
-type SettingsSection = "connections" | "preferences";
+type SettingsSection = "accounts" | "analytics" | "website" | "preferences";
+
+/** The GitHub install returns to ?settings=connections, which means the website sources. */
+function sectionFromUrl(value: string | null): SettingsSection | null {
+  if (value === "connections") return "website";
+  return value === "accounts" ||
+    value === "analytics" ||
+    value === "website" ||
+    value === "preferences"
+    ? value
+    : null;
+}
 
 type Props = {
   workspaceId: string | null;
@@ -31,13 +51,13 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
   const [renameOpen, setRenameOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<SettingsSection>("connections");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("accounts");
 
   useEffect(() => {
     const openRename = () => setRenameOpen(true);
     const openDetails = () => setDetailsOpen(true);
     const openSettings = (e: AppEvent<"open:settings">) => {
-      setSettingsSection(e.detail?.section ?? "connections");
+      setSettingsSection(e.detail?.section ?? "accounts");
       setSettingsOpen(true);
     };
     addAppEventListener("open:rename", openRename);
@@ -45,8 +65,8 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
     addAppEventListener("open:settings", openSettings);
     // Deep link: /app?settings=connections (the GitHub install returns here).
     const url = new URL(window.location.href);
-    const section = url.searchParams.get("settings");
-    if (section === "connections" || section === "preferences") {
+    const section = sectionFromUrl(url.searchParams.get("settings"));
+    if (section) {
       setSettingsSection(section);
       setSettingsOpen(true);
       url.searchParams.delete("settings");
@@ -132,7 +152,6 @@ function RenameDialog({
       onOpenChange={onOpenChange}
       size="sm"
       Icon={Pencil}
-      eyebrow="Workspace"
       title="Rename workspace"
       description="This is how the workspace shows up across Mellox AI."
       bodyClassName="px-5 py-5 sm:px-6"
@@ -228,7 +247,6 @@ function DetailsDialog({
       onOpenChange={onOpenChange}
       size="sm"
       Icon={Info}
-      eyebrow="Workspace"
       title="Workspace details"
       description="Quick facts about this workspace."
       bodyClassName="px-5 py-5 sm:px-6"
@@ -291,6 +309,19 @@ function DetailsDialog({
   );
 }
 
+const SETTINGS_NAV: SurfaceNavItem<SettingsSection>[] = [
+  { id: "accounts", label: "Social accounts", icon: Users },
+  { id: "analytics", label: "Analytics", icon: BarChart },
+  { id: "website", label: "Website", icon: Globe },
+  { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
+];
+
+const THEMES = [
+  { id: "system", label: "System", icon: Monitor },
+  { id: "light", label: "Light", icon: Sun },
+  { id: "dark", label: "Dark", icon: Moon },
+] as const;
+
 function SettingsDialog({
   open,
   onOpenChange,
@@ -306,6 +337,7 @@ function SettingsDialog({
 }) {
   const [notifications, setNotifications] = useState(true);
   const [sounds, setSounds] = useState(true);
+  const { preference, setPreference } = useTheme();
 
   useEffect(() => {
     if (!open) return;
@@ -321,104 +353,111 @@ function SettingsDialog({
     } catch {}
   };
 
+  const noWorkspace = (
+    <p className="text-[13px] text-muted-foreground">Open a workspace to manage connections.</p>
+  );
+
   return (
     <AppModalShell
       open={open}
       onOpenChange={onOpenChange}
-      size="lg"
+      size="xl"
       Icon={Settings2}
-      eyebrow="Workspace"
       title="Settings"
-      description="Connect the accounts and systems Mellox works with, and tune how it behaves on this device."
-      bodyClassName="space-y-5 px-5 py-5 sm:px-6"
+      srDescription="Connected accounts, analytics, website sources and device preferences"
+      bodyClassName="overflow-hidden"
     >
-      <Tabs value={section} onValueChange={(v) => onSectionChange(v as SettingsSection)}>
-        <TabsList className="h-9 rounded-full bg-muted/70 p-1">
-          <TabsTrigger value="connections" className="rounded-full px-3 text-[12.5px]">
-            Connections
-          </TabsTrigger>
-          <TabsTrigger value="preferences" className="rounded-full px-3 text-[12.5px]">
-            Preferences
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="connections" className="mt-5 space-y-6">
-          <div className="rounded-2xl border border-border/70 bg-gradient-to-br from-card/80 via-card/45 to-primary/[0.04] px-4 py-4 sm:px-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
-              Integrations
-            </p>
-            <h3 className="mt-1 text-lg font-semibold tracking-tight">
-              Connect the tools your marketing intelligence works with.
-            </h3>
-            <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
-              Connect a website source, codebase, or analytics account. Mellox only shows resources
-              that the connected account can actually access.
-            </p>
-          </div>
-          <SocialAccountsSection variant="settings" />
-          {workspaceId && (
-            <div className="border-t border-border/70 pt-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Analytics
-              </p>
-              <GoogleConnectCard />
-            </div>
+      <SurfaceLayout
+        label="Settings"
+        items={SETTINGS_NAV}
+        value={section}
+        onChange={onSectionChange}
+      >
+        <div key={section} className="animate-in fade-in duration-300">
+          {section === "accounts" && (
+            <SurfacePage width="narrow">
+              <SocialAccountsSection variant="settings" />
+            </SurfacePage>
           )}
-          <div className="border-t border-border/70 pt-5">
-            <div className="mb-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Development &amp; Website
-              </p>
-              <p className="mt-1 text-[12px] text-muted-foreground">
-                Connect the live site and the code that powers it. These are independent sources;
-                use either one or both.
-              </p>
-            </div>
-            {workspaceId ? (
-              <div className="grid items-start gap-4 xl:grid-cols-2">
-                <GitHubConnector workspaceId={workspaceId} />
-                <WebflowConnector workspaceId={workspaceId} />
+          {section === "analytics" && (
+            <SurfacePage title="Analytics" width="narrow">
+              {workspaceId ? <GoogleConnectCard /> : noWorkspace}
+            </SurfacePage>
+          )}
+          {section === "website" && (
+            <SurfacePage
+              title="Website"
+              subtitle="Your live site and the code behind it"
+              width="narrow"
+            >
+              {workspaceId ? (
+                <div className="space-y-3">
+                  <Tile>
+                    <GitHubConnector workspaceId={workspaceId} />
+                  </Tile>
+                  <WebflowConnector workspaceId={workspaceId} />
+                  <WordPressConnector workspaceId={workspaceId} />
+                </div>
+              ) : (
+                noWorkspace
+              )}
+            </SurfacePage>
+          )}
+          {section === "preferences" && (
+            <SurfacePage title="Preferences" width="narrow">
+              <GroupLabel>Theme</GroupLabel>
+              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Theme">
+                {THEMES.map((t) => {
+                  const selected = preference === t.id;
+                  const Icon = t.icon;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setPreference(t.id)}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-[20px] border px-3 py-4 text-[13px] font-medium transition-colors",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                        selected
+                          ? "border-primary/50 bg-primary/[0.08] text-foreground"
+                          : "border-border/50 bg-surface-3 text-muted-foreground hover:text-foreground dark:border-white/[0.06] dark:bg-white/[0.035]",
+                      )}
+                    >
+                      <Icon className={cn("h-5 w-5", selected && "text-primary")} />
+                      {t.label}
+                    </button>
+                  );
+                })}
               </div>
-            ) : (
-              <p className="text-[13px] text-muted-foreground">
-                Select a workspace to manage connections.
-              </p>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="preferences" className="mt-5">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Device preferences
-          </p>
-          <ul className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card/40">
-            <ToggleRow
-              label="Approval notifications"
-              description="Toast me when an agent needs a sign-off."
-              checked={notifications}
-              onChange={(v) => {
-                setNotifications(v);
-                save("settings:notifications", v);
-              }}
-            />
-            <ToggleRow
-              label="Interface sounds"
-              description="Subtle chimes when actions complete."
-              checked={sounds}
-              onChange={(v) => {
-                setSounds(v);
-                save("settings:sounds", v);
-              }}
-            />
-          </ul>
-          <p className="mt-3 text-[11.5px] text-muted-foreground">
-            Need theme controls? Open the workspace menu → Appearance.
-          </p>
-        </TabsContent>
-      </Tabs>
-      <div className="mt-4 flex justify-end">
-        <Button onClick={() => onOpenChange(false)}>Done</Button>
-      </div>
+              <GroupLabel>On this device</GroupLabel>
+              <Tile className="p-0 sm:p-0">
+                <ul className="divide-y divide-border/50">
+                  <ToggleRow
+                    label="Approval alerts"
+                    description="When an agent needs your OK"
+                    checked={notifications}
+                    onChange={(v) => {
+                      setNotifications(v);
+                      save("settings:notifications", v);
+                    }}
+                  />
+                  <ToggleRow
+                    label="Sounds"
+                    description="A soft chime when something finishes"
+                    checked={sounds}
+                    onChange={(v) => {
+                      setSounds(v);
+                      save("settings:sounds", v);
+                    }}
+                  />
+                </ul>
+              </Tile>
+            </SurfacePage>
+          )}
+        </div>
+      </SurfaceLayout>
     </AppModalShell>
   );
 }
@@ -435,10 +474,10 @@ function ToggleRow({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <li className="flex items-start justify-between gap-3 px-3.5 py-3">
+    <li className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
       <div className="min-w-0">
-        <div className="text-[13px] font-medium">{label}</div>
-        <p className="text-[11.5px] text-muted-foreground">{description}</p>
+        <div className="text-[14px] font-medium text-foreground">{label}</div>
+        <p className="text-[12.5px] text-muted-foreground">{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
     </li>

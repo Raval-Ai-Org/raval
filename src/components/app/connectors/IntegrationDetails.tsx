@@ -77,9 +77,9 @@ export function IntegrationDetails({
       onOpenChange={onOpenChange}
       size="md"
       Icon={Icon}
-      eyebrow={provider}
       title={title}
       description={description}
+      srDescription={`${provider} connection details`}
       bodyClassName="space-y-4 px-5 py-5 sm:px-6"
     >
       <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/60 px-3.5 py-3">

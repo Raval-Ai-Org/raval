@@ -5,6 +5,7 @@
 // provider (GET /api/sdr/status), so only platforms that can actually publish
 // are offered. Connections finish in a popup (/app/social/connected), which
 // notifies this view over a BroadcastChannel.
+import { Spinner } from "@/components/icons";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -173,15 +174,16 @@ export function SocialAccountsSection({ variant }: Props) {
             id={`${variant}-connections-title`}
             className={cn(
               "font-semibold text-foreground",
-              variant === "studio" ? "text-xs uppercase tracking-wide" : "text-sm",
+              variant === "studio"
+                ? "text-xs uppercase tracking-wide"
+                : "text-[20px] leading-tight tracking-tight",
             )}
           >
-            {variant === "studio" ? "Connections" : "Connected accounts"}
+            {variant === "studio" ? "Connections" : "Social accounts"}
           </h3>
           {variant === "settings" && (
-            <p className="mt-1 max-w-xl break-words text-[12px] leading-relaxed text-muted-foreground">
-              The social accounts this workspace can publish and schedule to. Accounts are only
-              visible inside this workspace.
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              Where Mellox posts for this workspace
             </p>
           )}
         </div>
@@ -189,7 +191,7 @@ export function SocialAccountsSection({ variant }: Props) {
           <button
             type="button"
             onClick={() => void refresh()}
-            className="shrink-0 text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            className="h-9 shrink-0 rounded-full border border-border/70 px-3.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
             aria-label="Refresh connected accounts"
           >
             Refresh
@@ -290,7 +292,8 @@ export function SocialAccountsSection({ variant }: Props) {
                           size="sm"
                           variant="outline"
                           onClick={() => setPendingPlatform(account.platform)}
-                          disabled={busy === account.platform || !status.canPublish}
+                          disabled={!status.canPublish}
+                          loading={busy === account.platform}
                         >
                           Reconnect
                         </Button>
@@ -341,7 +344,14 @@ export function SocialAccountsSection({ variant }: Props) {
                         {platform.description}
                       </span>
                     </span>
-                    <Plus className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    {busy === platform.id ? (
+                      <Spinner
+                        className="h-4 w-4 shrink-0 animate-spin text-muted-foreground"
+                        aria-hidden
+                      />
+                    ) : (
+                      <Plus className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    )}
                   </button>
                 ))}
               </div>

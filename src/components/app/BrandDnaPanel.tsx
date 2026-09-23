@@ -376,7 +376,13 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
         <DialogPrimitive.Content
           aria-labelledby="brand-dna-title"
           aria-describedby="brand-dna-desc"
-          className="fixed left-1/2 top-1/2 z-50 flex h-[92vh] w-[96vw] max-w-[1280px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background p-0 shadow-[0_30px_120px_-20px_rgba(0,0,0,0.45),0_1px_0_0_hsl(var(--border)),inset_0_1px_0_hsl(0_0%_100%/0.06)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+          data-mellox-app
+          // Focus the window, not its first button (no ring on open).
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            (e.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
+          }}
+          className="ds-window ds-glow fixed left-1/2 top-1/2 z-50 flex h-[min(92dvh,960px)] w-[min(calc(100vw-24px),1240px)] max-sm:h-dvh max-sm:w-screen max-sm:rounded-none -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden p-0 outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
         >
           <DialogHeader className="sr-only">
             <DialogTitle id="brand-dna-title">Brand DNA</DialogTitle>
@@ -386,18 +392,8 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
             </DialogDescription>
           </DialogHeader>
 
-          {/* Brand halo — matches unified AppModalShell surface */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-0 opacity-70"
-            style={{
-              background:
-                "radial-gradient(60% 50% at 18% 0%, hsl(var(--brand-blue) / 0.10), transparent 60%), radial-gradient(50% 45% at 100% 100%, hsl(var(--brand-green) / 0.12), transparent 65%)",
-            }}
-          />
-
           {/* Sticky top bar */}
-          <div className="relative z-10 flex items-center gap-3 px-4 py-2.5 sm:px-6">
+          <div className="relative z-10 flex h-14 shrink-0 items-center gap-3 border-b border-border/50 bg-background/60 px-3 backdrop-blur-xl sm:px-5">
             {activeTile ? (
               <button
                 ref={backButtonRef}
@@ -410,17 +406,16 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
             ) : (
               <div className="flex items-center gap-2.5">
                 <span
-                  className="relative grid h-7 w-7 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-[hsl(var(--brand-green))] to-[hsl(220_90%_60%)] shadow-[0_6px_18px_-6px_hsl(var(--brand-green)/0.55)]"
+                  className="grid h-8 w-8 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20"
                   aria-hidden="true"
                 >
-                  <Brain className="h-3.5 w-3.5 text-white" />
-                  <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_60%_at_50%_0%,rgba(255,255,255,0.35),transparent_60%)]" />
+                  <Brain className="h-4 w-4" />
                 </span>
                 <div className="flex flex-col leading-tight">
-                  <span className="text-[13.5px] font-semibold tracking-tight text-foreground">
+                  <span className="text-[15px] font-semibold tracking-tight text-foreground">
                     Brand DNA
                   </span>
-                  <span className="text-[10.5px] text-muted-foreground">
+                  <span className="hidden text-[11.5px] text-muted-foreground sm:block">
                     What Mellox knows about you
                   </span>
                 </div>
@@ -465,7 +460,7 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
               </Button>
               <DialogPrimitive.Close
                 aria-label="Close Brand DNA"
-                className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand-green))] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[var(--ds-well-bg-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </DialogPrimitive.Close>
@@ -558,7 +553,7 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
             </AnimatePresence>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 py-3 sm:px-7">
+          <div className="relative z-10 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border/50 bg-background/60 px-4 py-3 backdrop-blur-xl sm:px-6">
             <div className="flex flex-wrap items-center gap-1">
               <Button
                 size="sm"
@@ -607,11 +602,7 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
                 setOpen(false);
                 setActiveTile(null);
               }}
-              className="group h-9 rounded-full px-5 text-[13px] font-medium text-primary-foreground shadow-[0_8px_22px_-8px_hsl(var(--brand-green)/0.65)] transition-transform hover:scale-[1.02] active:scale-[0.98]"
-              style={{
-                backgroundImage:
-                  "linear-gradient(120deg, hsl(var(--brand-blue)) 0%, hsl(var(--brand-green)) 100%)",
-              }}
+              className="h-9 rounded-full px-5 text-[13px]"
             >
               <Check className="h-3.5 w-3.5" /> {dirty ? "Save & close" : "Done"}
             </Button>
@@ -708,16 +699,15 @@ function OverviewHero({
 
   return (
     <div className="mb-6 sm:mb-7">
-      <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        <span className="h-1 w-1 rounded-full bg-[hsl(var(--brand-green))]" />
+      <div className="ds-label flex items-center gap-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
         Living brand memory
       </div>
       <h2 className="mt-2 text-[26px] font-semibold leading-tight tracking-tight text-foreground sm:text-[30px]">
         {dna.brandName || "Your Brand DNA"}
       </h2>
       <p className="mt-1.5 max-w-[62ch] text-[13.5px] leading-relaxed text-muted-foreground">
-        {dna.oneLiner ||
-          "Click any tile to customize your brand identity. Mellox uses this to write, design and post on your behalf."}
+        {dna.oneLiner || "Tap a tile to edit it. Mellox uses this in everything it makes."}
       </p>
 
       {(connectedUrl || chips.length > 0) && (
@@ -751,7 +741,7 @@ function OverviewHero({
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), onSubmit())}
-            placeholder="yourbrand.com — we'll auto-fill everything below"
+            placeholder="yourbrand.com"
             className="h-9 flex-1 min-w-[200px] border-0 bg-transparent text-[13.5px] focus-visible:ring-0"
           />
           <Button
@@ -1859,7 +1849,7 @@ function BrandHero({
             className="absolute -inset-1.5 -z-10 rounded-[22px] opacity-70 blur-md"
             style={{
               background:
-                "conic-gradient(from 140deg, hsl(var(--brand-green)), hsl(220 90% 60%), hsl(280 80% 65%), hsl(var(--brand-green)))",
+                "conic-gradient(from 140deg, hsl(var(--primary)), hsl(var(--primary) / 0.35), hsl(var(--primary) / 0.7), hsl(var(--primary)))",
             }}
             animate={{ rotate: loading ? 360 : 0, opacity: loading ? [0.55, 0.95, 0.55] : 0.55 }}
             transition={{
@@ -2015,7 +2005,7 @@ function MemoryNav({
                   className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full"
                   style={{
                     background:
-                      "linear-gradient(180deg, hsl(var(--brand-green)), hsl(220 90% 60%))",
+                      "linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary) / 0.55))",
                   }}
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />

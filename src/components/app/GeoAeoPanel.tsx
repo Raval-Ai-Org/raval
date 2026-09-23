@@ -4,42 +4,50 @@
 // the server (src/server/geo); this panel starts them, follows their progress
 // and presents scores, explainable findings, page evidence, history and
 // scheduled monitoring.
+//
+// Layout: a navigation rail (SurfaceLayout) with one page per question —
+// how am I doing (Overview), what is wrong (Issues), which pages (Pages), how
+// has it moved (History) and keep watching (Monitoring). Before the first scan
+// there is nothing to navigate, so the panel is a single centred scan box.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CalendarClock,
+  Check,
+  Copy,
+  FileText,
   History,
   LayoutDashboard,
   ListTree,
-  FileText,
+  Wand,
 } from "@/components/icons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBrandDna } from "@/hooks/use-brand-dna";
 import { emitAppEvent } from "@/lib/app-events";
 import { getGeoSettings } from "@/lib/geo.functions";
 import type { GeoScanMode } from "@/lib/geo/contracts";
 import { cn } from "@/lib/utils";
+import { SurfaceLayout, SurfacePage, type SurfaceNavItem } from "./surface/SurfaceLayout";
 import { FindingsTab, type FindingsFilter } from "./geo/FindingsTab";
 import { HistoryTab } from "./geo/HistoryTab";
 import { MonitoringTab } from "./geo/MonitoringTab";
-import { OverviewTab } from "./geo/OverviewTab";
+import { buildReport, OverviewTab } from "./geo/OverviewTab";
 import { PagesTab } from "./geo/PagesTab";
 import { ScanBar, ScanIntro, ScanProgress } from "./geo/ScanControls";
-import { displayUrl, hostOf, relativeTime } from "./geo/geo-ui";
+import {
+  copyText,
+  displayUrl,
+  ghostBtn,
+  hostOf,
+  primaryBtn,
+  relativeTime,
+  ScoreRing,
+} from "./geo/geo-ui";
 import { useGeoScans } from "./geo/use-geo-scans";
 
 type TabId = "overview" | "findings" | "pages" | "history" | "monitoring";
-
-const TAB_ICON = {
-  overview: LayoutDashboard,
-  findings: ListTree,
-  pages: FileText,
-  history: History,
-  monitoring: CalendarClock,
-};
 
 type AutoRunProps = {
   /** Non-zero while chat or a suggestion has asked for a scan ("scan my site"). */
@@ -93,6 +101,7 @@ function Panel({
   const [probes, setProbes] = useState(false);
   const [tab, setTab] = useState<TabId>(initialFindings ? "findings" : "overview");
   const [findingsFilter, setFindingsFilter] = useState<FindingsFilter>(initialFindings ?? {});
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     getGeoSettings({ data: { workspaceId } })
@@ -173,21 +182,22 @@ function Panel({
       out.set(brandHost, { host: brandHost, url: brandUrl, latestId: null });
     return [...out.values()];
   }, [scans.history, brandHost, brandUrl]);
+
+  // One short line under the scan box, only when there is something to act on.
   const hint = !brandUrl ? (
     <>
-      No website saved in Brand DNA yet.{" "}
+      No website in Brand DNA yet.{" "}
       <button
         type="button"
         onClick={() => emitAppEvent("open:brand-dna")}
         className="font-medium text-primary underline-offset-2 hover:underline"
       >
         Add it
-      </button>{" "}
-      so every Mellox agent can use it.
+      </button>
     </>
   ) : targetHost && targetHost !== brandHost ? (
     <>
-      Scanning a different site than your Brand DNA ({brandHost}).{" "}
+      Not your Brand DNA site.{" "}
       <button
         type="button"
         onClick={() => {
@@ -199,23 +209,116 @@ function Panel({
         Use {brandHost}
       </button>
     </>
-  ) : (
-    "60+ checks for AI engines, SEO and content."
+  ) : null;
+
+  const scanBar = (
+    <ScanBar
+      url={urlInput}
+      onUrlChange={(v) => {
+        urlTouched.current = true;
+        setUrlInput(v);
+      }}
+      mode={mode}
+      onModeChange={setMode}
+      maxPages={settings?.maxPages ?? null}
+      probesAvailable={!!settings?.probesAvailable}
+      probes={probes}
+      onProbesChange={setProbes}
+      busy={busy}
+      starting={scans.starting}
+      canRescan={!!current && targetHost === current.host}
+      onRun={() => run()}
+      hint={hint}
+    />
   );
 
-  return (
-    <section aria-label="AI visibility" className="space-y-5 px-1 pb-2">
+  const errorBanner = scans.error && (
+    <div
+      role="alert"
+      className="mb-4 flex items-start gap-2 rounded-2xl bg-destructive/10 px-4 py-3 text-[13px] text-destructive"
+    >
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.2} />
+      <span className="min-w-0 flex-1">{scans.error}</span>
+      <button
+        type="button"
+        onClick={() => scans.setError(null)}
+        className="shrink-0 text-[12px] font-medium underline-offset-2 hover:underline"
+      >
+        Dismiss
+      </button>
+    </div>
+  );
+
+  if (scans.loading) {
+    return (
+      <div className="flex h-full">
+        <div className="hidden w-[216px] shrink-0 space-y-2 border-r border-border/60 p-4 md:block">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full rounded-full" />
+          ))}
+        </div>
+        <div className="flex-1 space-y-4 p-7">
+          <Skeleton className="h-12 w-full rounded-full" />
+          <Skeleton className="h-52 w-full rounded-[20px]" />
+          <Skeleton className="h-28 w-full rounded-[20px]" />
+        </div>
+      </div>
+    );
+  }
+
+  // ── First scan: one centred box, nothing else to look at yet ──────────────
+  if (!current) {
+    return (
+      <div className="h-full overflow-y-auto scrollbar-thin">
+        <div className="mx-auto w-full max-w-[720px] px-4 pb-12 pt-8 sm:pt-14">
+          {errorBanner}
+          {scans.active ? (
+            <ScanProgress scan={scans.active} onCancel={() => void scans.cancel()} />
+          ) : (
+            <ScanIntro hasUrl={!!target}>{scanBar}</ScanIntro>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const report = current.report;
+  const nav: SurfaceNavItem<TabId>[] = [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "findings", label: "Issues", icon: ListTree, count: report?.counts.findings },
+    { id: "pages", label: "Pages", icon: FileText, count: report?.counts.pagesCrawled },
+    { id: "history", label: "History", icon: History },
+    { id: "monitoring", label: "Monitoring", icon: CalendarClock },
+  ];
+
+  const siteCard = (
+    <div className="rounded-[18px] bg-foreground/[0.04] p-3">
+      <div className="flex items-center gap-3">
+        {current.overallScore !== null ? (
+          <ScoreRing value={current.overallScore} size={44} />
+        ) : (
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-muted text-[12px] text-muted-foreground">
+            —
+          </span>
+        )}
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-semibold text-foreground">{current.host}</div>
+          <div className="truncate text-[11.5px] text-muted-foreground">
+            {relativeTime(current.completedAt ?? current.createdAt)}
+          </div>
+        </div>
+      </div>
       {sites.length > 1 && (
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Websites">
-          <span className="text-[11.5px] font-medium text-muted-foreground">Websites</span>
+        <div className="mt-3 flex flex-wrap gap-1" role="group" aria-label="Websites">
           {sites.map((s) => {
-            const selected = (current?.host ?? targetHost) === s.host;
+            const selected = current.host === s.host;
             return (
               <button
                 key={s.host}
                 type="button"
                 aria-pressed={selected}
                 disabled={busy}
+                title={s.latestId ? s.host : `${s.host} · not scanned yet`}
                 onClick={() => {
                   urlTouched.current = true;
                   setUrlInput(displayUrl(s.url));
@@ -223,68 +326,84 @@ function Panel({
                   setTab("overview");
                 }}
                 className={cn(
-                  "rounded-full px-3 py-1 text-[12px] font-medium ring-1 transition-colors disabled:opacity-60",
+                  "max-w-full truncate rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-colors disabled:opacity-60",
                   selected
-                    ? "bg-primary text-primary-foreground ring-primary"
-                    : "bg-card text-muted-foreground ring-border/70 hover:text-foreground",
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-foreground/[0.06] text-muted-foreground hover:text-foreground",
+                  !s.latestId && !selected && "opacity-70",
                 )}
               >
                 {s.host}
-                {!s.latestId && <span className="ml-1 opacity-70">· not scanned</span>}
               </button>
             );
           })}
         </div>
       )}
-      <ScanBar
-        url={urlInput}
-        onUrlChange={(v) => {
-          urlTouched.current = true;
-          setUrlInput(v);
+    </div>
+  );
+
+  const pageTitle: Record<TabId, string> = {
+    overview: "Overview",
+    findings: "Issues",
+    pages: "Pages",
+    history: "History",
+    monitoring: "Monitoring",
+  };
+  // Inside Issues, a finding or the fix-all flow is its own screen with a back button.
+  const issuesSubview = tab === "findings" && (findingsFilter.fixAll || findingsFilter.findingId);
+
+  const actions =
+    tab === "overview" && report ? (
+      <button
+        type="button"
+        onClick={async () => {
+          if (await copyText(buildReport(current))) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1800);
+          }
         }}
-        mode={mode}
-        onModeChange={setMode}
-        maxPages={settings?.maxPages ?? null}
-        probesAvailable={!!settings?.probesAvailable}
-        probes={probes}
-        onProbesChange={setProbes}
-        busy={busy}
-        starting={scans.starting}
-        canRescan={!!current && targetHost === current.host}
-        onRun={() => run()}
-        hint={hint}
-      />
+        className={cn(ghostBtn, "h-9 px-3.5 text-[12.5px]")}
+      >
+        {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? "Copied" : "Copy report"}
+      </button>
+    ) : tab === "findings" && !issuesSubview ? (
+      <button
+        type="button"
+        onClick={() => openFindings({ fixAll: true })}
+        className={cn(primaryBtn, "h-9 px-4 text-[12.5px]")}
+      >
+        <Wand className="h-3.5 w-3.5" /> Fix all
+      </button>
+    ) : undefined;
 
-      {scans.error && (
-        <div
-          role="alert"
-          className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-[13px] text-destructive"
+  return (
+    <section aria-label="AI visibility" className="h-full">
+      <SurfaceLayout
+        label="AI Visibility"
+        items={nav}
+        value={tab}
+        onChange={(id) => {
+          if (id === "findings") setFindingsFilter({});
+          setTab(id);
+        }}
+        railTop={siteCard}
+      >
+        <SurfacePage
+          title={issuesSubview ? undefined : pageTitle[tab]}
+          actions={issuesSubview ? undefined : actions}
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.2} />
-          <span className="min-w-0 flex-1">{scans.error}</span>
-          <button
-            type="button"
-            onClick={() => scans.setError(null)}
-            className="shrink-0 text-[12px] font-medium underline-offset-2 hover:underline"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {scans.active && <ScanProgress scan={scans.active} onCancel={() => void scans.cancel()} />}
-
-      {scans.loading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-40 w-full rounded-2xl" />
-          <Skeleton className="h-24 w-full rounded-2xl" />
-        </div>
-      ) : !current ? (
-        !scans.active && <ScanIntro hasUrl={!!target} maxPages={settings?.maxPages ?? null} />
-      ) : (
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
+          {errorBanner}
+          {tab === "overview" && (
+            <div className="mb-5 space-y-4">
+              {scanBar}
+              {scans.active && (
+                <ScanProgress scan={scans.active} onCancel={() => void scans.cancel()} />
+              )}
+            </div>
+          )}
           {viewingOlder && (
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card/60 px-3.5 py-2 text-[12.5px] text-muted-foreground">
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-full bg-foreground/[0.05] px-4 py-2 text-[12.5px] text-muted-foreground">
               Viewing the scan from {relativeTime(current.createdAt)}.
               <button
                 type="button"
@@ -295,100 +414,55 @@ function Panel({
               </button>
             </div>
           )}
-          <div className="sticky -top-4 z-20 -mx-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-background/85 px-1 py-2 backdrop-blur-md sm:-top-5">
-            <TabsList className="h-11 gap-0.5 rounded-full border border-border/60 bg-muted/60 p-1 shadow-sm">
-              {(["overview", "findings", "pages", "history", "monitoring"] as const).map((id) => {
-                const Icon = TAB_ICON[id];
-                const count =
-                  id === "findings"
-                    ? current.report?.counts.findings
-                    : id === "pages"
-                      ? current.report?.counts.pagesCrawled
-                      : undefined;
-                return (
-                  <TabsTrigger
-                    key={id}
-                    value={id}
-                    className={cn(
-                      "gap-1.5 rounded-full px-3.5 text-[12.5px] capitalize transition-all duration-200 data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-border/60",
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {id}
-                    {typeof count === "number" && (
-                      <span className="tabular-nums text-muted-foreground">{count}</span>
-                    )}
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-          </div>
-          <TabsContent
-            value="overview"
-            className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
-          >
-            {current.report ? (
-              <OverviewTab
+          <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+            {tab === "overview" &&
+              (report ? (
+                <OverviewTab
+                  workspaceId={workspaceId}
+                  scan={current}
+                  previousScore={previousScore}
+                  sparkValues={sparkValues}
+                  brandName={dna.brandName || null}
+                  onOpenFindings={openFindings}
+                />
+              ) : (
+                <EmptyState
+                  size="sm"
+                  title="This scan has no report"
+                  description="Run a new scan to refresh the results."
+                />
+              ))}
+            {tab === "findings" && (
+              <FindingsTab
                 workspaceId={workspaceId}
                 scan={current}
-                previousScore={previousScore}
-                sparkValues={sparkValues}
                 brandName={dna.brandName || null}
-                probesAvailable={!!settings?.probesAvailable}
-                onOpenFindings={openFindings}
-              />
-            ) : (
-              <EmptyState
-                size="sm"
-                title="This scan has no report"
-                description="Run a new scan to refresh the results."
+                filter={findingsFilter}
+                onFilterChange={setFindingsFilter}
               />
             )}
-          </TabsContent>
-          <TabsContent
-            value="findings"
-            className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
-          >
-            <FindingsTab
-              workspaceId={workspaceId}
-              scan={current}
-              brandName={dna.brandName || null}
-              filter={findingsFilter}
-              onFilterChange={setFindingsFilter}
-            />
-          </TabsContent>
-          <TabsContent
-            value="pages"
-            className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
-          >
-            <PagesTab workspaceId={workspaceId} scan={current} />
-          </TabsContent>
-          <TabsContent
-            value="history"
-            className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
-          >
-            <HistoryTab
-              workspaceId={workspaceId}
-              history={scans.history}
-              currentId={current.id}
-              onView={(id) => {
-                void scans.view(id);
-                setTab("overview");
-              }}
-            />
-          </TabsContent>
-          <TabsContent
-            value="monitoring"
-            className="mt-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
-          >
-            <MonitoringTab
-              workspaceId={workspaceId}
-              defaultUrl={current.origin}
-              probesAvailable={!!settings?.probesAvailable}
-            />
-          </TabsContent>
-        </Tabs>
-      )}
+            {tab === "pages" && <PagesTab workspaceId={workspaceId} scan={current} />}
+            {tab === "history" && (
+              <HistoryTab
+                workspaceId={workspaceId}
+                history={scans.history}
+                currentId={current.id}
+                onView={(id) => {
+                  void scans.view(id);
+                  setTab("overview");
+                }}
+              />
+            )}
+            {tab === "monitoring" && (
+              <MonitoringTab
+                workspaceId={workspaceId}
+                defaultUrl={current.origin}
+                probesAvailable={!!settings?.probesAvailable}
+              />
+            )}
+          </div>
+        </SurfacePage>
+      </SurfaceLayout>
     </section>
   );
 }

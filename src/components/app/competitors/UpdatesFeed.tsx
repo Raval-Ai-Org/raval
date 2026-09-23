@@ -7,10 +7,37 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
-import { ExternalLink } from "@/components/icons";
+import {
+  Bell,
+  ExternalLink,
+  FileText,
+  Globe,
+  Megaphone,
+  Rocket,
+  Sparkles,
+  Target,
+  Wallet,
+} from "@/components/icons";
 import { ghostBtn, relativeTime } from "@/components/app/geo/geo-ui";
-import { Card, SiteMark, UpdateKindBadge, hostOf } from "./competitors-ui";
-import type { CompetitorUpdateView } from "@/lib/competitors.functions";
+import { SiteMark, hostOf } from "./competitors-ui";
+import {
+  UPDATE_KIND_LABELS,
+  type CompetitorUpdateKind,
+  type CompetitorUpdateView,
+} from "@/lib/competitors.functions";
+
+const KIND: Record<
+  CompetitorUpdateKind,
+  { icon: React.ComponentType<{ className?: string }>; tint: string }
+> = {
+  launch: { icon: Rocket, tint: "bg-primary/15 text-primary" },
+  pricing: { icon: Wallet, tint: "bg-warning/15 text-warning" },
+  positioning: { icon: Target, tint: "bg-info/15 text-info" },
+  funding: { icon: Sparkles, tint: "bg-success/15 text-success" },
+  campaign: { icon: Megaphone, tint: "bg-destructive/12 text-destructive" },
+  content: { icon: FileText, tint: "bg-foreground/[0.07] text-foreground/75" },
+  site_change: { icon: Globe, tint: "bg-foreground/[0.07] text-foreground/75" },
+};
 
 function dayLabel(iso: string): string {
   const date = new Date(iso);
@@ -29,31 +56,42 @@ export function UpdateRow({
   update: CompetitorUpdateView;
   showCompetitor?: boolean;
 }) {
+  const kind = KIND[update.kind];
+  const Icon = kind.icon;
+  const unread = !update.readAt;
   return (
-    <Card
+    <div
       className={cn(
-        "flex min-w-0 gap-3 p-3",
-        !update.readAt && "border-primary/25 bg-primary/[0.03]",
+        "grid grid-cols-[auto_minmax(0,1fr)] gap-3.5 rounded-[20px] p-3.5 transition-colors sm:p-4",
+        unread ? "bg-primary/[0.06]" : "hover:bg-foreground/[0.03]",
       )}
     >
-      {showCompetitor && <SiteMark domain={update.competitorDomain} size={28} />}
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <UpdateKindBadge kind={update.kind} significance={update.significance} />
-          {showCompetitor && update.competitorName && (
-            <span className="truncate text-[12px] font-medium text-foreground/80">
-              {update.competitorName}
+      <span className={cn("relative grid h-10 w-10 place-items-center rounded-full", kind.tint)}>
+        <Icon className="h-[18px] w-[18px]" />
+        {unread && (
+          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background" />
+        )}
+      </span>
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
+          {showCompetitor && (
+            <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-foreground/80">
+              <SiteMark domain={update.competitorDomain} size={16} />
+              <span className="truncate">{update.competitorName}</span>
             </span>
           )}
-          <span className="text-[11.5px] text-muted-foreground">
-            {relativeTime(update.publishedAt ?? update.detectedAt)}
-          </span>
+          <span>{UPDATE_KIND_LABELS[update.kind]}</span>
+          <span aria-hidden>·</span>
+          <span>{relativeTime(update.publishedAt ?? update.detectedAt)}</span>
+          {update.significance === "major" && (
+            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
+              Big change
+            </span>
+          )}
         </div>
-        <p className="mt-1 text-[13.5px] font-medium leading-snug text-foreground">
-          {update.title}
-        </p>
+        <p className="mt-1 text-[14px] font-medium leading-snug text-foreground">{update.title}</p>
         {update.summary && (
-          <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
+          <p className="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
             {update.summary}
           </p>
         )}
@@ -62,14 +100,14 @@ export function UpdateRow({
             href={update.sourceUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="mt-1 inline-flex items-center gap-1 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+            className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-muted-foreground transition-colors hover:text-primary"
           >
             {hostOf(update.sourceUrl)}
-            <ExternalLink className="h-2.5 w-2.5" />
+            <ExternalLink className="h-3 w-3" />
           </a>
         )}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -103,43 +141,42 @@ export function UpdatesFeed({
   if (!updates.length) {
     return (
       <EmptyState
+        icon={Bell}
         title={hasCompetitors ? "Nothing new" : "No competitors yet"}
         description={
           hasCompetitors
-            ? "We check your competitors regularly. You'll see real changes here — launches, price changes, new positioning — not every blog post."
-            : "Add a competitor and we'll tell you when something real changes."
+            ? "Launches, price changes and new messaging show up here."
+            : "Add a competitor to see what they change."
         }
       />
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {unread > 0 && (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[12.5px] text-muted-foreground">
-            {unread} new change{unread === 1 ? "" : "s"}
-          </span>
+          <span className="text-[13px] text-muted-foreground">{unread} new</span>
           <button
             type="button"
             onClick={onMarkRead}
-            className={cn(ghostBtn, "h-7 px-2.5 text-[12px]")}
+            className={cn(ghostBtn, "h-8 px-3 text-[12px]")}
           >
             Mark all read
           </button>
         </div>
       )}
       {groups.map(([label, items]) => (
-        <div key={label}>
-          <h3 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <section key={label} data-no-rhythm>
+          <h4 className="mb-1 px-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {label}
-          </h3>
-          <div className="space-y-2">
+          </h4>
+          <div className="space-y-1">
             {items.map((update) => (
               <UpdateRow key={update.id} update={update} />
             ))}
           </div>
-        </div>
+        </section>
       ))}
     </div>
   );

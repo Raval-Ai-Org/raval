@@ -19,8 +19,6 @@ import {
 import {
   Link as LinkIcon,
   Check,
-  Globe,
-  Lock,
   Users,
   Loader2,
   Mail,
@@ -69,6 +67,21 @@ const initials = (n?: string | null, e?: string | null) => {
   return s.slice(0, 2).toUpperCase();
 };
 
+const inviteLink = (baseUrl: string, token: string) => `${baseUrl}/app?invite_token=${token}`;
+
+/** Opens the user's own email app with the invite filled in. */
+const inviteMailto = (email: string, link: string, workspaceName: string | null) => {
+  const subject = workspaceName ? `Join ${workspaceName} on Mellox` : "Join my workspace on Mellox";
+  const body = [
+    "Hi,",
+    "",
+    `I've invited you to ${workspaceName ? `the ${workspaceName} workspace` : "my workspace"} on Mellox.`,
+    `Open this link and sign in (or sign up) with ${email}:`,
+    link,
+  ].join("\n");
+  return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+};
+
 const roleIcon = (r: string) =>
   r === "owner" ? Crown : r === "admin" ? Shield : r === "viewer" ? Eye : Pencil;
 
@@ -102,7 +115,8 @@ export function ShareDialog({
   const [inviting, setInviting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [access, setAccess] = useState<"workspace" | "invite-only">("invite-only");
+  const [lastInvite, setLastInvite] = useState<{ email: string; link: string } | null>(null);
+  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [canManageInvites, setCanManageInvites] = useState(false);
   const getWorkspaceMemberProfilesFn = useServerFn(getWorkspaceMemberProfiles);
@@ -123,7 +137,7 @@ export function ShareDialog({
           .eq("workspace_id", workspaceId)
           .is("accepted_at", null)
           .order("created_at", { ascending: false }),
-        supabase.from("workspaces").select("owner_id").eq("id", workspaceId).maybeSingle(),
+        supabase.from("workspaces").select("owner_id, name").eq("id", workspaceId).maybeSingle(),
       ]);
       const me = sess.user;
       const rows: Member[] = (mres ?? []).map((m: any) => ({
@@ -132,13 +146,14 @@ export function ShareDialog({
         name: m.name,
         avatar_url: m.avatar_url,
         joined_at: m.joined_at,
-        email: m.user_id === me?.id ? (me?.email ?? null) : null,
+        email: m.email ?? (m.user_id === me?.id ? (me?.email ?? null) : null),
         isYou: m.user_id === me?.id,
       }));
       rows.sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : 0));
       setMembers(rows);
       setInvites((ires.data as Invite[]) ?? []);
       setIsOwner(!!me && wres.data?.owner_id === me.id);
+      setWorkspaceName(wres.data?.name ?? null);
       setCanManageInvites(
         !!me && rows.some((row) => row.user_id === me.id && ["owner", "admin"].includes(row.role)),
       );
@@ -168,15 +183,16 @@ export function ShareDialog({
     setInviting(true);
     try {
       const data = await createWorkspaceInvite({ data: { workspaceId, email: trimmed, role } });
-      const link = `${baseUrl}/app?invite_token=${data.token}`;
+      const link = inviteLink(baseUrl, data.token);
+      setLastInvite({ email: trimmed, link });
       try {
         await navigator.clipboard.writeText(link);
         toast.success(`Invite ready for ${trimmed}`, {
-          description: "Link copied to clipboard — paste it into email or chat.",
+          description: "Link copied. Send it by email or chat.",
         });
       } catch {
-        toast.success(`Invite created for ${trimmed}`, {
-          description: "Use the Copy link button below to share it.",
+        toast.success(`Invite ready for ${trimmed}`, {
+          description: "Copy the link below and send it.",
         });
       }
       setEmail("");
@@ -195,9 +211,12 @@ export function ShareDialog({
       await revokeWorkspaceInvite({ data: { workspaceId: workspaceId!, inviteId: id } });
     } catch {
       setInvites(prev);
-      return toast.error("Could not revoke invite");
+      return toast.error("Could not cancel invite");
     }
-    toast.success("Invite revoked");
+    if (lastInvite && prev.find((x) => x.id === id)?.email === lastInvite.email) {
+      setLastInvite(null);
+    }
+    toast.success("Invite cancelled", { description: "That link no longer works." });
   };
 
   const removeMember = async (userId: string) => {
@@ -244,9 +263,8 @@ export function ShareDialog({
         onOpenChange={setOpen}
         size="sm"
         Icon={UserPlus}
-        eyebrow="Workspace"
         title="Invite to workspace"
-        description="Invite teammates to collaborate — they get access to this workspace's chats, agents, and content."
+        description="Work on this workspace together"
         srDescription="Share workspace and manage members"
         bodyClassName="px-6 py-5"
       >
@@ -328,18 +346,63 @@ export function ShareDialog({
                   have read-only access.
                 </>
               ) : (
-                <>Only the workspace owner can invite or remove members.</>
+                <>Only admins and the owner can invite people.</>
               )}
             </p>
           </section>
 
-          {/* Copy invite link */}
+          {lastInvite && (
+            <section
+              aria-label="Invite ready"
+              className="space-y-2 rounded-xl border border-[hsl(var(--brand-green)/0.35)] bg-[hsl(var(--brand-green)/0.06)] p-3"
+            >
+              <div className="text-[12px] font-medium text-foreground">
+                Invite ready for {lastInvite.email}
+              </div>
+              <div className="flex items-stretch gap-2 rounded-lg border border-border/60 bg-background/70 p-1 pl-3">
+                <span className="flex-1 truncate self-center text-[11.5px] text-muted-foreground">
+                  {lastInvite.link}
+                </span>
+                <Button
+                  onClick={() => copy(lastInvite.link, "last-invite")}
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 rounded-md px-2.5 text-[11.5px] font-medium"
+                >
+                  {copied === "last-invite" ? (
+                    <>
+                      <Check className="mr-1 h-3 w-3 text-[hsl(var(--brand-green))]" /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <LinkIcon className="mr-1 h-3 w-3" /> Copy
+                    </>
+                  )}
+                </Button>
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 rounded-md px-2.5 text-[11.5px] font-medium"
+                >
+                  <a href={inviteMailto(lastInvite.email, lastInvite.link, workspaceName)}>
+                    <Mail className="mr-1 h-3 w-3" /> Email
+                  </a>
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                They sign in or sign up with this email, then join right away.
+              </p>
+            </section>
+          )}
+
+          {/* Link for people already in the workspace */}
           <section aria-labelledby="link-heading" className="space-y-2">
             <div
               id="link-heading"
               className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
             >
-              <LinkIcon className="h-3 w-3" /> Shareable workspace link
+              <LinkIcon className="h-3 w-3" /> Workspace link (members only)
             </div>
             <div className="flex items-stretch gap-2 rounded-lg border border-border/60 bg-background/50 p-1 pl-3">
               <span className="flex-1 truncate self-center text-[12px] text-muted-foreground">
@@ -452,7 +515,7 @@ export function ShareDialog({
                     </span>
                   </div>
                   {invites.map((inv) => {
-                    const link = `${baseUrl}/app?invite_token=${inv.token}`;
+                    const link = inviteLink(baseUrl, inv.token);
                     return (
                       <div
                         key={inv.id}
@@ -484,11 +547,21 @@ export function ShareDialog({
                             </span>
                           )}
                         </button>
+                        <a
+                          href={inviteMailto(inv.email, link, workspaceName)}
+                          title="Email invite"
+                          aria-label={`Email invite to ${inv.email}`}
+                          className="rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground transition hover:bg-background hover:text-foreground"
+                        >
+                          <span className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" /> Email
+                          </span>
+                        </a>
                         {canManageInvites && (
                           <button
                             onClick={() => revoke(inv.id)}
-                            title="Revoke invite"
-                            aria-label={`Revoke invite for ${inv.email}`}
+                            title="Cancel invite"
+                            aria-label={`Cancel invite for ${inv.email}`}
                           >
                             <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                           </button>
@@ -505,39 +578,6 @@ export function ShareDialog({
                 </div>
               )}
             </div>
-          </section>
-
-          {/* General access */}
-          <section aria-labelledby="access-heading">
-            <div
-              id="access-heading"
-              className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
-            >
-              <Globe className="h-3 w-3" /> General access
-            </div>
-            <button
-              onClick={() => setAccess((a) => (a === "workspace" ? "invite-only" : "workspace"))}
-              className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-background/40 px-3 py-2.5 text-left transition hover:border-foreground/20"
-            >
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-secondary text-foreground/80">
-                {access === "workspace" ? (
-                  <Users className="h-3.5 w-3.5" />
-                ) : (
-                  <Lock className="h-3.5 w-3.5" />
-                )}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[12.5px] font-medium text-foreground">
-                  {access === "workspace" ? "Anyone in workspace" : "Invite only"}
-                </span>
-                <span className="block text-[11px] text-muted-foreground">
-                  {access === "workspace"
-                    ? "Everyone in this workspace can access"
-                    : "Only people added above can access"}
-                </span>
-              </span>
-              <span className="text-[10.5px] font-medium text-muted-foreground">Switch</span>
-            </button>
           </section>
         </div>
       </AppModalShell>

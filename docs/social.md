@@ -25,7 +25,7 @@ provider callback is late. Exact contracts live in
 
 - GitHub App: source ownership, repository context, callbacks, webhooks, and PR-based writes.
 - Google Analytics/Search Console: OAuth callback, encrypted token storage, sync runs, and aggregates.
-- Firecrawl/DataForSEO/Pexels/Unsplash: server-side intelligence or media providers.
+- Firecrawl/Tavily/Pexels/Unsplash: server-side intelligence or media providers.
 
 The full external SDR runtime is not in this repository. Its availability,
 platform approval state, and production credentials must be verified outside

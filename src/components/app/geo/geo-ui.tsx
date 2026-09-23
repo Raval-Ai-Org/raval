@@ -18,6 +18,8 @@ import {
   ShieldCheck,
   XCircle,
 } from "@/components/icons";
+import { BrandLogo } from "@/components/brand/BrandLogo";
+import { dsFocus, dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { cn } from "@/lib/utils";
 import type { FixSafety, GeoCategoryId, Priority, RuleStatus } from "@/lib/geo/types";
 
@@ -98,16 +100,8 @@ export const SAFETY_META: Record<FixSafety, { label: string; hint: string }> = {
   },
 };
 
-export const btnFocus =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background";
-export const primaryBtn = cn(
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-primary font-semibold text-primary-foreground shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)] transition-all duration-200 hover:-translate-y-px hover:bg-primary/90 hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)] active:translate-y-0 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
-  btnFocus,
-);
-export const ghostBtn = cn(
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-card/80 font-medium text-foreground/85 backdrop-blur transition-all duration-200 hover:border-foreground/20 hover:bg-secondary hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
-  btnFocus,
-);
+// Buttons are the shared surface pills (src/components/app/surface/buttons.ts).
+export { dsFocus as btnFocus, dsPrimaryBtn as primaryBtn, dsGhostBtn as ghostBtn };
 
 /* ───────────────────────── Formatting ───────────────────────── */
 
@@ -149,6 +143,30 @@ export function relativeTime(iso: string | number | null | undefined, now = Date
 
 /* ───────────────────────── Pieces ───────────────────────── */
 
+const ENGINE_LOGO: Record<string, "openai" | "claude" | "gemini"> = {
+  chatgpt: "openai",
+  claude: "claude",
+  gemini: "gemini",
+};
+
+/** An AI engine's mark: the real logo where we have it, else a monogram. */
+export function EngineMark({ id, name, size = 28 }: { id: string; name: string; size?: number }) {
+  const logo = ENGINE_LOGO[id];
+  return (
+    <span
+      aria-hidden
+      className="grid shrink-0 place-items-center rounded-full bg-background text-[11px] font-semibold text-foreground/80 ring-1 ring-border/60 dark:bg-white/[0.08] dark:ring-white/[0.06]"
+      style={{ width: size, height: size }}
+    >
+      {logo ? (
+        <BrandLogo name={logo} brand size={Math.round(size * 0.55)} />
+      ) : (
+        name.charAt(0).toUpperCase()
+      )}
+    </span>
+  );
+}
+
 function AnimatedNumber({ value, className }: { value: number; className?: string }) {
   const mv = useMotionValue(0);
   const display = useTransform(mv, (v) => Math.round(v).toString());
@@ -168,7 +186,7 @@ export function ScoreRing({
   size?: number;
   label?: string;
 }) {
-  const stroke = size > 80 ? 9 : 6;
+  const stroke = size > 80 ? 9 : size > 50 ? 6 : 4;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   return (
@@ -208,7 +226,7 @@ export function ScoreRing({
             value={value}
             className={cn(
               "font-semibold tabular-nums tracking-tight text-foreground",
-              size > 80 ? "text-[30px]" : "text-[17px]",
+              size > 80 ? "text-[30px]" : size > 50 ? "text-[17px]" : "text-[13px]",
             )}
           />
           {size > 80 && <span className="text-[11px] font-medium text-muted-foreground">/100</span>}
@@ -358,7 +376,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           className={cn(
             "whitespace-nowrap rounded-full px-3 py-1 font-medium transition-colors",
-            btnFocus,
+            dsFocus,
             value === o.value
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground",

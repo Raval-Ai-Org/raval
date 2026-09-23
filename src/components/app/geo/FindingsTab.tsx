@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -125,7 +126,13 @@ function IgnoreDialog({
           disabled={!reason || busy}
           className={cn(primaryBtn, "px-3 py-1.5 text-[12px]")}
         >
-          {busy ? "Saving…" : "Ignore"}
+          {busy ? (
+            <>
+              <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden /> Saving…
+            </>
+          ) : (
+            "Ignore"
+          )}
         </button>
         <button
           type="button"
@@ -531,33 +538,17 @@ export function FindingsTab({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3.5 py-2.5">
-        <p className="min-w-0 flex-1 basis-[220px] text-[12.5px]">
-          <span className="font-medium">Fix all automatically</span>
-          <span className="text-muted-foreground">
-            {" "}
-            — every fix Mellox can make, in one GitHub pull request you approve once.
-          </span>
-        </p>
-        <button
-          type="button"
-          onClick={() => onFilterChange({ fixAll: true })}
-          className={cn(primaryBtn, "px-3.5 py-1.5 text-[12.5px]")}
-        >
-          <Wand className="h-3.5 w-3.5" /> Fix all
-        </button>
-      </div>
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={() => onFilterChange({})}
             className={cn(
-              "rounded-full px-3 py-1 text-[12px] font-medium ring-1 transition-colors",
+              "h-8 rounded-full px-3.5 text-[12.5px] font-medium ring-1 transition-colors",
               !filter.category && !filter.ruleId
-                ? "bg-primary text-primary-foreground ring-primary"
-                : "bg-card text-muted-foreground ring-border/70 hover:text-foreground",
+                ? "bg-primary/15 text-foreground ring-primary/40"
+                : "bg-transparent text-muted-foreground ring-border/70 hover:text-foreground",
             )}
           >
             All
@@ -568,10 +559,10 @@ export function FindingsTab({
               type="button"
               onClick={() => onFilterChange({ category: c.id })}
               className={cn(
-                "rounded-full px-3 py-1 text-[12px] font-medium ring-1 transition-colors",
+                "h-8 rounded-full px-3.5 text-[12.5px] font-medium ring-1 transition-colors",
                 filter.category === c.id
-                  ? "bg-primary text-primary-foreground ring-primary"
-                  : "bg-card text-muted-foreground ring-border/70 hover:text-foreground",
+                  ? "bg-primary/15 text-foreground ring-primary/40"
+                  : "bg-transparent text-muted-foreground ring-border/70 hover:text-foreground",
               )}
             >
               {c.short}
@@ -586,7 +577,7 @@ export function FindingsTab({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search findings or pages"
-              className="h-8 w-full rounded-full border border-border/70 bg-background/60 pl-8 pr-3 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-primary/25 sm:w-48"
+              className="h-9 w-full rounded-full border border-border/70 bg-transparent pl-8 pr-3 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-primary/25 sm:w-52"
             />
           </label>
           <label className="sr-only" htmlFor="geo-state-filter">
@@ -596,7 +587,7 @@ export function FindingsTab({
             id="geo-state-filter"
             value={stateFilter}
             onChange={(e) => setStateFilter(e.target.value as typeof stateFilter)}
-            className="h-8 rounded-full border border-border/70 bg-card px-2.5 text-[12px] outline-none"
+            className="h-9 rounded-full border border-border/70 bg-transparent px-3 text-[12.5px] outline-none"
           >
             <option value="active">Open & in progress</option>
             {FILTER_STATES.map((o) => (
@@ -662,15 +653,15 @@ export function FindingsTab({
               <li
                 key={g.ruleId}
                 className={cn(
-                  "overflow-hidden rounded-xl border bg-card/50",
-                  open ? "border-foreground/15" : "border-border/60",
+                  "overflow-hidden rounded-[18px] border bg-surface-3 dark:bg-white/[0.035]",
+                  open ? "border-primary/30" : "border-border/50 dark:border-white/[0.06]",
                 )}
               >
                 <button
                   type="button"
                   aria-expanded={open}
                   onClick={() => setOpenGroup(open ? null : g.ruleId)}
-                  className="flex w-full items-center gap-3 px-3.5 py-3 text-left hover:bg-secondary/40"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-foreground/[0.03]"
                 >
                   <PriorityChip priority={g.priority} />
                   <div className="min-w-0 flex-1">
@@ -716,7 +707,13 @@ export function FindingsTab({
                           className={cn(ghostBtn, "px-3 py-1.5 text-[12px]")}
                           title="Re-scan the affected pages; findings resolve only if the check passes"
                         >
-                          {verifyingGroup === g.ruleId ? "Starting…" : "Verify fixes"}
+                          {verifyingGroup === g.ruleId ? (
+                            <>
+                              <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden /> Starting…
+                            </>
+                          ) : (
+                            "Verify fixes"
+                          )}
                         </button>
                       ) : (
                         <span className="text-[11.5px] text-muted-foreground">

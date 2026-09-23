@@ -233,7 +233,7 @@ function PulseOrb({ phase }: { phase: ScanPhase }) {
         />
       ))}
       <motion.span
-        className="relative grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-emerald-500/20 to-sky-500/20 text-emerald-500 ring-1 ring-emerald-500/30"
+        className="relative grid h-9 w-9 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/25"
         animate={{ scale: [1, 1.06, 1] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
       >
@@ -265,7 +265,7 @@ function ProgressBar({ value }: { value: number }) {
     >
       {/* scaleX, not width: stays on the compositor (see styles.css guidance). */}
       <motion.div
-        className="absolute inset-0 origin-left rounded-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-sky-400"
+        className="absolute inset-0 origin-left rounded-full bg-primary"
         initial={{ scaleX: 0 }}
         animate={{ scaleX: value / 100 }}
         transition={{ type: "spring", stiffness: 40, damping: 18 }}

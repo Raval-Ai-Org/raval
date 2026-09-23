@@ -30,10 +30,9 @@ export default function CompetitorsRoute() {
         if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
       title="Competitors"
-      description="Who you're up against, what they do, and what changed."
-      eyebrow="Intelligence"
       Icon={Users}
       size="xl"
+      bodyClassName="overflow-hidden"
     >
       <Suspense fallback={<PageLoader />}>
         <CompetitorsPanel workspaceId={workspaceId} />

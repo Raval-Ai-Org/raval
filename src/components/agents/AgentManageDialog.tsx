@@ -369,7 +369,8 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
                       <Button
                         size="sm"
                         variant={running || queued ? "secondary" : "default"}
-                        disabled={!on || running}
+                        disabled={!on}
+                        loading={running}
                         onClick={() => {
                           runtime.deploy(m);
                           toast.success(`${agent.name} deployed: ${m.label}`);

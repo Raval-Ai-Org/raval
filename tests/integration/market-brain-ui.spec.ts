@@ -40,9 +40,9 @@ const intelligence = {
     "Interest around AI marketing is strong in the United States. This creates an opportunity to teach practical strategy.",
   trendSignals: [
     {
-      title: "Strong search interest",
+      title: "Strong web coverage",
       direction: "rising",
-      evidence: ["Google Trends reported a measured value of 80."],
+      evidence: ["Multiple recent articles cover AI marketing tools gaining traction."],
       significance: "A focused educational test is warranted.",
       opportunities: ["Create one explainer."],
     },
@@ -76,13 +76,23 @@ const completedCollection = {
   collectionId: COLLECTION_ID,
   data: {
     keywords: ["AI marketing"],
-    interestOverTime: [
-      { timestamp: 1, date: "2026-09-01", values: [80] },
-      { timestamp: 2, date: "2026-09-02", values: [90] },
+    location: "United States",
+    sources: [
+      {
+        title: "AI marketing tools are having a moment",
+        url: "https://example.com/ai-marketing-tools",
+        snippet: "A roundup of AI marketing tools gaining traction with marketing teams.",
+        domain: "example.com",
+        publishedDate: "2026-09-01",
+      },
+      {
+        title: "Marketers are testing AI-generated campaigns",
+        url: "https://example.org/ai-campaigns",
+        snippet: "Early results from AI-generated marketing campaigns.",
+        domain: "example.org",
+        publishedDate: "2026-09-02",
+      },
     ],
-    regionalInterest: [],
-    relatedQueries: [],
-    relatedTopics: [],
   },
 };
 
@@ -215,17 +225,17 @@ test.describe("Market Brain UI", () => {
 
     await openMarketBrain(page, context);
     await scan(page);
-    await expect(page.getByText(/market data is still being collected/i)).toBeVisible();
+    await expect(page.getByText(/searching the web for market signals/i)).toBeVisible();
     await expect(page.getByText("Market pulse")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Interest around AI marketing is strong/i)).toBeVisible();
-    await expect(page.getByTestId("market-brain-kpis")).toContainText("Interest now");
+    await expect(page.getByTestId("market-brain-kpis")).toContainText("Sources found");
     await expect(page.getByRole("tab", { name: /next moves/i })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     await expect(page.getByText("Publish one practical explainer.")).toBeVisible();
     await page.getByRole("tab", { name: /signals/i }).click();
-    await expect(page.getByText("Strong search interest")).toBeVisible();
+    await expect(page.getByText("Strong web coverage")).toBeVisible();
   });
 
   test("shows the stored result on open without starting a scan, and after reopening", async ({
@@ -240,7 +250,7 @@ test.describe("Market Brain UI", () => {
 
     await openMarketBrain(page, context, { latest: storedLatest });
     await expect(page.getByText("Market pulse")).toBeVisible();
-    await expect(page.getByTestId("market-brain-kpis")).toContainText("Interest now");
+    await expect(page.getByTestId("market-brain-kpis")).toContainText("Sources found");
     await expect(page.getByTestId("market-brain-lens")).toContainText("United States");
     await expect(page.getByTestId("market-brain-freshness")).toContainText("Updated 2h ago");
     await expect(page.getByText("Set your market lens")).toHaveCount(0);
@@ -364,7 +374,7 @@ test.describe("Market Brain UI", () => {
     await openMarketBrain(page, context);
     await scan(page);
     await expect(page.getByTestId("market-brain-no-data")).toContainText(
-      "found no measurable search interest",
+      "No recent web coverage was found",
     );
     await expect(page.getByTestId("market-brain-error")).toHaveCount(0);
     await expect(page.getByText("Set your market lens")).toBeVisible();
@@ -377,7 +387,7 @@ test.describe("Market Brain UI", () => {
         state: "failed",
         collectionId: COLLECTION_ID,
         error: {
-          message: "DataForSEO task creation failed: Payment Required.",
+          message: "Search provider failed: Payment Required.",
           providerCode: 40200,
         },
         retryAfterSeconds: 42,
@@ -387,7 +397,7 @@ test.describe("Market Brain UI", () => {
     await openMarketBrain(page, context);
     await scan(page);
     const alert = page.getByTestId("market-brain-error");
-    await expect(alert).toContainText("Google Trends collection failed");
+    await expect(alert).toContainText("Market scan failed");
     await expect(alert).toContainText("Payment Required");
     await expect(alert).toContainText("retry available in 42s");
   });
@@ -421,7 +431,7 @@ test.describe("Market Brain UI", () => {
     const progress = page.getByTestId("market-brain-pending").getByRole("progressbar");
     await expect(progress).toBeVisible();
     await expect(page.getByTestId("market-brain-skeleton")).toBeVisible();
-    await expect(page.locator('[aria-current="step"]')).toContainText("Google Trends");
+    await expect(page.locator('[aria-current="step"]')).toContainText("Web search");
     const firstValue = Number(await progress.getAttribute("aria-valuenow"));
     const firstClock = await page
       .getByTestId("market-brain-pending")
@@ -433,7 +443,9 @@ test.describe("Market Brain UI", () => {
       firstClock ?? "",
     );
 
-    await expect(page.getByText(/Mellox is analyzing your market/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Mellox is analyzing your market/i)).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.locator('[aria-current="step"]')).toContainText("Analysis");
     await expect(page.getByText("Market pulse")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("market-brain-pending")).toHaveCount(0);

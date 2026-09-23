@@ -8,6 +8,7 @@
 // goes through the caller's RLS client except asset storage (service role, in
 // persist.server.ts).
 import { humanizeOutput } from "@/lib/studio/humanize";
+import { naturalizeVariants } from "@/lib/studio/naturalize.server";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { runStructuredPrompt, AiOutputError, AiGatewayError } from "@/lib/ai";
@@ -860,6 +861,19 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     angle: angle.label,
     partial: partial.length ? partial : undefined,
   });
+  // Second pass: rewrite only the captions that still read like AI marketing
+  // copy (cliché phrasing, robotic structure). Most ship untouched — this
+  // only ever replaces a variant with a validated, fact-preserving rewrite,
+  // never blocks the job if the model call fails.
+  if (!mediaOnly && output.variants?.length) {
+    output = {
+      ...output,
+      variants: await naturalizeVariants(output.variants, {
+        brandName: ctx.brandName,
+        brandText: ctx.brandText,
+      }),
+    };
+  }
   const title = (output.title || input.intent.brief).slice(0, 120);
 
   // Drafts before rendering so the asset can link to them.

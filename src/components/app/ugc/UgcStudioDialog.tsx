@@ -48,7 +48,7 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
     <AppModalShell
       open={open}
       onOpenChange={setOpen}
-      size="xl"
+      size="2xl"
       Icon={Video}
       title="Creator Video Ads"
       description="From product link to video ad"

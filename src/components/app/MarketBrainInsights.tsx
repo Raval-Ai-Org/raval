@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
@@ -137,8 +137,13 @@ export function KpiStrip({ metrics }: { metrics: SignalMetrics }) {
 
 /* ------------------------------ pulse card ------------------------------- */
 
-function DirectionBadge({ direction }: { direction: NonNullable<ReturnType<typeof overallDirection>> }) {
-  const Icon = direction === "rising" ? TrendingUp : direction === "declining" ? TrendingDown : Minus;
+function DirectionBadge({
+  direction,
+}: {
+  direction: NonNullable<ReturnType<typeof overallDirection>>;
+}) {
+  const Icon =
+    direction === "rising" ? TrendingUp : direction === "declining" ? TrendingDown : Minus;
   return (
     <span
       className={cn(
@@ -187,7 +192,7 @@ export function PulseSummary({
   completedAt: string | null;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.08] via-card to-sky-500/[0.05] p-4">
+    <section className="ds-tile ds-glow relative overflow-hidden border-primary/20 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-emerald-600 dark:text-emerald-400">
           <Sparkles className="h-3 w-3" aria-hidden="true" /> Market pulse
@@ -624,9 +629,7 @@ export function InsightTabs({
           {tab === "actions" && <ActionsList intelligence={intelligence} />}
           {tab === "signals" && <SignalsList intelligence={intelligence} />}
           {tab === "opportunities" && <OpportunitiesList intelligence={intelligence} />}
-          {tab === "sources" && (
-            <SourcesPanel intelligence={intelligence} trendData={trendData} />
-          )}
+          {tab === "sources" && <SourcesPanel intelligence={intelligence} trendData={trendData} />}
         </motion.div>
       </AnimatePresence>
     </section>

@@ -119,9 +119,6 @@ async function loadWorkspaceSnapshot(
   const insightRows = ((insights as { data: Row[] | null }).data ?? []) as Row[];
 
   const intelligence = market?.intelligence ?? null;
-  const rising =
-    market?.result?.data?.relatedQueries?.filter((q) => q.kind === "rising").map((q) => q.query) ??
-    [];
 
   const value: WorkspaceSnapshot = {
     name: str(ws.name) ?? "the brand",
@@ -156,7 +153,7 @@ async function loadWorkspaceSnapshot(
         .filter((t) => t.direction === "rising")
         .map((t) => `Rising: ${t.title}`),
     ].slice(0, 6),
-    risingQueries: [...new Set([...rising, ...(intelligence?.relatedQueries ?? [])])].slice(0, 8),
+    risingQueries: [...new Set(intelligence?.relatedQueries ?? [])].slice(0, 8),
     competitorMoves: alertRows
       .map((a) => [str(a.title), str(a.summary)].filter(Boolean).join(": ").slice(0, 240))
       .filter(Boolean),

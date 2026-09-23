@@ -118,6 +118,13 @@ export const getConnectors = createServerFn({ method: "POST" })
           issues,
           diagnostic,
         },
+        wordpress: {
+          ready: Boolean(process.env.WORDPRESS_TOKEN_ENCRYPTION_KEY),
+          installVerification: "application_password",
+          issues: process.env.WORDPRESS_TOKEN_ENCRYPTION_KEY
+            ? []
+            : ["WORDPRESS_TOKEN_ENCRYPTION_KEY is not configured on this server"],
+        },
       },
       connections: (connections.data ?? []).map((r) => presentConnection(r as never)),
       sources: (sources.data ?? []).map((r) => presentSource(r as never)),

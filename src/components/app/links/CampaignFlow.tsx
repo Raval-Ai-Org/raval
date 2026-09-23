@@ -332,7 +332,7 @@ export function CampaignFlow({
                 </p>
               </header>
 
-              <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-1">
+              <div className="overflow-hidden rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035]">
                 <ul className="divide-y divide-border">
                   {chosen.map((item) => (
                     <li
@@ -394,7 +394,7 @@ export function CampaignFlow({
                 </div>
               )}
 
-              <div className="rounded-2xl border border-border bg-card p-5">
+              <div className="rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-5">
                 <h2 className="text-[14px] font-semibold text-foreground">What happens next</h2>
                 <ol className="mt-3 space-y-2.5">
                   {[

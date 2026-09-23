@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { Link, useNavigate } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
 import { motion } from "framer-motion";
@@ -119,6 +120,13 @@ function LoginPage() {
           New here?{" "}
           <Link
             to="/signup"
+            // Keep where the person was going (e.g. an invite link) when they
+            // switch between sign in and sign up.
+            onClick={(e) => {
+              if (nextPath === "/projects") return;
+              e.preventDefault();
+              navigate({ to: "/signup", search: { next: nextPath } });
+            }}
             className="font-semibold text-primary underline-offset-4 hover:underline"
           >
             Create an account
@@ -198,7 +206,13 @@ function LoginPage() {
             disabled={resetLoading || emailLoading || googleLoading}
             className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-50"
           >
-            {resetLoading ? "Sending…" : "Forgot password?"}
+            {resetLoading ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Spinner className="h-3 w-3 animate-spin" aria-hidden /> Sending…
+              </span>
+            ) : (
+              "Forgot password?"
+            )}
           </button>
         </motion.div>
 

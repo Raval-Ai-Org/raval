@@ -707,8 +707,7 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
             </Button>
           </div>
           <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
-            Connect the repository behind your website so Mellox can see how your SEO, GEO and AEO
-            setup is built and propose approved fixes as pull requests you review.
+            The code behind your website. Mellox suggests fixes as pull requests you approve.
           </p>
         </div>
       </div>
@@ -774,7 +773,9 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
               <Github className="h-4 w-4" /> Connect GitHub
             </Button>
             {installing && (
-              <span className="text-[12px] text-muted-foreground">Opening GitHub…</span>
+              <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden /> Opening GitHub…
+              </span>
             )}
             {!canManage && (
               <span className="text-[12px] text-muted-foreground">
@@ -1038,7 +1039,7 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
                   size="sm"
                   variant="outline"
                   className="ml-auto"
-                  disabled={installing}
+                  loading={installing}
                   onClick={() => void install()}
                 >
                   Reconnect

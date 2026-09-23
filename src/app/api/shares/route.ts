@@ -1,10 +1,17 @@
 import { z } from "zod";
-import { createHash, randomBytes } from "crypto";
+import { randomBytes } from "crypto";
 import { checkWorkspaceMembership, jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { checkOutput } from "@/server/guardrails/output-check";
 import { moderateImage } from "@/server/guardrails/moderation";
 import { logGuardrailEvent } from "@/server/guardrails/events";
+import {
+  hashShareToken,
+  makeShareToken,
+  openShareToken,
+  sealShareToken,
+  shareUrl,
+} from "@/server/shares/link-token.server";
 
 export const dynamic = "force-dynamic";
 
@@ -48,10 +55,6 @@ const ReplySchema = z.object({
 });
 
 const ListSchema = z.object({ workspaceId: z.string().uuid() });
-
-function sha256(s: string) {
-  return createHash("sha256").update(s, "utf8").digest("hex");
-}
 
 // 128 random bits (26 base32 chars). The old slug mixed ~40 bits of
 // randomBytes with Math.random(); access still needs the token, but the slug
@@ -144,10 +147,6 @@ async function reviewShareItems(
   return { findings, blocking: findings.filter((f) => f.severity === "block") };
 }
 
-function makeToken(): string {
-  return randomBytes(24).toString("base64url");
-}
-
 async function bcryptHash(pw: string): Promise<string> {
   // Lightweight password hash using scrypt (Node built-in) — avoids extra deps.
   // Async form: the sync one blocks the event loop for ~50-100ms, which stalls
@@ -165,7 +164,8 @@ async function bcryptHash(pw: string): Promise<string> {
   return `scrypt$${salt.toString("hex")}$${key.toString("hex")}`;
 }
 
-// One endpoint, four actions (?action=list|revoke|decide|create). Bodies are
+// One endpoint, several actions (?action=list|revoke|reactivate|link|rotate|
+// reply|decide|create). Bodies are
 // parsed per action; a ZodError becomes a 400 in the route kernel.
 export const POST = defineRoute({
   name: "shares",
@@ -221,31 +221,51 @@ export const POST = defineRoute({
       return Response.json({ ok: true });
     }
 
-    if (action === "reactivate" || action === "link") {
+    // link: the share's current link (the same one the client already has).
+    // rotate: a new link; the old one stops working. reactivate: re-open a
+    // revoked share, keeping its link when it can be recovered.
+    if (action === "reactivate" || action === "link" || action === "rotate") {
       const { shareId } = RevokeSchema.parse(await request.json());
       const { data: share } = await supabase
         .from("client_shares")
-        .select("workspace_id, slug")
+        .select("workspace_id, slug, token_hash, token_ciphertext")
         .eq("id", shareId)
         .maybeSingle();
+      // RLS hides other workspaces' shares: not found, not "bad request".
+      if (!share) return jsonError(404, "Share not found");
       const access = await checkWorkspaceMembership(
         { ok: true, userId, claims: {} as never, supabase },
         share?.workspace_id,
         { minRole: "editor" },
       );
       if (!access.ok) return access.response;
-      const token = makeToken();
-      const { error } = await supabase
+      const origin = new URL(request.url).origin;
+
+      const existing =
+        action === "rotate" ? null : openShareToken(share.token_ciphertext, share.token_hash);
+      if (existing && action === "link") {
+        return Response.json({
+          ok: true,
+          url: shareUrl(origin, share.slug, existing),
+          rotated: false,
+        });
+      }
+      const token = existing ?? makeShareToken();
+      const { data: updated, error } = await supabase
         .from("client_shares")
         .update({
-          token_hash: sha256(token),
+          token_hash: hashShareToken(token),
+          token_ciphertext: sealShareToken(token),
           ...(action === "reactivate" ? { status: "active" } : {}),
         })
-        .eq("id", shareId);
+        .eq("id", shareId)
+        .select("id");
       if (error) return jsonError(500, error.message);
+      if (!updated?.length) return jsonError(403, "You can't change this share");
       return Response.json({
         ok: true,
-        url: `${new URL(request.url).origin}/share/${share?.slug}?t=${token}`,
+        url: shareUrl(origin, share.slug, token),
+        rotated: !existing,
       });
     }
 
@@ -349,8 +369,8 @@ export const POST = defineRoute({
     }
 
     const slug = makeSlug();
-    const token = makeToken();
-    const tokenHash = sha256(token);
+    const token = makeShareToken();
+    const tokenHash = hashShareToken(token);
     const passwordHash = body.password ? await bcryptHash(body.password) : null;
 
     const { data: share, error: shareErr } = await supabase
@@ -361,6 +381,7 @@ export const POST = defineRoute({
         title: body.title,
         slug,
         token_hash: tokenHash,
+        token_ciphertext: sealShareToken(token),
         client_name: body.clientName ?? null,
         client_email: body.clientEmail ?? null,
         password_hash: passwordHash,
@@ -392,7 +413,7 @@ export const POST = defineRoute({
       id: (share as any).id,
       slug,
       token,
-      url: `${new URL(request.url).origin}/share/${slug}?t=${token}`,
+      url: shareUrl(new URL(request.url).origin, slug, token),
     });
   },
 });

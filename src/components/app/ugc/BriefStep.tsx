@@ -1,8 +1,39 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { RefreshCw, Sparkles, Wand2 } from "@/components/icons";
+import {
+  BookOpen,
+  Compass,
+  Download,
+  FacebookIcon,
+  Gift,
+  InstagramIcon,
+  Lightbulb,
+  Mail,
+  Megaphone,
+  MessageCircle,
+  MousePointerClick,
+  Play,
+  RefreshCw,
+  Repeat2,
+  ShoppingBag,
+  SlidersHorizontal,
+  Sparkles,
+  Star,
+  Target,
+  ThumbsUp,
+  TiktokIcon,
+  User,
+  UserCircle2,
+  Users,
+  Video,
+  Wand2,
+  YoutubeIcon,
+  Zap,
+  type LucideIcon,
+} from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,11 +48,62 @@ import {
   PLATFORMS,
   SETTINGS,
   TONES,
+  labelOf,
+  type FormatId,
+  type ObjectiveId,
+  type PlatformId,
 } from "@/lib/ugc/options";
 import { ugcApi } from "@/lib/ugc/client";
 import type { Brief, Product } from "@/lib/ugc/schemas";
 import { cn } from "@/lib/utils";
-import { ChipGroup, Field, Panel, StepActions } from "./ugc-ui";
+import {
+  ChipGroup,
+  ChoiceTile,
+  CreatorSilhouette,
+  Disclosure,
+  Field,
+  Panel,
+  PhoneFrame,
+  RatioShape,
+  SectionLabel,
+  StepActions,
+} from "./ugc-ui";
+
+const PLATFORM_ICON: Record<PlatformId, LucideIcon> = {
+  tiktok: TiktokIcon,
+  reels: InstagramIcon,
+  shorts: YoutubeIcon,
+  facebook: FacebookIcon,
+};
+
+const PLATFORM_SHORT: Record<PlatformId, string> = {
+  tiktok: "TikTok",
+  reels: "Reels",
+  shorts: "Shorts",
+  facebook: "Facebook",
+};
+
+const OBJECTIVE_ICON: Record<ObjectiveId, LucideIcon> = {
+  sales: ShoppingBag,
+  conversion: MousePointerClick,
+  awareness: Megaphone,
+  engagement: MessageCircle,
+  app_install: Download,
+  lead_gen: Mail,
+};
+
+const FORMAT_ICON: Record<FormatId, LucideIcon> = {
+  testimonial: Star,
+  problem_solution: Lightbulb,
+  demo: Play,
+  unboxing: Gift,
+  before_after: Repeat2,
+  storytelling: BookOpen,
+  founder: UserCircle2,
+  review: ThumbsUp,
+  educational: Compass,
+  viral_hook: Zap,
+};
 
 export function BriefStep({
   workspaceId,
@@ -45,7 +127,6 @@ export function BriefStep({
   onSkipToConcepts: (brief: Brief) => void;
 }) {
   const [brief, setBrief] = useState<Brief>(initialBrief);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const set = <K extends keyof Brief>(key: K, value: Brief[K]) =>
     setBrief((b) => ({ ...b, [key]: value }));
   const setCreator = <K extends keyof Brief["creator"]>(key: K, value: Brief["creator"][K]) =>
@@ -54,6 +135,7 @@ export function BriefStep({
   const [writing, setWriting] = useState(false);
   const [written, setWritten] = useState<string | null>(null);
   const ours = !!written && brief.instructions.trim() === written.trim();
+  const platform = PLATFORMS.find((p) => p.id === brief.platform) ?? PLATFORMS[0];
 
   const writeNotes = async () => {
     if (writing) return;
@@ -68,7 +150,7 @@ export function BriefStep({
       );
       set("instructions", notes);
       setWritten(notes);
-      toast.success("Creative notes written", {
+      toast.success("Notes written", {
         action: { label: "Undo", onClick: () => set("instructions", previous) },
       });
     } catch (e) {
@@ -81,98 +163,164 @@ export function BriefStep({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel className="space-y-4">
-          <h3 className="text-sm font-semibold">Campaign</h3>
-          <Field label="Objective">
+    <div className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="min-w-0 space-y-6">
+          <div className="space-y-2.5">
+            <SectionLabel icon={Video}>Where</SectionLabel>
+            <div role="radiogroup" aria-label="Platform" className="grid grid-cols-4 gap-2">
+              {PLATFORMS.map((p) => {
+                const Icon = PLATFORM_ICON[p.id];
+                return (
+                  <ChoiceTile
+                    key={p.id}
+                    selected={brief.platform === p.id}
+                    onSelect={() => set("platform", p.id)}
+                    label={PLATFORM_SHORT[p.id]}
+                    sublabel={p.hint}
+                    visual={<Icon className="size-5" />}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <SectionLabel icon={Target}>Goal</SectionLabel>
             <ChipGroup
-              label="Objective"
-              options={OBJECTIVES}
+              label="Goal"
+              options={OBJECTIVES.map((o) => ({ ...o, icon: OBJECTIVE_ICON[o.id] }))}
               value={brief.objective}
               onChange={(v) => set("objective", v)}
             />
-          </Field>
-          <Field label="Platform" hint="Sets the format and pacing">
-            <ChipGroup
-              label="Platform"
-              options={PLATFORMS}
-              value={brief.platform}
-              onChange={(v) => set("platform", v)}
-            />
-          </Field>
-          <Field
-            label="Target audience"
-            htmlFor="ugc-audience"
-            hint={product.audienceHints.length ? "Suggested from the page" : undefined}
-          >
-            <Input
-              id="ugc-audience"
-              value={brief.audience}
-              onChange={(e) => set("audience", e.target.value)}
-              placeholder={product.audienceHints[0] ?? "e.g. busy parents who cook at home"}
-            />
-          </Field>
-          <Field label="Call to action" htmlFor="ugc-cta">
-            <div className="space-y-2">
-              <Input
-                id="ugc-cta"
-                value={brief.cta}
-                onChange={(e) => set("cta", e.target.value)}
-                placeholder={ctas[0]}
-              />
-              <div className="flex flex-wrap gap-1.5">
-                {ctas.map((cta) => (
-                  <button
-                    key={cta}
-                    type="button"
-                    onClick={() => set("cta", cta)}
-                    className="rounded-full bg-surface-3/60 px-2.5 py-1 text-[11.5px] text-muted-foreground ring-1 ring-border/60 transition-colors hover:text-foreground"
-                  >
-                    {cta}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </Field>
-        </Panel>
-
-        <Panel className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold">Creative</h3>
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((v) => !v)}
-              className="text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
-            >
-              {showAdvanced ? "Hide advanced" : "Advanced"}
-            </button>
           </div>
 
-          <Field label="Video style">
-            <ChipGroup
-              label="Video style"
-              size="sm"
-              options={FORMATS}
-              value={brief.format}
-              onChange={(v) => set("format", v)}
-            />
-          </Field>
-          <Field label="Tone">
+          <div className="space-y-2.5">
+            <SectionLabel icon={Sparkles}>Style</SectionLabel>
+            <div
+              role="radiogroup"
+              aria-label="Video style"
+              className="grid grid-cols-3 gap-2 sm:grid-cols-5"
+            >
+              {FORMATS.map((f) => {
+                const Icon = FORMAT_ICON[f.id];
+                return (
+                  <ChoiceTile
+                    key={f.id}
+                    selected={brief.format === f.id}
+                    onSelect={() => set("format", f.id)}
+                    label={f.label}
+                    sublabel={f.hint}
+                    visual={<Icon className="size-5" />}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <SectionLabel icon={MessageCircle}>Tone</SectionLabel>
             <ChipGroup
               label="Tone"
-              size="sm"
               options={TONES}
               value={brief.tone}
               onChange={(v) => set("tone", v)}
             />
+          </div>
+        </div>
+
+        {/* Creator preview */}
+        <Panel className="space-y-4 lg:sticky lg:top-0 lg:self-start">
+          <SectionLabel icon={User}>Creator</SectionLabel>
+          <div className="mx-auto w-36">
+            <PhoneFrame ratio={platform.aspectRatio}>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`${brief.creator.setting}-${brief.creator.vibe}-${brief.creator.gender}`}
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.35 }}
+                  className="absolute inset-0"
+                >
+                  <div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_50%_0%,hsl(var(--primary)/0.35),transparent_60%)]" />
+                  <div className="absolute inset-x-4 bottom-0 top-[22%]">
+                    <CreatorSilhouette />
+                  </div>
+                  <span className="absolute left-2 top-4 rounded-full bg-black/55 px-2 py-0.5 text-[9px] font-medium backdrop-blur">
+                    {labelOf(SETTINGS, brief.creator.setting)}
+                  </span>
+                  <span className="absolute bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2 py-0.5 text-[9px] font-semibold text-primary-foreground">
+                    {labelOf(CREATOR_VIBES, brief.creator.vibe)}
+                  </span>
+                </motion.div>
+              </AnimatePresence>
+            </PhoneFrame>
+          </div>
+          <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+            <RatioShape ratio={platform.aspectRatio} className="text-primary" />
+            {platform.aspectRatio} · {PLATFORM_SHORT[platform.id]}
+          </div>
+          <div className="space-y-3">
+            <ChipGroup
+              label="Presenter"
+              size="sm"
+              options={CREATOR_GENDERS}
+              value={brief.creator.gender}
+              onChange={(v) => setCreator("gender", v)}
+            />
+            <ChipGroup
+              label="Age"
+              size="sm"
+              options={CREATOR_AGES}
+              value={brief.creator.age}
+              onChange={(v) => setCreator("age", v)}
+            />
+            <ChipGroup
+              label="Energy"
+              size="sm"
+              options={CREATOR_VIBES}
+              value={brief.creator.vibe}
+              onChange={(v) => setCreator("vibe", v)}
+            />
+            <ChipGroup
+              label="Setting"
+              size="sm"
+              options={SETTINGS}
+              value={brief.creator.setting}
+              onChange={(v) => setCreator("setting", v)}
+            />
+          </div>
+        </Panel>
+      </div>
+
+      <Disclosure
+        label="Audience, ending & notes"
+        icon={SlidersHorizontal}
+        badge={
+          brief.audience ? (
+            <span className="hidden max-w-[40%] items-center gap-1 truncate rounded-full bg-[var(--ds-well-bg)] px-2 py-0.5 text-[11px] text-muted-foreground sm:inline-flex">
+              <Users className="size-3 shrink-0" aria-hidden />
+              <span className="truncate">{brief.audience}</span>
+            </span>
+          ) : null
+        }
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Who it's for" htmlFor="ugc-audience">
+            <Input
+              id="ugc-audience"
+              value={brief.audience}
+              onChange={(e) => set("audience", e.target.value)}
+              placeholder={product.audienceHints[0] ?? "e.g. busy parents"}
+            />
           </Field>
-          <Field label="Spoken language" htmlFor="ugc-language">
+          <Field label="Language" htmlFor="ugc-language">
             <select
               id="ugc-language"
               value={brief.language}
               onChange={(e) => set("language", e.target.value as Brief["language"])}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="h-9 w-full rounded-full border border-input bg-[var(--ds-well-bg)] px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               {LANGUAGES.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -181,92 +329,66 @@ export function BriefStep({
               ))}
             </select>
           </Field>
-
-          {showAdvanced ? (
-            <div className="space-y-4 border-t border-border/60 pt-4">
-              <div>
-                <h4 className="text-sm font-semibold">Creator on camera</h4>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  An AI-generated everyday creator — not a real person or influencer.
-                </p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Presenter">
-                  <ChipGroup
-                    label="Presenter"
-                    size="sm"
-                    options={CREATOR_GENDERS}
-                    value={brief.creator.gender}
-                    onChange={(v) => setCreator("gender", v)}
-                  />
-                </Field>
-                <Field label="Age">
-                  <ChipGroup
-                    label="Age"
-                    size="sm"
-                    options={CREATOR_AGES}
-                    value={brief.creator.age}
-                    onChange={(v) => setCreator("age", v)}
-                  />
-                </Field>
-                <Field label="Energy">
-                  <ChipGroup
-                    label="Energy"
-                    size="sm"
-                    options={CREATOR_VIBES}
-                    value={brief.creator.vibe}
-                    onChange={(v) => setCreator("vibe", v)}
-                  />
-                </Field>
-                <Field label="Setting">
-                  <ChipGroup
-                    label="Setting"
-                    size="sm"
-                    options={SETTINGS}
-                    value={brief.creator.setting}
-                    onChange={(v) => setCreator("setting", v)}
-                  />
-                </Field>
-              </div>
-            </div>
-          ) : null}
-        </Panel>
-      </div>
-
-      <Panel className="space-y-4">
-        <Field label="Creative notes" htmlFor="ugc-notes" hint="Optional">
+        </div>
+        <Field label="Ending line" htmlFor="ugc-cta">
           <div className="space-y-2">
+            <Input
+              id="ugc-cta"
+              value={brief.cta}
+              onChange={(e) => set("cta", e.target.value)}
+              placeholder={ctas[0]}
+            />
+            <div className="flex flex-wrap gap-1.5">
+              {ctas.map((cta) => (
+                <button
+                  key={cta}
+                  type="button"
+                  onClick={() => set("cta", cta)}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[11.5px] transition-colors",
+                    brief.cta === cta
+                      ? "bg-primary/15 text-foreground ring-1 ring-primary/50"
+                      : "bg-[var(--ds-well-bg)] text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {cta}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Field>
+        <Field label="Notes" htmlFor="ugc-notes" hint="Optional">
+          <div className="relative">
             <Textarea
               id="ugc-notes"
-              rows={brief.instructions.length > 160 ? 8 : 3}
+              rows={brief.instructions.length > 160 ? 7 : 3}
               value={brief.instructions}
               readOnly={writing}
               aria-busy={writing}
               onChange={(e) => set("instructions", e.target.value)}
-              placeholder="Anything the ad must include or avoid — e.g. “show it fitting in a gym bag”, “don't mention price”."
-              className={cn(writing && "opacity-50")}
+              placeholder="Must include or avoid…"
+              className={cn("pb-11", writing && "opacity-50")}
             />
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void writeNotes()}
-                loading={writing}
-                className="h-8 rounded-full px-3 text-xs"
-              >
-                {writing ? null : ours ? <RefreshCw aria-hidden /> : <Wand2 aria-hidden />}
-                {writing
-                  ? "Writing…"
-                  : ours
-                    ? "Try another"
-                    : brief.instructions.trim()
-                      ? "Improve it"
-                      : "Write it for me"}
-              </Button>
-            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => void writeNotes()}
+              loading={writing}
+              className="absolute bottom-2 right-2 h-7 px-2.5 text-[11.5px]"
+            >
+              {writing ? null : ours ? <RefreshCw aria-hidden /> : <Wand2 aria-hidden />}
+              {writing
+                ? "Writing…"
+                : ours
+                  ? "Another"
+                  : brief.instructions.trim()
+                    ? "Improve"
+                    : "Write for me"}
+            </Button>
           </div>
         </Field>
-      </Panel>
+      </Disclosure>
 
       <StepActions>
         <Button variant="ghost" onClick={onBack} className="mr-auto">
@@ -274,12 +396,12 @@ export function BriefStep({
         </Button>
         {hasConcepts ? (
           <Button variant="outline" onClick={() => onSkipToConcepts(brief)} disabled={busy}>
-            Keep current concepts
+            Keep ideas
           </Button>
         ) : null}
         <Button size="lg" onClick={() => onGenerate(brief)} loading={busy}>
           {busy ? null : <Sparkles aria-hidden />}
-          {hasConcepts ? "Write new concepts" : "Write ad concepts"}
+          {hasConcepts ? "New ideas" : "Get ideas"}
         </Button>
       </StepActions>
     </div>

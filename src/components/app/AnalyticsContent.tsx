@@ -11,8 +11,7 @@
 // The whole surface is gated by AnalyticsGate: until a Google property or
 // Search Console site is chosen there is nothing here but a blurred preview
 // and one card asking to connect. After that no panel asks again.
-import { AnimatePresence, motion } from "framer-motion";
-import { AnalyticsTabs, type AnalyticsTab } from "@/components/app/AnalyticsTabs";
+import { TABS, type AnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { AnalyticsGate } from "@/components/app/analytics/AnalyticsLock";
 import { ContentPanel } from "@/components/app/analytics/ContentPanel";
 import { useAnalyticsInvalidation } from "@/components/app/analytics/hooks";
@@ -22,8 +21,7 @@ import { AnalyticsRangeProvider, RangeBar } from "@/components/app/analytics/ran
 import { SearchPanel } from "@/components/app/analytics/SearchPanel";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WebsitePanel } from "@/components/app/analytics/WebsitePanel";
-
-const EASE = [0.22, 1, 0.36, 1] as const;
+import { SurfaceLayout, SurfacePage } from "@/components/app/surface/SurfaceLayout";
 
 export function AnalyticsContent({
   tab,
@@ -33,33 +31,23 @@ export function AnalyticsContent({
   onTabChange: (t: AnalyticsTab) => void;
 }) {
   useAnalyticsInvalidation();
+  const current = TABS.find((t) => t.id === tab) ?? TABS[0];
   return (
     <TooltipProvider delayDuration={200}>
       <AnalyticsRangeProvider>
-        <div className="mx-auto w-full max-w-6xl p-3 pb-16 sm:p-5 lg:p-6">
-          <div className="sticky top-0 z-20 -mx-3 mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-3 pb-3 pt-1 backdrop-blur-xl sm:-mx-5 sm:px-5">
-            <AnalyticsTabs value={tab} onChange={onTabChange} />
-            <RangeBar />
-          </div>
-
-          <AnalyticsGate>
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={tab}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.22, ease: EASE }}
-              >
+        <SurfaceLayout label="Analytics sections" items={TABS} value={tab} onChange={onTabChange}>
+          <SurfacePage title={current.label} subtitle={current.blurb} actions={<RangeBar />}>
+            <AnalyticsGate>
+              <div key={tab} className="ds-enter">
                 {tab === "overview" && <OverviewPanel onTabChange={onTabChange} />}
                 {tab === "website" && <WebsitePanel />}
                 {tab === "search" && <SearchPanel />}
                 {tab === "content" && <ContentPanel />}
                 {tab === "insights" && <InsightsPanel />}
-              </motion.div>
-            </AnimatePresence>
-          </AnalyticsGate>
-        </div>
+              </div>
+            </AnalyticsGate>
+          </SurfacePage>
+        </SurfaceLayout>
       </AnalyticsRangeProvider>
     </TooltipProvider>
   );

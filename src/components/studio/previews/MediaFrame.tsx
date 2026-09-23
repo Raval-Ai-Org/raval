@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Maximize2 } from "lucide-react";
@@ -87,7 +88,9 @@ export function MediaFrame({
     return (
       <RatioFrame ratio={ratio} maxHeight={maxHeight} className={cn(frame, "bg-surface-2")}>
         <div className="absolute inset-0 grid place-items-center text-xs text-muted-foreground">
-          Loading preview…
+          <span className="inline-flex items-center gap-1.5">
+            <Spinner className="size-3.5 animate-spin" aria-hidden /> Loading preview…
+          </span>
         </div>
       </RatioFrame>
     );

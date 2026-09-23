@@ -20,6 +20,7 @@ import * as links from "./links";
 import * as schedules from "./schedules";
 import * as workspaces from "./workspaces";
 import * as webflow from "./webflow";
+import * as wordpress from "./wordpress";
 
 // Registry the /api/rpc/[...fn] route dispatches against. Keys mirror the paths
 // the client stubs in src/lib/*.functions.ts were generated with.
@@ -43,6 +44,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   schedules,
   workspaces,
   webflow,
+  wordpress,
 };
 
 function isServerFn(value: unknown): value is AnyServerFn {

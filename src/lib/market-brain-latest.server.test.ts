@@ -52,10 +52,16 @@ const workspaceId = "22222222-2222-2222-2222-222222222222";
 const completedAt = "2026-09-11T06:00:00.000Z";
 const trendData = {
   keywords: ["AI marketing"],
-  interestOverTime: [{ timestamp: 1, date: "2026-09-01", values: [80] }],
-  relatedQueries: [],
-  relatedTopics: [],
-  regionalInterest: [],
+  location: "United States",
+  sources: [
+    {
+      title: "AI marketing interest is climbing",
+      url: "https://example.com/ai-marketing",
+      snippet: "Coverage of rising AI marketing adoption.",
+      domain: "example.com",
+      publishedDate: "2026-09-10",
+    },
+  ],
 };
 const intelligence = {
   summary: "Interest is strong.",

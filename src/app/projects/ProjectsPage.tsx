@@ -213,7 +213,10 @@ function ProjectsPage() {
   };
 
   return (
-    <div className="relative min-h-[100dvh] overflow-hidden bg-background text-foreground">
+    <div
+      data-mellox-app
+      className="relative min-h-[100dvh] overflow-hidden bg-background text-foreground"
+    >
       <AuroraBackdrop />
 
       {/* Top bar */}
@@ -226,7 +229,12 @@ function ProjectsPage() {
           <Logo height={30} />
         </Link>
         <div className="flex items-center gap-2 sm:gap-3">
-          <AgencyHqPill />
+          <AgencyHqPill
+            waiting={workspaces.reduce(
+              (n, w) => n + w.pendingApprovals + w.draftCount + w.failedCount,
+              0,
+            )}
+          />
           <AccountMenu
             email={userEmail}
             name={userName}
@@ -403,21 +411,40 @@ function ProjectsPage() {
   );
 }
 
-function AgencyHqPill() {
+/**
+ * The way into Command Center. A solid pill (the one dark-on-light control in
+ * the header) with a lime mark, and a live count of what is waiting across
+ * every client so the reason to open it is visible before clicking.
+ */
+function AgencyHqPill({ waiting }: { waiting: number }) {
   return (
     <Link
       to="/agency"
-      aria-label="Open Command Center — combined view across all clients"
-      className="group relative inline-flex h-9 items-center gap-2 overflow-hidden rounded-full border border-primary-border bg-primary-surface pl-1 pr-3.5 text-[13px] font-semibold text-brand-green backdrop-blur-md transition hover:bg-primary-surface hover:border-primary-border hover:shadow-[0_0_28px_-6px_hsl(var(--brand-green)/0.38)]"
+      aria-label={`Open Command Center${waiting ? ` — ${waiting} waiting across your clients` : ""}`}
+      className="group relative inline-flex h-10 items-center gap-2 rounded-full bg-foreground pl-1.5 pr-2 text-[13px] font-semibold text-background shadow-[0_8px_24px_-12px_hsl(var(--foreground)/0.55)] transition-all duration-300 hover:-translate-y-px hover:shadow-[0_14px_34px_-14px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:pr-3"
     >
-      <span className="relative grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-brand-green to-emerald-700 text-primary-foreground shadow-[0_0_14px_-3px_hsl(var(--brand-green)/0.5)] transition group-hover:scale-[1.06]">
+      {/* Lime halo that wakes on hover */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -inset-px rounded-full opacity-0 ring-1 ring-primary/70 transition-opacity duration-300 group-hover:opacity-100"
+      />
+      <span className="relative grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-foreground transition-transform duration-300 group-hover:rotate-[-8deg] group-hover:scale-105">
         <LayoutDashboard className="h-3.5 w-3.5" strokeWidth={2.2} />
-        <span className="pointer-events-none absolute inset-0 rounded-full border border-white/20" />
       </span>
-      <span className="tracking-tight">Command Center</span>
-      <ArrowRight className="h-3.5 w-3.5 text-brand-green/70 transition group-hover:translate-x-0.5 group-hover:text-brand-green" />
-      {/* Shimmer sweep on hover */}
-      <span className="pointer-events-none absolute inset-0 -translate-x-full rounded-full bg-gradient-to-r from-transparent via-white/12 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+      <span className="relative hidden whitespace-nowrap tracking-tight sm:inline">
+        Command Center
+      </span>
+      {waiting > 0 ? (
+        <span className="relative inline-flex h-5 min-w-5 sm:ml-0.5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold tabular-nums text-primary-foreground">
+          <span
+            aria-hidden
+            className="absolute inset-0 animate-ping rounded-full bg-primary/50 [animation-duration:2.4s] motion-reduce:hidden"
+          />
+          <span className="relative">{waiting > 99 ? "99+" : waiting}</span>
+        </span>
+      ) : (
+        <ArrowRight className="relative hidden h-3.5 w-3.5 opacity-60 transition group-hover:translate-x-0.5 group-hover:opacity-100 sm:block" />
+      )}
     </Link>
   );
 }

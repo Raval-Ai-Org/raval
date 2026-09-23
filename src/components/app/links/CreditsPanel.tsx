@@ -85,10 +85,8 @@ export function CreditsPanel({
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8 pb-8">
       <Rise>
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-1 sm:p-7">
-          <p className="text-[13px] uppercase tracking-wide text-muted-foreground">
-            Available balance
-          </p>
+        <div className="rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-6 shadow-1 sm:p-7">
+          <p className="text-[13px] font-medium text-muted-foreground">Available</p>
           <Money
             usd={availableUsd}
             cents
@@ -126,7 +124,7 @@ export function CreditsPanel({
             <Rise key={pack.id} index={index}>
               <div
                 className={cn(
-                  "flex h-full flex-col rounded-2xl border border-border bg-card p-5 shadow-1 transition-shadow",
+                  "flex h-full flex-col rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-5 shadow-1 transition-shadow",
                   canBuy && "hover:shadow-2",
                 )}
               >
@@ -134,17 +132,20 @@ export function CreditsPanel({
                   usd={pack.valueUsd}
                   className="text-[26px] font-semibold tracking-tight text-foreground"
                 />
-                <p className="mt-0.5 text-[12.5px] text-muted-foreground">of balance</p>
-                {pack.bonusUsd > 0 && (
-                  <p className="mt-2 text-[12.5px] font-medium text-success">
-                    <Money usd={pack.bonusUsd} /> free
-                  </p>
-                )}
+                <p className="mt-0.5 text-[12.5px] text-muted-foreground">added to balance</p>
+                {/* Reserve the line either way, so every Pay button sits at the same height. */}
+                <p className="mb-4 mt-2 h-5 text-[12.5px] font-medium text-success">
+                  {pack.bonusUsd > 0 && (
+                    <>
+                      <Money usd={pack.bonusUsd} /> free
+                    </>
+                  )}
+                </p>
                 <button
                   type="button"
                   onClick={() => void buy(pack.id)}
                   disabled={!canBuy || busy !== null}
-                  className={cn(btnPrimary, "mt-4 w-full")}
+                  className={cn(btnPrimary, "mt-auto w-full")}
                 >
                   {busy === pack.id ? (
                     <Spinner className="h-4 w-4 animate-spin" aria-hidden />
@@ -164,11 +165,11 @@ export function CreditsPanel({
         {history.isLoading ? (
           <ListSkeleton rows={3} />
         ) : (history.data ?? []).length === 0 ? (
-          <p className="rounded-2xl border border-border bg-card p-5 text-[13.5px] text-muted-foreground">
+          <p className="rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-5 text-[13.5px] text-muted-foreground">
             Nothing yet.
           </p>
         ) : (
-          <ul className="overflow-hidden rounded-2xl border border-border bg-card shadow-1">
+          <ul className="overflow-hidden rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035]">
             {(history.data ?? []).map((entry) => (
               <li
                 key={entry.id}

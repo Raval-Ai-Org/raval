@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
  * orbit while Mellox is working. Used next to the reply that is being written.
  */
 export function MelloxPulse({ active, className }: { active: boolean; className?: string }) {
-  const reduce = useReducedMotion();
   return (
     <span
       aria-hidden
@@ -18,14 +17,14 @@ export function MelloxPulse({ active, className }: { active: boolean; className?
     >
       <motion.span
         className="mx-pulse__orbit absolute inset-0 rounded-full"
-        // The orbit is a loading signal, so it keeps turning with reduced motion.
+        // Orbit and breathing are loading signals, so they keep going with reduced motion.
         animate={active ? { rotate: 360 } : { rotate: 0 }}
         transition={active ? { duration: 2.4, ease: "linear", repeat: Infinity } : {}}
       />
       <motion.span
         className="mx-pulse__core relative grid size-[18px] place-items-center"
-        animate={active && !reduce ? { scale: [1, 0.86, 1] } : { scale: 1 }}
-        transition={active && !reduce ? { duration: 1.6, ease: "easeInOut", repeat: Infinity } : {}}
+        animate={active ? { scale: [1, 0.86, 1] } : { scale: 1 }}
+        transition={active ? { duration: 1.6, ease: "easeInOut", repeat: Infinity } : {}}
       >
         <svg viewBox="0 0 24 24" className="size-full" fill="none">
           <path

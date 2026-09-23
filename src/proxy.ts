@@ -55,7 +55,12 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/w/");
 
   if (user && (isRoot || isAuthPage)) {
-    return NextResponse.redirect(new URL("/projects", request.url));
+    // Already signed in: go where the login was headed (an invite link, a
+    // workspace page), not always /projects.
+    const next = isAuthPage
+      ? safeNextPath(request.nextUrl.searchParams.get("next"), "/projects")
+      : "/projects";
+    return NextResponse.redirect(new URL(next, request.url));
   }
 
   if (!user && isProtectedPage) {

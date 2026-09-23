@@ -1,8 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { FileText, Globe, LayoutDashboard, Lightbulb, Search } from "@/components/icons";
-import { cn } from "@/lib/utils";
 
 export type AnalyticsTab = "overview" | "website" | "search" | "content" | "insights";
 
@@ -32,53 +30,4 @@ export function normalizeAnalyticsTab(value: string | null | undefined): Analyti
   if (!value) return null;
   if (TABS.some((t) => t.id === value)) return value as AnalyticsTab;
   return LEGACY[value] ?? null;
-}
-
-export function AnalyticsTabs({
-  value,
-  onChange,
-  className,
-}: {
-  value: AnalyticsTab;
-  onChange: (t: AnalyticsTab) => void;
-  className?: string;
-}) {
-  return (
-    <nav
-      role="tablist"
-      aria-label="Analytics sections"
-      className={cn(
-        "scrollbar-none flex items-center gap-0.5 overflow-x-auto rounded-full border border-border/70 bg-card/60 p-1",
-        className,
-      )}
-    >
-      {TABS.map((t) => {
-        const isActive = value === t.id;
-        const Icon = t.icon;
-        return (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={isActive}
-            onClick={() => onChange(t.id)}
-            title={t.blurb}
-            className={cn(
-              "relative inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
-              isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {isActive && (
-              <motion.span
-                layoutId="analytics-tab"
-                transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                className="absolute inset-0 -z-10 rounded-full bg-background shadow-sm ring-1 ring-border/70"
-              />
-            )}
-            <Icon className={cn("h-3.5 w-3.5", isActive && "text-primary")} />
-            {t.label}
-          </button>
-        );
-      })}
-    </nav>
-  );
 }

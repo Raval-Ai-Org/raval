@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { toast } from "sonner";
@@ -335,6 +336,7 @@ function Onboarding() {
 
   return (
     <motion.div
+      data-mellox-app
       className="relative flex min-h-[100dvh] flex-col overflow-x-clip bg-background text-foreground"
       animate={{ opacity: leaving ? 0 : 1 }}
       transition={{ duration: duration.slow, ease: ease.accelerate }}
@@ -356,7 +358,13 @@ function Onboarding() {
               disabled={saving}
               className="inline-flex h-8 items-center rounded-lg px-3 text-[12px] font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
             >
-              {saving ? "Saving..." : "Skip for now"}
+              {saving ? (
+                <>
+                  <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> Saving…
+                </>
+              ) : (
+                "Skip for now"
+              )}
             </button>
           )}
         </div>

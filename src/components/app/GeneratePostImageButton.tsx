@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -257,7 +258,13 @@ export function GeneratePostImageButton({
                   </div>
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-[11px] text-muted-foreground">
-                    {bodyLoaded ? "No image yet" : "Loading post…"}
+                    {bodyLoaded ? (
+                      "No image yet"
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Spinner className="h-3 w-3 animate-spin" aria-hidden /> Loading post…
+                      </span>
+                    )}
                   </div>
                 )}
                 {status === "loading" && (

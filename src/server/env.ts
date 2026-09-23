@@ -70,6 +70,10 @@ const Schema = z.object({
   WEBFLOW_CLIENT_SECRET: z.string().optional(),
   WEBFLOW_REDIRECT_URI: z.string().optional(),
   WEBFLOW_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  WORDPRESS_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  WORDPRESS_CLIENT_ID: z.string().optional(),
+  WORDPRESS_CLIENT_SECRET: z.string().optional(),
+  WORDPRESS_REDIRECT_URI: z.string().optional(),
   // AI Visibility rendering fallback + fix verification.
   FEATURE_FLAG_GEO_RENDERING_ENABLED: z.string().optional(),
   GEO_RENDER_EXECUTABLE: z.string().optional(),
@@ -99,6 +103,11 @@ const Schema = z.object({
   ALERT_WEBHOOK_URL: optionalUrl,
   AGENTS_DISABLED: z.string().optional(),
   AI_USER_DAILY_USD: z.coerce.number().min(0).optional(),
+  // Generated-image EXIF/XMP finalization (src/server/assets/image-metadata.server.ts).
+  // Fails open when unset/unavailable — never required.
+  FEATURE_FLAG_ASSET_METADATA_ENABLED: z.string().optional(),
+  ASSET_METADATA_PYTHON_BIN: z.string().optional(),
+  ASSET_METADATA_EXIFTOOL_DIR: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof Schema>;

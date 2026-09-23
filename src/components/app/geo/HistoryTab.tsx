@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { useState } from "react";
 import { ArrowDown, ArrowUp, History, LineChart } from "@/components/icons";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
@@ -180,7 +181,13 @@ export function HistoryTab({
             onClick={() => void runCompare(selected)}
             className={cn(primaryBtn, "px-3 py-1.5 text-[12px]")}
           >
-            {comparing ? "Comparing…" : "Compare selected"}
+            {comparing ? (
+              <>
+                <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden /> Comparing…
+              </>
+            ) : (
+              "Compare selected"
+            )}
           </button>
         }
       />

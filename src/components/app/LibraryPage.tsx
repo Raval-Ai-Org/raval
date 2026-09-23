@@ -356,13 +356,14 @@ export function LibraryPage({
   return (
     <div className="@container/library flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
       {/* ── Header ── */}
-      <header className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-3 @3xl/library:px-5">
-        {onClose || selected ? (
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/50 bg-background/60 px-3 backdrop-blur-xl @3xl/library:px-5">
+        {/* Back only when drilled into an item; the X closes the window. */}
+        {selected ? (
           <button
             type="button"
-            onClick={() => (selected ? setSelected(null) : onClose?.())}
-            aria-label={selected ? "Back to library" : "Close library"}
-            title={selected ? "Back to library" : "Back"}
+            onClick={() => setSelected(null)}
+            aria-label="Back to library"
+            title="Back to library"
             className="grid size-9 shrink-0 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
           >
             <ArrowLeft className="size-4" />
@@ -370,7 +371,7 @@ export function LibraryPage({
         ) : null}
         <span
           aria-hidden
-          className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary-surface text-primary ring-1 ring-primary-border"
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20"
         >
           <LayoutGrid className="size-4" />
         </span>
@@ -388,7 +389,7 @@ export function LibraryPage({
               <span>{selected.kind === "post" ? "Posts" : "Media"}</span>
             </p>
           ) : null}
-          <h1 className="truncate text-base font-semibold leading-tight tracking-tight">
+          <h1 className="truncate text-[15px] font-semibold leading-tight tracking-tight">
             {selected ? selected.title : "Library"}
           </h1>
           {!selected ? (
@@ -789,7 +790,12 @@ function PostCard({ group, thumb, onOpen }: { group: Group; thumb?: string; onOp
         <StatusBadge status={group.status} className="absolute left-2.5 top-2.5" />
         {thumb ? (
           <span className="absolute right-2.5 top-2.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-            <DownloadAssetButton url={thumb} filename={downloadName} compact className="bg-black/55 text-white backdrop-blur hover:bg-black/75" />
+            <DownloadAssetButton
+              url={thumb}
+              filename={downloadName}
+              compact
+              className="bg-black/55 text-white backdrop-blur hover:bg-black/75"
+            />
           </span>
         ) : null}
       </span>
@@ -855,7 +861,13 @@ function MediaCard({ asset, onOpen }: { asset: LibraryAsset; onOpen: () => void 
         {kind === "video" ? "Video" : "Image"}
       </span>
       <span className="absolute right-2.5 top-2.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        <DownloadAssetButton url={asset.url} filename={downloadName} mimeType={asset.mimeType} compact className="bg-black/55 text-white backdrop-blur hover:bg-black/75" />
+        <DownloadAssetButton
+          url={asset.url}
+          filename={downloadName}
+          mimeType={asset.mimeType}
+          compact
+          className="bg-black/55 text-white backdrop-blur hover:bg-black/75"
+        />
       </span>
       {asset.createdAt ? (
         <span className="absolute inset-x-0 bottom-0 translate-y-1 bg-gradient-to-t from-black/60 to-transparent px-2.5 pb-2 pt-6 text-left text-[11px] text-white opacity-0 transition-[opacity,translate] duration-[--motion-duration-base] group-hover:translate-y-0 group-hover:opacity-100">
@@ -874,7 +886,7 @@ function ListRow({ item, thumb, onOpen }: { item: Item; thumb?: string; onOpen: 
       : item.group.type
     : mediaStudioType(item.asset);
   const kind = isPost ? item.group.mediaType : mediaKind(item.asset);
-  const downloadName = `mellox-${isPost ? item.group.mediaType ?? "asset" : kind}-${new Date().toISOString().slice(0, 10)}`;
+  const downloadName = `mellox-${isPost ? (item.group.mediaType ?? "asset") : kind}-${new Date().toISOString().slice(0, 10)}`;
   return (
     <div
       role="button"

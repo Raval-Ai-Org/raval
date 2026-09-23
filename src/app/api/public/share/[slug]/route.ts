@@ -162,12 +162,14 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
 
   const { data: events } = await supabaseAdmin
     .from("client_events")
-    .select(
-      "id, item_id, kind, body, actor_name, actor_email, actor_type, marketer_decision, marketer_read_at, client_read_at, created_at",
-    )
+    // No emails and no view pings: anyone holding the link sees this thread.
+    .select("id, item_id, kind, body, actor_name, actor_type, marketer_decision, created_at")
     .eq("share_id", (share as any).id)
-    .order("created_at", { ascending: true })
+    .neq("kind", "viewed")
+    .order("created_at", { ascending: false })
     .limit(200);
+  // Newest 200, shown oldest first.
+  const thread = (events ?? []).slice().reverse();
 
   await supabaseAdmin
     .from("client_events")
@@ -176,14 +178,17 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     .eq("actor_type", "team")
     .is("client_read_at", null);
 
-  // Fire-and-forget view track
-  await supabaseAdmin
-    .from("client_shares")
-    .update({
-      last_viewed_at: new Date().toISOString(),
-      view_count: ((share as any).view_count ?? 0) + 1,
-    })
-    .eq("id", (share as any).id);
+  // Count a view on page load only; the page's background refresh sends
+  // ?refresh=1 so an open tab does not inflate the count.
+  if (url.searchParams.get("refresh") !== "1") {
+    await supabaseAdmin
+      .from("client_shares")
+      .update({
+        last_viewed_at: new Date().toISOString(),
+        view_count: ((share as any).view_count ?? 0) + 1,
+      })
+      .eq("id", (share as any).id);
+  }
 
   return json(200, {
     share: {
@@ -200,7 +205,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
       passwordRequired,
     },
     items: items ?? [],
-    events: events ?? [],
+    events: thread,
   });
 }
 

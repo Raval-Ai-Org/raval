@@ -312,7 +312,7 @@ export function NotesPanel({ workspaceId }: { workspaceId: string }) {
           aria-expanded={open}
           className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-secondary/60"
         >
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-gradient-to-br from-amber-500/20 via-rose-500/15 to-violet-500/20 text-amber-600 dark:text-amber-400">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
             <StickyNote className="h-3.5 w-3.5" />
           </span>
           <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -548,7 +548,7 @@ export function NotesTabBody({ workspaceId }: { workspaceId: string }) {
       {filtered.length === 0 ? (
         <div className="flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-card/30 px-4 py-8 text-center">
           <div className="flex flex-col items-center gap-1.5">
-            <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-amber-500/15 via-rose-500/10 to-violet-500/15 ring-1 ring-border/60">
+            <div className="grid h-8 w-8 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20">
               <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <p className="text-[12px] font-medium text-foreground">

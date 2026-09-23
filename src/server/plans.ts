@@ -4,7 +4,7 @@
 // Each plan carries AI spend ceilings (daily + monthly USD, measured by
 // src/server/ai/metering.ts) and monthly generation quotas. Every number is
 // env-overridable — PLAN_<ID>_DAILY_USD, _MONTHLY_USD, _MONTHLY_IMAGES,
-// _MONTHLY_VIDEOS, _MONTHLY_POSTS — so pricing experiments need no deploy.
+// _MONTHLY_VIDEOS, _MONTHLY_POSTS, _MAX_EXPERIMENTS — so pricing experiments need no deploy.
 //
 // monthlyPosts is the social publishing credit: each post created at the
 // distribution provider (publish, schedule, retry) uses one, mirroring how
@@ -23,6 +23,11 @@ export type PlanLimits = {
   monthlyPosts: number;
   /** Pages one AI Visibility site scan may crawl (PLAN_<ID>_GEO_MAX_PAGES). */
   geoMaxPages: number;
+  /**
+   * Proof Engine experiments open at once — every status from
+   * awaiting_approval through concluded (PLAN_<ID>_MAX_EXPERIMENTS).
+   */
+  maxConcurrentExperiments: number;
 };
 
 const PLANS: Record<PlanId, PlanLimits> = {
@@ -35,6 +40,7 @@ const PLANS: Record<PlanId, PlanLimits> = {
     monthlyVideos: 10,
     monthlyPosts: 60,
     geoMaxPages: 25,
+    maxConcurrentExperiments: 1,
   },
   growth: {
     id: "growth",
@@ -45,6 +51,7 @@ const PLANS: Record<PlanId, PlanLimits> = {
     monthlyVideos: 40,
     monthlyPosts: 300,
     geoMaxPages: 100,
+    maxConcurrentExperiments: 3,
   },
   agency: {
     id: "agency",
@@ -55,6 +62,7 @@ const PLANS: Record<PlanId, PlanLimits> = {
     monthlyVideos: 150,
     monthlyPosts: 2_000,
     geoMaxPages: 300,
+    maxConcurrentExperiments: 15,
   },
 };
 
@@ -94,6 +102,9 @@ export function getPlanLimits(plan: string | null | undefined): PlanLimits {
     geoMaxPages: Math.max(
       1,
       Math.min(1000, envNumber(`PLAN_${key}_GEO_MAX_PAGES`) ?? base.geoMaxPages),
+    ),
+    maxConcurrentExperiments: Math.floor(
+      Math.min(100, envNumber(`PLAN_${key}_MAX_EXPERIMENTS`) ?? base.maxConcurrentExperiments),
     ),
   };
 }

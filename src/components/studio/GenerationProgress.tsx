@@ -126,9 +126,7 @@ export function GenerationProgress({
         <div className="flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-2.5 text-[1.375rem] font-semibold leading-tight tracking-tight text-foreground">
             <span className="relative flex size-2">
-              {!reduce ? (
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-50" />
-              ) : null}
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-50" />
               <span className="relative inline-flex size-2 rounded-full bg-primary" />
             </span>
             Creating your {format.noun}
@@ -216,7 +214,7 @@ export function GenerationProgress({
                     >
                       <Check className="size-3.5" strokeWidth={3} />
                     </motion.span>
-                  ) : state === "current" && !reduce ? (
+                  ) : state === "current" ? (
                     <motion.span
                       key={`act-${s.id}`}
                       className="grid place-items-center"
@@ -296,7 +294,7 @@ export function GenerationProgress({
                 size="sm"
                 className="text-muted-foreground"
                 onClick={() => setConfirmCancel(true)}
-                disabled={cancelling}
+                loading={cancelling}
               >
                 <X />
                 Cancel

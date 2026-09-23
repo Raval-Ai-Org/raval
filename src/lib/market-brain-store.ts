@@ -505,7 +505,10 @@ async function analyze(run: RunContext, collectionId: string) {
       tone: "error",
       message:
         analysis.state === "failed"
-          ? withDetail("Trend data is ready, but Mellox's analysis failed:", analysis.error?.message)
+          ? withDetail(
+              "Trend data is ready, but Mellox's analysis failed:",
+              analysis.error?.message,
+            )
           : "No market data is available to analyze for this scan.",
       action: "analyze",
     },

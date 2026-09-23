@@ -70,7 +70,7 @@ Raval Ai/
 
 5. Restart the app. Every AI call already routed through
    `src/server/ai/metering.ts`'s `recordUsage()` (OpenRouter, Anthropic, KIE,
-   DataForSEO) now also logs to Helicone — token counts, estimated cost,
+   Tavily, Firecrawl) now also logs to Helicone — token counts, estimated cost,
    latency, status and provider — with full request/response bodies included
    only if `HELICONE_LOG_PROMPTS=true` is also set. Stop the Helicone
    containers (or unset `HELICONE_BASE_URL`) at any time; nothing else

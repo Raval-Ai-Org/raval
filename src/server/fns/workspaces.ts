@@ -31,6 +31,22 @@ const inviteSchema = z.object({
 });
 const inviteIdSchema = z.object({ workspaceId: uuidSchema, inviteId: uuidSchema });
 
+const ROLE_RANK: Record<string, number> = { viewer: 1, editor: 2, admin: 3, owner: 4 };
+
+/** Sign-in emails for the given users (service role; callers check membership first). */
+async function memberEmails(userIds: string[]): Promise<Map<string, string>> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const out = new Map<string, string>();
+  const found = await Promise.all(
+    userIds.map(async (id) => {
+      const { data } = await supabaseAdmin.auth.admin.getUserById(id);
+      return [id, data?.user?.email ?? null] as const;
+    }),
+  );
+  for (const [id, email] of found) if (email) out.set(id, email.toLowerCase());
+  return out;
+}
+
 export const renameWorkspace = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => renameWorkspaceSchema.parse(data))
@@ -190,13 +206,19 @@ export const ensureAuthWorkspace = createServerFn({ method: "POST" })
 
 export const acceptWorkspaceInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) => z.object({ token: uuidSchema }).parse(data))
+  .inputValidator((data) => {
+    const parsed = z.object({ token: z.string().trim() }).parse(data);
+    if (!uuidSchema.safeParse(parsed.token).success) {
+      throw new HttpError(404, "This invite link is not valid. Ask for a new one.");
+    }
+    return parsed;
+  })
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const email = String(context.claims.email ?? "")
       .trim()
       .toLowerCase();
-    if (!email) throw new Error("Could not verify invite email");
+    if (!email) throw new HttpError(400, "Your account has no email address to match the invite");
 
     const { data: invite, error: inviteError } = await supabaseAdmin
       .from("workspace_invites")
@@ -204,22 +226,41 @@ export const acceptWorkspaceInvite = createServerFn({ method: "POST" })
       .eq("token", data.token)
       .maybeSingle();
 
-    if (inviteError || !invite) throw new Error("Invite not found");
+    if (inviteError || !invite) {
+      throw new HttpError(404, "This invite was cancelled or replaced. Ask for a new one.");
+    }
     if (String(invite.email).toLowerCase() !== email) {
-      throw new Error("Invite email does not match your account");
+      throw new HttpError(
+        403,
+        `This invite is for ${invite.email}. You are signed in as ${email}. Sign in with the invited email to join.`,
+      );
+    }
+
+    const { data: existing } = await supabaseAdmin
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", invite.workspace_id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+
+    // Joining never lowers a role someone already has here.
+    if (!existing) {
+      const { error: memberError } = await supabaseAdmin.from("workspace_members").insert({
+        workspace_id: invite.workspace_id,
+        user_id: context.userId,
+        role: invite.role as "admin" | "editor" | "viewer",
+      });
+      if (memberError) throw new Error("Could not join workspace");
+    } else if ((ROLE_RANK[String(existing.role)] ?? 0) < (ROLE_RANK[invite.role] ?? 0)) {
+      const { error: roleError } = await supabaseAdmin
+        .from("workspace_members")
+        .update({ role: invite.role as "admin" | "editor" | "viewer" })
+        .eq("workspace_id", invite.workspace_id)
+        .eq("user_id", context.userId);
+      if (roleError) throw new Error("Could not join workspace");
     }
 
     if (!invite.accepted_at) {
-      const { error: memberError } = await supabaseAdmin.from("workspace_members").upsert(
-        {
-          workspace_id: invite.workspace_id,
-          user_id: context.userId,
-          role: invite.role as "admin" | "editor" | "viewer",
-        },
-        { onConflict: "workspace_id,user_id" },
-      );
-      if (memberError) throw new Error("Could not join workspace");
-
       await supabaseAdmin
         .from("workspace_invites")
         .update({ accepted_at: new Date().toISOString() })
@@ -253,9 +294,12 @@ export const getWorkspaceMemberProfiles = createServerFn({ method: "GET" })
     if (membersError) throw new Error("Could not load members");
 
     const userIds = (members ?? []).map((member) => member.user_id);
-    const { data: profiles, error: profilesError } = userIds.length
-      ? await supabaseAdmin.from("profiles").select("id, name, avatar_url").in("id", userIds)
-      : { data: [], error: null };
+    const [{ data: profiles, error: profilesError }, emails] = await Promise.all([
+      userIds.length
+        ? supabaseAdmin.from("profiles").select("id, name, avatar_url").in("id", userIds)
+        : Promise.resolve({ data: [], error: null }),
+      memberEmails(userIds),
+    ]);
 
     if (profilesError) throw new Error("Could not load member profiles");
 
@@ -270,6 +314,7 @@ export const getWorkspaceMemberProfiles = createServerFn({ method: "GET" })
         };
       })(),
       user_id: member.user_id,
+      email: emails.get(member.user_id) ?? null,
       role: String(member.role),
       joined_at: member.created_at,
     }));
@@ -280,14 +325,30 @@ export const createWorkspaceInvite = createServerFn({ method: "POST" })
   .inputValidator((data) => inviteSchema.parse(data))
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "admin");
+    const email = data.email.toLowerCase();
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: members } = await supabaseAdmin
+      .from("workspace_members")
+      .select("user_id")
+      .eq("workspace_id", data.workspaceId);
+    const emails = await memberEmails((members ?? []).map((m) => m.user_id));
+    if ([...emails.values()].includes(email)) {
+      throw new HttpError(409, `${email} is already in this workspace`);
+    }
+
+    // Inviting the same email again issues a fresh link: the old one stops
+    // working, and someone removed earlier can join again (accepted_at resets).
     const { data: invite, error } = await context.supabase
       .from("workspace_invites")
       .upsert(
         {
           workspace_id: data.workspaceId,
-          email: data.email.toLowerCase(),
+          email,
           role: data.role,
           invited_by: context.userId,
+          token: crypto.randomUUID(),
+          accepted_at: null,
         },
         { onConflict: "workspace_id,email" },
       )

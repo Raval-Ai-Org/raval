@@ -5,6 +5,7 @@
 // active distribution provider; unconnected ones offer inline Connect. When a
 // TikTok post is going out, the creator's allowed audiences are loaded and one
 // must be chosen (TikTok forbids a default).
+import { Spinner } from "@/components/icons";
 import { useCallback, useEffect, useState } from "react";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { useSdrStatus } from "@/hooks/use-sdr-status";
@@ -240,7 +241,13 @@ export function StudioDestinationPicker({
                       disabled={connecting === p.id || !status?.canPublish}
                       className="ml-auto rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
-                      {connecting === p.id ? "…" : needsReconnect ? "Reconnect" : "Connect"}
+                      {connecting === p.id ? (
+                        <Spinner className="h-3 w-3 animate-spin" aria-hidden />
+                      ) : needsReconnect ? (
+                        "Reconnect"
+                      ) : (
+                        "Connect"
+                      )}
                     </button>
                   )}
                 </label>

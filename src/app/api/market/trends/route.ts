@@ -16,12 +16,22 @@ import {
 
 export const dynamic = "force-dynamic";
 
+// A keyword only ever becomes part of a Tavily search query string (a plain
+// JSON field, never a shell/SQL/URL context) and is rendered as ordinary React
+// text (auto-escaped) in the UI — so normal punctuation ("D2C", "AI-powered",
+// "state-of-the-art", "Gen Z & millennials") must be allowed. The old
+// character blocklist here was inherited from DataForSEO's Google Ads
+// Keyword Planner API, where "-", "+", "[...]" and quotes were live search
+// operators; Tavily has no such operator syntax, so that restriction just
+// rejected ordinary keywords once real users had more than a couple of them.
+// Only control characters (which could corrupt logs) are refused now.
 const keyword = z
   .string()
   .trim()
   .min(2)
   .max(100)
-  .refine((value) => !/[<>|"\-+=~!:*()[\]{}]/.test(value), "Invalid keyword");
+  // eslint-disable-next-line no-control-regex -- deliberately matching control chars to refuse them
+  .refine((value) => !/[\x00-\x1f\x7f]/.test(value), "Invalid keyword");
 
 const BodySchema = z.object({
   workspaceId: z.string().uuid(),

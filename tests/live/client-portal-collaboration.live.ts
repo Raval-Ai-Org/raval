@@ -261,4 +261,156 @@ async function api(actor: Actor, path: string, data: unknown) {
       rpc(outsider, "workspaces/acceptWorkspaceInvite", { token: revokedInvite.token }),
     ).rejects.toThrow();
   }, 180_000);
+
+  it("keeps share links stable until a new one is asked for", async () => {
+    const created = await api(owner, "/api/shares?action=create", {
+      workspaceId,
+      title: "Stable link",
+      items: [{ kind: "note", title: "Draft", description: "Body" }],
+    });
+    expect(created.status).toBe(200);
+    const share = created.body as { id: string; slug: string; token: string; url: string };
+    const apiUrl = (pageUrl: string) => {
+      const u = new URL(pageUrl);
+      return `${BASE}/api/public/share/${share.slug}${u.search}`;
+    };
+
+    // Copying the link twice returns the link the client already has.
+    const first = await api(owner, "/api/shares?action=link", { shareId: share.id });
+    const second = await api(owner, "/api/shares?action=link", { shareId: share.id });
+    expect(first.status).toBe(200);
+    expect(first.body.rotated).toBe(false);
+    expect(first.body.url).toBe(share.url);
+    expect(second.body.url).toBe(share.url);
+    expect((await fetch(apiUrl(share.url))).status).toBe(200);
+
+    // The page's background refresh does not count as a view.
+    const before = await admin
+      .from("client_shares")
+      .select("view_count")
+      .eq("id", share.id)
+      .single();
+    await fetch(`${apiUrl(share.url)}&refresh=1`);
+    const after = await admin
+      .from("client_shares")
+      .select("view_count")
+      .eq("id", share.id)
+      .single();
+    expect(after.data?.view_count).toBe(before.data?.view_count);
+
+    // The public thread carries no view pings and no email addresses.
+    await fetch(`${BASE}/api/public/share/${share.slug}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: share.token, kind: "viewed" }),
+    });
+    await fetch(`${BASE}/api/public/share/${share.slug}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        token: share.token,
+        kind: "commented",
+        body: "Looks good",
+        actorName: "Client",
+        actorEmail: "client@example.com",
+      }),
+    });
+    const thread = await (await fetch(apiUrl(share.url))).json();
+    expect(thread.events.some((e: { kind: string }) => e.kind === "viewed")).toBe(false);
+    expect(thread.events.some((e: { body?: string }) => e.body === "Looks good")).toBe(true);
+    expect(JSON.stringify(thread.events)).not.toContain("client@example.com");
+
+    // Turning a link off and on keeps the same link.
+    await api(owner, "/api/shares?action=revoke", { shareId: share.id });
+    const back = await api(owner, "/api/shares?action=reactivate", { shareId: share.id });
+    expect(back.body.url).toBe(share.url);
+    expect((await fetch(apiUrl(share.url))).status).toBe(200);
+
+    // A new link replaces the old one.
+    const rotated = await api(owner, "/api/shares?action=rotate", { shareId: share.id });
+    expect(rotated.status).toBe(200);
+    expect(rotated.body.url).not.toBe(share.url);
+    expect((await fetch(apiUrl(share.url))).status).toBe(404);
+    expect((await fetch(apiUrl(rotated.body.url))).status).toBe(200);
+    const afterRotate = await api(owner, "/api/shares?action=link", { shareId: share.id });
+    expect(afterRotate.body.url).toBe(rotated.body.url);
+
+    // Someone outside the workspace can't read the link or learn it exists.
+    const foreign = await api(outsider, "/api/shares?action=link", { shareId: share.id });
+    expect(foreign.status).toBe(404);
+    expect(foreign.body.url).toBeUndefined();
+  }, 180_000);
+
+  it("lets removed teammates rejoin and never lowers a role", async () => {
+    const teammate = await makeActor("rejoin");
+    const first = await rpc<{ token: string }>(owner, "workspaces/createWorkspaceInvite", {
+      workspaceId,
+      email: teammate.email,
+      role: "editor",
+    });
+    await expect(
+      rpc(teammate, "workspaces/acceptWorkspaceInvite", { token: first.token }),
+    ).resolves.toBe(workspaceId);
+
+    // Members are listed with their emails, and can't be invited twice.
+    const profiles = await rpc<Array<{ user_id: string; email: string | null }>>(
+      owner,
+      "workspaces/getWorkspaceMemberProfiles",
+      { workspaceId },
+    );
+    expect(profiles.find((p) => p.user_id === teammate.id)?.email).toBe(teammate.email);
+    await expect(
+      rpc(owner, "workspaces/createWorkspaceInvite", {
+        workspaceId,
+        email: teammate.email,
+        role: "viewer",
+      }),
+    ).rejects.toThrow(/409/);
+
+    // Accepting an old invite again doesn't lower the role.
+    await rpc(owner, "workspaces/updateWorkspaceMemberRole", {
+      workspaceId,
+      userId: teammate.id,
+      role: "admin",
+    });
+    await rpc(teammate, "workspaces/acceptWorkspaceInvite", { token: first.token });
+    const role = await admin
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", teammate.id)
+      .single();
+    expect(role.data?.role).toBe("admin");
+
+    // Removed, then invited again: the new link works and the old one doesn't.
+    await rpc(owner, "workspaces/removeWorkspaceMember", { workspaceId, userId: teammate.id });
+    const again = await rpc<{ token: string }>(owner, "workspaces/createWorkspaceInvite", {
+      workspaceId,
+      email: teammate.email,
+      role: "viewer",
+    });
+    expect(again.token).not.toBe(first.token);
+    await expect(
+      rpc(teammate, "workspaces/acceptWorkspaceInvite", { token: first.token }),
+    ).rejects.toThrow(/404/);
+    await expect(
+      rpc(teammate, "workspaces/acceptWorkspaceInvite", { token: again.token }),
+    ).resolves.toBe(workspaceId);
+    const rejoined = await teammate.db
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", teammate.id);
+    expect(rejoined.data?.[0]?.role).toBe("viewer");
+
+    // The wrong account gets told which email the invite is for.
+    const forSomeoneElse = await rpc<{ token: string }>(owner, "workspaces/createWorkspaceInvite", {
+      workspaceId,
+      email: `someone-else-${randomUUID().slice(0, 8)}@example.com`,
+      role: "viewer",
+    });
+    await expect(
+      rpc(outsider, "workspaces/acceptWorkspaceInvite", { token: forSomeoneElse.token }),
+    ).rejects.toThrow(/403.*This invite is for someone-else/);
+  }, 180_000);
 });

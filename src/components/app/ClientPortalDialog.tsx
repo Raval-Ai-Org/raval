@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
-import { Slot } from "@radix-ui/react-slot";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +31,8 @@ import {
   Trash2,
   MessageSquare,
   Eye,
+  Mail,
+  RefreshCw,
 } from "@/components/ui/gemini-icons";
 import { StarAgent } from "@/components/StarAgent";
 import { LoadingIndicator } from "@/components/ui/loading-indicator";
@@ -39,10 +40,6 @@ import { cn } from "@/lib/utils";
 
 /** A guardrail finding returned by POST /api/shares when review is needed. */
 type ShareFinding = { itemTitle: string; rule: string; severity: "warn" | "block"; detail: string };
-
-// Matches the other top-bar pills (Schedule, Brand DNA) for visual cohesion.
-const PILL =
-  "group relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-card/70 px-2.5 sm:px-3 text-[12px] font-medium text-foreground/80 backdrop-blur-md transition-[transform,box-shadow,background-color,border-color,color] duration-200 ease-out hover:-translate-y-px hover:border-foreground/20 hover:bg-card hover:text-foreground hover:shadow-[0_4px_12px_-6px_rgba(0,0,0,0.12)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 type ContentRow = {
   id: string;
@@ -93,9 +90,14 @@ const EVENT_META: Record<string, { icon: any; tone: string; label: string }> = {
   suggested: { icon: Lightbulb, tone: "text-[hsl(var(--brand-blue))]", label: "Suggestion" },
   commented: { icon: MessageSquare, tone: "text-foreground/80", label: "Comment" },
   viewed: { icon: Eye, tone: "text-muted-foreground", label: "Viewed" },
+  replied: { icon: MessageSquare, tone: "text-foreground/80", label: "Your team replied" },
 };
 
-export function ClientPortalButton({ workspaceId }: { workspaceId: string | null }) {
+/**
+ * The client portal. Opened by the "open:client-portal" app event (sidebar,
+ * Share menu, chat tools, Studio suggestions); AppShell mounts it once.
+ */
+export function ClientPortalDialog({ workspaceId }: { workspaceId: string | null }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"share" | "inbox" | "manage">("inbox");
   const [pending, setPending] = useState(0);
@@ -106,9 +108,9 @@ export function ClientPortalButton({ workspaceId }: { workspaceId: string | null
     return () => removeAppEventListener("open:client-portal", h);
   }, []);
 
-  // Poll pending count cheap
+  // Pending count for the Inbox tab badge, refreshed while the dialog is open.
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId || !open) return;
     let cancel = false;
     const load = async () => {
       try {
@@ -121,21 +123,19 @@ export function ClientPortalButton({ workspaceId }: { workspaceId: string | null
         const data = await r.json();
         if (cancel) return;
         const p = (data.events ?? []).filter(
-          (e: EventRow) => e.marketer_decision === "pending" && e.kind !== "viewed",
+          (e: EventRow) =>
+            e.actor_type !== "team" && e.marketer_decision === "pending" && e.kind !== "viewed",
         ).length;
         setPending(p);
       } catch {}
     };
     load();
-    // Only poll while the dialog is open AND tab is visible.
-    const id = open
-      ? setInterval(() => {
-          if (!document.hidden) load();
-        }, 60_000)
-      : null;
+    const id = setInterval(() => {
+      if (!document.hidden) load();
+    }, 30_000);
     return () => {
       cancel = true;
-      if (id) clearInterval(id);
+      clearInterval(id);
     };
   }, [workspaceId, open]);
 
@@ -149,55 +149,23 @@ export function ClientPortalButton({ workspaceId }: { workspaceId: string | null
     },
     { id: "share" as const, label: "New share", icon: Plus, badge: 0, hint: "Build a review link" },
     {
-      id: "share" as const,
-      label: "New Review",
-      icon: Plus,
-      badge: 0,
-      hint: "Build a review link",
-    },
-    {
       id: "manage" as const,
-      label: "Manage",
+      label: "Links",
       icon: ShieldCheck,
       badge: 0,
-      hint: "Active share links",
+      hint: "Your share links",
     },
   ];
 
   return (
     <>
-      <Slot onClick={() => setOpen(true)}>
-        <button className={PILL} title="Client portal — share for approval">
-          <Users className="h-3.5 w-3.5 transition-colors group-hover:text-[hsl(var(--brand-green))]" />
-          <span className="hidden md:inline">Clients</span>
-          <AnimatePresence>
-            {pending > 0 && (
-              <motion.span
-                key="badge"
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.5, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 420, damping: 22 }}
-                className="relative grid h-4 min-w-[16px] place-items-center rounded-full bg-gradient-to-br from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] px-1 text-[9.5px] font-semibold tabular-nums text-background shadow-[0_0_0_2px_hsl(var(--background)),0_0_12px_-2px_hsl(var(--brand-green)/0.7)]"
-              >
-                <span
-                  aria-hidden
-                  className="absolute inset-0 rounded-full bg-[hsl(var(--brand-green))] opacity-50 animate-ping"
-                />
-                <span className="relative">{pending}</span>
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
-      </Slot>
       <AppModalShell
         open={open}
         onOpenChange={setOpen}
         size="lg"
         Icon={Users}
-        eyebrow="Client portal"
         title="Share your work. Stay in control."
-        description="Send drafts to clients for review. They can approve, suggest, or reject — nothing changes in your workspace until you confirm."
+        description="Send drafts to clients to approve"
         headerAccessory={
           <div className="hidden sm:block shrink-0">
             <StarAgent
@@ -260,7 +228,7 @@ export function ClientPortalButton({ workspaceId }: { workspaceId: string | null
                 exit={{ opacity: 0, y: -6, filter: "blur(4px)" }}
                 transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               >
-                <InboxView workspaceId={workspaceId} />
+                <InboxView workspaceId={workspaceId} onPendingChange={setPending} />
               </motion.div>
             )}
             {tab === "share" && (
@@ -293,7 +261,13 @@ export function ClientPortalButton({ workspaceId }: { workspaceId: string | null
 }
 
 /* ───────── Inbox ───────── */
-function InboxView({ workspaceId }: { workspaceId: string | null }) {
+function InboxView({
+  workspaceId,
+  onPendingChange,
+}: {
+  workspaceId: string | null;
+  onPendingChange: (count: number) => void;
+}) {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [shares, setShares] = useState<ShareRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -310,9 +284,12 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspaceId }),
       });
+      if (!r.ok) return;
       const data = await r.json();
       setEvents(data.events ?? []);
       setShares(data.shares ?? []);
+    } catch {
+      // Keep the last good list; the next poll retries.
     } finally {
       setLoading(false);
     }
@@ -349,7 +326,7 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ eventId, decision }),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await errorText(r));
       toast.success(
         decision === "accepted" ? "Accepted" : decision === "applied" ? "Applied" : "Dismissed",
       );
@@ -392,7 +369,7 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ shareId, body: replyText.trim() }),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await errorText(r));
       setReplyText("");
       setReplyTo(null);
       toast.success("Reply sent to the client");
@@ -411,6 +388,10 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
     .filter((e) => e.marketer_decision !== "pending" || e.kind === "viewed")
     .slice(0, 20);
   const sharesById = useMemo(() => Object.fromEntries(shares.map((s) => [s.id, s])), [shares]);
+
+  useEffect(() => {
+    onPendingChange(pending.length);
+  }, [pending.length, onPendingChange]);
 
   if (loading && events.length === 0) {
     return <LoadingIndicator label="Loading activity" className="py-12" />;
@@ -494,7 +475,7 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
                             <Button
                               size="sm"
                               onClick={() => saveToMemory(ev)}
-                              disabled={busy === ev.id}
+                              loading={busy === ev.id}
                             >
                               <Lightbulb className="h-3.5 w-3.5 mr-1" /> Save to Memory
                             </Button>
@@ -502,7 +483,7 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
                               size="sm"
                               variant="outline"
                               onClick={() => decide(ev.id, "dismissed")}
-                              disabled={busy === ev.id}
+                              loading={busy === ev.id}
                             >
                               Dismiss
                             </Button>
@@ -512,7 +493,7 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
                             <Button
                               size="sm"
                               onClick={() => decide(ev.id, "accepted")}
-                              disabled={busy === ev.id}
+                              loading={busy === ev.id}
                             >
                               <Check className="h-3.5 w-3.5 mr-1" /> Accept
                             </Button>
@@ -520,7 +501,7 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
                               size="sm"
                               variant="outline"
                               onClick={() => decide(ev.id, "dismissed")}
-                              disabled={busy === ev.id}
+                              loading={busy === ev.id}
                             >
                               Dismiss
                             </Button>
@@ -548,7 +529,8 @@ function InboxView({ workspaceId }: { workspaceId: string | null }) {
                           <Button
                             size="sm"
                             onClick={() => reply(share.id)}
-                            disabled={!replyText.trim() || busy === `reply:${share.id}`}
+                            disabled={!replyText.trim()}
+                            loading={busy === `reply:${share.id}`}
                           >
                             Send
                           </Button>
@@ -664,6 +646,14 @@ function NewShareView({
       toast.error("Pick at least one item to share");
       return;
     }
+    if (password.trim() && password.trim().length < 8) {
+      toast.error("Password needs at least 8 characters");
+      return;
+    }
+    if (clientEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail.trim())) {
+      toast.error("Enter a valid client email");
+      return;
+    }
 
     setBusy(true);
     try {
@@ -696,7 +686,7 @@ function NewShareView({
           return;
         }
       }
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await errorText(r));
       const data = await r.json();
       setReview(null);
       setCreated({ url: data.url, slug: data.slug });
@@ -742,9 +732,19 @@ function NewShareView({
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
             </Button>
           </div>
-          <div className="mt-3 flex items-center justify-center gap-2">
+          {password.trim() && (
+            <div className="mt-2 text-[11.5px] text-muted-foreground">
+              Send the password separately.
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             <Button size="sm" variant="ghost" onClick={() => window.open(created.url, "_blank")}>
               Preview as client
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <a href={shareMailto(created.url, title.trim(), clientEmail.trim() || null)}>
+                <Mail className="h-3.5 w-3.5 mr-1" /> Email to client
+              </a>
             </Button>
             <Button size="sm" onClick={onCreated}>
               Done
@@ -908,7 +908,7 @@ function NewShareView({
             <Button variant="ghost" size="sm" onClick={() => setReview(null)}>
               Go back and edit
             </Button>
-            <Button size="sm" variant="outline" onClick={() => create(true)} disabled={busy}>
+            <Button size="sm" variant="outline" onClick={() => create(true)} loading={busy}>
               Share anyway
             </Button>
           </div>
@@ -964,53 +964,110 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ shareId }),
       });
-      if (!r.ok) throw new Error(await r.text());
-      toast.success("Share revoked");
+      if (!r.ok) throw new Error(await errorText(r));
+      toast.success("Link turned off", { description: "Your client can no longer open it." });
       refresh();
     } catch (e: any) {
-      toast.error("Couldn't revoke", { description: e?.message });
+      toast.error("Couldn't turn the link off", { description: e?.message });
     } finally {
       setBusy(null);
+    }
+  };
+
+  const [confirmRotate, setConfirmRotate] = useState<string | null>(null);
+
+  /** Ask the server for the share's link. link = same link; rotate = new one. */
+  const fetchLink = async (
+    shareId: string,
+    action: "link" | "rotate" | "reactivate",
+  ): Promise<{ url: string; rotated: boolean }> => {
+    const r = await authedFetch(`/api/shares?action=${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shareId }),
+    });
+    if (!r.ok) throw new Error(await errorText(r));
+    const data = await r.json();
+    return { url: data.url, rotated: Boolean(data.rotated) };
+  };
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
     }
   };
 
   const reactivate = async (shareId: string) => {
     setBusy(shareId);
     try {
-      const r = await authedFetch("/api/shares?action=reactivate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shareId }),
+      const { url, rotated } = await fetchLink(shareId, "reactivate");
+      const copied = await copyText(url);
+      toast.success("Link is on again", {
+        description: rotated
+          ? "This is a new link. Send it to your client."
+          : copied
+            ? "Link copied."
+            : undefined,
       });
-      if (!r.ok) throw new Error(await r.text());
-      const { url } = await r.json();
-      await navigator.clipboard.writeText(url);
-      toast.success("Share reactivated — secure link copied");
       refresh();
     } catch (e: any) {
-      toast.error("Couldn't reactivate", { description: e?.message });
+      toast.error("Couldn't turn the link back on", { description: e?.message });
     } finally {
       setBusy(null);
     }
   };
 
   const copyLink = async (s: ShareRow) => {
-    const r = await authedFetch("/api/shares?action=link", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ shareId: s.id }),
-    });
-    if (!r.ok) {
-      toast.error("Couldn't generate a secure link");
-      return;
-    }
-    const { url } = await r.json();
+    setBusy(s.id);
     try {
-      await navigator.clipboard.writeText(url);
+      const { url, rotated } = await fetchLink(s.id, "link");
+      if (!(await copyText(url))) {
+        window.prompt("Copy this link", url);
+        return;
+      }
       setCopiedId(s.id);
       setTimeout(() => setCopiedId(null), 1500);
-    } catch {}
-    toast.success("Secure portal link copied");
+      toast.success("Link copied", {
+        description: rotated ? "This is a new link. The old one no longer works." : undefined,
+      });
+    } catch (e: any) {
+      toast.error("Couldn't get the link", { description: e?.message });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const rotateLink = async (s: ShareRow) => {
+    setBusy(s.id);
+    setConfirmRotate(null);
+    try {
+      const { url } = await fetchLink(s.id, "rotate");
+      const copied = await copyText(url);
+      toast.success("New link made", {
+        description: copied
+          ? "Copied. The old link no longer works."
+          : "The old link no longer works.",
+      });
+    } catch (e: any) {
+      toast.error("Couldn't make a new link", { description: e?.message });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const emailLink = async (s: ShareRow) => {
+    setBusy(s.id);
+    try {
+      const { url } = await fetchLink(s.id, "link");
+      window.location.href = shareMailto(url, s.title, s.client_email);
+    } catch (e: any) {
+      toast.error("Couldn't get the link", { description: e?.message });
+    } finally {
+      setBusy(null);
+    }
   };
 
   if (loading && shares.length === 0) {
@@ -1054,8 +1111,13 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-[13px] font-semibold">
                 {s.title}
+                {s.status === "active" && s.expires_at && new Date(s.expires_at) < new Date() && (
+                  <span className="text-[10px] uppercase tracking-wide text-amber-600">
+                    Expired
+                  </span>
+                )}
                 {s.status !== "active" && (
-                  <span className="text-[10px] uppercase tracking-wide text-red-600">Revoked</span>
+                  <span className="text-[10px] uppercase tracking-wide text-red-600">Off</span>
                 )}
               </div>
               <div className="text-[11.5px] text-muted-foreground">
@@ -1071,20 +1133,64 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <Button size="sm" variant="ghost" onClick={() => copyLink(s)} title="Copy share URL">
-                {copiedId === s.id ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-              </Button>
+              {s.status === "active" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => copyLink(s)}
+                    disabled={busy === s.id}
+                    title="Copy link"
+                    aria-label={`Copy link for ${s.title}`}
+                  >
+                    {copiedId === s.id ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => emailLink(s)}
+                    loading={busy === s.id}
+                    title="Email link"
+                    aria-label={`Email link for ${s.title}`}
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                  </Button>
+                  {confirmRotate === s.id ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => rotateLink(s)}
+                      loading={busy === s.id}
+                      title="The old link will stop working"
+                    >
+                      Make new link?
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setConfirmRotate(s.id)}
+                      loading={busy === s.id}
+                      title="New link (the old one stops working)"
+                      aria-label={`New link for ${s.title}`}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </>
+              )}
               {s.status === "active" ? (
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => revoke(s.id)}
-                  disabled={busy === s.id}
-                  title="Revoke share"
+                  loading={busy === s.id}
+                  title="Turn link off"
+                  aria-label={`Turn off link for ${s.title}`}
                 >
                   <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                 </Button>
@@ -1093,10 +1199,10 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
                   size="sm"
                   variant="outline"
                   onClick={() => reactivate(s.id)}
-                  disabled={busy === s.id}
-                  title="Reactivate share"
+                  loading={busy === s.id}
+                  title="Turn link back on"
                 >
-                  Reactivate
+                  Turn on
                 </Button>
               )}
             </div>
@@ -1105,6 +1211,35 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
       ))}
     </div>
   );
+}
+
+/* ───────── Helpers ───────── */
+/** A readable message from a failed /api/shares response. */
+async function errorText(r: Response): Promise<string> {
+  const text = await r.text().catch(() => "");
+  try {
+    const data = JSON.parse(text) as { error?: unknown; message?: unknown };
+    const msg = data.error ?? data.message;
+    if (typeof msg === "string" && msg) return msg;
+  } catch {
+    // not JSON
+  }
+  if (r.status === 403) return "You need editor access to do this.";
+  return text.slice(0, 200) || `Request failed (${r.status})`;
+}
+
+/** A mailto: link that opens the user's own email app with the link filled in. */
+function shareMailto(url: string, title: string, to: string | null): string {
+  const subject = title ? `For your review: ${title}` : "For your review";
+  const body = [
+    "Hi,",
+    "",
+    "Here is the link to review:",
+    url,
+    "",
+    "You can approve, ask for changes or leave comments there.",
+  ].join("\n");
+  return `mailto:${to ? encodeURIComponent(to) : ""}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 /* ───────── Atoms ───────── */

@@ -93,7 +93,7 @@ export function OrderDetail({
       </button>
 
       <Rise>
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-1 sm:p-7">
+        <div className="rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-6 shadow-1 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
@@ -158,7 +158,7 @@ export function OrderDetail({
         <ul className="space-y-3">
           {placements.map((placement, index) => (
             <Rise key={placement.id} index={index}>
-              <li className="rounded-2xl border border-border bg-card p-5 shadow-1">
+              <li className="rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-5 shadow-1">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">

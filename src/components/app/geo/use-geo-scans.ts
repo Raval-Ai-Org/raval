@@ -22,6 +22,14 @@ async function readJson(res: Response): Promise<Record<string, unknown> | null> 
 
 const isActive = (s: { status: string }) => s.status === "queued" || s.status === "running";
 
+function errorStatus(error: unknown): number | null {
+  return error && typeof error === "object" && "status" in error
+    ? typeof error.status === "number"
+      ? error.status
+      : null
+    : null;
+}
+
 export function useGeoScans(workspaceId: string) {
   const [history, setHistory] = useState<GeoScanSummary[] | null>(null);
   const [current, setCurrent] = useState<GeoScanView | null>(null);
@@ -36,8 +44,11 @@ export function useGeoScans(workspaceId: string) {
         `/api/geo/scans/${id}?workspaceId=${encodeURIComponent(workspaceId)}`,
       );
       const json = await readJson(res);
-      if (!res.ok)
-        throw new Error((json?.error as string) ?? `Couldn't load the scan (${res.status})`);
+      if (!res.ok) {
+        const error = new Error((json?.error as string) ?? `Couldn't load the scan (${res.status})`);
+        Object.assign(error, { status: res.status });
+        throw error;
+      }
       return json!.scan as GeoScanView;
     },
     [workspaceId],
@@ -59,10 +70,21 @@ export function useGeoScans(workspaceId: string) {
       try {
         const rows = await refreshHistory();
         const running = rows.find(isActive);
-        const latest = rows.find((r) => r.status === "succeeded");
+        const completed = rows.filter((r) => r.status === "succeeded");
+        const loadOptional = async (id: string) => {
+          try {
+            return await fetchScan(id);
+          } catch (error) {
+            if (errorStatus(error) === 404) return null;
+            throw error;
+          }
+        };
         const [runningView, latestView] = await Promise.all([
-          running ? fetchScan(running.id) : null,
-          latest ? fetchScan(latest.id) : null,
+          running ? loadOptional(running.id) : null,
+          completed.reduce<Promise<GeoScanView | null>>(
+            async (promise, summary) => (await promise) ?? loadOptional(summary.id),
+            Promise.resolve(null),
+          ),
         ]);
         if (cancelled) return;
         setActive(runningView && isActive(runningView) ? runningView : null);
@@ -164,6 +186,10 @@ export function useGeoScans(workspaceId: string) {
       try {
         setCurrent(await fetchScan(id));
       } catch (e) {
+        if (errorStatus(e) === 404) {
+          setHistory((rows) => rows?.filter((scan) => scan.id !== id) ?? null);
+          return;
+        }
         setError(e instanceof Error ? e.message : "Couldn't load that scan");
       }
     },

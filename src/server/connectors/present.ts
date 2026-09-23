@@ -29,7 +29,7 @@ export type ConnectionRow = {
   manage_url: string | null;
   repository_selection: "all" | "selected" | null;
   permissions: Record<string, string> | null;
-  verification: "oauth" | "install_window";
+  verification: "oauth" | "install_window" | "application_password";
   last_verified_at: string | null;
   last_error: string | null;
   revoked_at: string | null;

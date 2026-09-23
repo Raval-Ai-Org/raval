@@ -40,3 +40,22 @@ export function PageLoader({
     </div>
   );
 }
+
+/**
+ * Shown while a panel's code downloads after a click, so the wait is never
+ * silent. It fades in after a short delay, so fast loads never flash it.
+ */
+export function OpeningPill({ label = "Loading…" }: { label?: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="mx-opening-pill pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex justify-center"
+    >
+      <span className="flex items-center gap-2.5 rounded-full border border-border/70 bg-background/95 py-1.5 pl-2 pr-4 text-[13px] font-medium text-foreground shadow-lg backdrop-blur-xl">
+        <MelloxLoader size={22} />
+        {label}
+      </span>
+    </div>
+  );
+}

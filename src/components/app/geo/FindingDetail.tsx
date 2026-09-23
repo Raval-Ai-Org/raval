@@ -376,7 +376,7 @@ export function SetupRequirement({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => emitAppEvent("open:settings", { section: "connections" })}
+              onClick={() => emitAppEvent("open:settings", { section: "website" })}
             >
               Link a different repository
             </Button>
@@ -393,7 +393,7 @@ export function SetupRequirement({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => emitAppEvent("open:settings", { section: "connections" })}
+              onClick={() => emitAppEvent("open:settings", { section: "website" })}
             >
               Open Settings → Connections
             </Button>

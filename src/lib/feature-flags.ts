@@ -97,6 +97,40 @@ export function isGoogleAnalyticsEnabled(workspaceId?: string): boolean {
   return !isFalsy((process.env.FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED ?? "").trim().toLowerCase());
 }
 
+/**
+ * EXIF/XMP privacy cleanup + attribution for generated images
+ * (src/server/assets/image-metadata.server.ts). Local processing, no paid
+ * call, so on by default; the wrapper itself fails open to the original
+ * bytes whenever Python/ExifTool aren't on PATH, so this flag exists purely
+ * as an operational kill-switch, not a cost gate.
+ * FEATURE_FLAG_ASSET_METADATA_ENABLED_WS_<id> overrides per workspace.
+ */
+export function isAssetMetadataFinalizeEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_ASSET_METADATA_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_ASSET_METADATA_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Proof Engine — controlled website experiments (ADR-0024). OFF unless
+ * FEATURE_FLAG_PROOF_ENGINE_ENABLED is set; FEATURE_FLAG_PROOF_ENGINE_ENABLED_WS_<id>
+ * overrides per workspace (either way). When off, the surface is hidden, its
+ * routes and RPCs answer 404 and the worker skips the workspace.
+ */
+export function isProofEngineEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_PROOF_ENGINE_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return isTruthy(perWs);
+  }
+  return isTruthy((process.env.FEATURE_FLAG_PROOF_ENGINE_ENABLED ?? "").trim().toLowerCase());
+}
+
 /** Is the real SDR distribution path enabled? Off by default. */
 export function isSdrEnabled(): boolean {
   const v = process.env[ENV_FEATURE_SDR];

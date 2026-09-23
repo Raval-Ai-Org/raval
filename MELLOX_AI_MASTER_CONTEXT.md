@@ -31,7 +31,7 @@ The repo also contains a lot of product/design/ADR history. Some historical mate
 - Database: PostgreSQL via Supabase
 - AI stack: OpenRouter for chat/extraction, Anthropic for Claude-based strategy branches, KIE for media generation
 - Background jobs: cron hooks and lease-based workers; no generic queue service in the app
-- External integrations: GitHub, Google Analytics/Search Console, Webflow, SocialAPI, SDR, KIE, Firecrawl, DataForSEO, Stripe, Rixot
+- External integrations: GitHub, Google Analytics/Search Console, Webflow, SocialAPI, SDR, KIE, Firecrawl, Tavily, Stripe, Rixot
 
 ### Active code anchors
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { emitAppEvent, type AppEventName } from "@/lib/app-events";
 import { useAppEvent } from "@/hooks/use-app-event";
 import { useEffect, useState, useCallback } from "react";
@@ -375,7 +376,7 @@ export function ScheduleButton({ workspaceId }: { workspaceId: string | null }) 
               onClick={submit}
               disabled={!title.trim() || !due || busy || !workspaceId}
             >
-              {busy ? "…" : "Schedule"}
+              {busy ? <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null} Schedule
             </Button>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 pl-5">
@@ -446,7 +447,11 @@ export function ScheduleButton({ workspaceId }: { workspaceId: string | null }) 
         {/* Upcoming */}
         <div className="mb-1 flex items-center justify-between px-0.5">
           <span className="ui-eyebrow">Upcoming</span>
-          {loading && <span className="text-[10.5px] text-muted-foreground">Loading…</span>}
+          {loading && (
+            <span className="inline-flex items-center gap-1 text-[10.5px] text-muted-foreground">
+              <Spinner className="h-3 w-3 animate-spin" aria-hidden /> Loading…
+            </span>
+          )}
         </div>
         <div className="max-h-[40vh] space-y-1.5 overflow-auto pr-1">
           {jobs.length === 0 ? (

@@ -8,6 +8,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { ResponseTooLargeError, safeFetch } from "@/server/safe-fetch";
 import { mergeMeta } from "@/lib/content-lifecycle";
+import { isAssetMetadataFinalizeEnabled } from "@/lib/feature-flags";
+import {
+  finalizeImageMetadata,
+  type ImageMetadataFinding,
+} from "@/server/assets/image-metadata.server";
 
 const DATA_URL_RE = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i;
 export const MAX_ASSET_BYTES = 50 * 1024 * 1024;
@@ -87,6 +92,62 @@ function extensionFor(assetType: "image" | "video", mimeType: string) {
   return mimeType.includes("png") ? "png" : mimeType.includes("webp") ? "webp" : "jpg";
 }
 
+/** Best-effort attribution for image metadata finalization; never blocks persistence. */
+async function resolveImageOwnership(supabase: SupabaseClient, workspaceId: string) {
+  const { data } = await supabase
+    .from("workspaces")
+    .select("name, domain")
+    .eq("id", workspaceId)
+    .maybeSingle();
+  const name = String((data as { name?: string } | null)?.name ?? "").trim() || "Mellox AI";
+  const domain = String((data as { domain?: string } | null)?.domain ?? "").trim();
+  const websiteUrl = domain ? `https://${domain}` : (process.env.APP_URL ?? "");
+  return {
+    creator: name,
+    publisher: name,
+    websiteUrl,
+    // ASCII only: ExifTool's Windows CLI-argument decoding mangles non-ASCII
+    // bytes on some hosts (reproduced during integration testing with both
+    // "©" and an em dash) — the underlying brand `name` can still contain
+    // non-ASCII characters, that's a pre-existing tool limitation on Windows
+    // outside Mellox's control, but text this module itself supplies stays
+    // ASCII everywhere the process might run.
+    credit: `${name} - generated with Mellox AI`,
+  };
+}
+
+/**
+ * Best-effort EXIF/XMP privacy cleanup + attribution for a generated image.
+ * Failure of any kind (missing tooling, provenance detected, verification
+ * mismatch) falls open to the original bytes — this must never block an
+ * asset from being saved.
+ */
+async function tryFinalizeImageMetadata(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  assetType: "image" | "video",
+  mimeType: string,
+  bytes: Buffer,
+): Promise<{
+  bytes: Buffer;
+  report: { applied: boolean; reason?: string; finding?: ImageMetadataFinding } | null;
+}> {
+  if (assetType !== "image" || !isAssetMetadataFinalizeEnabled(workspaceId)) {
+    return { bytes, report: null };
+  }
+  try {
+    const ownership = await resolveImageOwnership(supabase, workspaceId);
+    const result = await finalizeImageMetadata(bytes, mimeType, ownership);
+    if (result.applied) {
+      return { bytes: result.bytes, report: { applied: true, finding: result.finding } };
+    }
+    return { bytes, report: { applied: false, reason: result.reason, finding: result.finding } };
+  } catch (error) {
+    console.warn("[assets] image metadata finalization failed", errorMessage(error as Error));
+    return { bytes, report: { applied: false, reason: "unexpected-error" } };
+  }
+}
+
 export async function persistAsset(input: PersistAssetInput): Promise<PersistResult> {
   const { workspaceId, idempotencyKey, assetType } = input;
   if (!idempotencyKey || (!input.dataUrl && !input.sourceUrl)) {
@@ -155,6 +216,15 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
     return { ok: false, status: 413, message: "Generated asset is too large" };
   }
 
+  const finalized = await tryFinalizeImageMetadata(
+    supabase,
+    workspaceId,
+    assetType,
+    mimeType,
+    bytes,
+  );
+  bytes = finalized.bytes;
+
   // Only link content items that really belong to this workspace.
   let linkIds: string[] = [];
   if (input.contentItemIds?.length) {
@@ -190,7 +260,9 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
       brand_dna_version: input.brandDnaVersion ?? null,
       attempt: input.attempt ?? 1,
       seed: input.seed ?? null,
-      metadata: input.metadata ?? {},
+      metadata: finalized.report
+        ? { ...(input.metadata ?? {}), image_metadata_finalization: finalized.report }
+        : (input.metadata ?? {}),
     });
     if (insertError && !String(insertError.message).toLowerCase().includes("duplicate")) {
       return {

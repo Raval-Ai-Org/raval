@@ -59,7 +59,9 @@ export type RateLimitTier =
   | "links-match"
   | "links-brief"
   | "links-checkout"
-  | "billing-checkout";
+  | "billing-checkout"
+  | "experiment-propose"
+  | "experiment-action";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -147,6 +149,11 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   "links-checkout": { limit: 10, windowSeconds: 3600, label: "placement order" },
   // Opening a Stripe checkout session.
   "billing-checkout": { limit: 10, windowSeconds: 3600, label: "credit purchase" },
+  // Proof Engine: change proposals and per-page copy — paid model calls.
+  "experiment-propose": { limit: 10, windowSeconds: 3600, label: "experiment proposal" },
+  // Creating, assigning, cancelling experiments (database work, some reads of
+  // Google data). Ship/rollout/rollback PRs use connector-write.
+  "experiment-action": { limit: 40, windowSeconds: 3600, label: "experiment action" },
 };
 
 export type RateLimitResult = {

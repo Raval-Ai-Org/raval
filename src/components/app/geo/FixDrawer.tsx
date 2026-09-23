@@ -18,7 +18,7 @@ export function FixDrawer({ recipe, safety }: { recipe: FixRecipe; safety?: FixS
       transition={{ duration: 0.24, ease: EASE }}
       className="overflow-hidden"
     >
-      <div className="mx-3.5 mb-3.5 rounded-xl border border-border/60 bg-gradient-to-b from-background/80 to-muted/20 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3">
+      <div className="mx-3 mb-3 rounded-2xl bg-background/70 p-3.5 ring-1 ring-border/50 dark:bg-black/30 dark:ring-white/[0.06]">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-foreground">
             <Wand className="h-3.5 w-3.5 text-primary" strokeWidth={2.2} />

@@ -135,9 +135,8 @@ export function PublishDialog({ workspaceId, children }: Props) {
         onOpenChange={setOpen}
         size="sm"
         Icon={ListChecks}
-        eyebrow="Approvals"
         title="Waiting on you"
-        description="Actions Mellox wants to take on your behalf."
+        description="Things Mellox wants to do for you"
         srDescription="Review and approve pending agent actions"
         bodyClassName="px-5 py-4 sm:px-6"
       >

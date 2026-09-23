@@ -30,10 +30,9 @@ export default function BacklinksRoute() {
         if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
       title="Backlink Growth"
-      description="Get real links from other websites, bought and verified for you."
-      eyebrow="SEO"
       Icon={Link2}
       size="xl"
+      bodyClassName="overflow-hidden"
     >
       <Suspense fallback={<PageLoader />}>
         <LinksPanel workspaceId={workspaceId} />

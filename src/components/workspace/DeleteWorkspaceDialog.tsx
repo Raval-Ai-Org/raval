@@ -105,7 +105,6 @@ export function DeleteWorkspaceDialog({
       }}
       size="sm"
       Icon={Trash2}
-      eyebrow="Danger zone"
       title="Delete workspace"
       description="This permanently deletes the workspace and everything in it."
       disableClose={deleting}

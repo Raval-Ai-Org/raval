@@ -4,6 +4,7 @@
 // (same browser) or, after a reload elsewhere, the job itself — so the chat
 // shows the same progress as the Studio rail. Nothing opens by itself: Review
 // and "See in Studio" are the user's choice.
+import { Spinner } from "@/components/icons";
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, ArrowRight, RefreshCw, X } from "@/components/icons";
@@ -213,7 +214,11 @@ export function StudioTaskCard({
               aria-label="Stop creating"
               title="Stop"
             >
-              <X className="size-3.5" />
+              {busy ? (
+                <Spinner className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <X className="size-3.5" />
+              )}
             </button>
           ) : null}
           {view === "ready" ? (

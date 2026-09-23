@@ -14,6 +14,7 @@ import {
 } from "@/lib/ai-gateway.server";
 import { logGuardrailEvent } from "@/server/guardrails/events";
 import { AiOutputError, parseStructured, runStructured } from "@/server/ai/structured";
+import { humanizeText } from "./humanize-text";
 import { safeParseJson } from "./json";
 
 export { AiGatewayError, AiOutputError };
@@ -59,8 +60,15 @@ async function callJson(
   const json = isExtraction
     ? await extractionCompletion(common)
     : await chatCompletion({ ...common, model: opts.model, task: opts.task ?? "generate" });
+  const raw = String(json?.choices?.[0]?.message?.content ?? "");
   return {
-    text: String(json?.choices?.[0]?.message?.content ?? ""),
+    // Em dash is the clearest "AI voice" tell in generated prose; strip it
+    // here so every runStructuredPrompt/runJsonPrompt caller gets clean
+    // output for free. Skipped for extraction: that's parsing an external
+    // source's own text (a scraped page, an uploaded file), not generating
+    // new copy, so it must stay faithful to what the source actually says.
+    // Safe for JSON responses too — only touches string content, not syntax.
+    text: isExtraction ? raw : humanizeText(raw),
     truncated: json?._truncated === true,
   };
 }

@@ -1802,6 +1802,7 @@ export type Database = {
           slug: string;
           status: string;
           title: string;
+          token_ciphertext: string | null;
           token_hash: string;
           updated_at: string;
           view_count: number;
@@ -1823,6 +1824,7 @@ export type Database = {
           slug: string;
           status?: string;
           title?: string;
+          token_ciphertext?: string | null;
           token_hash: string;
           updated_at?: string;
           view_count?: number;
@@ -1844,6 +1846,7 @@ export type Database = {
           slug?: string;
           status?: string;
           title?: string;
+          token_ciphertext?: string | null;
           token_hash?: string;
           updated_at?: string;
           view_count?: number;
@@ -2392,6 +2395,697 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [];
+      };
+      experiment_assignments: {
+        Row: {
+          active: boolean;
+          arm: string;
+          baseline: Json;
+          created_at: string;
+          excluded_at: string | null;
+          excluded_reason: string | null;
+          experiment_id: string;
+          id: string;
+          page_url: string;
+          path: string;
+          site_host: string;
+          stratum: number;
+          workspace_id: string;
+        };
+        Insert: {
+          active?: boolean;
+          arm: string;
+          baseline?: Json;
+          created_at?: string;
+          excluded_at?: string | null;
+          excluded_reason?: string | null;
+          experiment_id: string;
+          id?: string;
+          page_url: string;
+          path: string;
+          site_host: string;
+          stratum: number;
+          workspace_id: string;
+        };
+        Update: {
+          active?: boolean;
+          arm?: string;
+          baseline?: Json;
+          created_at?: string;
+          excluded_at?: string | null;
+          excluded_reason?: string | null;
+          experiment_id?: string;
+          id?: string;
+          page_url?: string;
+          path?: string;
+          site_host?: string;
+          stratum?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "experiment_assignments_experiment_id_fkey";
+            columns: ["experiment_id"];
+            isOneToOne: false;
+            referencedRelation: "experiments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiment_assignments_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      experiment_changes: {
+        Row: {
+          after: string;
+          before: string | null;
+          created_at: string;
+          experiment_id: string;
+          field: string;
+          grounding: Json;
+          id: string;
+          path: string;
+          workspace_id: string;
+        };
+        Insert: {
+          after: string;
+          before?: string | null;
+          created_at?: string;
+          experiment_id: string;
+          field: string;
+          grounding?: Json;
+          id?: string;
+          path: string;
+          workspace_id: string;
+        };
+        Update: {
+          after?: string;
+          before?: string | null;
+          created_at?: string;
+          experiment_id?: string;
+          field?: string;
+          grounding?: Json;
+          id?: string;
+          path?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "experiment_changes_experiment_id_fkey";
+            columns: ["experiment_id"];
+            isOneToOne: false;
+            referencedRelation: "experiments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiment_changes_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      experiment_deliveries: {
+        Row: {
+          agent_run_id: string | null;
+          approved_at: string | null;
+          approved_by: string | null;
+          base_branch: string | null;
+          base_sha: string | null;
+          commit_sha: string | null;
+          content_hash: string | null;
+          created_at: string;
+          created_by: string | null;
+          error: string | null;
+          experiment_id: string | null;
+          fields: string[];
+          files: Json;
+          head_branch: string | null;
+          id: string;
+          kind: string;
+          live_at: string | null;
+          merged_at: string | null;
+          pr_number: number | null;
+          pr_state: string | null;
+          pr_url: string | null;
+          source_id: string | null;
+          status: string;
+          template_files: string[];
+          updated_at: string;
+          validation: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          agent_run_id?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          base_branch?: string | null;
+          base_sha?: string | null;
+          commit_sha?: string | null;
+          content_hash?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          experiment_id?: string | null;
+          fields?: string[];
+          files?: Json;
+          head_branch?: string | null;
+          id?: string;
+          kind: string;
+          live_at?: string | null;
+          merged_at?: string | null;
+          pr_number?: number | null;
+          pr_state?: string | null;
+          pr_url?: string | null;
+          source_id?: string | null;
+          status?: string;
+          template_files?: string[];
+          updated_at?: string;
+          validation?: Json;
+          workspace_id: string;
+        };
+        Update: {
+          agent_run_id?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          base_branch?: string | null;
+          base_sha?: string | null;
+          commit_sha?: string | null;
+          content_hash?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          experiment_id?: string | null;
+          fields?: string[];
+          files?: Json;
+          head_branch?: string | null;
+          id?: string;
+          kind?: string;
+          live_at?: string | null;
+          merged_at?: string | null;
+          pr_number?: number | null;
+          pr_state?: string | null;
+          pr_url?: string | null;
+          source_id?: string | null;
+          status?: string;
+          template_files?: string[];
+          updated_at?: string;
+          validation?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "experiment_deliveries_experiment_id_fkey";
+            columns: ["experiment_id"];
+            isOneToOne: false;
+            referencedRelation: "experiments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiment_deliveries_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiment_deliveries_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      experiment_events: {
+        Row: {
+          actor_id: string | null;
+          created_at: string;
+          data: Json;
+          experiment_id: string;
+          id: string;
+          kind: string;
+          summary: string;
+          workspace_id: string;
+        };
+        Insert: {
+          actor_id?: string | null;
+          created_at?: string;
+          data?: Json;
+          experiment_id: string;
+          id?: string;
+          kind: string;
+          summary: string;
+          workspace_id: string;
+        };
+        Update: {
+          actor_id?: string | null;
+          created_at?: string;
+          data?: Json;
+          experiment_id?: string;
+          id?: string;
+          kind?: string;
+          summary?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "experiment_events_experiment_id_fkey";
+            columns: ["experiment_id"];
+            isOneToOne: false;
+            referencedRelation: "experiments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiment_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      experiment_jobs: {
+        Row: {
+          attempts: number;
+          created_at: string;
+          experiment_id: string;
+          finished_at: string | null;
+          id: string;
+          kind: string;
+          last_error: string | null;
+          lease_until: string | null;
+          locked_by: string | null;
+          max_attempts: number;
+          next_attempt_at: string;
+          payload: Json;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attempts?: number;
+          created_at?: string;
+          experiment_id: string;
+          finished_at?: string | null;
+          id?: string;
+          kind: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          payload?: Json;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempts?: number;
+          created_at?: string;
+          experiment_id?: string;
+          finished_at?: string | null;
+          id?: string;
+          kind?: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          payload?: Json;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "experiment_jobs_experiment_id_fkey";
+            columns: ["experiment_id"];
+            isOneToOne: false;
+            referencedRelation: "experiments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiment_jobs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      experiment_metric_days: {
+        Row: {
+          complete: boolean;
+          date: string;
+          experiment_id: string;
+          pulled_at: string;
+          source: string;
+          workspace_id: string;
+        };
+        Insert: {
+          complete?: boolean;
+          date: string;
+          experiment_id: string;
+          pulled_at?: string;
+          source: string;
+          workspace_id: string;
+        };
+        Update: {
+          complete?: boolean;
+          date?: string;
+          experiment_id?: string;
+          pulled_at?: string;
+          source?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "experiment_metric_days_experiment_id_fkey";
+            columns: ["experiment_id"];
+            isOneToOne: false;
+            referencedRelation: "experiments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiment_metric_days_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      experiment_metrics_daily: {
+        Row: {
+          ai_referral_sessions: number;
+          arm: string;
+          clicks: number;
+          date: string;
+          experiment_id: string;
+          impressions: number;
+          key_events: number;
+          path: string;
+          position_weighted: number;
+          revenue: number;
+          sessions: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          ai_referral_sessions?: number;
+          arm: string;
+          clicks?: number;
+          date: string;
+          experiment_id: string;
+          impressions?: number;
+          key_events?: number;
+          path: string;
+          position_weighted?: number;
+          revenue?: number;
+          sessions?: number;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          ai_referral_sessions?: number;
+          arm?: string;
+          clicks?: number;
+          date?: string;
+          experiment_id?: string;
+          impressions?: number;
+          key_events?: number;
+          path?: string;
+          position_weighted?: number;
+          revenue?: number;
+          sessions?: number;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "experiment_metrics_daily_experiment_id_fkey";
+            columns: ["experiment_id"];
+            isOneToOne: false;
+            referencedRelation: "experiments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiment_metrics_daily_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      experiment_page_groups: {
+        Row: {
+          created_at: string;
+          detected_at: string;
+          eligibility: Json;
+          id: string;
+          label: string;
+          monthly_clicks: number;
+          page_count: number;
+          paths: string[];
+          pattern: string;
+          rule: Json;
+          source_id: string;
+          template_file: string | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          detected_at?: string;
+          eligibility?: Json;
+          id?: string;
+          label: string;
+          monthly_clicks?: number;
+          page_count?: number;
+          paths?: string[];
+          pattern: string;
+          rule?: Json;
+          source_id: string;
+          template_file?: string | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          detected_at?: string;
+          eligibility?: Json;
+          id?: string;
+          label?: string;
+          monthly_clicks?: number;
+          page_count?: number;
+          paths?: string[];
+          pattern?: string;
+          rule?: Json;
+          source_id?: string;
+          template_file?: string | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "experiment_page_groups_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiment_page_groups_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      experiments: {
+        Row: {
+          approved_at: string | null;
+          approved_by: string | null;
+          approved_patch_hash: string | null;
+          assignment_attempts: number | null;
+          assignment_seed: number | null;
+          cancelled_at: string | null;
+          change_type: string;
+          closed_at: string | null;
+          closed_via: string | null;
+          concluded_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          estimated_monthly_units: number | null;
+          estimated_monthly_value: number | null;
+          ga4_source_id: string | null;
+          gsc_source_id: string | null;
+          hypothesis: string;
+          id: string;
+          invalid_reason: string | null;
+          invalidated_at: string | null;
+          last_checkpoint_day: number | null;
+          lift: number | null;
+          lift_high: number | null;
+          lift_low: number | null;
+          live_confirmed_at: string | null;
+          mde_estimate: number | null;
+          name: string;
+          page_group_id: string | null;
+          planned_max_days: number;
+          planned_min_days: number;
+          pre_period_end: string | null;
+          pre_period_start: string | null;
+          primary_metric: string;
+          result: Json;
+          revenue_basis: Json;
+          secondary_metrics: string[];
+          shipped_at: string | null;
+          site_host: string;
+          source_id: string | null;
+          status: string;
+          updated_at: string;
+          value_currency: string | null;
+          verdict: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          approved_at?: string | null;
+          approved_by?: string | null;
+          approved_patch_hash?: string | null;
+          assignment_attempts?: number | null;
+          assignment_seed?: number | null;
+          cancelled_at?: string | null;
+          change_type: string;
+          closed_at?: string | null;
+          closed_via?: string | null;
+          concluded_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          estimated_monthly_units?: number | null;
+          estimated_monthly_value?: number | null;
+          ga4_source_id?: string | null;
+          gsc_source_id?: string | null;
+          hypothesis?: string;
+          id?: string;
+          invalid_reason?: string | null;
+          invalidated_at?: string | null;
+          last_checkpoint_day?: number | null;
+          lift?: number | null;
+          lift_high?: number | null;
+          lift_low?: number | null;
+          live_confirmed_at?: string | null;
+          mde_estimate?: number | null;
+          name: string;
+          page_group_id?: string | null;
+          planned_max_days?: number;
+          planned_min_days?: number;
+          pre_period_end?: string | null;
+          pre_period_start?: string | null;
+          primary_metric: string;
+          result?: Json;
+          revenue_basis?: Json;
+          secondary_metrics?: string[];
+          shipped_at?: string | null;
+          site_host: string;
+          source_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          value_currency?: string | null;
+          verdict?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          approved_at?: string | null;
+          approved_by?: string | null;
+          approved_patch_hash?: string | null;
+          assignment_attempts?: number | null;
+          assignment_seed?: number | null;
+          cancelled_at?: string | null;
+          change_type?: string;
+          closed_at?: string | null;
+          closed_via?: string | null;
+          concluded_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          estimated_monthly_units?: number | null;
+          estimated_monthly_value?: number | null;
+          ga4_source_id?: string | null;
+          gsc_source_id?: string | null;
+          hypothesis?: string;
+          id?: string;
+          invalid_reason?: string | null;
+          invalidated_at?: string | null;
+          last_checkpoint_day?: number | null;
+          lift?: number | null;
+          lift_high?: number | null;
+          lift_low?: number | null;
+          live_confirmed_at?: string | null;
+          mde_estimate?: number | null;
+          name?: string;
+          page_group_id?: string | null;
+          planned_max_days?: number;
+          planned_min_days?: number;
+          pre_period_end?: string | null;
+          pre_period_start?: string | null;
+          primary_metric?: string;
+          result?: Json;
+          revenue_basis?: Json;
+          secondary_metrics?: string[];
+          shipped_at?: string | null;
+          site_host?: string;
+          source_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          value_currency?: string | null;
+          verdict?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "experiments_ga4_source_id_fkey";
+            columns: ["ga4_source_id"];
+            isOneToOne: false;
+            referencedRelation: "analytics_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiments_gsc_source_id_fkey";
+            columns: ["gsc_source_id"];
+            isOneToOne: false;
+            referencedRelation: "analytics_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiments_page_group_id_fkey";
+            columns: ["page_group_id"];
+            isOneToOne: false;
+            referencedRelation: "experiment_page_groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiments_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "experiments_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       geo_agent_events: {
         Row: {
@@ -4000,13 +4694,8 @@ export type Database = {
       market_trend_collections: {
         Row: {
           completed_at: string | null;
-          dataforseo_task_id: string | null;
-          date_from: string | null;
-          date_to: string | null;
           id: string;
           keywords: string[];
-          language: string | null;
-          last_polled_at: string | null;
           location: string | null;
           normalized_result: Json | null;
           provider: string;
@@ -4014,19 +4703,13 @@ export type Database = {
           request_key: string;
           requested_at: string;
           status: string;
-          time_range: string | null;
           updated_at: string;
           workspace_id: string;
         };
         Insert: {
           completed_at?: string | null;
-          dataforseo_task_id?: string | null;
-          date_from?: string | null;
-          date_to?: string | null;
           id?: string;
           keywords: string[];
-          language?: string | null;
-          last_polled_at?: string | null;
           location?: string | null;
           normalized_result?: Json | null;
           provider?: string;
@@ -4034,19 +4717,13 @@ export type Database = {
           request_key: string;
           requested_at?: string;
           status?: string;
-          time_range?: string | null;
           updated_at?: string;
           workspace_id: string;
         };
         Update: {
           completed_at?: string | null;
-          dataforseo_task_id?: string | null;
-          date_from?: string | null;
-          date_to?: string | null;
           id?: string;
           keywords?: string[];
-          language?: string | null;
-          last_polled_at?: string | null;
           location?: string | null;
           normalized_result?: Json | null;
           provider?: string;
@@ -4054,7 +4731,6 @@ export type Database = {
           request_key?: string;
           requested_at?: string;
           status?: string;
-          time_range?: string | null;
           updated_at?: string;
           workspace_id?: string;
         };
@@ -5072,6 +5748,177 @@ export type Database = {
           },
         ];
       };
+      wordpress_credentials: {
+        Row: {
+          api_namespaces: string[];
+          application_password_enc: string;
+          connection_id: string;
+          created_at: string;
+          site_description: string | null;
+          site_home: string | null;
+          site_name: string | null;
+          site_url: string;
+          updated_at: string;
+          username: string;
+          workspace_id: string;
+        };
+        Insert: {
+          api_namespaces?: string[];
+          application_password_enc: string;
+          connection_id: string;
+          created_at?: string;
+          site_description?: string | null;
+          site_home?: string | null;
+          site_name?: string | null;
+          site_url: string;
+          updated_at?: string;
+          username: string;
+          workspace_id: string;
+        };
+        Update: {
+          api_namespaces?: string[];
+          application_password_enc?: string;
+          connection_id?: string;
+          created_at?: string;
+          site_description?: string | null;
+          site_home?: string | null;
+          site_name?: string | null;
+          site_url?: string;
+          updated_at?: string;
+          username?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wordpress_credentials_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: true;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "wordpress_credentials_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      wordpress_oauth_credentials: {
+        Row: {
+          access_token_enc: string;
+          access_token_expires_at: string | null;
+          connection_id: string;
+          created_at: string;
+          refresh_token_enc: string | null;
+          scopes: string[];
+          updated_at: string;
+          wordpress_user_id: string | null;
+          wordpress_user_login: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          access_token_enc: string;
+          access_token_expires_at?: string | null;
+          connection_id: string;
+          created_at?: string;
+          refresh_token_enc?: string | null;
+          scopes?: string[];
+          updated_at?: string;
+          wordpress_user_id?: string | null;
+          wordpress_user_login?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          access_token_enc?: string;
+          access_token_expires_at?: string | null;
+          connection_id?: string;
+          created_at?: string;
+          refresh_token_enc?: string | null;
+          scopes?: string[];
+          updated_at?: string;
+          wordpress_user_id?: string | null;
+          wordpress_user_login?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wordpress_oauth_credentials_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: true;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "wordpress_oauth_credentials_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      wordpress_sites: {
+        Row: {
+          connection_id: string;
+          created_at: string;
+          id: string;
+          last_error: string | null;
+          last_synced_at: string | null;
+          selected: boolean;
+          site_name: string;
+          site_url: string;
+          status: string;
+          updated_at: string;
+          wordpress_site_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          connection_id: string;
+          created_at?: string;
+          id?: string;
+          last_error?: string | null;
+          last_synced_at?: string | null;
+          selected?: boolean;
+          site_name: string;
+          site_url: string;
+          status?: string;
+          updated_at?: string;
+          wordpress_site_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          connection_id?: string;
+          created_at?: string;
+          id?: string;
+          last_error?: string | null;
+          last_synced_at?: string | null;
+          selected?: boolean;
+          site_name?: string;
+          site_url?: string;
+          status?: string;
+          updated_at?: string;
+          wordpress_site_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wordpress_sites_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "wordpress_sites_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_agent_settings: {
         Row: {
           agents_paused: boolean;
@@ -5542,6 +6389,41 @@ export type Database = {
           },
         ];
       };
+      workspace_report_branding: {
+        Row: {
+          created_at: string;
+          display_name: string | null;
+          logo_path: string | null;
+          updated_at: string;
+          updated_by: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          display_name?: string | null;
+          logo_path?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          display_name?: string | null;
+          logo_path?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_report_branding_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_sdr: {
         Row: {
           created_at: string;
@@ -5897,6 +6779,10 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["scheduled_jobs"]["Row"][];
       };
+      claim_experiment_jobs: {
+        Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
+        Returns: Database["public"]["Tables"]["experiment_jobs"]["Row"][];
+      };
       claim_geo_agent_runs: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["geo_agent_runs"]["Row"][];
@@ -5929,6 +6815,16 @@ export type Database = {
           p_idempotency_key: string;
         };
         Returns: { workspace_id: string; created: boolean }[];
+      };
+      experiment_overview: {
+        Args: never;
+        Returns: {
+          workspace_id: string;
+          proven_monthly_value: number;
+          proven_value_currency: string;
+          won_experiments: number;
+          running_experiments: number;
+        }[];
       };
       is_workspace_member: { Args: { _workspace_id: string; _user_id: string }; Returns: boolean };
       log_audit: {

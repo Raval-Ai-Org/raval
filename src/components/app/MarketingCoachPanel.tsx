@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -365,7 +366,8 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(30rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_24px_60px_-24px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+            data-mellox-app
+            className="ds-glow absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(30rem,calc(100vw-1.5rem))] overflow-hidden rounded-[24px] bg-background/95 shadow-[var(--ds-window-shadow)] backdrop-blur-xl"
           >
             <div className="max-h-[58vh] overflow-auto scrollbar-thin px-3 pb-3 pt-3">
               {coachContent}
@@ -378,10 +380,11 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
       <Dialog open={maximized} onOpenChange={(value) => !value && setMaximized(false)}>
         <DialogContent
           data-testid="marketing-coach-maximized"
-          className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 bg-card/95 p-0 backdrop-blur-xl sm:h-[90dvh] sm:max-h-[90dvh] sm:w-[min(1200px,96vw)] sm:rounded-3xl sm:border sm:border-border/60 sm:p-0"
+          data-mellox-app
+          className="ds-glow flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 bg-background p-0 sm:ds-window sm:h-[min(92dvh,960px)] sm:max-h-[min(92dvh,960px)] sm:w-[min(calc(100vw-24px),1240px)] sm:p-0"
         >
-          <div className="flex items-center gap-3 border-b border-border/60 bg-gradient-to-r from-emerald-500/[0.07] via-transparent to-sky-500/[0.07] py-3 pl-4 pr-14 sm:pl-6">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-500/20 via-sky-500/15 to-indigo-500/20 text-emerald-500">
+          <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border/50 bg-background/60 pl-4 pr-14 backdrop-blur-xl sm:pl-5">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20">
               <Sparkles className="h-4 w-4" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
@@ -426,13 +429,13 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
           )}
         >
           {leading ?? (
-            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-gradient-to-br from-emerald-500/20 via-sky-500/15 to-indigo-500/20 text-emerald-500">
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
               <Sparkles className="h-3.5 w-3.5" />
             </span>
           )}
           <span className="flex min-w-0 max-w-[10rem] flex-1 items-center gap-1.5 sm:max-w-[18rem]">
             <span className="shrink-0 text-[12px] font-semibold tracking-tight text-foreground">
-              Marketing Coach
+              <span className="hidden sm:inline">Marketing </span>Coach
             </span>
             <span
               className={cn(
@@ -673,7 +676,10 @@ function CoachBody({
             {(generatedLabel || loading) && (
               <>
                 <span aria-hidden="true">·</span>
-                <span>{loading ? "Updating…" : `Updated ${generatedLabel}`}</span>
+                <span className="inline-flex items-center gap-1">
+                  {loading ? <Spinner className="h-3 w-3 animate-spin" aria-hidden /> : null}
+                  {loading ? "Updating…" : `Updated ${generatedLabel}`}
+                </span>
               </>
             )}
           </div>
@@ -903,7 +909,7 @@ function SourcesPanel({ sources }: { sources: SourceEntry[] }) {
 function FocusCard({ briefing, sources }: { briefing: CoachBriefing; sources?: SourceEntry[] }) {
   const { focus } = briefing;
   return (
-    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/8 via-transparent to-sky-500/8 p-3 sm:p-3.5">
+    <div className="rounded-2xl border border-primary/20 bg-primary/[0.06] p-3 sm:p-3.5">
       <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-emerald-500">
         <Target className="h-3 w-3 shrink-0" /> Today's focus
       </div>
@@ -1424,7 +1430,7 @@ function ChecklistPanel({
         </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-sky-500 transition-all"
+            className="h-full rounded-full bg-primary transition-all"
             style={{ width: `${pct}%` }}
           />
         </div>

@@ -114,7 +114,8 @@ export function BrandDnaEditor({
               transition={{ type: "spring", stiffness: 140, damping: 22 }}
               className="h-full rounded-full"
               style={{
-                background: "linear-gradient(90deg, hsl(var(--brand-green)), hsl(220 90% 60%))",
+                background:
+                  "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.55))",
               }}
             />
           </div>

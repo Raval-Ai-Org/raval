@@ -97,8 +97,8 @@ export type AppEventMap = {
   "open:publish": undefined;
   "open:rename": undefined;
   "open:schedule": undefined;
-  /** Settings, optionally on a section (provider connections live under "connections"). */
-  "open:settings": { section?: "connections" | "preferences" } | undefined;
+  /** Settings, optionally on a section (GitHub, Webflow and WordPress live under "website"). */
+  "open:settings": { section?: "accounts" | "analytics" | "website" | "preferences" } | undefined;
   "open:share": undefined;
   "open:studio": undefined;
   "open:tasks": undefined;

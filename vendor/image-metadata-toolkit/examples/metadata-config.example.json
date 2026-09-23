@@ -1,0 +1,23 @@
+{
+  "ownership": {
+    "creator": "Your Name",
+    "publisher": "Your Site or Organization",
+    "website_url": "https://example.com/",
+    "rights_notice": "© {year} {creator}. All rights reserved.",
+    "credit": "Your Name / Example.com",
+    "marked": true
+  },
+  "content": {
+    "title": "",
+    "description": "",
+    "subjects": [],
+    "preserve_existing_when_blank": true
+  },
+  "privacy_cleanup": {
+    "enabled": true
+  },
+  "rendering_preservation": {
+    "enabled": true
+  },
+  "provenance_policy": "preserve"
+}

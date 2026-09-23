@@ -9,6 +9,7 @@
 //              policy decisions
 // Labels follow the audit's UX rules: Suggested / Awaiting approval /
 // Executed / Failed / Needs review — a recommendation is never shown as done.
+import { Spinner } from "@/components/icons";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -336,7 +337,11 @@ export function OperationsInbox() {
               disabled={busy === "pause"}
               className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[12px]"
             >
-              <PauseCircle className="h-3.5 w-3.5" />
+              {busy === "pause" ? (
+                <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <PauseCircle className="h-3.5 w-3.5" />
+              )}
               {settings.agentsPaused ? "Resume agents" : "Pause agents"}
             </button>
           ) : null}
@@ -445,6 +450,9 @@ export function OperationsInbox() {
                             onClick={() => void updateFinding(f.id, "acknowledge")}
                             className="rounded-md border border-border px-2 py-0.5 text-foreground"
                           >
+                            {busy === f.id ? (
+                              <Spinner className="mr-1 inline h-3 w-3 animate-spin" aria-hidden />
+                            ) : null}
                             Acknowledge
                           </button>
                         ) : null}
@@ -454,6 +462,9 @@ export function OperationsInbox() {
                           onClick={() => void updateFinding(f.id, "resolve")}
                           className="rounded-md border border-border px-2 py-0.5 text-foreground"
                         >
+                          {busy === f.id ? (
+                            <Spinner className="mr-1 inline h-3 w-3 animate-spin" aria-hidden />
+                          ) : null}
                           Mark resolved
                         </button>
                       </span>
@@ -533,6 +544,9 @@ export function OperationsInbox() {
                           onClick={() => void decide(a.id, "approve")}
                           className="rounded-md bg-primary px-2.5 py-1 text-[12px] font-medium text-primary-foreground disabled:opacity-50"
                         >
+                          {busy === a.id ? (
+                            <Spinner className="mr-1 inline h-3 w-3 animate-spin" aria-hidden />
+                          ) : null}
                           Approve & apply
                         </button>
                         <button
@@ -541,6 +555,9 @@ export function OperationsInbox() {
                           onClick={() => void decide(a.id, "reject")}
                           className="rounded-md border border-border px-2.5 py-1 text-[12px]"
                         >
+                          {busy === a.id ? (
+                            <Spinner className="mr-1 inline h-3 w-3 animate-spin" aria-hidden />
+                          ) : null}
                           Reject
                         </button>
                       </div>

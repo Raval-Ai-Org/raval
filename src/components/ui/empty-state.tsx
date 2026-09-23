@@ -54,7 +54,7 @@ export function EmptyState({
         <span
           aria-hidden
           className={cn(
-            "grid shrink-0 place-items-center rounded-2xl bg-surface-2 text-muted-foreground ring-1 ring-border",
+            "grid shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15",
             compact ? "size-9" : "size-12",
           )}
         >

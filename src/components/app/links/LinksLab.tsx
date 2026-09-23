@@ -103,7 +103,7 @@ export function LinksLab() {
         {/* ── First run ─────────────────────────────────────────────────── */}
         <Section title="First run">
           <span id="first-run" />
-          <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-6">
             <div className="mx-auto flex w-full max-w-xl flex-col items-center py-8 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-surface">
                 <Link2 className="h-6 w-6 text-primary" aria-hidden />
@@ -133,7 +133,7 @@ export function LinksLab() {
         <Section title="Overview">
           <span id="overview" />
           <Rise>
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-1 sm:p-8">
+            <div className="rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-6 shadow-1 sm:p-8">
               <div className="flex flex-wrap items-start justify-between gap-6">
                 <div>
                   <p className="text-[13px] uppercase tracking-wide text-muted-foreground">
@@ -175,7 +175,7 @@ export function LinksLab() {
             </div>
           </Rise>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-6 shadow-1">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-6 shadow-1">
             <div className="min-w-0">
               <h3 className="text-[16px] font-semibold tracking-tight text-foreground">
                 Buy more placements
@@ -194,7 +194,7 @@ export function LinksLab() {
         {/* ── Journey ───────────────────────────────────────────────────── */}
         <Section title="Order journey" description="Click a stage to preview it.">
           <span id="journey" />
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-1 sm:p-7">
+          <div className="rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-6 shadow-1 sm:p-7">
             <Journey reached={stage} />
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -214,7 +214,7 @@ export function LinksLab() {
         {/* ── Status pills ──────────────────────────────────────────────── */}
         <Section title="Every order state">
           <span id="states" />
-          <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-card p-6">
+          <div className="flex flex-wrap gap-2 rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-6">
             {Object.keys(ORDER_LABELS).map((status) => (
               <StatusPill key={status} status={status} label={ORDER_LABELS[status]} />
             ))}

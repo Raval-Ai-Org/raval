@@ -27,6 +27,9 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
 - **Design:** icons from `@/components/icons` (bespoke Mellox set, lucide fallback);
   primary colour is Ultra Moss lime in both themes; use `EmptyState` /
   `ErrorState` / `Skeleton` for states; feature surfaces are `AppModalShell` modals.
+  Follow [docs/design-system.md](docs/design-system.md): `ds-*` tokens/utilities,
+  `SurfaceLayout` rail for multi-section surfaces, pill buttons. Never restyle the
+  public landing page (`src/app/page.tsx`) as part of app UI work.
 - **Background work:** no queue service — job rows with leases claimed via
   SKIP LOCKED RPCs, advanced by pg_cron → `/api/public/hooks/*` and `after()`.
 
@@ -58,6 +61,29 @@ Decision record [ADR-0014](docs/adr/0014-canonical-workspaces.md).
   removes them on switch.
 - **Service-role reads of user-editable `meta`** (storage paths, provider ids)
   must check they belong to the row's workspace (`src/lib/workspace/storage-path.ts`).
+
+## Sharing (team invites and the client portal)
+
+- **Team invites:** `src/server/fns/workspaces.ts` + `ShareDialog.tsx`.
+  - The link is `/app?invite_token=<uuid>`, accepted by `LegacyAppRedirect`.
+  - Login and signup keep `?next=` when you switch between them, so a new
+    teammate lands back on the invite.
+  - Inviting the same email again issues a new token and resets
+    `accepted_at`, which lets a removed member rejoin.
+  - Accepting never lowers an existing role.
+  - Admins+ invite; only the owner changes roles or removes members.
+- **Client portal:** `ClientPortalDialog.tsx`, opened by `open:client-portal`
+  and mounted once in `AppShell`. Routes: `src/app/api/shares` (team side) and
+  `src/app/api/public/share/[slug]` (client side, service role after
+  token/password check).
+- **Share links stay the same link.** `client_shares.token_ciphertext`
+  (`SHARE_LINK_ENCRYPTION_KEY`, `src/server/shares/link-token.server.ts`) lets
+  `?action=link` return the link the client already has. Only
+  `?action=rotate` issues a new link. Access is always checked against
+  `token_hash`.
+- The public thread never returns emails or `viewed` rows, and the page's
+  background refresh (`?refresh=1`) doesn't count as a view.
+- Live check: `tests/live/client-portal-collaboration.live.ts`.
 
 ## AI Visibility (GEO / AEO / SEO)
 
@@ -144,6 +170,33 @@ Decision record [ADR-0022](docs/adr/0022-tavily-web-intelligence.md).
   - Background work is leased (`claim_competitor_jobs`) and advanced by the
     **existing** `competitor-watch` cron hook — do not add a cron job.
 
+## Market Brain ("Market Updates" in Marketing Coach)
+
+Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
+
+- **DataForSEO/Google Trends is removed from this product — never add it
+  back.** Market Brain's measured evidence is Tavily web search
+  (`src/server/research/market-signals.server.ts`, via the one search path in
+  ADR-0022), not a search-interest index. There is no numeric trend graph or
+  regional-interest map to restore; a `MarketSignalsData` collection is a list
+  of real, dated, linkable web sources.
+- **Collection/cache**: `src/lib/market-signals-collection.server.ts`
+  (workspace-scoped `market_trend_collections`, 6 h TTL, compare-and-set claim
+  so concurrent requests never double-bill). Tavily answers inline, so a scan
+  resolves `completed`/`failed`/`no_data` directly from the POST in the normal
+  case — `pending`/poll is crash recovery only, not a normal phase.
+- **Synthesis**: `market-intelligence.server.ts` turns a collection's sources
+  into a Claude-authored `MarketIntelligence` (cached in
+  `market_intelligence_cache`, keyed on the sources' own content so identical
+  evidence never bills twice). Sources are wrapped as untrusted data
+  (`src/server/guardrails/untrusted.ts`) before they reach the prompt.
+- **Daily re-collection** is a `scheduled_jobs` row (`task_type:
+  "market-brain"`) driven by `market-brain-scheduler.server.ts`, advanced by
+  `runDueMarketBrainCollections()`.
+- UI: `MarketBrainPanel.tsx` + `MarketBrainInsights.tsx` +
+  `MarketBrainProgress.tsx`, embedded in `MarketingCoachPanel.tsx`'s "Market"
+  tab; routes `src/app/api/market/{trends,intelligence,latest}`.
+
 ## Backlink Growth (buying real placements)
 
 Mellox **buys** backlinks; it does not analyse someone else's. A user picks the
@@ -224,6 +277,41 @@ record [ADR-0011](docs/adr/0011-github-app-website-connector.md).
 - Repository writes go only through `git.server.ts`: new `mellox/` branches,
   paths checked by `paths.ts`, exact-content approval, a PR — never a push to or
   merge of a base branch. Every write is audited (`src/server/audit.server.ts`).
+
+## Caption naturalization & image metadata finalization
+
+Two quality passes, both fail open (a failure never blocks saving the
+originally generated content) and both off only if explicitly disabled.
+
+- **Captions:** `src/lib/studio/naturalize.ts` (pure heuristic — an
+  AI-cliché/robotic-phrasing score, `needsNaturalization`) gates
+  `src/lib/studio/naturalize.server.ts` (calls `claudeJsonPrompt` from the
+  Anthropic gateway). Wired into `runner.server.ts`'s `executeJob`, right after
+  `humanizeOutput` (em-dash cleanup) and before drafts are written. Most
+  captions never cross the threshold and ship unrewritten. A rewrite is kept
+  only if it demonstrably reduced the cliché score (`isBetterThanOriginal`)
+  _and_ preserved every URL/@mention/#hashtag/number from the original
+  (`checkPreservation`) — otherwise the original ships untouched. Re-runs
+  `finalizeVariant` afterward so a rewrite can never blow past a platform's
+  character limit. Scoped to `output.variants[].body` (social captions) only —
+  article/script/ad/carousel text is intentionally out of scope for now.
+- **Images:** `src/server/assets/image-metadata.server.ts` wraps the vendored
+  `vendor/image-metadata-toolkit` (MIT, pinned — see `MELLOX_VENDOR.md` there)
+  as a CLI subprocess: strips privacy-sensitive EXIF/GPS/device fields, writes
+  XMP ownership/attribution (creator/publisher from the workspace's own
+  name+domain), and verifies pixels are unchanged. Wired into
+  `persist.server.ts`'s `persistAsset`, between downloading the generated
+  image and uploading it to Storage. **Never overrides the toolkit's
+  `provenance_policy: "preserve"`** — a file already carrying C2PA/Content
+  Credentials is left untouched, never stripped. Requires `python3` (3.10+)
+  and `exiftool` (12.70+) on `PATH` (the Dockerfile installs both via apt);
+  where either is missing, every call fails open to the original bytes.
+  Gated by `isAssetMetadataFinalizeEnabled()` in `feature-flags.ts`
+  (`FEATURE_FLAG_ASSET_METADATA_ENABLED`, on by default).
+- Neither pass talks to an AI-detection/plagiarism-detection service or
+  attempts to defeat one — naturalization is a genuine style rewrite with a
+  gateway-backed model, and metadata finalization is legitimate EXIF/XMP
+  hygiene with provenance left untouched by design.
 
 ## Verifying work
 

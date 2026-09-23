@@ -1,8 +1,9 @@
 // competitor-intel.server.ts — multi-page AI-driven competitor crawl +
 // positioning/strengths/weaknesses synthesis. A genuine gap this codebase had
 // before: competitor-watch.server.ts only does regex snapshot-diff alerting
-// (no AI), and market-intelligence.server.ts synthesizes from DataForSEO trend
-// data, never from reading a competitor's own site.
+// (no AI), and market-intelligence.server.ts synthesizes from Tavily market
+// signals (see market-signals.server.ts), never from reading a competitor's
+// own site.
 //
 // Page text comes from whichever fetcher is actually available:
 //   Firecrawl, when configured — a real crawl, several pages, best quality.

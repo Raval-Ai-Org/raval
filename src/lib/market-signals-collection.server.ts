@@ -277,7 +277,11 @@ async function runCollection(
       collectionId: row.id,
       message: details.message,
     });
-    const updated = await updateRow(row.id, { status: "failed", provider_error: details }, operation);
+    const updated = await updateRow(
+      row.id,
+      { status: "failed", provider_error: details },
+      operation,
+    );
     return { ...resultFromRow(updated, "failed"), error: details };
   }
 }

@@ -15,22 +15,31 @@ vi.mock("@/server/rate-limit", async (importActual) => ({
 
 const ensureMarketBrainSchedule = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
 
-vi.mock("@/lib/dataforseo/google-trends-collection.server", () => ({
-  requestGoogleTrendsCollection: vi.fn(async () => ({
-    state: "pending",
-    collectionId: "11111111-1111-1111-1111-111111111111",
-    taskId: "task-1",
-  })),
-  pollGoogleTrendsCollection: vi.fn(async () => ({
+vi.mock("@/lib/market-signals-collection.server", () => ({
+  requestMarketSignalsCollection: vi.fn(async () => ({
     state: "completed",
     collectionId: "11111111-1111-1111-1111-111111111111",
-    taskId: "task-1",
     data: {
       keywords: ["AI marketing"],
-      interestOverTime: [],
-      relatedQueries: [],
-      relatedTopics: [],
-      regionalInterest: [],
+      location: "United States",
+      sources: [
+        {
+          title: "AI marketing tools are having a moment",
+          url: "https://example.com/ai-marketing",
+          snippet: "A look at the latest AI marketing tools.",
+          domain: "example.com",
+          publishedDate: "2026-09-20",
+        },
+      ],
+    },
+  })),
+  pollMarketSignalsCollection: vi.fn(async () => ({
+    state: "completed",
+    collectionId: "11111111-1111-1111-1111-111111111111",
+    data: {
+      keywords: ["AI marketing"],
+      location: "United States",
+      sources: [],
     },
   })),
 }));
@@ -41,9 +50,9 @@ vi.mock("@/lib/market-brain-scheduler.server", () => ({
 
 import { POST } from "./route";
 import {
-  pollGoogleTrendsCollection,
-  requestGoogleTrendsCollection,
-} from "@/lib/dataforseo/google-trends-collection.server";
+  pollMarketSignalsCollection,
+  requestMarketSignalsCollection,
+} from "@/lib/market-signals-collection.server";
 
 describe("POST /api/market/trends", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -56,14 +65,13 @@ describe("POST /api/market/trends", () => {
           workspaceId: "22222222-2222-2222-2222-222222222222",
           keywords: ["AI marketing"],
           location: "United States",
-          language: "en",
         }),
       }),
     );
 
     expect(response.status).toBe(200);
-    expect((await response.json()).state).toBe("pending");
-    expect(requestGoogleTrendsCollection).toHaveBeenCalledOnce();
+    expect((await response.json()).state).toBe("completed");
+    expect(requestMarketSignalsCollection).toHaveBeenCalledOnce();
   });
 
   it("polls a collection without blocking the original request", async () => {
@@ -77,7 +85,7 @@ describe("POST /api/market/trends", () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).state).toBe("completed");
-    expect(pollGoogleTrendsCollection).toHaveBeenCalledWith(
+    expect(pollMarketSignalsCollection).toHaveBeenCalledWith(
       "11111111-1111-1111-1111-111111111111",
       "22222222-2222-2222-2222-222222222222",
       expect.stringMatching(/^market-poll-/),
@@ -92,7 +100,6 @@ describe("POST /api/market/trends", () => {
           workspaceId: "22222222-2222-2222-2222-222222222222",
           keywords: ["AI marketing"],
           location: "United States",
-          language: "en",
         }),
       }),
     );
@@ -101,9 +108,46 @@ describe("POST /api/market/trends", () => {
     expect(ensureMarketBrainSchedule).toHaveBeenCalledWith({
       workspaceId: "22222222-2222-2222-2222-222222222222",
       location: "United States",
-      language: "en",
       keywords: ["AI marketing"],
     });
+  });
+
+  it("accepts ordinary keyword punctuation (hyphens, quotes, brackets) — not DataForSEO search operators here", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/market/trends", {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: "22222222-2222-2222-2222-222222222222",
+          keywords: [
+            "AI-powered marketing",
+            "D2C brands",
+            "Gen Z & millennials",
+            '"best in class" tools',
+            "state-of-the-art (2026)",
+          ],
+          location: "United States",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(requestMarketSignalsCollection).toHaveBeenCalledOnce();
+  });
+
+  it("still rejects control characters in a keyword", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/market/trends", {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: "22222222-2222-2222-2222-222222222222",
+          keywords: ["broken\nkeyword"],
+          location: "United States",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(requestMarketSignalsCollection).not.toHaveBeenCalled();
   });
 
   it("rejects missing keywords and more than five keywords", async () => {
@@ -122,6 +166,6 @@ describe("POST /api/market/trends", () => {
 
     expect(missing.status).toBe(400);
     expect(tooMany.status).toBe(400);
-    expect(requestGoogleTrendsCollection).not.toHaveBeenCalled();
+    expect(requestMarketSignalsCollection).not.toHaveBeenCalled();
   });
 });

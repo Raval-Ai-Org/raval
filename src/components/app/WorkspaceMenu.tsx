@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "@/lib/navigation";
@@ -239,7 +240,11 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground disabled:opacity-60"
           >
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-secondary/80 text-muted-foreground">
-              <LogOut className="h-3.5 w-3.5" aria-hidden />
+              {signingOut ? (
+                <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <LogOut className="h-3.5 w-3.5" aria-hidden />
+              )}
             </span>
             <span className="flex-1 truncate">{signingOut ? "Signing out…" : "Sign out"}</span>
           </button>

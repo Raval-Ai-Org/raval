@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import {
@@ -173,7 +174,7 @@ export function MarketBrainPanel({ workspaceId, brandKeywords = [] }: Props) {
     <MotionConfig reducedMotion="user">
       <div className="@container space-y-3" data-testid="market-brain" aria-busy={running}>
         {/* ── Header ─────────────────────────────────────────── */}
-        <header className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-emerald-500/[0.08] via-card to-sky-500/[0.06] p-4">
+        <header className="ds-tile ds-glow relative overflow-hidden p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
@@ -454,7 +455,7 @@ function LensEditor({
       )}
     >
       <div className="flex items-start gap-3">
-        <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-500/15 to-sky-500/15 text-emerald-600 @md:grid dark:text-emerald-400">
+        <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20 @md:grid">
           <MapPin className="h-4 w-4" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
@@ -524,7 +525,12 @@ function LensEditor({
                 disabled={running}
                 className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 text-[12px] font-semibold text-background transition hover:opacity-90 disabled:opacity-60 @xl:flex-none"
               >
-                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> Scan
+                {running ? (
+                  <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                )}{" "}
+                {running ? "Scanning…" : "Scan"}
               </button>
             </div>
           </form>

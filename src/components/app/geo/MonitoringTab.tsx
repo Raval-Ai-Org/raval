@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { useEffect, useState } from "react";
 import { CalendarClock, Plus, Trash } from "@/components/icons";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
@@ -139,7 +140,12 @@ export function MonitoringTab({
           disabled={!url.trim() || saving}
           className={cn(primaryBtn, "h-9 px-4 text-[12.5px]")}
         >
-          <Plus className="h-3.5 w-3.5" /> {saving ? "Saving…" : "Add monitor"}
+          {saving ? (
+            <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          ) : (
+            <Plus className="h-3.5 w-3.5" />
+          )}{" "}
+          {saving ? "Saving…" : "Add monitor"}
         </button>
       </form>
       {error && (

@@ -71,10 +71,16 @@ const workspaceId = "22222222-2222-2222-2222-222222222222";
 
 const trendData = {
   keywords: ["AI marketing"],
-  interestOverTime: [{ timestamp: 1, date: "2024-01-01", values: [80] }],
-  relatedQueries: [{ query: "AI marketing tools", value: "100", kind: "top" as const }],
-  relatedTopics: [],
-  regionalInterest: [{ geoId: "US-CA", geoName: "California", values: [90] }],
+  location: "United States",
+  sources: [
+    {
+      title: "AI marketing tools are having a moment",
+      url: "https://example.com/ai-marketing-tools",
+      snippet: "A roundup of AI marketing tools gaining traction with marketing teams.",
+      domain: "example.com",
+      publishedDate: "2026-09-08",
+    },
+  ],
 };
 
 const validIntelligence = {
@@ -136,13 +142,18 @@ beforeEach(() => {
 });
 
 describe("Market Intelligence engine", () => {
-  it("turns valid trend data and Brand DNA into validated intelligence", async () => {
+  it("turns valid web sources and Brand DNA into validated intelligence", async () => {
     const result = await analyzeMarketCollection({ collectionId, workspaceId });
 
     expect(result.state).toBe("completed");
     expect(MarketIntelligenceSchema.safeParse(result.data).success).toBe(true);
     expect(claudeTextPrompt).toHaveBeenCalledOnce();
-    expect(claudeTextPrompt.mock.calls[0][0].user).toContain("AI marketing tools");
+    expect(claudeTextPrompt.mock.calls[0][0].user).toContain(
+      "AI marketing tools are having a moment",
+    );
+    expect(claudeTextPrompt.mock.calls[0][0].user).toContain(
+      "https://example.com/ai-marketing-tools",
+    );
     expect(claudeTextPrompt.mock.calls[0][0].user).toContain("AI marketing intelligence");
   });
 
@@ -225,9 +236,15 @@ describe("Market Intelligence engine", () => {
     state.collection!.completed_at = "2026-09-11T06:00:00.000Z";
     state.collection!.normalized_result = {
       ...trendData,
-      interestOverTime: [
-        ...trendData.interestOverTime,
-        { timestamp: 2, date: "2024-01-08", values: [95] },
+      sources: [
+        ...trendData.sources,
+        {
+          title: "A second source on the same topic",
+          url: "https://example.org/second-source",
+          snippet: "More coverage of the same AI marketing trend.",
+          domain: "example.org",
+          publishedDate: "2026-09-11",
+        },
       ],
     };
     const refreshed = await analyzeMarketCollection({ collectionId, workspaceId });

@@ -340,7 +340,7 @@ export function JobRow({
             variant="ghost"
             className="size-7 rounded-full"
             onClick={() => void cancel()}
-            disabled={cancelling}
+            loading={cancelling}
             aria-label={`Cancel ${job.title ?? format.noun}`}
             title="Cancel"
           >
@@ -1186,7 +1186,11 @@ export function ApprovalCard({
               title="Back to review"
               className={cn(iconButton, "hover:bg-surface-2 hover:text-foreground")}
             >
-              <RotateCcw className="size-3.5" />
+              {busy ? (
+                <Spinner className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <RotateCcw className="size-3.5" />
+              )}
             </button>
             <Button size="sm" className="studio-cta h-7 rounded-full px-3" onClick={open}>
               <CalendarClock />
@@ -1224,7 +1228,11 @@ export function ApprovalCard({
               title="Discard"
               className={cn(iconButton, "hover:bg-danger-surface hover:text-danger")}
             >
-              <X className="size-3.5" />
+              {busy ? (
+                <Spinner className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <X className="size-3.5" />
+              )}
             </button>
             {needsPost ? null : (
               <Button size="sm" variant="ghost" className="h-7 rounded-full px-2.5" onClick={open}>
@@ -1235,7 +1243,7 @@ export function ApprovalCard({
               size="sm"
               className="studio-cta h-7 rounded-full px-3"
               onClick={() => (needsPost && onCreate ? onCreate(group) : void decide("approved"))}
-              disabled={busy}
+              loading={busy}
               aria-label={
                 needsPost ? `Approve and create ${group.title}` : `Approve ${group.title}`
               }

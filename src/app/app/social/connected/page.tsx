@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { PageLoader } from "@/components/ui/page-loader";
 import { SocialConnectCallback } from "@/components/app/SocialConnectCallback";
 
 // OAuth return page for social account connections (SocialAPI.ai redirects
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function SocialConnectedPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PageLoader label="Connecting account…" />}>
       <SocialConnectCallback />
     </Suspense>
   );

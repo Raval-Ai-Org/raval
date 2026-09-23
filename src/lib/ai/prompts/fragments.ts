@@ -53,6 +53,17 @@ export const RULE_NO_DUPES = "Never duplicate facts already listed as KNOWN.";
 export const RULE_NO_FLUFF =
   "No filler. Skip generic advice. Prefer 2 sharp specifics over 4 generic items.";
 
+/**
+ * Streamed chat text can't be cleaned up after the fact the way a fully
+ * materialized completion can (src/lib/ai/humanize-text.ts, applied to every
+ * non-streaming call in run.server.ts and anthropic-gateway.server.ts) — so
+ * for the one surface that streams straight to the browser, prevention in
+ * the prompt is the only real defense. Mirrors the instruction Studio's
+ * CRAFT_RULES already gives (src/lib/studio/prompts.ts).
+ */
+export const RULE_NATURAL_VOICE =
+  "Write like a real person, not a template: plain words, varied sentence length. Never use em dashes (—) or en dashes (–) — use a comma, a period, a colon, or 'and' instead. Avoid AI-marketing clichés: 'game-changer', 'unlock', 'elevate', 'in today's fast-paced world', 'dive in', 'look no further'.";
+
 /* ------------------------------ Format ------------------------------ */
 
 export const FMT_CHAT =

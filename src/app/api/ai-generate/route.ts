@@ -4,6 +4,7 @@ import { defineRoute } from "@/server/route";
 import { fetchPublicText } from "@/server/safe-fetch";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 import { chatCompletion } from "@/lib/ai";
+import { humanizeText } from "@/lib/ai/humanize-text";
 import { stripHtml } from "@/lib/crawl/html";
 import { TASK_SYSTEMS } from "@/lib/ai/prompts";
 import { assemble } from "@/lib/ai/prompts/assemble";
@@ -83,7 +84,7 @@ export const POST = defineRoute({
       regenerate: body.regenerate,
       route: `ai-generate.${body.task}`,
     });
-    const text = String(json?.choices?.[0]?.message?.content ?? "").trim();
+    const text = humanizeText(String(json?.choices?.[0]?.message?.content ?? "").trim());
     if (!text) return jsonError(502, "AI returned an empty draft");
     // `truncated` tells the client the draft was cut off at the output ceiling
     // (also metered + logged server-side) instead of failing to parse silently.

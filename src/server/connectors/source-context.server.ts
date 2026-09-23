@@ -20,6 +20,11 @@ export type SiteSourceContext = {
     domain: string | null;
     connectionId: string;
   } | null;
+  wordpressSite: {
+    siteUrl: string;
+    name: string;
+    connectionId: string;
+  } | null;
   /** Capabilities available now vs. planned. */
   capabilities: { inspect: true; proposeChanges: boolean };
 };
@@ -40,6 +45,7 @@ export async function getSiteSourceContext(
     .limit(1)
     .maybeSingle();
   let webflowSite: SiteSourceContext["webflowSite"] = null;
+  let wordpressSite: SiteSourceContext["wordpressSite"] = null;
   const webflowDb = supabase as unknown as { from: (table: string) => any };
   const { data: wf } = await webflowDb
     .from("webflow_sites")
@@ -56,15 +62,34 @@ export async function getSiteSourceContext(
       connectionId: wf.connection_id,
     };
   }
+  const { data: wp } = await webflowDb
+    .from("wordpress_sites")
+    .select("site_url, site_name, connection_id")
+    .eq("workspace_id", workspaceId)
+    .eq("selected", true)
+    .eq("status", "active")
+    .maybeSingle();
+  if (
+    wp?.site_url &&
+    new URL(wp.site_url).hostname.toLowerCase().replace(/^www\./, "") === normalized
+  ) {
+    wordpressSite = { siteUrl: wp.site_url, name: wp.site_name, connectionId: wp.connection_id };
+  }
   if (error) return null;
   if (!data)
     return webflowSite
-      ? { source: null, webflowSite, capabilities: { inspect: true, proposeChanges: false } }
+      ? {
+          source: null,
+          webflowSite,
+          wordpressSite,
+          capabilities: { inspect: true, proposeChanges: false },
+        }
       : null;
   const row = data as unknown as SourceRow;
   return {
     source: presentSource(row),
     webflowSite,
+    wordpressSite,
     // Pull requests for AI Visibility fixes: src/server/geo/fixes/service.server.ts.
     // Changes are only proposed once the repository is proven to build this host.
     capabilities: {

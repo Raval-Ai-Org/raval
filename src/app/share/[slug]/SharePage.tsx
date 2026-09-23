@@ -1,7 +1,7 @@
 "use client";
 
 import { PageLoader } from "@/components/ui/page-loader";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,6 +12,7 @@ import {
   Lightbulb,
   Lock,
   Sparkles,
+  Download,
 } from "@/components/ui/gemini-icons";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
@@ -49,8 +50,30 @@ type PortalEvent = {
   body: string | null;
   actor_name: string | null;
   actor_type: "client" | "team";
+  marketer_decision?: string;
   created_at: string;
 };
+
+const EVENT_LABEL: Record<string, string> = {
+  approved: "Approved",
+  rejected: "Rejected",
+  requested_changes: "Asked for changes",
+  suggested: "Suggestion",
+  commented: "Comment",
+  replied: "Reply",
+};
+
+/** The latest approval-type decision the client made on each item. */
+function decisionsByItem(events: PortalEvent[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const e of events) {
+    if (!e.item_id || e.actor_type !== "client") continue;
+    if (e.kind === "approved" || e.kind === "rejected" || e.kind === "requested_changes") {
+      out[e.item_id] = e.kind;
+    }
+  }
+  return out;
+}
 
 export function FullPage({ title, body }: { title: string; body: string }) {
   return (
@@ -90,7 +113,18 @@ function SharePage() {
         headers: pw ? { "X-Share-Password": pw } : undefined,
       });
       if (res.status === 410) {
-        setError("This share link has expired or was revoked.");
+        const reason = await res.text().catch(() => "");
+        setError(
+          reason === "Expired"
+            ? "This link has expired. Ask the sender for a new one."
+            : "This link was turned off. Ask the sender for a new one.",
+        );
+        return;
+      }
+      if (res.status === 429) {
+        setShare((s) => s ?? { id: "", title: "Protected review", passwordRequired: true });
+        setLocked(true);
+        setPwError("Too many tries. Wait a few minutes and try again.");
         return;
       }
       if (res.status === 404) {
@@ -121,12 +155,19 @@ function SharePage() {
       }
       setLocked(false);
       setPwError(null);
-      // viewed event
-      fetch(`/api/public/share/${slug}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: t, kind: "viewed", password: pw }),
-      }).catch(() => {});
+      // One "viewed" note per browser session, not one per reload.
+      let seen = false;
+      try {
+        seen = sessionStorage.getItem(`share:viewed:${slug}`) === "1";
+        sessionStorage.setItem(`share:viewed:${slug}`, "1");
+      } catch {}
+      if (!seen) {
+        fetch(`/api/public/share/${slug}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: t, kind: "viewed", password: pw }),
+        }).catch(() => {});
+      }
     } catch (e: any) {
       setError(e?.message ?? "Failed to load");
     } finally {
@@ -145,7 +186,8 @@ function SharePage() {
       if (saved) {
         const p = JSON.parse(saved);
         setIdentity({ name: p.name ?? "", email: p.email ?? "" });
-        setIdentityLocked(!!(p.name && p.email));
+        // Email is optional, so a saved name is enough to skip the question.
+        setIdentityLocked(!!(typeof p.name === "string" && p.name.trim()));
       }
       const savedPw = sessionStorage.getItem(`share:pw:${slug}`) ?? "";
       if (savedPw) setPassword(savedPw);
@@ -155,6 +197,51 @@ function SharePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // Pick up replies from the team while the page is open. Quiet: no loader,
+  // and ?refresh=1 so it doesn't count as another view.
+  const refreshThread = useCallback(async () => {
+    if (!token) return;
+    try {
+      const qs = new URLSearchParams({ t: token, refresh: "1" });
+      const res = await fetch(`/api/public/share/${slug}?${qs.toString()}`, {
+        headers: password ? { "X-Share-Password": password } : undefined,
+      });
+      if (res.status === 410) {
+        setError("This link is no longer active.");
+        return;
+      }
+      if (!res.ok) return;
+      const data = await res.json().catch(() => null);
+      if (data && !data.locked && Array.isArray(data.events)) setEvents(data.events);
+    } catch {}
+  }, [password, slug, token]);
+
+  const pollRef = useRef(refreshThread);
+  useEffect(() => {
+    pollRef.current = refreshThread;
+  }, [refreshThread]);
+  const unlocked = !!share && !locked && !loading && !error;
+  useEffect(() => {
+    if (!unlocked) return;
+    const id = window.setInterval(() => {
+      if (!document.hidden) void pollRef.current();
+    }, 30_000);
+    const onVisible = () => {
+      if (!document.hidden) void pollRef.current();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [unlocked]);
+
+  const itemDecisions = useMemo(() => decisionsByItem(events), [events]);
+  const itemTitles = useMemo(
+    () => Object.fromEntries(items.map((i) => [i.id, i.title ?? "Item"])),
+    [items],
+  );
 
   const submitPassword = async () => {
     const pw = pwInput.trim();
@@ -181,11 +268,14 @@ function SharePage() {
     toast.success("Welcome " + identity.name.split(" ")[0]);
   };
 
-  const sendEvent = async (kind: string, payload: { itemId?: string; body?: string } = {}) => {
-    if (!share) return;
+  const sendEvent = async (
+    kind: string,
+    payload: { itemId?: string; body?: string } = {},
+  ): Promise<boolean> => {
+    if (!share) return false;
     if (!identityLocked) {
       toast.error("Add your name first");
-      return;
+      return false;
     }
     const res = await fetch(`/api/public/share/${slug}`, {
       method: "POST",
@@ -201,13 +291,19 @@ function SharePage() {
       }),
     });
     if (!res.ok) {
-      toast.error("Couldn't send — try again");
-      return;
+      toast.error(
+        res.status === 410
+          ? "This link is no longer active"
+          : res.status === 403
+            ? "That isn't allowed on this link"
+            : "Couldn't send. Try again.",
+      );
+      return false;
     }
     setEvents((current) => [
       ...current,
       {
-        id: crypto.randomUUID(),
+        id: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         item_id: payload.itemId ?? null,
         kind,
         body: payload.body ?? null,
@@ -227,6 +323,7 @@ function SharePage() {
               ? "Suggestion sent to marketer"
               : "Comment sent",
     );
+    return true;
   };
 
   if (loading) return <PageLoader label="Loading…" />;
@@ -345,7 +442,9 @@ function SharePage() {
           <section className="rounded-2xl border border-border/60 bg-card p-5 sm:p-6">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[15px] font-semibold">Conversation</h2>
-              <span className="text-[11px] text-muted-foreground">{events.length} messages</span>
+              <span className="text-[11px] text-muted-foreground">
+                {events.length} {events.length === 1 ? "message" : "messages"}
+              </span>
             </div>
             <div className="space-y-3">
               {events.map((event) => (
@@ -360,15 +459,17 @@ function SharePage() {
                 >
                   <div className="mb-1 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground">
                     <span className="font-medium text-foreground">
-                      {event.actor_name ?? "Client"}
+                      {event.actor_name ?? (event.actor_type === "team" ? "Team" : "Client")}
                     </span>
                     <time dateTime={event.created_at}>
                       {new Date(event.created_at).toLocaleString()}
                     </time>
                   </div>
-                  <p className="whitespace-pre-wrap">
-                    {event.body ?? event.kind.replaceAll("_", " ")}
-                  </p>
+                  <EventHeading
+                    event={event}
+                    itemTitle={event.item_id ? itemTitles[event.item_id] : undefined}
+                  />
+                  {event.body && <p className="whitespace-pre-wrap">{event.body}</p>}
                 </div>
               ))}
             </div>
@@ -384,6 +485,8 @@ function SharePage() {
                 index={idx}
                 allowApprovals={!!share.allowApprovals}
                 allowComments={!!share.allowComments}
+                allowDownload={!!share.allowDownload}
+                decision={itemDecisions[it.id] ?? null}
                 onAction={sendEvent}
                 disabled={!identityLocked}
               />
@@ -397,8 +500,7 @@ function SharePage() {
         </div>
 
         <footer className="pt-8 pb-6 text-center text-[11px] text-muted-foreground">
-          Powered by Mellox AI · This is a read-only review link. All decisions need marketer
-          confirmation.
+          Powered by Mellox AI · The team confirms every decision before anything changes.
         </footer>
       </section>
     </div>
@@ -410,6 +512,8 @@ function ItemCard({
   index,
   allowApprovals,
   allowComments,
+  allowDownload,
+  decision,
   onAction,
   disabled,
 }: {
@@ -417,12 +521,16 @@ function ItemCard({
   index: number;
   allowApprovals: boolean;
   allowComments: boolean;
-  onAction: (kind: string, p?: { itemId?: string; body?: string }) => void;
+  allowDownload: boolean;
+  decision: string | null;
+  onAction: (kind: string, p?: { itemId?: string; body?: string }) => Promise<boolean>;
   disabled: boolean;
 }) {
   const [drawer, setDrawer] = useState<null | "comment" | "changes" | "reject" | "suggest">(null);
   const [text, setText] = useState("");
-  const [done, setDone] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+  // What the client already decided (from the thread) or just sent.
+  const done = sent ?? decision;
 
   const snapshot = item.snapshot || {};
   const body = snapshot.body || snapshot.content || item.description || "";
@@ -445,11 +553,29 @@ function ItemCard({
     }
   }, [item.kind, channel]);
 
-  const submit = (kind: string) => {
-    onAction(kind, { itemId: item.id, body: text || undefined });
-    setDone(kind);
+  const submit = async (kind: string) => {
+    const ok = await onAction(kind, { itemId: item.id, body: text || undefined });
+    if (!ok) return;
+    setSent(kind);
     setText("");
     setDrawer(null);
+  };
+
+  const download = () => {
+    const tags = hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ");
+    const text = [item.title, body, tags].filter(Boolean).join("\n\n");
+    const href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    const name = (item.title || "content")
+      .replace(/[^\w\- ]+/g, "")
+      .trim()
+      .slice(0, 60);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = `${name || "content"}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
   };
 
   return (
@@ -531,6 +657,21 @@ function ItemCard({
             disabled={disabled}
           />
         )}
+        {allowDownload && <ActionButton icon={Download} label="Download text" onClick={download} />}
+        {allowDownload &&
+          typeof snapshot.media_url === "string" &&
+          /^https?:\/\//.test(snapshot.media_url) && (
+            <a
+              href={snapshot.media_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background px-3 py-1.5 text-[12px] font-medium transition hover:border-foreground/30 hover:bg-card"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Image
+            </a>
+          )}
       </div>
 
       <AnimatePresence>
@@ -602,11 +743,26 @@ function ItemCard({
                 : "text-foreground",
           )}
         >
-          <Check className="h-3.5 w-3.5" /> Sent — your marketer will see this in their inbox.
+          <Check className="h-3.5 w-3.5" />
+          {sent
+            ? "Sent. The team will see this in their inbox."
+            : done === "approved"
+              ? "You approved this."
+              : done === "rejected"
+                ? "You rejected this."
+                : "You asked for changes."}
         </div>
       )}
     </motion.article>
   );
+}
+
+function EventHeading({ event, itemTitle }: { event: PortalEvent; itemTitle?: string }) {
+  const plain = event.kind === "commented" || event.kind === "replied";
+  const label = plain ? null : (EVENT_LABEL[event.kind] ?? event.kind.replaceAll("_", " "));
+  const text = [label, itemTitle].filter(Boolean).join(" · ");
+  if (!text) return null;
+  return <div className="mb-0.5 text-[11px] font-medium text-muted-foreground">{text}</div>;
 }
 
 function ActionButton({

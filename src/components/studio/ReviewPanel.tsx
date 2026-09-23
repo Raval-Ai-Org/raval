@@ -1179,7 +1179,7 @@ export function ReviewPanel({
               <span className="absolute inset-x-0 bottom-0 h-px overflow-hidden">
                 <motion.span
                   className="absolute inset-y-0 w-1/3 bg-primary"
-                  animate={reduce ? undefined : { x: ["-100%", "300%"] }}
+                  animate={{ x: ["-100%", "300%"] }}
                   transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
                 />
               </span>

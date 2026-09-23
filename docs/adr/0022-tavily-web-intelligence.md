@@ -132,8 +132,10 @@ Tavily is not called on every AI interaction. Where it is used, it is gated:
   which Mellox already holds — never search.
 - **Studio** — `briefNeedsResearch()` researches a factual or market-based
   brief; a caption, a hook or a visual idea never triggers it.
-- **Market Intelligence** — trends say *what* is moving, coverage says *why*.
-  Absorbed by the existing `context_fingerprint` cache key.
+- **Market Intelligence** — at the time of writing, still layered on top of
+  Google Trends via DataForSEO for *what* is moving, with Tavily coverage
+  answering *why*. ADR-0023 replaces DataForSEO entirely: Tavily search
+  becomes the only measured evidence Market Brain has.
 - **GEO/AEO** — `citation-probes.server.ts` runs a search per probe question to
   establish who is actually surfaced for the queries this brand should own. It
   reuses `detectMentions`/`extractCitations`/`summarizeProbes` unchanged, so it

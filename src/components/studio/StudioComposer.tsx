@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/icons";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -823,7 +824,7 @@ export function IntentStep({
           size="lg"
           className="studio-cta ml-auto"
         >
-          <Wand2 />
+          {busy ? <Spinner className="animate-spin" aria-hidden /> : <Wand2 />}
           {busy ? "Starting…" : session.lastGood ? "Generate again" : "Generate"}
         </Button>
       </footer>

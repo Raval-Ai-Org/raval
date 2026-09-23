@@ -14,10 +14,12 @@ Production validation is implemented in `src/server/env.ts`.
 ## Providers and features
 
 - AI: `ANTHROPIC_API_KEY`, `AI_USER_DAILY_USD`, `AI_TEXT_ROUTE_*`, `HELICONE_*`.
-- Media/intelligence: `KIE_*`, `UGC_*`, `DATAFORSEO_*`, `PEXELS_API_KEY`, `UNSPLASH_ACCESS_KEY`, `FIRECRAWL_*`.
+- Media/intelligence: `KIE_*`, `UGC_*`, `TAVILY_*`, `PEXELS_API_KEY`, `UNSPLASH_ACCESS_KEY`, `FIRECRAWL_*`.
 - GEO: `FEATURE_FLAG_GEO_*`, `GEO_*`.
 - Distribution: `DISTRIBUTION_PROVIDER`, `FEATURE_FLAG_SDR_ENABLED`, `SDR_*`, `FEATURE_FLAG_SOCIALAPI_ENABLED`, `SOCIALAPI_*`.
 - Connectors: `GITHUB_*`, `GOOGLE_ANALYTICS_*`, `GOOGLE_TOKEN_ENCRYPTION_KEY`.
+- Client portal: `SHARE_LINK_ENCRYPTION_KEY` (base64 32 bytes) keeps share links
+  stable; without it "Copy link" issues a new link and the old one stops working.
 - Operations: `REDIS_URL`, `SENTRY_DSN`, `ALERT_WEBHOOK_URL`, `AGENTS_DISABLED`, `LOG_LEVEL`.
 
 `src/server/env.ts` is more authoritative than this summary. A missing optional

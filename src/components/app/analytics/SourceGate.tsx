@@ -90,7 +90,7 @@ export function SourceNotice({ status }: { status: SourceStatus }) {
       {!syncing && (
         <button
           type="button"
-          onClick={() => emitAppEvent("open:settings", { section: "connections" })}
+          onClick={() => emitAppEvent("open:settings", { section: "analytics" })}
           className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-[12px] font-medium transition hover:border-foreground/30"
         >
           <Settings className="size-3.5" aria-hidden /> Open connections

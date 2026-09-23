@@ -15,6 +15,7 @@ import {
   type ChatMessage,
 } from "@/lib/ai-gateway.server";
 import { claudeTextCompletion, selectClaudeModel } from "@/lib/anthropic-gateway.server";
+import { humanizeText } from "@/lib/ai/humanize-text";
 import {
   resolveTextRoute,
   unifiedGatewayEnabled,
@@ -64,8 +65,12 @@ async function callOpenRouter(
     _extraction: opts.kind === "extraction",
   });
   const content = json?.choices?.[0]?.message?.content;
+  const raw = typeof content === "string" ? content : "";
   return {
-    text: typeof content === "string" ? content : "",
+    // Extraction stays faithful to the source; everything else gets the
+    // "no em dash" cleanup every other gateway path applies
+    // (src/lib/ai/humanize-text.ts).
+    text: opts.kind === "extraction" ? raw : humanizeText(raw),
     provider: "openrouter",
     model: json?._model ?? candidate.model,
     truncated: Boolean(json?._truncated),
