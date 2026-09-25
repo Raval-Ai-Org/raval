@@ -45,7 +45,9 @@ export function useGeoScans(workspaceId: string) {
       );
       const json = await readJson(res);
       if (!res.ok) {
-        const error = new Error((json?.error as string) ?? `Couldn't load the scan (${res.status})`);
+        const error = new Error(
+          (json?.error as string) ?? `Couldn't load the scan (${res.status})`,
+        );
         Object.assign(error, { status: res.status });
         throw error;
       }

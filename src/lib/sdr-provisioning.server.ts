@@ -9,7 +9,11 @@
 
 import "server-only";
 import { randomBytes, randomUUID } from "node:crypto";
-import { decryptWithKey, encryptWithKey, readEncryptionKey } from "@/server/crypto/secret-box.server";
+import {
+  decryptWithKey,
+  encryptWithKey,
+  readEncryptionKey,
+} from "@/server/crypto/secret-box.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { callSdr } from "@/lib/sdr.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";

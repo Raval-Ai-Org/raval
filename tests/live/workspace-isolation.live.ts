@@ -102,7 +102,11 @@ async function makeActor(tag: string): Promise<Actor> {
   describe("creation and duplicates", () => {
     it("the same brand domain (any spelling) returns the existing workspace", async () => {
       const { createOrGetWorkspace } = await import("@/server/workspaces/service.server");
-      for (const websiteUrl of ["mellox.ai", "https://www.MELLOX.ai/", "http://mellox.ai/pricing"]) {
+      for (const websiteUrl of [
+        "mellox.ai",
+        "https://www.MELLOX.ai/",
+        "http://mellox.ai/pricing",
+      ]) {
         const r = await createOrGetWorkspace({
           userId: alice.id,
           name: "Mellox again",

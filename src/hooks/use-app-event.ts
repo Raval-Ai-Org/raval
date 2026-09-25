@@ -5,11 +5,7 @@
 // `react`'s useEffect/useRef (which Next.js refuses to bundle into a Server
 // Component / route module).
 import { useEffect, useRef } from "react";
-import {
-  onAppEvent,
-  type AppEventHandler,
-  type AppEventName,
-} from "@/lib/app-events";
+import { onAppEvent, type AppEventHandler, type AppEventName } from "@/lib/app-events";
 
 /**
  * Subscribe for the component's lifetime. The latest handler is always

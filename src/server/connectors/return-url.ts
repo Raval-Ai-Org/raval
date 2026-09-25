@@ -29,14 +29,17 @@ export function allowedReturnOriginFrom(
   if (url.protocol !== "https:" && url.protocol !== "http:") return null;
   if (/^(localhost|127\.0\.0\.1)$/i.test(url.hostname)) return opts.allowLocal ? url.origin : null;
   if (url.protocol !== "https:") return null;
-  const allowed = [env.APP_URL, env.NEXT_PUBLIC_APP_URL, ...(opts.extraOrigins ?? "").split(",")]
-    .flatMap((raw) => {
-      try {
-        return raw?.trim() ? [new URL(raw.trim()).origin] : [];
-      } catch {
-        return [];
-      }
-    });
+  const allowed = [
+    env.APP_URL,
+    env.NEXT_PUBLIC_APP_URL,
+    ...(opts.extraOrigins ?? "").split(","),
+  ].flatMap((raw) => {
+    try {
+      return raw?.trim() ? [new URL(raw.trim()).origin] : [];
+    } catch {
+      return [];
+    }
+  });
   return allowed.includes(url.origin) ? url.origin : null;
 }
 

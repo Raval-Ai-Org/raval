@@ -56,9 +56,8 @@ let workspaceId: string;
   }, 60_000);
 
   it("collects real web sources for a real keyword and stores them", async () => {
-    const { requestMarketSignalsCollection } = await import(
-      "@/lib/market-signals-collection.server"
-    );
+    const { requestMarketSignalsCollection } =
+      await import("@/lib/market-signals-collection.server");
     const result = await requestMarketSignalsCollection(
       { keywords: ["artificial intelligence"], location: "United States" },
       workspaceId,
@@ -86,9 +85,8 @@ let workspaceId: string;
   }, 60_000);
 
   it("reuses the cached collection instead of searching again", async () => {
-    const { requestMarketSignalsCollection } = await import(
-      "@/lib/market-signals-collection.server"
-    );
+    const { requestMarketSignalsCollection } =
+      await import("@/lib/market-signals-collection.server");
     const result = await requestMarketSignalsCollection(
       { keywords: ["artificial intelligence"], location: "United States" },
       workspaceId,

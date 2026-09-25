@@ -61,7 +61,9 @@ describeLive("GitHub connect return path (live)", () => {
     );
     expect(res.status).toBe(302);
     const location = res.headers.get("location")!;
-    console.info(`[live] callback relay -> ${location.replace(state, "<state>").replace("abc", "<code>")}`);
+    console.info(
+      `[live] callback relay -> ${location.replace(state, "<state>").replace("abc", "<code>")}`,
+    );
     expect(location.startsWith("http://localhost:8080/integrations/github/callback?")).toBe(true);
     const forwarded = new URL(location).searchParams;
     expect(forwarded.get("state")).toBe(state);
@@ -76,13 +78,19 @@ describeLive("GitHub connect return path (live)", () => {
         "https://mellox.ai/api/integrations/github/callback?installation_id=1&state=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
       ),
     );
-    expect(unknown.headers.get("location")!.startsWith("/integrations/github/callback?")).toBe(true);
+    expect(unknown.headers.get("location")!.startsWith("/integrations/github/callback?")).toBe(
+      true,
+    );
 
     const { state } = await issue("https://evil.example");
     const foreign = await GET(
-      new Request(`https://mellox.ai/api/integrations/github/callback?installation_id=1&state=${state}`),
+      new Request(
+        `https://mellox.ai/api/integrations/github/callback?installation_id=1&state=${state}`,
+      ),
     );
-    expect(foreign.headers.get("location")!.startsWith("/integrations/github/callback?")).toBe(true);
+    expect(foreign.headers.get("location")!.startsWith("/integrations/github/callback?")).toBe(
+      true,
+    );
   });
 
   it("keeps a state usable after a failed completion and binds it to its user", async () => {
@@ -98,9 +106,9 @@ describeLive("GitHub connect return path (live)", () => {
     const again = await readInstallState(state, who.userId);
     expect(again.consumedAt).toBeNull();
 
-    await expect(
-      readInstallState(state, "00000000-0000-0000-0000-000000000000"),
-    ).rejects.toThrow(/different Mellox user/);
+    await expect(readInstallState(state, "00000000-0000-0000-0000-000000000000")).rejects.toThrow(
+      /different Mellox user/,
+    );
 
     await markInstallStateUsed(again);
     const used = await readInstallState(state, who.userId);

@@ -19,7 +19,8 @@ export function readEncryptionKey(envName: string, env = process.env): Buffer {
   const raw = env[envName];
   if (!raw) throw new SecretKeyError(`${envName} not set (server-only env)`);
   const key = Buffer.from(raw, "base64");
-  if (key.length !== 32) throw new SecretKeyError(`${envName} must be a base64-encoded 32-byte key`);
+  if (key.length !== 32)
+    throw new SecretKeyError(`${envName} must be a base64-encoded 32-byte key`);
   return key;
 }
 

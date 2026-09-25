@@ -12,7 +12,7 @@ import {
 
 export type CompetitorIntelRunPayload = {
   runId: string;
-    workspaceId: string;
+  workspaceId: string;
   competitorUrl: string;
 };
 

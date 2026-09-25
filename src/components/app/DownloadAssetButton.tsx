@@ -15,7 +15,8 @@ function extensionFrom(url: string, mimeType?: string | null): string {
     "video/quicktime": "mov",
     "video/webm": "webm",
   };
-  if (mimeType && mimeExtension[mimeType.toLowerCase()]) return mimeExtension[mimeType.toLowerCase()];
+  if (mimeType && mimeExtension[mimeType.toLowerCase()])
+    return mimeExtension[mimeType.toLowerCase()];
   try {
     const match = new URL(url).pathname.match(/\.([a-z0-9]+)$/i);
     return match?.[1].toLowerCase() ?? "bin";
@@ -25,7 +26,12 @@ function extensionFrom(url: string, mimeType?: string | null): string {
 }
 
 function safeFilename(value: string): string {
-  return value.trim().replace(/[^a-z0-9._-]+/gi, "-").replace(/^-+|-+$/g, "") || "mellox-asset";
+  return (
+    value
+      .trim()
+      .replace(/[^a-z0-9._-]+/gi, "-")
+      .replace(/^-+|-+$/g, "") || "mellox-asset"
+  );
 }
 
 export function DownloadAssetButton({
@@ -88,7 +94,7 @@ export function DownloadAssetButton({
       )}
     >
       {busy ? <Spinner className="animate-spin" /> : <Download />}
-      {!compact ? children ?? "Download" : null}
+      {!compact ? (children ?? "Download") : null}
     </button>
   );
 }

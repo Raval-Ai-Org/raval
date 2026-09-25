@@ -104,15 +104,15 @@ export function WordPressConnectCallback() {
           return;
         }
         clear();
-        const rawMessage = e instanceof Error ? e.message : "WordPress.com could not finish connecting.";
+        const rawMessage =
+          e instanceof Error ? e.message : "WordPress.com could not finish connecting.";
         setView({
           kind: "error",
-          message:
-            /expired|invalid|link/i.test(rawMessage)
-              ? "This WordPress.com connection request is no longer valid. Please try again."
-              : /denied|oauth|authorization|token/i.test(rawMessage)
-                ? "WordPress.com could not finish the connection. Please try again."
-                : "WordPress.com could not finish connecting. Please try again.",
+          message: /expired|invalid|link/i.test(rawMessage)
+            ? "This WordPress.com connection request is no longer valid. Please try again."
+            : /denied|oauth|authorization|token/i.test(rawMessage)
+              ? "WordPress.com could not finish the connection. Please try again."
+              : "WordPress.com could not finish connecting. Please try again.",
         });
       }
     })();
@@ -130,8 +130,7 @@ export function WordPressConnectCallback() {
       setBusySiteId(null);
       setView({
         kind: "error",
-        message:
-          e instanceof Error ? e.message : "That WordPress.com site could not be selected.",
+        message: e instanceof Error ? e.message : "That WordPress.com site could not be selected.",
       });
     }
   };
@@ -182,7 +181,10 @@ export function WordPressConnectCallback() {
             </p>
             <ul className="space-y-2">
               {view.sites.map((site) => (
-                <li key={site.id} className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2.5">
+                <li
+                  key={site.id}
+                  className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2.5"
+                >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{site.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{site.url}</p>
