@@ -16,7 +16,6 @@ import {
   Check,
   Eye,
   FileText,
-  Inbox,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -39,11 +38,7 @@ import { isActiveJob, type StudioJob } from "@/lib/studio/jobs";
 import { cancelSession, getStudioState, openJob, useStudioStore } from "@/lib/studio/session-store";
 import { openItemOrJob } from "@/hooks/use-studio";
 import { useVisibleInterval } from "@/hooks/use-visible-interval";
-import {
-  useStudioSuggestions,
-  type StudioSuggestion,
-  type StudioSuggestionAccent,
-} from "@/hooks/use-studio-suggestions";
+import { useStudioSuggestions } from "@/hooks/use-studio-suggestions";
 import { Burst, DrawCheck, PlatformStack, TypeGlyph } from "@/components/studio/studio-ui";
 import { studioApi } from "@/lib/studio/client";
 import { createPostFromDraft } from "@/lib/studio/convert";
@@ -81,7 +76,6 @@ function useWorkspaceId(): string | null {
 export function StudioRail(_props: { embedded?: boolean } = {}) {
   const workspaceId = useWorkspaceId();
   const [rows, setRows] = useState<ContentRow[] | null>(null);
-  const [agentActions, setAgentActions] = useState(0);
   const [publishedThisWeek, setPublishedThisWeek] = useState(0);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -95,7 +89,7 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
     }
     setRefreshing(true);
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-    const [queue, approvals, published] = await Promise.all([
+    const [queue, published] = await Promise.all([
       // Everything still on its way out: not published, not discarded.
       supabase
         .from("content_items")
@@ -104,11 +98,6 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
         .in("status", [...PIPELINE_STATUSES])
         .order("created_at", { ascending: false })
         .limit(80),
-      supabase
-        .from("approvals")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", ws)
-        .eq("status", "pending"),
       supabase
         .from("content_items")
         .select("id", { count: "exact", head: true })
@@ -125,7 +114,6 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
     setLoadError(null);
     const queueRows = (queue.data ?? []) as ContentRow[];
     setRows(queueRows);
-    setAgentActions(approvals.count ?? 0);
     setPublishedThisWeek(published.count ?? 0);
 
     const paths = [
@@ -178,7 +166,6 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
             error={loadError}
             thumbs={thumbs}
             jobs={jobs}
-            agentActions={agentActions}
             publishedThisWeek={publishedThisWeek}
             onRefresh={() => void load()}
           />
@@ -439,7 +426,6 @@ export function PipelineSection({
   error,
   thumbs,
   jobs,
-  agentActions = 0,
   publishedThisWeek = 0,
   onRefresh,
   fixture,
@@ -450,7 +436,7 @@ export function PipelineSection({
   error: string | null;
   thumbs: Record<string, string>;
   jobs: StudioJob[];
-  /** Pending Operations approvals (agent actions), shown as one row. */
+  /** Still accepted by the visual fixture while the Operations row is retired. */
   agentActions?: number;
   publishedThisWeek?: number;
   onRefresh: () => void;
@@ -656,20 +642,6 @@ export function PipelineSection({
           <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
         </button>
       </div>
-
-      {agentActions > 0 ? (
-        <button
-          type="button"
-          onClick={() => emitAppEvent("open:operations", { tab: "approvals" })}
-          className="mb-3 flex w-full items-center gap-2 rounded-xl bg-warning-surface px-3 py-2 text-left text-xs text-foreground ring-1 ring-warning-border transition-[filter] hover:brightness-[0.97]"
-        >
-          <Inbox className="size-3.5 shrink-0 text-warning" />
-          <span className="min-w-0 flex-1 truncate">
-            {agentActions} agent action{agentActions === 1 ? " needs" : "s need"} a decision
-          </span>
-          <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
-        </button>
-      ) : null}
 
       {/* ── The pipeline: four connected stages ── */}
       <div role="tablist" aria-label="Pipeline stage" className="relative grid grid-cols-4">
@@ -1305,9 +1277,7 @@ export function ApprovalCard({
 }
 
 /* ───────────────────────── Suggestions ─────────────────────────
- * Operational nudges (Brand DNA, audit, planning). Creative ideas live in the
- * composer, where they're specific to the chosen format. The card DOM and ARIA
- * contract is covered by tests/integration/studio-suggestions-*.spec.ts. */
+ * Signal-grounded ideas from the same Studio engine used by the composer. */
 
 const SUGGESTION_ICON = {
   Sparkles,
@@ -1329,36 +1299,9 @@ const clampStyle = (lines: number): React.CSSProperties => ({
   WebkitLineClamp: lines,
 });
 
-const _accentUnused: StudioSuggestionAccent | null = null;
-
 function SuggestionsSection() {
-  const { items, loading } = useStudioSuggestions();
-  const [dismissed, setDismissed] = useState<Set<string>>(() => {
-    try {
-      const raw =
-        typeof window !== "undefined" ? localStorage.getItem("studio:suggest-dismissed") : null;
-      return new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
-    } catch {
-      return new Set<string>();
-    }
-  });
-  const visible = items.filter((s: StudioSuggestion) => !dismissed.has(s.id));
-  void _accentUnused;
-
-  const dismiss = (id: string) => {
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      try {
-        localStorage.setItem("studio:suggest-dismissed", JSON.stringify([...next]));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
-
-  if ((loading && items.length === 0) || visible.length === 0) return null;
+  const { items, loading, error, refresh, dismiss } = useStudioSuggestions();
+  const visible = items;
 
   return (
     <section data-no-rhythm>
@@ -1367,8 +1310,27 @@ function SuggestionsSection() {
           <Sparkles className="h-2.5 w-2.5 text-primary" strokeWidth={2.5} />
           Suggestions for you
         </h3>
-        <span className="ui-count-pill">{visible.length}</span>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={loading}
+          aria-label="Refresh suggestions"
+          title="Fresh suggestions"
+          className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+        >
+          <RefreshCw className={cn("size-3", loading && "animate-spin")} />
+        </button>
       </div>
+      {error && visible.length === 0 ? (
+        <p className="rounded-lg border border-border bg-surface-3 px-3 py-2 text-xs text-muted-foreground">
+          Suggestions are unavailable right now. Try refreshing.
+        </p>
+      ) : null}
+      {!loading && !error && visible.length === 0 ? (
+        <p className="rounded-lg border border-border bg-surface-3 px-3 py-2 text-xs text-muted-foreground">
+          Add your Brand DNA or new market research to get relevant ideas.
+        </p>
+      ) : null}
       <ul className="flex flex-col gap-1.5">
         <AnimatePresence initial={false}>
           {visible.map((s, idx) => {
@@ -1382,7 +1344,7 @@ function SuggestionsSection() {
                 exit={{ opacity: 0, x: -8, transition: { duration: 0.18 } }}
                 transition={{ delay: idx * 0.04, duration: 0.25, ease: ease.emphasized }}
               >
-                <div className="group relative grid min-h-[64px] grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-2 overflow-hidden rounded-xl border border-border bg-surface-3 px-2.5 py-2 transition-colors hover:border-border-strong">
+                <div className="group relative grid h-[84px] grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-2 overflow-hidden rounded-xl border border-border bg-surface-3 px-2.5 py-2 transition-colors hover:border-border-strong">
                   <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-surface-2 ring-1 ring-border">
                     <Icon className="h-3.5 w-3.5 text-foreground/75" strokeWidth={2.25} />
                   </span>
@@ -1403,7 +1365,7 @@ function SuggestionsSection() {
                     </span>
                     <span
                       title={s.hint}
-                      style={clampStyle(1)}
+                      style={clampStyle(2)}
                       className={cn(
                         SUGGESTION_TEXT_BASE,
                         "mt-0.5 text-[10.5px] leading-snug text-muted-foreground",

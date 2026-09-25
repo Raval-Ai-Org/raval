@@ -9,6 +9,7 @@
 import "server-only";
 import { chatCompletion } from "@/lib/ai-gateway.server";
 import { BudgetExceededError } from "@/server/ai/budget";
+import { geoProbeModels } from "@/server/ai/task-models";
 import {
   buildProbeQueries,
   detectMentions,
@@ -20,8 +21,6 @@ import {
 import type { ProbeContext } from "./scan-runner.server";
 import type { ScanRow } from "./store.server";
 
-const DEFAULT_MODELS = ["perplexity/sonar", "openai/gpt-4o-mini"];
-
 const ENGINE_NAMES: Record<string, string> = {
   perplexity: "Perplexity",
   openai: "ChatGPT",
@@ -30,12 +29,9 @@ const ENGINE_NAMES: Record<string, string> = {
   "x-ai": "Grok",
 };
 
+/** Each engine is asked separately — these are not a fallback chain. */
 function probeModels(): string[] {
-  const configured = (process.env.GEO_PROBE_MODELS ?? "")
-    .split(",")
-    .map((m) => m.trim())
-    .filter(Boolean);
-  return (configured.length ? configured : DEFAULT_MODELS).slice(0, 4);
+  return geoProbeModels().slice(0, 4);
 }
 
 function maxQueries(): number {
@@ -75,7 +71,8 @@ export async function runGeoProbes(scan: ScanRow, ctx: ProbeContext): Promise<Pr
     for (const query of queries) {
       try {
         const json = await chatCompletion({
-          model,
+          // One specific engine per probe: its own model, no fallback.
+          plan: { models: [model] },
           messages: [
             { role: "system", content: SYSTEM },
             { role: "user", content: query.text },

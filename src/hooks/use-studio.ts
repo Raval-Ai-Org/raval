@@ -77,6 +77,11 @@ export function useStudioEntry(workspaceId: string | null) {
         platforms: Array.isArray(detail.platforms)
           ? (detail.platforms.filter((p) => PLATFORM_IDS.includes(p as PlatformId)) as PlatformId[])
           : undefined,
+        styleId:
+          typeof detail.styleId === "string" &&
+          (detail.styleId === "none" || UUID_RE.test(detail.styleId))
+            ? detail.styleId
+            : undefined,
       });
       if (sessionId && brief.length >= 3) void generate(sessionId, { kind: "generate" });
     };

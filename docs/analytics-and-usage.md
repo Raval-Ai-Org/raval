@@ -13,6 +13,14 @@ metric. Treat stored fields and server aggregations as implementation facts;
 TODO: publish metric definitions and timezone/attribution rules with product
 and data owners.
 
+## Current usage and measurement model
+
+Mellox AI measures operational work in a way that matters to product decisions:
+usage events track who did what, budget records constrain spending, and
+workspace-level summary data reflects recent activity. This is designed to keep
+AI and provider spend inside a defined and auditable product boundary rather than
+letting each feature decide its own accounting rules.
+
 ## Usage and budgets
 
 AI usage events and reservations record route, provider/model, kind, estimated

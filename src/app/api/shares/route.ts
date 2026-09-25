@@ -32,7 +32,14 @@ const CreateSchema = z.object({
   items: z
     .array(
       z.object({
-        kind: z.enum(["content_item", "audit", "brand_dna", "calendar", "note"]),
+        kind: z.enum([
+          "content_item",
+          "audit",
+          "brand_dna",
+          "calendar",
+          "note",
+          "experiment_report",
+        ]),
         refId: z.string().uuid().optional().nullable(),
         title: z.string().max(200).optional(),
         description: z.string().max(1000).optional(),
@@ -368,6 +375,28 @@ export const POST = defineRoute({
       );
     }
 
+    // An experiment report is rendered from server rows at view time, so the
+    // share only needs to point at an experiment of this workspace that has a result.
+    const reportIds = body.items
+      .filter((i) => i.kind === "experiment_report")
+      .map((i) => i.refId)
+      .filter((id): id is string => !!id);
+    if (reportIds.length !== body.items.filter((i) => i.kind === "experiment_report").length) {
+      return jsonError(400, "An experiment report needs an experiment");
+    }
+    if (reportIds.length) {
+      const { isProofEngineEnabled } = await import("@/lib/feature-flags");
+      if (!isProofEngineEnabled(body.workspaceId)) return jsonError(404, "Not found");
+      const { data: exps } = await supabase
+        .from("experiments")
+        .select("id, verdict")
+        .eq("workspace_id", body.workspaceId)
+        .in("id", reportIds);
+      if ((exps ?? []).filter((e: any) => e.verdict).length !== new Set(reportIds).size) {
+        return jsonError(409, "Only experiments with a result can be shared");
+      }
+    }
+
     const slug = makeSlug();
     const token = makeShareToken();
     const tokenHash = hashShareToken(token);
@@ -403,7 +432,8 @@ export const POST = defineRoute({
       title: it.title ?? null,
       description: it.description ?? null,
       position: i,
-      snapshot: it.snapshot ?? {},
+      // Never trust a stored snapshot for a report: it is built on view.
+      snapshot: it.kind === "experiment_report" ? {} : (it.snapshot ?? {}),
       visible: true,
     }));
     const { error: itemsErr } = await supabase.from("client_share_items").insert(rows);

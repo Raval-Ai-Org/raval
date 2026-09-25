@@ -21,6 +21,7 @@ const WS_A = "11111111-1111-4111-8111-111111111111";
 const WS_B = "22222222-2222-4222-8222-222222222222";
 const ITEM_A = "a0000000-0000-4000-8000-00000000000a";
 const ITEM_B = "b0000000-0000-4000-8000-00000000000b";
+const ITEM_UPDATED_AT = "2026-09-12T11:00:00Z";
 
 /** Minimal Supabase-like db over plain arrays; supports the filters tools use. */
 function fakeDb(tables: Record<string, Array<Record<string, any>>>) {
@@ -76,6 +77,7 @@ function seedDb() {
         channel: "x",
         kind: "post",
         status: "draft",
+        updated_at: ITEM_UPDATED_AT,
         title: "A",
         body: "Hello",
         hashtags: [],
@@ -87,6 +89,7 @@ function seedDb() {
         channel: "x",
         kind: "post",
         status: "draft",
+        updated_at: ITEM_UPDATED_AT,
         title: "B",
         body: "Secret B",
         hashtags: [],
@@ -194,7 +197,12 @@ describe("tool invocation", () => {
     const out = await invokeTool(
       workerCtx(db),
       "content.apply_revision",
-      { contentItemId: ITEM_A, body: "Rewritten", reasons: ["too long"] },
+      {
+        contentItemId: ITEM_A,
+        expectedUpdatedAt: ITEM_UPDATED_AT,
+        body: "Rewritten",
+        reasons: ["too long"],
+      },
       { store },
     );
     expect(out.status).toBe("pending_approval");
@@ -208,7 +216,12 @@ describe("tool invocation", () => {
   it("the same proposal twice is one request (idempotent suggestion)", async () => {
     const db = seedDb();
     const store = memoryAgentStore();
-    const input = { contentItemId: ITEM_A, body: "Rewritten", reasons: [] };
+    const input = {
+      contentItemId: ITEM_A,
+      expectedUpdatedAt: ITEM_UPDATED_AT,
+      body: "Rewritten",
+      reasons: [],
+    };
     await invokeTool(workerCtx(db), "content.apply_revision", input, { store });
     await invokeTool(workerCtx(db), "content.apply_revision", input, { store });
     expect(store.actions.size).toBe(1);
@@ -229,7 +242,7 @@ describe("approvals", () => {
     const out = await invokeTool(
       workerCtx(db),
       "content.apply_revision",
-      { contentItemId: ITEM_A, body: "Rewritten", reasons: [] },
+      { contentItemId: ITEM_A, expectedUpdatedAt: ITEM_UPDATED_AT, body: "Rewritten", reasons: [] },
       { store },
     );
     if (out.status !== "pending_approval") throw new Error("expected a proposal");
@@ -259,6 +272,23 @@ describe("approvals", () => {
       now: () => NOW,
     });
     expect(second).toMatchObject({ ok: false, status: "conflict" });
+  });
+
+  it("does not overwrite content edited after the proposal", async () => {
+    const { db, store, id } = await proposal();
+    db.tables.content_items[0].body = "New human edit";
+    db.tables.content_items[0].updated_at = "2026-09-12T11:01:00Z";
+    const out = await approveAction({
+      store,
+      db,
+      requestId: id,
+      workspaceId: WS_A,
+      userId: "u-1",
+      role: "editor",
+      now: () => NOW,
+    });
+    expect(out).toMatchObject({ ok: false, status: "failed" });
+    expect(db.tables.content_items[0].body).toBe("New human edit");
   });
 
   it("a viewer cannot approve; the request stays suggested", async () => {

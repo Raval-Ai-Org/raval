@@ -169,7 +169,7 @@ type FindingLite = {
 };
 
 /** Open findings of a scan split into fixable / manual / already in progress. */
-async function classifyFindings(ctx: FixContext, scanId: string) {
+export async function classifyFindings(ctx: FixContext, scanId: string) {
   const { data: findings, error } = await ctx.supabase
     .from("geo_findings")
     .select(
@@ -203,6 +203,8 @@ async function classifyFindings(ctx: FixContext, scanId: string) {
   const inProgress = new Set((live ?? []).map((p) => p.fingerprint));
   const open = rows.filter((r) => !closed.has(r.fingerprint));
   return {
+    open,
+    inProgress,
     fixable: open.filter((r) => fixKindForRule(r.rule_id) && !inProgress.has(r.fingerprint)),
     manualCount: open.filter((r) => !fixKindForRule(r.rule_id)).length,
     inProgressCount: open.filter((r) => fixKindForRule(r.rule_id) && inProgress.has(r.fingerprint))
@@ -299,7 +301,8 @@ export async function getFixAllPreflight(
   scanId: string,
 ): Promise<FixAllPreflight> {
   const scan = await loadScan(ctx, scanId);
-  const [classes, setup, { data: latest }] = await Promise.all([
+  const { resolveSite } = await import("@/server/sites/resolve.server");
+  const [classes, setup, { data: latest }, resolution] = await Promise.all([
     classifyFindings(ctx, scanId),
     getSiteSetup(ctx, scan.host),
     ctx.supabase
@@ -310,6 +313,7 @@ export async function getFixAllPreflight(
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    resolveSite(ctx.workspaceId, scan.host),
   ]);
   let batch: FixBatchView | null = null;
   if (latest) {
@@ -320,6 +324,7 @@ export async function getFixAllPreflight(
     scanId: scan.id,
     host: scan.host,
     origin: scan.origin,
+    platform: resolution.binding?.verified ? resolution.binding.provider : null,
     setup,
     fixable: classes.fixable.map((f) => ({
       findingId: f.id,

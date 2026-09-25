@@ -18,6 +18,18 @@
 | `docs/adr/**` | Architecture decisions |
 | `docs/specs/**` | Feature specifications and contracts |
 
+## Current codebase reading pattern
+
+The fastest way to understand this repository is to start from the application
+entry points and then follow the ownership boundaries:
+
+- `src/app` shows user-facing routes and product structure
+- `src/components` shows how users interact with the product
+- `src/server` shows the real enforcement and execution layer
+- `src/lib` shows shared contracts, prompts, and workflows
+- `supabase` shows the persistent schema and access rules
+- `docs` explains product intent and current boundaries
+
 ## Feature ownership map
 
 - Workspaces and Brand DNA: `src/server/workspaces`, `src/server/fns/brand-dna.ts`, `src/components/workspace`, `workspace_*` migrations.

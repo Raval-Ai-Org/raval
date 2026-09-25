@@ -17,7 +17,8 @@ import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
-import { AnthropicGatewayError, type ClaudeMessage } from "@/lib/anthropic-gateway.server";
+import { AiGatewayError } from "@/lib/ai-gateway.server";
+import { isLoopConversation, type LlmLoopMessage } from "@/lib/ai-gateway.tool-loop.server";
 import { ownershipIsCurrent } from "@/lib/connectors/ownership";
 import type { AgentPlan, AgentRunStatus, AgentStage, AgentUsage } from "@/lib/geo/agent-contracts";
 import { nextStatus, statusFromProposal, type AgentEvent } from "@/lib/geo/agent-state";
@@ -65,12 +66,15 @@ const WORKER = `geo-agent-${process.pid}-${randomUUID().slice(0, 8)}`;
 const LEASE_SECONDS = 200;
 
 export const RUN_COLS =
-  "id, workspace_id, kind, scan_id, finding_id, fingerprint, rule_id, page_url, site_host, site_origin, source_id, connection_id, repo_full_name, repo_external_id, base_branch, base_sha, framework, status, status_detail, failed_at_step, error_code, error, attempts, max_attempts, next_attempt_at, lease_until, locked_by, cancel_requested_at, plan, plan_hash, plan_revision, plan_ready_at, plan_approved_by, plan_approved_at, feedback, inputs, files_inspected, patch, review, validation, correction_rounds, proposal_id, batch_id, verification_id, result, model, usage, checkpoint, created_by, created_at, updated_at, completed_at";
+  "id, workspace_id, kind, provider, site_ref, scan_id, finding_id, fingerprint, rule_id, page_url, site_host, site_origin, source_id, connection_id, repo_full_name, repo_external_id, base_branch, base_sha, framework, status, status_detail, failed_at_step, error_code, error, attempts, max_attempts, next_attempt_at, lease_until, locked_by, cancel_requested_at, plan, plan_hash, plan_revision, plan_ready_at, plan_approved_by, plan_approved_at, feedback, inputs, files_inspected, patch, review, validation, correction_rounds, proposal_id, batch_id, verification_id, result, model, usage, checkpoint, created_by, created_at, updated_at, completed_at";
 
 export type AgentRunRow = {
   id: string;
   workspace_id: string;
-  kind: "finding" | "batch";
+  kind: "finding" | "batch" | "blog_setup" | "article";
+  /** github = repository + pull request; wordpress / webflow = direct CMS change. */
+  provider: "github" | "wordpress" | "webflow";
+  site_ref: Record<string, unknown> | null;
   scan_id: string | null;
   finding_id: string | null;
   fingerprint: string;
@@ -115,7 +119,7 @@ export type AgentRunRow = {
   result: Record<string, unknown> | null;
   model: string | null;
   usage: Partial<AgentUsage>;
-  checkpoint: { stage: "investigate" | "implement"; messages: ClaudeMessage[] } | null;
+  checkpoint: { stage: "investigate" | "implement"; messages: LlmLoopMessage[] } | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -522,6 +526,18 @@ function ruleInfoText(ctx: Omit<AgentContext, "inputs" | "feedback" | "previousP
 
 const usageOf = (run: AgentRunRow): AgentUsage => ({ ...emptyUsage(), ...(run.usage ?? {}) });
 
+/**
+ * The stage's saved conversation, when it can be replayed. A checkpoint from
+ * the former Anthropic-format loop can't be, so that stage starts over.
+ */
+function resumableCheckpoint(
+  run: AgentRunRow,
+  stage: "investigate" | "implement",
+): LlmLoopMessage[] | undefined {
+  if (run.checkpoint?.stage !== stage) return undefined;
+  return isLoopConversation(run.checkpoint.messages) ? run.checkpoint.messages : undefined;
+}
+
 /* ───────────────────────── stages ───────────────────────── */
 
 async function runInvestigation(run: AgentRunRow) {
@@ -550,7 +566,7 @@ async function runInvestigation(run: AgentRunRow) {
   };
   const spent = usageOf(run);
   const budget = geoAgentMaxCostUsd() * STAGE_LIMITS.investigate.maxCostShare;
-  const resume = run.checkpoint?.stage === "investigate" ? run.checkpoint.messages : undefined;
+  const resume = resumableCheckpoint(run, "investigate");
 
   const outcome = await investigateAndPlan(
     full,
@@ -670,7 +686,7 @@ async function runImplementation(run: AgentRunRow) {
     actor: "system",
     summary: "Implementing the approved plan",
   });
-  const resume = run.checkpoint?.stage === "implement" ? run.checkpoint.messages : undefined;
+  const resume = resumableCheckpoint(run, "implement");
   const outcome = await implementPlan(
     full,
     run.plan,
@@ -861,7 +877,7 @@ export async function cancelRunNow(run: AgentRunRow, userId: string | null) {
 export async function syncAgentRunFromProposal(proposalId: string) {
   const { data: p } = await supabaseAdmin
     .from("geo_fix_proposals")
-    .select("id, status, agent_run_id, pr_url, pr_number")
+    .select("id, status, agent_run_id, pr_url, pr_number, error")
     .eq("id", proposalId)
     .maybeSingle();
   if (!p?.agent_run_id) return;
@@ -884,25 +900,40 @@ export async function syncAgentRunFromProposal(proposalId: string) {
     "closed",
     "stale",
   ].includes(next);
+  const cms = run.provider && run.provider !== "github";
+  const site = run.provider === "webflow" ? "Webflow" : "WordPress";
   const detail =
-    next === "pr_open"
-      ? `Pull request #${p.pr_number} is open`
-      : next === "merged"
-        ? "Merged — waiting for the deploy before re-scanning"
-        : next === "rescan_pending"
-          ? "Re-scanning the live site"
-          : next === "verified_fixed"
-            ? "Verified fixed on the live site"
-            : next === "not_verified"
-              ? (v?.outcome_detail ?? "The live site still fails this check")
-              : null;
+    next === "applying"
+      ? cms
+        ? `Applying the change to ${site}`
+        : "Opening the pull request"
+      : next === "pr_open"
+        ? `Pull request #${p.pr_number} is open`
+        : next === "merged"
+          ? "Merged — waiting for the deploy before re-scanning"
+          : next === "rescan_pending"
+            ? cms
+              ? `Changed on ${site} — re-scanning the live page`
+              : "Re-scanning the live site"
+            : next === "verified_fixed"
+              ? "Verified fixed on the live site"
+              : next === "not_verified"
+                ? (v?.outcome_detail ?? "The live site still fails this check")
+                : next === "closed" && p.status === "rolled_back"
+                  ? `Undone — the previous values are back on ${site}`
+                  : next === "failed" || next === "stale"
+                    ? ((p as { error?: string | null }).error ?? null)
+                    : null;
   await supabaseAdmin
     .from("geo_agent_runs")
     .update({
       status: next,
       status_detail: detail,
       verification_id: v?.id ?? run.verification_id,
-      ...(terminal ? { completed_at: new Date().toISOString() } : {}),
+      ...(next === "failed" || next === "stale"
+        ? { error: detail, error_code: next === "stale" ? "stale" : "apply_failed" }
+        : {}),
+      ...(terminal ? { completed_at: new Date().toISOString(), lease_until: null } : {}),
     })
     .eq("id", run.id)
     .eq("status", run.status);
@@ -925,6 +956,20 @@ async function advance(run: AgentRunRow) {
     return;
   }
   try {
+    if (run.provider && run.provider !== "github") {
+      // CMS runs have one working stage; an interrupted one starts it again.
+      if (["reviewing", "validating", "implementing", "correcting"].includes(run.status)) {
+        await supabaseAdmin
+          .from("geo_agent_runs")
+          .update({ status: "investigating" })
+          .eq("id", run.id)
+          .eq("status", run.status);
+        run.status = "investigating";
+      }
+      const { runCmsInvestigation } = await import("../cms/runner.server");
+      await runCmsInvestigation(run, { transition, log: logAgentEvent });
+      return;
+    }
     if (run.status === "queued" || run.status === "investigating") await runInvestigation(run);
     else if (
       run.status === "implementing" ||
@@ -970,8 +1015,8 @@ async function handleRunError(run: AgentRunRow, error: unknown) {
     return;
   }
   if (
-    error instanceof AnthropicGatewayError &&
-    ["timeout", "rate_limited", "network_error"].includes(error.code ?? "") &&
+    error instanceof AiGatewayError &&
+    ["timeout", "rate_limited", "network_error", "provider_error"].includes(error.code ?? "") &&
     fresh.attempts < fresh.max_attempts
   ) {
     await retry(
@@ -994,7 +1039,7 @@ async function handleRunError(run: AgentRunRow, error: unknown) {
         ? "access_lost"
         : error instanceof BudgetExceededError
           ? "budget"
-          : error instanceof AnthropicGatewayError
+          : error instanceof AiGatewayError
             ? (error.code ?? "model_error")
             : "error";
   const message =

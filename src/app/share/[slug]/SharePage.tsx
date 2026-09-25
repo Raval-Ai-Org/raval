@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ExperimentReportView } from "@/components/app/experiments/ExperimentReport";
 
 type Item = {
   id: string;
@@ -277,27 +278,32 @@ function SharePage() {
       toast.error("Add your name first");
       return false;
     }
-    const res = await fetch(`/api/public/share/${slug}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token,
-        kind,
-        itemId: payload.itemId,
-        body: payload.body,
-        password: password || undefined,
-        actorName: identity.name || undefined,
-        actorEmail: identity.email || undefined,
-      }),
-    });
-    if (!res.ok) {
-      toast.error(
-        res.status === 410
-          ? "This link is no longer active"
-          : res.status === 403
-            ? "That isn't allowed on this link"
-            : "Couldn't send. Try again.",
-      );
+    try {
+      const res = await fetch(`/api/public/share/${slug}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          kind,
+          itemId: payload.itemId,
+          body: payload.body,
+          password: password || undefined,
+          actorName: identity.name || undefined,
+          actorEmail: identity.email || undefined,
+        }),
+      });
+      if (!res.ok) {
+        toast.error(
+          res.status === 410
+            ? "This link is no longer active"
+            : res.status === 403
+              ? "That isn't allowed on this link"
+              : "Couldn't send. Try again.",
+        );
+        return false;
+      }
+    } catch {
+      toast.error("Couldn't send. Check your connection and try again.");
       return false;
     }
     setEvents((current) => [
@@ -548,6 +554,8 @@ function ItemCard({
         return "Brand snapshot";
       case "calendar":
         return "Content calendar";
+      case "experiment_report":
+        return "Experiment result";
       default:
         return "Note";
     }
@@ -599,9 +607,21 @@ function ItemCard({
         {item.title && <h2 className="text-[16px] font-semibold tracking-tight">{item.title}</h2>}
       </div>
 
-      <div className="px-5 sm:px-6 py-4 text-[14px] leading-relaxed whitespace-pre-wrap">
-        {body || <span className="text-muted-foreground italic">No content body</span>}
-      </div>
+      {item.kind === "experiment_report" ? (
+        <div className="px-5 sm:px-6 py-4">
+          {snapshot.unavailable || !snapshot.name ? (
+            <p className="text-[14px] text-muted-foreground">
+              This result isn't available any more.
+            </p>
+          ) : (
+            <ExperimentReportView report={snapshot} />
+          )}
+        </div>
+      ) : (
+        <div className="px-5 sm:px-6 py-4 text-[14px] leading-relaxed whitespace-pre-wrap">
+          {body || <span className="text-muted-foreground italic">No content body</span>}
+        </div>
+      )}
 
       {hashtags.length > 0 && (
         <div className="px-5 sm:px-6 pb-3 flex flex-wrap gap-1.5">

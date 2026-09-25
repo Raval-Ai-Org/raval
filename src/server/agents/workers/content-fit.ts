@@ -70,6 +70,7 @@ export const contentFitWorker: WorkerDefinition = {
     const contentItemId = String(ctx.input.contentItemId ?? "");
     const got = await ctx.tool<{
       id: string;
+      updated_at: string;
       channel: string | null;
       kind: string;
       status: string;
@@ -80,6 +81,8 @@ export const contentFitWorker: WorkerDefinition = {
     }>("content.get", { id: contentItemId });
     if (got.status !== "ok") throw new Error("content.get unexpectedly required approval");
     const item = got.output;
+    if (!["draft", "pending", "rejected", "failed"].includes(item.status))
+      throw new Error("This content item is no longer editable.");
     const issues = contentFitIssues(item);
     // Media rules can't be fixed by rewriting copy; only text issues get a proposal.
     const fixable = issues.filter((i) => !/media/i.test(i.message));
@@ -122,8 +125,12 @@ export const contentFitWorker: WorkerDefinition = {
       ...revision,
       hashtags: revision.hashtags ?? item.hashtags,
     });
+    const blockers = remaining.filter((issue) => issue.severity === "block");
+    if (blockers.length)
+      throw new Error(`Suggested revision still fails ${blockers.length} required check(s).`);
     const proposed = await ctx.tool("content.apply_revision", {
       contentItemId: item.id,
+      expectedUpdatedAt: item.updated_at,
       title: revision.title,
       body: revision.body,
       hashtags: revision.hashtags,
@@ -131,7 +138,7 @@ export const contentFitWorker: WorkerDefinition = {
     });
     await ctx.note("Proposed revision", {
       issues: fixable.length,
-      remainingAfterRevision: remaining.filter((i) => i.severity === "block").length,
+      remainingAfterRevision: blockers.length,
     });
     return {
       summary: `${fixable.length} issue${fixable.length === 1 ? "" : "s"} found; a revision is waiting for approval.`,

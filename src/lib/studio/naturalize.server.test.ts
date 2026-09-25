@@ -7,8 +7,8 @@ const state = vi.hoisted(() => ({
   calls: [] as { system: string; user: string }[],
 }));
 
-vi.mock("@/lib/anthropic-gateway.server", () => ({
-  claudeJsonPrompt: vi.fn(async (opts: { system: string; user: string; fallback: unknown }) => {
+vi.mock("@/lib/ai-gateway.server", () => ({
+  llmJson: vi.fn(async (opts: { system: string; user: string; fallback: unknown }) => {
     state.calls.push({ system: opts.system, user: opts.user });
     if (state.shouldThrow) throw new Error("gateway unavailable");
     return state.response ?? opts.fallback;

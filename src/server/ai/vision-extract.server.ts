@@ -1,12 +1,13 @@
 // vision-extract.server.ts — text + visual description from an uploaded image
 // (chat attachments via /api/file-extract).
 //
-// Cost shape: the economy vision model reads the image first; only when it
-// returns almost nothing for a substantial image does the request escalate to
-// the extraction model. Results are cached per tenant by image digest, so
-// re-attaching the same image is free.
+// Cost shape: the `file-extract` route's plan (economy vision model) reads the
+// image first; only when it returns almost nothing for a substantial image
+// does the request apply the route's escalation (the workhorse model).
+// Results are cached per tenant by image digest, so re-attaching the same
+// image is free.
 import "server-only";
-import { chatCompletion, EXTRACTION_MODEL, FAST_CHAT_MODEL } from "@/lib/ai-gateway.server";
+import { chatCompletion } from "@/lib/ai-gateway.server";
 import { FILE_EXTRACT_SYSTEM } from "@/lib/ai/prompts";
 import { cache, digest, recordCacheLookup } from "@/server/cache/store";
 import { getRequestScope } from "@/server/request-context";
@@ -17,12 +18,16 @@ export const THIN_TEXT_CHARS = 40;
 /** Images smaller than this rarely hold enough text to justify escalating. */
 export const ESCALATE_MIN_BYTES = 150_000;
 
-export type VisionCall = (model: string, dataUrl: string) => Promise<string>;
+/** One read of the image; `escalate` applies the route's escalation rule. */
+export type VisionCall = (
+  escalate: boolean,
+  dataUrl: string,
+) => Promise<{ text: string; model: string }>;
 
-const defaultCall: VisionCall = async (model, dataUrl) => {
+const defaultCall: VisionCall = async (escalate, dataUrl) => {
   const json = await chatCompletion({
-    model,
-    _extraction: true,
+    task: "extraction",
+    escalate,
     // Cached below by image digest instead of hashing the full base64 body twice.
     noCache: true,
     route: "file-extract",
@@ -36,7 +41,10 @@ const defaultCall: VisionCall = async (model, dataUrl) => {
       },
     ],
   });
-  return String(json?.choices?.[0]?.message?.content ?? "");
+  return {
+    text: String(json?.choices?.[0]?.message?.content ?? ""),
+    model: String(json?._model ?? "unknown"),
+  };
 };
 
 /** Decoded byte size of a base64 data URL. */
@@ -60,12 +68,13 @@ export async function extractImageText(
   recordCacheLookup("vision", Boolean(hit));
   if (hit) return { ...hit, cached: true };
 
-  let model = FAST_CHAT_MODEL;
-  let text = (await call(model, dataUrl)).trim();
+  let read = await call(false, dataUrl);
+  let text = read.text.trim();
   if (text.length < THIN_TEXT_CHARS && dataUrlBytes(dataUrl) > ESCALATE_MIN_BYTES) {
-    model = EXTRACTION_MODEL;
-    text = (await call(model, dataUrl)).trim();
+    read = await call(true, dataUrl);
+    text = read.text.trim();
   }
+  const model = read.model;
   if (text) await cache.set(key, { text, model }, CACHE_TTL_SECONDS);
   return { text, model, cached: false };
 }

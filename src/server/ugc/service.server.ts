@@ -10,9 +10,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { UserSupabaseClient } from "@/integrations/supabase/client.user.server";
 import type { Json } from "@/integrations/supabase/types";
-import { checkRenderSettings, isUgcModelKey, UGC_MODELS, usableImageCount } from "@/lib/ugc/models";
+import {
+  checkRenderSettings,
+  isKnownUgcModelKey,
+  isUgcModelKey,
+  resolveUgcModel,
+  usableImageCount,
+  type UgcModelKey,
+} from "@/lib/ugc/models";
 import { platformPreset } from "@/lib/ugc/options";
 import { buildModelPrompt } from "@/lib/ugc/prompt-adapters";
+import { styleAppliesTo } from "@/lib/brand-kit/resolve";
+import { styleBlockFor, ugcStyleNotes } from "@/lib/brand-kit/prompt";
+import { loadResolvedStyle } from "@/server/brand-kit/resolve.server";
 import { routeVideo } from "@/lib/ugc/router";
 import {
   ACTIVE_RENDER_STATUSES,
@@ -35,14 +45,14 @@ import { getPlanLimits } from "@/server/plans";
 import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import { createRenderEngine } from "./engine.server";
 import {
+  activeModel,
   defaultModelKey,
   enabledModels,
   estimateRender,
   isModelEnabled,
   maxConcurrentRenders,
-  providerModelId,
 } from "./models.server";
-import { kieVideoProvider } from "./providers/kie.server";
+import { routedVideoProvider } from "./providers/routed.server";
 import type { RenderRow } from "./store";
 import { RENDER_COLS, supabaseUgcStore } from "./store.supabase.server";
 
@@ -59,7 +69,7 @@ export function kieCallbackUrl(): string | undefined {
 
 export const renderEngine = createRenderEngine({
   store: supabaseUgcStore,
-  provider: kieVideoProvider,
+  provider: routedVideoProvider,
   callbackUrl: kieCallbackUrl,
 });
 
@@ -254,20 +264,43 @@ async function workspaceBrand(db: UserSupabaseClient, workspaceId: string) {
 
 export async function projectContext(db: UserSupabaseClient, workspaceId: string, id: string) {
   const row = await loadProjectRow(db, workspaceId, id);
-  const [{ data: ws }, brand] = await Promise.all([
+  const brief = BriefSchema.parse(row.brief ?? {});
+  const [{ data: ws }, brand, style] = await Promise.all([
     db.from("workspaces").select("industry, audience").eq("id", workspaceId).maybeSingle(),
     workspaceBrand(db, workspaceId),
+    projectStyle(workspaceId, brief.styleId),
   ]);
   return {
     row,
     product: ProductSchema.parse(row.product ?? {}),
-    brief: BriefSchema.parse(row.brief ?? {}),
+    brief,
+    style,
+    styleText: style ? styleBlockFor(style.resolved, "ugc") : "",
+    styleNotes: style ? ugcStyleNotes(style.resolved) : "",
     brand: Object.keys(brand).length
       ? brand
       : ((row.brand_snapshot ?? {}) as Record<string, unknown>),
     script: row.script ? (ScriptSchema.safeParse(row.script).data ?? null) : null,
     workspace: (ws ?? {}) as { industry?: string | null; audience?: string | null },
   };
+}
+
+/**
+ * The Brand Kit Style for a UGC project (by the verified workspace id). An
+ * explicit pick always applies; the default only when it lists UGC. Never
+ * throws — no style just means Brand DNA only.
+ */
+async function projectStyle(workspaceId: string, choice: string | null | undefined) {
+  if (choice === "none") return null;
+  try {
+    const loaded = await loadResolvedStyle(workspaceId, choice ?? null);
+    if (!loaded.resolved.styleId) return null;
+    const explicit = !!choice && !loaded.fellBack;
+    if (!explicit && !styleAppliesTo(loaded.resolved, "ugc")) return null;
+    return loaded;
+  } catch {
+    return null;
+  }
 }
 
 /** Image asset ids that really belong to this workspace and are stored. */
@@ -320,7 +353,7 @@ function presentRender(
   releasedHolds: Set<string>,
 ): RenderView {
   const script = row.script as { hook?: string };
-  const model = isUgcModelKey(row.model_key) ? UGC_MODELS[row.model_key] : null;
+  const model = isKnownUgcModelKey(row.model_key) ? resolveUgcModel(row.model_key) : null;
   return {
     id: row.id,
     projectId: row.project_id,
@@ -543,10 +576,12 @@ export async function startRender(
       brand: ctx.brand,
       requestedModel,
     },
-    enabledModels().map((candidate) => candidate.key),
+    enabledModels().map((candidate) => candidate.key as UgcModelKey),
   );
-  if (!isModelEnabled(route.model)) throw new HttpError(400, "No suitable video model is available.");
-  const model = UGC_MODELS[route.model];
+  if (!isModelEnabled(route.model))
+    throw new HttpError(400, "No suitable video model is available.");
+  // Validated against the provider that will run it (VIDEO_PROVIDER).
+  const model = activeModel(route.model);
   const imageCount = usableImageCount(model, refs.length);
   const settings = {
     model: model.key,
@@ -566,10 +601,10 @@ export async function startRender(
     userId: input.userId,
     units: estimate.units,
     estCostUsd: estimate.usd,
-    provider: "kie",
+    provider: model.provider,
     model: model.providerVariant
-      ? `${providerModelId(model)}:${model.providerVariant}`
-      : providerModelId(model),
+      ? `${model.providerModel}:${model.providerVariant}`
+      : model.providerModel,
     route: "ugc/renders:create",
     sourceId: `${input.workspaceId}:${input.idempotencyKey}`,
     ttlSeconds: RESERVATION_TTL_SECONDS,
@@ -596,6 +631,7 @@ export async function startRender(
     aspectRatio: settings.aspectRatio,
     imageCount,
     brandVoice,
+    styleNotes: ctx.styleNotes || undefined,
   });
 
   let inserted;
@@ -607,10 +643,11 @@ export async function startRender(
       created_by: input.userId,
       idempotency_key: input.idempotencyKey,
       model_key: model.key,
-      provider: kieVideoProvider.id,
-      provider_model: providerModelId(model),
+      // The planned provider; submit records the one that actually accepted it.
+      provider: model.provider,
+      provider_model: model.providerModel,
       provider_variant: model.providerVariant ?? null,
-      generation_type: kieVideoProvider.generationType(model, imageCount),
+      generation_type: routedVideoProvider.generationType(model, imageCount),
       duration_sec: settings.durationSec,
       aspect_ratio: settings.aspectRatio,
       resolution: settings.resolution,

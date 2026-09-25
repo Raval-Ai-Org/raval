@@ -39,3 +39,21 @@ export const POST = defineRoute({
     return out;
   },
 });
+
+export const GET = defineRoute({
+  name: "agents/run.content-items",
+  auth: "workspace",
+  query: z.object({ workspaceId: z.string().optional() }),
+  workspaceId: ({ query }) => query.workspaceId,
+  handler: async ({ workspaceId, supabase }) => {
+    const { data, error } = await supabase
+      .from("content_items")
+      .select("id, title, channel, status, updated_at")
+      .eq("workspace_id", workspaceId)
+      .in("status", ["draft", "pending", "rejected", "failed"])
+      .order("updated_at", { ascending: false })
+      .limit(100);
+    if (error) return jsonError(500, error.message);
+    return { items: data ?? [] };
+  },
+});

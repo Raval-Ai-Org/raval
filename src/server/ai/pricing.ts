@@ -4,7 +4,7 @@
 //   1. a cost the provider returns itself (OpenRouter `usage.cost`) — exact,
 //      always preferred;
 //   2. this table × the provider-reported token usage;
-//   3. a flat per-unit estimate (KIE images/videos).
+//   3. a flat per-unit estimate (images/videos without a reported cost).
 // Every figure can be overridden with an env var, so a price change is a
 // config change, not a deploy: AI_PRICE_<MODEL_KEY>_IN / _OUT (USD per 1M
 // tokens) or AI_PRICE_<KEY>_UNIT (USD per unit), where MODEL_KEY is the model
@@ -13,16 +13,15 @@ import "server-only";
 
 type TokenPrice = { inPerM: number; outPerM: number };
 
-// USD per 1M tokens. Anthropic: first-party API list prices. OpenRouter:
-// list prices at time of writing — OpenRouter's own usage.cost overrides these.
+// USD per 1M tokens: OpenRouter list prices confirmed from /api/v1/models on
+// 2026-09-25. OpenRouter's own usage.cost is always preferred over these.
 const TOKEN_PRICES: Record<string, TokenPrice> = {
-  "claude-opus-5": { inPerM: 5, outPerM: 25 },
-  "claude-sonnet-5": { inPerM: 2, outPerM: 10 },
-  "claude-haiku-4-5": { inPerM: 1, outPerM: 5 },
-  "qwen/qwen3-max": { inPerM: 1.2, outPerM: 6 },
-  "google/gemini-2.5-pro": { inPerM: 1.25, outPerM: 10 },
-  "google/gemini-2.5-flash": { inPerM: 0.3, outPerM: 2.5 },
-  "google/gemini-2.5-flash-lite": { inPerM: 0.1, outPerM: 0.4 },
+  "anthropic/claude-opus-5.5": { inPerM: 4, outPerM: 20 },
+  "google/gemini-3.8-flash": { inPerM: 0.75, outPerM: 3.75 },
+  "google/gemini-3.1-flash-lite": { inPerM: 0.25, outPerM: 1.5 },
+  "openai/gpt-5.6-terra": { inPerM: 2, outPerM: 12 },
+  "openai/gpt-5.6-luna": { inPerM: 0.2, outPerM: 1.2 },
+  "perplexity/sonar": { inPerM: 1, outPerM: 1 },
 };
 
 // Conservative fallback for an unknown text model: better to over-count spend
@@ -30,10 +29,12 @@ const TOKEN_PRICES: Record<string, TokenPrice> = {
 const UNKNOWN_TEXT_PRICE: TokenPrice = { inPerM: 5, outPerM: 25 };
 
 // USD per generated unit (estimates; provider invoices are authoritative).
+// Images and OpenRouter videos meter from the provider's usage.cost; these are
+// only the fallback when a response carries none.
 const UNIT_PRICES: Record<string, number> = {
-  "kie:image": 0.04,
-  "kie:image:premium": 0.08,
-  "kie:video": 1.5,
+  "openrouter:image": 0.04,
+  "openrouter:image:premium": 0.08,
+  "openrouter:video": 1.5,
   // Tavily bills per API credit: 1 for a basic search, 2 for an advanced one,
   // and 1 per 5 extracted URLs. These are the per-credit list rates converted
   // to per-call, so a plan change is AI_PRICE_TAVILY_SEARCH_UNIT, not a deploy.

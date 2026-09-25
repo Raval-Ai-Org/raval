@@ -18,7 +18,7 @@ export const GET = defineRoute({
   workspaceId: ({ query }) => query.workspaceId,
   handler: async ({ query, workspaceId, supabase }) => {
     if (query.id) {
-      const [{ data: run, error }, { data: steps }] = await Promise.all([
+      const [{ data: run, error }, { data: steps, error: stepsError }] = await Promise.all([
         supabase
           .from("agent_runs")
           .select(RUN_COLS)
@@ -35,6 +35,7 @@ export const GET = defineRoute({
           .order("seq", { ascending: true }),
       ]);
       if (error) return jsonError(500, error.message);
+      if (stepsError) return jsonError(500, stepsError.message);
       if (!run) return jsonError(404, "Run not found");
       return { run, steps: steps ?? [] };
     }

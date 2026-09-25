@@ -4,6 +4,27 @@ Supabase PostgreSQL is the system of record. Migrations under
 `supabase/migrations` are the authoritative schema history; generated client
 types live in `src/integrations/supabase/types.ts`.
 
+## Database role in the product
+
+The database is the durable state layer for the product. It stores workspace
+identity, content state, AI usage, job leases, approval records, social and
+GEO evidence, and operational events. In Mellox AI, the database is not a
+simple cache: it carries the truth that shapes auth, ownership, content status,
+and verification outcomes.
+
+## Durability and operational truth
+
+The database is where the product remembers what has happened. It records
+workspace membership, content status, scans, jobs, rates, balances, and provider
+side effects. The browser is therefore not the canonical state layer. A user
+interface is only a projection of the underlying database state as shaped by the
+server-side logic.
+
+This matters for workflows like publication approval, GEO verification, job
+reconciliation, and credit usage. If the database and browser disagree, the
+database is the authoritative system of record and the server logic is expected
+to reconcile the difference.
+
 ## Core domains
 
 | Domain | Tables (representative current objects) |

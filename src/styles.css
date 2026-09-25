@@ -499,11 +499,9 @@
 
 /* ═══ Animation performance safeguards ═══
  * Keep animations on the compositor thread (transform / opacity / filter)
- * and avoid layout thrash. Any element that animates position, scale,
- * rotation, fade, or blur should opt in via `.gpu` or one of the
- * `animate-*` / `hover-*` utilities, which the rules below hint to the
- * browser. Never animate `width`, `height`, `top`, `left`, `margin`, or
- * `box-shadow` in a hot path — animate `transform` and `opacity` instead.
+ * and avoid layout thrash. Do not set a base transform here: one-sided
+ * full-circle rotation keyframes can then interpolate between identical
+ * matrices and leave every small spinner visually frozen.
  *
  * `will-change` is applied only while an animation/transition is in
  * flight (via `.is-animating` toggled by JS, or the `:hover`/`:focus`
@@ -515,7 +513,6 @@
 .hover-glow,
 .press-bounce,
 [class*="animate-"] {
-  transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-font-smoothing: subpixel-antialiased;
 }
@@ -1781,13 +1778,6 @@ h6 {
       background-position: -100% 0;
     }
   }
-  :root[data-chat-motion="reduced"] .composer-shimmer-text {
-    animation: none;
-    color: hsl(var(--muted-foreground));
-    background: none;
-    -webkit-text-fill-color: currentColor;
-  }
-
   /* Presence cursor label (the "Lucy" / "Jonathan" tags) */
   .cursor-tag {
     display: inline-flex;
@@ -2808,7 +2798,7 @@ h6 {
 /* ═══ Unified spinner ═══
  * Brand-tinted, theme-aware. Use inline as <span class="ui-spinner" /> or wrap
  * text with `ui-spinner-inline`. */
-@utility ui-spinner {
+.ui-spinner {
   display: inline-block;
   width: 1em;
   height: 1em;
@@ -5306,6 +5296,44 @@ pre {
   }
 }
 
+/* Brand Kit: a thin lime line that sweeps an example while Mellox studies it.
+ * It is a progress cue, so it keeps moving under reduced motion (slower). */
+@utility ds-scan {
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 2px;
+    background: hsl(var(--primary));
+    box-shadow: 0 0 18px 6px hsl(var(--primary) / 0.35);
+    animation: ds-scan 1.8s var(--ds-ease) infinite;
+  }
+}
+@keyframes ds-scan {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(var(--ds-scan-h, 220px));
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-scan::after {
+    animation-duration: 3.6s;
+  }
+}
+
 /* In the app, every Button is a pill (Gemini/ChatGPT-style). Unlayered so it
  * outranks per-instance radius utilities; opt out with data-shape="square". */
 :root:has([data-mellox-app]) [data-slot="button"]:not([data-shape="square"]) {
@@ -5324,6 +5352,17 @@ pre {
  *
  * Adding a loader? If it means "working", list it here.
  */
+:root[data-chat-motion="reduced"] .mx-shimmer {
+  animation: mx-shimmer 2.2s linear infinite !important;
+}
+:root[data-chat-motion="reduced"] .composer-skel::after,
+:root[data-chat-motion="reduced"] .composer-skel-chip::after {
+  animation: composer-shimmer 1.4s ease-in-out infinite !important;
+}
+:root[data-chat-motion="reduced"] .composer-pulse-dot::after {
+  animation: composer-pulse-ring 1.6s ease-out infinite !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Studio: light travelling around a working item, progress glint, weave. */
   :root .studio-ring::before {
@@ -5392,6 +5431,9 @@ pre {
   :root .mx-shimmer {
     animation: mx-shimmer 2.2s linear infinite !important;
   }
+  :root .composer-shimmer-text {
+    animation: composer-text-shimmer 2.2s linear infinite !important;
+  }
   :root .composer-skel::after {
     animation: composer-shimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
   }
@@ -5403,6 +5445,10 @@ pre {
   }
   :root .chat-assistant-status-dot {
     animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
+  }
+  :root .ds-scan::after {
+    animation-duration: 3.6s !important;
     animation-iteration-count: infinite !important;
   }
 

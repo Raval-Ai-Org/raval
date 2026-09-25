@@ -94,6 +94,18 @@ export function normalizeHost(raw: string | null | undefined): string | null {
   }
 }
 
+/**
+ * Whether `text` names `host` as a whole hostname — `example.com` matches
+ * `https://example.com/x` and `www.example.com`, never `notexample.com` or
+ * `example.com.evil.io`.
+ */
+export function containsHost(text: string, host: string): boolean {
+  const h = normalizeHost(host);
+  if (!h) return false;
+  const escaped = h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9.-])(www\\.)?${escaped}(?![a-z0-9-]|\\.[a-z0-9])`, "i").test(text);
+}
+
 export function hostsMatch(a: string | null | undefined, b: string | null | undefined): boolean {
   const x = normalizeHost(a);
   const y = normalizeHost(b);
@@ -288,7 +300,11 @@ export function scoreOwnership(evidence: OwnershipEvidence[]): OwnershipResult {
 
   let status: OwnershipResult["status"];
   if (!negatives.length && (definitive || (strong && content >= 0.3))) status = "verified";
-  else if (confidence >= 0.8 && (strong || content >= 0.3)) status = "verified";
+  // Owner-declared signals (homepage, CNAME, config URLs) are all writable by
+  // whoever controls the repository — a fork or clone of someone else's site
+  // can carry every one of them. High confidence verifies only with GitHub's
+  // own hosting evidence or live page content actually found in the source.
+  else if (confidence >= 0.8 && (definitive || content >= 0.3)) status = "verified";
   else if (negatives.length && pos < 0.5) status = "mismatch";
   else if (confidence >= 0.5) status = "likely";
   else status = "unverified";

@@ -6,7 +6,7 @@
 // get one automatic repair pass, and anything still unsupported is surfaced
 // to the user as a warning rather than silently kept.
 import "server-only";
-import { claudeTextCompletion, CLAUDE_SONNET_MODEL } from "@/lib/anthropic-gateway.server";
+import { llmText } from "@/lib/ai-gateway.server";
 import { serializeBrandContext, type BrandCtxDna } from "@/lib/ai/brand-context";
 import { checkScriptClaims, validFactIds, type ClaimWarning } from "@/lib/ugc/grounding";
 import {
@@ -40,9 +40,11 @@ export type ConceptContext = {
   brand: Record<string, unknown>;
   workspace: WorkspaceProfile;
   durationSec: number;
+  /** Brand Kit writing + video style for this project (styleBlockFor "ugc"). */
+  styleText?: string;
 };
 
-export type Completer = typeof claudeTextCompletion;
+export type Completer = typeof llmText;
 
 const SCENE_SCHEMA = {
   type: "object",
@@ -157,7 +159,7 @@ ${brief.instructions ? `- Creative notes from the marketer: ${brief.instructions
 ${ctx.workspace.industry ? `- Industry: ${ctx.workspace.industry}` : ""}
 
 ${brandContext ? wrapUntrusted("brand dna", brandContext, { maxChars: 4000, route: "ugc.concepts" }) : "No Brand DNA saved."}
-
+${ctx.styleText ? `\nBRAND STYLE (write the dialogue, hooks and post caption in this style; facts still come only from the product facts)\n${wrapUntrusted("brand style", ctx.styleText, { maxChars: 3000, route: "ugc.concepts" })}\n` : ""}
 ${extra}`;
 }
 
@@ -226,9 +228,7 @@ async function complete(
     route: "ugc.concepts",
     system: systemPrompt(ctx),
     user: userPrompt(ctx, extra),
-    model: CLAUDE_SONNET_MODEL,
     maxTokens,
-    effort: "medium",
     outputSchema: schema,
     timeoutMs: 90_000,
     retries: 1,
@@ -279,7 +279,7 @@ function toConcepts(raw: unknown, ctx: ConceptContext): Concept[] {
 
 export async function generateConcepts(
   ctx: ConceptContext,
-  completer: Completer = claudeTextCompletion,
+  completer: Completer = llmText,
 ): Promise<Concept[]> {
   const raw = await complete(
     completer,
@@ -326,7 +326,7 @@ export async function rewriteScript(
   ctx: ConceptContext,
   script: Script,
   instruction: string,
-  completer: Completer = claudeTextCompletion,
+  completer: Completer = llmText,
 ): Promise<{ script: Script; warnings: string[] }> {
   const raw = await complete(
     completer,

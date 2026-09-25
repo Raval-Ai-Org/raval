@@ -12,19 +12,32 @@ import { naturalizeVariants } from "@/lib/studio/naturalize.server";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { runStructuredPrompt, AiOutputError, AiGatewayError } from "@/lib/ai";
-import { BudgetExceededError } from "@/server/ai/budget";
+import { BudgetExceededError, enforceBudget } from "@/server/ai/budget";
+import { recordUsage } from "@/server/ai/metering";
 import { UpstreamError } from "@/server/upstream";
 import {
-  checkTask,
-  pickVideoUrl,
-  recordTaskUsage,
+  checkImageTask,
+  isImageTask,
   startImageTask,
-  startVideoTask,
-  type KieImageSize,
-  type VideoAspectRatio,
-} from "@/lib/kie-gateway.server";
+  type ImageSize,
+} from "@/lib/openrouter-image.server";
+import type { UgcAspectRatio, UgcResolution } from "@/lib/ugc/models";
+import { activeModel } from "@/server/ugc/models.server";
+import { routedVideoProvider } from "@/server/ugc/providers/routed.server";
 import { persistAsset, signAssetPath } from "@/server/assets/persist.server";
-import { buildImagePromptDetailed, type BrandDnaLite } from "@/lib/post-image";
+import {
+  buildImagePromptDetailed,
+  type BrandDnaLite,
+  type ImageStyleInput,
+} from "@/lib/post-image";
+import { loadResolvedStyle, type LoadedStyle } from "@/server/brand-kit/resolve.server";
+import { resolveStyle, styleAppliesTo } from "@/lib/brand-kit/resolve";
+import {
+  imageStyleInput,
+  styleProtectedTerms,
+  videoStyleBlock,
+  writingStyleBlock,
+} from "@/lib/brand-kit/prompt";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { canTransitionContent, isContentStatus, mergeMeta } from "@/lib/content-lifecycle";
 import {
@@ -72,6 +85,8 @@ type ProviderTask = {
   slot: string;
   kind: "image" | "video";
   taskId: string;
+  /** Who runs it: "openrouter" for images; the accepting provider for video. */
+  provider?: string;
   model: string;
   fallbacks: string[];
   ratio: AspectRatio;
@@ -292,6 +307,10 @@ function draftRows(type: StudioType, output: StudioJobOutput, platforms: Platfor
               metaDescription: a.metaDescription,
               takeaways: a.takeaways,
               wordCount: a.wordCount,
+              faq: a.faq ?? [],
+              slug: a.slug ?? "",
+              category: a.category ?? "",
+              tags: a.tags ?? [],
             },
           },
         },
@@ -514,6 +533,32 @@ async function markDraftsFailed(client: Db, workspaceId: string, ids: string[]) 
   }
 }
 
+/* ───────────────────────── style ───────────────────────── */
+
+/**
+ * The Brand Kit Style this job follows, plus the server's Brand DNA. An
+ * explicit pick always applies; the workspace default only applies to the
+ * formats it lists. `resolved.styleId === null` means Brand DNA only. Never
+ * throws: a style that can't be loaded means Brand DNA only, not a failed job.
+ */
+async function loadJobStyle(
+  workspaceId: string,
+  type: string,
+  choice: CreateJobInput["styleId"],
+): Promise<LoadedStyle | null> {
+  try {
+    const loaded = await loadResolvedStyle(workspaceId, choice ?? null);
+    const explicit = !!choice && choice !== "none" && !loaded.fellBack;
+    if (loaded.resolved.styleId && !explicit && !styleAppliesTo(loaded.resolved, type)) {
+      return { ...loaded, referenceUrls: [], resolved: resolveStyle(loaded.dna as never, null) };
+    }
+    return loaded;
+  } catch (error) {
+    console.error("[studio] style load failed, using Brand DNA only", error);
+    return null;
+  }
+}
+
 /* ───────────────────────── media ───────────────────────── */
 
 function brandLite(brand: CreateJobInput["brand"]): BrandDnaLite | null {
@@ -529,6 +574,7 @@ function imagePrompt(args: {
   ratio: AspectRatio;
   seed: string;
   extra?: string;
+  style?: ImageStyleInput | null;
 }): string {
   // The shared builder knows three canvases; 4:5 composes like square with a
   // taller safe area.
@@ -542,6 +588,7 @@ function imagePrompt(args: {
     platform: args.platform,
     size,
     seedKey: args.seed,
+    style: args.style,
   }).prompt;
   return [
     built,
@@ -565,6 +612,7 @@ function videoPrompt(
     concept,
     "Coherent, purposeful camera movement. A clear opening hook, one focused product or service moment, and a clean closing frame.",
     "Keep on-screen text minimal and legible; no gibberish, watermarks, or other brands' logos.",
+    ctx.style ? videoStyleBlock(ctx.style) : "",
     ctx.brandText ? `Brand context:\n${ctx.brandText.slice(0, 1200)}` : "",
   ]
     .filter(Boolean)
@@ -578,11 +626,16 @@ async function startMedia(args: {
   output: StudioJobOutput;
   platforms: PlatformId[];
   referenceUrl?: string | null;
+  style?: LoadedStyle | null;
 }): Promise<ProviderTask[]> {
   const { job, input, ctx, output, platforms } = args;
   const ratio = mediaRatio(job.type, input, platforms);
   const seed = `${job.group_id}:${job.attempt}:${job.idempotency_key}`;
-  const brand = brandLite(input.brand);
+  // The server's own Brand DNA; the browser copy is only a fallback for a
+  // workspace whose DNA hasn't been saved yet.
+  const serverDna = args.style?.dna && Object.keys(args.style.dna).length ? args.style.dna : null;
+  const brand = brandLite((serverDna ?? input.brand) as CreateJobInput["brand"]);
+  const styled = brand && args.style?.logoUrl ? { ...brand, logoUrl: args.style.logoUrl } : brand;
   const refineNote =
     input.refine && ["media", "all"].includes(input.refine.target)
       ? `Revision request: ${input.refine.instruction}`
@@ -601,10 +654,10 @@ async function startMedia(args: {
       ratio,
       seconds,
     );
-    const started = await startVideoTask({
+    const started = await startStudioVideo({
       prompt: full,
-      aspectRatio: ratio as VideoAspectRatio,
-      duration: seconds,
+      aspectRatio: ratio,
+      durationSec: seconds,
       resolution: input.controls.videoResolution ?? "720P",
       audio: input.controls.audio ?? true,
     });
@@ -616,6 +669,7 @@ async function startMedia(args: {
         prompt: full,
         startedAt: Date.now(),
         state: "pending",
+        fallbacks: [],
         ...started,
       },
     ];
@@ -632,20 +686,30 @@ async function startMedia(args: {
       : job.type === "carousel"
         ? [output.slides?.[0]?.heading, output.slides?.[0]?.visual].filter(Boolean).join("\n")
         : (concept ?? output.variants?.[0]?.body ?? input.intent.brief);
+  // A media refine edits the previous render; otherwise the style's own
+  // reference posts (close/exact) steer the look through image-to-image.
+  const referenceAssets = args.referenceUrl
+    ? [args.referenceUrl]
+    : ctx.style
+      ? (args.style?.referenceUrls ?? []).slice(0, 4)
+      : [];
   const prompt = imagePrompt({
     body,
     title: output.title ?? input.intent.brief.slice(0, 80),
-    brand,
+    brand: styled,
     ctx,
     platform: platforms[0] ?? null,
     ratio,
     seed,
     extra: refineNote,
+    style: ctx.style
+      ? imageStyleInput(ctx.style, args.referenceUrl ? 0 : referenceAssets.length)
+      : null,
   });
   const started = await startImageTask({
     prompt,
-    size: size as KieImageSize,
-    referenceAssets: args.referenceUrl ? [args.referenceUrl] : [],
+    size: size as ImageSize,
+    referenceAssets,
   });
   return [
     {
@@ -699,7 +763,13 @@ export async function createStudioJob(args: {
       );
   }
 
+  // A revision or regenerate keeps the style its draft was made with.
+  if (input.styleId === undefined && parent) {
+    const parentStyle = (parent.input as { styleId?: string | null } | null)?.styleId;
+    if (parentStyle) input.styleId = parentStyle;
+  }
   const { brand: _brand, workspaceId: _ws, ...storedInput } = input;
+  const styleUuid = input.styleId && input.styleId !== "none" ? input.styleId : null;
   const insert = {
     workspace_id: workspaceId,
     created_by: args.userId,
@@ -715,6 +785,7 @@ export async function createStudioJob(args: {
     content_item_ids: parent?.content_item_ids ?? [],
     asset_ids: parent?.asset_ids ?? [],
     attempt: (parent?.attempt ?? 0) + 1,
+    ...(styleUuid ? { style_id: styleUuid } : {}),
   };
   const { data: inserted, error } = await client
     .from("studio_jobs")
@@ -802,9 +873,13 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   const controls = { ...input.controls, platforms };
 
   const base = await loadStudioContext(client, job.workspace_id, input.brand ?? null);
+  const style = await loadJobStyle(job.workspace_id, type, input.styleId);
   // Research is per-brief, so it cannot live in the 60s workspace context
   // cache. Most briefs skip it entirely and cost nothing.
-  const ctx = await withLiveResearch(base, input);
+  const ctx = await withLiveResearch(
+    { ...base, style: style?.resolved.styleId ? style.resolved : null },
+    input,
+  );
 
   const mediaOnly = !!input.refine && input.refine.target === "media" && !!parent;
   const previousAngle = parent?.output?.angle ?? null;
@@ -871,6 +946,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       variants: await naturalizeVariants(output.variants, {
         brandName: ctx.brandName,
         brandText: ctx.brandText,
+        styleText: ctx.style ? writingStyleBlock(ctx.style, "social") : undefined,
+        protectedTerms: ctx.style ? styleProtectedTerms(ctx.style) : undefined,
       }),
     };
   }
@@ -904,7 +981,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       referenceUrl = await signAssetPath(currentMedia.storagePath);
     }
     try {
-      const tasks = await startMedia({ job, input, ctx, output, platforms, referenceUrl });
+      const tasks = await startMedia({ job, input, ctx, output, platforms, referenceUrl, style });
       const media: MediaOutput[] = tasks.map((t) => ({
         slot: t.slot,
         kind: t.kind,
@@ -1012,6 +1089,12 @@ async function shapeOutput(args: {
           takeaways: (parsed.takeaways as string[]) ?? [],
           markdown,
           wordCount: countWords(markdown),
+          faq: ((parsed.faq as { question: string; answer: string }[]) ?? []).filter(
+            (f) => f.question && f.answer,
+          ),
+          slug: String(parsed.slug ?? ""),
+          category: String(parsed.category ?? ""),
+          tags: (parsed.tags as string[]) ?? [],
         },
       };
     }
@@ -1080,6 +1163,67 @@ async function shapeOutput(args: {
   }
 }
 
+/* ───────────────────────── media providers ───────────────────────── */
+
+/** Studio video renders use the `premium` catalog model on the configured provider. */
+const STUDIO_VIDEO_MODEL = "premium" as const;
+
+async function startStudioVideo(opts: {
+  prompt: string;
+  aspectRatio: string;
+  durationSec: number;
+  resolution: "480P" | "720P" | "1080P";
+  audio: boolean;
+}): Promise<{ taskId: string; model: string; provider: string; route: string }> {
+  // The most expensive call in the product: quota + spend ceiling apply.
+  await enforceBudget("video");
+  const submitted = await routedVideoProvider.submit({
+    model: activeModel(STUDIO_VIDEO_MODEL),
+    prompt: opts.prompt,
+    durationSec: opts.durationSec,
+    aspectRatio: opts.aspectRatio as UgcAspectRatio,
+    resolution: opts.resolution.toLowerCase() as UgcResolution,
+    audio: opts.audio,
+    imageUrls: [],
+  });
+  if (!submitted.ok) throw new StudioJobError(submitted.retryable ? 503 : 502, submitted.message);
+  return {
+    taskId: submitted.taskId,
+    model: submitted.providerModel,
+    provider: submitted.provider,
+    route: "video",
+  };
+}
+
+type MediaCheck =
+  | { state: "pending" }
+  | { state: "failed"; message: string }
+  | { state: "success"; url?: string; dataUrl?: string; costUsd: number | null };
+
+/** One status read of a render; the finished file comes back as a URL or its bytes. */
+async function checkMediaTask(task: ProviderTask): Promise<MediaCheck> {
+  if (task.kind === "image") {
+    if (!isImageTask(task.taskId)) {
+      // A render started on the retired KIE image path before this release.
+      return {
+        state: "failed",
+        message: "This render was started on a retired image service. Try again.",
+      };
+    }
+    const image = await checkImageTask(task.taskId);
+    if (image.state !== "success") return image;
+    return { state: "success", dataUrl: image.dataUrl, costUsd: image.costUsd };
+  }
+  const provider = task.provider ?? "kie";
+  const check = await routedVideoProvider.check(task.taskId, provider);
+  if (check.state === "pending") return { state: "pending" };
+  if (check.state === "failed") return { state: "failed", message: check.message };
+  const downloaded = await routedVideoProvider.download?.(check.videoUrl, provider);
+  return downloaded
+    ? { state: "success", dataUrl: downloaded.dataUrl, costUsd: check.costUsd }
+    : { state: "success", url: check.videoUrl, costUsd: check.costUsd };
+}
+
 /* ───────────────────────── poll / advance ───────────────────────── */
 
 export async function advanceStudioJob(client: unknown, row: JobRow): Promise<JobRow> {
@@ -1115,19 +1259,13 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         setMedia({ status: "failed", error: "The render took too long. Try again." });
         continue;
       }
-      const check = await checkTask(task.taskId);
+      const check = await checkMediaTask(task);
       if (check.state === "pending") continue;
       if (check.state === "failed") {
-        recordTaskUsage({
-          kind: task.kind,
-          model: task.model,
-          latencyMs: now - task.startedAt,
-          ok: false,
-          taskId: task.taskId,
-        });
+        // Image attempts are metered where they ran; a failed video costs nothing.
         const next = task.kind === "image" ? task.fallbacks[0] : undefined;
         if (next) {
-          const size = IMAGE_SIZE_BY_RATIO[task.ratio] as KieImageSize;
+          const size = IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize;
           const restarted = await startImageTask({ prompt: task.prompt, size, model: next });
           Object.assign(task, {
             taskId: restarted.taskId,
@@ -1143,12 +1281,10 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       }
       stage = "save";
       await setStage(c, row.id, "save");
-      const url = task.kind === "video" ? pickVideoUrl(check.urls).videoUrl : check.urls[0];
-      if (!url) throw new Error("The provider returned no usable file.");
       const persisted = await persistAsset({
         workspaceId: row.workspace_id,
         idempotencyKey: `studio:${row.id}:${task.slot}:${task.taskId}`,
-        sourceUrl: url,
+        ...(check.dataUrl ? { dataUrl: check.dataUrl } : { sourceUrl: check.url }),
         contentItemIds: row.content_item_ids,
         assetType: task.kind,
         filename: `mellox-${row.type}-${task.ratio.replace(":", "x")}-${row.id.slice(0, 8)}`,
@@ -1164,13 +1300,16 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           studio_type: row.type,
         },
       });
-      recordTaskUsage({
-        kind: task.kind,
-        model: task.model,
-        latencyMs: Date.now() - task.startedAt,
-        ok: true,
-        taskId: task.taskId,
-      });
+      if (task.kind === "video") {
+        recordUsage({
+          provider: task.provider === "kie" ? "kie" : "openrouter",
+          model: task.model,
+          kind: "video",
+          units: 1,
+          estCostUsd: check.costUsd ?? undefined,
+          latencyMs: Date.now() - task.startedAt,
+        });
+      }
       if (!persisted.ok) {
         task.state = "failed";
         setMedia({ status: "failed", error: persisted.message });

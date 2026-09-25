@@ -3,8 +3,8 @@
 // provider/model/workspace).
 //
 // This does NOT proxy AI calls through Helicone. Every existing gateway
-// (src/lib/ai-gateway.server.ts, anthropic-gateway.server.ts,
-// kie-gateway.server.ts) keeps calling its provider directly; Helicone only
+// (src/lib/ai-gateway.server.ts, openrouter-image.server.ts,
+// the video providers) keeps calling its provider directly; Helicone only
 // ever receives a copy of the same usage event src/server/ai/metering.ts
 // already records to Postgres, the same way that function has one sink
 // today. A Helicone outage must never slow or fail a real AI request — this
@@ -107,10 +107,10 @@ export function logToHelicone(row: Record<string, unknown>): void {
         ...(row.est_cost_usd != null
           ? { "Helicone-Property-Est-Cost-Usd": String(row.est_cost_usd) }
           : {}),
-          "Helicone-Property-Input-Tokens": String(inputTokens),
-          "Helicone-Property-Output-Tokens": String(outputTokens),
-          "Helicone-Property-Total-Tokens": String(inputTokens + outputTokens),
-          "Helicone-Property-Latency-Ms": String(Math.max(0, Math.round(latencyMs))),
+        "Helicone-Property-Input-Tokens": String(inputTokens),
+        "Helicone-Property-Output-Tokens": String(outputTokens),
+        "Helicone-Property-Total-Tokens": String(inputTokens + outputTokens),
+        "Helicone-Property-Latency-Ms": String(Math.max(0, Math.round(latencyMs))),
       },
     },
     providerResponse: {

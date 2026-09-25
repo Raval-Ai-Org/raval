@@ -51,6 +51,8 @@ export async function streamImage(
       referenceAssets?: string[];
     };
     maxAttempts?: number;
+    /** Brand Kit Style to apply on the server: an id, "default" or "none". */
+    brandStyle?: string | null;
   } = {},
 ): Promise<void> {
   const res = await authedFetch("/api/generate-image", {
@@ -63,6 +65,7 @@ export async function streamImage(
       ...opts.routing,
       metadata: opts.metadata,
       maxAttempts: opts.maxAttempts,
+      ...(opts.brandStyle ? { brandStyle: opts.brandStyle } : {}),
     }),
     signal: opts.signal,
   });

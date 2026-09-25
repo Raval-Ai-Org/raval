@@ -24,10 +24,15 @@ import {
 } from "@/components/icons";
 import { countBrandDnaFilled } from "@/hooks/use-brand-dna";
 import type { BrandExtractResult } from "@/lib/brand-extract-events";
+import type { CompetitorView } from "@/lib/competitors.functions";
 import { normalizeHex, pickTextOn } from "@/lib/color";
 import { duration, ease } from "@/lib/motion";
 import { splitGuidance } from "./guidance";
 import { BrandMark, Eyebrow, Tag } from "./ui";
+import {
+  CompetitorResearchPreview,
+  type CompetitorResearchStatus,
+} from "./CompetitorResearchPreview";
 import { hostOf } from "./url";
 
 export const EDITABLE_FIELDS = [
@@ -68,6 +73,8 @@ const swatchIn: Variants = {
 
 export function BrandReveal({
   brand,
+  competitors,
+  competitorResearchStatus,
   url,
   saving,
   reduce,
@@ -78,6 +85,8 @@ export function BrandReveal({
   onChangeUrl,
 }: {
   brand: BrandExtractResult;
+  competitors: CompetitorView[];
+  competitorResearchStatus: CompetitorResearchStatus;
   url: string;
   saving: boolean;
   reduce: boolean;
@@ -101,9 +110,9 @@ export function BrandReveal({
   const valueTags = (brand.valueTags ?? []).filter(Boolean);
   const audienceTags = (brand.audienceTags ?? []).filter(Boolean);
   const keywords = (brand.keywords ?? []).filter(Boolean).slice(0, 14);
-  const competitors = (brand.competitors ?? []).filter((c) => c?.name).slice(0, 5);
   const insights = (brand.insights ?? []).filter((i) => i?.title).slice(0, 4);
-  const hasMarket = keywords.length > 0 || competitors.length > 0;
+  const hasMarket =
+    keywords.length > 0 || competitors.length > 0 || competitorResearchStatus !== "idle";
   const statements = (
     [
       ["Unique value", brand.uniqueValueProp],
@@ -354,25 +363,13 @@ export function BrandReveal({
         {hasMarket && (
           <Card variants={card} icon={Swords} title="Market" className="lg:col-span-5">
             {keywords.length > 0 && <TagList label="Keywords" tags={keywords} first />}
-            {competitors.length > 0 && (
-              <div className={keywords.length ? "mt-5" : ""}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  Competitors
-                </p>
-                <ul className="mt-2 divide-y divide-border">
-                  {competitors.map((competitor) => (
-                    <li key={competitor.name} className="py-2.5 first:pt-1 last:pb-0">
-                      <p className="text-[13.5px] font-medium">{competitor.name}</p>
-                      {competitor.positioning && (
-                        <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">
-                          {competitor.positioning}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <div className={keywords.length ? "mt-5 border-t border-border pt-4" : ""}>
+              <CompetitorResearchPreview
+                competitors={competitors}
+                status={competitorResearchStatus}
+                reduce={reduce}
+              />
+            </div>
           </Card>
         )}
 

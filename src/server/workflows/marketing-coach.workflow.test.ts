@@ -32,7 +32,7 @@ const input = {
   dayName: "Thursday",
   siteUrl: "https://mellox.ai",
   brandSeed: "Mellox",
-  model: "claude-sonnet-5",
+  model: "anthropic/claude-opus-5.5",
   signals: {
     workspaceName: "Mellox",
     website: "https://mellox.ai",

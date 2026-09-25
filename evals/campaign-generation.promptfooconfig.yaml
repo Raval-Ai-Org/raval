@@ -1,6 +1,6 @@
 # Campaign Generation eval — exercises the REAL production brief-generation
 # function (src/server/research/campaign-brief.server.ts) via
-# evals/providers/campaign-brief.provider.ts. Needs a real ANTHROPIC_API_KEY.
+# evals/providers/campaign-brief.provider.ts. Needs a real OPENROUTER_API_KEY.
 #
 # Run: npx --yes promptfoo@latest eval -c evals/campaign-generation.promptfooconfig.yaml
 

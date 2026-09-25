@@ -4,7 +4,13 @@
 // src/server/geo/agents/present.ts. Every field comes from real execution —
 // there is no simulated activity.
 
-import type { FixProposalView, ProposalValidation, VerificationView } from "./fix-contracts";
+import type {
+  AssistedStepView,
+  FixProposalView,
+  ProposalValidation,
+  SiteProviderId,
+  VerificationView,
+} from "./fix-contracts";
 
 export const GEO_AGENT_NAME = "Mellox GEO Engineer";
 
@@ -188,6 +194,10 @@ export type AgentRunView = {
   model: string | null;
   status: AgentRunStatus;
   statusDetail: string | null;
+  /** github = pull request; wordpress / webflow = the change is written on the site. */
+  provider: SiteProviderId;
+  /** Exact values to paste where the platform's API can't reach (CMS runs). */
+  assisted: AssistedStepView[];
   error: { code: string | null; message: string } | null;
   fingerprint: string;
   ruleId: string;
@@ -218,6 +228,8 @@ export type AgentRunView = {
     approvePatch: boolean;
     cancel: boolean;
     retry: boolean;
+    /** CMS: put back the values Mellox replaced. */
+    undo: boolean;
   };
   createdAt: string;
   updatedAt: string;

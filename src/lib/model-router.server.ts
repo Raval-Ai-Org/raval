@@ -1,3 +1,8 @@
+// model-router.server.ts — picks the OpenRouter image model for a request:
+// GPT Image 2.5 Flare for everyday social images and quick edits, Sunburst for
+// premium, cinematic, text-heavy or brand-critical images and precise edits.
+// Scoring keeps benchmark results and failure history, and each tier falls
+// back to the other.
 import "server-only";
 export type ImageRoutingInput = {
   prompt: string;
@@ -41,35 +46,29 @@ export type ImageModelConfigStatus = {
   configuredModels: string[];
 };
 
+// OpenRouter image models (Images API, POST /api/v1/images). Both generate and
+// edit (with reference images), so the edit routes default to the same ids.
+export const IMAGE_FLARE = "openai/gpt-image-2.5-flare";
+export const IMAGE_SUNBURST = "openai/gpt-image-2.5-sunburst";
+
 const configured = (name: string, fallback: string) => process.env[name]?.trim() || fallback;
 
-function configuredList(name: string, fallback: string[]): string[] {
-  const value = process.env[name]?.trim();
-  return value
-    ? value
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean)
-    : fallback;
-}
-
+// Env: IMAGE_MODEL_DEFAULT (social images, quick edits), IMAGE_MODEL_PREMIUM
+// (cinematic, text-heavy, brand-critical), IMAGE_MODEL_EDIT and
+// IMAGE_MODEL_PREMIUM_EDIT. Each tier falls back to the other.
 function catalog(): ModelCatalog {
-  const defaultText = configured("KIE_IMAGE_MODEL_DEFAULT", "gpt-image-2-5-flare-text-to-image");
-  const premiumText = configured("KIE_IMAGE_MODEL_PREMIUM", "gpt-image-2-5-sunburst-text-to-image");
-  const fastText = configured("KIE_IMAGE_MODEL_FAST", defaultText);
-  const defaultEdit = configured("KIE_IMAGE_MODEL_EDIT", "gpt-image-2-5-flare-image-to-image");
-  const premiumEdit = configured(
-    "KIE_IMAGE_MODEL_PREMIUM_EDIT",
-    "gpt-image-2-5-sunburst-image-to-image",
-  );
+  const defaultText = configured("IMAGE_MODEL_DEFAULT", IMAGE_FLARE);
+  const premiumText = configured("IMAGE_MODEL_PREMIUM", IMAGE_SUNBURST);
+  const defaultEdit = configured("IMAGE_MODEL_EDIT", defaultText);
+  const premiumEdit = configured("IMAGE_MODEL_PREMIUM_EDIT", premiumText);
   return {
     defaultText,
     premiumText,
-    fastText,
+    fastText: defaultText,
     defaultEdit,
     premiumEdit,
-    fallbackText: configuredList("KIE_IMAGE_MODEL_FALLBACKS", [defaultText, premiumText]),
-    fallbackEdit: configuredList("KIE_IMAGE_MODEL_EDIT_FALLBACKS", [defaultEdit, premiumEdit]),
+    fallbackText: [defaultText, premiumText],
+    fallbackEdit: [defaultEdit, premiumEdit],
   };
 }
 
@@ -78,38 +77,39 @@ export function getImageModelConfigStatus(): ImageModelConfigStatus {
   const configuredModels = [
     models.defaultText,
     models.premiumText,
-    models.fastText,
     models.defaultEdit,
     models.premiumEdit,
-    ...models.fallbackText,
-    ...models.fallbackEdit,
   ].filter(Boolean);
   return {
-    defaultConfigured: Boolean(process.env.KIE_IMAGE_MODEL_DEFAULT?.trim()),
-    premiumConfigured: Boolean(process.env.KIE_IMAGE_MODEL_PREMIUM?.trim()),
-    editConfigured: Boolean(process.env.KIE_IMAGE_MODEL_EDIT?.trim()),
-    premiumEditConfigured: Boolean(process.env.KIE_IMAGE_MODEL_PREMIUM_EDIT?.trim()),
-    fallbackConfigured: Boolean(
-      process.env.KIE_IMAGE_MODEL_FALLBACKS?.trim() ||
-      process.env.KIE_IMAGE_MODEL_EDIT_FALLBACKS?.trim(),
-    ),
+    defaultConfigured: Boolean(process.env.IMAGE_MODEL_DEFAULT?.trim()),
+    premiumConfigured: Boolean(process.env.IMAGE_MODEL_PREMIUM?.trim()),
+    editConfigured: Boolean(process.env.IMAGE_MODEL_EDIT?.trim()),
+    premiumEditConfigured: Boolean(process.env.IMAGE_MODEL_PREMIUM_EDIT?.trim()),
+    fallbackConfigured: true,
     configuredModels: [...new Set(configuredModels)],
   };
 }
 
+/** Prompt signals that the image must be premium (cinematic, text-heavy, brand-critical). */
+const PREMIUM_SIGNALS = [
+  "campaign",
+  "product launch",
+  "multiple subjects",
+  "detailed",
+  "cinematic",
+  "editorial",
+  "premium",
+  "complex composition",
+  "text-heavy",
+  "headline",
+  "infographic",
+  "typography",
+];
+
 function complexity(prompt: string): number {
   const text = prompt.toLowerCase();
   let score = Math.min(4, Math.floor(prompt.length / 900));
-  for (const signal of [
-    "campaign",
-    "product launch",
-    "multiple subjects",
-    "detailed",
-    "cinematic",
-    "editorial",
-    "premium",
-    "complex composition",
-  ]) {
+  for (const signal of PREMIUM_SIGNALS) {
     if (text.includes(signal)) score += 1;
   }
   return score;
@@ -125,17 +125,20 @@ export function routeImageModel(input: ImageRoutingInput): ImageModelPlan {
     input.taskType === "reference" ||
     input.taskType === "editing",
   );
-  const maximum = input.requiredQuality === "maximum" || score >= 4;
+  const maximum =
+    input.requiredQuality === "maximum" ||
+    (input.requiredQuality === "high" && input.brandPrecision === "strict") ||
+    score >= 4;
   const fast =
     input.latency === "fast" || input.iteration === "variation" || input.taskType === "variation";
   let model: string;
   let reason: string;
   let route: ImageModelPlan["route"];
 
-  if (reference && maximum) {
+  if (reference && (maximum || input.brandPrecision === "strict")) {
     model = models.premiumEdit;
     route = "sunburst-edit";
-    reason = "reference-preserving, high-complexity edit";
+    reason = "precise or high-complexity reference edit";
   } else if (reference && fast) {
     model = models.defaultEdit;
     route = "flare-edit";
@@ -179,13 +182,14 @@ export function routeImageModel(input: ImageRoutingInput): ImageModelPlan {
     model: selected,
     fallbacks,
     reason,
-    route:
-      selected === models.premiumEdit
+    route: reference
+      ? selected === models.premiumEdit
         ? "sunburst-edit"
-        : selected === models.defaultEdit
-          ? "flare-edit"
-          : selected === models.premiumText
-            ? "sunburst"
-            : route,
+        : "flare-edit"
+      : selected === models.premiumText
+        ? "sunburst"
+        : selected === models.defaultText
+          ? "flare"
+          : route,
   };
 }

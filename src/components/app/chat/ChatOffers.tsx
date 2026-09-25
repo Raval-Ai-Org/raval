@@ -6,7 +6,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Activity,
   ArrowUpRight,
   BookOpen,
   Brain,
@@ -33,7 +32,6 @@ const OFFER_ICON: Partial<Record<ChatToolCall["kind"], LucideIcon>> = {
   "open-visibility": Globe,
   "open-competitor": Radio,
   "open-coach": Sparkles,
-  "open-operations": Activity,
 };
 
 const ACTION_ICON: Record<ChatAction["kind"], LucideIcon> = {

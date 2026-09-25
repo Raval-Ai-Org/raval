@@ -23,7 +23,7 @@ export class MemoryUgcStore implements UgcRenderStore {
   renders = new Map<string, RenderRow>();
   holds = new Map<string, Hold>();
   usageEvents: Array<{ reservationId: string; cost: number | null }> = [];
-  persisted: Array<{ idempotencyKey: string; sourceUrl: string }> = [];
+  persisted: Array<{ idempotencyKey: string; sourceUrl: string; dataUrl?: string }> = [];
   persistFailures = 0;
   images = new Map<string, string>();
   reserveResult: ReserveResult | null = null;
@@ -149,6 +149,7 @@ export class MemoryUgcStore implements UgcRenderStore {
 
   async persistVideo(input: {
     sourceUrl: string;
+    dataUrl?: string;
     idempotencyKey: string;
   }): Promise<PersistVideoResult> {
     if (this.persistFailures > 0) {
@@ -157,7 +158,11 @@ export class MemoryUgcStore implements UgcRenderStore {
     }
     const existing = this.persisted.findIndex((p) => p.idempotencyKey === input.idempotencyKey);
     if (existing === -1)
-      this.persisted.push({ idempotencyKey: input.idempotencyKey, sourceUrl: input.sourceUrl });
+      this.persisted.push({
+        idempotencyKey: input.idempotencyKey,
+        sourceUrl: input.sourceUrl,
+        ...(input.dataUrl ? { dataUrl: input.dataUrl } : {}),
+      });
     return { ok: true, assetId: `asset-${input.idempotencyKey}` };
   }
 }

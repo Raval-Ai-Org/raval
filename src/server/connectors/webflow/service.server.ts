@@ -7,10 +7,12 @@ import { HttpError } from "@/server/http-error";
 import { recordAudit } from "@/server/audit.server";
 import {
   allowedWebflowReturnOrigin,
+  missingWebflowWriteScopes,
   requireWebflowConfig,
   webflowTokenKey,
   WEBFLOW_SCOPES,
 } from "./config.server";
+import { hostOf } from "@/lib/sites/fingerprint";
 import {
   exchangeCode,
   getTokenUser,
@@ -52,6 +54,8 @@ export type WebflowConnectionView = {
   status: string;
   selectedSite: WebflowSiteView | null;
   sites: WebflowSiteView[];
+  /** Write scopes this connection was not granted; non-empty means "reconnect to allow changes". */
+  missingWriteScopes: string[];
 };
 
 export function createAuthUrl(args: {
@@ -194,7 +198,9 @@ export async function completeConnect(state: State, code: string, userId: string
         external_account_id: identity.id ?? identity.email ?? "webflow-user",
         account_login: identity.email ?? identity.id ?? "Webflow account",
         account_type: "user",
-        permissions: Object.fromEntries(tokens.scopes.map((scope) => [scope, "read"])),
+        permissions: Object.fromEntries(
+          tokens.scopes.map((scope) => [scope, scope.endsWith(":write") ? "write" : "read"]),
+        ),
         verification: "oauth",
         connected_by: userId,
         last_verified_at: new Date().toISOString(),
@@ -254,6 +260,17 @@ function viewForApi(site: WebflowSite, selected: boolean): WebflowSiteView {
   };
 }
 
+/** Every host a Webflow site is served on: its custom domains and its webflow.io subdomain. */
+export function webflowSiteDomains(site: WebflowSite): string[] {
+  const hosts = new Set<string>();
+  for (const d of site.customDomains ?? []) {
+    const host = hostOf(d.url ?? null);
+    if (host) hosts.add(host);
+  }
+  if (site.shortName) hosts.add(`${site.shortName.toLowerCase()}.webflow.io`);
+  return [...hosts];
+}
+
 async function saveSites(workspaceId: string, connectionId: string, sites: WebflowSite[]) {
   if (!sites.length) return;
   await db.from("webflow_sites").upsert(
@@ -263,6 +280,8 @@ async function saveSites(workspaceId: string, connectionId: string, sites: Webfl
       site_id: site.id,
       site_name: site.displayName ?? site.id,
       domain: site.customDomains?.[0]?.url ?? null,
+      domains: webflowSiteDomains(site),
+      short_name: site.shortName ?? null,
       preview_url: site.previewUrl ?? null,
       status: "active",
     })),
@@ -285,6 +304,11 @@ export async function getConnectionView(
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!connection) return null;
+  const { data: grant } = await db
+    .from("webflow_oauth_credentials")
+    .select("scopes")
+    .eq("connection_id", connection.id)
+    .maybeSingle();
   const { data: sites, error: sitesError } = await client
     .from("webflow_sites")
     .select("site_id, site_name, domain, preview_url, selected, status")
@@ -300,6 +324,50 @@ export async function getConnectionView(
     selectedSite: (sites ?? []).find((site: any) => site.selected)
       ? siteView((sites ?? []).find((site: any) => site.selected))
       : null,
+    missingWriteScopes: missingWebflowWriteScopes(grant?.scopes ?? []),
+  };
+}
+
+/**
+ * A token and the selected site for changing this workspace's Webflow site.
+ * Refuses (409) when the grant has no write scopes, with the fix in the message.
+ */
+export async function webflowAccess(
+  workspaceId: string,
+  opts: { requireWrite?: boolean } = {},
+): Promise<{
+  token: string;
+  connectionId: string;
+  site: WebflowSite;
+  domains: string[];
+  missingWriteScopes: string[];
+}> {
+  const view = await getConnectionView(supabaseAdmin, workspaceId);
+  if (!view || view.status === "revoked") throw new HttpError(409, "Connect Webflow first.");
+  if (!view.selectedSite) throw new HttpError(409, "Choose your Webflow site first.");
+  if (opts.requireWrite && view.missingWriteScopes.length)
+    throw new HttpError(
+      409,
+      "Reconnect Webflow and allow Mellox to edit your site, then try again.",
+    );
+  const token = await tokenFor(view.connectionId, workspaceId);
+  const site = await getSiteChecked(token, view.selectedSite.id);
+  const domains = webflowSiteDomains(site);
+  await db
+    .from("webflow_sites")
+    .update({
+      domains,
+      short_name: site.shortName ?? null,
+      last_synced_at: new Date().toISOString(),
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("site_id", site.id);
+  return {
+    token,
+    connectionId: view.connectionId,
+    site,
+    domains,
+    missingWriteScopes: view.missingWriteScopes,
   };
 }
 
@@ -348,6 +416,8 @@ export async function selectSite(args: {
       selected: true,
       site_name: site.displayName ?? args.siteId,
       domain: site.customDomains?.[0]?.url ?? null,
+      domains: webflowSiteDomains(site),
+      short_name: site.shortName ?? null,
       preview_url: site.previewUrl ?? null,
       last_synced_at: new Date().toISOString(),
       last_error: null,

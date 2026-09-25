@@ -37,6 +37,12 @@ export type Ga4ReportRequest = {
   metrics: string[];
   limit?: number;
   orderBySessionsDesc?: boolean;
+  /** Row offset for paging past `limit` (experiment pulls; the dashboard sync doesn't page). */
+  offset?: number;
+  /** Restrict to these values of one dimension (GA4 `inListFilter`). */
+  inListFilter?: { dimension: string; values: string[] };
+  /** Stable paging order: ascending by these dimensions. */
+  orderByDimensions?: string[];
 };
 
 export type Ga4ReportRow = { dimensions: string[]; metrics: number[] };
@@ -58,6 +64,12 @@ export type GscQueryRequest = {
   dimensions: Array<"date" | "query" | "page" | "country" | "device">;
   rowLimit?: number;
   startRow?: number;
+  /** Search Console filters, all ANDed (e.g. page contains "/products/"). */
+  filters?: {
+    dimension: "page" | "query" | "country" | "device";
+    operator: "contains" | "equals" | "notContains" | "notEquals";
+    expression: string;
+  }[];
 };
 
 export type GscRow = {
@@ -275,9 +287,26 @@ export function createGoogleApi(getToken: TokenProvider): GoogleApi {
         metrics: req.metrics.map((name) => ({ name })),
         limit: String(req.limit ?? 10_000),
         returnPropertyQuota: true,
-        ...(req.orderBySessionsDesc
-          ? { orderBys: [{ metric: { metricName: "sessions" }, desc: true }] }
+        ...(req.offset ? { offset: String(req.offset) } : {}),
+        ...(req.inListFilter
+          ? {
+              dimensionFilter: {
+                filter: {
+                  fieldName: req.inListFilter.dimension,
+                  inListFilter: { values: req.inListFilter.values, caseSensitive: true },
+                },
+              },
+            }
           : {}),
+        ...(req.orderByDimensions?.length
+          ? {
+              orderBys: req.orderByDimensions.map((dimensionName) => ({
+                dimension: { dimensionName },
+              })),
+            }
+          : req.orderBySessionsDesc
+            ? { orderBys: [{ metric: { metricName: "sessions" }, desc: true }] }
+            : {}),
       };
       const data = await call(
         "Google Analytics Data",
@@ -321,6 +350,7 @@ export function createGoogleApi(getToken: TokenProvider): GoogleApi {
             dataState: "final",
             rowLimit: req.rowLimit ?? 25_000,
             startRow: req.startRow ?? 0,
+            ...(req.filters?.length ? { dimensionFilterGroups: [{ filters: req.filters }] } : {}),
           },
         },
       );

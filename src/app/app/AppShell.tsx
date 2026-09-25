@@ -9,29 +9,31 @@ import { Link, useRouterState, useNavigate } from "@/lib/navigation";
 // Remember a chat/suggestion scan request until the lazy AI Visibility dialog mounts.
 ensureGeoRunCapture();
 import { useServerFn } from "@/lib/use-server-fn";
+import { useQuery } from "@tanstack/react-query";
+import { getProofEngineStatus } from "@/lib/experiments.functions";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
-import { conversationIdFromPath, workspacePath } from "@/lib/workspace/paths";
+import { brandKitPath, conversationIdFromPath, workspacePath } from "@/lib/workspace/paths";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
-  Activity,
   ArrowLeft,
   BarChart3,
   BookOpen,
   Brain,
+  BrandKit,
   Building2,
   Calendar as CalendarIcon,
   ChevronDown,
   Link2,
   PanelRightOpen,
   Plus,
-  Radio,
   Rocket,
   Share2,
   Sparkles,
+  Trophy,
   Users,
   type LucideIcon,
 } from "@/components/icons";
@@ -108,7 +110,6 @@ import { useRealtimeContent } from "@/hooks/use-realtime-content";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
-import { OperationsInbox } from "@/components/app/OperationsInbox";
 import { UsagePanel } from "@/components/app/UsagePanel";
 
 function AppShell() {
@@ -118,6 +119,13 @@ function AppShell() {
   const workspace = useWorkspace();
   const { patch: patchWorkspace } = useWorkspaceActions();
   const workspaceId = workspace.id;
+  const proofEngineStatus = useServerFn(getProofEngineStatus);
+  const { data: proofEngine } = useQuery({
+    queryKey: ["proof-engine-status", workspaceId],
+    queryFn: () => proofEngineStatus({ data: { workspaceId } }),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
   const workspaceName = workspace.displayName;
   const workspaceWebsite = workspace.websiteUrl;
   const homeHref = workspacePath(workspaceId);
@@ -266,13 +274,32 @@ function AppShell() {
     };
   }, []);
 
-  // The chat's "Open Competitors" button and any other caller reach the full
-  // surface through this event, because navigating needs the router and the
-  // workspace id, which only live here.
+  // Keep older chat and coach actions pointed at the Brand DNA section.
   useEffect(() => {
-    const onOpenCompetitors = () => navigate({ to: workspacePath(workspaceId, "competitors") });
+    const onOpenCompetitors = () => emitAppEvent("open:brand-dna", { tab: "competitors" });
     addAppEventListener("open:competitors", onOpenCompetitors);
     return () => removeAppEventListener("open:competitors", onOpenCompetitors);
+  }, []);
+
+  // Brand Kit is a route too. When it's already open, the panel handles the
+  // event itself (a style, a section, or the create flow) without navigating.
+  useEffect(() => {
+    const onOpenBrandKit = (
+      event: CustomEvent<{ styleId?: string; section?: string; create?: boolean } | null>,
+    ) => {
+      if (window.location.pathname.endsWith("/app/brand-kit")) return;
+      const d = event.detail ?? {};
+      navigate({
+        to: brandKitPath(workspaceId, {
+          style: d.styleId,
+          section: d.section,
+          create: d.create,
+        }),
+      });
+      setNavOpen(false);
+    };
+    addAppEventListener("open:brand-kit", onOpenBrandKit);
+    return () => removeAppEventListener("open:brand-kit", onOpenBrandKit);
   }, [navigate, workspaceId]);
 
   useEffect(() => {
@@ -440,6 +467,17 @@ function AppShell() {
             accent: "hsl(var(--brand-green))",
             onClick: () => navigate({ to: workspacePath(workspaceId, "backlinks") }),
           })}
+          {proofEngine?.enabled &&
+            sidebarAction({
+              icon: Trophy,
+              label: "Experiments",
+              hint: "Prove what works",
+              accent: "hsl(var(--brand-green))",
+              onClick: () => {
+                navigate({ to: workspacePath(workspaceId, "experiments") });
+                setNavOpen(false);
+              },
+            })}
           {sidebarAction({
             icon: Brain,
             label: "Brand DNA",
@@ -447,19 +485,19 @@ function AppShell() {
             onClick: () => emitAppEvent("open:brand-dna"),
           })}
           {sidebarAction({
+            icon: BrandKit,
+            label: "Brand Kit",
+            hint: "Your styles",
+            accent: "hsl(var(--brand-blue))",
+            onClick: () => {
+              navigate({ to: brandKitPath(workspaceId) });
+              setNavOpen(false);
+            },
+          })}
+          {sidebarAction({
             icon: CalendarIcon,
             label: "Schedule",
             onClick: () => emitAppEvent("open:schedule"),
-          })}
-          {sidebarAction({
-            icon: Radio,
-            label: "Competitors",
-            hint: "Who you're up against",
-            accent: "hsl(var(--brand-green))",
-            onClick: () => {
-              navigate({ to: workspacePath(workspaceId, "competitors") });
-              setNavOpen(false);
-            },
           })}
         </SidebarSection>
 
@@ -575,9 +613,9 @@ function AppShell() {
                   onClick: () => emitAppEvent("open:brand-dna"),
                 },
                 {
-                  icon: Radio,
-                  label: "Competitors",
-                  onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
+                  icon: BrandKit,
+                  label: "Brand Kit",
+                  onClick: () => navigate({ to: brandKitPath(workspaceId) }),
                 },
               ].map(({ icon: Icon, label, onClick }) => (
                 <Tooltip key={label}>
@@ -729,18 +767,7 @@ function AppShell() {
                   brandKeywords={brandDna.keywords}
                 />
               </Suspense>
-              <button
-                type="button"
-                onClick={() => emitAppEvent("open:operations")}
-                aria-label="Open Operations inbox"
-                title="Operations inbox — agent findings and approvals"
-                className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-2 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <Activity className="h-3.5 w-3.5" aria-hidden />
-                <span className="hidden lg:inline">Operations</span>
-              </button>
-              {/* Self-mounting panels: they open on open:operations / open:usage. */}
-              <OperationsInbox />
+              {/* Self-mounting usage panel opens on open:usage. */}
               <UsagePanel />
               <button
                 type="button"

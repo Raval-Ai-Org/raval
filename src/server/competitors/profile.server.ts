@@ -38,6 +38,7 @@ export async function buildCompetitorProfile(input: ProfileInput): Promise<Compe
       [
         `${input.name} ${input.domain} review`,
         `${input.name} pricing`,
+        `${input.name} founded headquarters company`,
         `what does ${input.name} do`,
       ],
       { limit: 12, perHost: 2, route: "competitors.profile" },

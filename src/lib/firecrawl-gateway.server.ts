@@ -12,7 +12,7 @@
 // Deliberately never uses Firecrawl's LLM-powered /extract format — only
 // markdown/links — so every synthesis step still goes through this
 // codebase's own metered, budget-checked gateways
-// (src/lib/anthropic-gateway.server.ts), never a side channel through a
+// (src/lib/ai-gateway.server.ts), never a side channel through a
 // Firecrawl-configured LLM key.
 import "server-only";
 import FirecrawlSdk from "@mendable/firecrawl-js";
@@ -127,12 +127,16 @@ function configuredNumber(name: string, fallback: number, maximum: number): numb
 }
 
 function retryable(error: unknown): boolean {
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
   return /timeout|timed out|abort|econn|enotfound|429|502|503|504|network/.test(message);
 }
 
 async function withFirecrawlRetry<T>(operation: () => Promise<T>, timeoutMs?: number): Promise<T> {
-  const budget = Math.max(1_000, timeoutMs ?? configuredNumber("FIRECRAWL_TIMEOUT_MS", DEFAULT_TIMEOUT_MS, 120_000));
+  const budget = Math.max(
+    1_000,
+    timeoutMs ?? configuredNumber("FIRECRAWL_TIMEOUT_MS", DEFAULT_TIMEOUT_MS, 120_000),
+  );
   const maxRetries = configuredNumber("FIRECRAWL_MAX_RETRIES", 2, 5);
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -142,9 +146,13 @@ async function withFirecrawlRetry<T>(operation: () => Promise<T>, timeoutMs?: nu
       return await Promise.race([
         operation(),
         new Promise<never>((_, reject) =>
-          controller.signal.addEventListener("abort", () => reject(new Error("Firecrawl request timed out")), {
-            once: true,
-          }),
+          controller.signal.addEventListener(
+            "abort",
+            () => reject(new Error("Firecrawl request timed out")),
+            {
+              once: true,
+            },
+          ),
         ),
       ]);
     } catch (error) {

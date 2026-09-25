@@ -1,14 +1,14 @@
-// Live UGC Video Ads end to end against the REAL Supabase project, Claude and
+// Live UGC Video Ads end to end against the REAL Supabase project, OpenRouter and
 // Kie.ai (reads .env). Creates two temporary users and a workspace, then:
-//   product page extraction → project (RLS client) → grounded concepts (Claude)
+//   product page extraction → project (RLS client) → grounded concepts (OpenRouter)
 //   → reference image import → allowance reservation → a real Kie render
-//   (Veo 3.1 Lite, the cheapest model: ~30 Kie credits) → storage + Library
+//   (`draft` = Veo 3.1 Lite on KIE: ~30 Kie credits) → storage + Library
 //   asset → reservation captured once → signed playback + download links.
 // Also: a real provider-side failure releases the hold, a double submit makes
 // one render, an exhausted plan refuses the render, and another tenant can't
 // see any of it. Everything created is removed at the end.
 //
-// Opt-in (spends ~$0.15 of Kie credits + a few cents of Claude):
+// Opt-in (spends ~$0.15 of Kie credits + a few cents of OpenRouter):
 //   npx vitest run --config vitest.live.config.ts tests/live/ugc-video.live.ts
 // UGC_LIVE_PRODUCT_URL picks the product page.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -26,7 +26,7 @@ const configured =
   !!process.env.SUPABASE_SERVICE_ROLE_KEY &&
   !!process.env.SUPABASE_PUBLISHABLE_KEY &&
   !!process.env.KIE_API_KEY &&
-  !!process.env.ANTHROPIC_API_KEY;
+  !!process.env.OPENROUTER_API_KEY;
 
 const PRODUCT_URL =
   process.env.UGC_LIVE_PRODUCT_URL || "https://www.glossier.com/products/boy-brow";
@@ -46,13 +46,20 @@ async function makeActor(tag: string): Promise<Actor> {
   const { createClient } = await import("@supabase/supabase-js");
   const email = `ugc-live-${tag}-${randomUUID().slice(0, 8)}@example.com`;
   const password = `${randomUUID()}Aa1!`;
-  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
   if (error || !data.user) throw new Error(`createUser failed: ${error?.message}`);
   users.push(data.user.id);
   const anon = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
     auth: { persistSession: false },
   });
-  const { data: session, error: signInError } = await anon.auth.signInWithPassword({ email, password });
+  const { data: session, error: signInError } = await anon.auth.signInWithPassword({
+    email,
+    password,
+  });
   if (signInError || !session.session) throw new Error(`sign in failed: ${signInError?.message}`);
   const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
     auth: { persistSession: false },
@@ -70,7 +77,8 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
     await renderEngine.runDue({ worker: "live-test", budgetMs: 30_000, max: 1, id: renderId });
     const row = await supabaseUgcStore.getRender(renderId);
     if (row && ["succeeded", "failed", "cancelled"].includes(row.status)) return row;
-    if (Date.now() - started > maxMs) throw new Error(`render still ${row?.status} after ${maxMs}ms`);
+    if (Date.now() - started > maxMs)
+      throw new Error(`render still ${row?.status} after ${maxMs}ms`);
     await new Promise((r) => setTimeout(r, 8000));
   }
 }
@@ -94,8 +102,13 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
   afterAll(async () => {
     if (!admin) return;
     if (workspaceId) {
-      const { data: assets } = await admin.from("assets").select("storage_path").eq("workspace_id", workspaceId);
-      const paths = (assets ?? []).map((a: { storage_path: string | null }) => a.storage_path).filter(Boolean) as string[];
+      const { data: assets } = await admin
+        .from("assets")
+        .select("storage_path")
+        .eq("workspace_id", workspaceId);
+      const paths = (assets ?? [])
+        .map((a: { storage_path: string | null }) => a.storage_path)
+        .filter(Boolean) as string[];
       if (paths.length) await admin.storage.from("generated-assets").remove(paths);
       await admin.from("ugc_renders").delete().eq("workspace_id", workspaceId);
       await admin.from("ai_usage_reservations").delete().eq("workspace_id", workspaceId);
@@ -158,7 +171,12 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
     });
     console.log(
       "[ugc-live] concepts",
-      concepts.map((c) => ({ title: c.title, hook: c.script.hook, words: scriptWordCount(c.script), warnings: c.warnings })),
+      concepts.map((c) => ({
+        title: c.title,
+        hook: c.script.hook,
+        words: scriptWordCount(c.script),
+        warnings: c.warnings,
+      })),
     );
     expect(concepts.length).toBeGreaterThanOrEqual(2);
     for (const c of concepts) {
@@ -170,10 +188,15 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
   }, 300_000);
 
   it("another tenant sees nothing and cannot start a render", async () => {
-    const { data: projects } = await bob.db.from("ugc_projects").select("id").eq("workspace_id", workspaceId);
+    const { data: projects } = await bob.db
+      .from("ugc_projects")
+      .select("id")
+      .eq("workspace_id", workspaceId);
     expect(projects ?? []).toHaveLength(0);
     const { getProjectView } = await import("@/server/ugc/service.server");
-    await expect(getProjectView(bob.db as never, workspaceId, projectId)).rejects.toMatchObject({ status: 404 });
+    await expect(getProjectView(bob.db as never, workspaceId, projectId)).rejects.toMatchObject({
+      status: 404,
+    });
     const { error } = await bob.db
       .from("ugc_renders")
       .insert({ workspace_id: workspaceId, project_id: projectId, idempotency_key: "x" } as never);
@@ -191,7 +214,7 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
           userId: alice.id,
           projectId,
           idempotencyKey: `blocked-${randomUUID()}`,
-          model: "veo-3-1-lite",
+          model: "draft",
           durationSec: 8,
           aspectRatio: "9:16",
           resolution: "720p",
@@ -210,23 +233,30 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
   });
 
   it("renders a real video with Kie, stores it in the Library and captures the allowance once", async () => {
-    const { startRender, getRenderView, renderDownload } = await import("@/server/ugc/service.server");
+    const { startRender, getRenderView, renderDownload } =
+      await import("@/server/ugc/service.server");
     const key = `live-${randomUUID()}`;
     const input = {
       workspaceId,
       userId: alice.id,
       projectId,
       idempotencyKey: key,
-      model: "veo-3-1-lite",
+      model: "draft",
       durationSec: 8,
       aspectRatio: "9:16",
       resolution: "720p",
       referenceAssetIds: [referenceAssetId],
     };
     // Double submit: one render, one hold.
-    const [a, b] = await Promise.all([startRender(alice.db as never, input), startRender(alice.db as never, input)]);
+    const [a, b] = await Promise.all([
+      startRender(alice.db as never, input),
+      startRender(alice.db as never, input),
+    ]);
     expect(a.render.id).toBe(b.render.id);
-    const { data: holds } = await admin.from("ai_usage_reservations").select("id, state").eq("workspace_id", workspaceId);
+    const { data: holds } = await admin
+      .from("ai_usage_reservations")
+      .select("id, state")
+      .eq("workspace_id", workspaceId);
     expect(holds).toHaveLength(1);
     expect(holds![0].state).toBe("held");
 
@@ -236,10 +266,15 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
       error: row.error_message,
       taskId: row.provider_task_id,
       cost: row.actual_cost_usd,
+      provider: row.provider,
+      providerModel: row.provider_model,
       generationType: row.generation_type,
     });
     expect(row.status).toBe("succeeded");
-    expect(row.generation_type).toBe("REFERENCE_2_VIDEO");
+    // KIE takes product photos as references; OpenRouter's Veo opens on the photo.
+    expect(row.generation_type).toBe(
+      process.env.VIDEO_PROVIDER === "openrouter" ? "IMAGE_TO_VIDEO" : "REFERENCE_2_VIDEO",
+    );
     expect(row.asset_id).toBeTruthy();
     expect(row.actual_cost_usd).toBeGreaterThan(0);
 
@@ -304,12 +339,17 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
       route: "live-test",
       sourceId: `${workspaceId}:${renderKey}`,
       ttlSeconds: 3600,
-      limits: { dailyUsd: limits.dailyUsd, monthlyUsd: limits.monthlyUsd, monthlyUnits: limits.monthlyVideos },
+      limits: {
+        dailyUsd: limits.dailyUsd,
+        monthlyUsd: limits.monthlyUsd,
+        monthlyUnits: limits.monthlyVideos,
+      },
       maxConcurrent: 5,
     });
     expect(hold.ok).toBe(true);
-    // Bypass the service's validation on purpose: Kie accepts the task, then
-    // fails it upstream (reference-to-video only renders 8 seconds).
+    // Bypass the service's validation on purpose: Veo 3.1 takes only 9:16 and
+    // 16:9, so Kie refuses a 1:1 task at submit. A validation refusal must stay
+    // on Kie (never the OpenRouter fallback) and return the allowance.
     const { row } = await supabaseUgcStore.insertRender({
       id: randomUUID(),
       workspace_id: workspaceId,
@@ -321,8 +361,8 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
       provider_model: "veo-3-1",
       provider_variant: "veo3_lite",
       generation_type: "REFERENCE_2_VIDEO",
-      duration_sec: 6,
-      aspect_ratio: "9:16",
+      duration_sec: 8,
+      aspect_ratio: "1:1",
       resolution: "720p",
       audio: true,
       reference_asset_ids: [referenceAssetId],
@@ -333,7 +373,10 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
       est_cost_usd: 0.15,
     });
     const settled = await settle(row.id, 3 * 60_000);
-    console.log("[ugc-live] rejected render", { status: settled.status, error: settled.error_message });
+    console.log("[ugc-live] rejected render", {
+      status: settled.status,
+      error: settled.error_message,
+    });
     expect(settled.status).toBe("failed");
     const { data: released } = await admin
       .from("ai_usage_reservations")

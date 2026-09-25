@@ -13,6 +13,14 @@ verification is the only path that resolves a GEO finding. Repository writes
 are mediated by GitHub connector code and create Mellox branches/PRs rather
 than pushing to or merging a base branch.
 
+## Current automation model
+
+Automation in Mellox AI is intentionally bounded. It can schedule work, claim
+jobs, read or write controlled repository files, or update provider status, but
+it must stay inside the workspace, provider, and approval constraints defined by
+server-side code. This is a core product principle: automation extends human
+decision-making without removing accountability.
+
 ## Automation
 
 Cron/public hooks include agent ticks, GEO scans and agents, scheduled jobs,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canAttestOwnership,
+  containsHost,
   contentFingerprints,
   hostsInConfig,
   hostsMatch,
@@ -240,5 +241,37 @@ describe("admin ownership confirmation", () => {
         siteHost: "threereach.lovable.app",
       }),
     ).toBe(true);
+  });
+});
+
+describe("ownership hardening", () => {
+  it("never verifies on owner-declared signals alone", () => {
+    // Homepage + CNAME + config URL can all be copied into a fork or clone.
+    const r = scoreOwnership([
+      ev("repo_homepage", 0.45),
+      ev("pages_cname", 0.5),
+      ev("config_site_url", 0.3),
+      ev("host_literal", 0.2),
+    ]);
+    expect(r.confidence).toBeGreaterThanOrEqual(0.8);
+    expect(r.status).toBe("likely");
+    // The same signals with live page content found in the source do verify.
+    expect(
+      scoreOwnership([
+        ev("repo_homepage", 0.45),
+        ev("pages_cname", 0.5),
+        ev("content_fingerprint", 0.3),
+      ]).status,
+    ).toBe("verified");
+  });
+
+  it("matches a host only as a whole hostname", () => {
+    expect(containsHost("see https://example.com/about", "example.com")).toBe(true);
+    expect(containsHost('siteUrl: "https://www.example.com"', "example.com")).toBe(true);
+    expect(containsHost("example.com", "www.example.com")).toBe(true);
+    expect(containsHost("https://notexample.com", "example.com")).toBe(false);
+    expect(containsHost("https://example.com.evil.io", "example.com")).toBe(false);
+    expect(containsHost("https://app.example.com", "example.com")).toBe(false);
+    expect(containsHost("mail me at hi@example.com.", "example.com")).toBe(true);
   });
 });

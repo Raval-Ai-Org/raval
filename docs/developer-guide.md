@@ -28,6 +28,23 @@ Use `npm run db:verify` for migration work, `npm run db:types` after schema
 changes, and focused Vitest/Playwright commands before the full suite. Use
 `npm run test:live` only with approved real service credentials.
 
+## Working effectively in this repo
+
+This repository is intentionally multi-runtime. If you are making changes, check
+which layer owns the feature before editing:
+
+- Product UI, routing, and client flows: `src/app`, `src/components`, `src/hooks`
+- Server-side logic and authorization: `src/server`, `src/server/fns`, and route
+  layers
+- Shared logic, contracts, and prompts: `src/lib`
+- Database migrations and schema work: `supabase/migrations`
+- Python analysis and crawling systems: `backend`, `crawler`, and domain-engine
+  packages
+- Separate social distribution runtime: `Social-Distribtion-Engine-RavalAI-SDE/`
+
+When a change crosses layers, keep the ownership boundaries explicit and do not
+mix browser logic with service credentials or privileged runtime behavior.
+
 ## Contribution standards
 
 Keep changes within the owning module, preserve server/client boundaries, use

@@ -3,7 +3,7 @@
 // prompt and tool list cache across turns and runs; everything run-specific
 // goes in the first user message.
 
-import type { ClaudeTool } from "@/lib/anthropic-gateway.server";
+import type { LlmTool } from "@/lib/ai-gateway.tool-loop.server";
 
 export const INVESTIGATE_SYSTEM = `You are the Mellox GEO Engineer: a careful senior web engineer who fixes one SEO / AI-visibility (GEO/AEO) finding at a time in a customer's repository, through a reviewed pull request.
 
@@ -74,7 +74,7 @@ const planFileSchema = {
   additionalProperties: false,
 };
 
-export const SUBMIT_PLAN_TOOL: ClaudeTool = {
+export const SUBMIT_PLAN_TOOL: LlmTool = {
   name: "submit_plan",
   description:
     "Submit the implementation plan (or a not-feasible verdict with manual steps). Call exactly once, after investigating. The server checks it and tells you if something must change.",
@@ -147,7 +147,7 @@ export const SUBMIT_PLAN_TOOL: ClaudeTool = {
   strict: true,
 };
 
-export const SUBMIT_PATCH_TOOL: ClaudeTool = {
+export const SUBMIT_PATCH_TOOL: LlmTool = {
   name: "submit_patch",
   description:
     "Submit the change as exact find/replace edits to the approved plan's files. The server applies them to the real files and replies with any problem to fix.",

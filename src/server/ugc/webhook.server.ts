@@ -62,3 +62,53 @@ export function verifyKieCallback(input: {
   }
   return { ok: true, taskId };
 }
+
+/* ───────────── OpenRouter video callbacks (docs: guides/overview/multimodal/video-generation) ─────────────
+ *   X-OpenRouter-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(`${t},${rawBody}`, OPENROUTER_WEBHOOK_SECRET)>
+ * Body: { type: "video.generation.completed" | …failed | …cancelled | …expired, data: { id, status, … } }
+ * Like Kie's, a verified callback is only a nudge: the engine re-reads the job.
+ */
+export const OPENROUTER_CALLBACK_TOLERANCE_SECONDS = 5 * 60;
+
+export function signOpenRouterCallback(timestamp: string, rawBody: string, secret: string): string {
+  return createHmac("sha256", secret).update(`${timestamp},${rawBody}`).digest("hex");
+}
+
+export function verifyOpenRouterCallback(input: {
+  rawBody: string;
+  signature: string | null;
+  secret: string | undefined;
+  nowSeconds?: number;
+}): CallbackVerdict {
+  if (!input.secret) return { ok: false, status: 503, reason: "callbacks not configured" };
+  if (Buffer.byteLength(input.rawBody) > MAX_CALLBACK_BYTES) {
+    return { ok: false, status: 413, reason: "payload too large" };
+  }
+  const parts = (input.signature ?? "").split(",").map((p) => p.trim());
+  const timestamp = parts.find((p) => p.startsWith("t="))?.slice(2) ?? "";
+  const hash = parts.find((p) => p.startsWith("v1="))?.slice(3) ?? "";
+  if (!/^\d{9,11}$/.test(timestamp) || !/^[0-9a-f]{64}$/i.test(hash)) {
+    return { ok: false, status: 401, reason: "missing signature" };
+  }
+  const now = input.nowSeconds ?? Math.floor(Date.now() / 1000);
+  const age = now - Number(timestamp);
+  if (age > OPENROUTER_CALLBACK_TOLERANCE_SECONDS || age < -60) {
+    return { ok: false, status: 401, reason: "stale timestamp" };
+  }
+  const expected = Buffer.from(signOpenRouterCallback(timestamp, input.rawBody, input.secret));
+  const provided = Buffer.from(hash.toLowerCase());
+  if (expected.length !== provided.length || !timingSafeEqual(expected, provided)) {
+    return { ok: false, status: 401, reason: "bad signature" };
+  }
+  let body: { data?: { id?: unknown } } | null;
+  try {
+    body = JSON.parse(input.rawBody);
+  } catch {
+    return { ok: false, status: 400, reason: "malformed" };
+  }
+  const id = body?.data?.id;
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{4,128}$/.test(id)) {
+    return { ok: false, status: 400, reason: "missing job id" };
+  }
+  return { ok: true, taskId: id };
+}

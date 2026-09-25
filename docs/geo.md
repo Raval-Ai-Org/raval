@@ -5,6 +5,18 @@ findings, verification, and optional AI probes. Pure engine code lives in
 `src/lib/geo`; crawlers, runners, services, and fixes live in `src/server/geo`.
 The UI is under `src/components/app/geo` and routes under `/api/geo`.
 
+## Current AI Visibility model
+
+The current GEO/AEO/SEO product is intended to behave like a measurable
+visibility workflow, not a passive dashboard. The system records a site or
+page state, gathers evidence from crawls and page analysis, scores the result
+against deterministic rules, surfaces findings to a workspace, and then supports
+fix generation and post-fix verification.
+
+This is important because a finding is never considered complete merely because a
+recommendation was proposed. The verification lifecycle is what converts a
+hypothesis into a real, auditable outcome.
+
 ## Finding lifecycle
 
 A scan creates pages/findings and stable fingerprints. Fix proposals and

@@ -328,6 +328,15 @@ export function saveBrandDnaFor(workspaceId: string, next: Partial<BrandDna>, re
   return entry.dna;
 }
 
+/** Persist pending edits before a server workflow reads Brand DNA. */
+export async function flushBrandDnaFor(workspaceId: string): Promise<void> {
+  const entry = entryFor(workspaceId);
+  clearTimeout(entry.saveTimer);
+  entry.saveTimer = undefined;
+  const { saveBrandDna } = await import("@/lib/brand-dna.functions");
+  await saveBrandDna({ data: { workspaceId, dna: entry.dna as never } });
+}
+
 /** Current Brand DNA for a workspace (cached copy; never another workspace's). */
 export function readBrandDnaFor(workspaceId: string | null | undefined): BrandDna {
   return workspaceId ? entryFor(workspaceId).dna : emptyDna;

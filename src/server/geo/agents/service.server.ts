@@ -43,6 +43,7 @@ import {
   type FixContext,
 } from "../fixes/service.server";
 import { strategyForRule } from "../fixes/strategies";
+import { cmsFieldsForRule } from "@/lib/geo/cms-fixes";
 import { isValidBaseBranch } from "@/server/connectors/github/paths";
 import { hashPlan } from "./geo-coding-agent";
 import { geoAgentEnabled, geoAgentModelConfigured } from "./flags";
@@ -144,6 +145,10 @@ export async function presentRun(
     model: row.model,
     status: row.status,
     statusDetail: row.status_detail,
+    provider: row.provider ?? "github",
+    assisted: (
+      (row.result as { assisted?: AgentRunView["assisted"] } | null)?.assisted ?? []
+    ).slice(0, 20),
     error: row.error ? { code: row.error_code, message: row.error } : null,
     fingerprint: row.fingerprint,
     ruleId: row.rule_id,
@@ -183,11 +188,12 @@ export async function presentRun(
       planReadyAt: row.plan_ready_at,
       planApprovedAt: row.plan_approved_at,
       proposalCreatedAt: p?.created_at ?? null,
-      prOpenedAt: p?.pr_number ? (p.approved_at ?? p.updated_at) : null,
+      prOpenedAt: p?.pr_number ? (p.approved_at ?? p.updated_at) : (p?.applied_at ?? null),
       mergedAt: p?.pr_merged_at ?? null,
       verifiedAt: v?.status === "verified" ? v.completed_at : null,
       failedAtStep: (row.failed_at_step as never) ?? null,
       statusDetail: row.status_detail,
+      provider: row.provider ?? "github",
     }),
     actions: {
       approvePlan: ctx.canPropose && row.status === "awaiting_plan_approval",
@@ -200,6 +206,9 @@ export async function presentRun(
         ctx.canPropose && row.status === "awaiting_patch_approval" && p?.status === "draft",
       cancel: ctx.canPropose && canCancel(row.status),
       retry: ctx.canPropose && canRetry(row.status),
+      undo:
+        ctx.canPropose &&
+        Boolean(p && p.provider !== "github" && presentProposal(p, v).cms?.canUndo),
     },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -223,7 +232,9 @@ export async function getAgentRun(ctx: FixContext, runId: string, afterEventId?:
   const row = await loadRunRls(ctx, runId);
   // Local development has no pg_cron: a due, unleased run is advanced when someone looks at it.
   if (
-    ["queued", "investigating", "implementing"].includes(row.status) &&
+    ["queued", "investigating", "implementing", "reviewing", "validating", "correcting"].includes(
+      row.status,
+    ) &&
     Date.parse(row.next_attempt_at) <= Date.now() &&
     (!row.lease_until || Date.parse(row.lease_until) < Date.now())
   ) {
@@ -295,7 +306,7 @@ export async function startAgentRun(
   if (!geoAgentModelConfigured())
     return {
       ok: false,
-      reason: "The AI model isn't configured on this server (ANTHROPIC_API_KEY).",
+      reason: "The AI model isn't configured on this server (OPENROUTER_API_KEY).",
     };
 
   const { data: finding, error } = await ctx.supabase
@@ -333,6 +344,95 @@ export async function startAgentRun(
     .limit(1)
     .maybeSingle();
   if (live && !isTerminal(live.status as never)) return { ok: true, runId: live.id, joined: true };
+
+  // Which platform builds this site: a CMS site is changed through its API.
+  if (!args.sourceId) {
+    const { resolveSite } = await import("@/server/sites/resolve.server");
+    const resolution = await resolveSite(ctx.workspaceId, scan.host, { live: true });
+    const cms =
+      resolution.binding && resolution.binding.provider !== "github"
+        ? resolution.binding
+        : !resolution.binding
+          ? (resolution.candidates.find((c) => c.provider !== "github") ?? null)
+          : null;
+    if (cms) {
+      if (!cms.verified) return { ok: false, reason: cms.proof };
+      if (!cmsFieldsForRule(finding.rule_id).length)
+        return {
+          ok: false,
+          reason:
+            "This finding needs changes Mellox can't make safely on its own. Follow the steps below.",
+          manualSteps: strategy.manualSteps,
+          validationSteps: strategy.validationSteps,
+        };
+      if (cms.provider === "webflow" && cms.missingWriteScopes.length)
+        return {
+          ok: false,
+          reason: "Reconnect Webflow and allow Mellox to edit your site, then try again.",
+        };
+      if (await dailyLimitReached(ctx.workspaceId))
+        return {
+          ok: false,
+          reason: `This workspace has used today's ${dailyRunLimit()} GEO agent runs. Try again tomorrow.`,
+        };
+      const name = cms.provider === "webflow" ? "Webflow" : "WordPress";
+      const { data: row, error: insertError } = await supabaseAdmin
+        .from("geo_agent_runs")
+        .insert({
+          workspace_id: ctx.workspaceId,
+          provider: cms.provider,
+          scan_id: scan.id,
+          finding_id: finding.id,
+          fingerprint: finding.fingerprint,
+          rule_id: finding.rule_id,
+          page_url: finding.page_url,
+          site_host: normHost(scan.host),
+          site_origin: scan.origin,
+          connection_id: cms.connectionId,
+          site_ref: {
+            provider: cms.provider,
+            ...(cms.provider === "wordpress" ? { siteUrl: cms.siteUrl, seo: cms.seo } : {}),
+            ...(cms.provider === "webflow" ? { siteId: cms.siteId, siteName: cms.siteName } : {}),
+          } as unknown as Json,
+          status: "queued",
+          status_detail: "Queued",
+          created_by: ctx.userId,
+        })
+        .select(RUN_COLS)
+        .single();
+      if (insertError || !row) {
+        if (insertError?.code === "23505") {
+          const { data: again } = await supabaseAdmin
+            .from("geo_agent_runs")
+            .select("id")
+            .eq("workspace_id", ctx.workspaceId)
+            .eq("fingerprint", finding.fingerprint)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (again) return { ok: true, runId: again.id, joined: true };
+        }
+        throw new Error(insertError?.message ?? "Couldn't start the agent");
+      }
+      const run = row as unknown as AgentRunRow;
+      await logAgentEvent(run, {
+        stage: null,
+        kind: "stage_started",
+        actor: "user",
+        userId: ctx.userId,
+        summary: `Asked the GEO Engineer to fix this finding on ${name} (${cms.provider === "wordpress" ? cms.siteUrl : cms.siteName})`,
+      });
+      await recordAudit({
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        action: "geo.agent.started",
+        entity: "geo_agent_run",
+        payload: { runId: run.id, ruleId: finding.rule_id, provider: cms.provider },
+      });
+      kickAgentRun(run.id);
+      return { ok: true, runId: run.id, joined: false };
+    }
+  }
 
   let sourceId = args.sourceId ?? null;
   if (!sourceId) {
@@ -596,7 +696,7 @@ export async function retryAgentRun(
     throw new FixWorkflowError("The GEO coding agent is turned off on this server.", 409);
   if (!geoAgentModelConfigured())
     throw new FixWorkflowError(
-      "The AI model isn't configured on this server (ANTHROPIC_API_KEY).",
+      "The AI model isn't configured on this server (OPENROUTER_API_KEY).",
       409,
     );
   if (await dailyLimitReached(ctx.workspaceId))

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getKieConfigStatus } from "@/lib/kie-gateway.server";
+import { getImageModelConfigStatus } from "@/lib/model-router.server";
+import { videoFallbackProvider, videoProvider } from "@/server/ugc/models.server";
 
 export const dynamic = "force-dynamic";
 
@@ -17,15 +18,24 @@ function version() {
 }
 
 export function GET() {
-  const kie = getKieConfigStatus();
-  const imageReady = kie.configured && kie.image.defaultRouteConfigured;
+  // Presence only — never the keys themselves.
+  const openrouter = Boolean(process.env.OPENROUTER_API_KEY?.trim());
+  const kie = Boolean(process.env.KIE_API_KEY?.trim());
+  const primary = videoProvider();
+  const fallback = videoFallbackProvider();
+  const videoReady =
+    (primary === "kie" ? kie : openrouter) || (fallback === "openrouter" && openrouter);
   return NextResponse.json({
-    status: imageReady ? "ok" : "degraded",
+    status: openrouter ? "ok" : "degraded",
     version: version(),
-    kie,
+    ai: { provider: "openrouter", configured: openrouter },
+    image: { provider: "openrouter", ...getImageModelConfigStatus() },
+    video: { provider: primary, fallback, kieConfigured: kie },
     services: {
-      imageGeneration: imageReady,
-      imageToImage: kie.configured && kie.image.imageToImageRouteConfigured,
+      text: openrouter,
+      imageGeneration: openrouter,
+      imageToImage: openrouter,
+      videoGeneration: videoReady,
     },
   });
 }

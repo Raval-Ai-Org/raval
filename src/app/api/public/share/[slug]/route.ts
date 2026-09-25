@@ -160,6 +160,30 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     .eq("visible", true)
     .order("position", { ascending: true });
 
+  // Experiment reports are rendered now, from server-owned rows of this
+  // share's own workspace (buildReport refuses any other workspace).
+  const shareItems = (items ?? []) as Array<{
+    kind: string;
+    ref_id: string | null;
+    snapshot: unknown;
+  }>;
+  if (shareItems.some((i) => i.kind === "experiment_report")) {
+    const { isProofEngineEnabled } = await import("@/lib/feature-flags");
+    const enabled = isProofEngineEnabled((share as any).workspace_id);
+    const { buildReport } = enabled
+      ? await import("@/server/experiments/report.server")
+      : { buildReport: null };
+    for (const item of shareItems) {
+      if (item.kind !== "experiment_report") continue;
+      item.snapshot =
+        buildReport && item.ref_id
+          ? ((await buildReport(item.ref_id, (share as any).workspace_id).catch(() => null)) ?? {
+              unavailable: true,
+            })
+          : { unavailable: true };
+    }
+  }
+
   const { data: events } = await supabaseAdmin
     .from("client_events")
     // No emails and no view pings: anyone holding the link sees this thread.

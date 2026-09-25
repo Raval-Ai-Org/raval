@@ -15,6 +15,7 @@ import {
   getOverview,
   recheckPlacement,
   saveSelection,
+  suggestLinkText,
   writeBrief,
 } from "@/lib/links.functions";
 
@@ -23,6 +24,7 @@ export const linksKeys = {
   overview: (ws: string | null) => ["links", ws, "overview"] as const,
   order: (ws: string | null, id: string | null) => ["links", ws, "order", id] as const,
   credits: (ws: string | null) => ["links", ws, "credits"] as const,
+  suggest: (ws: string | null, url: string | null) => ["links", ws, "suggest", url] as const,
 };
 
 function message(error: unknown, fallback: string): string {
@@ -72,11 +74,25 @@ export function useCreditHistory(workspaceId: string | null, enabled: boolean) {
   });
 }
 
+/** Link text suggestions for a page; fetched once per workspace and page. */
+export function useLinkTextSuggestions(workspaceId: string | null, targetUrl: string | null) {
+  return useQuery({
+    queryKey: linksKeys.suggest(workspaceId, targetUrl),
+    enabled: Boolean(workspaceId) && Boolean(targetUrl),
+    staleTime: 6 * 3600_000,
+    retry: false,
+    queryFn: () =>
+      suggestLinkText({
+        data: { workspaceId: workspaceId as string, targetUrl: targetUrl as string },
+      }),
+  });
+}
+
 export function useFindPlacements(workspaceId: string | null) {
   return useMutation({
     mutationFn: (input: {
       targetUrl: string;
-      keyword: string;
+      keyword?: string | null;
       maxPriceUsd?: number;
       minAuthority?: number;
       search?: string;

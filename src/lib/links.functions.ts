@@ -6,6 +6,7 @@ import type * as Handlers from "@/server/fns/links";
 
 export const getOverview = serverFn<typeof Handlers.getOverview>("links/getOverview");
 export const findPlacements = serverFn<typeof Handlers.findPlacements>("links/findPlacements");
+export const suggestLinkText = serverFn<typeof Handlers.suggestLinkText>("links/suggestLinkText");
 export const writeBrief = serverFn<typeof Handlers.writeBrief>("links/writeBrief");
 export const saveSelection = serverFn<typeof Handlers.saveSelection>("links/saveSelection");
 export const getOrder = serverFn<typeof Handlers.getOrder>("links/getOrder");

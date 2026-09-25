@@ -12,8 +12,8 @@
 // without double-submitting, double-storing or double-charging.
 import "server-only";
 import {
-  UGC_MODELS,
-  isUgcModelKey,
+  isKnownUgcModelKey,
+  resolveUgcModel,
   type UgcAspectRatio,
   type UgcResolution,
 } from "@/lib/ugc/models";
@@ -64,9 +64,10 @@ export function createRenderEngine(deps: EngineDeps) {
   }
 
   async function submit(row: RenderRow): Promise<RenderRow> {
-    if (!isUgcModelKey(row.model_key))
+    if (!isKnownUgcModelKey(row.model_key))
       return fail(row, "model_unavailable", "This model is no longer available.");
-    const model = UGC_MODELS[row.model_key];
+    // A legacy key resolves to its current equivalent; the provider adapts it.
+    const model = resolveUgcModel(row.model_key);
     if (row.submit_attempts >= MAX_SUBMIT_ATTEMPTS) {
       return fail(
         row,
@@ -102,6 +103,7 @@ export function createRenderEngine(deps: EngineDeps) {
       durationSec: current.duration_sec,
       aspectRatio: current.aspect_ratio as UgcAspectRatio,
       resolution: current.resolution as UgcResolution,
+      audio: current.audio,
       imageUrls,
       callbackUrl: deps.callbackUrl?.(),
     });
@@ -109,6 +111,9 @@ export function createRenderEngine(deps: EngineDeps) {
     if (result.ok) {
       const processing = await store.transition(current.id, ["submitting"], {
         status: "processing",
+        // Recorded so checks, webhooks, refunds and metering reach the provider that took it.
+        provider: result.provider,
+        provider_model: result.providerModel,
         provider_task_id: result.taskId,
         provider_state: "waiting",
         provider_meta: { ...current.provider_meta, request: result.request },
@@ -155,7 +160,7 @@ export function createRenderEngine(deps: EngineDeps) {
     }
     let result;
     try {
-      result = await provider.check(row.provider_task_id);
+      result = await provider.check(row.provider_task_id, row.provider);
     } catch (error) {
       log.warn("ugc.render.check_error", {
         renderId: row.id,
@@ -205,9 +210,20 @@ export function createRenderEngine(deps: EngineDeps) {
     if (!videoUrl) return fail(row, "no_result", "The provider finished without a video.");
     const persistAttempts = Number(row.provider_meta.persistAttempts ?? 0) + 1;
     const script = row.script as { hook?: string; postCaption?: string };
+    // A provider whose file URL needs its API key hands over the bytes instead.
+    let dataUrl: string | undefined;
+    try {
+      dataUrl = (await provider.download?.(videoUrl, row.provider))?.dataUrl;
+    } catch (error) {
+      log.warn("ugc.render.download_failed", {
+        renderId: row.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     const stored = await store.persistVideo({
       row,
       sourceUrl: videoUrl,
+      dataUrl,
       idempotencyKey: `ugc:${row.id}:${row.provider_task_id}`,
       metadata: {
         source: "ugc",

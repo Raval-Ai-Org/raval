@@ -11,6 +11,13 @@
 - `npm run db:verify`: migration baseline/replay verification.
 - `npm run eval`: Promptfoo model/security evaluations.
 
+## Testing model for Mellox AI
+
+The project relies on a multi-layer QA model because the product spans UI,
+workflows, route validation, provider integrations, and database policy changes.
+A change is not considered safe just because a page renders; it must also pass
+through the relevant contract, authorization, migration, and runtime checks.
+
 Focused tests exist for navigation/library, AI route selection and metering,
 GEO scan/agent behavior, and related contracts. Tests must not print secrets or
 call paid providers accidentally; live tests require explicit environment

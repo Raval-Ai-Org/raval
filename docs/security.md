@@ -1,5 +1,40 @@
 # Security guide
 
+## Security model
+
+Mellox AI treats security as a product boundary, not a side concern. The web
+browser is never the authority for privileged actions. Real permissions,
+provider access, workspace ownership checks, and side-effectful operations are
+validated on the server before data is changed or an external provider is
+called.
+
+## Data classification
+
+The repository's security model assumes three main classes of data:
+
+- Workspace data: content, Brand DNA, approvals, assets, settings, and member
+	ownership information.
+- Sensitive operational data: tokens, webhook secrets, OAuth metadata, service
+	account credentials, and provider keys.
+- External evidence data: search results, crawled pages, provider responses, and
+	integration metadata used to inform decisions.
+
+Only the server layer should touch the second category. The first and third
+categories must stay scoped to a verified workspace and be treated as untrusted
+unless the server has validated them and the feature specifically needs them.
+
+## Provider and integration boundaries
+
+All outbound provider calls are expected to pass through approved adapters or
+gateways. This includes AI providers, GitHub, Google, Tavily, Firecrawl,
+distribution providers, media providers, and analytics services. Direct calls
+from the browser are not accepted as the product design.
+
+The reason is straightforward: a browser-safe API surface cannot safely enforce
+budget, approval, provider authorization, or data hygiene rules. Provider trust
+is therefore not an app-level UX concern; it is a server-side engineering
+decision.
+
 ## Authentication and authorization
 
 Supabase bearer tokens authenticate API requests. Workspace membership and roles

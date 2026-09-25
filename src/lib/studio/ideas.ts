@@ -62,7 +62,18 @@ export function collectSignals(
 ): IdeaSignal[] {
   const signals: IdeaSignal[] = [];
 
-  for (const m of ctx.moments.slice(0, 3)) {
+  const brandText = [ctx.brandText, ctx.industry, ctx.audience]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const businessModel = text(brand?.businessModel).toLowerCase();
+  const isRetail = /retail|ecommerce|e-commerce|consumer|shop|store|d2c|b2c/.test(businessModel);
+  const isB2b = /b2b|business.to.business|enterprise|saas/.test(businessModel);
+  for (const m of ctx.moments.slice(0, 4)) {
+    const named = brandText.includes(m.name.toLowerCase());
+    const planning = m.tags.includes("planning") && isB2b;
+    const shopping = m.tags.includes("retail") && isRetail && !/\(us\//i.test(m.name);
+    if (!named && !planning && !shopping) continue;
     const days = daysUntil(m.date, today);
     signals.push({
       source: "season",
@@ -101,6 +112,23 @@ export function collectSignals(
       headline: firstClause(c).slice(0, 90),
       detail: c,
       weight: 70,
+      goal: "leads",
+    });
+  }
+
+  const competitors = Array.isArray(brand?.competitors) ? brand.competitors : [];
+  for (const value of competitors.slice(0, 3)) {
+    if (!value || typeof value !== "object") continue;
+    const competitor = value as Record<string, unknown>;
+    const name = text(competitor.name, 60);
+    const positioning = text(competitor.positioning, 150);
+    const weakness = text(competitor.weaknesses, 150);
+    if (!name || (!positioning && !weakness)) continue;
+    signals.push({
+      source: "competitor",
+      headline: `${name}: ${firstClause(positioning || weakness).slice(0, 65)}`,
+      detail: `${name} ${positioning ? `positions around ${positioning}` : `has a documented weakness: ${weakness}`}. Show how this brand differs using only known facts.`,
+      weight: 76,
       goal: "leads",
     });
   }
@@ -154,13 +182,22 @@ export function collectSignals(
   const pains = text(customer.painPoints, 220);
   const objections = text(customer.objections, 220);
   const jobs = text(customer.jobsToBeDone, 220);
+  const triggers = text(customer.buyingTriggers, 220);
+  const decisionCriteria = text(customer.decisionCriteria, 220);
   const products = text(brand?.products, 220);
+  const positioning = text(brand?.positioning, 220);
+  const uniqueValue = text(brand?.uniqueValueProp, 220);
+  const audience = text(brand?.audience ?? ctx.audience, 160);
+  const voice = text(brand?.voice, 100);
+  const context = [audience && ` for ${audience}`, voice && ` in a ${voice} voice`]
+    .filter(Boolean)
+    .join("");
   if (pains) {
     signals.push({
       source: "pillar",
       headline: `Pain point: ${firstClause(pains).slice(0, 70)}`,
-      detail: pains,
-      weight: 62,
+      detail: `Address ${pains}${context}.`,
+      weight: 84,
       goal: "education",
     });
   }
@@ -168,8 +205,8 @@ export function collectSignals(
     signals.push({
       source: "pillar",
       headline: `Objection: ${firstClause(objections).slice(0, 70)}`,
-      detail: objections,
-      weight: 58,
+      detail: `Answer ${objections}${context}, using only verifiable proof.`,
+      weight: 82,
       goal: "leads",
     });
   }
@@ -177,8 +214,26 @@ export function collectSignals(
     signals.push({
       source: "pillar",
       headline: `Job to be done: ${firstClause(jobs).slice(0, 70)}`,
-      detail: jobs,
-      weight: 52,
+      detail: `Help customers accomplish ${jobs}${context}.`,
+      weight: 74,
+      goal: "education",
+    });
+  }
+  if (triggers) {
+    signals.push({
+      source: "pillar",
+      headline: `Buying trigger: ${firstClause(triggers).slice(0, 65)}`,
+      detail: `Meet the customer when ${triggers}${context}; connect the message to a real offer.`,
+      weight: 81,
+      goal: "leads",
+    });
+  }
+  if (decisionCriteria) {
+    signals.push({
+      source: "pillar",
+      headline: `Decision criteria: ${firstClause(decisionCriteria).slice(0, 65)}`,
+      detail: `Help ${audience || "buyers"} evaluate ${decisionCriteria} using verifiable information about this brand.`,
+      weight: 77,
       goal: "education",
     });
   }
@@ -186,10 +241,38 @@ export function collectSignals(
     signals.push({
       source: "pillar",
       headline: `Offer: ${firstClause(products).slice(0, 70)}`,
-      detail: products,
-      weight: 50,
+      detail: `Show ${products}${context}; connect the offer to a real customer need.`,
+      weight: 68,
       suggestedType: "image",
       goal: "offer",
+    });
+  }
+
+  if (uniqueValue || positioning) {
+    const value = uniqueValue || positioning;
+    signals.push({
+      source: "pillar",
+      headline: `Why this brand: ${firstClause(value).slice(0, 65)}`,
+      detail: `Explain ${value}${context}. Use a concrete example or demonstration, without invented claims.`,
+      weight: 78,
+      goal: "awareness",
+    });
+  }
+
+  const personas = Array.isArray(customer.personas) ? customer.personas : [];
+  for (const value of personas.slice(0, 2)) {
+    if (!value || typeof value !== "object") continue;
+    const persona = value as Record<string, unknown>;
+    const name = text(persona.name, 65);
+    const pain = text(persona.painPoints, 130);
+    const goal = text(persona.goals, 130);
+    if (!name || (!pain && !goal)) continue;
+    signals.push({
+      source: "pillar",
+      headline: `${name}: ${firstClause(pain || goal).slice(0, 65)}`,
+      detail: `Speak to ${name}'s ${pain ? `pain point, ${pain}` : `goal, ${goal}`}${voice ? ` in a ${voice} voice` : ""}.`,
+      weight: 79,
+      goal: "education",
     });
   }
 

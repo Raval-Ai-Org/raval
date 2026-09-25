@@ -1,5 +1,5 @@
 import "server-only";
-import { fetchWithRetry, UpstreamError } from "@/server/upstream";
+import { fetchWithRetry, fetchWithTimeout, UpstreamError } from "@/server/upstream";
 
 const API = "https://api.webflow.com/v2";
 const TOKEN = "https://api.webflow.com/oauth/access_token";
@@ -40,6 +40,50 @@ async function request<T>(path: string, token: string, init: RequestInit = {}): 
     throw new WebflowApiError(response.status, message, code);
   }
   return body as T;
+}
+
+/**
+ * One attempt, never retried: Webflow has no idempotency key, so a repeated
+ * create makes a second item. Callers settle an unknown outcome by reading back.
+ */
+async function write<T>(
+  path: string,
+  token: string,
+  method: "POST" | "PUT" | "PATCH",
+  body: unknown,
+): Promise<T> {
+  const response = await fetchWithTimeout(
+    `${API}${path}`,
+    {
+      method,
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+    {
+      timeoutMs: 30_000,
+      onTransportError: (failure) => new WebflowApiError(502, `Webflow ${failure.kind}`),
+    },
+  );
+  const json = await response.json().catch(() => null);
+  if (!response.ok) {
+    const code = typeof json?.code === "string" ? json.code : undefined;
+    const detail = typeof json?.message === "string" ? json.message.slice(0, 200) : "";
+    const message =
+      response.status === 401
+        ? "Webflow authorization is invalid or expired."
+        : response.status === 403
+          ? "Webflow didn't allow this change. Reconnect Webflow and allow Mellox to edit your site."
+          : response.status === 429
+            ? "Webflow rate limit reached. Try again in a minute."
+            : `Webflow could not complete that change${detail ? `: ${detail}` : "."}`;
+    throw new WebflowApiError(response.status, message, code);
+  }
+  return json as T;
 }
 
 export type WebflowTokenSet = {
@@ -177,22 +221,149 @@ export const listItems = (token: string, collectionId: string) =>
     token,
   );
 
+export const getPage = (token: string, pageId: string) =>
+  request<WebflowPage>(`/pages/${encodeURIComponent(pageId)}`, token);
+export const getCollection = (token: string, collectionId: string) =>
+  request<WebflowCollection>(`/collections/${encodeURIComponent(collectionId)}`, token);
+export const listItemsPage = (token: string, collectionId: string, offset = 0) =>
+  request<{
+    items?: WebflowItem[];
+    pagination?: { total?: number; offset?: number; limit?: number };
+  }>(`/collections/${encodeURIComponent(collectionId)}/items?limit=100&offset=${offset}`, token);
+export const getItem = (token: string, collectionId: string, itemId: string) =>
+  request<WebflowItem>(
+    `/collections/${encodeURIComponent(collectionId)}/items/${encodeURIComponent(itemId)}`,
+    token,
+  );
+
+/** Page title, slug, SEO and Open Graph settings (pages:write). Goes live on the next site publish. */
+export const updatePageSettings = (
+  token: string,
+  pageId: string,
+  body: {
+    title?: string;
+    slug?: string;
+    seo?: { title?: string; description?: string };
+    openGraph?: {
+      title?: string;
+      description?: string;
+      titleCopied?: boolean;
+      descriptionCopied?: boolean;
+    };
+  },
+) => write<WebflowPage>(`/pages/${encodeURIComponent(pageId)}`, token, "PUT", body);
+
+export const createCollection = (
+  token: string,
+  siteId: string,
+  body: {
+    displayName: string;
+    singularName: string;
+    slug: string;
+    fields?: Array<{ type: string; displayName: string; isRequired?: boolean; helpText?: string }>;
+  },
+) =>
+  write<WebflowCollection>(`/sites/${encodeURIComponent(siteId)}/collections`, token, "POST", body);
+
+export const createCollectionField = (
+  token: string,
+  collectionId: string,
+  body: { type: string; displayName: string; isRequired?: boolean; helpText?: string },
+) =>
+  write<WebflowField>(
+    `/collections/${encodeURIComponent(collectionId)}/fields`,
+    token,
+    "POST",
+    body,
+  );
+
+/** Create an item and publish it live in one call (cms:write). */
+export const createItemLive = (
+  token: string,
+  collectionId: string,
+  fieldData: Record<string, unknown>,
+) =>
+  write<WebflowItem>(`/collections/${encodeURIComponent(collectionId)}/items/live`, token, "POST", {
+    isArchived: false,
+    isDraft: false,
+    fieldData,
+  });
+
+export const updateItemLive = (
+  token: string,
+  collectionId: string,
+  itemId: string,
+  fieldData: Record<string, unknown>,
+) =>
+  write<WebflowItem>(
+    `/collections/${encodeURIComponent(collectionId)}/items/${encodeURIComponent(itemId)}/live`,
+    token,
+    "PATCH",
+    { isArchived: false, isDraft: false, fieldData },
+  );
+
+/**
+ * Publish the site (sites:write). Webflow publishes every staged change, not
+ * only Mellox's — the UI says so before anyone approves.
+ */
+export const publishSite = (
+  token: string,
+  siteId: string,
+  body: { customDomains?: string[]; publishToWebflowSubdomain?: boolean },
+) =>
+  write<{ customDomains?: unknown[]; publishToWebflowSubdomain?: boolean }>(
+    `/sites/${encodeURIComponent(siteId)}/publish`,
+    token,
+    "POST",
+    body,
+  );
+
 export type WebflowSite = {
   id: string;
   displayName?: string;
-  customDomains?: Array<{ url?: string | null }>;
+  shortName?: string;
+  customDomains?: Array<{ id?: string; url?: string | null }>;
   previewUrl?: string | null;
+  lastPublished?: string | null;
 };
 export type WebflowPage = {
   id: string;
+  siteId?: string;
   title?: string;
   slug?: string;
   publishedPath?: string;
-  seo?: { title?: string; description?: string };
+  collectionId?: string | null;
+  draft?: boolean;
+  archived?: boolean;
+  lastUpdated?: string;
+  seo?: { title?: string | null; description?: string | null };
+  openGraph?: {
+    title?: string | null;
+    titleCopied?: boolean;
+    description?: string | null;
+    descriptionCopied?: boolean;
+  };
+};
+export type WebflowField = {
+  id: string;
+  type: string;
+  slug: string;
+  displayName: string;
+  isRequired?: boolean;
 };
 export type WebflowCollection = {
   id: string;
   displayName?: string;
   slug?: string;
   singularName?: string;
+  fields?: WebflowField[];
+};
+export type WebflowItem = {
+  id: string;
+  cmsLocaleId?: string;
+  lastPublished?: string | null;
+  lastUpdated?: string;
+  isDraft?: boolean;
+  isArchived?: boolean;
+  fieldData: Record<string, unknown> & { name?: string; slug?: string };
 };

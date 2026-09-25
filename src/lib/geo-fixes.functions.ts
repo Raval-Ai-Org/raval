@@ -21,6 +21,13 @@ export const getFixProposal = serverFn<typeof Handlers.getFixProposal>("geo-fixe
 export const approveFixProposal = serverFn<typeof Handlers.approveFixProposal>(
   "geo-fixes/approveFixProposal",
 );
+export const undoCmsFix = serverFn<typeof Handlers.undoCmsFix>("geo-fixes/undoCmsFix");
+export const getSiteConnections = serverFn<typeof Handlers.getSiteConnections>(
+  "geo-fixes/getSiteConnections",
+);
+export const getCmsFixAll = serverFn<typeof Handlers.getCmsFixAll>("geo-fixes/getCmsFixAll");
+export const startCmsFixAll = serverFn<typeof Handlers.startCmsFixAll>("geo-fixes/startCmsFixAll");
+export const applyCmsFixAll = serverFn<typeof Handlers.applyCmsFixAll>("geo-fixes/applyCmsFixAll");
 export const discardFixProposal = serverFn<typeof Handlers.discardFixProposal>(
   "geo-fixes/discardFixProposal",
 );

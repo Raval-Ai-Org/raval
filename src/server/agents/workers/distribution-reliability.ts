@@ -239,10 +239,8 @@ export const distributionReliabilityWorker: WorkerDefinition = {
     if (findings.length && ctx.input.explain !== false) {
       try {
         const { runStructuredPrompt } = await import("@/lib/ai/run.server");
-        const { FAST_CHAT_MODEL } = await import("@/lib/ai-gateway.server");
         const out = await runStructuredPrompt({
           route: "agent.distribution-reliability",
-          model: FAST_CHAT_MODEL,
           system:
             'You explain social-media delivery problems to a marketing team in one or two plain sentences each. Use only the evidence given. Do not invent causes beyond it. Return JSON {"explanations":[{"fingerprint":string,"hypothesis":string}]}.',
           user: JSON.stringify(

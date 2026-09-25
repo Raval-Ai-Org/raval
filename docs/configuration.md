@@ -4,6 +4,14 @@ Values are intentionally omitted. Use `.env.example`, `src/server/env.ts`, and
 team-managed secret storage for values. `npm run setup` creates/checks a local
 environment without making credentials part of the repository.
 
+## Current configuration model
+
+Mellox AI expects configuration to be explicit, environment-scoped, and
+server-owned. The web app reads public values like the Supabase publishable key
+from the browser-safe env surface, while secrets and privileged settings remain
+server-side only. This split exists to prevent credential leakage and to keep
+workspace-scoped runtime behavior aligned with the product's security model.
+
 ## Core
 
 `APP_URL`, `NEXT_PUBLIC_APP_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`,

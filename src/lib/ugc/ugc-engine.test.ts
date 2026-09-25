@@ -5,6 +5,8 @@ import {
   coerceRenderSettings,
   durationsFor,
   renderCredits,
+  renderPrice,
+  specFor,
   UGC_MODELS,
   UGC_MODEL_KEYS,
 } from "./models";
@@ -71,22 +73,25 @@ const script = ScriptSchema.parse({
 });
 
 describe("model registry", () => {
-  it("every model has pricing for each resolution it offers", () => {
+  it("every model has a price for each resolution it offers, on both providers", () => {
     for (const key of UGC_MODEL_KEYS) {
-      const m = UGC_MODELS[key];
-      for (const r of m.resolutions) expect(renderCredits(m.pricing, r, 8)).toBeGreaterThan(0);
+      for (const provider of ["kie", "openrouter"] as const) {
+        const m = specFor(UGC_MODELS[key], provider)!;
+        for (const r of m.resolutions)
+          expect(renderPrice(m.pricing, r, 8), `${key}/${provider}/${r}`).toBeGreaterThan(0);
+      }
     }
   });
 
-  it("Veo reference renders are 8 seconds only; Quality takes a first frame", () => {
-    const fast = UGC_MODELS["veo-3-1-fast"];
-    expect(durationsFor(fast, false)).toEqual([4, 6, 8]);
-    expect(durationsFor(fast, true)).toEqual([8]);
-    expect(UGC_MODELS["veo-3-1-quality"].images).toEqual({ mode: "first_frame", max: 1 });
+  it("Veo reference renders on KIE are 8 seconds only", () => {
+    const standard = UGC_MODELS.standard;
+    expect(durationsFor(standard, false)).toEqual([4, 6, 8]);
+    expect(durationsFor(standard, true)).toEqual([8]);
+    expect(specFor(standard, "openrouter")!.images).toEqual({ mode: "first_frame", max: 1 });
   });
 
   it("rejects combinations the model can't render", () => {
-    const veo = UGC_MODELS["veo-3-1-fast"];
+    const veo = UGC_MODELS.standard;
     const problems = checkRenderSettings(veo, {
       model: veo.key,
       durationSec: 6,
@@ -102,10 +107,10 @@ describe("model registry", () => {
   });
 
   it("coerces settings to the nearest valid combination", () => {
-    const veo = UGC_MODELS["veo-3-1-fast"];
+    const veo = UGC_MODELS.standard;
     expect(
       coerceRenderSettings(veo, {
-        model: "seedance-2",
+        model: "long",
         durationSec: 12,
         aspectRatio: "1:1",
         resolution: "480p",
@@ -120,10 +125,13 @@ describe("model registry", () => {
     });
   });
 
-  it("prices per video and per second", () => {
-    expect(renderCredits(UGC_MODELS["veo-3-1-fast"].pricing, "720p", 4)).toBe(60);
-    expect(renderCredits(UGC_MODELS["seedance-2-fast"].pricing, "720p", 10)).toBe(248);
-    expect(renderCredits(UGC_MODELS["veo-3-1-fast"].pricing, "480p", 8)).toBeNull();
+  it("prices per video and per second, in credits (KIE) or USD (OpenRouter)", () => {
+    expect(renderCredits(UGC_MODELS.standard.pricing, "720p", 4)).toBe(60);
+    expect(renderCredits(UGC_MODELS.long.pricing, "720p", 10)).toBe(248);
+    expect(renderCredits(UGC_MODELS.standard.pricing, "480p", 8)).toBeNull();
+    const orStandard = specFor(UGC_MODELS.standard, "openrouter")!;
+    expect(renderCredits(orStandard.pricing, "720p", 8)).toBeNull();
+    expect(renderPrice(orStandard.pricing, "720p", 8)).toBe(0.8);
   });
 
   it("every platform preset maps to at least one enabled model", () => {
@@ -137,22 +145,49 @@ describe("model registry", () => {
 
 describe("automatic video router", () => {
   const enabled = UGC_MODEL_KEYS;
+  const route = (over: Partial<Parameters<typeof routeVideo>[0]>) =>
+    routeVideo(
+      {
+        product,
+        brief,
+        script,
+        platform: "reels",
+        durationSec: 8,
+        referenceCount: 0,
+        brand: {},
+        ...over,
+      },
+      enabled,
+    );
 
-  it("uses Seedance for a visual product social concept without speech", () => {
-    const visualScript = { ...script, scenes: script.scenes.map((scene) => ({ ...scene, dialogue: "" })) };
-    expect(
-      routeVideo({ product, brief, script: visualScript, platform: "reels", durationSec: 8, referenceCount: 1, brand: {} }, enabled),
-    ).toMatchObject({ model: "seedance-2" });
+  it("uses the standard model for talking-creator UGC", () => {
+    expect(route({}).model).toBe("standard");
   });
 
-  it("uses Veo for spoken human content and Kling for cinematic motion", () => {
-    expect(routeVideo({ product, brief, script, platform: "reels", durationSec: 8, referenceCount: 0, brand: {} }, enabled).model).toBe("veo-3-1-quality");
-    const cinematic = { ...script, scenes: script.scenes.map((scene) => ({ ...scene, dialogue: "", action: "complex camera movement through an action sequence" })) };
-    expect(routeVideo({ product, brief, script: cinematic, platform: "reels", durationSec: 10, referenceCount: 0, brand: {}, requestedModel: "auto" }, enabled).model).toBe("kling-3");
+  it("uses premium for realism, cinematic for controlled motion, variation for quick iterations", () => {
+    const realistic = { ...script, hook: "A photoreal, high-end hero ad" };
+    expect(route({ script: realistic }).model).toBe("premium");
+    const cinematic = {
+      ...script,
+      scenes: script.scenes.map((scene) => ({
+        ...scene,
+        dialogue: "",
+        action: "complex camera movement through an action sequence",
+      })),
+    };
+    expect(route({ script: cinematic, durationSec: 10, requestedModel: "auto" }).model).toBe(
+      "cinematic",
+    );
+    expect(route({ tier: "variations" }).model).toBe("variation");
+  });
+
+  it("uses the long model for more than 3 photos or more than 8 seconds", () => {
+    expect(route({ referenceCount: 5 }).model).toBe("long");
+    expect(route({ durationSec: 12 }).model).toBe("long");
   });
 
   it("honours an available advanced override", () => {
-    expect(routeVideo({ product, brief, script, platform: "reels", durationSec: 8, referenceCount: 1, brand: {}, requestedModel: "grok-imagine" }, enabled).model).toBe("grok-imagine");
+    expect(route({ referenceCount: 1, requestedModel: "variation" }).model).toBe("variation");
   });
 });
 
@@ -161,7 +196,7 @@ describe("prompt builder", () => {
     product,
     brief,
     script,
-    model: UGC_MODELS["veo-3-1-fast"],
+    model: UGC_MODELS.standard,
     durationSec: 8,
     aspectRatio: "9:16" as const,
     imageCount: 1,
@@ -199,7 +234,7 @@ describe("prompt builder", () => {
   });
 
   it("uses first-frame wording and no image wording when no images are sent", () => {
-    const quality = buildVideoPrompt({ ...input, model: UGC_MODELS["veo-3-1-quality"] });
+    const quality = buildVideoPrompt({ ...input, model: UGC_MODELS.variation });
     expect(quality).toContain("opens on the provided product image");
     const none = buildVideoPrompt({ ...input, imageCount: 0 });
     expect(none).not.toContain("reference image");
@@ -274,7 +309,7 @@ describe("render request contract", () => {
       workspaceId: "a1111111-1111-4111-8111-111111111111",
       projectId: "a1111111-1111-4111-8111-111111111112",
       idempotencyKey: "click-123456",
-      model: "veo-3-1-fast",
+      model: "standard",
       durationSec: 8,
       aspectRatio: "9:16",
       resolution: "720p",

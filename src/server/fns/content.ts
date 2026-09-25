@@ -383,6 +383,8 @@ const GenerateSchema = z.object({
   count: z.number().int().min(1).max(8).optional(),
   context: z.string().max(6000).optional(),
   websiteUrl: z.string().max(2048).optional().nullable(),
+  /** Brand Kit Style: an id, "none", or absent for the workspace default. */
+  styleId: z.union([uuid, z.literal("none")]).nullish(),
 });
 
 export const generateContentBatch = createServerFn({ method: "POST" })
@@ -409,7 +411,13 @@ export const generateContentBatch = createServerFn({ method: "POST" })
       brandContext: storedBrand || data.context,
       websiteUrl: data.websiteUrl,
     });
-    const user = `${userTail}\n\n## Brief\n${data.prompt}`;
+    const { styleTextFor } = await import("@/server/brand-kit/resolve.server");
+    const styleText = await styleTextFor(data.workspaceId, data.styleId, "social");
+    const user = `${userTail}${
+      styleText
+        ? `\n\n## Style (follow exactly; it overrides generic platform guidance)\n${styleText.replace(/^## /gm, "### ")}`
+        : ""
+    }\n\n## Brief\n${data.prompt}`;
 
     type Item = {
       channel?: string;

@@ -32,12 +32,19 @@ export type AgentEvent =
   | "verified"
   | "not_verified"
   | "fail"
-  | "cancel";
+  | "cancel"
+  /** CMS runs: exact field changes are ready (no plan step; the change itself is approved). */
+  | "cms_changes_submitted"
+  /** CMS runs: the approved change was written to the live site. */
+  | "applied_live"
+  /** CMS runs: the person undid an applied change. */
+  | "rolled_back";
 
 const T: Partial<Record<AgentRunStatus, Partial<Record<AgentEvent, AgentRunStatus>>>> = {
   queued: { start: "investigating", cancel: "cancelled", fail: "failed" },
   investigating: {
     plan_submitted: "awaiting_plan_approval",
+    cms_changes_submitted: "reviewing",
     input_needed: "needs_input",
     not_fixable: "not_fixable",
     fail: "failed",
@@ -87,11 +94,23 @@ const T: Partial<Record<AgentRunStatus, Partial<Record<AgentEvent, AgentRunStatu
     base_moved: "stale",
     cancel: "cancelled",
   },
-  applying: { pr_opened: "pr_open", base_moved: "stale", fail: "failed" },
+  applying: {
+    pr_opened: "pr_open",
+    applied_live: "rescan_pending",
+    base_moved: "stale",
+    fail: "failed",
+  },
   pr_open: { pr_merged: "merged", pr_closed: "closed", cancel: "cancelled" },
   closed: { pr_reopened: "pr_open", pr_merged: "merged" },
   merged: { verification_started: "rescan_pending" },
-  rescan_pending: { verified: "verified_fixed", not_verified: "not_verified", fail: "failed" },
+  rescan_pending: {
+    verified: "verified_fixed",
+    not_verified: "not_verified",
+    rolled_back: "closed",
+    fail: "failed",
+  },
+  verified_fixed: { rolled_back: "closed" },
+  not_verified: { rolled_back: "closed" },
 };
 
 export function nextStatus(from: AgentRunStatus, event: AgentEvent): AgentRunStatus | null {
@@ -134,7 +153,10 @@ export function statusFromProposal(
     case "merged":
       return "merged";
     case "verifying":
+    case "applied":
       return "rescan_pending";
+    case "rolled_back":
+      return "closed";
     case "verified":
       return "verified_fixed";
     case "not_verified":
@@ -213,6 +235,8 @@ export type TimelineInput = {
   verifiedAt: string | null;
   /** Step reached before a failure/cancel (for failed runs). */
   failedAtStep?: TimelineStepId | null;
+  /** CMS runs relabel the plan and pull-request steps. */
+  provider?: "github" | "wordpress" | "webflow";
   statusDetail?: string | null;
 };
 
@@ -242,6 +266,20 @@ export function timelineFor(run: TimelineInput): TimelineStep[] {
     rescan_pending: run.mergedAt,
     verified_fixed: run.verifiedAt,
   };
+  const cms =
+    run.provider && run.provider !== "github"
+      ? run.provider === "webflow"
+        ? "Webflow"
+        : "WordPress"
+      : null;
+  const label = (id: TimelineStepId) =>
+    cms && id === "pr_created"
+      ? `Changed on ${cms}`
+      : cms && id === "plan_ready"
+        ? "Change prepared"
+        : cms && id === "implementing"
+          ? "Writing the change"
+          : LABEL[id];
   return ORDER.map((id, i) => {
     let state: TimelineStep["state"];
     if (run.status === "verified_fixed") state = "done";
@@ -254,7 +292,7 @@ export function timelineFor(run: TimelineInput): TimelineStep[] {
     if (id === "plan_ready" && run.planReadyAt && state === "todo") state = "done";
     return {
       id,
-      label: LABEL[id],
+      label: label(id),
       state,
       at:
         state === "done" || state === "current" || state === "waiting" || state === "failed"

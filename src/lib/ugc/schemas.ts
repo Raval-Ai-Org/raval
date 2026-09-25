@@ -64,6 +64,8 @@ export const BriefSchema = z.object({
     })
     .default({}),
   instructions: text(1000).default(""),
+  /** Brand Kit Style: a style id, "none", or absent for the workspace default. */
+  styleId: z.union([z.string().uuid(), z.literal("none")]).nullish(),
 });
 export type Brief = z.infer<typeof BriefSchema>;
 
@@ -143,10 +145,12 @@ export const StartRenderBody = z.object({
   projectId: uuid,
   /** Client-generated per click; a double submit returns the same render. */
   idempotencyKey: z.string().min(8).max(100),
-  model: z.union([z.literal("auto"), z.enum(UGC_MODEL_KEYS as [string, ...string[]])]).default("auto"),
+  model: z
+    .union([z.literal("auto"), z.enum(UGC_MODEL_KEYS as [string, ...string[]])])
+    .default("auto"),
   durationSec: z.number().int().min(4).max(15),
   aspectRatio: z.enum(["9:16", "1:1", "16:9", "4:3", "3:4"]),
-  resolution: z.enum(["480p", "720p", "1080p"]),
+  resolution: z.enum(["480p", "720p", "768p", "1080p", "2k"]),
   /** Assets (uploaded or product images) to show the model; filtered to the workspace. */
   referenceAssetIds: z.array(uuid).max(9).default([]),
 });

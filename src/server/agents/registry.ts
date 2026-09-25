@@ -276,6 +276,7 @@ const schedulerHeartbeats: ToolDefinition<
 
 const ContentItem = z.object({
   id: z.string(),
+  updated_at: z.string(),
   channel: z.string().nullable(),
   kind: z.string(),
   status: z.string(),
@@ -297,7 +298,7 @@ const contentGet: ToolDefinition<{ id: string }, z.infer<typeof ContentItem>> = 
   async handler({ id }, ctx) {
     const { data, error } = await ctx.db
       .from("content_items")
-      .select("id, channel, kind, status, title, body, hashtags, media_url")
+      .select("id, updated_at, channel, kind, status, title, body, hashtags, media_url")
       .eq("id", id)
       .eq("workspace_id", ctx.workspaceId)
       .maybeSingle();
@@ -311,6 +312,7 @@ const contentGet: ToolDefinition<{ id: string }, z.infer<typeof ContentItem>> = 
 // ── write tools (always approval-gated by policy) ─────────────────────────
 const RevisionInput = z.object({
   contentItemId: uuid,
+  expectedUpdatedAt: z.string().datetime({ offset: true }),
   title: z.string().max(280).optional(),
   body: z.string().min(1).max(8000),
   hashtags: z.array(z.string().max(60)).max(30).optional(),
@@ -331,14 +333,19 @@ const contentApplyRevision: ToolDefinition<
   idempotent: true,
   affects: (input) => [{ table: "content_items", id: input.contentItemId }],
   async preview(input, ctx) {
-    const { data } = await ctx.db
+    const { data, error } = await ctx.db
       .from("content_items")
-      .select("title, body, hashtags")
+      .select("title, body, hashtags, status, updated_at")
       .eq("id", input.contentItemId)
       .eq("workspace_id", ctx.workspaceId)
       .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data || data.updated_at !== input.expectedUpdatedAt)
+      throw new Error("Content changed while checking it. Run the content check again.");
     return {
       before: {
+        status: data?.status ?? null,
+        updatedAt: data?.updated_at ?? null,
         title: data?.title ?? null,
         body: data?.body ?? null,
         hashtags: data?.hashtags ?? [],
@@ -360,10 +367,13 @@ const contentApplyRevision: ToolDefinition<
       .update(patch)
       .eq("id", input.contentItemId)
       .eq("workspace_id", ctx.workspaceId)
+      .eq("updated_at", input.expectedUpdatedAt)
+      .in("status", ["draft", "pending", "rejected", "failed"])
       .select("id, status")
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!data) throw new Error("Content item not found");
+    if (!data)
+      throw new Error("Content changed or is no longer editable. Run the content check again.");
     return data;
   },
 };

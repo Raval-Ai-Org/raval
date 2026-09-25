@@ -22,6 +22,7 @@ import {
   hostsInConfig,
   isPlatformHost,
   matchFingerprints,
+  containsHost,
   normalizeHost,
   scoreOwnership,
   SIGNAL_WEIGHTS,
@@ -311,7 +312,7 @@ export async function collectOwnershipEvidence(
       });
     }
   }
-  const literal = texts.filter((f) => f.text.toLowerCase().includes(host)).map((f) => f.path);
+  const literal = texts.filter((f) => containsHost(f.text, host)).map((f) => f.path);
   if (literal.length) {
     add({
       signal: "host_literal",

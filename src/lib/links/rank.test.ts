@@ -9,6 +9,7 @@ import {
   WEIGHTS,
   type DonorSignals,
 } from "./rank";
+import { rankForBrand, relevanceScore } from "./rank";
 
 function donor(overrides: Partial<DonorSignals> = {}): DonorSignals {
   return {
@@ -173,5 +174,53 @@ describe("qualityBand", () => {
     expect(qualityBand(61.99)).toBe("solid");
     expect(qualityBand(42)).toBe("solid");
     expect(qualityBand(41.99)).toBe("modest");
+  });
+});
+
+describe("rankForBrand", () => {
+  const site = (id: number, domain: string, extra: Partial<DonorSignals> = {}): DonorSignals => ({
+    id,
+    domain,
+    ext: domain.split(".").pop() ?? null,
+    page: `https://${domain}/`,
+    priceUsd: 10,
+    dr: 50,
+    referringDomains: 1000,
+    backlinks: 5000,
+    dfsRank: 300,
+    top100: 1000,
+    cat: null,
+    ...extra,
+  });
+  const catalog = [
+    site(1, "dentalcareblog.com"),
+    site(2, "petlovers.com"),
+    site(3, "bigtechnews.com", { cat: "Technology" }),
+    site(4, "fitnesstoday.com", { page: "https://fitnesstoday.com/healthy-teeth-guide" }),
+    site(5, "zdorovie.ru", { cat: "Medicine" }),
+  ];
+
+  it("gives two brands in different fields different shortlists", () => {
+    const dental = rankForBrand(catalog, {
+      categories: ["Medicine", "Beauty & Health"],
+      topics: ["dental", "teeth", "dentist"],
+      tlds: ["uk"],
+    });
+    const software = rankForBrand(catalog, {
+      categories: ["Technology", "Business"],
+      topics: ["software", "tech", "startup"],
+      tlds: ["uk"],
+    });
+    expect(dental[0].domain).toBe("dentalcareblog.com");
+    expect(software[0].domain).toBe("bigtechnews.com");
+  });
+
+  it("counts topic words in the page address, and demotes foreign-language sites", () => {
+    const profile = { categories: ["Medicine"], topics: ["teeth"], tlds: ["uk"] };
+    const fitness = relevanceScore(catalog[3], profile);
+    const pets = relevanceScore(catalog[1], profile);
+    expect(fitness).toBeGreaterThan(pets);
+    // Right category, wrong language: the .ru site still loses its lead.
+    expect(relevanceScore(catalog[4], profile)).toBeLessThan(0.45);
   });
 });

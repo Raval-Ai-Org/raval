@@ -113,6 +113,67 @@ export const approveFixProposal = createServerFn({ method: "POST" })
     return svc.approveAndApply(ctx, data);
   });
 
+/** WordPress / Webflow: put back the values an applied change replaced. */
+export const undoCmsFix = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, proposalId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    const ctx = await fixContext(context, data.workspaceId);
+    requireEditor(ctx);
+    const svc = await import("@/server/geo/fixes/service.server");
+    return svc.undoCmsProposal(ctx, data.proposalId);
+  });
+
+/** GitHub / WordPress / Webflow: what each can do for this scan's website. */
+export const getSiteConnections = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, scanId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    const ctx = await fixContext(context, data.workspaceId);
+    const svc = await import("@/server/geo/fixes/site-connections.server");
+    return svc.getSiteConnections(ctx, await svc.scanHost(ctx, data.scanId));
+  });
+
+/** "Fix all" on a WordPress / Webflow site. */
+export const getCmsFixAll = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ workspaceId: uuid, scanId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    const svc = await import("@/server/geo/fixes/cms-fix-all.server");
+    return svc.getCmsFixAll(await fixContext(context, data.workspaceId), data.scanId);
+  });
+
+export const startCmsFixAll = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, scanId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    const ctx = await fixContext(context, data.workspaceId);
+    requireEditor(ctx);
+    const svc = await import("@/server/geo/fixes/cms-fix-all.server");
+    return svc.startCmsFixAll(ctx, data.scanId);
+  });
+
+export const applyCmsFixAll = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        scanId: uuid,
+        items: z
+          .array(z.object({ proposalId: uuid, contentHash: z.string().regex(/^[0-9a-f]{64}$/) }))
+          .min(1)
+          .max(10),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = await fixContext(context, data.workspaceId);
+    requireEditor(ctx);
+    const svc = await import("@/server/geo/fixes/cms-fix-all.server");
+    return svc.applyCmsFixAll(ctx, data);
+  });
+
 export const discardFixProposal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
   .inputValidator((data) =>

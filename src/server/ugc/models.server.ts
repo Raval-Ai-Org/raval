@@ -1,26 +1,32 @@
-// Runtime configuration of the UGC model registry: which models are enabled,
-// what a render costs, and how much plan allowance it uses. Every number is an
-// env override on top of src/lib/ugc/models.ts, so pricing and availability
-// change without a deploy:
+// Runtime configuration of the video model registry: which provider runs
+// renders, which models are enabled, what a render costs, and how much plan
+// allowance it uses. Every number is an env override on top of
+// src/lib/ugc/models.ts, so pricing and availability change without a deploy:
 //
-//   UGC_MODEL_<KEY>_ENABLED=false            hide a model (KEY: VEO_3_1_FAST, …)
-//   UGC_PRICE_<KEY>_<RES>_CREDITS=65         Kie credits per video/second at a resolution
+//   VIDEO_PROVIDER=kie|openrouter            primary provider (default kie)
+//   VIDEO_PROVIDER_FALLBACK=openrouter|none  used when KIE definitively refuses
+//   UGC_MODEL_<KEY>_ENABLED=false            hide a model (KEY: STANDARD, DRAFT, …)
+//   UGC_PRICE_<KEY>_<RES>_USD=0.12           OpenRouter USD per video/second at a resolution
+//   UGC_PRICE_<KEY>_<RES>_CREDITS=65         Kie credits per video/second (DEPRECATED with KIE)
 //   UGC_VIDEO_UNITS_<KEY>=2                  monthly video quota units per render
-//   KIE_USD_PER_CREDIT=0.005                 Kie credit → USD
-//   UGC_DEFAULT_MODEL=seedance-2
+//   KIE_USD_PER_CREDIT=0.005                 Kie credit → USD (DEPRECATED with KIE)
+//   UGC_DEFAULT_MODEL=standard
 //   UGC_MAX_CONCURRENT_RENDERS=3             live renders per workspace
-//   KIE_UGC_MODEL_KLING_3=kling-3.0/video    server-side KIE id override
 import "server-only";
 import {
   DEFAULT_UGC_MODEL,
   durationsFor,
   isUgcModelKey,
-  renderCredits,
-  UGC_MODELS,
+  renderPrice,
+  resolveUgcModel,
+  specFor,
   UGC_MODEL_KEYS,
+  type AnyUgcModelKey,
   type UgcModel,
   type UgcModelKey,
+  type UgcPricing,
   type UgcResolution,
+  type VideoProviderId,
 } from "@/lib/ugc/models";
 import type { ModelView } from "@/lib/ugc/schemas";
 
@@ -40,13 +46,29 @@ function envBool(name: string): boolean | undefined {
   return undefined;
 }
 
+/** The provider that runs new renders. */
+export function videoProvider(): VideoProviderId {
+  return (process.env.VIDEO_PROVIDER ?? "").trim().toLowerCase() === "openrouter"
+    ? "openrouter"
+    : "kie";
+}
+
+/** Where a render goes when the primary refuses it outright (null: nowhere). */
+export function videoFallbackProvider(): VideoProviderId | null {
+  const raw = (process.env.VIDEO_PROVIDER_FALLBACK ?? "openrouter").trim().toLowerCase();
+  if (["", "none", "off", "false"].includes(raw)) return null;
+  const fallback: VideoProviderId = raw === "kie" ? "kie" : "openrouter";
+  return fallback === videoProvider() ? null : fallback;
+}
+
 export function kieUsdPerCredit(): number {
   return envNumber("KIE_USD_PER_CREDIT") ?? 0.005;
 }
 
-/** Provider ids stay configurable without exposing them to the browser. */
-export function providerModelId(model: UgcModel): string {
-  return process.env[`KIE_UGC_MODEL_${envKey(model.key)}`]?.trim() || model.providerModel;
+/** The model as the configured primary provider runs it (falls back to any provider it has). */
+export function activeModel(key: AnyUgcModelKey, provider = videoProvider()): UgcModel {
+  const model = resolveUgcModel(key, provider);
+  return specFor(model, provider) ?? model;
 }
 
 export function maxConcurrentRenders(): number {
@@ -54,37 +76,43 @@ export function maxConcurrentRenders(): number {
 }
 
 export function isModelEnabled(key: UgcModelKey): boolean {
-  return envBool(`UGC_MODEL_${envKey(key)}_ENABLED`) ?? UGC_MODELS[key].enabledByDefault;
+  return envBool(`UGC_MODEL_${envKey(key)}_ENABLED`) ?? resolveUgcModel(key).enabledByDefault;
 }
 
+/** Models offered for new renders, viewed for the primary provider. */
 export function enabledModels(): UgcModel[] {
-  return UGC_MODEL_KEYS.filter(isModelEnabled).map((k) => UGC_MODELS[k]);
+  return UGC_MODEL_KEYS.filter(isModelEnabled).map((k) => activeModel(k));
 }
 
 export function defaultModelKey(): UgcModelKey {
   const configured = process.env.UGC_DEFAULT_MODEL?.trim();
   if (isUgcModelKey(configured) && isModelEnabled(configured)) return configured;
   if (isModelEnabled(DEFAULT_UGC_MODEL)) return DEFAULT_UGC_MODEL;
-  return enabledModels()[0]?.key ?? DEFAULT_UGC_MODEL;
+  return (enabledModels()[0]?.key as UgcModelKey | undefined) ?? DEFAULT_UGC_MODEL;
 }
 
-/** The registry price table with env overrides applied. */
-export function effectivePricing(model: UgcModel): UgcModel["pricing"] {
-  const credits: Partial<Record<UgcResolution, number>> = {};
+/** The price table with env overrides applied, in the table's own currency. */
+export function effectivePricing(model: UgcModel): UgcPricing {
+  const amounts: Partial<Record<UgcResolution, number>> = {};
+  const suffix = model.pricing.currency === "credits" ? "CREDITS" : "USD";
   for (const res of model.resolutions) {
-    const override = envNumber(`UGC_PRICE_${envKey(model.key)}_${envKey(res)}_CREDITS`);
-    const base = model.pricing.credits[res];
-    const value = override ?? base;
-    if (value != null) credits[res] = value;
+    const override = envNumber(`UGC_PRICE_${envKey(String(model.key))}_${envKey(res)}_${suffix}`);
+    const value = override ?? model.pricing.amounts[res];
+    if (value != null) amounts[res] = value;
   }
-  return { unit: model.pricing.unit, credits };
+  return { ...model.pricing, amounts } as UgcPricing;
+}
+
+function toUsd(pricing: UgcPricing, amount: number): number {
+  const usd = pricing.currency === "credits" ? amount * kieUsdPerCredit() : amount;
+  return Math.round(usd * 1_000_000) / 1_000_000;
 }
 
 export function videoUnits(model: UgcModel): number {
-  return Math.max(1, Math.round(envNumber(`UGC_VIDEO_UNITS_${envKey(model.key)}`) ?? 1));
+  return Math.max(1, Math.round(envNumber(`UGC_VIDEO_UNITS_${envKey(String(model.key))}`) ?? 1));
 }
 
-export type RenderEstimate = { credits: number; usd: number; units: number };
+export type RenderEstimate = { credits: number | null; usd: number; units: number };
 
 /** Server-authoritative cost of a render. Throws when the resolution has no price. */
 export function estimateRender(
@@ -92,11 +120,12 @@ export function estimateRender(
   resolution: UgcResolution,
   durationSec: number,
 ): RenderEstimate {
-  const credits = renderCredits(effectivePricing(model), resolution, durationSec);
-  if (credits == null) throw new Error(`No price configured for ${model.key} at ${resolution}`);
+  const pricing = effectivePricing(model);
+  const amount = renderPrice(pricing, resolution, durationSec);
+  if (amount == null) throw new Error(`No price configured for ${model.key} at ${resolution}`);
   return {
-    credits,
-    usd: Math.round(credits * kieUsdPerCredit() * 1_000_000) / 1_000_000,
+    credits: pricing.currency === "credits" ? amount : null,
+    usd: toUsd(pricing, amount),
     units: videoUnits(model),
   };
 }
@@ -104,11 +133,11 @@ export function estimateRender(
 export function toModelView(model: UgcModel): ModelView {
   const pricing = effectivePricing(model);
   const usd: Record<string, number> = {};
-  for (const [res, credits] of Object.entries(pricing.credits)) {
-    usd[res] = Math.round((credits ?? 0) * kieUsdPerCredit() * 10_000) / 10_000;
+  for (const [res, amount] of Object.entries(pricing.amounts)) {
+    usd[res] = Math.round(toUsd(pricing, amount ?? 0) * 10_000) / 10_000;
   }
   return {
-    key: model.key,
+    key: String(model.key),
     displayName: model.displayName,
     tier: model.tier,
     description: model.description,

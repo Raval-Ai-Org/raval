@@ -14,6 +14,15 @@ current examples include OpenRouter chat/extraction/fast models and Anthropic
 Claude models. Do not treat model names in old docs as a promise. The chat route
 accepts allow-listed ids, not arbitrary model names.
 
+## Current AI operating model
+
+Across the project, AI usage is intentionally disciplined. The server owns the
+provider calls, budget controls, usage accounting, caching decisions, and error
+mapping. Browser requests can trigger AI work but they cannot bypass the
+configured gateway or the authorization layer. This is a deliberate product
+design choice: it keeps AI usage measurable, reviewable, and safe within a
+workspace-scoped product.
+
 ## Prompt and context safety
 
 Prompt fragments live under `src/lib/ai/prompts`. Chat removes client-supplied

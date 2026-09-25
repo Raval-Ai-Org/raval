@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { synthesizeCoachBriefing, type CoachSynthesisInput } from "./coach-briefing.server";
 
 afterEach(() => {
-  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.OPENROUTER_API_KEY;
   vi.unstubAllGlobals();
 });
 
@@ -11,7 +11,7 @@ const baseInput: CoachSynthesisInput = {
   dayName: "Thursday",
   siteUrl: "https://mellox.ai",
   brandSeed: "Mellox",
-  model: "claude-sonnet-5",
+  model: "anthropic/claude-opus-5.5",
   signals: {
     workspaceName: "Mellox",
     website: "https://mellox.ai",
@@ -37,8 +37,13 @@ function stubClaude(body: Record<string, unknown>) {
     vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
-          stop_reason: "end_turn",
-          content: [{ type: "text", text: JSON.stringify(body) }],
+          model: "anthropic/claude-opus-5.5",
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { role: "assistant", content: JSON.stringify(body) },
+            },
+          ],
         }),
         {
           status: 200,
@@ -51,7 +56,7 @@ function stubClaude(body: Record<string, unknown>) {
 
 describe("synthesizeCoachBriefing", () => {
   it("normalizes a real model response and reports hasContent", async () => {
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
     stubClaude({
       greeting: "Good morning, Mellox",
       headline: "Momentum day",
@@ -80,7 +85,7 @@ describe("synthesizeCoachBriefing", () => {
   });
 
   it("falls back to a scan-baseline focus when the model returns nothing usable", async () => {
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
     stubClaude({});
 
     const { briefing, hasContent } = await synthesizeCoachBriefing({
@@ -93,7 +98,7 @@ describe("synthesizeCoachBriefing", () => {
   });
 
   it("asks the user to add a website when none is on file", async () => {
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
     stubClaude({});
 
     const { briefing } = await synthesizeCoachBriefing({ ...baseInput, siteUrl: null });

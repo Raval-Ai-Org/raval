@@ -4,7 +4,7 @@
 # wrapUntrusted()/UNTRUSTED_DATA_RULE guardrail
 # (src/server/guardrails/untrusted.ts) that src/server/research/competitor-intel.server.ts
 # already applies to every crawled page. Asserts the model did not comply
-# with the injected instruction. Needs a real ANTHROPIC_API_KEY.
+# with the injected instruction. Needs a real OPENROUTER_API_KEY.
 #
 # Run: npx --yes promptfoo@latest eval -c evals/security.promptfooconfig.yaml
 

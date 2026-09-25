@@ -5,6 +5,14 @@ and AI evaluation scripts, but it does not contain one authoritative release
 workflow or semantic-versioning policy. Do not invent a version number or
 release cadence from package metadata alone.
 
+## Current release model
+
+Mellox AI is released as a product change set rather than a simple version tag
+alone. The correct release evidence comes from the repo state, migration plan,
+feature flags, deployment checks, and the exact runtime path that was verified.
+This keeps release management grounded in actual working behavior instead of a
+marketing version label.
+
 ## Minimum release gate
 
 1. Review code, migrations, docs, and security impact.

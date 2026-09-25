@@ -20,9 +20,12 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   idempotent (`IF NOT EXISTS`, `DROP POLICY IF EXISTS`) — `npm run db:verify`
   replays them; `npm run db:types` regenerates `src/integrations/supabase/types.ts`.
 - **Fetching user-supplied URLs:** only via `src/server/safe-fetch.ts` (SSRF guard).
-- **Paid AI calls:** only through the gateways (`src/lib/ai-gateway.server.ts`,
-  `anthropic-gateway.server.ts`, `kie-gateway.server.ts`) — they meter and
-  budget-check. Declare a rate-limit tier for anything that spends.
+- **Paid AI calls:** only through the gateways — text/vision/tools
+  `src/lib/ai-gateway.server.ts` (+ `ai-gateway.tool-loop.server.ts`), images
+  `src/lib/openrouter-image.server.ts`, video the provider interface in
+  `src/server/ugc/providers/` — they meter and budget-check. Declare a
+  rate-limit tier for anything that spends. Never name a model at a call site
+  (see "Models" below).
 - **Cross-component events:** declare in `src/lib/app-events.ts`, use `emitAppEvent`.
 - **Design:** icons from `@/components/icons` (bespoke Mellox set, lucide fallback);
   primary colour is Ultra Moss lime in both themes; use `EmptyState` /
@@ -61,6 +64,57 @@ Decision record [ADR-0014](docs/adr/0014-canonical-workspaces.md).
   removes them on switch.
 - **Service-role reads of user-editable `meta`** (storage paths, provider ids)
   must check they belong to the row's workspace (`src/lib/workspace/storage-path.ts`).
+
+## Models (OpenRouter only)
+
+Decision record [ADR-0026](docs/adr/0026-openrouter-only-models.md); full
+table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
+
+- **No Anthropic API.** Text, vision, tool use and images all go through
+  OpenRouter (`OPENROUTER_API_KEY`). Claude is used as
+  `anthropic/claude-opus-5.5` via OpenRouter.
+- **The model comes from the route label.** `src/server/ai/task-models.ts`
+  maps every metering `route` to a plan (models + fallbacks, reasoning effort,
+  token ceiling, escalation, degraded plan). Tiers: PREMIUM Opus 5.5,
+  WORKHORSE Gemini 3.8 Flash, ECONOMY Gemini 3.1 Flash-Lite. A new `route:`
+  label needs an entry (a test enforces it). Override per route with
+  `AI_MODEL_<ROUTE_KEY>` / `AI_EFFORT_<ROUTE_KEY>`.
+- Every call sends `provider.data_collection: "deny"`, `tool_choice: "auto"`
+  only (Opus rejects forced tools), and meters the model that actually
+  answered from `usage.cost`. The tool loop replays `reasoning_details`
+  unchanged and is append-only.
+- **Images:** GPT Image 2.5 Flare (default) / Sunburst (premium), routed by
+  `src/lib/model-router.server.ts`, env `IMAGE_MODEL_*`.
+- **Video (still KIE):** `VIDEO_PROVIDER=kie` with automatic fallback to
+  OpenRouter (`VIDEO_PROVIDER_FALLBACK`) only on out-of-credits, auth or
+  model-unavailable — never on an unknown outcome. Catalog keys
+  (`standard`, `draft`, `premium`, `long`, `cinematic`, `variation`) in
+  `src/lib/ugc/models.ts`; old keys are read-only aliases. Dropping KIE is
+  the checklist in ADR-0026.
+- Live check: `tests/live/openrouter-models.live.ts` (video behind
+  `VIDEO_LIVE_OPENROUTER=yes`).
+
+## Brand Kit and Styles
+
+Full reference: [docs/brand-kit.md](docs/brand-kit.md), decision record
+[ADR-0025](docs/adr/0025-brand-kit-styles.md).
+
+- A **Style** (`brand_styles`) is a named look and voice; the **Brand Kit** is
+  its library (`brand_kit_assets`: logos, fonts, elements, example posts and
+  videos, writing samples). Brand DNA stays the source of facts; a style
+  inherits colours, fonts, voice, logo and rules field by field.
+- **Generators get a style only through** `loadResolvedStyle` / `styleTextFor`
+  (`src/server/brand-kit/resolve.server.ts`), with the verified workspace id.
+  Choice: style id, `"none"` (Brand DNA only), or empty (the default, only for
+  the formats it lists). Never trust a browser style id without that check.
+- Pure core in `src/lib/brand-kit/` (`resolveStyle`, prompt blocks,
+  `mergeAnalyses`, `checkWritingConformance`, fonts); analysis uses vision
+  through the gateway's `images` option (`llmJson`), claimed by compare-and-set.
+  Analysis never overwrites a user-set field (`provenance`).
+- Uploads: signed upload URLs for server-chosen paths under
+  `workspace/<id>/assets/brand-kit/`, verified in `finishUpload`. No SVG.
+- Live check: `tests/live/brand-kit.live.ts` (paid part behind
+  `BRAND_KIT_LIVE_ANALYZE=yes`).
 
 ## Sharing (team invites and the client portal)
 
@@ -110,13 +164,14 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
   request is fulfilled through the SSRF-guarded fetcher.
 - GEO Engineer coding agent ([ADR-0013](docs/adr/0013-geo-coding-agent-and-repo-ownership.md)):
   `src/server/geo/agents/`:
-  - tool loop `claudeToolLoop` in `anthropic-gateway.server.ts`;
+  - tool loop `llmToolLoop` in `src/lib/ai-gateway.tool-loop.server.ts`;
   - read-only `repo-tools.server.ts`;
   - stages in `geo-coding-agent.ts`;
   - leased `runner.server.ts`;
   - `service.server.ts`;
   - RPC `src/server/fns/geo-agent.ts`, UI `geo/agent/AgentPanel.tsx`.
-  Model `GEO_AGENT_MODEL` (default `claude-sonnet-5`). Rules:
+  Models: routes `geo.agent.investigate` / `implement` / `review` in
+  `task-models.ts` (Opus 5.5; override `AI_MODEL_GEO_AGENT_*`). Rules:
   - **Ownership first:** no proposal, batch or run unless
     `src/lib/connectors/ownership.ts` verified the repository builds that host
     (`assertSourceOwnsHost`).
@@ -129,6 +184,70 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
     only, never model reasoning.
 - Dimension scores (`src/lib/geo/dimensions.ts`) are derived from the stored
   rule summaries; every rule id must be mapped (a test enforces it).
+- WordPress / Webflow sites (migration `20260929090000_geo_site_connectors.sql`):
+  - **Which platform builds a host** is decided only by `src/server/sites/resolve.server.ts`
+    (connection + live page fingerprint, `src/lib/sites/fingerprint.ts`). Nothing
+    is written to a site whose binding isn't `verified`.
+  - CMS fixes live in `src/server/geo/cms/` (targets → generate → field-level
+    before/after → apply with a snapshot → undo). Approval binds the content
+    hash; apply refuses on drift. Still only a verification scan resolves a finding.
+  - "Fix all" follows the site's platform (`FixAllPreflight.platform`): GitHub →
+    one batch PR; WordPress/Webflow → `fixes/cms-fix-all.server.ts` + `geo/CmsFixAllPanel.tsx`
+    (one run per finding, one change per field and page, apply all ready changes
+    at once). The platform tiles are `geo/SiteConnectPicker.tsx` fed by
+    `fixes/site-connections.server.ts`; brand marks are `components/brand/SiteLogos.tsx`.
+  - The optional WordPress plugin is `integrations/wordpress/mellox-geo`
+    (`scripts/build-wp-plugin.mjs` → `public/downloads/mellox-geo.zip`).
+- Article publishing (Studio article → the workspace's website):
+  `src/lib/articles/` (render + GEO gate, blog layout, live-page verify, all pure
+  and tested), `src/server/articles/` (`blog.server.ts` detection/setup,
+  `publish.server.ts` service + leased worker on `claim_site_publications`),
+  RPC `src/server/fns/site-publishing.ts`, UI `src/components/studio/PublishToSite.tsx`.
+  - Advanced by the **existing** geo-agents cron hook and `after()`; no new cron job.
+  - A publication is bound to a hash of the approved article; an edit after
+    approval stops it (`needs_attention`).
+  - Provider creates are never blindly retried: WordPress/Webflow re-find by
+    slug; GitHub stores the `mellox/post-` branch name before committing and
+    only ever opens a pull request.
+  - Only the live-page check marks a publication `verified`. A "coming soon"
+    placeholder, an empty template or noindex keeps it unverified.
+  - Mellox never invents a blog in a codebase: GitHub needs an existing posts
+    folder; Webflow can get a "Blog Posts" collection in one click.
+  - Live checks: `tests/live/article-publish.live.ts`, `tests/live/geo-cms-fix.live.ts`
+    (writes gated behind `SITES_LIVE_WRITE=yes`).
+
+## Proof Engine (Experiments)
+
+Decision record [ADR-0024](docs/adr/0024-proof-engine-controlled-experiments.md).
+Flag `FEATURE_FLAG_PROOF_ENGINE_ENABLED` (per workspace:
+`FEATURE_FLAG_PROOF_ENGINE_ENABLED_WS_<id>`), off by default. When it's off the
+sidebar entry is hidden, RPCs answer 404, and the worker pauses that workspace.
+
+- A test changes one field (title, meta description, H1, intro, FAQ, button
+  text) on half of a group of similar pages and compares it with the other
+  half. Pure maths in `src/lib/experiments/`; server in
+  `src/server/experiments/`; RPC `src/server/fns/experiments.ts`; UI
+  `src/components/app/experiments/` at `/w/<id>/app/experiments`.
+- **Delivery:** everything goes through pull requests on `mellox/exp-…`
+  branches (`deliveries.server.ts`), with exact-content approval. Mellox never
+  merges.
+  - A one-time integration PR adds a reader module plus
+    `mellox-experiments/overrides.json`, and wires the page template to it.
+  - Ship, roll-out and roll-back PRs rewrite only that data file,
+    deterministically.
+  - Only one experiment PR may be open per repository at a time.
+- **Only the live check starts the clock** (`live-check.server.ts`, raw HTML
+  through `safeFetch`). Verdicts are written only at checkpoint days, and the
+  database keeps the design, patch hash, live date and verdict final. Never
+  write them anywhere else.
+- **Grounding:** AI copy goes through `fixes/grounding.ts`, the same rule as
+  fixes: no facts that aren't on the page, in its searches or in Brand DNA.
+- **Client reports** are built from server rows at view time (`buildReport`),
+  never from the member-writable share snapshot.
+- Worker: leased `experiment_jobs` (`claim_experiment_jobs`), advanced by
+  `/api/public/hooks/experiments` every 5 minutes. PR state arrives via the
+  GitHub webhook and a poll.
+- Live check: `tests/live/experiments.live.ts`.
 
 ## Web intelligence and Competitors
 
@@ -285,8 +404,8 @@ originally generated content) and both off only if explicitly disabled.
 
 - **Captions:** `src/lib/studio/naturalize.ts` (pure heuristic — an
   AI-cliché/robotic-phrasing score, `needsNaturalization`) gates
-  `src/lib/studio/naturalize.server.ts` (calls `claudeJsonPrompt` from the
-  Anthropic gateway). Wired into `runner.server.ts`'s `executeJob`, right after
+  `src/lib/studio/naturalize.server.ts` (calls `llmJson` from the
+  OpenRouter gateway, route `studio.naturalize`). Wired into `runner.server.ts`'s `executeJob`, right after
   `humanizeOutput` (em-dash cleanup) and before drafts are written. Most
   captions never cross the threshold and ship unrewritten. A rewrite is kept
   only if it demonstrably reduced the cliché score (`isBetterThanOriginal`)

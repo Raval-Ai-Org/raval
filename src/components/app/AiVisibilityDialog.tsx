@@ -17,7 +17,7 @@ export function AiVisibilityDialog({ workspaceId }: { workspaceId: string | null
   const [open, setOpen] = useState(false);
   // Non-zero while a chat/suggestion scan request waits for the panel to start it.
   const [runToken, setRunToken] = useState(0);
-  // Deep link /app?geo=findings[&rule=…] — e.g. back from connecting GitHub on a finding.
+  // Deep link /app?geo=findings[&rule=…|&fix=all] — e.g. back from connecting a site.
   const [initialFindings, setInitialFindings] = useState<FindingsFilter | undefined>();
 
   const requestRun = useCallback(() => {
@@ -43,9 +43,12 @@ export function AiVisibilityDialog({ workspaceId }: { workspaceId: string | null
     const url = new URL(window.location.href);
     if (url.searchParams.get("geo") === "findings") {
       const rule = url.searchParams.get("rule");
-      setInitialFindings(rule && /^[w.:-]{1,80}$/.test(rule) ? { ruleId: rule } : {});
+      const fixAll = url.searchParams.get("fix") === "all";
+      setInitialFindings(
+        fixAll ? { fixAll: true } : rule && /^[\w.:-]{1,80}$/.test(rule) ? { ruleId: rule } : {},
+      );
       setOpen(true);
-      for (const key of ["geo", "rule", "github"]) url.searchParams.delete(key);
+      for (const key of ["geo", "rule", "github", "fix"]) url.searchParams.delete(key);
       window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
     }
     // A request that arrived before this code-split dialog finished loading.

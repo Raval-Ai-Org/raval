@@ -37,6 +37,9 @@ import {
   type CoachAction,
 } from "@/lib/coach.functions";
 import { exportBriefingPDF, exportBriefingDoc } from "@/lib/coach-export";
+import { useCompetitorOverview, useMarkUpdatesRead } from "./competitors/hooks";
+import { UpdateRow } from "./competitors/UpdatesFeed";
+import type { CompetitorView, CompetitorUpdateView } from "@/lib/competitors.functions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -644,18 +647,35 @@ function CoachBody({
   generatedLabel: string | null;
 }) {
   const checklistTasks = useMemo(() => buildChecklist(briefing), [briefing]);
+  const competitorOverview = useCompetitorOverview(workspaceId);
+  const markCompetitorUpdatesRead = useMarkUpdatesRead(workspaceId);
+  const trackedCompetitors = competitorOverview.data?.competitors ?? [];
+  const competitorCount = competitorOverview.isLoading
+    ? briefing.competitors.length
+    : trackedCompetitors.length;
   const [done, setDone] = useState<Record<string, boolean>>(() =>
     workspaceId ? readChecklistState(workspaceId) : {},
   );
   useEffect(() => {
     if (workspaceId) setDone(readChecklistState(workspaceId));
   }, [workspaceId]);
+  useEffect(() => {
+    if (
+      tab === "competitors" &&
+      (competitorOverview.data?.unreadUpdates ?? 0) > 0 &&
+      !markCompetitorUpdatesRead.isPending
+    ) {
+      markCompetitorUpdatesRead.mutate(null);
+    }
+    // The mutation is intentionally triggered when the Coach competitor tab is opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, competitorOverview.data?.unreadUpdates]);
   const openCount = checklistTasks.filter((t) => !done[t.id]).length;
 
   const tabs: { id: typeof tab; label: string; icon: typeof Target; count?: number }[] = [
     { id: "today", label: "Today", icon: Target },
     { id: "checklist", label: "To-do", icon: CheckSquare, count: openCount },
-    { id: "competitors", label: "Competitors", icon: Swords, count: briefing.competitors.length },
+    { id: "competitors", label: "Competitors", icon: Swords, count: competitorCount },
     { id: "market", label: "Market", icon: TrendingUp, count: briefing.market.length },
     { id: "notes", label: "Notes", icon: StickyNote },
   ];
@@ -727,6 +747,11 @@ function CoachBody({
       <TabPanel id="today" active={tab === "today"}>
         <div className="space-y-2">
           <FocusCard briefing={briefing} sources={briefing.sources} />
+          <CompetitorPulse
+            competitors={trackedCompetitors}
+            updates={competitorOverview.data?.updates ?? []}
+            unreadUpdates={competitorOverview.data?.unreadUpdates ?? 0}
+          />
           {briefing.wins.length > 0 && (
             <Section
               title="Working well"
@@ -777,18 +802,13 @@ function CoachBody({
       </TabPanel>
 
       <TabPanel id="competitors" active={tab === "competitors"}>
-        <SectionOrEmpty
-          items={briefing.competitors}
+        <CompetitorCoachPanel
+          competitors={trackedCompetitors}
+          updates={competitorOverview.data?.updates ?? []}
+          unreadUpdates={competitorOverview.data?.unreadUpdates ?? 0}
+          loading={competitorOverview.isLoading}
+          signals={briefing.competitors}
           sources={briefing.sources}
-          icon={Swords}
-          tint="rose"
-          emptyTitle="No competitor moves yet"
-          empty="Add your competitors in Brand DNA to see what they're doing."
-          emptyAction={{
-            label: "Add competitors",
-            prompt: "Help me list my top 5 competitors and what they're doing this month",
-            intent: "brand-dna",
-          }}
         />
       </TabPanel>
 
@@ -806,6 +826,194 @@ function CoachBody({
         <SourcesPanel sources={briefing.sources} />
       )}
     </div>
+  );
+}
+
+function CompetitorPulse({
+  competitors,
+  updates,
+  unreadUpdates,
+}: {
+  competitors: CompetitorView[];
+  updates: CompetitorUpdateView[];
+  unreadUpdates: number;
+}) {
+  if (!competitors.length) return null;
+
+  return (
+    <section className="rounded-xl border border-border/70 bg-card p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-rose-500">
+            <Swords className="h-3 w-3" /> Competitor pulse
+          </div>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            {unreadUpdates > 0
+              ? `${unreadUpdates} new change${unreadUpdates === 1 ? "" : "s"} across ${competitors.length} tracked competitor${competitors.length === 1 ? "" : "s"}`
+              : `${competitors.length} tracked competitor${competitors.length === 1 ? "" : "s"}`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => emitAppEvent("open:competitors")}
+          className="shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-primary transition hover:bg-primary/10"
+        >
+          View all
+        </button>
+      </div>
+      {updates.length > 0 ? (
+        <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+          {updates.slice(0, 3).map((update) => (
+            <UpdateRow key={update.id} update={update} />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 border-t border-border/50 pt-2 text-[11.5px] text-muted-foreground">
+          No recent competitor changes have been detected.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function CompetitorCoachPanel({
+  competitors,
+  updates,
+  unreadUpdates,
+  loading,
+  signals,
+  sources,
+}: {
+  competitors: CompetitorView[];
+  updates: CompetitorUpdateView[];
+  unreadUpdates: number;
+  loading: boolean;
+  signals: CoachInsight[];
+  sources?: SourceEntry[];
+}) {
+  if (loading && !competitors.length) return <SkeletonBrief />;
+
+  if (!competitors.length) {
+    return (
+      <div className="space-y-3">
+        <SectionOrEmpty
+          items={signals}
+          sources={sources}
+          icon={Swords}
+          tint="rose"
+          emptyTitle="No competitors tracked yet"
+          empty="Add competitors in Brand DNA to bring their updates and points into your coach."
+          emptyAction={{
+            label: "Add competitors",
+            prompt: "Help me list my top 5 competitors and what they're doing this month",
+            intent: "brand-dna",
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => emitAppEvent("open:competitors")}
+          className="w-full rounded-full border border-border/70 px-3 py-2 text-[12px] font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        >
+          Open Brand DNA competitors
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-[14px] font-semibold text-foreground">Your tracked competitors</h3>
+          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+            {unreadUpdates > 0
+              ? `${unreadUpdates} new update${unreadUpdates === 1 ? "" : "s"} to review`
+              : "Profiles, points and recent changes from your workspace"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => emitAppEvent("open:competitors")}
+          className="shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-primary transition hover:bg-primary/10"
+        >
+          Manage
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {competitors.map((competitor) => (
+          <CompetitorCoachCard key={competitor.id} competitor={competitor} />
+        ))}
+      </div>
+
+      {updates.length > 0 && (
+        <section className="rounded-xl border border-border/70 bg-card p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-rose-500">
+              Recent competitor updates
+            </h3>
+            <span className="text-[10.5px] text-muted-foreground">{updates.length} signals</span>
+          </div>
+          <div className="space-y-1">
+            {updates.slice(0, 6).map((update) => (
+              <UpdateRow key={update.id} update={update} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {signals.length > 0 && (
+        <Section
+          title="Coach signals"
+          icon={Swords}
+          tint="rose"
+          items={signals}
+          sources={sources}
+        />
+      )}
+    </div>
+  );
+}
+
+function CompetitorCoachCard({ competitor }: { competitor: CompetitorView }) {
+  const profile = competitor.profile;
+  const points = [
+    ...(profile?.strengths ?? []).slice(0, 2).map((point) => `Strength: ${point}`),
+    ...(profile?.weaknesses ?? []).slice(0, 2).map((point) => `Gap: ${point}`),
+  ];
+
+  return (
+    <article className="rounded-xl border border-border/70 bg-card p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="truncate text-[13px] font-semibold text-foreground">{competitor.name}</h4>
+          <p className="truncate text-[11px] text-muted-foreground">{competitor.domain}</p>
+        </div>
+        {competitor.unreadUpdates > 0 && (
+          <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+            {competitor.unreadUpdates} new
+          </span>
+        )}
+      </div>
+      {profile?.summary && (
+        <p className="mt-2 text-[12px] leading-relaxed text-foreground/80">{profile.summary}</p>
+      )}
+      {points.length > 0 ? (
+        <ul className="mt-2 space-y-1 border-t border-border/50 pt-2">
+          {points.map((point) => (
+            <li key={point} className="text-[11.5px] leading-relaxed text-muted-foreground">
+              {point}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-[11.5px] text-muted-foreground">
+          {competitor.profileStatus === "pending" || competitor.profileStatus === "running"
+            ? "Researching profile points…"
+            : "No profile points yet."}
+        </p>
+      )}
+    </article>
   );
 }
 

@@ -125,7 +125,7 @@ export function GenerateStep({
   }
   const model =
     models.find((m) => m.key === settings.model) ??
-    models.find((m) => m.key === "seedance-2") ??
+    models.find((m) => m.key === "standard") ??
     models[0];
   if (!model) {
     return (

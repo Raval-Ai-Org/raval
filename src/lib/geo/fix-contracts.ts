@@ -4,8 +4,11 @@
 
 import type { ConnectionView, SourceView } from "@/lib/connectors/types";
 
-/** How a finding can be fixed. `github_pr` only when Mellox can really write the change. */
-export type FixMethod = "github_pr" | "manual";
+/**
+ * How a finding can be fixed. `github_pr` / `cms_apply` only when Mellox can
+ * really write the change (a pull request, or a direct WordPress/Webflow edit).
+ */
+export type FixMethod = "github_pr" | "cms_apply" | "manual";
 
 /** What's missing before Mellox can propose a pull request for a finding. */
 export type FixRequirement =
@@ -28,7 +31,28 @@ export type FixRequirement =
   /** The repository's framework or layout can't be edited safely for this fix. */
   | "unsupported"
   /** This finding has no automated fix (manual steps only). */
-  | "manual_only";
+  | "manual_only"
+  /** Webflow is connected without permission to edit the site. */
+  | "cms_reconnect"
+  /** A CMS is connected but the live site isn't proven to be it. */
+  | "cms_unverified";
+
+/** Which connected platform builds the scanned website, as the person sees it. */
+export type SiteBindingView = {
+  provider: SiteProviderId;
+  /** Repository full name, WordPress site URL or Webflow site name. */
+  name: string;
+  verified: boolean;
+  proof: string;
+  /** WordPress: where head tags are written. */
+  seoBackend: "mellox" | "rankmath" | "jetpack" | "none" | null;
+  /** WordPress: the Mellox GEO plugin version when installed. */
+  pluginVersion: string | null;
+  /** Webflow: write scopes missing from the grant. */
+  missingWriteScopes: string[];
+  /** The live site shows a "coming soon" placeholder to visitors and crawlers. */
+  placeholder: boolean;
+};
 
 export type ProposalStatus =
   | "draft"
@@ -42,7 +66,11 @@ export type ProposalStatus =
   | "failed"
   | "discarded"
   | "stale"
-  | "access_lost";
+  | "access_lost"
+  /** CMS: written to the live site, verification pending. */
+  | "applied"
+  /** CMS: undone by a person. */
+  | "rolled_back";
 
 export type ValidationCheck = {
   id: string;
@@ -106,9 +134,40 @@ export type VerificationView = {
   completedAt: string | null;
 };
 
+/** Which platform a fix changes: a repository (pull request) or a CMS (direct write). */
+export type SiteProviderId = "github" | "wordpress" | "webflow";
+
+/** One field a CMS fix changes, as the person reviews it. */
+export type CmsChangeView = {
+  label: string;
+  /** "WordPress post #12", "Webflow page" … */
+  target: string;
+  before: string;
+  after: string;
+  reason: string;
+  /** code = JSON-LD, robots.txt, HTML: shown monospaced. */
+  format: "text" | "code";
+};
+
+/** A value Mellox prepared that the person pastes where the platform's API can't reach. */
+export type AssistedStepView = { label: string; where: string; value: string; why: string };
+
+export type CmsProposalView = {
+  changes: CmsChangeView[];
+  assisted: AssistedStepView[];
+  appliedAt: string | null;
+  rolledBackAt: string | null;
+  /** Undo is offered once applied, until someone edits the fields again. */
+  canUndo: boolean;
+  /** Webflow: applying publishes the site, which also publishes other staged edits. */
+  publishesSite: boolean;
+};
+
 export type FixProposalView = {
   id: string;
   status: ProposalStatus;
+  provider: SiteProviderId;
+  cms: CmsProposalView | null;
   fingerprint: string;
   ruleId: string;
   fixId: string;
@@ -159,7 +218,9 @@ export type FixAvailability = {
   requirement: FixRequirement;
   /** Plain-language explanation of the requirement. */
   reason: string;
-  provider: "github";
+  provider: SiteProviderId;
+  /** The platform that builds this site (null when nothing is connected). */
+  site: SiteBindingView | null;
   configured: boolean;
   connection: ConnectionView | null;
   source: SourceView | null;
@@ -250,6 +311,8 @@ export type FixAllPreflight = {
   scanId: string;
   host: string;
   origin: string;
+  /** The platform proven to serve this website; decides pull request vs direct change. */
+  platform: SiteProviderId | null;
   setup: FixSetup;
   /** Findings Mellox can try to fix automatically, highest priority first. */
   fixable: {
@@ -267,4 +330,70 @@ export type FixAllPreflight = {
   maxFindings: number;
   /** The live or most recent "Fix all" run for this website. */
   batch: FixBatchView | null;
+};
+
+/* ───────────────────────── site connections (the platform picker) ───────────────────────── */
+
+export type SiteConnectionState =
+  /** Connected and proven to serve this website. */
+  | "serves_site"
+  /** Connected; the link to this website still needs a check. */
+  | "needs_check"
+  /** Connected, but to a different site (or no site chosen yet). */
+  | "connected_other"
+  | "not_connected"
+  /** This Mellox server can't use the provider (missing configuration). */
+  | "unavailable";
+
+export type SiteConnectionTile = {
+  provider: SiteProviderId;
+  state: SiteConnectionState;
+  /** One plain sentence about this provider for this website. */
+  detail: string;
+  /** The connected site or repository, when there is one. */
+  siteName: string | null;
+  /** The live page says this platform builds the website. */
+  detected: boolean;
+};
+
+export type SiteConnections = {
+  host: string;
+  /** The provider Mellox will use for this website (a proven connection), if any. */
+  active: SiteProviderId | null;
+  /** The platform the live page identifies (WordPress / Webflow), if any. */
+  detected: SiteProviderId | null;
+  tiles: SiteConnectionTile[];
+  canManage: boolean;
+};
+
+/* ───────────────────────── Fix all on WordPress / Webflow ───────────────────────── */
+
+export type CmsFixAllItem = {
+  findingId: string;
+  title: string;
+  pageUrl: string | null;
+  priority: string;
+  run: {
+    id: string;
+    status: string;
+    statusDetail: string | null;
+    /** Ready to apply: the exact changes and the hash that approval binds. */
+    proposalId: string | null;
+    contentHash: string | null;
+    changes: CmsChangeView[];
+    publishesSite: boolean;
+    assistedCount: number;
+    applied: boolean;
+  } | null;
+};
+
+export type CmsFixAllView = {
+  scanId: string;
+  host: string;
+  provider: "wordpress" | "webflow";
+  items: CmsFixAllItem[];
+  /** Findings of the same kind left for a later run (one change per field and page at a time). */
+  deferred: number;
+  maxFindings: number;
+  canPropose: boolean;
 };

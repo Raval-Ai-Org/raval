@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle, Globe, Loader2, RefreshCw, Trash } from "lucide-react";
 import { toast } from "sonner";
+import { SiteLogo } from "@/components/brand/SiteLogos";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -112,7 +113,7 @@ export function WebflowConnector({ workspaceId }: { workspaceId: string }) {
       <article className="rounded-2xl border border-border/70 bg-card/50 p-4 shadow-sm transition-colors hover:border-primary/30">
         <div className="flex items-center gap-3">
           <span className="grid size-10 place-items-center rounded-xl bg-[#146EF5] text-sm font-black text-white shadow-sm">
-            W
+            <SiteLogo provider="webflow" size={20} />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -140,7 +141,7 @@ export function WebflowConnector({ workspaceId }: { workspaceId: string }) {
       <article className="rounded-2xl border border-border/70 bg-card/50 p-4 shadow-sm transition-colors hover:border-primary/30">
         <div className="flex flex-wrap items-start gap-3">
           <span className="grid size-10 place-items-center rounded-xl bg-[#146EF5] text-sm font-black text-white shadow-sm">
-            W
+            <SiteLogo provider="webflow" size={20} />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">

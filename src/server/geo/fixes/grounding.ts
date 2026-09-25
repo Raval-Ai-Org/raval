@@ -126,43 +126,55 @@ export function groundingCheck(input: {
   inputs: string[];
   threshold?: number;
 }): GroundingResult {
-  const threshold = input.threshold ?? 0.85;
-  const corpusParts = [
-    ...input.siteText,
-    ...input.inputs,
-    ...input.files.map((f) => f.before ?? ""),
-  ];
+  const fragments = input.files.flatMap((f) =>
+    addedTextFragments(f.path, f.before ?? "", f.after).map((text) => ({ path: f.path, text })),
+  );
+  return checkFragments(
+    fragments,
+    [...input.siteText, ...input.inputs, ...input.files.map((f) => f.before ?? "")],
+    input.threshold,
+  );
+}
+
+/**
+ * Each fragment must appear in the corpus, or carry only facts that do and
+ * mostly known words. Used for code patches (above) and for plain CMS values
+ * such as a new meta description.
+ */
+export function checkFragments(
+  fragments: { path: string; text: string }[],
+  corpusParts: string[],
+  threshold = 0.85,
+): GroundingResult {
   const corpus = normalize(corpusParts.join("\n"));
   const corpusTokens = new Set(tokens(corpusParts.join(" ")));
   const ungrounded: GroundingResult["ungrounded"] = [];
   let checked = 0;
 
-  for (const f of input.files) {
-    for (const frag of addedTextFragments(f.path, f.before ?? "", f.after)) {
-      checked++;
-      const n = normalize(frag);
-      if (corpus.includes(n)) continue;
-      const facts = [...frag.matchAll(FACT)].map((m) => normalize(m[0]).replace(/[.,]$/, ""));
-      const missingFact = facts.find((x) => !corpus.includes(x));
-      if (missingFact) {
-        ungrounded.push({
-          path: f.path,
-          text: frag.slice(0, 200),
-          reason: `“${missingFact}” doesn't appear on the site or in your inputs`,
-        });
-        continue;
-      }
-      const t = tokens(frag);
-      if (!t.length) continue;
-      const known = t.filter((x) => corpusTokens.has(x)).length / t.length;
-      if (known < threshold) {
-        const unknown = t.filter((x) => !corpusTokens.has(x)).slice(0, 5);
-        ungrounded.push({
-          path: f.path,
-          text: frag.slice(0, 200),
-          reason: `new wording not found on the site (${unknown.join(", ")})`,
-        });
-      }
+  for (const { path, text: frag } of fragments) {
+    checked++;
+    const n = normalize(frag);
+    if (corpus.includes(n)) continue;
+    const facts = [...frag.matchAll(FACT)].map((m) => normalize(m[0]).replace(/[.,]$/, ""));
+    const missingFact = facts.find((x) => !corpus.includes(x));
+    if (missingFact) {
+      ungrounded.push({
+        path,
+        text: frag.slice(0, 200),
+        reason: `“${missingFact}” doesn't appear on the site or in your inputs`,
+      });
+      continue;
+    }
+    const t = tokens(frag);
+    if (!t.length) continue;
+    const known = t.filter((x) => corpusTokens.has(x)).length / t.length;
+    if (known < threshold) {
+      const unknown = t.filter((x) => !corpusTokens.has(x)).slice(0, 5);
+      ungrounded.push({
+        path,
+        text: frag.slice(0, 200),
+        reason: `new wording not found on the site (${unknown.join(", ")})`,
+      });
     }
   }
   return { ok: ungrounded.length === 0, checked, ungrounded: ungrounded.slice(0, 20) };

@@ -23,6 +23,9 @@ export const getCompetitorOverview = serverFn<typeof Handlers.getCompetitorOverv
 export const discoverCompetitors = serverFn<typeof Handlers.discoverCompetitors>(
   "competitors/discoverCompetitors",
 );
+export const bootstrapCompetitors = serverFn<typeof Handlers.bootstrapCompetitors>(
+  "competitors/bootstrapCompetitors",
+);
 export const addCompetitor = serverFn<typeof Handlers.addCompetitor>("competitors/addCompetitor");
 export const setCompetitorStatus = serverFn<typeof Handlers.setCompetitorStatus>(
   "competitors/setCompetitorStatus",

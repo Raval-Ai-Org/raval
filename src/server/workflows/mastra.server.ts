@@ -2,7 +2,7 @@
 // ONLY the workflow graph (step sequencing, retries, per-step observability)
 // — it never calls a model directly. Every step in every workflow registered
 // here is a thin wrapper around this codebase's own gateways
-// (claudeJsonPrompt/unifiedChatCompletion/firecrawl-gateway.server.ts), so
+// (llmJson in ai-gateway.server.ts / firecrawl-gateway.server.ts), so
 // checkBudget/recordUsage/Helicone logging all keep working exactly as they
 // do for every other call site. Mastra's own `@ai-sdk/*` model-provider
 // integrations are never used — adopting them would silently bypass all of

@@ -34,7 +34,6 @@ import {
   Mail,
   RefreshCw,
 } from "@/components/ui/gemini-icons";
-import { StarAgent } from "@/components/StarAgent";
 import { LoadingIndicator } from "@/components/ui/loading-indicator";
 import { cn } from "@/lib/utils";
 
@@ -166,15 +165,6 @@ export function ClientPortalDialog({ workspaceId }: { workspaceId: string | null
         Icon={Users}
         title="Share your work. Stay in control."
         description="Send drafts to clients to approve"
-        headerAccessory={
-          <div className="hidden sm:block shrink-0">
-            <StarAgent
-              mood={pending > 0 ? "excited" : "happy"}
-              size={56}
-              hue={pending > 0 ? 151 : 217}
-            />
-          </div>
-        }
       >
         <div className="px-5 sm:px-6 pt-4">
           <div className="inline-flex w-full sm:w-auto items-center gap-0.5 rounded-full border border-border/60 bg-background/70 p-1 backdrop-blur-md shadow-sm">
@@ -410,7 +400,6 @@ function InboxView({
             className="relative overflow-hidden rounded-2xl border border-dashed border-border/60 bg-gradient-to-br from-[hsl(var(--brand-blue)/0.04)] to-[hsl(var(--brand-green)/0.05)] py-8 text-center"
           >
             <div className="flex flex-col items-center gap-2">
-              <StarAgent mood="happy" size={60} hue={151} />
               <div className="text-[13px] font-medium">All caught up</div>
               <div className="text-[11.5px] text-muted-foreground max-w-xs">
                 No pending approvals or suggestions. When clients act, you'll see it land here.
@@ -945,8 +934,11 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspaceId }),
       });
+      if (!r.ok) throw new Error(await errorText(r));
       const data = await r.json();
       setShares(data.shares ?? []);
+    } catch (e: any) {
+      toast.error("Couldn't load share links", { description: e?.message });
     } finally {
       setLoading(false);
     }
@@ -1082,7 +1074,6 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
         className="relative overflow-hidden rounded-2xl border border-dashed border-border/60 bg-gradient-to-br from-[hsl(var(--brand-blue)/0.04)] to-[hsl(var(--brand-green)/0.05)] py-10 text-center"
       >
         <div className="flex flex-col items-center gap-2">
-          <StarAgent mood="waving" size={64} hue={217} />
           <div className="text-[13.5px] font-medium">No shares yet</div>
           <div className="text-[11.5px] text-muted-foreground max-w-xs">
             Switch to <span className="text-foreground font-medium">New share</span> to build a
@@ -1260,8 +1251,16 @@ function Toggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onChange(!value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onChange(!value);
+        }
+      }}
       className={cn(
         "flex items-center justify-between rounded-lg border px-3 py-2 text-[12px] transition",
         value
@@ -1270,8 +1269,13 @@ function Toggle({
       )}
     >
       <span>{label}</span>
-      <Switch checked={value} onCheckedChange={onChange} />
-    </button>
+      <Switch
+        checked={value}
+        onCheckedChange={onChange}
+        onClick={(event) => event.stopPropagation()}
+        aria-label={label}
+      />
+    </div>
   );
 }
 function Badge({ children }: { children: React.ReactNode }) {

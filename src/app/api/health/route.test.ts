@@ -1,25 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
 
-describe("health diagnostics", () => {
-  it("reports route-specific Kie readiness without secrets", async () => {
-    const response = GET();
-    const body = await response.json();
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
-    expect(body.kie.image).toEqual(
-      expect.objectContaining({
-        defaultRouteConfigured: expect.any(Boolean),
-        imageToImageRouteConfigured: expect.any(Boolean),
-        availability: "not-probed",
-      }),
-    );
-    expect(body.kie).not.toHaveProperty("apiKey");
-    expect(body.kie).not.toHaveProperty("serviceRoleKey");
+describe("health diagnostics", () => {
+  it("reports OpenRouter and video provider readiness without secrets", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-secret-value");
+    vi.stubEnv("VIDEO_PROVIDER", "openrouter");
+    const body = await GET().json();
+
+    expect(body.ai).toEqual({ provider: "openrouter", configured: true });
+    expect(body.image).toEqual(expect.objectContaining({ provider: "openrouter" }));
+    expect(body.video).toEqual(expect.objectContaining({ provider: "openrouter", fallback: null }));
     expect(body.services).toEqual(
-      expect.objectContaining({
-        imageGeneration: expect.any(Boolean),
-        imageToImage: expect.any(Boolean),
-      }),
+      expect.objectContaining({ text: true, imageGeneration: true, videoGeneration: true }),
     );
+    expect(JSON.stringify(body)).not.toContain("sk-or-secret-value");
+  });
+
+  it("is degraded without an OpenRouter key", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const body = await GET().json();
+    expect(body.status).toBe("degraded");
+    expect(body.services.imageGeneration).toBe(false);
   });
 });

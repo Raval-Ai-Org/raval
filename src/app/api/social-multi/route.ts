@@ -25,6 +25,8 @@ const BodySchema = z.object({
   platforms: z.array(PlatformEnum).min(1).max(7),
   /** The user asked for a different take — bypass the cached answer. */
   regenerate: z.boolean().optional(),
+  /** Brand Kit Style: an id, "none", or absent for the workspace default. */
+  styleId: z.union([z.string().uuid(), z.literal("none")]).nullish(),
 });
 
 const VariantsSchema = z.object({
@@ -101,7 +103,7 @@ export const POST = defineRoute({
   auth: "user",
   body: BodySchema,
   rateLimit: "generate",
-  handler: async ({ body }) => {
+  handler: async ({ body, attributedWorkspaceId }) => {
     // ── Single LLM call for all platforms (was N calls) ─────────
     // Build a per-platform rubric deterministically, and ask the
     // model to emit one JSON object with one variant per platform.
@@ -122,8 +124,19 @@ export const POST = defineRoute({
       `Schema: {"variants":[{"platform":"<id>","title":string,"body":string,"hashtags":string[]}]}`,
     );
 
+    // The style is read on the server for the VERIFIED workspace only.
+    const styleText = attributedWorkspaceId
+      ? await import("@/server/brand-kit/resolve.server").then((m) =>
+          m.styleTextFor(attributedWorkspaceId, body.styleId, "social"),
+        )
+      : "";
     const user = assemble([
       { label: "Brand context", body: body.context, maxChars: 4000 },
+      {
+        label: "Style (follow exactly; it overrides generic platform guidance)",
+        body: styleText ? styleText.replace(/^## /gm, "### ") : undefined,
+        maxChars: 3000,
+      },
       { label: "Brief", body: body.prompt },
       { label: "Platforms + rules", body: rubric },
       { body: `Return exactly ${specs.length} variants — one per platform id in the list.` },

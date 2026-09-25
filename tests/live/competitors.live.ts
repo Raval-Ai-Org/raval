@@ -13,7 +13,7 @@ import { config } from "dotenv";
 config({ path: ".env", quiet: true });
 config({ path: ".env.local", override: true, quiet: true });
 
-const ready = Boolean(process.env.TAVILY_API_KEY?.trim() && process.env.ANTHROPIC_API_KEY?.trim());
+const ready = Boolean(process.env.TAVILY_API_KEY?.trim() && process.env.OPENROUTER_API_KEY?.trim());
 const describeLive = ready ? describe : describe.skip;
 
 // A real, well-documented business with real competitors and real coverage.
@@ -41,10 +41,17 @@ describeLive("competitor pipeline, end to end", () => {
 
   it("discovers real competitors from real business context", async () => {
     const result = await discovery.discoverCompetitors(BUSINESS);
-
     expect(result.queries.length).toBeGreaterThan(0);
     expect(result.sourcesSeen).toBeGreaterThan(0);
     expect(result.suggestions.length).toBeGreaterThan(0);
+    expect(
+      result.suggestions.filter(
+        (candidate) =>
+          candidate.relationship !== "unknown" &&
+          candidate.confidence >= 0.55 &&
+          candidate.sources.length > 0,
+      ).length,
+    ).toBeGreaterThanOrEqual(3);
 
     for (const suggestion of result.suggestions) {
       // Grounding: never the business itself, never a directory, and always a

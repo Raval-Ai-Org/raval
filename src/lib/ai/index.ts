@@ -16,15 +16,11 @@ export {
   chatCompletion,
   chatCompletionStream,
   extractionCompletion,
-  EXTRACTION_MODEL,
+  llmJson,
+  llmText,
 } from "@/lib/ai-gateway.server";
 
-export {
-  imageGenerationStream,
-  KieGatewayError,
-  type GeneratedMedia,
-  type GeneratedVideo,
-} from "@/lib/kie-gateway.server";
+export { imageGenerationStream, generateImage } from "@/lib/openrouter-image.server";
 
 export {
   serializeBrandContext,

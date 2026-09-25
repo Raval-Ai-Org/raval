@@ -16,14 +16,15 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { createPatch } from "diff";
+import { llmText } from "@/lib/ai-gateway.server";
 import {
-  claudeTextCompletion,
-  claudeToolLoop,
-  type ClaudeMessage,
-  type ClaudeToolLoopResult,
+  llmToolLoop,
+  type LlmLoopMessage,
+  type LlmToolLoopResult,
   type ToolLoopUsage,
   type ToolOutcome,
-} from "@/lib/anthropic-gateway.server";
+} from "@/lib/ai-gateway.tool-loop.server";
+import { primaryModel } from "@/server/ai/task-models";
 import type {
   AgentFileInspected,
   AgentPlan,
@@ -62,8 +63,13 @@ export const GEO_AGENT_ROUTE = {
   review: "geo.agent.review",
 } as const;
 
+/**
+ * The agent's planned model, recorded on runs and proposals. The stages' model
+ * plans live in src/server/ai/task-models.ts (geo.agent.*); override with
+ * AI_MODEL_GEO_AGENT_INVESTIGATE / _IMPLEMENT / _REVIEW.
+ */
 export function geoAgentModel(): string {
-  return (process.env.GEO_AGENT_MODEL ?? "").trim() || "claude-sonnet-5";
+  return primaryModel(GEO_AGENT_ROUTE.investigate);
 }
 
 export function geoAgentMaxCostUsd(): number {
@@ -123,12 +129,12 @@ export type StageEvent = {
 
 export type AgentDeps = {
   toolDeps: RepoToolDeps;
-  loop?: typeof claudeToolLoop;
-  complete?: typeof claudeTextCompletion;
+  loop?: typeof llmToolLoop;
+  complete?: typeof llmText;
   onEvent: (e: StageEvent) => Promise<void>;
   isCancelled: () => Promise<boolean>;
   /** Persist the conversation after each turn (resume after a lost lease). */
-  checkpoint?: (stage: "investigate" | "implement", messages: ClaudeMessage[]) => Promise<void>;
+  checkpoint?: (stage: "investigate" | "implement", messages: LlmLoopMessage[]) => Promise<void>;
   now?: () => number;
 };
 
@@ -167,7 +173,7 @@ export function addUsage(a: AgentUsage, b: ToolLoopUsage | AgentUsage): AgentUsa
   };
 }
 
-function loopFailure(result: ClaudeToolLoopResult, usage: AgentUsage): StageFailure {
+function loopFailure(result: LlmToolLoopResult, usage: AgentUsage): StageFailure {
   const messages: Record<string, string> = {
     cancelled: "The run was cancelled.",
     budget: "The run reached its AI spend limit before finishing.",
@@ -294,14 +300,14 @@ export type PlanOutcome =
       plan: AgentPlan;
       filesInspected: AgentFileInspected[];
       usage: AgentUsage;
-      messages: ClaudeMessage[];
+      messages: LlmLoopMessage[];
     }
   | StageFailure;
 
 export async function investigateAndPlan(
   ctx: AgentContext,
   deps: AgentDeps,
-  opts: { resume?: ClaudeMessage[]; state: RepoToolState; budgetUsd: number },
+  opts: { resume?: LlmLoopMessage[]; state: RepoToolState; budgetUsd: number },
 ): Promise<PlanOutcome> {
   const now = deps.now ?? Date.now;
   const repo = createRepoToolHandlers({
@@ -351,12 +357,11 @@ export async function investigateAndPlan(
     return out;
   };
 
-  const messages: ClaudeMessage[] = opts.resume?.length
+  const messages: LlmLoopMessage[] = opts.resume?.length
     ? opts.resume
     : [{ role: "user", content: briefing(ctx) }];
-  const result = await (deps.loop ?? claudeToolLoop)({
+  const result = await (deps.loop ?? llmToolLoop)({
     route: GEO_AGENT_ROUTE.investigate,
-    model: geoAgentModel(),
     system: INVESTIGATE_SYSTEM,
     tools: [...REPO_TOOLS, SUBMIT_PLAN_TOOL],
     messages,
@@ -366,7 +371,6 @@ export async function investigateAndPlan(
     maxTokensPerTurn: STAGE_LIMITS.investigate.maxTokens,
     maxCostUsd: opts.budgetUsd,
     deadlineAt: now() + STAGE_LIMITS.investigate.wallMs,
-    effort: "high",
     workspaceId: ctx.workspaceId,
     userId: ctx.userId,
     isCancelled: deps.isCancelled,
@@ -550,13 +554,11 @@ ${files.map((f) => f.diff).join("\n")}
 </diff>
 <site_text_sample>${ctx.siteText.join("\n").slice(0, 6000)}</site_text_sample>
 <user_inputs>${JSON.stringify(ctx.inputs)}</user_inputs>`;
-  const res = await (deps.complete ?? claudeTextCompletion)({
+  const res = await (deps.complete ?? llmText)({
     route: GEO_AGENT_ROUTE.review,
-    model: geoAgentModel(),
     system: REVIEW_SYSTEM,
     user,
     maxTokens: 6000,
-    effort: "high",
     outputSchema: REVIEW_SCHEMA,
     timeoutMs: 90_000,
     retries: 1,
@@ -593,7 +595,7 @@ export async function implementPlan(
   ctx: AgentContext,
   plan: AgentPlan,
   deps: AgentDeps,
-  opts: { state: RepoToolState; budgetUsd: number; resume?: ClaudeMessage[] },
+  opts: { state: RepoToolState; budgetUsd: number; resume?: LlmLoopMessage[] },
 ): Promise<PatchOutcome> {
   const now = deps.now ?? Date.now;
   let usage = emptyUsage();
@@ -666,7 +668,7 @@ export async function implementPlan(
     null,
     2,
   );
-  let messages: ClaudeMessage[] = opts.resume?.length
+  let messages: LlmLoopMessage[] = opts.resume?.length
     ? opts.resume
     : [
         {
@@ -679,9 +681,8 @@ export async function implementPlan(
   for (;;) {
     submitted = null;
     const remaining = opts.budgetUsd - usage.costUsd;
-    const result = await (deps.loop ?? claudeToolLoop)({
+    const result = await (deps.loop ?? llmToolLoop)({
       route: GEO_AGENT_ROUTE.implement,
-      model: geoAgentModel(),
       system: IMPLEMENT_SYSTEM,
       tools: [...REPO_TOOLS.filter((t) => t.name !== "inspect_live_page"), SUBMIT_PATCH_TOOL],
       messages,
@@ -691,7 +692,6 @@ export async function implementPlan(
       maxTokensPerTurn: STAGE_LIMITS.implement.maxTokens,
       maxCostUsd: Math.max(0.01, remaining),
       deadlineAt: now() + STAGE_LIMITS.implement.wallMs,
-      effort: "medium",
       workspaceId: ctx.workspaceId,
       userId: ctx.userId,
       isCancelled: deps.isCancelled,

@@ -153,12 +153,16 @@ export const POST = defineRoute({
     ]);
 
     const json: any = await extractionCompletion({
+      route: "memory-extract",
       messages: [
-        { role: "system", content: MEMORY_SYSTEM },
+        {
+          role: "system",
+          content: `${MEMORY_SYSTEM}\n\nAnswer by calling the \`save_memory\` tool.`,
+        },
         { role: "user", content: `${knownBlock}\n\n## Transcript\n${transcript}` },
       ],
+      // tool_choice stays "auto" (forced tool use is rejected by Claude Opus 5.5).
       tools: [MEMORY_TOOL],
-      tool_choice: { type: "function", function: { name: "save_memory" } },
       max_tokens: 2000,
     });
     const args = json?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ?? "";

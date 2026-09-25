@@ -12,7 +12,7 @@
 // dependency trees). Repository text and page text are wrapped as data and
 // credential-shaped strings are redacted before anything reaches the model.
 import "server-only";
-import type { ClaudeTool, ToolOutcome } from "@/lib/anthropic-gateway.server";
+import type { LlmTool, ToolOutcome } from "@/lib/ai-gateway.tool-loop.server";
 import type { AgentFileInspected } from "@/lib/geo/agent-contracts";
 import { checkReadPath } from "@/server/connectors/github/paths";
 import type { TreeEntry } from "@/server/connectors/github/git.server";
@@ -145,7 +145,7 @@ const int = (v: unknown, fallback: number) =>
 
 /* ───────────────────────── tool definitions ───────────────────────── */
 
-export const REPO_TOOLS: ClaudeTool[] = [
+export const REPO_TOOLS: LlmTool[] = [
   {
     name: "list_files",
     description:

@@ -6,9 +6,20 @@ import { HttpError } from "@/server/http-error";
 export const WEBFLOW_SCOPES = [
   "authorized_user:read",
   "sites:read",
+  "sites:write",
   "pages:read",
+  "pages:write",
   "cms:read",
+  "cms:write",
 ] as const;
+
+/** What Mellox needs to change a site (fixes, articles); older connections lack them. */
+export const WEBFLOW_WRITE_SCOPES = ["sites:write", "pages:write", "cms:write"] as const;
+
+export function missingWebflowWriteScopes(scopes: readonly string[] | null | undefined): string[] {
+  const granted = new Set(scopes ?? []);
+  return WEBFLOW_WRITE_SCOPES.filter((s) => !granted.has(s));
+}
 export const WEBFLOW_CALLBACK_PATH = "/api/integrations/webflow/callback";
 export const WEBFLOW_TOKEN_KEY_ENV = "WEBFLOW_TOKEN_ENCRYPTION_KEY";
 

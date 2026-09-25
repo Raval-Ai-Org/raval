@@ -83,22 +83,29 @@ async function primeSuggestions(
   page: import("@playwright/test").Page,
   items: readonly SeededSuggestion[] = SEEDED_SUGGESTIONS,
 ) {
-  // The hook exposes an internal cache keyed per workspace. Seeding it here
-  // sidesteps supabase count queries + AI refresh so the rendered cards are
-  // byte-identical every run.
+  // The rail now uses Studio's authenticated ideas endpoint.
+  await page.route("**/api/studio/ideas", (route) =>
+    route.fulfill({
+      status: 200,
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        generated: "model",
+        cached: true,
+        ideas: items.map((item) => ({
+          id: item.id,
+          type: "social",
+          title: item.label,
+          why: item.hint,
+          brief: `Create a relevant social post for Acme Studio about ${item.label}.`,
+          platforms: ["linkedin"],
+          source: "pillar",
+        })),
+      }),
+    }),
+  );
   await page.addInitScript(
-    ({ wsId, items }) => {
-      try {
-        window.localStorage.setItem(
-          `studio:suggestions:${wsId}`,
-          JSON.stringify({ at: Date.now(), items }),
-        );
-        window.localStorage.removeItem("studio:suggest-dismissed");
-      } catch {
-        /* noop */
-      }
-    },
-    { wsId: WS_ID, items },
+    ({ wsId }) => window.localStorage.removeItem(`studio:ideas-dismissed:${wsId}`),
+    { wsId: WS_ID },
   );
 }
 
@@ -360,9 +367,9 @@ const EXTREME_CASES = [
   },
 ] as const;
 
-// Card min-height in StudioRail.tsx is min-h-[72px]; a 1px tolerance covers
+// Card height in StudioRail.tsx is h-[84px]; a 1px tolerance covers
 // sub-pixel rounding across engines.
-const EXPECTED_CARD_HEIGHT = 72;
+const EXPECTED_CARD_HEIGHT = 84;
 const HEIGHT_TOLERANCE = 1;
 
 test.describe("Studio rail suggestion cards — extreme content", () => {

@@ -9,7 +9,7 @@
 // same older turns hash to the same request. Any failure falls back to the
 // deterministic heuristic, so chat never breaks because summarisation did.
 import "server-only";
-import { chatCompletion, FAST_CHAT_MODEL } from "@/lib/ai-gateway.server";
+import { chatCompletion } from "@/lib/ai-gateway.server";
 import { compactHistory, type ChatTurn } from "./history-compact";
 
 export const KEEP_TAIL = 12;
@@ -69,7 +69,6 @@ export async function summarizeHistory(
   const tail = messages.slice(olderCount);
   try {
     const json = await chatCompletion({
-      model: FAST_CHAT_MODEL,
       task: "generate",
       max_tokens: SUMMARY_MAX_TOKENS,
       temperature: 0.1,

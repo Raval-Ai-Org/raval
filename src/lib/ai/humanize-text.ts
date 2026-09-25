@@ -1,7 +1,7 @@
 // humanize-text.ts — strips the em/en-dash "AI voice" tell from generated
 // prose. Pure, no server import, so every AI-facing surface can share it: the
 // gateways apply it to every generation call's output (src/lib/ai/run.server.ts,
-// src/lib/anthropic-gateway.server.ts), and src/lib/studio/humanize.ts
+// llmText in src/lib/ai-gateway.server.ts), and src/lib/studio/humanize.ts
 // re-exports it for Studio's existing StudioJobOutput walker.
 //
 // Prevention is the primary defense (system prompts forbid the em dash); this

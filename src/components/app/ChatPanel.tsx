@@ -57,6 +57,7 @@ import { ChatGreeting, ChatStarters, type Starter } from "./chat/ChatEmptyState"
 import { AssistantMessage, ErrorMessage, NoticeMessage, UserMessage } from "./chat/ChatMessages";
 import { ChatOffers } from "./chat/ChatOffers";
 import { StudioTaskCard, type StudioTaskPayload } from "./chat/StudioTaskCard";
+import { StylePicker, useRememberedStyle } from "./brand-kit/StylePicker";
 import { ThinkingIndicator } from "./chat/ThinkingIndicator";
 
 type MsgKind = "text" | "clarify" | "actions" | "notice" | "error" | "studio";
@@ -249,6 +250,9 @@ export function ChatPanel({
   const preserveMessagesOnRouteRef = useRef(false);
   const skipNextHistoryLoadRef = useRef(false);
   const { dna, save: saveDna } = useBrandDna(workspaceId);
+  // The Brand Kit style for drafted copy; shared with Studio so a post the chat
+  // starts uses the same style.
+  const [chatStyle, setChatStyle] = useRememberedStyle(workspaceId);
   const dnaRef = useRef(dna);
   // Used by an APPROVED "save to memory" suggestion from a chat reply.
   const saveMemoryNote = async (title: string, body: string) => {
@@ -1094,6 +1098,7 @@ export function ChatPanel({
           context: smartCtx,
           modelId,
           workspaceId: streamWorkspaceId,
+          ...(chatStyle ? { styleId: chatStyle } : {}),
         }),
         signal: controller.signal,
         workspaceId: streamWorkspaceId,
@@ -1537,6 +1542,15 @@ export function ChatPanel({
             modelId={modelId}
             onModelChange={changeModel}
             placeholder={placeholder}
+            toolbarSlot={
+              <StylePicker
+                workspaceId={workspaceId}
+                value={chatStyle}
+                onChange={setChatStyle}
+                size="sm"
+                className="h-8 border-transparent bg-transparent"
+              />
+            }
           />
         </motion.div>
 

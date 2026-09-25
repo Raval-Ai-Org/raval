@@ -2,8 +2,11 @@
 // (src/lib/geo/fix-contracts.ts). File contents never leave as raw "after"
 // text: the browser gets the diff it needs to review the change.
 import "server-only";
+import { displayValue, targetLabel } from "@/lib/geo/cms-fixes";
 import type {
+  AssistedStepView,
   ChecksSummary,
+  CmsChangeView,
   FixBatchItem,
   FixBatchStatus,
   FixBatchView,
@@ -17,7 +20,7 @@ import type {
 } from "@/lib/geo/fix-contracts";
 
 export const PROPOSAL_COLS =
-  "id, workspace_id, scan_id, finding_id, fingerprint, rule_id, fix_id, page_url, site_origin, provider, connection_id, source_id, repo_full_name, repo_external_id, framework, base_branch, base_sha, head_branch, strategy, files, files_purged_at, explanation, validation, content_hash, model, status, error, commit_sha, pr_number, pr_url, pr_state, pr_merged_at, checks, last_synced_at, created_by, approved_by, approved_at, created_at, updated_at, batch_id";
+  "id, workspace_id, scan_id, finding_id, fingerprint, rule_id, fix_id, page_url, site_origin, provider, connection_id, source_id, repo_full_name, repo_external_id, framework, base_branch, base_sha, head_branch, strategy, files, files_purged_at, explanation, validation, content_hash, model, status, error, commit_sha, pr_number, pr_url, pr_state, pr_merged_at, checks, last_synced_at, created_by, approved_by, approved_at, created_at, updated_at, batch_id, cms_changes, cms_snapshot, site_ref, applied_at, rolled_back_at, agent_run_id";
 
 export const BATCH_COLS =
   "id, workspace_id, scan_id, site_origin, host, provider, connection_id, source_id, repo_full_name, repo_external_id, framework, base_branch, base_sha, head_branch, status, progress, items, files, files_purged_at, explanation, validation, content_hash, error, commit_sha, pr_number, pr_url, pr_state, pr_merged_at, checks, last_synced_at, created_by, approved_by, approved_at, created_at, updated_at";
@@ -46,7 +49,7 @@ export type ProposalRow = {
   fix_id: string;
   page_url: string | null;
   site_origin: string;
-  provider: "github";
+  provider: "github" | "wordpress" | "webflow";
   connection_id: string | null;
   source_id: string | null;
   repo_full_name: string | null;
@@ -77,6 +80,18 @@ export type ProposalRow = {
   created_at: string;
   updated_at: string;
   batch_id: string | null;
+  cms_changes: StoredCmsChanges | null;
+  cms_snapshot: { index: number; value: string | boolean | null }[] | null;
+  site_ref: Record<string, unknown> | null;
+  applied_at: string | null;
+  rolled_back_at: string | null;
+  agent_run_id: string | null;
+};
+
+/** What a CMS proposal stores: the exact changes, plus values to paste by hand. */
+export type StoredCmsChanges = {
+  changes: import("@/lib/geo/cms-fixes").CmsChange[];
+  assisted: AssistedStepView[];
 };
 
 export type StoredBatchItem = Omit<FixBatchItem, "proposalStatus"> & { proposalId: string | null };
@@ -191,6 +206,8 @@ export function presentProposal(
   return {
     id: row.id,
     status: row.status,
+    provider: row.provider ?? "github",
+    cms: presentCms(row),
     fingerprint: row.fingerprint,
     ruleId: row.rule_id,
     fixId: row.fix_id,
@@ -225,6 +242,40 @@ export function presentProposal(
     approvedAt: row.approved_at,
     verification: verification ? presentVerification(verification) : null,
     batchId: row.batch_id ?? null,
+  };
+}
+
+const CODE_FIELDS = new Set([
+  "jsonld_page",
+  "jsonld_site",
+  "robots_txt",
+  "llms_txt",
+  "content_html",
+]);
+
+function presentCms(row: ProposalRow): FixProposalView["cms"] {
+  if (row.provider === "github" || !row.cms_changes) return null;
+  const changes: CmsChangeView[] = (row.cms_changes.changes ?? []).map((c) => ({
+    label: c.label,
+    target: targetLabel(c.target),
+    before: displayValue(c.before),
+    after: displayValue(c.after),
+    reason: c.reason,
+    format: CODE_FIELDS.has(c.field) ? "code" : "text",
+  }));
+  return {
+    changes,
+    assisted: row.cms_changes.assisted ?? [],
+    appliedAt: row.applied_at,
+    rolledBackAt: row.rolled_back_at,
+    canUndo:
+      Boolean(row.applied_at) &&
+      !row.rolled_back_at &&
+      Boolean(row.cms_snapshot?.length) &&
+      ["applied", "verifying", "verified", "not_verified"].includes(row.status),
+    publishesSite:
+      row.provider === "webflow" &&
+      (row.cms_changes.changes ?? []).some((c) => c.target.kind === "webflow_page"),
   };
 }
 

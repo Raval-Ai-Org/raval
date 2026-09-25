@@ -6,6 +6,44 @@ linked handler before adding a client. Authenticated requests use a Supabase
 bearer token. Workspace routes require a verified `workspaceId` and may require
 `owner`, `admin`, or `editor`.
 
+## Current API model
+
+The API layer in Mellox AI is the product boundary between browser orchestration
+and server-side trust enforcement. It is responsible for parsing requests,
+checking workspace membership, verifying role, evaluating budgets, contracting
+provider calls, and returning normalized result payloads. The browser should not
+be treated as the authority for any high-impact operation.
+
+## Route ownership conventions
+
+Every route or function should be owned by the domain it serves. In practice that
+means:
+
+- chat and brand work go through AI route handlers and server AI services;
+- workspace operations go through the workspace server/service layer;
+- social and distribution flows go through distribution adapters;
+- GEO and agent tasks go through the server-side scan, approval, and fix flows;
+- analytics and connector flows use server-only OAuth and sync routines.
+
+If a new API surface is added, it should follow the same pattern: validate input,
+check workspace authorization, enforce limits, and then call the domain service.
+This keeps the app predictable and avoids the repo turning into a collection of
+one-off browser-controlled side effects.
+
+## Contract expectations
+
+Route contracts are intentionally narrow and explicit. The app expects:
+
+- stable JSON payloads for normal success and failure,
+- mapped error codes rather than raw provider blobs,
+- workspace-scoped IDs and role validation for protected actions,
+- no secret material in responses, and
+- idempotent retries for actions that create or mutate records.
+
+When a route or function changes, update the matching feature guide and any test
+that validates the contract. The code is the source of truth for the exact
+payloads.
+
 ## Request lifecycle and response rules
 
 ```mermaid

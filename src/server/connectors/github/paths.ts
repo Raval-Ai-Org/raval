@@ -86,7 +86,28 @@ export function checkReadPath(raw: string): PathCheck {
   return { ok: true, path };
 }
 
-const BRANCH_RE = /^mellox\/geo-[a-z0-9][a-z0-9-]{0,48}-[a-z0-9]{6}$/;
+const BRANCH_RE = /^mellox\/(geo|exp|post)-[a-z0-9][a-z0-9-]{0,48}-[a-z0-9]{6}$/;
+
+/** Branch for a Proof Engine delivery (ADR-0024): mellox/exp-<kind>-<id>-<6>. */
+export function experimentBranchName(kind: string, id: string, suffix: string): string {
+  const slug =
+    `${kind}-${id}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "exp";
+  const tail = suffix
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 6)
+    .padEnd(6, "0");
+  return `mellox/exp-${slug}-${tail}`;
+}
+
+/** Branch for an article published to a repository: mellox/post-<slug>-<6>. */
+export function postBranchName(slug: string, suffix: string): string {
+  return proposalBranchName(slug, suffix).replace(/^mellox\/geo-/, "mellox/post-");
+}
 
 /** Branch Mellox creates for a proposal: always under mellox/, never a base branch. */
 export function proposalBranchName(fixId: string, suffix: string): string {

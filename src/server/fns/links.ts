@@ -230,7 +230,7 @@ export const findPlacements = createServerFn({ method: "POST" })
       .object({
         workspaceId: uuid,
         targetUrl: url,
-        keyword: z.string().min(1).max(200),
+        keyword: z.string().max(200).nullish(),
         maxPriceUsd: z.number().min(0).max(100000).optional(),
         minAuthority: z.number().int().min(0).max(100).optional(),
         search: z.string().max(120).optional(),
@@ -247,15 +247,15 @@ export const findPlacements = createServerFn({ method: "POST" })
     ]);
 
     const ownDomain = await workspaceSite(data.workspaceId);
-    const found = await findOpportunities({
+    const { opportunities: found, profile } = await findOpportunities({
       workspaceId: data.workspaceId,
       targetUrl: data.targetUrl,
-      keyword: data.keyword,
+      keyword: data.keyword ?? null,
       ownDomain,
       maxPriceUsd: data.maxPriceUsd,
       minAuthority: data.minAuthority,
       search: data.search,
-      limit: data.limit ?? 12,
+      limit: data.limit ?? 24,
     });
 
     const placements: OpportunityView[] = found.map((item) => ({
@@ -280,7 +280,21 @@ export const findPlacements = createServerFn({ method: "POST" })
         : null,
     }));
 
-    return { placements, ownDomain };
+    return { placements, ownDomain, keywords: profile.keywords };
+  });
+
+/**
+ * Link text suggestions for a page, from Brand DNA and the page itself, so the
+ * user starts with good words already filled in.
+ */
+export const suggestLinkText = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("links-brief")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, targetUrl: url }).parse(data))
+  .handler(async ({ data, context }) => {
+    await requireEditor(context, data.workspaceId);
+    const { buildLinkProfile } = await import("@/server/links/profile.server");
+    const profile = await buildLinkProfile(data.workspaceId, data.targetUrl);
+    return { keywords: profile.keywords, categories: profile.categories };
   });
 
 /** Writes the article brief Mellox sends with the order. */

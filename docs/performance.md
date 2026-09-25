@@ -6,6 +6,14 @@ provider-specific polling/webhooks. Long-running GEO scans, UGC renders,
 analytics sync, and distribution delivery do not belong in a single blocking
 browser request.
 
+## Current performance model
+
+Mellox AI is built as an asynchronous product system. The UI initiates work,
+while the server persists jobs, claims them through leases, and processes them in
+small bounded stages. This is critical for GEO scanning, asset generation, and
+publishing status updates because these operations can take longer than a normal
+browser request and should not block the user interface.
+
 ## Practical constraints
 
 - Keep query keys workspace-specific and paginate/limit recent activity reads.

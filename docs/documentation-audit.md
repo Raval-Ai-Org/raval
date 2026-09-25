@@ -1,34 +1,47 @@
 # Documentation audit record
 
-**Audit date:** 2026-09-20
+**Audit date:** 2026-09-24
 
 ## Scope
 
 Audited the current Next.js routes, server modules, client feature surfaces,
 Supabase migrations/RLS patterns, environment schema, provider gateways,
-background hooks, tests, deployment artifacts, and existing `docs` material.
-The repository contains 82 API route handlers, 91 migration files, and a mixed
-set of current ADRs, feature specifications, validation records, and historical
-planning documents.
+background hooks, tests, deployment artifacts, and the current `docs` material.
+The repository contains a mixed set of active product documentation, canonical
+reference guides, ADRs, specs, validation records, and historical planning
+material that should not be treated as current behavior without revalidation.
 
 ## Findings and fixes
 
-- Added a canonical Mellox AI documentation map and modular current-state guides.
-- Indexed all major API route families and documented representative request/response contracts.
-- Added architecture, codebase, frontend, backend, database, AI, workspace, agent, media, social, GEO, security, configuration, deployment, operations, testing, flow, analytics, privacy, performance, component, developer, troubleshooting, glossary, and release references.
-- Marked old Raval AI architecture and launch material as historical and linked current guides.
-- Removed real-looking test-account credentials, historical Supabase project identifiers, and an ephemeral development tunnel hostname from documentation.
-- Checked canonical relative links; no missing targets were found.
-- Checked canonical pages for secret-shaped values; no secret values were found.
-- TypeScript validation passed after documentation changes.
+- Added and refreshed a canonical Mellox AI documentation index and modular
+  current-state guides for the active product.
+- Realigned the docs around current workspace-first, server-backed architecture,
+  security boundaries, and product workflows.
+- Clarified the distinction between current implementation guidance and
+  historical Raval AI planning material.
+- Updated the contributor-facing docs to emphasize the actual runtime layers:
+  web app, server enforcement, provider gateways, Supabase schema, Python
+  services, and the separate social distribution runtime.
+- Removed stale assumptions and improved the navigation of the main canonical
+  guides.
+- Checked canonical relative links and confirmed the documentation set remains
+  free of secret-shaped values in the active pages.
+- Verified the documentation patch passes a repo-level whitespace check.
 
 ## Residual risks and TODOs
 
-- Existing deep-reference documents still contain historical Raval AI wording and
-  should be migrated only when their implementation claims are revalidated.
+- Some historical deep-reference documents still contain legacy Raval AI
+  naming and should be treated as historical unless revalidated against current
+  runtime behavior.
 - The repository does not prove a single production hosting topology, release
   policy, SLO set, retention schedule, privacy notice, pricing sheet, or final
   component catalog. These remain explicit TODOs in the relevant guides.
-- Live database/provider verification was not run because it requires approved
-  credentials and external services. Run the live checks before a production
-  release.
+- Live database/provider verification remains an operational requirement before a
+  production release.
+
+## Current canonical status
+
+The canonical current-state documentation is now centered on the active product
+implementation and the repository's actual runtime boundaries. Historical records
+and planning specs remain available for context, but they are intentionally not
+used as the primary source of truth for current product behavior.

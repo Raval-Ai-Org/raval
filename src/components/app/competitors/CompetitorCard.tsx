@@ -9,7 +9,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { relativeTime } from "@/components/app/geo/geo-ui";
 import { ArrowRight, RefreshCw, Spinner } from "@/components/icons";
-import { RelationshipChip, SiteMark } from "./competitors-ui";
+import { RelationshipChip, SiteMark, SourceChips } from "./competitors-ui";
 import type { CompetitorView } from "@/lib/competitors.functions";
 
 export function CompetitorCard({
@@ -28,7 +28,7 @@ export function CompetitorCard({
     competitor.profileStatus === "running" || competitor.profileStatus === "pending";
 
   return (
-    <article className="group relative flex min-h-[200px] flex-col rounded-[22px] border border-border/50 bg-surface-3 p-5 transition-colors hover:border-primary/35 dark:border-white/[0.06] dark:bg-white/[0.035]">
+    <article className="group relative flex min-h-[220px] flex-col rounded-[22px] border border-border/50 bg-surface-3 p-5 shadow-sm transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md dark:border-white/[0.06] dark:bg-white/[0.035]">
       <div className="flex min-w-0 items-start gap-3">
         <SiteMark domain={competitor.domain} size={44} />
         <div className="min-w-0 flex-1">
@@ -93,6 +93,17 @@ export function CompetitorCard({
             )}
           </div>
         ) : null}
+        {profile?.companyFacts?.length ? (
+          <p className="mt-3 line-clamp-2 rounded-xl bg-primary/[0.06] px-3 py-2 text-[12px] leading-relaxed text-foreground/80">
+            <span className="font-semibold text-primary">Company fact · </span>
+            {profile.companyFacts[0]}
+          </p>
+        ) : null}
+        {competitor.discoverySources.length > 0 && (
+          <div className="relative z-10 mt-3">
+            <SourceChips sources={competitor.discoverySources} limit={2} />
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2 border-t border-border/50 pt-3">

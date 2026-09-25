@@ -415,6 +415,22 @@ export function logoCorner(size: ImgSize): "top-left" | "bottom-right" {
   return size === "1024x1792" ? "top-left" : "bottom-right";
 }
 
+/** A Brand Kit Style applied to one image (see imageStyleInput in brand-kit/prompt). */
+export type ImageStyleInput = {
+  name: string | null;
+  /** The visual style block (visualStyleBlock). */
+  block: string;
+  /** Resolved palette, most important first — overrides Brand DNA colours. */
+  colors: string[];
+  /** Resolved heading/body fonts — override Brand DNA fonts. */
+  fonts: string[];
+  maxWords?: number;
+  logoCorner?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  useLogo?: boolean;
+  /** Reference images attached to the request, and how closely to follow them. */
+  references?: { count: number; strength: "close" | "exact" };
+};
+
 export function buildImagePromptDetailed(args: {
   postBody: string;
   postTitle?: string | null;
@@ -424,8 +440,10 @@ export function buildImagePromptDetailed(args: {
   size: ImgSize;
   seedKey: string;
   autoSize?: boolean;
+  style?: ImageStyleInput | null;
 }): PromptInspection {
-  const { postBody, postTitle, brand, workspaceName, platform, size, seedKey, autoSize } = args;
+  const { postBody, postTitle, brand, workspaceName, platform, size, seedKey, autoSize, style } =
+    args;
   const body = (postBody || "").trim();
   const firstLine =
     body
@@ -454,12 +472,19 @@ export function buildImagePromptDetailed(args: {
   const audienceTags = (brand?.audienceTags ?? []).filter(Boolean).slice(0, 6).join(", ");
   const valueTags = (brand?.valueTags ?? []).filter(Boolean).slice(0, 6).join(", ");
   const keywords = (brand?.keywords ?? []).filter(Boolean).slice(0, 8).join(", ");
-  const brandColors = (brand?.colors ?? [])
-    .map((c) => normalizeHex(c?.hex))
+  const brandColors = (
+    style?.colors.length
+      ? style.colors.map((hex) => normalizeHex(hex))
+      : (brand?.colors ?? []).map((c) => normalizeHex(c?.hex))
+  )
     .filter(Boolean)
     .slice(0, 6) as string[];
-  const brandFonts = (brand?.fonts ?? []).filter(Boolean).slice(0, 3);
-  const hasLogo = !!brand?.logoUrl;
+  const brandFonts = (style?.fonts.length ? style.fonts : (brand?.fonts ?? []))
+    .filter(Boolean)
+    .slice(0, 3);
+  const hasLogo = style?.useLogo === false ? false : !!brand?.logoUrl;
+  const corner = style?.logoCorner ?? logoCorner(size);
+  const maxWords = style?.maxWords ?? 6;
 
   const brandFields: PromptInspection["brandFields"] = [
     { key: "brandName", label: "Brand name", value: brandName, used: !!brandName },
@@ -491,8 +516,17 @@ export function buildImagePromptDetailed(args: {
     { key: "logoUrl", label: "Logo", value: hasLogo ? "provided" : "", used: hasLogo },
   ];
 
-  const vis = getBrandVisualSystem(brand, seedKey, workspaceName);
-  const styleSeed = getStyleSeed(brand, seedKey, workspaceName);
+  // A Style's palette and fonts drive the canvas defaults too, not only the
+  // "exact palette" line, so nothing in the prompt still points at DNA colours.
+  const visualBrand: BrandDnaLite | null = style
+    ? {
+        ...(brand ?? {}),
+        ...(style.colors.length ? { colors: style.colors.map((hex) => ({ hex })) } : {}),
+        ...(style.fonts.length ? { fonts: style.fonts } : {}),
+      }
+    : brand;
+  const vis = getBrandVisualSystem(visualBrand, seedKey, workspaceName);
+  const styleSeed = getStyleSeed(visualBrand, seedKey, workspaceName);
   const moodLine = deriveMoodFromVoice(voice, values, industry);
   const creativeBrief = deriveCreativeBrief({
     body,
@@ -601,14 +635,34 @@ export function buildImagePromptDetailed(args: {
     "• Feel: modern, editorial, confident, premium. Feed-native. Scroll-stopping.",
     "• Rendering quality: MAXIMUM. Photographic clarity or crisp vector edges (no fuzzy JPEG artifacts, no blurred textures, no low-poly shading). Every element must look intentional and finished — magazine cover / Apple keynote grade.",
     hasLogo
-      ? `• LOGO OVERLAY: the real brand logo will be composited onto this image after generation in the ${logoCorner(size)} corner at ~12% width. LEAVE THAT CORNER CLEAN — no busy pattern, no text, no faces, no high-contrast detail in that ~18% square region. Do NOT draw any logo, wordmark, monogram, or letter mark yourself.`
+      ? `• LOGO OVERLAY: the real brand logo will be composited onto this image after generation in the ${corner} corner at ~12% width. LEAVE THAT CORNER CLEAN — no busy pattern, no text, no faces, no high-contrast detail in that ~18% square region. Do NOT draw any logo, wordmark, monogram, or letter mark yourself.`
       : `• No brand logo provided — do NOT invent a logo, wordmark, or monogram. Compose without any brand mark; keep the corner clean.`,
     `• Consistency rule: any other image tagged with style anchor "${styleSeed}" must look like it came from the same art-directed set — same palette, same type system, same compositional grammar. Only reframe for the target aspect ratio.`,
     "• Absolutely NOT: stock-photo, clip-art, AI-generic collage, cliché 3D blobs, generic gradient mesh, purple-pink SaaS gradient, off-palette colors, low-resolution textures.",
+    ...(style?.block
+      ? [
+          "",
+          `BRAND STYLE${style.name ? ` "${style.name}"` : ""} — the brand's own chosen look. Where it differs from the defaults above, follow the style:`,
+          ...style.block
+            .split("\n")
+            .slice(1)
+            .map((line) => `• ${line}`),
+        ]
+      : []),
+    ...(style?.references?.count
+      ? [
+          "",
+          style.references.strength === "exact"
+            ? `REFERENCE IMAGES (${style.references.count} attached): these are the brand's own posts. Make this image look like the next post in that exact series: same layout grid, type treatment, palette, lighting, graphic elements and finish. Change only the subject and message for this post. Never copy their text.`
+            : `REFERENCE IMAGES (${style.references.count} attached): examples of the brand's style. Match their look closely: palette, lighting, composition, typography treatment and graphic elements. Create a NEW image for this post; never copy their subject or text.`,
+        ]
+      : []),
 
     "",
     "TEXT ON IMAGE:",
-    "• If any text appears, it must be a short real phrase pulled directly from the post hook (max 6 words). No lorem ipsum, no gibberish, no repeated letters, no misspellings.",
+    maxWords === 0
+      ? "• NO text on the image at all. No letters, no words, no numbers."
+      : `• If any text appears, it must be a short real phrase pulled directly from the post hook (max ${maxWords} words). No lorem ipsum, no gibberish, no repeated letters, no misspellings.`,
     "• Type must sit in the brand palette. Kerning tight, hierarchy clear. Legible at thumbnail size.",
     "",
     "GUARDRAILS:",

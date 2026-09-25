@@ -3,7 +3,7 @@
 # evals/providers/competitor-intel.provider.ts. Deterministic assertions only
 # (schema conformance + grounding against the fixture pages) — no LLM judge,
 # so this is fast and has no flakiness budget to tune. Needs a real
-# ANTHROPIC_API_KEY to run (it calls the real Claude gateway).
+# OPENROUTER_API_KEY to run (it calls the real OpenRouter gateway).
 #
 # Run: npx --yes promptfoo@latest eval -c evals/competitor-intel.promptfooconfig.yaml
 

@@ -34,7 +34,7 @@ const SITE = process.env.GEO_AGENT_LIVE_SITE ?? "threereach.lovable.app";
 const CLEANUP = process.env.GEO_AGENT_E2E_CLEANUP === "1";
 const ready =
   process.env.GEO_AGENT_E2E === "1" &&
-  !!process.env.ANTHROPIC_API_KEY &&
+  !!process.env.OPENROUTER_API_KEY &&
   !!process.env.GITHUB_APP_ID &&
   !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -285,7 +285,10 @@ const WAITING = new Set(["awaiting_plan_approval", "needs_input", "awaiting_patc
         console.info(`[live] ${finding.rule_id} ended ${run.status}: ${run.statusDetail}`);
         continue;
       }
-      expect(run.model).toBe(process.env.GEO_AGENT_MODEL || "claude-sonnet-5");
+      expect(run.model).toBe(
+        process.env.AI_MODEL_GEO_AGENT_INVESTIGATE?.split(",")[0]?.trim() ||
+          "anthropic/claude-opus-5.5",
+      );
       const plan = run.plan!;
       console.info(
         `[live] plan: ${plan.strategy} — ${plan.files.map((f) => `${f.action}:${f.path}`).join(", ")}\n   ${plan.summary}`,

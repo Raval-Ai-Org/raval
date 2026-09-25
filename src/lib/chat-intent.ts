@@ -44,3 +44,14 @@ export function detectCreateIntent(text: string): CreateIntent | null {
   if (!type) return null;
   return { type, brief: t };
 }
+
+// Strategy and analysis turns get more reasoning on the premium chat model
+// (the `chat.pro` escalation in src/server/ai/task-models.ts). Pure and cheap:
+// a keyword read of the newest user turn, never a model call.
+const STRATEGY =
+  /\b(?:strateg(?:y|ies|ic)|analy[sz](?:e|is|ing)|audit|diagnos(?:e|is)|positioning|go[\s-]to[\s-]market|gtm|roadmap|forecast|prioriti[sz]e|trade-?offs?|compare|competitors?|pricing\s+model|why\s+(?:is|are|did|does|do)|what\s+should\s+(?:i|we))\b/i;
+
+export function isStrategyTurn(text: string): boolean {
+  const t = text.replace(/\s+/g, " ").trim();
+  return t.length >= 12 && STRATEGY.test(t);
+}

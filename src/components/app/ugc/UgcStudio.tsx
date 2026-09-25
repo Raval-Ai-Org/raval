@@ -471,7 +471,7 @@ function ProjectEditor({
 
   const model =
     catalog?.models.find((m) => m.key === settings?.model) ??
-    catalog?.models.find((m) => m.key === "seedance-2") ??
+    catalog?.models.find((m) => m.key === "standard") ??
     catalog?.models[0];
   const durationSec = settings?.durationSec ?? 8;
 

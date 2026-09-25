@@ -166,3 +166,49 @@ export async function catalogHealth(): Promise<CatalogHealth> {
     lastSyncedAt: latest.data?.last_seen_at ?? null,
   };
 }
+
+/** A catalog older than this is refreshed before anyone browses it. */
+const REFRESH_AFTER_HOURS = 20;
+
+let refreshing: Promise<void> | null = null;
+
+/**
+ * Makes sure the mirror is fresh enough to quote from.
+ *
+ * The daily cron hook is the normal path, but when it cannot reach the app (a
+ * local server, a misconfigured base URL) every row ages past FRESH_HOURS and
+ * the whole marketplace silently shows nothing. So the first browse after the
+ * mirror goes stale walks the catalog itself. One walk per process at a time;
+ * a second walk elsewhere is harmless because the upsert is idempotent.
+ */
+export async function ensureFreshCatalog(options: { deadlineMs?: number } = {}): Promise<void> {
+  if (!rixotConfigured()) return;
+
+  const { data } = await supabaseAdmin
+    .from("rixot_donors")
+    .select("last_seen_at")
+    .is("delisted_at", null)
+    .order("last_seen_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const latest = data?.last_seen_at ? new Date(data.last_seen_at).getTime() : 0;
+  if (Date.now() - latest < REFRESH_AFTER_HOURS * 3600_000) return;
+
+  refreshing ??= syncCatalog({ deadline: Date.now() + (options.deadlineMs ?? 90_000) })
+    .then((result) => {
+      if (result.errors.length > 0) {
+        console.warn(
+          "[links] on-demand catalog sync finished with errors",
+          result.errors.slice(0, 3),
+        );
+      }
+    })
+    .catch((error) => {
+      console.warn("[links] on-demand catalog sync failed", error);
+    })
+    .finally(() => {
+      refreshing = null;
+    });
+  await refreshing;
+}

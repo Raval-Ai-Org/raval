@@ -13,7 +13,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { HttpError } from "@/server/http-error";
 import { recordAudit } from "@/server/audit.server";
 import { assertPublicUrl, SsrfBlockedError } from "@/server/safe-fetch";
-import { claudeJsonPrompt, selectClaudeModel } from "@/lib/anthropic-gateway.server";
+import { llmJson } from "@/lib/ai-gateway.server";
 import { checkBudget } from "@/server/ai/budget";
 import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import { quoteLines, roundUsd } from "@/lib/links/pricing";
@@ -179,11 +179,9 @@ export async function prepareBrief(args: {
   };
   if (budget.mode === "block") return fallback;
 
-  const result = await claudeJsonPrompt<{ angle: string; brief: string } | null>({
+  const result = await llmJson<{ angle: string; brief: string } | null>({
     route: "links-article-brief",
-    model: selectClaudeModel("default"),
     maxTokens: 900,
-    effort: "low",
     timeoutMs: 45_000,
     outputSchema: BRIEF_SCHEMA,
     fallback: null,

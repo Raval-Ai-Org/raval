@@ -13,7 +13,7 @@
 // facts; the prompt carries repository code, never instructions from it.
 import "server-only";
 import { createPatch } from "diff";
-import { CLAUDE_SONNET_MODEL, claudeTextCompletion } from "@/lib/anthropic-gateway.server";
+import { llmText } from "@/lib/ai-gateway.server";
 import type { SiteArtifacts } from "@/lib/geo/types";
 import {
   buildLlmsTxt,
@@ -66,7 +66,7 @@ export type GenerationInput = {
   current: { path: string; action: "create" | "update"; content: string | null }[];
 };
 
-export type Completer = typeof claudeTextCompletion;
+export type Completer = typeof llmText;
 
 function finalize(files: ProposedFile[], explanations: Map<string, string>): GeneratedFile[] {
   return files.map((f) => {
@@ -304,9 +304,7 @@ ${files}`;
     route: "geo.fix.propose",
     system: SYSTEM,
     user,
-    model: CLAUDE_SONNET_MODEL,
     maxTokens: 8000,
-    effort: "medium",
     outputSchema: OUTPUT_SCHEMA,
     timeoutMs: 90_000,
     retries: 1,
@@ -339,5 +337,5 @@ export async function generateChange(
   deps: { complete?: Completer } = {},
 ): Promise<GenerationResult> {
   if (input.plan.strategy === "static_file") return generateStatic(input);
-  return generateCode(input, deps.complete ?? claudeTextCompletion);
+  return generateCode(input, deps.complete ?? llmText);
 }

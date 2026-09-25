@@ -132,6 +132,15 @@ export async function POST(request: Request) {
       },
       forgetToken: forgetInstallationToken,
       onPullRequest: async (installationId, pr) => {
+        if (pr.headRef.startsWith("mellox/exp-")) {
+          const { handleExperimentPullRequest } =
+            await import("@/server/experiments/deliveries.server");
+          return handleExperimentPullRequest(await connectionIds(installationId), pr);
+        }
+        if (pr.headRef.startsWith("mellox/post-")) {
+          const { handlePublicationPullRequest } = await import("@/server/articles/publish.server");
+          return handlePublicationPullRequest(await connectionIds(installationId), pr);
+        }
         const { handlePullRequestWebhook } = await import("@/server/geo/fixes/service.server");
         return handlePullRequestWebhook(await connectionIds(installationId), pr);
       },

@@ -27,6 +27,13 @@ export type BrandCtxDna = {
   userInsights?: Array<{ title: string; body: string }> | null;
   competitors?: Array<{ name: string; positioning?: string; url?: string }> | null;
   customer?: {
+    jobsToBeDone?: string | null;
+    painPoints?: string | null;
+    objections?: string | null;
+    buyingTriggers?: string | null;
+    decisionCriteria?: string | null;
+    channels?: string | null;
+    feedback?: string | null;
     personas?: Array<{ name: string }>;
     triggerSignals?: Array<{ text: string }>;
     objectionSignals?: Array<{ text: string }>;
@@ -113,6 +120,11 @@ export function serializeBrandContext(
     push("USP", dna.uniqueValueProp);
     push("Positioning", dna.positioning);
     push("Mission", dna.mission);
+    if (dna.socials?.length)
+      push(
+        "Active social channels",
+        [...new Set(dna.socials.map((social) => social.platform))].join(", "),
+      );
 
     if (dna.userInsights?.length) {
       lines.push("");
@@ -133,9 +145,28 @@ export function serializeBrandContext(
     }
 
     const cs = dna.customer;
-    if (cs && (cs.personas?.length || cs.triggerSignals?.length || cs.objectionSignals?.length)) {
+    if (
+      cs &&
+      (cs.jobsToBeDone ||
+        cs.painPoints ||
+        cs.objections ||
+        cs.buyingTriggers ||
+        cs.decisionCriteria ||
+        cs.channels ||
+        cs.feedback ||
+        cs.personas?.length ||
+        cs.triggerSignals?.length ||
+        cs.objectionSignals?.length)
+    ) {
       lines.push("");
       lines.push("## Customer signals");
+      push("Jobs to be done", cs.jobsToBeDone);
+      push("Pain points", cs.painPoints);
+      push("Objections", cs.objections);
+      push("Buying triggers", cs.buyingTriggers);
+      push("Decision criteria", cs.decisionCriteria);
+      push("Customer channels", cs.channels);
+      push("Feedback", cs.feedback);
       if (cs.personas?.length)
         lines.push(
           `- Personas: ${cs.personas

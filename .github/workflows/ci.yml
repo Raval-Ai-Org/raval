@@ -170,10 +170,10 @@ jobs:
       # SDKs) is much heavier than this app's runtime needs, so it's fetched
       # on demand via npx, isolated from the app's own lockfile.
       - name: Run evals when configured
-        if: ${{ secrets.ANTHROPIC_API_KEY_EVALS != '' }}
+        if: ${{ secrets.OPENROUTER_API_KEY_EVALS != '' }}
         run: npm run eval
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_EVALS }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_EVALS }}
 
   sdr:
     name: SDR service · pytest · ruff

@@ -18,8 +18,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { cancelScheduled } from "@/lib/sdr.functions";
-import { authedFetch } from "@/lib/authed-fetch";
+import { authedFetch, getActiveWorkspaceId } from "@/lib/authed-fetch";
 import { streamImage } from "@/lib/streamImage";
+import { rememberedStyle } from "@/lib/studio/session-store";
 import {
   CalendarDays,
   Sparkles,
@@ -1667,15 +1668,25 @@ function EntryEditor({
     setImgLoading(true);
     setImgFinal(false);
     try {
-      await streamImage(prompt, (dataUrl, isFinal) => {
-        setStreamingPreview(dataUrl);
-        if (isFinal) {
-          setImgFinal(true);
-          addImage(dataUrl);
-          setStreamingPreview(undefined);
-          snapshot("auto");
-        }
-      });
+      await streamImage(
+        prompt,
+        (dataUrl, isFinal) => {
+          setStreamingPreview(dataUrl);
+          if (isFinal) {
+            setImgFinal(true);
+            addImage(dataUrl);
+            setStreamingPreview(undefined);
+            snapshot("auto");
+          }
+        },
+        {
+          // The workspace's Brand Kit style, applied (and checked) on the server.
+          brandStyle: (() => {
+            const ws = getActiveWorkspaceId();
+            return (ws && rememberedStyle(ws)) || "default";
+          })(),
+        },
+      );
       toast.success("Visual ready");
     } catch (e: any) {
       toast.error(e?.message ?? "Image generation failed");

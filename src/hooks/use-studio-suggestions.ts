@@ -1,433 +1,144 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useServerFn } from "@/lib/use-server-fn";
-import { supabase } from "@/integrations/supabase/client";
-import { refreshSuggestions } from "@/lib/insights.functions";
+import { readBrandPayload, studioApi } from "@/lib/studio/client";
+import { IDEA_SOURCE_LABEL, type StudioIdea } from "@/lib/studio/ideas";
 
 export type StudioSuggestionAccent = "indigo" | "blue" | "green" | "violet" | "rose" | "amber";
-
 export type StudioSuggestion = {
   id: string;
   label: string;
   hint: string;
   accent: StudioSuggestionAccent;
-  /** Lucide-like icon name we render via the brand icons re-exports */
   icon: "Sparkles" | "Brain" | "Calendar" | "Search" | "Wand2" | "Mail" | "Share2" | "FileText";
-  /** Fired when the user clicks. */
   run: () => void;
 };
 
-function hasBrandDna(wsId: string): boolean {
-  try {
-    for (const k of [`brand-dna:v3:${wsId}`, `brand-dna:v2:${wsId}`, `brand-dna:${wsId}`]) {
-      const raw = localStorage.getItem(k);
-      if (!raw) continue;
-      const b = JSON.parse(raw) as Record<string, unknown>;
-      if (b && (b.brandName || b.oneLiner || b.websiteUrl)) return true;
-    }
-  } catch {}
-  return false;
-}
+type DismissedIdea = { id: string; title: string };
+const dismissedKey = (workspaceId: string) => `studio:ideas-dismissed:${workspaceId}`;
 
-function hasRecentAudit(wsId: string): boolean {
+function readDismissed(workspaceId: string): DismissedIdea[] {
   try {
-    const raw = localStorage.getItem(`geo:lastRun:${wsId}`);
-    if (!raw) return false;
-    const ts = Number(raw);
-    if (!Number.isFinite(ts)) return false;
-    return Date.now() - ts < 1000 * 60 * 60 * 24 * 7; // 7 days
+    const value = JSON.parse(localStorage.getItem(dismissedKey(workspaceId)) ?? "[]") as unknown;
+    return Array.isArray(value)
+      ? value.filter(
+          (item): item is DismissedIdea =>
+            !!item && typeof item.id === "string" && typeof item.title === "string",
+        )
+      : [];
   } catch {
-    return false;
+    return [];
   }
 }
 
-function openCanvas(type: string) {
-  emitAppEvent("open:canvas", { type });
-}
+const ICON = {
+  season: "Calendar",
+  trend: "Search",
+  competitor: "Wand2",
+  gap: "FileText",
+  pillar: "Brain",
+  momentum: "Sparkles",
+} as const;
+const ACCENT: Record<StudioIdea["source"], StudioSuggestionAccent> = {
+  season: "green",
+  trend: "blue",
+  competitor: "rose",
+  gap: "amber",
+  pillar: "violet",
+  momentum: "indigo",
+};
 
-function chatPrefill(prompt: string) {
-  emitAppEvent("chat:prefill", prompt);
-  emitAppEvent("chat:focus");
+function toSuggestion(idea: StudioIdea): StudioSuggestion {
+  return {
+    id: idea.id,
+    label: idea.title,
+    hint: idea.why
+      ? `${IDEA_SOURCE_LABEL[idea.source]} · ${idea.why}`
+      : IDEA_SOURCE_LABEL[idea.source],
+    accent: ACCENT[idea.source],
+    icon: ICON[idea.source],
+    run: () =>
+      emitAppEvent("open:canvas", {
+        type: idea.type,
+        brief: idea.brief,
+        goal: idea.goal,
+        ideaId: idea.id,
+        ideaSource: idea.source,
+        platforms: idea.platforms,
+      }),
+  };
 }
 
 export function useStudioSuggestions() {
-  // Suggestions are for the workspace on screen; loads re-run when it changes.
   const workspaceId = useOptionalWorkspaceId();
-  const [items, setItems] = useState<StudioSuggestion[]>([]);
+  const [ideas, setIdeas] = useState<StudioIdea[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const request = useRef(0);
 
-  const load = useCallback(async () => {
-    const wsId = workspaceId;
-    if (!wsId) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
-
-    const weekAgo = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString();
-    const nextWeek = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
-
-    const [publishedRecent, scheduledNext, draftsCount, blogCount, sharesCount] = await Promise.all(
-      [
-        supabase
-          .from("content_items")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", wsId)
-          .eq("status", "published")
-          .gte("updated_at", weekAgo),
-        supabase
-          .from("content_items")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", wsId)
-          .eq("status", "scheduled")
-          .lte("scheduled_at", nextWeek),
-        supabase
-          .from("content_items")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", wsId)
-          .eq("status", "draft"),
-        supabase
-          .from("content_items")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", wsId)
-          .in("kind", ["blog", "brief"]),
-        supabase
-          .from("client_shares")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", wsId),
-      ],
-    );
-
-    const dnaOk = hasBrandDna(wsId);
-    const auditOk = hasRecentAudit(wsId);
-
-    const out: StudioSuggestion[] = [];
-
-    if (!dnaOk) {
-      out.push({
-        id: "brand-dna",
-        label: "Capture your Brand DNA",
-        hint: "30s · unlocks personalised drafts",
-        accent: "violet",
-        icon: "Brain",
-        run: () => emitAppEvent("open:brand-dna"),
-      });
-    }
-
-    if (!auditOk) {
-      out.push({
-        id: "geo-audit",
-        label: "Run AI visibility audit",
-        hint: "60+ check GEO / AEO scan",
-        accent: "blue",
-        icon: "Search",
-        run: () => emitAppEvent("geo:run-audit"),
-      });
-    }
-
-    if ((publishedRecent.count ?? 0) < 3) {
-      out.push({
-        id: "plan-week",
-        label: "Plan this week's content",
-        hint: `${publishedRecent.count ?? 0} published in last 7 days`,
-        accent: "green",
-        icon: "Calendar",
-        run: () =>
-          chatPrefill(
-            "Plan this week's content — 5 posts across LinkedIn and Instagram, grounded in our Brand DNA.",
-          ),
-      });
-    }
-
-    if ((scheduledNext.count ?? 0) === 0) {
-      out.push({
-        id: "schedule-next",
-        label: "Schedule next week's posts",
-        hint: "Calendar is empty for next 7 days",
-        accent: "indigo",
-        icon: "Calendar",
-        run: () =>
-          chatPrefill(
-            "Schedule 5 posts for next week across LinkedIn and Instagram with the best times for our audience.",
-          ),
-      });
-    }
-
-    if ((draftsCount.count ?? 0) >= 5) {
-      out.push({
-        id: "review-drafts",
-        label: `Review ${draftsCount.count} drafts`,
-        hint: "Approve or polish to keep momentum",
-        accent: "amber",
-        icon: "Wand2",
-        run: () => emitAppEvent("open:content-calendar"),
-      });
-    }
-
-    if ((blogCount.count ?? 0) === 0) {
-      out.push({
-        id: "first-article",
-        label: "Write your first article",
-        hint: "Answer a question your buyers search for",
-        accent: "blue",
-        icon: "FileText",
-        run: () => openCanvas("article"),
-      });
-    }
-
-    if ((sharesCount.count ?? 0) === 0) {
-      out.push({
-        id: "first-share",
-        label: "Share work with a client",
-        hint: "Get approvals in one link",
-        accent: "rose",
-        icon: "Share2",
-        run: () => emitAppEvent("open:client-portal"),
-      });
-    }
-
-    // Always-on gentle nudge if everything else is clear
-    if (out.length === 0) {
-      out.push({
-        id: "ideate",
-        label: "Brainstorm a campaign",
-        hint: "Spin up 5 angles in 30s",
-        accent: "indigo",
-        icon: "Sparkles",
-        run: () =>
-          chatPrefill(
-            "Brainstorm 5 campaign angles for our next launch, grounded in our Brand DNA.",
-          ),
-      });
-    }
-
-    setItems(out.slice(0, 5));
-    setLoading(false);
-  }, [workspaceId]);
-
-  const callAi = useServerFn(refreshSuggestions);
-  const [aiItems, setAiItems] = useState<StudioSuggestion[]>([]);
-  const aiLoadingRef = useRef(false);
-
-  type CachedAiItem = Omit<StudioSuggestion, "run"> & { intent: string; prompt: string };
-
-  const loadAi = useCallback(
-    async (force = false) => {
-      const wsId = workspaceId;
-      if (!wsId || aiLoadingRef.current) return;
-      // 15-minute cache. We rebuild `run` from stored `intent`+`prompt` because
-      // functions don't survive JSON.stringify — hydrating a raw cached
-      // StudioSuggestion would crash on click with "s.run is not a function".
+  const load = useCallback(
+    async (refresh = false) => {
+      const id = ++request.current;
+      if (!workspaceId) {
+        setIdeas([]);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      setError(false);
       try {
-        if (!force) {
-          const raw = localStorage.getItem(`studio:suggestions:${wsId}`);
-          if (raw) {
-            const cached = JSON.parse(raw) as { at: number; items: CachedAiItem[] };
-            if (Date.now() - cached.at < 15 * 60 * 1000 && Array.isArray(cached.items)) {
-              setAiItems(
-                cached.items.map((c) => ({
-                  id: c.id,
-                  label: c.label,
-                  hint: c.hint,
-                  accent: c.accent,
-                  icon: c.icon,
-                  run: () => runIntent(c.intent, c.prompt),
-                })),
-              );
-              return;
-            }
-          }
-        }
-      } catch {}
-
-      aiLoadingRef.current = true;
-      try {
-        const brandContext = (() => {
-          try {
-            for (const k of [`brand-dna:v3:${wsId}`, `brand-dna:v2:${wsId}`, `brand-dna:${wsId}`]) {
-              const raw = localStorage.getItem(k);
-              if (!raw) continue;
-              const b = JSON.parse(raw) as Record<string, unknown>;
-              const lines: string[] = [];
-              for (const f of [
-                "brandName",
-                "oneLiner",
-                "industry",
-                "products",
-                "audience",
-                "voice",
-                "values",
-              ]) {
-                const v = b[f];
-                if (typeof v === "string" && v.trim()) lines.push(`${f}: ${v}`);
-              }
-              return lines.join("\n");
-            }
-          } catch {}
-          return "";
-        })();
-
-        const res = await callAi({
-          data: { workspaceId: wsId, brandContext, max: 5 },
+        const dismissed = readDismissed(workspaceId);
+        const result = await studioApi.ideas({
+          workspaceId,
+          brand: readBrandPayload(workspaceId),
+          dismissed: dismissed.map((item) => item.title).slice(-30),
+          limit: 8,
+          refresh,
         });
-        const raw = (res.suggestions ?? []).map((s, i) => ({
-          id: `ai-${i}-${s.intent}`,
-          label: s.label,
-          hint: s.hint,
-          accent: aiAccentFor(s.intent),
-          icon: aiIconFor(s.intent),
-          intent: s.intent,
-          prompt: s.prompt,
-        }));
-        const mapped: StudioSuggestion[] = raw.map((c) => ({
-          id: c.id,
-          label: c.label,
-          hint: c.hint,
-          accent: c.accent,
-          icon: c.icon,
-          run: () => runIntent(c.intent, c.prompt),
-        }));
-        setAiItems(mapped);
-        try {
-          localStorage.setItem(
-            `studio:suggestions:${wsId}`,
-            JSON.stringify({ at: Date.now(), items: raw }),
-          );
-        } catch {}
+        if (id !== request.current) return;
+        const hidden = new Set(dismissed.map((item) => item.id));
+        setIdeas(result.ideas.filter((idea) => !hidden.has(idea.id)));
       } catch {
-        /* silent — deterministic items already render */
+        if (id === request.current) setError(true);
       } finally {
-        aiLoadingRef.current = false;
+        if (id === request.current) setLoading(false);
       }
     },
-    [callAi, workspaceId],
+    [workspaceId],
   );
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    load().catch(() => {
-      if (!cancelled) setLoading(false);
-    });
-    loadAi(false).catch(() => {});
-    const onChange = () => {
-      load().catch(() => {});
-    };
-    const onSignalChange = () => {
-      loadAi(true).catch(() => {});
-    };
+    setIdeas([]);
+    void load();
+    const onChange = () => void load();
+    const onBrandChange = () => void load(true);
+    addAppEventListener("brand-dna:saved", onBrandChange);
     addAppEventListener("content:changed", onChange);
-    addAppEventListener("brand-dna:saved", onChange);
-    addAppEventListener("brand-dna:saved", onSignalChange);
     addAppEventListener("geo:audit-complete", onChange);
-    addAppEventListener("geo:audit-complete", onSignalChange);
-    const t = window.setInterval(() => {
-      if (!document.hidden) load().catch(() => {});
-    }, 120000);
-    const onVis = () => {
-      if (!document.hidden) load().catch(() => {});
-    };
-    document.addEventListener("visibilitychange", onVis);
     return () => {
-      cancelled = true;
+      removeAppEventListener("brand-dna:saved", onBrandChange);
       removeAppEventListener("content:changed", onChange);
-      removeAppEventListener("brand-dna:saved", onChange);
-      removeAppEventListener("brand-dna:saved", onSignalChange);
       removeAppEventListener("geo:audit-complete", onChange);
-      removeAppEventListener("geo:audit-complete", onSignalChange);
-      window.clearInterval(t);
-      document.removeEventListener("visibilitychange", onVis);
     };
-  }, [load, loadAi]);
+  }, [load]);
 
-  const refresh = useCallback(async () => {
-    await load();
-    await loadAi(true);
-  }, [load, loadAi]);
+  const dismiss = useCallback(
+    (id: string) => {
+      if (!workspaceId) return;
+      const idea = ideas.find((item) => item.id === id);
+      if (!idea) return;
+      const dismissed = [...readDismissed(workspaceId), { id, title: idea.title }].slice(-40);
+      try {
+        localStorage.setItem(dismissedKey(workspaceId), JSON.stringify(dismissed));
+      } catch {
+        // Dismissal still applies to this session when storage is unavailable.
+      }
+      setIdeas((current) => current.filter((item) => item.id !== id));
+    },
+    [ideas, workspaceId],
+  );
 
-  // Merge: deterministic first (high-confidence signals), then AI extras.
-  const merged = [
-    ...items,
-    ...aiItems.filter((a) => !items.some((i) => i.label === a.label)),
-  ].slice(0, 8);
-
-  return { items: merged, loading, reload: load, refresh, aiItems };
-}
-
-/* ---- intent helpers ---- */
-function aiAccentFor(intent: string): StudioSuggestionAccent {
-  switch (intent) {
-    case "geo-audit":
-      return "blue";
-    case "brand-dna":
-      return "violet";
-    case "plan-week":
-    case "schedule":
-      return "indigo";
-    case "review-drafts":
-      return "amber";
-    case "seo-brief":
-    case "blog":
-      return "blue";
-    case "share":
-      return "rose";
-    case "social":
-      return "green";
-    case "email":
-      return "blue";
-    default:
-      return "indigo";
-  }
-}
-function aiIconFor(intent: string): StudioSuggestion["icon"] {
-  switch (intent) {
-    case "geo-audit":
-      return "Search";
-    case "brand-dna":
-      return "Brain";
-    case "plan-week":
-    case "schedule":
-      return "Calendar";
-    case "review-drafts":
-      return "Wand2";
-    case "seo-brief":
-    case "blog":
-      return "FileText";
-    case "share":
-      return "Share2";
-    case "email":
-      return "Mail";
-    case "social":
-      return "Share2";
-    default:
-      return "Sparkles";
-  }
-}
-function runIntent(intent: string, prompt: string) {
-  switch (intent) {
-    case "geo-audit":
-      emitAppEvent("geo:run-audit");
-      return;
-    case "brand-dna":
-      emitAppEvent("open:brand-dna");
-      return;
-    case "review-drafts":
-      emitAppEvent("open:content-calendar");
-      return;
-    case "share":
-      emitAppEvent("open:client-portal");
-      return;
-    case "seo-brief":
-    case "blog":
-      emitAppEvent("open:canvas", { type: "article", brief: prompt });
-      return;
-    case "social":
-      emitAppEvent("open:canvas", { type: "social", brief: prompt });
-      return;
-    default:
-      chatPrefill(prompt);
-  }
+  return { items: ideas.map(toSuggestion), loading, error, refresh: () => load(true), dismiss };
 }

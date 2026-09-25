@@ -36,8 +36,7 @@ vi.mock("@/server/studio/context.server", () => ({
   }),
 }));
 
-const describeLive =
-  process.env.ANTHROPIC_API_KEY || process.env.OPENROUTER_API_KEY ? describe : describe.skip;
+const describeLive = process.env.OPENROUTER_API_KEY ? describe : describe.skip;
 
 const WS = "00000000-0000-0000-0000-000000000001";
 

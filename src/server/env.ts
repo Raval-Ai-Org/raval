@@ -20,8 +20,17 @@ const Schema = z.object({
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(10),
   OPENROUTER_API_KEY: z.string().startsWith("sk-or-"),
   CRON_SECRET: z.string().min(16),
-  // Providers — optional; the feature reports "not configured" without them.
-  ANTHROPIC_API_KEY: z.string().optional(),
+  // AI models: every text, vision and image call goes through OpenRouter
+  // (src/server/ai/task-models.ts). Video runs on VIDEO_PROVIDER.
+  OPENROUTER_WEBHOOK_SECRET: z.string().optional(),
+  VIDEO_PROVIDER: z.enum(["kie", "openrouter"]).optional(),
+  VIDEO_PROVIDER_FALLBACK: z.enum(["openrouter", "kie", "none"]).optional(),
+  IMAGE_MODEL_DEFAULT: z.string().optional(),
+  IMAGE_MODEL_PREMIUM: z.string().optional(),
+  IMAGE_MODEL_EDIT: z.string().optional(),
+  IMAGE_MODEL_PREMIUM_EDIT: z.string().optional(),
+  GEO_PROBE_MODELS: z.string().optional(),
+  // DEPRECATED: removed when KIE is dropped (docs/adr/0026-openrouter-only-models.md).
   KIE_API_KEY: z.string().optional(),
   // UGC Video Ads (docs/ugc-video-ads.md). Callbacks are optional; polling always works.
   KIE_WEBHOOK_HMAC_KEY: z.string().optional(),
@@ -123,14 +132,7 @@ const REQUIRED_IN_PRODUCTION = [
   "CRON_SECRET",
 ] as const;
 
-const RECOMMENDED = [
-  "ANTHROPIC_API_KEY",
-  "TAVILY_API_KEY",
-  "KIE_API_KEY",
-  "REDIS_URL",
-  "SENTRY_DSN",
-  "ALERT_WEBHOOK_URL",
-] as const;
+const RECOMMENDED = ["TAVILY_API_KEY", "REDIS_URL", "SENTRY_DSN", "ALERT_WEBHOOK_URL"] as const;
 
 export type EnvReport = { ok: boolean; errors: string[]; warnings: string[] };
 
@@ -188,6 +190,20 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
     } else if (Buffer.from(key, "base64").length !== 32) {
       errors.push("GOOGLE_TOKEN_ENCRYPTION_KEY must be base64 of exactly 32 bytes");
     }
+  }
+  const videoProvider = (env.VIDEO_PROVIDER ?? "kie").toLowerCase();
+  const videoFallback = (env.VIDEO_PROVIDER_FALLBACK ?? "openrouter").toLowerCase();
+  if (videoProvider === "kie" && !env.KIE_API_KEY) {
+    warnings.push(
+      videoFallback === "openrouter"
+        ? "KIE_API_KEY is not set (video renders go straight to the OpenRouter fallback)"
+        : "KIE_API_KEY is not set and VIDEO_PROVIDER_FALLBACK is off (video generation is unavailable)",
+    );
+  }
+  if (!env.OPENROUTER_WEBHOOK_SECRET) {
+    warnings.push(
+      "OPENROUTER_WEBHOOK_SECRET is not set (OpenRouter video jobs are advanced by polling only)",
+    );
   }
   if ((env.DISTRIBUTION_PROVIDER ?? "").toLowerCase() === "socialapi" && !env.SOCIALAPI_API_KEY) {
     errors.push("SOCIALAPI_API_KEY is required when DISTRIBUTION_PROVIDER is socialapi");

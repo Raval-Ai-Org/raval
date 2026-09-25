@@ -3,6 +3,7 @@ import type { AnyServerFn } from "@/server/server-fn";
 
 import * as analytics from "./analytics";
 import * as brandDna from "./brand-dna";
+import * as brandKit from "./brand-kit";
 import * as campaignGeneration from "./campaign-generation";
 import * as coach from "./coach";
 import * as competitorIntel from "./competitor-intel";
@@ -10,6 +11,7 @@ import * as competitors from "./competitors";
 import * as competitorWatch from "./competitor-watch";
 import * as connectors from "./connectors";
 import * as content from "./content";
+import * as experiments from "./experiments";
 import * as geo from "./geo";
 import * as geoAeoAudit from "./geo-aeo-audit";
 import * as geoAgent from "./geo-agent";
@@ -18,6 +20,7 @@ import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
 import * as links from "./links";
 import * as schedules from "./schedules";
+import * as sitePublishing from "./site-publishing";
 import * as workspaces from "./workspaces";
 import * as webflow from "./webflow";
 import * as wordpress from "./wordpress";
@@ -27,6 +30,7 @@ import * as wordpress from "./wordpress";
 const MODULES: Record<string, Record<string, unknown>> = {
   analytics,
   "brand-dna": brandDna,
+  "brand-kit": brandKit,
   "campaign-generation": campaignGeneration,
   coach,
   "competitor-intel": competitorIntel,
@@ -34,6 +38,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "competitor-watch": competitorWatch,
   connectors,
   content,
+  experiments,
   geo,
   "geo-aeo-audit": geoAeoAudit,
   "geo-agent": geoAgent,
@@ -42,6 +47,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   insights,
   links,
   schedules,
+  "site-publishing": sitePublishing,
   workspaces,
   webflow,
   wordpress,

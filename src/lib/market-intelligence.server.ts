@@ -4,11 +4,8 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { serializeBrandContext, type BrandCtxDna } from "@/lib/ai/brand-context";
 import { safeParseJson } from "@/lib/ai/json";
-import {
-  AnthropicGatewayError,
-  claudeTextPrompt,
-  selectClaudeModel,
-} from "@/lib/anthropic-gateway.server";
+import { AiGatewayError, llmTextPrompt } from "@/lib/ai-gateway.server";
+import { primaryModel } from "@/server/ai/task-models";
 import type {
   MarketSignalSource,
   MarketSignalsData,
@@ -331,7 +328,7 @@ export function parseIntelligence(raw: string): MarketIntelligence {
 }
 
 function providerError(error: unknown): NonNullable<MarketIntelligenceResult["error"]> {
-  if (error instanceof AnthropicGatewayError) {
+  if (error instanceof AiGatewayError) {
     return { message: error.message, status: error.status, code: error.code };
   }
   if (error instanceof MarketIntelligenceError) {
@@ -484,9 +481,9 @@ async function generateIntelligence({
   // these keywords); no second web call here — a re-analysis of the same
   // collection is a pure Claude cost, not a repeated search.
   const prompt = buildPrompt({ collection, workspace, brandContext });
-  // A structured summary of supplied evidence (not open research): Sonnet 5 at
-  // medium effort. Opus stays one env var away: MARKET_INTELLIGENCE_MODEL.
-  const model = process.env.MARKET_INTELLIGENCE_MODEL?.trim() || selectClaudeModel("default");
+  // The model and effort come from the `market-intelligence` route plan
+  // (src/server/ai/task-models.ts; override with AI_MODEL_MARKET_INTELLIGENCE).
+  const model = primaryModel("market-intelligence");
   const startedAt = Date.now();
   let intelligence: MarketIntelligence;
   try {
@@ -496,15 +493,11 @@ async function generateIntelligence({
       model,
       promptChars: prompt.system.length + prompt.user.length,
     });
-    const raw = await claudeTextPrompt({
+    const raw = await llmTextPrompt({
       route: "market-intelligence",
       system: prompt.system,
       user: prompt.user,
-      model,
       maxTokens: CLAUDE_MAX_TOKENS,
-      // Interactive route: medium effort keeps thinking (and latency) bounded;
-      // the task is a structured summary of supplied evidence, not open research.
-      effort: "medium",
       outputSchema: MARKET_INTELLIGENCE_OUTPUT_SCHEMA,
       timeoutMs: CLAUDE_TIMEOUT_MS,
       retries: 1,

@@ -47,7 +47,11 @@
     ".next-verify/types/**/*.ts",
     ".next-verify/dev/types/**/*.ts",
     ".next-shots/types/**/*.ts",
-    ".next-shots/dev/types/**/*.ts"
+    ".next-shots/dev/types/**/*.ts",
+    ".next-proof/types/**/*.ts",
+    ".next-proof/dev/types/**/*.ts",
+    ".next-proofbuild/types/**/*.ts",
+    ".next-proofbuild/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

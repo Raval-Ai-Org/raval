@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ClaudeToolLoopOpts, ClaudeToolLoopResult } from "@/lib/anthropic-gateway.server";
+import type { LlmToolLoopOpts, LlmToolLoopResult } from "@/lib/ai-gateway.tool-loop.server";
 import type { AgentPlan } from "@/lib/geo/agent-contracts";
 import type { SiteArtifacts } from "@/lib/geo/types";
 import { strategyForRule } from "../fixes/strategies";
@@ -119,7 +119,7 @@ type Call = { tool: string; input: unknown };
 /** A fake tool loop: runs scripted tool calls through the real handler, one "turn" each. */
 function scriptedLoop(script: Call[][]) {
   const outcomes: { tool: string; isError: boolean; content: string }[] = [];
-  const loop = vi.fn(async (opts: ClaudeToolLoopOpts): Promise<ClaudeToolLoopResult> => {
+  const loop = vi.fn(async (opts: LlmToolLoopOpts): Promise<LlmToolLoopResult> => {
     const turns = script.shift() ?? [];
     const usage = {
       turns: 1,
@@ -138,7 +138,7 @@ function scriptedLoop(script: Call[][]) {
           submission: { tool: call.tool, input: call.input },
           messages: opts.messages,
           usage,
-          model: "claude-sonnet-5",
+          model: "anthropic/claude-opus-5.5",
         };
       }
     }
@@ -147,7 +147,7 @@ function scriptedLoop(script: Call[][]) {
       submission: null,
       messages: opts.messages,
       usage,
-      model: "claude-sonnet-5",
+      model: "anthropic/claude-opus-5.5",
     };
   });
   return { loop, outcomes };
@@ -174,8 +174,9 @@ function deps(over: Partial<AgentDeps> = {}): AgentDeps & { events: string[] } {
 const approve = vi.fn(async () => ({
   text: JSON.stringify({ verdict: "approve", summary: "Looks right.", issues: [] }),
   truncated: false,
-  model: "claude-sonnet-5",
+  model: "anthropic/claude-opus-5.5",
   degraded: false,
+  costUsd: 0,
 }));
 
 describe("plan checks", () => {
@@ -413,6 +414,7 @@ describe("implement → review → validate → correct", () => {
       truncated: false,
       model: "m",
       degraded: false,
+      costUsd: 0,
     }));
     const { loop } = scriptedLoop([
       [{ tool: "submit_patch", input: goodEdit }],

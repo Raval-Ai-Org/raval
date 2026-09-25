@@ -116,6 +116,8 @@ export interface UgcRenderStore {
   persistVideo(input: {
     row: RenderRow;
     sourceUrl: string;
+    /** The file itself, when the provider's URL can't be fetched without a key. */
+    dataUrl?: string;
     idempotencyKey: string;
     metadata: Record<string, unknown>;
   }): Promise<PersistVideoResult>;

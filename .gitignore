@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 .next
 .next-verify
+.next-proof
+.next-build
+.next-proofbuild
 out
 dist
 *.local

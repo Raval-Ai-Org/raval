@@ -118,6 +118,11 @@ export const CreateJobSchema = z.object({
   intent: IntentSchema,
   controls: ControlsSchema,
   brand: BrandPayloadSchema,
+  /**
+   * Brand Kit Style: a style id, "none" for Brand DNA only, or absent for the
+   * workspace default. Checked on the server against the job's workspace.
+   */
+  styleId: z.union([z.string().uuid(), z.literal("none")]).nullish(),
   parentJobId: z.string().uuid().optional(),
   refine: RefineSchema.optional(),
   /** Regenerate: same brief, a new take. */
@@ -156,6 +161,11 @@ export type ArticleOutput = {
   markdown: string;
   takeaways: string[];
   wordCount: number;
+  /** Published as a visible FAQ and FAQPage structured data. */
+  faq?: { question: string; answer: string }[];
+  slug?: string;
+  category?: string;
+  tags?: string[];
 };
 
 export type ScriptBeat = {

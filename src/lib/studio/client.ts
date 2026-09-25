@@ -135,6 +135,7 @@ const BRAND_FIELDS = [
   "positioning",
   "uniqueValueProp",
   "keywords",
+  "socials",
   "competitors",
   "customer",
   "userInsights",

@@ -16,7 +16,11 @@ describe("recordUsage", () => {
     setUsageSink(sink);
     setHeliconeTransport(heliconeTransport);
 
-    recordUsage({ provider: "anthropic", model: "claude-sonnet-5", route: "test.route" });
+    recordUsage({
+      provider: "openrouter",
+      model: "anthropic/claude-opus-5.5",
+      route: "test.route",
+    });
     await Promise.resolve();
     await Promise.resolve();
 
@@ -30,7 +34,7 @@ describe("recordUsage", () => {
     setUsageSink(sink);
     setHeliconeTransport(heliconeTransport);
 
-    recordUsage({ provider: "openrouter", model: "qwen/qwen3-max", route: "test.route" });
+    recordUsage({ provider: "openrouter", model: "google/gemini-3.8-flash", route: "test.route" });
     await Promise.resolve();
 
     expect(sink).toHaveBeenCalledOnce();

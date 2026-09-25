@@ -515,6 +515,7 @@ export function FindingsTab({
         scan={scan}
         onBack={() => onFilterChange({})}
         onChanged={reload}
+        onOpenFinding={(findingId) => onFilterChange({ findingId })}
       />
     );
   }

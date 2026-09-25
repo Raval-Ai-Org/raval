@@ -26,7 +26,6 @@ const ResultSchema = z.object({
   reason: z.string().optional(),
 });
 
-const MODERATION_MODEL = "google/gemini-2.5-flash";
 const CACHE_TTL_SECONDS = 7 * 24 * 3600;
 
 const POLICY = [
@@ -40,7 +39,6 @@ export type ModerationClassifier = (imageUrl: string) => Promise<unknown>;
 const defaultClassifier: ModerationClassifier = async (imageUrl) => {
   const { chatCompletion } = await import("@/lib/ai-gateway.server");
   const json = await chatCompletion({
-    model: MODERATION_MODEL,
     task: "generate",
     max_tokens: 200,
     temperature: 0,

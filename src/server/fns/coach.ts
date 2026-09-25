@@ -4,7 +4,7 @@ import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rateLimitFor } from "@/server/rate-limit";
-import { selectClaudeModel } from "@/lib/anthropic-gateway.server";
+import { escalatedPlan } from "@/server/ai/task-models";
 import { cache, digest } from "@/server/cache/store";
 import { fetchPublicText } from "@/server/safe-fetch";
 import { webSearch, webAnswer } from "@/server/research/web-search.server";
@@ -194,11 +194,14 @@ async function loadResearch(
 
 /* -------------------- Output normalisation -------------------- */
 
-function coachModel(): string {
-  // Sonnet 5: a grounded executive summary of supplied signals. The old
-  // "Opus when the scraped site text is long" rule picked Opus for most sites,
-  // and every one of those calls failed. COACH_MODEL overrides.
-  return process.env.COACH_MODEL?.trim() || selectClaudeModel("marketing-coach");
+/**
+ * The model the briefing will use (part of its cache key). The route plan
+ * decides it: `coach.briefing` in src/server/ai/task-models.ts, escalated to
+ * high effort for a deep-strategy briefing.
+ */
+function coachModel(deepStrategy: boolean): string {
+  const plan = escalatedPlan("coach.briefing", deepStrategy);
+  return `${plan.models[0]}:${plan.effort ?? "default"}`;
 }
 
 /* -------------------- Server function -------------------- */
@@ -211,6 +214,8 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
         workspaceId: uuid,
         brandContext: z.string().max(8000).optional(),
         force: z.boolean().optional(),
+        /** Ask for the deeper (high-effort) strategy briefing. */
+        deepStrategy: z.boolean().optional(),
       })
       .parse(data),
   )
@@ -299,7 +304,8 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
 
     const today = new Date();
     const dayName = today.toLocaleDateString("en-US", { weekday: "long" });
-    const model = coachModel();
+    const deepStrategy = data.deepStrategy === true;
+    const model = coachModel(deepStrategy);
 
     /* 2. Reuse today's briefing while nothing it was built from has changed */
     const briefingKey = `coach:briefing:${await digest(
@@ -331,6 +337,7 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
       siteUrl,
       brandSeed,
       model,
+      deepStrategy,
       signals,
       brandContext: data.brandContext,
       siteText,

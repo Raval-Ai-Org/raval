@@ -19,7 +19,6 @@ import {
   X,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ugcApi, UgcApiError } from "@/lib/ugc/client";
 import type { Product, ReferenceImageView } from "@/lib/ugc/schemas";
@@ -168,32 +167,41 @@ export function ProductStep({
 
   const linkForm = (compact: boolean) => (
     <form
+      data-no-rhythm
       className={cn(
-        "flex items-center gap-1.5 rounded-full bg-background p-1.5 ring-1 ring-[var(--ds-tile-border)] transition-shadow focus-within:ring-2 focus-within:ring-primary/60",
-        !compact && "shadow-[0_18px_50px_-24px_hsl(var(--primary)/0.55)]",
+        "flex w-full items-center gap-2 rounded-full bg-background p-1.5 text-left ring-1 ring-[var(--ds-tile-border)] transition-shadow focus-within:ring-2 focus-within:ring-primary/60",
+        compact ? "h-12" : "h-14 shadow-[0_18px_50px_-24px_hsl(var(--primary)/0.55)]",
       )}
       onSubmit={(e) => {
         e.preventDefault();
         void extract();
       }}
     >
-      <Globe className="ml-2.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-      <Input
+      <span
+        aria-hidden
+        className={cn(
+          "grid shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground",
+          compact ? "size-9" : "size-11",
+        )}
+      >
+        <Globe className="size-4" />
+      </span>
+      <input
         aria-label="Product page link"
         inputMode="url"
         placeholder="Paste a product link"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         className={cn(
-          "min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0",
-          compact ? "h-9" : "h-11 text-[15px]",
+          "m-0 h-full min-w-0 flex-1 self-stretch bg-transparent px-1 text-left leading-none outline-none placeholder:text-muted-foreground disabled:opacity-60",
+          compact ? "text-sm" : "text-[15px]",
         )}
         disabled={extracting}
       />
       <Button
         type="submit"
         size={compact ? "default" : "lg"}
-        className="shrink-0"
+        className={cn("m-0 h-full shrink-0 px-5", compact && "px-4")}
         disabled={(!url.trim() && !workspaceWebsite) || extracting}
         loading={extracting}
       >
@@ -292,7 +300,7 @@ export function ProductStep({
       >
         {/* Product card */}
         <Panel className="space-y-5">
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row">
             <div className="relative size-24 shrink-0 overflow-hidden rounded-2xl bg-[var(--ds-well-bg)] sm:size-28">
               {cover ? (
                 <motion.img
@@ -655,6 +663,7 @@ function FactsEditor({
         </AnimatePresence>
       </ul>
       <form
+        data-no-rhythm
         className="flex items-center gap-1.5 rounded-full bg-[var(--ds-well-bg)] p-1 pl-3 ring-primary/50 focus-within:ring-2"
         onSubmit={(e) => {
           e.preventDefault();

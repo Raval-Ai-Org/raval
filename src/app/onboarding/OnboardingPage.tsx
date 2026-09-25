@@ -10,23 +10,28 @@ import { BrandReveal, type BrandEdits } from "@/components/onboarding/BrandRevea
 import { SCAN_PHASES, advancePhase } from "@/components/onboarding/phases";
 import { ScanStage, type ScanProgress, type ScanStatus } from "@/components/onboarding/ScanStage";
 import { SuccessMoment } from "@/components/onboarding/SuccessMoment";
-import { CompetitorStep } from "@/components/onboarding/CompetitorStep";
+import type { CompetitorResearchStatus } from "@/components/onboarding/CompetitorResearchPreview";
 import { AmbientCanvas } from "@/components/onboarding/ui";
 import { UrlStep } from "@/components/onboarding/UrlStep";
 import { normalizeUrl, validUrl } from "@/components/onboarding/url";
-import { emptyDna, saveBrandDnaFor, type BrandDna } from "@/hooks/use-brand-dna";
+import { emptyDna, flushBrandDnaFor, saveBrandDnaFor, type BrandDna } from "@/hooks/use-brand-dna";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { workspacePath } from "@/lib/workspace/paths";
 import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { mergeExtractionIntoDna } from "@/lib/brand-dna-merge";
-import type { BrandExtractResult, Discoveries } from "@/lib/brand-extract-events";
+import type { BrandExtractResult, Discoveries, SiteDiscovery } from "@/lib/brand-extract-events";
+import {
+  bootstrapCompetitors,
+  getCompetitorOverview,
+  type CompetitorView,
+} from "@/lib/competitors.functions";
 import { readBrandExtractStream } from "@/lib/brand-extract-stream";
 import { duration, ease } from "@/lib/motion";
 import { useNavigate } from "@/lib/navigation";
 
-type Step = "website" | "scan" | "review" | "competitors" | "done";
+type Step = "website" | "scan" | "review" | "done";
 
 /** workspaces_owner_domain_unique: this owner already has the brand's domain. */
 function isDuplicateDomainError(error: { code?: string; message?: string } | null): boolean {
@@ -39,14 +44,12 @@ const STEPS: { id: Exclude<Step, "done">; label: string }[] = [
   { id: "website", label: "Website" },
   { id: "scan", label: "Scan" },
   { id: "review", label: "Brand DNA" },
-  { id: "competitors", label: "Competitors" },
 ];
 
 const STEP_WIDTH: Record<Step, string> = {
   website: "max-w-2xl",
   scan: "max-w-[460px]",
   review: "max-w-6xl",
-  competitors: "max-w-2xl",
   done: "max-w-xl",
 };
 
@@ -88,11 +91,17 @@ function Onboarding() {
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
   const [scanError, setScanError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ScanProgress>(IDLE_PROGRESS);
+  const [competitors, setCompetitors] = useState<CompetitorView[]>([]);
+  const [competitorResearchStatus, setCompetitorResearchStatus] =
+    useState<CompetitorResearchStatus>("idle");
   const [saving, setSaving] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const scanFor = useRef<string | null>(null);
   const resultFor = useRef<string | null>(null);
   const scanAbort = useRef<AbortController | null>(null);
+  const competitorRun = useRef<Promise<void> | null>(null);
+  const competitorFor = useRef<string | null>(null);
+  const competitorGeneration = useRef(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const firstStep = useRef(true);
 
@@ -135,6 +144,49 @@ function Onboarding() {
     return () => window.clearTimeout(timer);
   }, [step, reduce]);
 
+  const startCompetitorResearch = (site: SiteDiscovery) => {
+    if (!workspaceId || competitorFor.current === site.hostname) return;
+    competitorFor.current = site.hostname;
+    const generation = ++competitorGeneration.current;
+    setCompetitorResearchStatus("searching");
+    competitorRun.current = bootstrapCompetitors({
+      data: {
+        workspaceId,
+        scanSeed: {
+          hostname: site.hostname,
+          siteName: (site.siteName || site.title.split(/[|·—-]/)[0]?.trim() || "").slice(0, 100),
+          description: site.description,
+        },
+      },
+    }).then(
+      (research) => {
+        if (generation !== competitorGeneration.current) return;
+        setCompetitors(research.competitors);
+        setCompetitorResearchStatus("ready");
+      },
+      () => {
+        if (generation === competitorGeneration.current) setCompetitorResearchStatus("error");
+      },
+    );
+  };
+
+  useEffect(() => {
+    if (
+      !workspaceId ||
+      competitorResearchStatus !== "ready" ||
+      !competitors.some(
+        (entry) => entry.profileStatus === "pending" || entry.profileStatus === "running",
+      )
+    )
+      return;
+    const timer = window.setInterval(() => {
+      void getCompetitorOverview({ data: { workspaceId } })
+        .then((overview) => setCompetitors(overview.competitors.slice(0, 6)))
+        .catch(() => undefined);
+    }, 8_000);
+    return () => window.clearInterval(timer);
+  }, [workspaceId, competitorResearchStatus, competitors]);
+
   const runScan = async (rawUrl: string, attempt = 0) => {
     const url = normalizeUrl(rawUrl);
     if (!workspaceId || !validUrl(url) || (scanStatus === "loading" && attempt === 0)) return;
@@ -144,6 +196,14 @@ function Onboarding() {
     }
 
     scanFor.current = url;
+    const nextHost = new URL(url).hostname.replace(/^www\./, "");
+    if (competitorFor.current && competitorFor.current !== nextHost) {
+      competitorGeneration.current += 1;
+      competitorFor.current = null;
+      competitorRun.current = null;
+      setCompetitors([]);
+      setCompetitorResearchStatus("idle");
+    }
     scanAbort.current?.abort();
     const controller = new AbortController();
     scanAbort.current = controller;
@@ -170,6 +230,11 @@ function Onboarding() {
       toast.error("You already have a workspace for this website", {
         description: "Open it from Workspaces instead of creating a second copy of the brand.",
       });
+      return;
+    }
+    if (siteError) {
+      setScanStatus("error");
+      setScanError("We couldn't save this website to your workspace. Please try again.");
       return;
     }
 
@@ -199,6 +264,7 @@ function Onboarding() {
         onDiscovery: (event) => {
           if (controller.signal.aborted) return;
           setDiscoveries((current) => ({ ...current, [event.kind]: event.data }));
+          if (event.kind === "site") startCompetitorResearch(event.data);
         },
       });
 
@@ -284,11 +350,30 @@ function Onboarding() {
       updatedAt: Date.now(),
     };
     saveBrandDnaFor(workspaceId, merged, true);
+    try {
+      await flushBrandDnaFor(workspaceId);
+    } catch (saveError) {
+      setSaving(false);
+      toast.error("Couldn't save Brand DNA", {
+        description: saveError instanceof Error ? saveError.message : "Try again in a moment.",
+      });
+      return;
+    }
     localStorage.removeItem(urlKey(workspaceId));
     setSaving(false);
-    // Brand DNA is saved, so discovery finally has a business to search
-    // around. It is its own step: a slow search must never hold up the reveal.
-    setStep("competitors");
+    // The early website search ran alongside the scan. Reconcile it with the
+    // completed Brand DNA without adding another onboarding step.
+    void (async () => {
+      await competitorRun.current?.catch(() => undefined);
+      try {
+        const research = await bootstrapCompetitors({ data: { workspaceId } });
+        setCompetitors(research.competitors);
+        setCompetitorResearchStatus("ready");
+      } catch {
+        // Competitor research can continue from the main app.
+      }
+    })();
+    setStep("done");
   };
 
   const skip = async () => {
@@ -333,6 +418,22 @@ function Onboarding() {
     exit: { opacity: 0, transition: { duration: duration.base, ease: ease.accelerate } },
   };
   const centered = step !== "review";
+
+  // Wait until the route's workspace and any saved scan URL are restored.
+  // Otherwise the empty URL form flashes for a frame before recovery switches
+  // returning users straight back to the scan.
+  if (!workspaceId) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-5 bg-background text-foreground">
+        <Logo markOnly height={34} />
+        <span
+          aria-label="Preparing your workspace"
+          className="h-4 w-4 rounded-full border-2 border-primary/25 border-t-primary animate-spin"
+        />
+        <span className="sr-only">Preparing your workspace</span>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -394,6 +495,8 @@ function Onboarding() {
                     progress={progress}
                     phase={phase}
                     discoveries={discoveries}
+                    competitors={competitors}
+                    competitorResearchStatus={competitorResearchStatus}
                     error={scanError}
                     reduce={reduce}
                     headingRef={headingRef}
@@ -405,6 +508,8 @@ function Onboarding() {
                 {step === "review" && (
                   <BrandReveal
                     brand={brand}
+                    competitors={competitors}
+                    competitorResearchStatus={competitorResearchStatus}
                     url={websiteUrl}
                     saving={saving}
                     reduce={reduce}
@@ -413,14 +518,6 @@ function Onboarding() {
                     onContinue={() => void finish()}
                     onRescan={rescan}
                     onChangeUrl={() => setStep("website")}
-                  />
-                )}
-                {step === "competitors" && workspaceId && (
-                  <CompetitorStep
-                    workspaceId={workspaceId}
-                    reduce={reduce}
-                    headingRef={headingRef}
-                    onContinue={() => setStep("done")}
                   />
                 )}
                 {step === "done" && (

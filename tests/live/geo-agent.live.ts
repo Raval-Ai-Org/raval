@@ -22,7 +22,7 @@ try {
 const REPO = process.env.GEO_AGENT_LIVE_REPO ?? "ZainIqbal-01/threereach";
 const SITE = process.env.GEO_AGENT_LIVE_SITE ?? "threereach.lovable.app";
 const ready =
-  !!process.env.ANTHROPIC_API_KEY &&
+  !!process.env.OPENROUTER_API_KEY &&
   !!process.env.GITHUB_APP_ID &&
   !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 /** Rules tried in order: head metadata first (a cheap, verifiable change). */

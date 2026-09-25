@@ -1,7 +1,12 @@
 "use client";
 
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
+import { BrandDnaStylesStrip } from "@/components/app/brand-kit/BrandDnaStylesStrip";
 import { mergeExtractionIntoDna } from "@/lib/brand-dna-merge";
+import { bootstrapCompetitors } from "@/lib/competitors.functions";
+import { flushBrandDnaFor } from "@/hooks/use-brand-dna";
+import { competitorKeys } from "@/components/app/competitors/hooks";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -43,7 +48,10 @@ import {
 } from "@/components/ui/dialog";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
-import { BrandDnaCompetitorsCallout } from "@/components/app/competitors/BrandDnaCompetitorsCallout";
+import {
+  BrandDnaCompetitorsCallout,
+  BrandDnaCompetitorsTilePreview,
+} from "@/components/app/competitors/BrandDnaCompetitorsCallout";
 import { Input } from "@/components/ui/input";
 import {
   useBrandDna,
@@ -88,6 +96,7 @@ const PLATFORM_KEYS: Record<string, BrandKey | undefined> = {
 };
 
 export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) {
+  const queryClient = useQueryClient();
   const { dna, save: rawSave, replace, filledCount, total } = useBrandDna(workspaceId);
   const [open, setOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -288,6 +297,20 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
       toast.success("Brand DNA synced", {
         description: `${stats.pages} pages • ${stats.competitors} competitors • ${stats.newInsights} insights`,
       });
+      if (workspaceId) {
+        void (async () => {
+          try {
+            await flushBrandDnaFor(workspaceId);
+            await bootstrapCompetitors({ data: { workspaceId } });
+            await queryClient.invalidateQueries({ queryKey: competitorKeys.all(workspaceId) });
+          } catch (researchError) {
+            console.warn(
+              "[competitors] automatic research after Brand DNA scan failed",
+              researchError,
+            );
+          }
+        })();
+      }
     } catch (e: any) {
       const msg = e?.message ?? "Try again later";
       setStatus("error");
@@ -513,6 +536,10 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
                     setCategory={setTileCategory}
                   />
                   <TileGrid dna={dna} onOpen={openTile} query={tileQuery} category={tileCategory} />
+                  <BrandDnaStylesStrip
+                    workspaceId={workspaceId}
+                    onNavigate={() => setOpen(false)}
+                  />
                   {status === "error" && lastError && (
                     <div className="mt-5 flex items-start gap-2 rounded-2xl border border-danger-border bg-danger-surface px-4 py-3 text-[12.5px] text-danger">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1082,15 +1109,10 @@ function TileGrid({
         <Tile
           tileKey="competitors"
           label="Competitors"
-          ariaLabel={`Edit Competitors (${dna.competitors.length} tracked)`}
+          ariaLabel="Open competitor research in Brand DNA"
           onClick={() => onOpen("competitors")}
         >
-          <CountPreview
-            count={dna.competitors.length}
-            icon={Building2}
-            label="tracked"
-            empty="Track who you're up against"
-          />
+          <BrandDnaCompetitorsTilePreview fallbackCount={dna.competitors.length} />
         </Tile>
       )}
       {show("customers") && (
@@ -3116,8 +3138,7 @@ function CompetitorsTab({ dna, save }: { dna: BrandDna; save: (n: Partial<BrandD
           <Plus className="h-3.5 w-3.5" /> Add competitor
         </Button>
       </div>
-      {/* The same companies live in the researched Competitors surface; this
-          is the way across, and the way to have Mellox find them for you. */}
+      {/* The researched set stays alongside the editable Brand DNA memory. */}
       <BrandDnaCompetitorsCallout />
       {dna.competitors.length === 0 && (
         <EmptyAction onClick={add} label="Track your first competitor" />

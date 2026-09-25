@@ -12,6 +12,14 @@ Workspace-aware UI reads identity from `WorkspaceProvider` and helpers in
 `src/lib/workspace/paths.ts`. Query keys for workspace data must include the
 workspace id so switching tenants cannot reuse another tenant's cache.
 
+## Product UI model
+
+The frontend is the editorial layer of the system. It presents the workspace,
+its content, media, findings, and commands, but does not own the trust model or
+execution path. This makes the UI simpler and safer: it reflects state from the
+server, triggers validated actions, and surfaces the operational result back to
+users with loading, empty, error, and success states.
+
 ## Design system
 
 The repository uses Tailwind v4, Radix primitives, `lucide-react`, bespoke

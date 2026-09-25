@@ -713,6 +713,18 @@ export async function selectRepository(args: {
     );
     if (!repo) throw new ConnectorError("Mellox can't access that repository.");
     const site = normalizeSiteUrl(args.siteUrl ?? repo.homepage);
+    // Re-selecting resets the branch to the default; evidence collected for a
+    // different branch or website proves nothing about this one.
+    const { data: existing } = await supabaseAdmin
+      .from("workspace_sources")
+      .select("branch, site_host")
+      .eq("workspace_id", connection.workspace_id)
+      .eq("provider", "github")
+      .eq("external_id", String(repo.id))
+      .maybeSingle();
+    const resetOwnership =
+      !!existing &&
+      (existing.branch !== repo.default_branch || existing.site_host !== (site?.host ?? null));
     const { data: row, error } = await supabaseAdmin
       .from("workspace_sources")
       .upsert(
@@ -735,6 +747,7 @@ export async function selectRepository(args: {
           last_synced_at: new Date().toISOString(),
           last_error: null,
           selected_by: args.userId,
+          ...(resetOwnership ? { ownership_status: "unchecked" as const } : {}),
         },
         { onConflict: "workspace_id,provider,external_id" },
       )

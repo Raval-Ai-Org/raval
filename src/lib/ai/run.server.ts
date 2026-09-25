@@ -5,13 +5,7 @@
 
 import "server-only";
 import type { ZodType, ZodTypeDef } from "zod";
-import {
-  chatCompletion,
-  extractionCompletion,
-  EXTRACTION_MODEL,
-  AiGatewayError,
-  type TokenTask,
-} from "@/lib/ai-gateway.server";
+import { chatCompletion, AiGatewayError, type TokenTask } from "@/lib/ai-gateway.server";
 import { logGuardrailEvent } from "@/server/guardrails/events";
 import { AiOutputError, parseStructured, runStructured } from "@/server/ai/structured";
 import { humanizeText } from "./humanize-text";
@@ -20,12 +14,14 @@ import { safeParseJson } from "./json";
 export { AiGatewayError, AiOutputError };
 
 type Common = {
+  /** Metering route; the model plan comes from src/server/ai/task-models.ts. */
   route: string;
   system: string;
   user: string;
-  /** Which model to route to. Default: chat model. */
-  model?: string;
+  /** Parsing an external source: extraction-scale budgets, faithful text. */
   extraction?: boolean;
+  /** Apply the route's escalation rule. */
+  escalate?: boolean;
   maxTokens?: number;
   temperature?: number;
   cacheTtlMs?: number;
@@ -45,8 +41,9 @@ async function callJson(
     { role: "system" as const, content: overrides.system },
     { role: "user" as const, content: overrides.user },
   ];
-  const isExtraction = opts.extraction || opts.model === EXTRACTION_MODEL;
-  const common = {
+  const isExtraction = opts.extraction === true;
+  const json = await chatCompletion({
+    route: opts.route,
     messages,
     response_format: { type: "json_object" as const },
     max_tokens: overrides.maxTokens,
@@ -55,11 +52,9 @@ async function callJson(
     // The repair attempt must never be answered from the cache.
     noCache: opts.noCache || overrides.repair,
     regenerate: opts.regenerate && !overrides.repair,
-    route: opts.route,
-  };
-  const json = isExtraction
-    ? await extractionCompletion(common)
-    : await chatCompletion({ ...common, model: opts.model, task: opts.task ?? "generate" });
+    escalate: opts.escalate,
+    task: isExtraction ? "extraction" : (opts.task ?? "generate"),
+  });
   const raw = String(json?.choices?.[0]?.message?.content ?? "");
   return {
     // Em dash is the clearest "AI voice" tell in generated prose; strip it
@@ -144,8 +139,6 @@ export type RunToolOpts = {
   parameters: Record<string, unknown>;
   system: string;
   user: string;
-  /** Default: the chat model. Classification-style tools should pass the economy model. */
-  model?: string;
   maxTokens?: number;
   temperature?: number;
   noCache?: boolean;
@@ -153,7 +146,8 @@ export type RunToolOpts = {
 
 /**
  * Tool-calling entry point. Returns the parsed tool arguments or null when
- * the model chose not to call the tool.
+ * the model chose not to call the tool. tool_choice is "auto" (Claude Opus 5.5
+ * rejects forced tool use), so the system prompt must ask for the call.
  */
 export async function runTool<T>(opts: RunToolOpts): Promise<T | null> {
   const tool = {
@@ -165,13 +159,14 @@ export async function runTool<T>(opts: RunToolOpts): Promise<T | null> {
     },
   };
   const json = await chatCompletion({
-    model: opts.model,
     messages: [
-      { role: "system", content: opts.system },
+      {
+        role: "system",
+        content: `${opts.system}\n\nAnswer by calling the \`${opts.name}\` tool.`,
+      },
       { role: "user", content: opts.user },
     ],
     tools: [tool],
-    tool_choice: { type: "function", function: { name: opts.name } },
     max_tokens: opts.maxTokens,
     temperature: opts.temperature,
     noCache: opts.noCache,

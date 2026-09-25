@@ -29,6 +29,8 @@ export type AppEventMap = {
   /** Open the Plan & usage panel (real metered AI usage vs plan limits). */
   "open:usage": undefined;
   "brand-dna:saved": undefined;
+  /** Brand Kit styles or files changed (pickers refetch their options). */
+  "brand-kit:changed": { workspaceId: string | null } | undefined;
   "notes:changed": { workspaceId: string };
   "assets:changed": undefined;
   "connections:changed": undefined;
@@ -57,6 +59,8 @@ export type AppEventMap = {
   // ── Open / toggle surfaces ──────────────────────────────────────────
   "open:analytics": { tab?: string } | undefined;
   "open:brand-dna": { tab?: string } | undefined;
+  /** Open the Brand Kit, optionally on a style, a section, or the create flow. */
+  "open:brand-kit": { styleId?: string; section?: string; create?: boolean } | undefined;
   /** Open a Studio canvas. `type` is validated by the listener (use-studio). */
   "open:canvas":
     | {
@@ -68,6 +72,8 @@ export type AppEventMap = {
         ideaId?: string;
         ideaSource?: string;
         platforms?: string[];
+        /** Brand Kit Style id, or "none" for Brand DNA only. */
+        styleId?: string;
       }
     | undefined;
   /** Review a single content item outside a Studio job (legacy or chat-created). */

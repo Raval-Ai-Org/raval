@@ -54,6 +54,7 @@ import {
   type PlatformId,
 } from "@/lib/ugc/options";
 import { ugcApi } from "@/lib/ugc/client";
+import { StylePicker } from "@/components/app/brand-kit/StylePicker";
 import type { Brief, Product } from "@/lib/ugc/schemas";
 import { cn } from "@/lib/utils";
 import {
@@ -225,6 +226,16 @@ export function BriefStep({
               options={TONES}
               value={brief.tone}
               onChange={(v) => set("tone", v)}
+            />
+          </div>
+
+          <div className="space-y-2.5">
+            <SectionLabel icon={MessageCircle}>Brand style</SectionLabel>
+            <StylePicker
+              workspaceId={workspaceId}
+              value={brief.styleId}
+              format="ugc"
+              onChange={(styleId) => set("styleId", styleId)}
             />
           </div>
         </div>

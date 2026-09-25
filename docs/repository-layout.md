@@ -42,6 +42,9 @@ location at the repository root does not by itself mean it is legacy.
 - `docs/` is the navigation layer, not an implementation layer. Start at
   [the documentation index](README.md), and treat audit reports and older
   specifications as historical unless a current guide points to them.
+- The repository should remain readable as a product map: the app ships the
+  experience, while the Python modules and distribution service provide the
+  operational and intelligence layer behind it.
 
 ## Safe organization workflow
 
@@ -49,3 +52,10 @@ Before moving a directory, search for imports, CI working directories, Docker
 build contexts, documentation links, and Python path configuration. Prefer
 updating ownership documentation first; relocate a package only together with
 its tests, deployment configuration, and import paths.
+
+## Canonical rule for documentation
+
+When in doubt, prefer the current canonical guides in `docs/` and the actual
+code under `src/` and `supabase/` over older historical notes. The historical
+project documents remain useful for context, but they should not override the
+current architecture or runtime boundaries enforced by the repository itself.

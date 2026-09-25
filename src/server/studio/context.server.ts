@@ -171,7 +171,7 @@ export async function loadStudioContext(
   db: SupabaseClient,
   workspaceId: string,
   brand: Record<string, unknown> | null | undefined,
-): Promise<StudioContext> {
+): Promise<StudioContext & { brand: Record<string, unknown> | null }> {
   const [snapshot, stored] = await Promise.all([
     loadWorkspaceSnapshot(db, workspaceId),
     settle(readBrandDna(db, workspaceId), null, "brand dna"),
@@ -191,6 +191,7 @@ export async function loadStudioContext(
   const { name, ...rest } = snapshot;
   return {
     ...rest,
+    brand: dna as Record<string, unknown> | null,
     brandName: str(dna?.brandName) ?? name,
     brandText: `${brandText}${insightsBlock}`.trim(),
     today: new Date().toISOString().slice(0, 10),

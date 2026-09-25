@@ -44,6 +44,8 @@ type Props = {
   onModelChange: (id: string) => void;
   placeholder: string;
   hero?: boolean;
+  /** Extra control next to "Add files" (the Brand Kit style picker). */
+  toolbarSlot?: React.ReactNode;
 };
 
 export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatComposer(
@@ -61,6 +63,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
     onModelChange,
     placeholder,
     hero,
+    toolbarSlot,
   },
   ref,
 ) {
@@ -195,6 +198,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
         >
           <Plus className="size-[18px]" />
         </button>
+        {toolbarSlot}
 
         <div className="ml-auto flex items-center gap-1.5">
           <DropdownMenu>

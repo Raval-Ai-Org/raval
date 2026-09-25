@@ -40,6 +40,8 @@ import {
 } from "@/lib/geo/contracts";
 import { markFindingsReviewed, setFindingState } from "@/lib/geo.functions";
 import { AgentPanel } from "./agent/AgentPanel";
+import { SiteConnectionCard } from "./SiteConnectionCard";
+import { SiteConnectSection } from "./SiteConnectPicker";
 import type {
   FixAvailability,
   FixSetup,
@@ -407,6 +409,13 @@ export function SetupRequirement({
   }
 }
 
+/** Nothing connected for this site yet: offer GitHub, WordPress and Webflow side by side. */
+function needsSite(a: FixAvailability): boolean {
+  return (
+    !a.site && !a.proposal && ["connect", "reconnect", "not_configured"].includes(a.requirement)
+  );
+}
+
 /* ───────────────────────── Repository setup ───────────────────────── */
 
 // Changes are made only by the GEO Engineer (AgentPanel above): it reads the
@@ -771,6 +780,7 @@ export function FindingDetail({
             findingId={finding.id}
             fixMode={finding.fixMode}
             canPropose={availability?.canPropose ?? false}
+            provider={availability?.provider ?? "github"}
             ready={availability?.requirement === "ready"}
             notReadyReason={
               availability && availability.requirement !== "ready" ? availability.reason : null
@@ -784,43 +794,77 @@ export function FindingDetail({
         )}
       </Section>
 
-      <Section title="Repository setup & manual fix">
+      <Section
+        title={
+          availability && needsSite(availability)
+            ? "Connect your site"
+            : availability?.site && availability.site.provider !== "github"
+              ? "Your site & manual fix"
+              : "Repository setup & manual fix"
+        }
+      >
         {error ? (
           <ErrorState size="sm" detail={error} onRetry={reload} />
         ) : !availability ? (
           <Skeleton className="h-24 w-full rounded-lg" />
         ) : (
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Chip tone={availability.method === "github_pr" ? "primary" : "muted"}>
-                {availability.method === "github_pr" ? (
-                  <>
-                    <Github className="h-3 w-3" /> Pull request via GitHub
-                  </>
-                ) : (
-                  "Manual fix"
-                )}
-              </Chip>
-              {availability.method === "github_pr" &&
-                availability.requirement !== "ready" &&
-                !availability.proposal && (
-                  <Chip tone="warning">
-                    <AlertTriangle className="h-3 w-3" /> Setup needed
-                  </Chip>
-                )}
-            </div>
-            {availability.method === "github_pr" && (
-              <RepositorySetup
+            {needsSite(availability) ? (
+              <SiteConnectSection
                 workspaceId={workspaceId}
-                scan={scan}
-                availability={availability}
-                onReload={reload}
+                scanId={scan.id}
+                returnPath={`/app?geo=findings&rule=${encodeURIComponent(finding.ruleId)}`}
               />
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Chip tone={availability.method === "manual" ? "muted" : "primary"}>
+                    {availability.method === "github_pr" ? (
+                      <>
+                        <Github className="h-3 w-3" /> Pull request via GitHub
+                      </>
+                    ) : availability.method === "cms_apply" ? (
+                      `Direct change on ${availability.provider === "webflow" ? "Webflow" : "WordPress"}`
+                    ) : (
+                      "Manual fix"
+                    )}
+                  </Chip>
+                  {availability.method === "cms_apply" && availability.requirement !== "ready" && (
+                    <Chip tone="warning">
+                      <AlertTriangle className="h-3 w-3" /> Setup needed
+                    </Chip>
+                  )}
+                  {availability.method === "github_pr" &&
+                    availability.requirement !== "ready" &&
+                    !availability.proposal && (
+                      <Chip tone="warning">
+                        <AlertTriangle className="h-3 w-3" /> Setup needed
+                      </Chip>
+                    )}
+                </div>
+                {availability.site && availability.site.provider !== "github" && (
+                  <SiteConnectionCard
+                    site={availability.site}
+                    canManage={availability.canManageConnections}
+                  />
+                )}
+                {availability.method === "cms_apply" && availability.requirement !== "ready" && (
+                  <p className="text-[12.5px]">{availability.reason}</p>
+                )}
+                {availability.method === "github_pr" && (
+                  <RepositorySetup
+                    workspaceId={workspaceId}
+                    scan={scan}
+                    availability={availability}
+                    onReload={reload}
+                  />
+                )}
+              </>
             )}
             {recipe && (
               <div>
                 <p className="mb-1 text-[12px] font-semibold">
-                  {availability.method === "github_pr" ? "Or fix it manually" : "How to fix it"}
+                  {availability.method === "manual" ? "How to fix it" : "Or fix it manually"}
                 </p>
                 <FixDrawer recipe={recipe} safety={finding.safety} />
               </div>

@@ -9,11 +9,18 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { readBrandDna } from "@/server/workspaces/brand-dna.server";
-import { webResearchAvailable } from "@/server/research/web-search.server";
-import { hostOf } from "@/lib/research/sources";
+import { webResearchAvailable, webSearch } from "@/server/research/web-search.server";
+import { hostOf, type WebSource } from "@/lib/research/sources";
+import { siteForNamedCompetitor } from "@/lib/competitors/resolve-name";
 import { discoverCompetitors, type DiscoveryContext } from "./discovery.server";
-import { knownDomains, saveSuggestions, upsertCompetitor } from "./store.server";
-import { normalizeCompetitorDomain } from "./service.server";
+import {
+  knownDomains,
+  loadOverview,
+  saveSuggestions,
+  setStatus,
+  upsertCompetitor,
+} from "./store.server";
+import { kickCompetitor, normalizeCompetitorDomain } from "./service.server";
 import type { CompetitorView } from "@/lib/competitors/contracts";
 
 type Db = SupabaseClient<never>;
@@ -47,7 +54,7 @@ export async function loadDiscoveryContext(db: Db, workspaceId: string): Promise
   ]);
 
   const dna = (stored?.dna ?? {}) as Record<string, unknown>;
-  const websiteUrl = text(dna.websiteUrl) || text(workspace.data?.website_url);
+  const websiteUrl = text(workspace.data?.website_url) || text(dna.websiteUrl);
   const domain = websiteUrl
     ? hostOf(websiteUrl.startsWith("http") ? websiteUrl : `https://${websiteUrl}`)
     : null;
@@ -76,29 +83,68 @@ export async function importBrandDnaCompetitors(args: {
   db: Db;
   workspaceId: string;
   userId: string | null;
+  resolveMissingUrls?: boolean;
+  maxNewTracked?: number;
 }): Promise<number> {
   const stored = await readBrandDna(args.db as never, args.workspaceId).catch(() => null);
   const entries = Array.isArray((stored?.dna as Record<string, unknown>)?.competitors)
     ? ((stored?.dna as Record<string, unknown>).competitors as unknown[])
     : [];
+  const context = args.resolveMissingUrls
+    ? await loadDiscoveryContext(args.db, args.workspaceId)
+    : null;
+  const trackedDomains =
+    args.maxNewTracked === undefined
+      ? null
+      : new Set(
+          (await loadOverview(args.db as never, args.workspaceId)).competitors.map(
+            (competitor) => competitor.domain,
+          ),
+        );
+  const resolved = await Promise.all(
+    entries.slice(0, args.resolveMissingUrls ? 6 : 20).map(async (entry) => {
+      const row = entry as Record<string, unknown>;
+      const name = text(row.name, 200);
+      const rawUrl = text(row.url, 300);
+      if (rawUrl || !name || !args.resolveMissingUrls)
+        return { row, name, url: rawUrl, source: null as WebSource | null };
+      const results = await webSearch(`"${name}" official website ${context?.industry ?? ""}`, {
+        limit: 6,
+        perHost: 1,
+        route: "competitors.resolve-name",
+      });
+      const source = siteForNamedCompetitor(name, results, context?.domain ?? null);
+      return { row, name, url: source?.url ?? "", source };
+    }),
+  );
   let imported = 0;
-  for (const entry of entries.slice(0, 20)) {
-    const row = entry as Record<string, unknown>;
-    const rawDomain = text(row.url, 300) || text(row.name, 200);
-    const domain = normalizeCompetitorDomain(rawDomain);
+  let newlyTracked = 0;
+  for (const { row, name, url, source } of resolved) {
+    const domain = normalizeCompetitorDomain(url);
     if (!domain || !domain.includes(".")) continue;
+    if (trackedDomains && !trackedDomains.has(domain) && newlyTracked >= (args.maxNewTracked ?? 0))
+      continue;
     try {
       const saved = await upsertCompetitor({
         workspaceId: args.workspaceId,
         userId: args.userId,
-        name: text(row.name, 200) || domain,
+        name: name || domain,
         domain,
-        url: text(row.url, 2048) || null,
+        url: url || null,
         source: "brand_dna",
         status: "tracked",
         rationale: text(row.positioning, 500) || text(row.notes, 500) || null,
+        discoverySources: source
+          ? [{ title: source.title, url: source.url, snippet: source.snippet }]
+          : [],
       });
-      if (saved) imported += 1;
+      if (saved) {
+        imported += 1;
+        if (trackedDomains && !trackedDomains.has(domain)) {
+          trackedDomains.add(domain);
+          newlyTracked += 1;
+        }
+      }
     } catch (error) {
       console.error("[competitors] brand DNA import failed for", domain, error);
     }
@@ -115,22 +161,35 @@ export async function runDiscoveryForWorkspace(args: {
   supabase: Db;
   workspaceId: string;
   userId: string | null;
+  scanSeed?: { hostname: string; siteName: string; description: string };
 }): Promise<{ suggestions: CompetitorView[]; searched: number; available: boolean }> {
-  if (!webResearchAvailable()) {
-    return { suggestions: [], searched: 0, available: false };
-  }
-
   // Anything already recorded by hand counts as known, so discovery spends its
   // searches on companies the workspace has not thought of yet.
-  await importBrandDnaCompetitors({
-    db: args.supabase,
-    workspaceId: args.workspaceId,
-    userId: args.userId,
-  });
+  if (!args.scanSeed) {
+    await importBrandDnaCompetitors({
+      db: args.supabase,
+      workspaceId: args.workspaceId,
+      userId: args.userId,
+    });
+  }
 
   const context = await loadDiscoveryContext(args.supabase, args.workspaceId);
+  if (args.scanSeed) {
+    // The homepage arrives early in the Brand DNA stream. Never let a caller
+    // research a different website under this workspace's identity.
+    const seedHost = hostOf(`https://${args.scanSeed.hostname}`);
+    if (!context.domain || seedHost !== context.domain) {
+      throw new Error("The scanned website does not match this workspace.");
+    }
+    context.brandName = text(args.scanSeed.siteName, 100) || context.domain.split(".")[0];
+    context.oneLiner = text(args.scanSeed.description, 240);
+    context.industry = "";
+    context.products = "";
+    context.audience = "";
+    context.keywords = [];
+  }
   if (!context.brandName && !context.domain) {
-    return { suggestions: [], searched: 0, available: true };
+    return { suggestions: [], searched: 0, available: webResearchAvailable() };
   }
 
   const { suggestions, sourcesSeen } = await discoverCompetitors(context);
@@ -144,6 +203,77 @@ export async function runDiscoveryForWorkspace(args: {
   return {
     suggestions: saved.filter((competitor) => competitor.status === "suggested"),
     searched: sourcesSeen,
-    available: true,
+    available: webResearchAvailable(),
   };
+}
+
+/** Build the first research set after a Brand DNA scan. Repeated calls are safe. */
+export async function bootstrapCompetitorsForWorkspace(args: {
+  supabase: Db;
+  workspaceId: string;
+  userId: string | null;
+  scanSeed?: { hostname: string; siteName: string; description: string };
+}): Promise<{ competitors: CompetitorView[]; searched: number; available: boolean }> {
+  if (args.scanSeed) {
+    const context = await loadDiscoveryContext(args.supabase, args.workspaceId);
+    if (!context.domain || hostOf(`https://${args.scanSeed.hostname}`) !== context.domain) {
+      throw new Error("The scanned website does not match this workspace.");
+    }
+  }
+  if (!args.scanSeed) {
+    const tracked = await loadOverview(args.supabase as never, args.workspaceId);
+    if (tracked.competitors.length < 6) {
+      await importBrandDnaCompetitors({
+        db: args.supabase,
+        workspaceId: args.workspaceId,
+        userId: args.userId,
+        resolveMissingUrls: true,
+        maxNewTracked: 6 - tracked.competitors.length,
+      });
+    }
+  }
+  let overview = await loadOverview(args.supabase as never, args.workspaceId);
+  const available = webResearchAvailable();
+  if (overview.competitors.length >= 3) {
+    for (const competitor of overview.competitors
+      .filter((entry) => entry.profileStatus === "pending")
+      .slice(0, 6)) {
+      kickCompetitor(competitor.id);
+    }
+    return { competitors: overview.competitors.slice(0, 6), searched: 0, available };
+  }
+
+  let searched = 0;
+  let candidates = overview.suggestions;
+  if (candidates.length < 3 - overview.competitors.length) {
+    const result = await runDiscoveryForWorkspace(args);
+    searched = result.searched;
+    overview = await loadOverview(args.supabase as never, args.workspaceId);
+    candidates = overview.suggestions;
+  }
+
+  const slots = Math.max(0, 6 - overview.competitors.length);
+  const selected = candidates
+    .filter(
+      (candidate) =>
+        candidate.relationship !== "unknown" &&
+        candidate.confidence >= 0.55 &&
+        candidate.discoverySources.length > 0,
+    )
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, slots);
+  for (const candidate of selected) {
+    await setStatus({
+      workspaceId: args.workspaceId,
+      competitorId: candidate.id,
+      status: "tracked",
+    });
+  }
+  overview = await loadOverview(args.supabase as never, args.workspaceId);
+  for (const competitor of overview.competitors
+    .filter((entry) => entry.profileStatus === "pending")
+    .slice(0, 6)) {
+    kickCompetitor(competitor.id);
+  }
+  return { competitors: overview.competitors.slice(0, 6), searched, available };
 }

@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { runTool } from "@/lib/ai";
-import { FAST_CHAT_MODEL } from "@/lib/ai-gateway.server";
 import { clarifyPrompt } from "@/lib/ai/prompts";
 
 export const dynamic = "force-dynamic";
@@ -80,9 +79,7 @@ export const POST = defineRoute({
       parameters: CLARIFY_PARAMS as unknown as Record<string, unknown>,
       system,
       user,
-      // Deciding whether to ask up to 3 multiple-choice questions is a
-      // classification task: the economy model, not the chat model.
-      model: FAST_CHAT_MODEL,
+      // A classification task; the `clarify` plan picks the model.
       maxTokens: 400,
     });
     return parsed ?? { needs_clarification: false, questions: [] };

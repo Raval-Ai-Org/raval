@@ -4,7 +4,7 @@
 // the page — facts whose evidence can't be found are dropped, so the concept
 // engine only ever sees claims the business itself makes.
 import "server-only";
-import { claudeTextCompletion, CLAUDE_SONNET_MODEL } from "@/lib/anthropic-gateway.server";
+import { llmText } from "@/lib/ai-gateway.server";
 import { normalizeUrl } from "@/lib/crawl/html";
 import { evidenceOnPage, parseProductPage } from "@/lib/ugc/product-page";
 import type { Product, ProductFact } from "@/lib/ugc/schemas";
@@ -150,7 +150,7 @@ export async function extractProduct(rawUrl: string): Promise<ExtractionResult> 
   }
 
   try {
-    const result = await claudeTextCompletion({
+    const result = await llmText({
       route: "ugc.product.extract",
       system: SYSTEM,
       user: `Product page: ${finalUrl}
@@ -162,9 +162,7 @@ Structured data found: ${JSON.stringify({
       })}
 
 ${wrapUntrusted("product page text", pageText, { maxChars: 12_000, route: "ugc.product.extract" })}`,
-      model: CLAUDE_SONNET_MODEL,
       maxTokens: 3000,
-      effort: "low",
       outputSchema: OUTPUT_SCHEMA as unknown as Record<string, unknown>,
       timeoutMs: 60_000,
       retries: 1,

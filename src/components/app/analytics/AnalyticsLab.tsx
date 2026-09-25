@@ -297,7 +297,7 @@ const INSIGHTS = {
   insight: {
     id: "i1",
     createdAt: new Date().toISOString(),
-    model: "claude-sonnet-5",
+    model: "anthropic/claude-opus-5.5",
     items: [
       {
         title: "Search is carrying your growth",

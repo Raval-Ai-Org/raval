@@ -55,13 +55,12 @@ vi.mock("@/integrations/supabase/client.server", () => ({
   supabaseAdmin: { from: vi.fn((table: string) => builder(table)) },
 }));
 
-vi.mock("@/lib/anthropic-gateway.server", () => ({
-  AnthropicGatewayError: class AnthropicGatewayError extends Error {
+vi.mock("@/lib/ai-gateway.server", () => ({
+  AiGatewayError: class AiGatewayError extends Error {
     status = 503;
     code = "provider_error";
   },
-  claudeTextPrompt,
-  selectClaudeModel: vi.fn(() => "test-model"),
+  llmTextPrompt: claudeTextPrompt,
 }));
 
 import { analyzeMarketCollection, MarketIntelligenceSchema } from "./market-intelligence.server";
@@ -188,7 +187,7 @@ describe("Market Intelligence engine", () => {
     claudeTextPrompt.mockResolvedValue(
       JSON.stringify({
         ...validIntelligence,
-        metadata: { model: "claude-opus-5", promptVersion: 3 },
+        metadata: { model: "anthropic/claude-opus-5.5", promptVersion: 3 },
         notes: "extra commentary",
       }),
     );
@@ -226,7 +225,7 @@ describe("Market Intelligence engine", () => {
     await analyzeMarketCollection({ collectionId, workspaceId });
     const call = claudeTextPrompt.mock.calls[0][0];
     expect(call.maxTokens).toBeGreaterThanOrEqual(16_000);
-    expect(call.effort).toBe("medium");
+    expect(call.route).toBe("market-intelligence");
     expect(call.outputSchema).toMatchObject({ type: "object", additionalProperties: false });
     expect(call.timeoutMs).toBeLessThan(90_000);
   });
@@ -261,20 +260,12 @@ describe("Market Intelligence engine", () => {
     expect(claudeTextPrompt).toHaveBeenCalledOnce();
   });
 
-  it("analyses on the default (Sonnet) tier unless MARKET_INTELLIGENCE_MODEL overrides it", async () => {
-    const { selectClaudeModel } = await import("@/lib/anthropic-gateway.server");
+  it("names only its route; the market-intelligence plan picks the model", async () => {
     await analyzeMarketCollection({ collectionId, workspaceId });
-    expect(selectClaudeModel).toHaveBeenCalledWith("default");
-    expect(claudeTextPrompt.mock.calls[0][0].model).toBe("test-model");
-
-    state.cached = null;
-    process.env.MARKET_INTELLIGENCE_MODEL = "claude-opus-5";
-    try {
-      await analyzeMarketCollection({ collectionId, workspaceId });
-      expect(claudeTextPrompt.mock.calls[1][0].model).toBe("claude-opus-5");
-    } finally {
-      delete process.env.MARKET_INTELLIGENCE_MODEL;
-    }
+    const opts = claudeTextPrompt.mock.calls[0][0];
+    expect(opts.route).toBe("market-intelligence");
+    expect(opts).not.toHaveProperty("model");
+    expect(opts).not.toHaveProperty("effort");
   });
 
   it("regenerates instead of returning an empty cached result when the cache entry is invalid", async () => {
@@ -299,8 +290,8 @@ describe("Market Intelligence engine", () => {
   });
 
   it("returns a truncation from the gateway as a failed state with its code", async () => {
-    const { AnthropicGatewayError } = await import("@/lib/anthropic-gateway.server");
-    const truncated = new AnthropicGatewayError(502, "cut off", "max_tokens");
+    const { AiGatewayError } = await import("@/lib/ai-gateway.server");
+    const truncated = new AiGatewayError(502, "cut off", "max_tokens");
     Object.assign(truncated, { status: 502, code: "max_tokens", message: "cut off" });
     claudeTextPrompt.mockRejectedValue(truncated);
     const result = await analyzeMarketCollection({ collectionId, workspaceId });

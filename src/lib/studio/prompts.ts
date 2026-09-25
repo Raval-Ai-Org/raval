@@ -7,6 +7,8 @@ import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import type { MarketingMoment } from "./moments";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
 import { templateDirective } from "./templates";
+import type { ResolvedStyle } from "@/lib/brand-kit/resolve";
+import { styleBlockFor } from "@/lib/brand-kit/prompt";
 import type {
   StudioControls,
   StudioIntent,
@@ -44,6 +46,11 @@ export type StudioContext = {
    * this; a "state of the industry" piece does.
    */
   liveResearch?: { summary: string; sources: { title: string; url: string }[] };
+  /**
+   * The Brand Kit Style this job follows (src/lib/brand-kit/resolve.ts), loaded
+   * on the server by the verified workspace id. Absent = Brand DNA only.
+   */
+  style?: ResolvedStyle | null;
 };
 
 export function emptyContext(brandName = "the brand"): StudioContext {
@@ -234,15 +241,32 @@ function systemPrompt(role: string, rules: string[], schema: string): string {
   ].join("\n");
 }
 
-function sharedUser(args: {
-  ctx: StudioContext;
-  intent: StudioIntent;
-  angle: Angle;
-  extra?: Section[];
-}): Section[] {
+/** The Style section: how this piece must read (and look, for visual formats). */
+export function styleSection(ctx: StudioContext, format: string): Section {
+  if (!ctx.style) return { label: "Style", body: null };
+  const block = styleBlockFor(ctx.style, format).replace(/^## /gm, "### ");
+  if (!block.trim()) return { label: "Style", body: null };
+  return {
+    label: "Style (follow exactly)",
+    body: `Match this style closely. Its tone, formatting, emoji and hashtag rules override the generic platform guidance above and below. Facts still come only from the Brand section.
+
+${block}`,
+  };
+}
+
+function sharedUser(
+  args: {
+    ctx: StudioContext;
+    intent: StudioIntent;
+    angle: Angle;
+    extra?: Section[];
+  },
+  format = "social",
+): Section[] {
   const { ctx, intent, angle } = args;
   return [
     { label: "Brand", body: ctx.brandText || `Brand: ${ctx.brandName}` },
+    styleSection(ctx, format),
     {
       label: "Business",
       body: [
@@ -334,6 +358,14 @@ export const ArticleSchema = z.object({
   metaDescription: Str(170),
   takeaways: StrList(6, 200),
   markdown: z.coerce.string().min(200),
+  faq: z
+    .array(z.object({ question: Str(200), answer: Str(600) }))
+    .max(6)
+    .catch([])
+    .default([]),
+  slug: Str(80).catch("").default(""),
+  category: Str(60).catch("").default(""),
+  tags: StrList(8, 40).catch([]).default([]),
 });
 
 export const ScriptSchema = z.object({
@@ -428,7 +460,7 @@ export function buildSocialPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof S
       `{"title": string (internal working title), "variants": [{"platform": "<id>", "title": string, "body": string, "hashtags": string[]}]}`,
     ),
     user: sections([
-      ...sharedUser(args),
+      ...sharedUser(args, "social"),
       { label: "Platforms and rules", body: platformRubric(platforms) },
       ...refineSections(args.refine, args.current),
       {
@@ -457,7 +489,7 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
       ].filter(Boolean),
       `{"title": string, "caption": string, "hashtags": string[], "slides": [{"heading": string, "body": string, "visual": string}]}`,
     ),
-    user: sections([...sharedUser(args), ...refineSections(args.refine, args.current)]),
+    user: sections([...sharedUser(args, "carousel"), ...refineSections(args.refine, args.current)]),
     schema: CarouselSchema,
     maxTokens: 2400,
     temperature: args.refine ? TEMPERATURE.refine : TEMPERATURE.draft,
@@ -476,12 +508,15 @@ export function buildArticlePrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof 
         `Target about ${words} words in \`markdown\`.`,
         "Structure: an opening that states the reader's problem in their words (no H1, the title is separate), 3-6 H2 sections with descriptive headings, short paragraphs, lists where they help, and a closing section with a clear next step.",
         "Answer the core question early (a 40-60 word direct answer near the top) so the piece works for search and AI answers.",
-        "`dek` is a one-sentence subtitle. `metaDescription` is ≤ 155 characters. `takeaways` are 3-5 crisp sentences.",
+        "`dek` is a one-sentence subtitle. `metaDescription` is 120-155 characters. `takeaways` are 3-5 crisp sentences.",
+        "`faq`: 3-5 questions a reader would really ask about this topic, each answered in 1-3 plain sentences that stand on their own (they are published as a visible FAQ and as FAQ structured data). Don't repeat a question already answered by an H2 word for word.",
+        "`slug`: 3-7 lowercase words from the title joined by hyphens. `category`: one short blog category. `tags`: 2-6 short topic tags.",
+        "Use H2 for sections and H3 for sub-points; never skip a level. Don't state facts, prices, dates or statistics that aren't in the brief or brand context.",
         args.controls.tone ? `Tone override: ${args.controls.tone}` : "",
       ].filter(Boolean),
-      `{"title": string, "dek": string, "metaDescription": string, "takeaways": string[], "markdown": string}`,
+      `{"title": string, "dek": string, "metaDescription": string, "takeaways": string[], "markdown": string, "faq": [{"question": string, "answer": string}], "slug": string, "category": string, "tags": string[]}`,
     ),
-    user: sections([...sharedUser(args), ...refineSections(args.refine, args.current)]),
+    user: sections([...sharedUser(args, "article"), ...refineSections(args.refine, args.current)]),
     schema: ArticleSchema,
     maxTokens: Math.min(6000, Math.round(words * 2.2) + 600),
     temperature: args.refine ? TEMPERATURE.refine : 0.7,
@@ -503,7 +538,7 @@ export function buildScriptPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof S
       ],
       `{"title": string, "hook": string, "beats": [{"time": string, "visual": string, "voiceover": string, "onScreen": string}], "cta": string, "caption": string, "hashtags": string[]}`,
     ),
-    user: sections([...sharedUser(args), ...refineSections(args.refine, args.current)]),
+    user: sections([...sharedUser(args, "script"), ...refineSections(args.refine, args.current)]),
     schema: ScriptSchema,
     maxTokens: 2000,
     temperature: args.refine ? TEMPERATURE.refine : TEMPERATURE.draft,
@@ -536,7 +571,7 @@ export function buildAdPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof AdSch
       ].filter(Boolean),
       `{"title": string, "visualConcept": string, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}]}`,
     ),
-    user: sections([...sharedUser(args), ...refineSections(args.refine, args.current)]),
+    user: sections([...sharedUser(args, "ad"), ...refineSections(args.refine, args.current)]),
     schema: AdSchema,
     maxTokens: 2000,
     temperature: args.refine ? TEMPERATURE.refine : TEMPERATURE.draft,
@@ -562,7 +597,10 @@ export function buildVisualBriefPrompt(
       ],
       `{"title": string, "concept": string, "onImageText": string, "altText": string}`,
     ),
-    user: sections([...sharedUser(args), ...refineSections(args.refine, args.current)]),
+    user: sections([
+      ...sharedUser(args, args.medium),
+      ...refineSections(args.refine, args.current),
+    ]),
     schema: VisualBriefSchema,
     maxTokens: 900,
     temperature: args.refine ? TEMPERATURE.refine : 0.85,
@@ -578,7 +616,7 @@ export function buildCaptionPrompt(
     ...base,
     route: "studio.captions",
     user: sections([
-      ...sharedUser(args),
+      ...sharedUser(args, "social"),
       { label: "The visual these captions accompany", body: args.visual },
       { label: "Platforms and rules", body: platformRubric(args.controls.platforms) },
       {

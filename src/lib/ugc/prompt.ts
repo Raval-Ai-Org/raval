@@ -124,6 +124,8 @@ export type PromptInput = {
   imageCount: number;
   /** One line of brand voice from Brand DNA, if any. */
   brandVoice?: string;
+  /** Look and pacing from the Brand Kit Style (ugcStyleNotes), if any. */
+  styleNotes?: string;
 };
 
 export function buildVideoPrompt(input: PromptInput): string {
@@ -180,6 +182,7 @@ export function buildVideoPrompt(input: PromptInput): string {
   if (facts.length)
     lines.push(`TRUE PRODUCT FACTS (only these may be claimed): ${facts.join("; ")}.`);
   if (input.brandVoice) lines.push(`BRAND VOICE: ${truncate(input.brandVoice, 200)}.`);
+  if (input.styleNotes) lines.push(`BRAND LOOK: ${truncate(input.styleNotes, 400)}.`);
   lines.push("");
 
   lines.push("BEAT SHEET:");

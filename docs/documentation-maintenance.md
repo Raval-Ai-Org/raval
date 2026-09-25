@@ -12,6 +12,14 @@ When sources conflict, document the implementation, link the conflict, and add
 `TODO` for an unresolved product or operational decision. Do not silently turn
 planned behavior into a current feature.
 
+## Current documentation principle
+
+The repository is a living product with historical notes alongside current code.
+The docs must favor the current implementation and the active runtime model over
+older names, plans, or historical reports. This is especially important in a
+codebase that contains both current Mellox AI product logic and historical Raval
+AI artifacts.
+
 ## Required updates
 
 Update the relevant canonical page when adding or changing a route, server
@@ -36,3 +44,10 @@ owning implementation/ADR. Do not claim a release, SLA, compliance status, or
 provider capability without a verified source. TODO: choose the repository's
 single release-note file/process; no canonical changelog process was confirmed
 in the audit.
+
+## Current governance summary
+
+The current docs are governed by a simple rule: current code and migrations win,
+then tests and config, then ADR/spec docs, then historical notes. This keeps the
+repository practical for contributors while preserving the historical records as
+context and evidence rather than runtime truth.

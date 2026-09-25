@@ -77,7 +77,7 @@ export async function getSiteSourceContext(
   }
   if (error) return null;
   if (!data)
-    return webflowSite
+    return webflowSite || wordpressSite
       ? {
           source: null,
           webflowSite,

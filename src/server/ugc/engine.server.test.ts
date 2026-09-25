@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { KieGatewayError } from "@/lib/kie-gateway.server";
 import { UGC_MODELS } from "@/lib/ugc/models";
 import { createRenderEngine, MAX_SUBMIT_ATTEMPTS, RENDER_TIMEOUT_MS } from "./engine.server";
-import { buildKieInput, kieFailure, kieGenerationType } from "./providers/kie.server";
+import { buildKieInput, kieFailure, kieGenerationType, kieModelId } from "./providers/kie.server";
 import type { ProviderCheck, SubmitResult, VideoProvider } from "./providers/types";
 import { MemoryUgcStore } from "./store.memory";
 import type { NewRenderRow } from "./store";
@@ -20,6 +20,8 @@ class FakeProvider implements VideoProvider {
         ok: true as const,
         taskId: `task-${this.submits.length}`,
         request: {},
+        provider: "kie" as const,
+        providerModel: "veo-3-1",
       }
     );
   }
@@ -263,7 +265,7 @@ describe("Kie provider mapping", () => {
     expect(
       buildKieInput({
         ...base,
-        model: UGC_MODELS["veo-3-1-fast"],
+        model: UGC_MODELS.standard,
         imageUrls: ["a", "b", "c", "d"],
       }),
     ).toEqual({
@@ -278,17 +280,37 @@ describe("Kie provider mapping", () => {
     });
   });
 
-  it("uses a first frame for Veo Quality and text-to-video without images", () => {
-    expect(
-      buildKieInput({ ...base, model: UGC_MODELS["veo-3-1-quality"], imageUrls: ["a", "b"] }),
-    ).toMatchObject({
-      model: "veo3",
-      generation_type: "FIRST_AND_LAST_FRAMES_2_VIDEO",
-      image_urls: ["a"],
+  it("builds Gemini Omni input: references only, string duration, 7 images max", () => {
+    const refs = Array.from({ length: 9 }, (_, i) => `i${i}`);
+    const input = buildKieInput({ ...base, model: UGC_MODELS.premium, imageUrls: refs });
+    expect(input).toEqual({
+      prompt: "p",
+      image_urls: refs.slice(0, 7),
+      duration: "8",
+      aspect_ratio: "9:16",
+      resolution: "720p",
     });
+    // A first frame can't be combined with references, so it is never sent.
+    expect(input).not.toHaveProperty("first_frame_url");
+    expect(kieModelId(UGC_MODELS.premium, 2)).toBe("google/gemini-omni-flash-1-1");
+  });
+
+  it("builds MiniMax H3 input and picks text- or reference-to-video", () => {
     expect(
-      buildKieInput({ ...base, model: UGC_MODELS["veo-3-1-lite"], imageUrls: [] }),
-    ).toMatchObject({
+      buildKieInput({ ...base, model: UGC_MODELS.cinematic, resolution: "2k", imageUrls: ["a"] }),
+    ).toEqual({
+      prompt: "p",
+      reference_image_urls: ["a"],
+      aspect_ratio: "9:16",
+      resolution: "2K",
+      duration: 8,
+    });
+    expect(kieModelId(UGC_MODELS.cinematic, 0)).toBe("minimax-h3/text-to-video");
+    expect(kieModelId(UGC_MODELS.cinematic, 2)).toBe("minimax-h3/reference-to-video");
+  });
+
+  it("uses text-to-video for the Veo draft tier without images", () => {
+    expect(buildKieInput({ ...base, model: UGC_MODELS.draft, imageUrls: [] })).toMatchObject({
       model: "veo3_lite",
       generation_type: "TEXT_2_VIDEO",
     });
@@ -299,7 +321,7 @@ describe("Kie provider mapping", () => {
       buildKieInput({
         ...base,
         durationSec: 12,
-        model: UGC_MODELS["seedance-2-fast"],
+        model: UGC_MODELS.long,
         imageUrls: ["a"],
       }),
     ).toEqual({
@@ -317,8 +339,12 @@ describe("Kie provider mapping", () => {
     expect(kieFailure(new KieGatewayError(400, "no credits", "request", 402))).toMatchObject({
       code: "provider_credits",
       retryable: false,
+      definite: true,
     });
     expect(kieFailure(new KieGatewayError(502, "blip", "provider", 500)).retryable).toBe(true);
+    // An unknown outcome is never "definite": Kie may already be rendering it.
+    expect(kieFailure(new KieGatewayError(504, "timed out", "timeout")).definite).toBeUndefined();
+    expect(kieFailure(new KieGatewayError(502, "reset", "network")).definite).toBeUndefined();
     expect(kieFailure(new KieGatewayError(422, "Ratio error", "request", 422))).toMatchObject({
       code: "provider_rejected",
       message: "Ratio error",

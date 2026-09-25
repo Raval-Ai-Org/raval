@@ -6,6 +6,7 @@ export function geoAgentEnabled(): boolean {
   return (process.env.FEATURE_FLAG_GEO_AGENT_ENABLED ?? "true").trim().toLowerCase() !== "false";
 }
 
+/** The agent's models are reached through OpenRouter. */
 export function geoAgentModelConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  return Boolean(process.env.OPENROUTER_API_KEY?.trim());
 }

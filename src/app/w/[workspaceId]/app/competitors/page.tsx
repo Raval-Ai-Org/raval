@@ -3,15 +3,13 @@ import { pageMetadata } from "@/lib/seo";
 import CompetitorsRoute from "@/components/app/CompetitorsRoute";
 
 export const metadata: Metadata = pageMetadata({
-  title: "Competitors · Mellox AI",
-  description:
-    "See who you're competing with, what they sell, and what changed on their side recently.",
+  title: "Brand DNA · Mellox AI",
+  description: "Competitor research is part of Brand DNA.",
   path: "/projects",
   noindex: true,
 });
 
-// AppShell (mounted by the parent layout) owns the viewport, so this route
-// renders its own layered surface over it rather than competing for layout.
+// Older competitor links land in Brand DNA's competitor section.
 export default function WorkspaceCompetitorsPage() {
   return <CompetitorsRoute />;
 }

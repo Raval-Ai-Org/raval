@@ -9,8 +9,6 @@ import {
 import { HttpError } from "@/server/http-error";
 import { recordAudit } from "@/server/audit.server";
 import {
-  createPage,
-  createPost,
   discover,
   getCurrentUser,
   listCategories,
@@ -19,9 +17,6 @@ import {
   listPosts,
   listTags,
   normalizeWordPressUrl,
-  updatePage,
-  updatePost,
-  uploadMedia,
   type WordPressSite,
   exchangeWordPressCode,
   getWordPressComUser,
@@ -37,6 +32,7 @@ import {
   WORDPRESS_AUTH_ENDPOINT,
 } from "./config.server";
 import { safeReturnPath } from "@/server/connectors/return-url";
+import { WordPressClient } from "./client.server";
 import { allowedReturnOriginFrom } from "@/server/connectors/return-url";
 
 const PROVIDER = "wordpress";
@@ -577,10 +573,8 @@ export async function data(
     if (kind === "posts") return listWordPressComPosts(token, siteId);
     if (kind === "pages") return listWordPressComPages(token, siteId);
     if (kind === "media") return listWordPressComMedia(token, siteId);
-    throw new HttpError(
-      400,
-      "Categories and tags are not available through the WordPress.com connector yet.",
-    );
+    const { client } = await clientFor(workspaceId);
+    return client.get<unknown[]>(`wp/v2/${kind}?per_page=100`);
   }
   const c = await access(workspaceId);
   if (kind === "posts") return listPosts(c.siteUrl, c.username, c.applicationPassword);
@@ -597,14 +591,49 @@ export async function publish(
   id: number | undefined,
   body: unknown,
 ) {
-  const c = await access(workspaceId);
-  if (kind === "post")
-    return operation === "create"
-      ? createPost(c.siteUrl, c.username, c.applicationPassword, body)
-      : updatePost(c.siteUrl, c.username, c.applicationPassword, id!, body);
+  const { client } = await clientFor(workspaceId);
+  const payload = (body ?? {}) as Record<string, unknown>;
   return operation === "create"
-    ? createPage(c.siteUrl, c.username, c.applicationPassword, body)
-    : updatePage(c.siteUrl, c.username, c.applicationPassword, id!, body);
+    ? client.createObject(kind, payload)
+    : client.updateObject(kind, id!, payload);
+}
+
+/**
+ * A REST client for the workspace's connected WordPress site — self-hosted
+ * (Application Password) or WordPress.com (OAuth, the selected site).
+ */
+export async function clientFor(workspaceId: string): Promise<{
+  client: WordPressClient;
+  connectionId: string;
+  siteUrl: string;
+  authType: WordPressConnectionView["authType"];
+}> {
+  const current = await getConnectionView(supabaseAdmin, workspaceId);
+  if (!current || current.status !== "active")
+    throw new HttpError(409, "Connect and verify WordPress first.");
+  if (current.authType === "wordpress_com_oauth") {
+    const token = await oauthAccess(current.connectionId, workspaceId);
+    const siteId = await selectedOAuthSite(workspaceId, current.connectionId);
+    const siteUrl = current.selectedSite?.url ?? "";
+    return {
+      client: new WordPressClient({ kind: "bearer", siteUrl, siteId, token }),
+      connectionId: current.connectionId,
+      siteUrl,
+      authType: current.authType,
+    };
+  }
+  const c = await credentialsFor(current.connectionId, workspaceId);
+  return {
+    client: new WordPressClient({
+      kind: "basic",
+      siteUrl: c.siteUrl,
+      username: c.username,
+      password: c.applicationPassword,
+    }),
+    connectionId: current.connectionId,
+    siteUrl: c.siteUrl,
+    authType: current.authType,
+  };
 }
 
 export async function media(
@@ -613,6 +642,6 @@ export async function media(
   contentType: string,
   bytes: Uint8Array,
 ) {
-  const c = await access(workspaceId);
-  return uploadMedia(c.siteUrl, c.username, c.applicationPassword, filename, contentType, bytes);
+  const { client } = await clientFor(workspaceId);
+  return client.uploadMedia({ filename, contentType, bytes });
 }

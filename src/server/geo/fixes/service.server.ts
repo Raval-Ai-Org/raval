@@ -72,6 +72,7 @@ import {
 } from "./present";
 import { fixKindForRule, frameworkKind, planFixTarget, type TargetPlan } from "./targets";
 import { isAgentFixable } from "./strategies";
+import { cmsFieldsForRule } from "@/lib/geo/cms-fixes";
 import { geoAgentEnabled } from "@/server/geo/agents/flags";
 import type { CrawledPageFacts } from "./text-artifacts";
 import { validateProposal } from "./validate";
@@ -92,7 +93,7 @@ export type FixContext = {
   canManage: boolean;
 };
 
-const LIVE_PROPOSAL = ["draft", "applying", "pr_open", "merged", "verifying"];
+const LIVE_PROPOSAL = ["draft", "applying", "pr_open", "merged", "verifying", "applied"];
 const SYNC_AFTER_MS = 2 * 60_000;
 
 /* ───────────────────────── loading ───────────────────────── */
@@ -302,11 +303,21 @@ export async function getFixAvailability(
   const siteSources = sources.filter((s) => normHost(s.site_host) === normHost(scan.host));
   const source = siteSources.find((s) => s.status === "active") ?? siteSources[0] ?? null;
 
+  const { resolveSite, bindingView } = await import("@/server/sites/resolve.server");
+  const resolution = await resolveSite(ctx.workspaceId, scan.host, { live: true }).catch(
+    () => null,
+  );
+  const binding = resolution?.binding ?? null;
   const base = {
     fingerprint: finding.fingerprint,
     ruleId: finding.rule_id,
     fixId: finding.fix_id,
-    provider: "github" as const,
+    provider: (binding?.provider ?? "github") as FixAvailability["provider"],
+    site: binding
+      ? bindingView(binding, resolution?.placeholder)
+      : (resolution?.candidates
+          .map((c) => bindingView(c, resolution.placeholder))
+          .find((c) => c.provider !== "github") ?? null),
     configured,
     connection: connection ? presentConnection(connection) : null,
     source: source ? presentSource(source) : null,
@@ -317,6 +328,40 @@ export async function getFixAvailability(
     proposal: proposalRow ? await proposalView(proposalRow) : null,
     verifications: verifications.map(presentVerification),
   };
+
+  // WordPress / Webflow: the change is written through the platform's API.
+  const cmsCandidate =
+    binding && binding.provider !== "github"
+      ? binding
+      : !binding && !source
+        ? (resolution?.candidates.find((c) => c.provider !== "github") ?? null)
+        : null;
+  if (cmsCandidate) {
+    const name = cmsCandidate.provider === "webflow" ? "Webflow" : "WordPress";
+    const cmsResult = (
+      req: FixAvailability["requirement"],
+      reason: string,
+      method: FixAvailability["method"] = "cms_apply",
+    ): FixAvailability => ({ ...base, method, requirement: req, reason });
+    if (!cmsFieldsForRule(finding.rule_id).length)
+      return cmsResult(
+        "manual_only",
+        "This finding needs changes Mellox can't make safely on its own. Follow the steps below, then verify the fix.",
+        "manual",
+      );
+    if (!cmsCandidate.verified) return cmsResult("cms_unverified", cmsCandidate.proof);
+    if (cmsCandidate.provider === "webflow" && cmsCandidate.missingWriteScopes.length)
+      return cmsResult(
+        "cms_reconnect",
+        "Reconnect Webflow and allow Mellox to edit your site, then try again.",
+      );
+    if (!geoAgentEnabled())
+      return cmsResult("manual_only", "Automatic fixes are turned off on this server.", "manual");
+    return cmsResult(
+      "ready",
+      `Mellox can make this change on ${name} after you approve exactly what changes.`,
+    );
+  }
 
   // The GEO Engineer reads the repository itself, so a rule it has a strategy for
   // needs only the GitHub setup — not the one-shot planner's rule/framework list.
@@ -818,6 +863,7 @@ export async function approveAndApply(
       409,
     );
   }
+  if (row.provider !== "github") return approveCmsProposal(ctx, row, args.contentHash);
   if (!row.source_id || !row.base_branch || !row.base_sha || !row.repo_full_name) {
     throw new FixWorkflowError("This proposal is missing its repository details.", 409);
   }
@@ -966,6 +1012,214 @@ export async function approveAndApply(
     void updated;
     throw new FixWorkflowError(message, stale ? 409 : 502);
   }
+}
+
+/* ───────────────────────── CMS: apply & undo ───────────────────────── */
+
+/** CMS caches (page cache plugins, CDNs) need a few minutes; retries widen. */
+function cmsVerifyDelaysMinutes(): number[] {
+  return [2, 10, 30];
+}
+
+const cmsName = (provider: string) => (provider === "webflow" ? "Webflow" : "WordPress");
+
+/**
+ * Write an approved WordPress / Webflow change. The live site must still be
+ * the connected site (checked again now), the fields must still hold the
+ * values the person reviewed, and verification decides whether it worked.
+ */
+async function approveCmsProposal(
+  ctx: FixContext,
+  row: ProposalRow,
+  hash: string,
+): Promise<FixProposalView> {
+  const changes = row.cms_changes?.changes ?? [];
+  if (!changes.length) throw new FixWorkflowError("This proposal has nothing to apply.", 409);
+  const provider = row.provider as "wordpress" | "webflow";
+  const name = cmsName(provider);
+  const host = new URL(row.site_origin).hostname;
+  const { resolveSite } = await import("@/server/sites/resolve.server");
+  const resolution = await resolveSite(ctx.workspaceId, host, { live: true });
+  const binding = resolution.candidates.find((c) => c.provider === provider);
+  if (!binding?.verified)
+    throw new FixWorkflowError(
+      binding?.proof ?? `${host} isn't connected through ${name} any more.`,
+      409,
+    );
+
+  const { data: claimed, error: claimError } = await supabaseAdmin
+    .from("geo_fix_proposals")
+    .update({
+      status: "applying",
+      approved_by: ctx.userId,
+      approved_at: new Date().toISOString(),
+      error: null,
+    })
+    .eq("id", row.id)
+    .eq("status", "draft")
+    .eq("content_hash", hash)
+    .select("id");
+  if (claimError) throw new Error(claimError.message);
+  if (!claimed?.length) throw new FixWorkflowError("This change is already being applied.", 409);
+  await syncAgentRun(row.id);
+  await recordAudit({
+    workspaceId: ctx.workspaceId,
+    userId: ctx.userId,
+    action: "geo.cms.approved",
+    entity: "geo_fix_proposal",
+    payload: {
+      proposalId: row.id,
+      provider,
+      contentHash: hash,
+      fields: changes.map((c) => c.label),
+    },
+  });
+
+  const { openCmsSession } = await import("@/server/geo/cms/access.server");
+  const { applyCmsChanges, CmsDriftError } = await import("@/server/geo/cms/apply.server");
+  try {
+    const session = await openCmsSession(ctx.workspaceId, provider, {
+      write: true,
+      seo: binding.provider === "wordpress" ? binding.seo : undefined,
+    });
+    const { snapshot, published } = await applyCmsChanges(session, changes);
+    const now = new Date().toISOString();
+    await patchProposal(row.id, {
+      status: "applied",
+      applied_at: now,
+      cms_snapshot: snapshot as unknown as Json,
+      error: null,
+    });
+    await recordAudit({
+      workspaceId: ctx.workspaceId,
+      userId: ctx.userId,
+      action: "geo.cms.applied",
+      entity: "geo_fix_proposal",
+      payload: { proposalId: row.id, provider, fields: changes.map((c) => c.label), published },
+    });
+    await supabaseAdmin.from("geo_finding_states").upsert(
+      {
+        workspace_id: ctx.workspaceId,
+        fingerprint: row.fingerprint,
+        state: "in_progress",
+        note: `Changed on ${name}; checking the live site.`,
+        resolved_via: null,
+        verified_at: null,
+        verification_id: null,
+        updated_by: ctx.userId,
+        updated_at: now,
+      },
+      { onConflict: "workspace_id,fingerprint" },
+    );
+    const before: Record<string, RuleCheckState> = {};
+    if (row.finding_id) {
+      const { data: f } = await supabaseAdmin
+        .from("geo_findings")
+        .select("status, detail")
+        .eq("id", row.finding_id)
+        .maybeSingle();
+      if (f)
+        before[row.fingerprint] = {
+          status: f.status as "warn" | "fail",
+          detail: f.detail,
+          pageUrl: row.page_url,
+        };
+    }
+    await scheduleVerification({
+      workspaceId: ctx.workspaceId,
+      userId: ctx.userId,
+      proposalId: row.id,
+      origin: row.site_origin,
+      targets: [{ fingerprint: row.fingerprint, ruleId: row.rule_id, pageUrl: row.page_url }],
+      baselineScanId: row.scan_id,
+      before,
+      delaysMinutes: cmsVerifyDelaysMinutes(),
+    });
+    const updated = await patchProposal(row.id, { status: "verifying" });
+    return proposalView(updated);
+  } catch (error) {
+    const drift = error instanceof CmsDriftError;
+    const message = error instanceof Error ? error.message : `${name} didn't accept the change.`;
+    await patchProposal(row.id, {
+      status: drift ? "stale" : "failed",
+      error: message.slice(0, 2000),
+    });
+    await recordAudit({
+      workspaceId: ctx.workspaceId,
+      userId: ctx.userId,
+      action: "geo.cms.apply_failed",
+      entity: "geo_fix_proposal",
+      payload: { proposalId: row.id, provider, error: message.slice(0, 500) },
+    });
+    throw new FixWorkflowError(message, drift ? 409 : 502);
+  }
+}
+
+/** Put back the values a CMS change replaced (refuses fields edited since). */
+export async function undoCmsProposal(
+  ctx: FixContext,
+  proposalId: string,
+): Promise<FixProposalView> {
+  if (!ctx.canPropose) throw new FixWorkflowError("Only editors can undo changes.", 403);
+  const row = await loadProposal(ctx, proposalId);
+  if (row.provider === "github")
+    throw new FixWorkflowError("Pull requests are undone on GitHub (revert the merge).", 409);
+  if (
+    !row.applied_at ||
+    row.rolled_back_at ||
+    !row.cms_snapshot?.length ||
+    !["applied", "verifying", "verified", "not_verified"].includes(row.status)
+  )
+    throw new FixWorkflowError("This change can't be undone.", 409);
+  const provider = row.provider as "wordpress" | "webflow";
+  const { openCmsSession } = await import("@/server/geo/cms/access.server");
+  const { rollbackCmsChanges } = await import("@/server/geo/cms/apply.server");
+  const session = await openCmsSession(ctx.workspaceId, provider, { write: true });
+  const result = await rollbackCmsChanges(
+    session,
+    row.cms_changes?.changes ?? [],
+    row.cms_snapshot,
+  );
+  if (!result.restored)
+    throw new FixWorkflowError(
+      `Nothing was undone: ${result.skipped.join(", ")} changed on ${cmsName(provider)} since Mellox applied it.`,
+      409,
+    );
+  await supabaseAdmin
+    .from("geo_verifications")
+    .update({ status: "cancelled", outcome_detail: "The change was undone." })
+    .eq("proposal_id", row.id)
+    .in("status", ["scheduled", "running"]);
+  const updated = await patchProposal(row.id, {
+    status: "rolled_back",
+    rolled_back_at: new Date().toISOString(),
+    rolled_back_by: ctx.userId,
+    error: result.skipped.length
+      ? `Not undone because they changed since: ${result.skipped.join(", ")}`
+      : null,
+  });
+  await supabaseAdmin.from("geo_finding_states").upsert(
+    {
+      workspace_id: ctx.workspaceId,
+      fingerprint: row.fingerprint,
+      state: "open",
+      note: `Mellox's change was undone on ${cmsName(provider)}.`,
+      resolved_via: null,
+      verified_at: null,
+      verification_id: null,
+      updated_by: ctx.userId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "workspace_id,fingerprint" },
+  );
+  await recordAudit({
+    workspaceId: ctx.workspaceId,
+    userId: ctx.userId,
+    action: "geo.cms.rolled_back",
+    entity: "geo_fix_proposal",
+    payload: { proposalId: row.id, provider, restored: result.restored, skipped: result.skipped },
+  });
+  return proposalView(updated);
 }
 
 /* ───────────────────────── sync & merge → verification ───────────────────────── */

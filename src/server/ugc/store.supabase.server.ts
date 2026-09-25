@@ -200,12 +200,18 @@ export const supabaseUgcStore: UgcRenderStore = {
     return (signed ?? []).map((s) => s.signedUrl).filter((u): u is string => Boolean(u));
   },
 
-  async persistVideo({ row, sourceUrl, idempotencyKey, metadata }): Promise<PersistVideoResult> {
+  async persistVideo({
+    row,
+    sourceUrl,
+    dataUrl,
+    idempotencyKey,
+    metadata,
+  }): Promise<PersistVideoResult> {
     const hook = typeof metadata.hook === "string" ? metadata.hook : "ugc-ad";
     const result = await persistAsset({
       workspaceId: row.workspace_id,
       idempotencyKey,
-      sourceUrl,
+      ...(dataUrl ? { dataUrl } : { sourceUrl }),
       assetType: "video",
       mimeType: "video/mp4",
       filename: `mellox-ugc-${slug(hook)}.mp4`,

@@ -38,6 +38,17 @@ export function workspacePath(
   return `/w/${workspaceId}/app${clean ? `/${clean}` : ""}${qs}`;
 }
 
+export function brandKitPath(
+  workspaceId: string,
+  options?: { style?: string | null; section?: string | null; create?: boolean },
+): string {
+  return workspacePath(workspaceId, "brand-kit", {
+    style: options?.style,
+    section: options?.section,
+    create: options?.create ? 1 : undefined,
+  });
+}
+
 /**
  * Re-anchor an in-app path ("/app?settings=connections", "/app/chat/x") inside
  * a workspace. Already-canonical and non-app paths are returned unchanged.

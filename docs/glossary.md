@@ -14,4 +14,5 @@
 - **Verification scan:** The scan that confirms whether a finding is resolved.
 - **Lease:** A time-bounded worker claim on a background job row.
 - **Gateway:** A server adapter that centralizes provider calls and controls.
+- **Mellox AI:** The current canonical product name for the platform.
 - **Raval AI:** Historical repository/documentation name; use Mellox AI for current product terminology unless quoting history.

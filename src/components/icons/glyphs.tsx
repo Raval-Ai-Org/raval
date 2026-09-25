@@ -497,3 +497,14 @@ export const Layers = createIcon(
 export const Dot = createIcon("dot", <circle cx="12" cy="12" r="4.4" />, { solid: true });
 
 export const Circle = createIcon("circle", <circle cx="12" cy="12" r="8.6" />);
+
+/** Brand Kit — a swatch card with a second fanning out: the brand's own look. */
+export const BrandKit = createIcon(
+  "brand-kit",
+  <>
+    <rect x="3.6" y="3.4" width="7" height="17.2" rx="2" />
+    <path d="M10.6 8.4 14.8 5.9a1.6 1.6 0 0 1 2.2.58l2.85 4.95a1.6 1.6 0 0 1-.58 2.19L10.6 18.2" />
+    <path d="M3.6 14.2h7" />
+    <circle cx="7.1" cy="17.4" r="1" />
+  </>,
+);

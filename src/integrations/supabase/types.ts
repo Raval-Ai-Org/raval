@@ -1118,6 +1118,7 @@ export type Database = {
           seed: string | null;
           status: string;
           storage_path: string | null;
+          style_id: string | null;
           thumbnail_path: string | null;
           updated_at: string;
           width: number | null;
@@ -1149,6 +1150,7 @@ export type Database = {
           seed?: string | null;
           status?: string;
           storage_path?: string | null;
+          style_id?: string | null;
           thumbnail_path?: string | null;
           updated_at?: string;
           width?: number | null;
@@ -1180,6 +1182,7 @@ export type Database = {
           seed?: string | null;
           status?: string;
           storage_path?: string | null;
+          style_id?: string | null;
           thumbnail_path?: string | null;
           updated_at?: string;
           width?: number | null;
@@ -1198,6 +1201,13 @@ export type Database = {
             columns: ["parent_asset_id"];
             isOneToOne: false;
             referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "assets_style_id_fkey";
+            columns: ["style_id"];
+            isOneToOne: false;
+            referencedRelation: "brand_styles";
             referencedColumns: ["id"];
           },
           {
@@ -1607,6 +1617,155 @@ export type Database = {
             foreignKeyName: "billing_customers_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      brand_kit_assets: {
+        Row: {
+          analysis: Json | null;
+          analysis_error: string | null;
+          analysis_started_at: string | null;
+          analysis_status: string;
+          bytes: number | null;
+          created_at: string;
+          created_by: string | null;
+          frame_paths: string[];
+          height: number | null;
+          id: string;
+          kind: string;
+          label: string | null;
+          mime: string | null;
+          source_url: string | null;
+          storage_path: string | null;
+          style_id: string | null;
+          tags: string[];
+          text_content: string | null;
+          updated_at: string;
+          width: number | null;
+          workspace_id: string;
+        };
+        Insert: {
+          analysis?: Json | null;
+          analysis_error?: string | null;
+          analysis_started_at?: string | null;
+          analysis_status?: string;
+          bytes?: number | null;
+          created_at?: string;
+          created_by?: string | null;
+          frame_paths?: string[];
+          height?: number | null;
+          id?: string;
+          kind: string;
+          label?: string | null;
+          mime?: string | null;
+          source_url?: string | null;
+          storage_path?: string | null;
+          style_id?: string | null;
+          tags?: string[];
+          text_content?: string | null;
+          updated_at?: string;
+          width?: number | null;
+          workspace_id: string;
+        };
+        Update: {
+          analysis?: Json | null;
+          analysis_error?: string | null;
+          analysis_started_at?: string | null;
+          analysis_status?: string;
+          bytes?: number | null;
+          created_at?: string;
+          created_by?: string | null;
+          frame_paths?: string[];
+          height?: number | null;
+          id?: string;
+          kind?: string;
+          label?: string | null;
+          mime?: string | null;
+          source_url?: string | null;
+          storage_path?: string | null;
+          style_id?: string | null;
+          tags?: string[];
+          text_content?: string | null;
+          updated_at?: string;
+          width?: number | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "brand_kit_assets_style_id_fkey";
+            columns: ["style_id"];
+            isOneToOne: false;
+            referencedRelation: "brand_styles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "brand_kit_assets_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      brand_styles: {
+        Row: {
+          applies_to: string[];
+          archived_at: string | null;
+          cover_asset_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          description: string | null;
+          id: string;
+          is_default: boolean;
+          name: string;
+          spec: Json;
+          status: string;
+          updated_at: string;
+          updated_by: string | null;
+          version: number;
+          workspace_id: string;
+        };
+        Insert: {
+          applies_to?: string[];
+          archived_at?: string | null;
+          cover_asset_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string | null;
+          id?: string;
+          is_default?: boolean;
+          name: string;
+          spec?: Json;
+          status?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+          workspace_id: string;
+        };
+        Update: {
+          applies_to?: string[];
+          archived_at?: string | null;
+          cover_asset_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string | null;
+          id?: string;
+          is_default?: boolean;
+          name?: string;
+          spec?: Json;
+          status?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "brand_styles_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
             referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
@@ -3180,6 +3339,7 @@ export type Database = {
           plan_ready_at: string | null;
           plan_revision: number;
           proposal_id: string | null;
+          provider: string;
           repo_external_id: string | null;
           repo_full_name: string | null;
           result: Json | null;
@@ -3188,6 +3348,7 @@ export type Database = {
           scan_id: string | null;
           site_host: string;
           site_origin: string;
+          site_ref: Json | null;
           source_id: string | null;
           status: string;
           status_detail: string | null;
@@ -3235,6 +3396,7 @@ export type Database = {
           plan_ready_at?: string | null;
           plan_revision?: number;
           proposal_id?: string | null;
+          provider?: string;
           repo_external_id?: string | null;
           repo_full_name?: string | null;
           result?: Json | null;
@@ -3243,6 +3405,7 @@ export type Database = {
           scan_id?: string | null;
           site_host: string;
           site_origin: string;
+          site_ref?: Json | null;
           source_id?: string | null;
           status?: string;
           status_detail?: string | null;
@@ -3290,6 +3453,7 @@ export type Database = {
           plan_ready_at?: string | null;
           plan_revision?: number;
           proposal_id?: string | null;
+          provider?: string;
           repo_external_id?: string | null;
           repo_full_name?: string | null;
           result?: Json | null;
@@ -3298,6 +3462,7 @@ export type Database = {
           scan_id?: string | null;
           site_host?: string;
           site_origin?: string;
+          site_ref?: Json | null;
           source_id?: string | null;
           status?: string;
           status_detail?: string | null;
@@ -3575,6 +3740,8 @@ export type Database = {
           base_branch: string | null;
           base_sha: string | null;
           checks: Json | null;
+          cms_changes: Json | null;
+          cms_snapshot: Json | null;
           commit_sha: string | null;
           connection_id: string | null;
           content_hash: string | null;
@@ -3612,6 +3779,8 @@ export type Database = {
           base_branch?: string | null;
           base_sha?: string | null;
           checks?: Json | null;
+          cms_changes?: Json | null;
+          cms_snapshot?: Json | null;
           commit_sha?: string | null;
           connection_id?: string | null;
           content_hash?: string | null;
@@ -3649,6 +3818,8 @@ export type Database = {
           base_branch?: string | null;
           base_sha?: string | null;
           checks?: Json | null;
+          cms_changes?: Json | null;
+          cms_snapshot?: Json | null;
           commit_sha?: string | null;
           connection_id?: string | null;
           content_hash?: string | null;
@@ -3714,12 +3885,15 @@ export type Database = {
       geo_fix_proposals: {
         Row: {
           agent_run_id: string | null;
+          applied_at: string | null;
           approved_at: string | null;
           approved_by: string | null;
           base_branch: string | null;
           base_sha: string | null;
           batch_id: string | null;
           checks: Json | null;
+          cms_changes: Json | null;
+          cms_snapshot: Json | null;
           commit_sha: string | null;
           connection_id: string | null;
           content_hash: string | null;
@@ -3746,9 +3920,12 @@ export type Database = {
           provider: string;
           repo_external_id: string | null;
           repo_full_name: string | null;
+          rolled_back_at: string | null;
+          rolled_back_by: string | null;
           rule_id: string;
           scan_id: string | null;
           site_origin: string;
+          site_ref: Json | null;
           source_id: string | null;
           status: string;
           strategy: string | null;
@@ -3758,12 +3935,15 @@ export type Database = {
         };
         Insert: {
           agent_run_id?: string | null;
+          applied_at?: string | null;
           approved_at?: string | null;
           approved_by?: string | null;
           base_branch?: string | null;
           base_sha?: string | null;
           batch_id?: string | null;
           checks?: Json | null;
+          cms_changes?: Json | null;
+          cms_snapshot?: Json | null;
           commit_sha?: string | null;
           connection_id?: string | null;
           content_hash?: string | null;
@@ -3790,9 +3970,12 @@ export type Database = {
           provider?: string;
           repo_external_id?: string | null;
           repo_full_name?: string | null;
+          rolled_back_at?: string | null;
+          rolled_back_by?: string | null;
           rule_id: string;
           scan_id?: string | null;
           site_origin: string;
+          site_ref?: Json | null;
           source_id?: string | null;
           status?: string;
           strategy?: string | null;
@@ -3802,12 +3985,15 @@ export type Database = {
         };
         Update: {
           agent_run_id?: string | null;
+          applied_at?: string | null;
           approved_at?: string | null;
           approved_by?: string | null;
           base_branch?: string | null;
           base_sha?: string | null;
           batch_id?: string | null;
           checks?: Json | null;
+          cms_changes?: Json | null;
+          cms_snapshot?: Json | null;
           commit_sha?: string | null;
           connection_id?: string | null;
           content_hash?: string | null;
@@ -3834,9 +4020,12 @@ export type Database = {
           provider?: string;
           repo_external_id?: string | null;
           repo_full_name?: string | null;
+          rolled_back_at?: string | null;
+          rolled_back_by?: string | null;
           rule_id?: string;
           scan_id?: string | null;
           site_origin?: string;
+          site_ref?: Json | null;
           source_id?: string | null;
           status?: string;
           strategy?: string | null;
@@ -5123,6 +5312,205 @@ export type Database = {
           },
         ];
       };
+      site_blog_settings: {
+        Row: {
+          blog_url: string | null;
+          content_dir: string | null;
+          created_at: string;
+          detected_at: string | null;
+          frontmatter: Json | null;
+          host: string;
+          id: string;
+          post_format: string | null;
+          provider: string;
+          route_prefix: string | null;
+          setup_run_id: string | null;
+          source_id: string | null;
+          status: string;
+          status_detail: string | null;
+          updated_at: string;
+          webflow_collection_id: string | null;
+          webflow_field_map: Json | null;
+          workspace_id: string;
+          wp_category_id: number | null;
+          wp_posts_page_id: number | null;
+        };
+        Insert: {
+          blog_url?: string | null;
+          content_dir?: string | null;
+          created_at?: string;
+          detected_at?: string | null;
+          frontmatter?: Json | null;
+          host: string;
+          id?: string;
+          post_format?: string | null;
+          provider: string;
+          route_prefix?: string | null;
+          setup_run_id?: string | null;
+          source_id?: string | null;
+          status?: string;
+          status_detail?: string | null;
+          updated_at?: string;
+          webflow_collection_id?: string | null;
+          webflow_field_map?: Json | null;
+          workspace_id: string;
+          wp_category_id?: number | null;
+          wp_posts_page_id?: number | null;
+        };
+        Update: {
+          blog_url?: string | null;
+          content_dir?: string | null;
+          created_at?: string;
+          detected_at?: string | null;
+          frontmatter?: Json | null;
+          host?: string;
+          id?: string;
+          post_format?: string | null;
+          provider?: string;
+          route_prefix?: string | null;
+          setup_run_id?: string | null;
+          source_id?: string | null;
+          status?: string;
+          status_detail?: string | null;
+          updated_at?: string;
+          webflow_collection_id?: string | null;
+          webflow_field_map?: Json | null;
+          workspace_id?: string;
+          wp_category_id?: number | null;
+          wp_posts_page_id?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "site_blog_settings_setup_run_id_fkey";
+            columns: ["setup_run_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_agent_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "site_blog_settings_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "site_blog_settings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      site_publications: {
+        Row: {
+          approved_by: string | null;
+          attempts: number;
+          content_item_id: string;
+          created_at: string;
+          external_id: string | null;
+          head_branch: string | null;
+          host: string;
+          id: string;
+          last_error: string | null;
+          lease_until: string | null;
+          locked_by: string | null;
+          max_attempts: number;
+          next_attempt_at: string;
+          payload_hash: string | null;
+          pr_number: number | null;
+          pr_url: string | null;
+          provider: string;
+          published_at: string | null;
+          scheduled_for: string | null;
+          slug: string;
+          status: string;
+          status_detail: string | null;
+          title: string;
+          updated_at: string;
+          url: string | null;
+          verification: Json | null;
+          verified_at: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          approved_by?: string | null;
+          attempts?: number;
+          content_item_id: string;
+          created_at?: string;
+          external_id?: string | null;
+          head_branch?: string | null;
+          host: string;
+          id?: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          payload_hash?: string | null;
+          pr_number?: number | null;
+          pr_url?: string | null;
+          provider: string;
+          published_at?: string | null;
+          scheduled_for?: string | null;
+          slug: string;
+          status?: string;
+          status_detail?: string | null;
+          title: string;
+          updated_at?: string;
+          url?: string | null;
+          verification?: Json | null;
+          verified_at?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          approved_by?: string | null;
+          attempts?: number;
+          content_item_id?: string;
+          created_at?: string;
+          external_id?: string | null;
+          head_branch?: string | null;
+          host?: string;
+          id?: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          payload_hash?: string | null;
+          pr_number?: number | null;
+          pr_url?: string | null;
+          provider?: string;
+          published_at?: string | null;
+          scheduled_for?: string | null;
+          slug?: string;
+          status?: string;
+          status_detail?: string | null;
+          title?: string;
+          updated_at?: string;
+          url?: string | null;
+          verification?: Json | null;
+          verified_at?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "site_publications_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "site_publications_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       social_accounts: {
         Row: {
           avatar_url: string | null;
@@ -5347,6 +5735,7 @@ export type Database = {
           stage: string;
           stage_at: string;
           status: string;
+          style_id: string | null;
           title: string | null;
           type: string;
           updated_at: string;
@@ -5371,6 +5760,7 @@ export type Database = {
           stage?: string;
           stage_at?: string;
           status?: string;
+          style_id?: string | null;
           title?: string | null;
           type: string;
           updated_at?: string;
@@ -5395,6 +5785,7 @@ export type Database = {
           stage?: string;
           stage_at?: string;
           status?: string;
+          style_id?: string | null;
           title?: string | null;
           type?: string;
           updated_at?: string;
@@ -5406,6 +5797,13 @@ export type Database = {
             columns: ["parent_job_id"];
             isOneToOne: false;
             referencedRelation: "studio_jobs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "studio_jobs_style_id_fkey";
+            columns: ["style_id"];
+            isOneToOne: false;
+            referencedRelation: "brand_styles";
             referencedColumns: ["id"];
           },
           {
@@ -5690,11 +6088,13 @@ export type Database = {
           connection_id: string;
           created_at: string;
           domain: string | null;
+          domains: string[];
           id: string;
           last_error: string | null;
           last_synced_at: string | null;
           preview_url: string | null;
           selected: boolean;
+          short_name: string | null;
           site_id: string;
           site_name: string;
           status: string;
@@ -5705,11 +6105,13 @@ export type Database = {
           connection_id: string;
           created_at?: string;
           domain?: string | null;
+          domains?: string[];
           id?: string;
           last_error?: string | null;
           last_synced_at?: string | null;
           preview_url?: string | null;
           selected?: boolean;
+          short_name?: string | null;
           site_id: string;
           site_name: string;
           status?: string;
@@ -5720,11 +6122,13 @@ export type Database = {
           connection_id?: string;
           created_at?: string;
           domain?: string | null;
+          domains?: string[];
           id?: string;
           last_error?: string | null;
           last_synced_at?: string | null;
           preview_url?: string | null;
           selected?: boolean;
+          short_name?: string | null;
           site_id?: string;
           site_name?: string;
           status?: string;
@@ -5861,11 +6265,13 @@ export type Database = {
       };
       wordpress_sites: {
         Row: {
+          api_namespaces: string[];
           connection_id: string;
           created_at: string;
           id: string;
           last_error: string | null;
           last_synced_at: string | null;
+          plugin_checked_at: string | null;
           selected: boolean;
           site_name: string;
           site_url: string;
@@ -5875,11 +6281,13 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          api_namespaces?: string[];
           connection_id: string;
           created_at?: string;
           id?: string;
           last_error?: string | null;
           last_synced_at?: string | null;
+          plugin_checked_at?: string | null;
           selected?: boolean;
           site_name: string;
           site_url: string;
@@ -5889,11 +6297,13 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          api_namespaces?: string[];
           connection_id?: string;
           created_at?: string;
           id?: string;
           last_error?: string | null;
           last_synced_at?: string | null;
+          plugin_checked_at?: string | null;
           selected?: boolean;
           site_name?: string;
           site_url?: string;
@@ -6799,6 +7209,10 @@ export type Database = {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_order_id?: string };
         Returns: Database["public"]["Tables"]["link_orders"]["Row"][];
       };
+      claim_site_publications: {
+        Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
+        Returns: Database["public"]["Tables"]["site_publications"]["Row"][];
+      };
       claim_ugc_renders: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["ugc_renders"]["Row"][];
@@ -6847,6 +7261,10 @@ export type Database = {
         Returns: boolean;
       };
       reserve_ai_usage: { Args: { p_request: Json }; Returns: Json };
+      set_default_brand_style: {
+        Args: { p_workspace_id: string; p_style_id: string };
+        Returns: undefined;
+      };
       set_persona_once: {
         Args: { _persona: string };
         Returns: { persona: string; persona_set_at: string }[];

@@ -33,6 +33,7 @@ export const POST = defineRoute({
       brand: ctx.brand,
       workspace: ctx.workspace,
       durationSec: body.durationSec ?? 8,
+      styleText: ctx.styleText || undefined,
     };
     if (body.mode === "rewrite") {
       if (!ctx.script) throw new HttpError(400, "Pick a concept before rewriting its script.");

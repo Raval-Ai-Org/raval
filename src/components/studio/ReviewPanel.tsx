@@ -58,6 +58,9 @@ import { usePreviewBrand } from "./previews/brand";
 import { CarouselPreview } from "./previews/CarouselPreview";
 import { MediaLightbox } from "./previews/MediaLightbox";
 import { ScriptPreview } from "./previews/ScriptPreview";
+import { PublishToSite } from "./PublishToSite";
+import { useStyleConformance } from "@/components/app/brand-kit/use-style-conformance";
+import { conformanceFixInstruction } from "@/lib/brand-kit/conformance";
 import { SocialPostPreview } from "./previews/SocialPostPreview";
 import { Burst, DrawCheck } from "./studio-ui";
 
@@ -317,6 +320,10 @@ export function ReviewPanel({
                 metaDescription: draft.article.metaDescription,
                 takeaways: draft.article.takeaways,
                 wordCount: draft.article.markdown.split(/\s+/).filter(Boolean).length,
+                faq: draft.article.faq ?? [],
+                slug: draft.article.slug ?? "",
+                category: draft.article.category ?? "",
+                tags: draft.article.tags ?? [],
               },
             },
           });
@@ -489,6 +496,13 @@ export function ReviewPanel({
   };
 
   const variant = draft.variants?.find((v) => v.platform === current) ?? null;
+  // Does the copy follow the Brand Kit style it was made with?
+  const styleCheck = useStyleConformance(
+    session.workspaceId,
+    (job.input as { styleId?: string | null } | undefined)?.styleId ?? session.styleId,
+    session.type,
+    variant?.body ?? draft.article?.markdown ?? null,
+  );
   const retryMedia = () => refine("Render the visual again.", "media");
   const partial = (draft.partial ?? []).filter(Boolean);
   const updateVariant = (body: string) =>
@@ -731,6 +745,30 @@ export function ReviewPanel({
       label: "Headlines within 40 characters",
       detail: long ? `${long} long` : `${draft.ads.length} variants`,
     });
+  }
+  if (styleCheck) {
+    const issues = styleCheck.result.issues;
+    checks.push(
+      issues.length
+        ? {
+            key: "style",
+            state: "warn",
+            label: `Style "${styleCheck.name}": ${issues.length} to fix`,
+            detail: issues[0].message,
+            action: locked ? undefined : (
+              <button
+                type="button"
+                onClick={() =>
+                  refine(conformanceFixInstruction(styleCheck.result), refineTarget, "style")
+                }
+                className="shrink-0 text-xs font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                Fix
+              </button>
+            ),
+          }
+        : { key: "style", state: "ok", label: `Matches style "${styleCheck.name}"` },
+    );
   }
   checks.push(
     hasBrand
@@ -1243,7 +1281,13 @@ export function ReviewPanel({
             <div className="mt-5 hidden @5xl/composer:flex">{actions}</div>
           </div>
 
-          {locked ? (
+          {session.type === "article" && rows[0] && !approvable && !fixtureRows ? (
+            <InspectorSection title="Your website">
+              <PublishToSite workspaceId={session.workspaceId} contentItemId={rows[0].id} />
+            </InspectorSection>
+          ) : null}
+
+          {locked && session.type !== "article" ? (
             <InspectorSection title="Delivery">
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {groupStatus === "published"

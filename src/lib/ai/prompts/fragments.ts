@@ -56,7 +56,7 @@ export const RULE_NO_FLUFF =
 /**
  * Streamed chat text can't be cleaned up after the fact the way a fully
  * materialized completion can (src/lib/ai/humanize-text.ts, applied to every
- * non-streaming call in run.server.ts and anthropic-gateway.server.ts) — so
+ * non-streaming call in run.server.ts and llmText in ai-gateway.server.ts) — so
  * for the one surface that streams straight to the browser, prevention in
  * the prompt is the only real defense. Mirrors the instruction Studio's
  * CRAFT_RULES already gives (src/lib/studio/prompts.ts).
@@ -81,10 +81,10 @@ export const FMT_EXECUTIVE = "Executive, concrete, sensory. No emojis. No filler
 // action tag or the Studio rail). Keep this list truthful — the model describes
 // exactly what it is told exists.
 export const PRODUCT_SURFACE =
-  "Product (chat-first): Chat with Mellox • Studio canvases (social post, article, landing page, email, SEO brief, design) • Brand DNA / Memory • AI Visibility (GEO/AEO audit) • Competitor Watch • Marketing Coach • Content Calendar • Client portal (share links) • Analytics (Website = Google Analytics 4 visits, Search = Google Search Console clicks/impressions/position, Content, AI Visibility score, Insights) • Library • Operations inbox (agent findings + approvals) • Agency Command Center (/agency, multi-client). Writing personas: Scout (SEO), Spark (content), Echo (social). Background workers: Distribution Reliability (watches publishing health, read-only) and Content-Fit (proposes platform fixes for approval).";
+  "Product (chat-first): Chat with Mellox • Studio canvases (social post, article, landing page, email, SEO brief, design) • Brand DNA / Memory • AI Visibility (GEO/AEO audit) • Competitor Watch • Marketing Coach • Content Calendar • Client portal (share links) • Analytics (Website = Google Analytics 4 visits, Search = Google Search Console clicks/impressions/position, Content, AI Visibility score, Insights) • Library • Agency Command Center (/agency, multi-client). Writing personas: Scout (SEO), Spark (content), Echo (social). Background workers: Distribution Reliability (watches publishing health, read-only) and Content-Fit (proposes platform fixes for approval).";
 
 export const ACTION_TAGS =
-  'Emit at most 3 action tags, only on the final line: [[action:audit]] [[action:open-studio canvas="..." brief="..."]] [[action:open-memory]] [[action:open-calendar]] [[action:open-clients]] [[action:open-visibility]] [[action:open-competitor]] [[action:open-coach]] [[action:open-operations]] [[action:open-analytics tab="overview|website|search|content|insights"]] [[action:save-memory title="..." body="..."]] [[action:schedule title="..." canvas="..." channel="..." when="..."]]. save-memory, schedule and audit only PROPOSE: the user approves them. schedule creates a draft for the approval queue — it never publishes.';
+  'Emit at most 3 action tags, only on the final line: [[action:audit]] [[action:open-studio canvas="..." brief="..."]] [[action:open-memory]] [[action:open-calendar]] [[action:open-clients]] [[action:open-visibility]] [[action:open-competitor]] [[action:open-coach]] [[action:open-analytics tab="overview|website|search|content|insights"]] [[action:save-memory title="..." body="..."]] [[action:schedule title="..." canvas="..." channel="..." when="..."]]. save-memory, schedule and audit only PROPOSE: the user approves them. schedule creates a draft for the approval queue — it never publishes.';
 
 /** How the assistant talks about analytics numbers from the "Analytics" context block. */
 export const ANALYTICS_RULES =

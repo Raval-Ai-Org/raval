@@ -55,7 +55,7 @@ import { runCompetitorIntel, startCompetitorIntelRun } from "./competitor-intel.
 
 afterEach(() => {
   delete process.env.FIRECRAWL_BASE_URL;
-  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.OPENROUTER_API_KEY;
   setFirecrawlClient(null);
   setUsageSink(async () => {});
   vi.unstubAllGlobals();
@@ -74,7 +74,7 @@ describe("runCompetitorIntel", () => {
 
   it("crawls the competitor site and synthesizes a grounded profile", async () => {
     process.env.FIRECRAWL_BASE_URL = "http://localhost:3002";
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
 
     setFirecrawlClient({
       scrape: vi.fn(),
@@ -104,8 +104,13 @@ describe("runCompetitorIntel", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
-          stop_reason: "end_turn",
-          content: [{ type: "text", text: JSON.stringify(claudeResponse) }],
+          model: "anthropic/claude-opus-5.5",
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { role: "assistant", content: JSON.stringify(claudeResponse) },
+            },
+          ],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
@@ -120,8 +125,8 @@ describe("runCompetitorIntel", () => {
 
     // The crawled text reached Claude wrapped as untrusted data, not raw.
     const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-    expect(request.messages[0].content).toContain("<untrusted_data");
-    expect(request.messages[0].content).toContain("solo founders");
+    expect(request.messages[1].content).toContain("<untrusted_data");
+    expect(request.messages[1].content).toContain("solo founders");
   });
 });
 
@@ -139,7 +144,7 @@ describe("startCompetitorIntelRun", () => {
     expect(row.status).toBe("running");
     expect(triggerTask).toHaveBeenCalledWith(
       "competitor-intel-run",
-        { runId: row.id, workspaceId: opts.workspaceId, competitorUrl: opts.competitorUrl },
+      { runId: row.id, workspaceId: opts.workspaceId, competitorUrl: opts.competitorUrl },
       `competitor-intel-run:${row.id}`,
     );
     expect(crawl).not.toHaveBeenCalled();
@@ -147,7 +152,7 @@ describe("startCompetitorIntelRun", () => {
 
   it("runs inline when Trigger.dev is not configured", async () => {
     process.env.FIRECRAWL_BASE_URL = "http://localhost:3002";
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
     setFirecrawlClient({
       scrape: vi.fn(),
       crawl: vi.fn().mockResolvedValue({
@@ -162,7 +167,10 @@ describe("startCompetitorIntelRun", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         new Response(
-          JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: "{}" }] }),
+          JSON.stringify({
+            model: "m",
+            choices: [{ finish_reason: "stop", message: { role: "assistant", content: "{}" } }],
+          }),
           {
             status: 200,
             headers: { "Content-Type": "application/json" },
@@ -181,7 +189,7 @@ describe("startCompetitorIntelRun", () => {
     triggerEnabled.mockReturnValue(true);
     triggerTask.mockRejectedValue(new Error("unreachable"));
     process.env.FIRECRAWL_BASE_URL = "http://localhost:3002";
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
     setFirecrawlClient({
       scrape: vi.fn(),
       crawl: vi.fn().mockResolvedValue({
@@ -196,7 +204,10 @@ describe("startCompetitorIntelRun", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         new Response(
-          JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: "{}" }] }),
+          JSON.stringify({
+            model: "m",
+            choices: [{ finish_reason: "stop", message: { role: "assistant", content: "{}" } }],
+          }),
           {
             status: 200,
             headers: { "Content-Type": "application/json" },

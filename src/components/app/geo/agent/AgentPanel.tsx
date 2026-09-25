@@ -7,6 +7,7 @@
 //   plan           files + reasons, risks, scope, validation criteria → approve / revise
 //   inputs         facts the fix needs (never guessed)
 //   patch          diff, self-review, validation checks → approve → pull request
+//                  (WordPress / Webflow: before → after per field → apply → undo)
 //   activity       the tools the agent actually ran (no model reasoning)
 //
 // Every state and every log line comes from the server; polling stops once the
@@ -18,8 +19,10 @@ import {
   AlertTriangle,
   Bot,
   CheckCircle,
+  Copy,
   ExternalLink,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
   Spinner,
   Wand,
@@ -39,7 +42,8 @@ import {
   startAgentRun,
   submitAgentInputs,
 } from "@/lib/geo-agent.functions";
-import { approveFixProposal } from "@/lib/geo-fixes.functions";
+import { approveFixProposal, undoCmsFix } from "@/lib/geo-fixes.functions";
+import type { AssistedStepView, CmsChangeView, SiteProviderId } from "@/lib/geo/fix-contracts";
 import {
   AGENT_TERMINAL_STATUSES,
   AGENT_WAITING_STATUSES,
@@ -52,6 +56,92 @@ import { Chip, relativeTime } from "../geo-ui";
 import { CheckRow, DiffView, VerificationCard } from "../FindingDetail";
 
 const errMsg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+
+const MODEL_NAMES: Record<string, string> = {
+  "anthropic/claude-opus-5.5": "Claude Opus 5.5",
+  "google/gemini-3.8-flash": "Gemini 3.8 Flash",
+  "openai/gpt-5.6-terra": "GPT-5.6 Terra",
+  // Labels for runs recorded before the move to OpenRouter.
+  "claude-sonnet-5": "Claude Sonnet 5",
+  "claude-opus-5": "Claude Opus 5",
+};
+const modelLabel = (id: string | null | undefined) =>
+  id ? (MODEL_NAMES[id] ?? id) : "Claude Opus 5.5";
+
+const siteName = (p: SiteProviderId) =>
+  p === "webflow" ? "Webflow" : p === "wordpress" ? "WordPress" : "GitHub";
+
+/* ───────────────────────── CMS: before → after, paste steps ───────────────────────── */
+
+export function BeforeAfter({ change }: { change: CmsChangeView }) {
+  const mono = change.format === "code";
+  const box = (label: string, value: string, tone: string) => (
+    <div className={cn("min-w-0 flex-1 rounded-md border px-2 py-1.5", tone)}>
+      <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div
+        className={cn(
+          "mt-0.5 max-h-56 overflow-auto whitespace-pre-wrap break-words text-[12px]",
+          mono && "font-mono text-[11px]",
+        )}
+      >
+        {value || <span className="italic text-muted-foreground">(empty)</span>}
+      </div>
+    </div>
+  );
+  return (
+    <div className="space-y-1">
+      <div className="text-[12px]">
+        <span className="font-medium">{change.label}</span>
+        <span className="text-muted-foreground"> · {change.target}</span>
+      </div>
+      <div className="flex flex-col gap-1.5 sm:flex-row">
+        {box("Now", change.before, "border-border/60 bg-background/60")}
+        {box("After", change.after, "border-success/30 bg-success/5")}
+      </div>
+      <p className="text-[11.5px] text-muted-foreground">{change.reason}</p>
+    </div>
+  );
+}
+
+function AssistedSteps({ steps }: { steps: AssistedStepView[] }) {
+  if (!steps.length) return null;
+  return (
+    <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-2.5">
+      <p className="text-[12.5px] font-medium">
+        Paste {steps.length > 1 ? "these" : "this"} yourself
+      </p>
+      {steps.map((s) => (
+        <div key={s.label + s.where} className="space-y-1">
+          <div className="text-[12px]">
+            <span className="font-medium">{s.label}</span>
+            <span className="text-muted-foreground"> → {s.where}</span>
+          </div>
+          {s.value && (
+            <div className="relative">
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border/60 bg-background/70 p-2 pr-9 font-mono text-[11px]">
+                {s.value}
+              </pre>
+              <button
+                type="button"
+                aria-label="Copy"
+                className="absolute right-1.5 top-1.5 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                onClick={() => {
+                  void navigator.clipboard.writeText(s.value).then(
+                    () => toast.success("Copied"),
+                    () => toast.error("Couldn't copy"),
+                  );
+                }}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          <p className="text-[11.5px] text-muted-foreground">{s.why}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 type RunState = { run: AgentRunView | null; events: AgentEventView[] };
 
@@ -419,6 +509,7 @@ function PatchReview({
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const proposal = run.proposal;
+  const cms = run.provider !== "github";
   const approve = async () => {
     if (!proposal?.contentHash) return;
     setBusy(true);
@@ -426,21 +517,29 @@ function PatchReview({
       const p = await approveFixProposal({
         data: { workspaceId, proposalId: proposal.id, contentHash: proposal.contentHash },
       });
-      toast.success(p.pr ? `Pull request #${p.pr.number} opened` : "Change applied");
+      toast.success(
+        p.pr
+          ? `Pull request #${p.pr.number} opened`
+          : `Changed on ${siteName(p.provider)}. Checking the live page now.`,
+      );
       onChanged();
     } catch (e) {
-      toast.error(errMsg(e, "Couldn't open the pull request"));
+      toast.error(errMsg(e, cms ? "Couldn't apply the change" : "Couldn't open the pull request"));
       onChanged();
     } finally {
       setBusy(false);
     }
   };
-  const files = run.patch?.files ?? [];
+  const files = cms ? [] : (run.patch?.files ?? []);
+  const cmsChanges = proposal?.cms?.changes ?? [];
   return (
     <div className="space-y-3">
       {run.patch?.explanation && (
         <p className="text-[12.5px] text-foreground/90">{run.patch.explanation}</p>
       )}
+      {cmsChanges.map((c) => (
+        <BeforeAfter key={c.label + c.target} change={c} />
+      ))}
       {files.map((f) => (
         <div key={f.path}>
           <div className="mb-1 flex flex-wrap items-center gap-2 text-[12px]">
@@ -496,15 +595,30 @@ function PatchReview({
               onChange={(e) => setAgreed(e.target.checked)}
               className="mt-0.5"
             />
-            <span>
-              I reviewed this exact change. Open it as a pull request from a new{" "}
-              <span className="font-mono">mellox/</span> branch on{" "}
-              <span className="font-medium">{run.repository}</span> (Mellox never merges or pushes
-              to {run.baseBranch}).
-            </span>
+            {cms ? (
+              <span>
+                I reviewed this exact change. Apply it to my {siteName(run.provider)} site now.
+                Mellox keeps the old values so I can undo it.
+              </span>
+            ) : (
+              <span>
+                I reviewed this exact change. Open it as a pull request from a new{" "}
+                <span className="font-mono">mellox/</span> branch on{" "}
+                <span className="font-medium">{run.repository}</span> (Mellox never merges or pushes
+                to {run.baseBranch}).
+              </span>
+            )}
           </label>
+          {cms && proposal.cms?.publishesSite && (
+            <p className="flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/5 px-2 py-1.5 text-[11.5px]">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+              Webflow page settings go live when the site is published. Applying publishes your
+              site, which also publishes any other unpublished edits in Webflow.
+            </p>
+          )}
           <Button size="sm" loading={busy} disabled={!agreed} onClick={() => void approve()}>
-            <Wand className="h-3.5 w-3.5" /> Approve & create pull request
+            <Wand className="h-3.5 w-3.5" />{" "}
+            {cms ? `Apply to ${siteName(run.provider)}` : "Approve & create pull request"}
           </Button>
         </div>
       )}
@@ -523,12 +637,15 @@ export function AgentPanel({
   notReadyReason,
   manualSteps,
   onChanged,
+  provider = "github",
 }: {
   workspaceId: string;
   findingId: string;
   fixMode: "deterministic" | "agent" | "manual";
   canPropose: boolean;
-  /** GitHub connected + repository verified for this site (from fix availability). */
+  /** The platform that builds the site (from fix availability). */
+  provider?: SiteProviderId;
+  /** Site connected and proven for this host (from fix availability). */
   ready: boolean;
   notReadyReason: string | null;
   manualSteps: string[];
@@ -536,7 +653,7 @@ export function AgentPanel({
 }) {
   const [state, setState] = useState<RunState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"start" | "cancel" | "retry" | null>(null);
+  const [busy, setBusy] = useState<"start" | "cancel" | "retry" | "undo" | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [refusal, setRefusal] = useState<{
     reason: string;
@@ -567,6 +684,8 @@ export function AgentPanel({
     !AGENT_TERMINAL_STATUSES.includes(run.status) &&
     !AGENT_WAITING_STATUSES.includes(run.status);
   const watching = !!run && ["pr_open", "merged", "rescan_pending"].includes(run.status);
+  const cmsSite = run ? run.provider !== "github" : provider !== "github";
+  const platform = siteName(run?.provider ?? provider);
 
   const poll = useCallback(async () => {
     if (!run) return;
@@ -587,7 +706,7 @@ export function AgentPanel({
     () => {
       if (active || watching) void poll();
     },
-    active ? 2500 : 20000,
+    active && !watching ? 2500 : 15000,
     [run?.id, run?.status, active, watching],
   );
 
@@ -625,6 +744,20 @@ export function AgentPanel({
       setBusy(null);
     }
   };
+  const undo = async () => {
+    if (!run?.proposal) return;
+    setBusy("undo");
+    try {
+      await undoCmsFix({ data: { workspaceId, proposalId: run.proposal.id } });
+      toast.success(`Undone. The previous values are back on ${platform}.`);
+      await load();
+      onChanged();
+    } catch (e) {
+      toast.error(errMsg(e, "Couldn't undo"));
+    } finally {
+      setBusy(null);
+    }
+  };
   const retry = async () => {
     if (!run) return;
     setBusy("retry");
@@ -647,12 +780,12 @@ export function AgentPanel({
         <div className="min-w-0">
           <div className="text-[13px] font-semibold">Mellox GEO Engineer</div>
           <div className="text-[11.5px] text-muted-foreground">
-            {run?.model
-              ? `Anthropic ${run.model === "claude-sonnet-5" ? "Claude Sonnet 5" : run.model}`
-              : "Anthropic Claude Sonnet 5"}
+            {`Anthropic ${modelLabel(run?.model)}`}
             {run?.repository
               ? ` · ${run.repository}@${run.baseBranch}${run.baseSha ? ` (${run.baseSha.slice(0, 7)})` : ""}`
-              : ""}
+              : run && run.provider !== "github"
+                ? ` · works on your ${siteName(run.provider)} site`
+                : ""}
           </div>
         </div>
         {run && (
@@ -696,10 +829,9 @@ export function AgentPanel({
       <div className="space-y-3">
         {header}
         <p className="text-[12.5px] text-muted-foreground">
-          The GEO Engineer reads your repository, finds where this is produced, proposes a plan for
-          you to approve, writes and self-reviews the patch, validates it, and opens a pull request
-          only after you approve the exact change. A re-scan of the live site decides whether it's
-          fixed.
+          {cmsSite
+            ? `The GEO Engineer checks that this page is really on your ${platform} site, finds the exact page, prepares the change from your own content and shows you before and after. Nothing changes until you approve. A re-scan of the live page then confirms the fix, and you can undo it.`
+            : "The GEO Engineer reads your repository, finds where this is produced, proposes a plan for you to approve, writes and self-reviews the patch, validates it, and opens a pull request only after you approve the exact change. A re-scan of the live site decides whether it's fixed."}
         </p>
         {refusal && (
           <div className="rounded-lg border border-warning/30 bg-warning/5 p-2.5 text-[12.5px]">
@@ -716,7 +848,9 @@ export function AgentPanel({
         {!ready ? (
           <p className="text-[12px] text-muted-foreground">
             {notReadyReason ??
-              "Connect and verify the repository behind this website first (see Repository setup below)."}
+              (cmsSite
+                ? `Connect your ${platform} site first.`
+                : "Connect and verify the repository behind this website first (see Repository setup below).")}
           </p>
         ) : !canPropose ? (
           <p className="text-[12px] text-muted-foreground">An editor can start the GEO Engineer.</p>
@@ -769,7 +903,9 @@ export function AgentPanel({
 
       {run.status === "not_fixable" && run.plan && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 p-2.5 text-[12.5px]">
-          <p className="font-medium">Can't be automated safely</p>
+          <p className="font-medium">
+            {run.assisted.length ? `${platform} needs a quick paste` : "Can't be automated safely"}
+          </p>
           <p className="mt-0.5 text-foreground/85">{run.plan.notFixableReason}</p>
           {run.plan.manualSteps.length > 0 && (
             <ol className="mt-1.5 list-decimal space-y-0.5 pl-5">
@@ -859,6 +995,30 @@ export function AgentPanel({
           )}
         </div>
       )}
+      {run.assisted.length > 0 && <AssistedSteps steps={run.assisted} />}
+      {run.proposal?.cms?.appliedAt && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-2.5 py-2 text-[12.5px]">
+          <CheckCircle className="h-3.5 w-3.5 text-success" />
+          <span>
+            {run.proposal.cms.rolledBackAt
+              ? `Undone ${relativeTime(run.proposal.cms.rolledBackAt)}`
+              : `Changed on ${platform} ${relativeTime(run.proposal.cms.appliedAt)}`}
+          </span>
+          {run.proposal.pageUrl && (
+            <a
+              href={run.proposal.pageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[12px] underline-offset-2 hover:underline"
+            >
+              View live page <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+          {run.proposal.error && (
+            <span className="text-[11.5px] text-warning">{run.proposal.error}</span>
+          )}
+        </div>
+      )}
       {run.verification && <VerificationCard v={run.verification} />}
 
       <details
@@ -874,6 +1034,11 @@ export function AgentPanel({
       </details>
 
       <div className="flex flex-wrap items-center gap-2">
+        {run.actions.undo && (
+          <Button size="sm" variant="outline" loading={busy === "undo"} onClick={() => void undo()}>
+            <RotateCcw className="h-3.5 w-3.5" /> Undo change
+          </Button>
+        )}
         {run.actions.retry && (
           <Button
             size="sm"

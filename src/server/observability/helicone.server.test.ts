@@ -19,7 +19,7 @@ afterEach(() => {
 
 const baseRow = {
   provider: "anthropic",
-  model: "claude-sonnet-5",
+  model: "anthropic/claude-opus-5.5",
   route: "coach.briefing",
   workspace_id: "ws-1",
   user_id: "user-1",
@@ -52,7 +52,7 @@ describe("logToHelicone", () => {
 
     expect(transport).toHaveBeenCalledOnce();
     const payload = transport.mock.calls[0][0] as CustomLogPayload;
-    expect(payload.providerRequest.json).toEqual({ model: "claude-sonnet-5" });
+    expect(payload.providerRequest.json).toEqual({ model: "anthropic/claude-opus-5.5" });
     expect(payload.providerRequest.meta["Helicone-Property-Provider"]).toBe("anthropic");
     expect(payload.providerRequest.meta["Helicone-Property-Workspace"]).toBe("ws-1");
     expect(payload.providerRequest.meta["Helicone-Property-Total-Tokens"]).toBe("160");

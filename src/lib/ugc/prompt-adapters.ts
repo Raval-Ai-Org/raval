@@ -26,6 +26,20 @@ export function klingPromptAdapter(input: PromptInput): string {
   );
 }
 
+export function geminiPromptAdapter(input: PromptInput): string {
+  return withDirection(
+    buildVideoPrompt(input),
+    "Prioritize lifelike people and faithful product detail: natural expressions, accurate quoted dialogue with clean lip sync, true-to-life materials and lighting. Keep the product's shape, label and colours exactly as in the reference photos.",
+  );
+}
+
+export function minimaxPromptAdapter(input: PromptInput): string {
+  return withDirection(
+    buildVideoPrompt(input),
+    "Treat the beat sheet as a directed shot plan: deliberate, readable camera moves, continuity of subjects and product geometry between shots, and cinematic but purposeful composition.",
+  );
+}
+
 export function grokPromptAdapter(input: PromptInput): string {
   return withDirection(
     buildVideoPrompt(input),
@@ -37,6 +51,10 @@ export function buildModelPrompt(input: PromptInput): string {
   switch (input.model.family) {
     case "veo":
       return veoPromptAdapter(input);
+    case "gemini":
+      return geminiPromptAdapter(input);
+    case "minimax":
+      return minimaxPromptAdapter(input);
     case "kling":
       return klingPromptAdapter(input);
     case "grok":

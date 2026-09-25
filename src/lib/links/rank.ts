@@ -224,3 +224,162 @@ export function donorFacts(donor: DonorSignals): DonorFacts {
     category: donor.cat,
   };
 }
+
+// ── Relevance to one brand ──────────────────────────────────────────────────
+//
+// Quality alone puts the same sites at the top for everyone. Relevance is what
+// makes a shortlist belong to one brand: the catalog category where the
+// provider has one, the brand's topic words found in the domain or the sample
+// page's address, and whether the site is in a language the brand writes in.
+
+/** The provider's category names, exactly as the catalog spells them. */
+export const CATALOG_CATEGORIES = [
+  "Technology",
+  "Business",
+  "E-commerce",
+  "Entertainment",
+  "Home & Garden",
+  "Education",
+  "Travel",
+  "News",
+  "Beauty & Health",
+  "Games",
+  "Sports",
+  "Fashion & Style",
+  "Food & Restaurants",
+  "Automotive",
+  "Real Estate",
+  "Medicine",
+  "Finance",
+  "Kids & Family",
+  "Music",
+  "Books & Literature",
+  "Politics",
+  "Movies & TV",
+  "Legal Services",
+] as const;
+
+/** Extensions that say nothing about a site's language or country. */
+const GENERIC_TLDS = new Set([
+  "com",
+  "net",
+  "org",
+  "info",
+  "io",
+  "co",
+  "biz",
+  "me",
+  "app",
+  "dev",
+  "blog",
+  "online",
+  "site",
+  "tech",
+  "space",
+  "store",
+  "shop",
+  "news",
+  "media",
+  "live",
+  "pro",
+  "world",
+  "today",
+  "agency",
+  "digital",
+  "cloud",
+  "ai",
+  "tv",
+  "cc",
+  "gg",
+  "eu",
+  "sh",
+  "st",
+  "us",
+]);
+
+export type RelevanceProfile = {
+  /** Catalog categories that suit the brand, best first. */
+  categories: string[];
+  /** Lower-case words that would appear in a relevant site's name or URLs. */
+  topics: string[];
+  /** Country extensions whose sites write in the brand's language(s). */
+  tlds: string[];
+};
+
+/** Splits a domain or URL path into lower-case word-ish pieces. */
+function tokens(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ");
+}
+
+/**
+ * 0..1. Deterministic, so the same brand gets the same order for the same
+ * catalog, and two brands in different fields get different ones.
+ */
+export function relevanceScore(
+  donor: DonorSignals & { summary?: string | null },
+  profile: RelevanceProfile,
+): number {
+  let score = 0;
+
+  if (donor.cat) {
+    const index = profile.categories.findIndex(
+      (category) => category.toLowerCase() === donor.cat!.toLowerCase(),
+    );
+    if (index === 0) score += 0.45;
+    else if (index > 0) score += Math.max(0.2, 0.4 - index * 0.05);
+  }
+
+  // Topic words in the domain count most; in the sample page's address or a
+  // stored summary of the site they count less. Substrings are fine here —
+  // "fitnessblog" is about fitness — but very short words are skipped because
+  // they match everything.
+  const domain = donor.domain.toLowerCase();
+  let path = "";
+  if (donor.page) {
+    try {
+      path = tokens(new URL(donor.page).pathname);
+    } catch {
+      path = tokens(donor.page);
+    }
+  }
+  const summary = donor.summary ? tokens(donor.summary) : "";
+  let hits = 0;
+  for (const raw of profile.topics) {
+    const topic = raw.toLowerCase().trim();
+    if (topic.length < 4) continue;
+    const compact = topic.replace(/[^a-z0-9]/g, "");
+    if (compact && domain.replace(/[^a-z0-9]/g, "").includes(compact)) hits += 0.25;
+    else if (path.includes(topic) || summary.includes(topic)) hits += 0.1;
+  }
+  score += Math.min(0.5, hits);
+
+  const ext = (donor.ext ?? "").toLowerCase();
+  if (ext && profile.tlds.includes(ext)) score += 0.1;
+  else if (ext && !GENERIC_TLDS.has(ext)) score -= 0.3;
+
+  return Math.max(0, Math.min(1, score));
+}
+
+export type RelevantDonor = ScoredDonor & { relevance: number; combined: number };
+
+/**
+ * Quality and relevance together. Relevance leads, because an off-topic link on
+ * a big site helps less than an on-topic one on a solid site — but a
+ * low-quality site never tops the list on topic alone.
+ */
+export function rankForBrand(
+  donors: Array<DonorSignals & { summary?: string | null }>,
+  profile: RelevanceProfile,
+  options: { ownDomain?: string | null; limit?: number } = {},
+): RelevantDonor[] {
+  const summaries = new Map(donors.map((donor) => [donor.id, donor.summary ?? null]));
+  const ranked = rankDonors(donors, { ownDomain: options.ownDomain }).map((donor) => {
+    const relevance = relevanceScore({ ...donor, summary: summaries.get(donor.id) }, profile);
+    const combined = Math.round((0.55 * relevance + 0.45 * (donor.score / 100)) * 10_000) / 100;
+    return { ...donor, relevance, combined };
+  });
+  ranked.sort(
+    (a, b) => b.combined - a.combined || b.score - a.score || a.domain.localeCompare(b.domain),
+  );
+  return typeof options.limit === "number" ? ranked.slice(0, options.limit) : ranked;
+}

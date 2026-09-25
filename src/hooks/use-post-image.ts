@@ -19,6 +19,7 @@ import { deriveCreativeBrief } from "@/lib/creative-brief";
 import { evaluateCreativePreflight, refinementInstructions } from "@/lib/creative-qa";
 import { deriveCreativeStrategy } from "@/lib/creative-strategy";
 import { persistGeneratedAsset } from "@/lib/persistent-assets";
+import { rememberedStyle } from "@/lib/studio/session-store";
 
 export type ImageStatus = "idle" | "loading" | "success" | "error";
 
@@ -201,6 +202,8 @@ export function usePostImage(args: {
           signal: ctrl.signal,
           size: activeSize,
           style,
+          // The workspace's Brand Kit style, applied (and checked) on the server.
+          brandStyle: rememberedStyle(workspaceId) ?? "default",
           routing: {
             taskType: "generation",
             brandPrecision: brand ? "strict" : "normal",

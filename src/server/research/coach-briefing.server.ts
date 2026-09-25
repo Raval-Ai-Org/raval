@@ -11,7 +11,7 @@ import "server-only";
 import { coachSystem } from "@/lib/ai/prompts";
 import { assemble } from "@/lib/ai/prompts/assemble";
 import { COACH_OUTPUT_SCHEMA } from "@/lib/ai/output-schemas";
-import { claudeJsonPrompt } from "@/lib/anthropic-gateway.server";
+import { llmJson } from "@/lib/ai-gateway.server";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 
 export type CoachIntent =
@@ -87,7 +87,10 @@ export type CoachSynthesisInput = {
   dayName: string;
   siteUrl: string | null;
   brandSeed: string;
+  /** The planned model (cache key only; the route plan picks the model). */
   model: string;
+  /** Deep strategy / forced premium: the `coach.briefing` escalation (high effort). */
+  deepStrategy?: boolean;
   signals: CoachSignals;
   brandContext?: string;
   siteText: string;
@@ -138,7 +141,7 @@ export type CoachSynthesisResult = {
 export async function synthesizeCoachBriefing(
   input: CoachSynthesisInput,
 ): Promise<CoachSynthesisResult> {
-  const { today, dayName, siteUrl, brandSeed, model, signals, brandContext } = input;
+  const { today, dayName, siteUrl, brandSeed, signals, brandContext } = input;
   const { siteText, siteMeta, compResults, reviewResults, trendResults } = input;
   const trendAnswer = input.trendAnswer ?? "";
 
@@ -189,13 +192,12 @@ export async function synthesizeCoachBriefing(
   // Structured output: valid JSON by construction, so no repair call. Thinking
   // shares max_tokens on Claude 5 models — the old 1,800 ceiling truncated the
   // briefing (and its 3,600 repair) and users got the template fallback.
-  const parsed = await claudeJsonPrompt<Partial<CoachBriefing>>({
+  const parsed = await llmJson<Partial<CoachBriefing>>({
     route: "coach.briefing",
     system,
     user,
     fallback: {},
-    model,
-    effort: "medium",
+    escalate: input.deepStrategy === true,
     maxTokens: 6000,
     outputSchema: COACH_OUTPUT_SCHEMA,
     timeoutMs: 90_000,

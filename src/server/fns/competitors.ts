@@ -11,11 +11,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rateLimitFor } from "@/server/rate-limit";
 import { requireWorkspaceRole } from "@/server/workspace-access.server";
 import { assertPublicUrl } from "@/server/safe-fetch";
-import type {
-  CompetitorOverview,
-  CompetitorView,
-  CompetitorUpdateView,
-} from "@/lib/competitors/contracts";
+import type { CompetitorOverview, CompetitorView } from "@/lib/competitors/contracts";
 
 export type {
   CompetitorOverview,
@@ -60,6 +56,40 @@ export const discoverCompetitors = createServerFn({ method: "POST" })
         supabase: context.supabase,
         workspaceId: data.workspaceId,
         userId: context.userId,
+      });
+    },
+  );
+
+/** Automatically create the initial, researched set after Brand DNA is saved. */
+export const bootstrapCompetitors = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("competitor-discovery")])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        scanSeed: z
+          .object({
+            hostname: z.string().min(3).max(255),
+            siteName: z.string().max(100),
+            description: z.string().max(240),
+          })
+          .optional(),
+      })
+      .parse(data),
+  )
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ competitors: CompetitorView[]; searched: number; available: boolean }> => {
+      await requireWorkspaceRole(context, data.workspaceId, "editor");
+      const { bootstrapCompetitorsForWorkspace } =
+        await import("@/server/competitors/workspace.server");
+      return bootstrapCompetitorsForWorkspace({
+        supabase: context.supabase,
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        scanSeed: data.scanSeed,
       });
     },
   );

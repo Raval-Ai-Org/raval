@@ -43,9 +43,10 @@ const TRANSITIONS: Record<ExperimentStatus, readonly ExperimentStatus[]> = {
   analyzing: ["running", "concluded", "invalidated"],
   // The user chooses: roll out, roll back, or keep things as they are.
   concluded: ["rolling_out", "rolling_back", "closed"],
-  // A rollout/rollback PR closed unmerged returns to concluded.
+  // A rollout/rollback PR closed unmerged returns to where it came from:
+  // concluded, or invalidated for a stopped test that has no result.
   rolling_out: ["closed", "concluded"],
-  rolling_back: ["closed", "concluded"],
+  rolling_back: ["closed", "concluded", "invalidated"],
   // The change may still be live on treatment pages: roll it back, or close.
   invalidated: ["rolling_back", "closed"],
   closed: [],

@@ -1,15 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  CheckCircle,
-  Globe as WordPress,
-  Loader2,
-  RefreshCw,
-  ShieldCheck,
-  Trash,
-} from "lucide-react";
+import { CheckCircle, Loader2, RefreshCw, ShieldCheck, Trash } from "lucide-react";
 import { toast } from "sonner";
+import { SiteLogo } from "@/components/brand/SiteLogos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ErrorState } from "@/components/ui/empty-state";
@@ -26,6 +20,10 @@ import {
 import { ConnectionHealth, IntegrationDetails } from "./IntegrationDetails";
 
 type Connection = Awaited<ReturnType<typeof getWordPressConnection>>;
+
+const WordPressMark = ({ className }: { className?: string }) => (
+  <SiteLogo provider="wordpress" size={20} className={className} />
+);
 
 export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
   const [connection, setConnection] = useState<Connection | null | undefined>();
@@ -161,7 +159,7 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
       <article className="rounded-2xl border border-border/70 bg-card/50 p-4 shadow-sm">
         <div className="flex items-center gap-3">
           <span className="grid size-10 place-items-center rounded-xl bg-[#21759b] text-sm font-black text-white">
-            <WordPress className="size-5" />
+            <SiteLogo provider="wordpress" size={20} />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -265,7 +263,7 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
       <article className="rounded-2xl border border-border/70 bg-card/50 p-4 shadow-sm">
         <div className="flex flex-wrap items-start gap-3">
           <span className="grid size-10 place-items-center rounded-xl bg-[#21759b] text-sm font-black text-white">
-            <WordPress className="size-5" />
+            <SiteLogo provider="wordpress" size={20} />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -344,7 +342,7 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
       <IntegrationDetails
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
-        icon={WordPress}
+        icon={WordPressMark}
         provider="Development & Website"
         title="WordPress connection"
         description="Choose the WordPress site Mellox should use for content management and GEO context."

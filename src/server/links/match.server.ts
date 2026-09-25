@@ -8,31 +8,38 @@
 // metric.
 import "server-only";
 
-import { claudeJsonPrompt, selectClaudeModel } from "@/lib/anthropic-gateway.server";
+import { llmJson } from "@/lib/ai-gateway.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Json } from "@/integrations/supabase/types";
 import { checkBudget } from "@/server/ai/budget";
-import { assertPublicUrl, safeFetch, SsrfBlockedError } from "@/server/safe-fetch";
-import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import {
   donorFacts,
   qualityBand,
-  rankDonors,
+  rankForBrand,
   type DonorSignals,
+  type RelevantDonor,
   type ScoredDonor,
 } from "@/lib/links/rank";
+import {
+  buildLinkProfile,
+  loadBrandFacts,
+  readPageText,
+  type BrandFacts as LoadedFacts,
+  type LinkProfile,
+} from "./profile.server";
 import { creditsFor } from "@/lib/links/pricing";
 import { pricingConfig } from "./credits.server";
-import { FRESH_HOURS } from "./catalog.server";
+import { ensureFreshCatalog, FRESH_HOURS } from "./catalog.server";
 
 /** How many ranked donors get the (paid) topical read. */
 const SHORTLIST = 24;
-/** Candidates pulled from Postgres before ranking. */
-const CANDIDATE_POOL = 400;
+/** Candidates the model looks over (by name and address) before any page is read. */
+const PICK_POOL = 260;
+/** Rows read from the mirror per request; the whole catalog is ~10k. */
+const PAGE_ROWS = 1000;
 /** A stored topical read older than this is refreshed. */
 const TOPIC_TTL_DAYS = 45;
 
-const PAGE_TIMEOUT_MS = 8_000;
-const PAGE_MAX_BYTES = 512 * 1024;
 const PAGE_TEXT_CHARS = 4_000;
 
 export type TopicRead = {
@@ -46,7 +53,7 @@ export type TopicRead = {
   checkedAt: string;
 };
 
-export type Opportunity = ScoredDonor & {
+export type Opportunity = RelevantDonor & {
   credits: number;
   quality: ReturnType<typeof qualityBand>;
   facts: ReturnType<typeof donorFacts>;
@@ -82,90 +89,22 @@ Rules:
 - Plain language a non-marketer understands. No SEO jargon, no superlatives,
   no scores or percentages.`;
 
-/** The sample page, reduced to readable text. Never throws. */
-async function readPage(url: string): Promise<string | null> {
-  try {
-    assertPublicUrl(url);
-    const response = await safeFetch(url, {
-      timeoutMs: PAGE_TIMEOUT_MS,
-      maxBytes: PAGE_MAX_BYTES,
-      onOverflow: "truncate",
-    });
-    if (!response.ok) return null;
-
-    const type = response.headers.get("content-type") ?? "";
-    if (type && !/text\/html|text\/plain|application\/xhtml/i.test(type)) return null;
-
-    const text = response
-      .text()
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    // Too little text to judge is a real answer, not a failure to report.
-    return text.length < 200 ? null : text.slice(0, PAGE_TEXT_CHARS);
-  } catch (error) {
-    if (error instanceof SsrfBlockedError) return null;
-    return null;
-  }
-}
-
-type BrandFacts = {
-  name: string;
-  industry: string;
-  audience: string;
-  targetUrl: string;
-  keyword: string;
-};
-
-async function brandFacts(
-  workspaceId: string,
-  targetUrl: string,
-  keyword: string,
-): Promise<BrandFacts> {
-  const [workspace, dna] = await Promise.all([
-    supabaseAdmin
-      .from("workspaces")
-      .select("name, industry, audience")
-      .eq("id", workspaceId)
-      .maybeSingle(),
-    readBrandDna(supabaseAdmin, workspaceId).catch(() => null),
-  ]);
-
-  const stored = (dna?.dna ?? {}) as Record<string, unknown>;
-  const pick = (key: string): string => {
-    const value = stored[key];
-    return typeof value === "string" ? value.slice(0, 400) : "";
-  };
-
-  return {
-    name: workspace.data?.name ?? "",
-    industry: pick("industry") || (workspace.data?.industry ?? ""),
-    audience: pick("audience") || (workspace.data?.audience ?? ""),
-    targetUrl,
-    keyword,
-  };
-}
+type BrandFacts = LoadedFacts & { targetUrl: string; keyword: string };
 
 async function judge(
   donor: ScoredDonor,
   brand: BrandFacts,
   workspaceId: string,
 ): Promise<TopicRead | null> {
-  const pageText = donor.page ? await readPage(donor.page) : null;
+  const pageText = donor.page ? await readPageText(donor.page, PAGE_TEXT_CHARS) : null;
 
-  const result = await claudeJsonPrompt<{
+  const result = await llmJson<{
     summary: string;
     fit: string;
     verdict: "good" | "workable" | "poor";
   } | null>({
     route: "links-topical-fit",
-    model: selectClaudeModel("default"),
     maxTokens: 700,
-    effort: "low",
     timeoutMs: 40_000,
     outputSchema: TOPIC_SCHEMA,
     fallback: null,
@@ -180,6 +119,7 @@ async function judge(
       `Brand: ${brand.name || "(not set)"}`,
       brand.industry ? `Industry: ${brand.industry}` : null,
       brand.audience ? `Audience: ${brand.audience}` : null,
+      brand.about ? `About the brand: ${brand.about}` : null,
       `The article would link to: ${brand.targetUrl}`,
       `Using the link text: ${brand.keyword}`,
     ]
@@ -199,10 +139,19 @@ async function judge(
 
   // Cached on the donor, not on the workspace: the summary is about the site.
   // The fit sentence is brand-specific, so it is only reused for this brand.
+  // Other brands' reads of the same site are kept; only this one is replaced.
+  const { data: current } = await supabaseAdmin
+    .from("rixot_donors")
+    .select("topic")
+    .eq("id", donor.id)
+    .maybeSingle();
+  const previous = (current?.topic ?? {}) as { byWorkspace?: Record<string, unknown> };
+  const byWorkspace = { ...(previous.byWorkspace ?? {}), [workspaceId]: read };
+
   await supabaseAdmin
     .from("rixot_donors")
     .update({
-      topic: { summary: read.summary, basis: read.basis, byWorkspace: { [workspaceId]: read } },
+      topic: { summary: read.summary, basis: read.basis, byWorkspace } as unknown as Json,
       topic_checked_at: read.checkedAt,
     })
     .eq("id", donor.id);
@@ -239,7 +188,8 @@ function cachedRead(
 export type FindOptions = {
   workspaceId: string;
   targetUrl: string;
-  keyword: string;
+  /** Link text. Optional: the brand profile suggests one when it is missing. */
+  keyword?: string | null;
   ownDomain?: string | null;
   maxPriceUsd?: number;
   minAuthority?: number;
@@ -249,53 +199,220 @@ export type FindOptions = {
   skipTopics?: boolean;
 };
 
-/**
- * Ranks the catalog, then explains the shortlist.
- *
- * The ranking is free and deterministic; only the shortlist costs an AI call,
- * which is why CANDIDATE_POOL is large and SHORTLIST is small.
- */
-export async function findOpportunities(options: FindOptions): Promise<Opportunity[]> {
-  const limit = Math.min(options.limit ?? 12, SHORTLIST);
+export type FindResult = { opportunities: Opportunity[]; profile: LinkProfile };
+
+const PICK_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  required: ["picks"],
+  additionalProperties: false,
+  properties: {
+    picks: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "fit"],
+        additionalProperties: false,
+        properties: {
+          id: { type: "integer" },
+          fit: { type: "integer" },
+        },
+      },
+    },
+  },
+};
+
+const PICK_SYSTEM = `You shortlist websites where one brand could publish an article
+with a link. You see each site's domain, its listed category (often blank) and
+the address of one page on it.
+
+Judge ONLY from those clues and the brand facts. Score each site you pick:
+3 = clearly the same field or the same readers, 2 = a closely related topic,
+1 = general-interest magazine or blog in the right language where the article
+would not look odd, 0 = unrelated, wrong language, adult, gambling, crypto or
+"investment" schemes, spam-looking, a shop or product page, a portal, a forum
+profile, or anything else that is not a site publishing articles. Prefer
+editorial blogs and magazines; a higher authority number is better when the
+fit is equal. Return every site scored 1 or higher, best
+first. Never invent sites; use only the ids given.`;
+
+/** One cheap call over names and addresses, so page reads go to likely fits. */
+async function pickRelevant(
+  candidates: RelevantDonor[],
+  facts: LoadedFacts,
+  profile: LinkProfile,
+  targetUrl: string,
+): Promise<Map<number, number> | null> {
+  const lines = candidates.map((donor) => {
+    let path = "";
+    if (donor.page) {
+      try {
+        path = new URL(donor.page).pathname.slice(0, 90);
+      } catch {
+        path = "";
+      }
+    }
+    return `${donor.id} | ${donor.domain} | ${donor.dr ?? "-"} | ${donor.cat ?? "-"} | ${path || "/"}`;
+  });
+
+  const result = await llmJson<{ picks: Array<{ id: number; fit: number }> } | null>({
+    route: "links-relevance-pick",
+    maxTokens: 2_500,
+    timeoutMs: 45_000,
+    outputSchema: PICK_SCHEMA,
+    fallback: null,
+    system: PICK_SYSTEM,
+    user: [
+      `Brand: ${facts.name || "(not set)"}`,
+      facts.industry ? `Industry: ${facts.industry}` : null,
+      facts.about ? `About: ${facts.about}` : null,
+      facts.audience ? `Audience: ${facts.audience}` : null,
+      `Page to link to: ${targetUrl}`,
+      `Topics: ${profile.topics.join(", ")}`,
+      `Article language: ${profile.language}`,
+      "",
+      "id | domain | authority | category | page address",
+      ...lines,
+    ]
+      .filter((line) => line !== null)
+      .join("\n"),
+  }).catch((error) => {
+    console.warn("[links] relevance pick failed", error instanceof Error ? error.message : error);
+    return null;
+  });
+
+  if (!result || !Array.isArray(result.picks)) return null;
+  const known = new Set(candidates.map((donor) => donor.id));
+  const fits = new Map<number, number>();
+  for (const pick of result.picks) {
+    if (known.has(pick.id) && typeof pick.fit === "number") {
+      fits.set(pick.id, Math.max(0, Math.min(3, Math.round(pick.fit))));
+    }
+  }
+  return fits;
+}
+
+type DonorRow = {
+  id: number;
+  domain: string;
+  ext: string | null;
+  page: string | null;
+  price_usd: number | null;
+  dr: number | null;
+  referring_domains: number | null;
+  backlinks: number | null;
+  dfs_rank: number | null;
+  top100: number | null;
+  cat: string | null;
+  topic: unknown;
+  topic_checked_at: string | null;
+};
+
+async function readCatalog(options: FindOptions): Promise<DonorRow[]> {
   const freshSince = new Date(Date.now() - FRESH_HOURS * 3600_000).toISOString();
+  const build = (from: number) => {
+    let query = supabaseAdmin
+      .from("rixot_donors")
+      .select(
+        "id, domain, ext, page, price_usd, dr, referring_domains, backlinks, dfs_rank, top100, cat, topic, topic_checked_at",
+      )
+      .is("delisted_at", null)
+      .gte("last_seen_at", freshSince)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE_ROWS - 1);
+    if (typeof options.maxPriceUsd === "number")
+      query = query.lte("price_usd", options.maxPriceUsd);
+    if (typeof options.minAuthority === "number") query = query.gte("dr", options.minAuthority);
+    if (options.search) query = query.ilike("domain", `%${options.search.toLowerCase()}%`);
+    return query;
+  };
 
-  let query = supabaseAdmin
-    .from("rixot_donors")
-    .select(
-      "id, domain, ext, page, price_usd, dr, referring_domains, backlinks, dfs_rank, top100, cat, topic, topic_checked_at",
-    )
-    .is("delisted_at", null)
-    .gte("last_seen_at", freshSince)
-    .order("dfs_rank", { ascending: false, nullsFirst: false })
-    .limit(CANDIDATE_POOL);
+  // The whole mirror, read in parallel pages: ranking only the top few hundred
+  // by one metric is what made every brand see the same sites.
+  const rows: DonorRow[] = [];
+  for (let from = 0; from < 20_000; from += PAGE_ROWS * 5) {
+    const pages = await Promise.all([0, 1, 2, 3, 4].map((i) => build(from + i * PAGE_ROWS)));
+    let done = false;
+    for (const { data, error } of pages) {
+      if (error) throw new Error(`catalog read failed: ${error.message}`);
+      rows.push(...((data ?? []) as DonorRow[]));
+      if (!data || data.length < PAGE_ROWS) done = true;
+    }
+    if (done) break;
+  }
+  return rows;
+}
 
-  if (typeof options.maxPriceUsd === "number") query = query.lte("price_usd", options.maxPriceUsd);
-  if (typeof options.minAuthority === "number") query = query.gte("dr", options.minAuthority);
-  if (options.search) query = query.ilike("domain", `%${options.search.toLowerCase()}%`);
+const VERDICT_ORDER = { good: 0, workable: 1, poor: 2 } as const;
 
-  const { data, error } = await query;
-  if (error) throw new Error(`catalog read failed: ${error.message}`);
+/**
+ * Finds the placements that suit this brand.
+ *
+ * 1. Builds the brand's profile (link text, topics, categories, language).
+ * 2. Ranks the whole catalog on quality and relevance, free and deterministic.
+ * 3. One model call reads the top names and addresses and keeps likely fits.
+ * 4. The shortlist's sample pages are read and judged, then ordered by verdict.
+ */
+export async function findOpportunities(options: FindOptions): Promise<FindResult> {
+  const limit = Math.min(options.limit ?? SHORTLIST, SHORTLIST);
 
-  const rows = data ?? [];
-  const signals: DonorSignals[] = rows.map((row) => ({
-    id: Number(row.id),
-    domain: String(row.domain),
-    ext: row.ext,
-    page: row.page,
-    priceUsd: Number(row.price_usd ?? 0),
-    dr: row.dr === null ? null : Number(row.dr),
-    referringDomains: row.referring_domains === null ? null : Number(row.referring_domains),
-    backlinks: row.backlinks === null ? null : Number(row.backlinks),
-    dfsRank: row.dfs_rank === null ? null : Number(row.dfs_rank),
-    top100: row.top100 === null ? null : Number(row.top100),
-    cat: row.cat,
-  }));
+  const [profile] = await Promise.all([
+    buildLinkProfile(options.workspaceId, options.targetUrl),
+    ensureFreshCatalog(),
+  ]);
+  const keyword = options.keyword?.trim() || profile.keywords[0];
 
-  const ranked = rankDonors(signals, { ownDomain: options.ownDomain, limit });
-  const config = pricingConfig();
+  const rows = await readCatalog(options);
+  const signals = rows.map((row) => {
+    const topic = row.topic as { summary?: unknown } | null;
+    const signal: DonorSignals & { summary: string | null } = {
+      id: Number(row.id),
+      domain: String(row.domain),
+      ext: row.ext,
+      page: row.page,
+      priceUsd: Number(row.price_usd ?? 0),
+      dr: row.dr === null ? null : Number(row.dr),
+      referringDomains: row.referring_domains === null ? null : Number(row.referring_domains),
+      backlinks: row.backlinks === null ? null : Number(row.backlinks),
+      dfsRank: row.dfs_rank === null ? null : Number(row.dfs_rank),
+      top100: row.top100 === null ? null : Number(row.top100),
+      cat: row.cat,
+      summary: typeof topic?.summary === "string" ? topic.summary : null,
+    };
+    return signal;
+  });
+
+  const ranked = rankForBrand(signals, profile, { ownDomain: options.ownDomain });
+  const pool = ranked.slice(0, PICK_POOL);
   const cacheById = new Map(rows.map((row) => [Number(row.id), row]));
+  const config = pricingConfig();
 
-  const base: Opportunity[] = ranked.map((donor) => {
+  const budget = options.skipTopics
+    ? { mode: "block" as const }
+    : await checkBudget("text", { workspaceId: options.workspaceId });
+  const facts = await loadBrandFacts(options.workspaceId);
+
+  // The model's pick reorders the pool; without it (budget, outage) the
+  // deterministic ranking stands on its own.
+  let shortlist: RelevantDonor[] = pool;
+  if (budget.mode !== "block" && !options.search && pool.length > 0) {
+    const fits = await pickRelevant(pool, facts, profile, options.targetUrl);
+    if (fits && fits.size > 0) {
+      shortlist = pool
+        .filter((donor) => (fits.get(donor.id) ?? 0) >= 1)
+        .sort((a, b) => (fits.get(b.id) ?? 0) - (fits.get(a.id) ?? 0) || b.combined - a.combined);
+      // Too few fits is a real answer for a niche brand, but still fill the
+      // page with the next-best sites rather than showing three.
+      if (shortlist.length < limit) {
+        const taken = new Set(shortlist.map((donor) => donor.id));
+        shortlist.push(...pool.filter((donor) => !taken.has(donor.id) && !fits.has(donor.id)));
+      }
+    }
+  }
+  // Read twice as many as are shown, so sites the page read rules out can be
+  // replaced by the next good one instead of being shown as poor fits.
+  shortlist = shortlist.slice(0, options.skipTopics ? limit : Math.min(limit * 2, 40));
+
+  const base: Opportunity[] = shortlist.map((donor) => {
     const row = cacheById.get(donor.id);
     return {
       ...donor,
@@ -306,25 +423,31 @@ export async function findOpportunities(options: FindOptions): Promise<Opportuni
     };
   });
 
-  if (options.skipTopics) return base;
+  let result = base;
+  if (budget.mode !== "block") {
+    const needsRead = base.filter((item) => item.topic === null);
+    if (needsRead.length > 0) {
+      const brand: BrandFacts = { ...facts, targetUrl: options.targetUrl, keyword };
+      const reads = await Promise.allSettled(
+        needsRead.map((item) => judge(item, brand, options.workspaceId)),
+      );
+      const byId = new Map<number, TopicRead>();
+      reads.forEach((read, index) => {
+        if (read.status === "fulfilled" && read.value) byId.set(needsRead[index].id, read.value);
+      });
+      result = base.map((item) => ({ ...item, topic: item.topic ?? byId.get(item.id) ?? null }));
+    }
+  }
 
-  const needsRead = base.filter((item) => item.topic === null);
-  if (needsRead.length === 0) return base;
-
-  // One budget decision for the whole shortlist. Degrading to the ranking
-  // alone is a worse answer, not a wrong one, so a blocked budget is not fatal.
-  const budget = await checkBudget("text", { workspaceId: options.workspaceId });
-  if (budget.mode === "block") return base;
-
-  const brand = await brandFacts(options.workspaceId, options.targetUrl, options.keyword);
-  const reads = await Promise.allSettled(
-    needsRead.map((item) => judge(item, brand, options.workspaceId)),
+  // Good fits first; a site Mellox judged a poor fit goes to the bottom rather
+  // than disappearing, so the user can still see why.
+  const order = new Map(result.map((item, index) => [item.id, index]));
+  result.sort(
+    (a, b) =>
+      VERDICT_ORDER[a.topic?.verdict ?? "workable"] -
+        VERDICT_ORDER[b.topic?.verdict ?? "workable"] ||
+      (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0),
   );
 
-  const byId = new Map<number, TopicRead>();
-  reads.forEach((result, index) => {
-    if (result.status === "fulfilled" && result.value) byId.set(needsRead[index].id, result.value);
-  });
-
-  return base.map((item) => ({ ...item, topic: item.topic ?? byId.get(item.id) ?? null }));
+  return { opportunities: result.slice(0, limit), profile };
 }

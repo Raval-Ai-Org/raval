@@ -37,6 +37,8 @@ const BodySchema = z.object({
 });
 
 const OUTPUT_TOKENS = { short: 600, standard: 1_200, long: 6_000 } as const;
+/** ~1,500 words: past this a draft counts as long-form (see task-models.ts). */
+const LONG_FORM_TOKENS = 2_000;
 
 export const POST = defineRoute({
   name: "ai-generate",
@@ -83,6 +85,8 @@ export const POST = defineRoute({
       temperature: 0.72,
       regenerate: body.regenerate,
       route: `ai-generate.${body.task}`,
+      // Long-form output (over ~1,500 words) escalates to the premium tier.
+      escalate: OUTPUT_TOKENS[body.size ?? "standard"] > LONG_FORM_TOKENS,
     });
     const text = humanizeText(String(json?.choices?.[0]?.message?.content ?? "").trim());
     if (!text) return jsonError(502, "AI returned an empty draft");

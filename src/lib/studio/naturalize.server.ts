@@ -9,7 +9,7 @@
 // original the same way: this can only ever improve a caption, never break
 // or block one.
 import "server-only";
-import { claudeJsonPrompt } from "@/lib/anthropic-gateway.server";
+import { llmJson } from "@/lib/ai-gateway.server";
 import type { SocialVariant } from "@/lib/studio/jobs";
 import {
   checkPreservation,
@@ -25,7 +25,7 @@ const REWRITE_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-function buildSystemPrompt(brandName: string, brandText: string) {
+function buildSystemPrompt(brandName: string, brandText: string, styleText?: string) {
   return [
     `You polish one social media caption for ${brandName || "the brand"} so it reads like a person wrote it, not a template.`,
     "Remove generic AI-marketing phrasing, cliché openers ('unlock', 'elevate', 'in today's fast-paced world'), and robotic structure.",
@@ -35,10 +35,39 @@ function buildSystemPrompt(brandName: string, brandText: string) {
     "",
     "Brand voice:",
     brandText || "(no brand profile on file — keep a neutral, confident marketing tone)",
+    ...(styleText
+      ? [
+          "",
+          "The brand's chosen writing style (the rewrite must still follow it exactly):",
+          styleText,
+        ]
+      : []),
   ].join("\n");
 }
 
-export type BrandVoice = { brandName: string; brandText: string };
+export type BrandVoice = {
+  brandName: string;
+  brandText: string;
+  /** Brand Kit writing style block, when the job follows a Style. */
+  styleText?: string;
+  /** Style phrases, hashtags and emoji a rewrite must not drop. */
+  protectedTerms?: string[];
+};
+
+/** Every protected style term the original used must survive the rewrite. */
+function keepsStyleTerms(
+  original: string,
+  rewritten: string,
+  terms: string[] | undefined,
+): boolean {
+  if (!terms?.length) return true;
+  const before = original.toLowerCase();
+  const after = rewritten.toLowerCase();
+  return terms.every((t) => {
+    const term = t.toLowerCase();
+    return !before.includes(term) || after.includes(term);
+  });
+}
 
 /** Rewrites one variant's body if (and only if) it clears the cliché bar and the rewrite survives validation. */
 export async function naturalizeVariant(
@@ -48,14 +77,13 @@ export async function naturalizeVariant(
   if (!needsNaturalization(variant.body)) return variant;
   let rewritten: string;
   try {
-    const result = await claudeJsonPrompt<{ rewritten: string }>({
+    const result = await llmJson<{ rewritten: string }>({
       route: "studio.naturalize",
-      system: buildSystemPrompt(brand.brandName, brand.brandText),
+      system: buildSystemPrompt(brand.brandName, brand.brandText, brand.styleText),
       user: variant.body,
       fallback: { rewritten: variant.body },
       outputSchema: REWRITE_SCHEMA,
       maxTokens: 600,
-      effort: "low",
     });
     rewritten = (result.rewritten ?? "").trim();
   } catch {
@@ -64,6 +92,7 @@ export async function naturalizeVariant(
   if (!rewritten) return variant;
   if (!isBetterThanOriginal(variant.body, rewritten)) return variant;
   if (!checkPreservation(variant.body, rewritten).ok) return variant;
+  if (!keepsStyleTerms(variant.body, rewritten, brand.protectedTerms)) return variant;
   // Re-clamp to the platform's limits and re-normalize hashtags — a rewrite
   // can change length even though isBetterThanOriginal bounds how much.
   return finalizeVariant(variant.platform, {

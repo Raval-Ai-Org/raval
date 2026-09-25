@@ -7,6 +7,13 @@ through the repository's Amplify, Docker, and deployment scripts. The app's
 normal local port is 8080. Supabase migrations are applied separately from the
 web build.
 
+The deployment model for Mellox AI is a product runtime plus integration layer:
+Next.js serves the product experience while migrations, provider credentials,
+public hooks, and server-only services enforce the actual business logic.
+Production deployment is therefore not only a frontend build step; it includes
+checks for auth state, database schema, provider connectivity, and runtime
+jobs.
+
 ```mermaid
 flowchart LR
   Git[Git repository] --> Build[Next build]

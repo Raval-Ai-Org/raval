@@ -31,7 +31,7 @@ const EXPECTED: Record<ExperimentStatus, ExperimentStatus[]> = {
   analyzing: ["running", "concluded", "invalidated"],
   concluded: ["rolling_out", "rolling_back", "closed"],
   rolling_out: ["closed", "concluded"],
-  rolling_back: ["closed", "concluded"],
+  rolling_back: ["closed", "concluded", "invalidated"],
   invalidated: ["rolling_back", "closed"],
   closed: [],
   cancelled: [],

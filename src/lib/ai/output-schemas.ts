@@ -92,6 +92,12 @@ export const COMPETITOR_INTEL_OUTPUT_SCHEMA = object({
   },
 });
 
+// Named alternatives are extracted from search snippets, then verified on
+// their own domains before the classification stage can use them.
+export const COMPETITOR_MENTION_NAMES_SCHEMA = object({
+  names: { type: "array", items: object({ name: str, sourceIndex: { type: "number" } }) },
+});
+
 // Competitor discovery: the model only ever *classifies* candidates that a
 // web search actually returned, so every property is about a company already
 // named in the evidence. "unknown" and 0 confidence are the honest answers

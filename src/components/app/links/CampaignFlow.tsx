@@ -5,7 +5,7 @@
 // parse a form. Nothing spends money until the last button, and the screen
 // before it shows the total, the balance after, and what happens next — because
 // that is the moment the decision is actually made.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { AlertCircle, ArrowLeft, Check, Search, Sparkles, Spinner } from "@/components/icons";
@@ -22,7 +22,13 @@ import {
   Money,
 } from "./links-ui";
 import { PlacementCard } from "./PlacementCard";
-import { useConfirmOrder, useFindPlacements, useSaveSelection, useWriteBrief } from "./hooks";
+import {
+  useConfirmOrder,
+  useFindPlacements,
+  useLinkTextSuggestions,
+  useSaveSelection,
+  useWriteBrief,
+} from "./hooks";
 import type { OpportunityView } from "@/server/fns/links";
 
 const STEPS = ["Page", "Sites", "Article", "Confirm"] as const;
@@ -50,12 +56,32 @@ export function CampaignFlow({
 
   const [targetUrl, setTargetUrl] = useState(siteHost ? `https://${siteHost}` : "");
   const [keyword, setKeyword] = useState("");
+  const [keywordTouched, setKeywordTouched] = useState(false);
+  const [settledUrl, setSettledUrl] = useState<string | null>(null);
   const [guidance, setGuidance] = useState("");
   const [brief, setBrief] = useState("");
   const [results, setResults] = useState<OpportunityView[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [quoted, setQuoted] = useState<{ credits: number; usd: number } | null>(null);
+
+  // Suggestions follow the page address once the user stops typing.
+  useEffect(() => {
+    const value = targetUrl.trim();
+    const timer = setTimeout(() => {
+      setSettledUrl(/^https?:\/\/[^\s/]+\.[^\s]{2,}/i.test(value) ? value : null);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [targetUrl]);
+
+  const suggest = useLinkTextSuggestions(workspaceId, settledUrl);
+  const suggested = useMemo(() => suggest.data?.keywords ?? [], [suggest.data]);
+
+  // The best suggestion fills the field until the user types their own.
+  const firstSuggestion = suggested[0] ?? null;
+  useEffect(() => {
+    if (!keywordTouched && firstSuggestion) setKeyword(firstSuggestion);
+  }, [firstSuggestion, keywordTouched]);
 
   const find = useFindPlacements(workspaceId);
   const write = useWriteBrief(workspaceId);
@@ -90,7 +116,12 @@ export function CampaignFlow({
   }
 
   async function runSearch() {
-    const found = await find.mutateAsync({ targetUrl, keyword, limit: 12 });
+    const found = await find.mutateAsync({
+      targetUrl: targetUrl.trim(),
+      keyword: keyword.trim() || null,
+      limit: 24,
+    });
+    if (!keyword.trim() && found.keywords[0]) setKeyword(found.keywords[0]);
     setResults(found.placements);
     setSelected([]);
     setStep(1);
@@ -164,7 +195,7 @@ export function CampaignFlow({
                   Which page should get the links?
                 </h1>
                 <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
-                  Every article we buy will link to this page, using the words you choose.
+                  Every article we buy will link to this page. We pick the link words for you.
                 </p>
               </header>
 
@@ -196,16 +227,49 @@ export function CampaignFlow({
               <Field
                 label="Link text"
                 id="keyword"
-                hint="The words the link will use. Write them as they'd read in a sentence."
+                hint="Picked from your brand and page. Tap another or type your own."
               >
-                <input
-                  id="keyword"
-                  value={keyword}
-                  onChange={(event) => setKeyword(event.target.value)}
-                  placeholder="project management software"
-                  className={inputBase}
-                  autoComplete="off"
-                />
+                <div className="relative">
+                  <input
+                    id="keyword"
+                    value={keyword}
+                    onChange={(event) => {
+                      setKeywordTouched(true);
+                      setKeyword(event.target.value);
+                    }}
+                    placeholder={
+                      suggest.isFetching ? "Finding the best words…" : "We'll choose for you"
+                    }
+                    className={inputBase}
+                    autoComplete="off"
+                  />
+                  {suggest.isFetching && (
+                    <Spinner
+                      className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground"
+                      aria-hidden
+                    />
+                  )}
+                </div>
+                {suggested.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {suggested.map((text) => (
+                      <button
+                        key={text}
+                        type="button"
+                        onClick={() => {
+                          setKeywordTouched(true);
+                          setKeyword(text);
+                        }}
+                        className={cn(
+                          btnQuiet,
+                          keyword === text && "bg-primary/15 text-foreground",
+                        )}
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </Field>
             </div>
           )}
@@ -218,8 +282,8 @@ export function CampaignFlow({
                     Where should it appear?
                   </h1>
                   <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
-                    Ranked on each site&rsquo;s real figures. The description is what Mellox found
-                    when it read the site.
+                    Picked for your brand and ranked on each site&rsquo;s real figures. The note is
+                    what Mellox found when it read the site.
                   </p>
                 </div>
                 <button
@@ -238,7 +302,12 @@ export function CampaignFlow({
               </header>
 
               {find.isPending ? (
-                <ListSkeleton rows={4} />
+                <div className="space-y-3">
+                  <p className="text-[13.5px] text-muted-foreground">
+                    Reading sites that match your brand. This can take up to a minute.
+                  </p>
+                  <ListSkeleton rows={4} />
+                </div>
               ) : results.length === 0 ? (
                 <EmptyState
                   size="sm"
@@ -439,7 +508,7 @@ export function CampaignFlow({
               <button
                 type="button"
                 onClick={() => void runSearch()}
-                disabled={targetUrl.trim().length < 8 || keyword.trim().length < 2 || busy}
+                disabled={targetUrl.trim().length < 8 || busy}
                 className={btnPrimary}
               >
                 {find.isPending ? (

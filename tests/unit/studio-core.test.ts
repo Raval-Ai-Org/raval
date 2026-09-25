@@ -187,9 +187,27 @@ describe("ideas", () => {
       new Date("2026-11-05T12:00:00Z"),
     );
     const sources = new Set(signals.map((s) => s.source));
-    expect(sources.has("season")).toBe(true);
+    expect(sources.has("season")).toBe(false);
     expect(sources.has("trend")).toBe(true);
     expect(sources.has("pillar")).toBe(true);
+  });
+
+  it("grounds competitor and customer ideas in Brand DNA without unrelated holidays", () => {
+    const signals = collectSignals(
+      { ...ctx, moments: upcomingMoments(new Date("2026-11-05T12:00:00Z"), { limit: 2 }) },
+      {
+        businessModel: "B2B SaaS",
+        positioning: "Private analytics for small teams",
+        competitors: [{ name: "Acme", positioning: "Enterprise-only analytics" }],
+        customer: { personas: [{ name: "Founder", painPoints: "No time for reporting" }] },
+      },
+      new Date("2026-11-05T12:00:00Z"),
+    );
+    expect(signals.some((s) => s.source === "competitor" && s.headline.includes("Acme"))).toBe(
+      true,
+    );
+    expect(signals.some((s) => s.source === "pillar" && s.headline.includes("Founder"))).toBe(true);
+    expect(signals.some((s) => s.headline.includes("Black Friday"))).toBe(false);
   });
 
   it("dedupes against recent work and each other", () => {

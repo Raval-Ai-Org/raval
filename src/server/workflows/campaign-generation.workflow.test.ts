@@ -8,7 +8,7 @@ import { campaignGenerationWorkflow } from "./campaign-generation.workflow";
 
 afterEach(() => {
   readBrandDna.mockReset();
-  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.OPENROUTER_API_KEY;
   vi.unstubAllGlobals();
 });
 
@@ -27,7 +27,7 @@ describe("campaignGenerationWorkflow", () => {
       version: 1,
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
     const brief = {
       theme: "Launch week",
       keyMessage: "Market like an agency, without one",
@@ -38,8 +38,13 @@ describe("campaignGenerationWorkflow", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
-          stop_reason: "end_turn",
-          content: [{ type: "text", text: JSON.stringify(brief) }],
+          model: "anthropic/claude-opus-5.5",
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { role: "assistant", content: JSON.stringify(brief) },
+            },
+          ],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
@@ -56,28 +61,31 @@ describe("campaignGenerationWorkflow", () => {
     expect(result.result).toEqual(brief);
 
     const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-    expect(request.messages[0].content).toContain("<untrusted_data");
-    expect(request.messages[0].content).toContain("Mellox");
-    expect(request.messages[0].content).toContain("Launch week signups");
+    expect(request.messages[1].content).toContain("<untrusted_data");
+    expect(request.messages[1].content).toContain("Mellox");
+    expect(request.messages[1].content).toContain("Launch week signups");
   });
 
   it("falls back to empty brand fields when no Brand DNA is stored yet", async () => {
     readBrandDna.mockResolvedValue(null);
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
-          stop_reason: "end_turn",
-          content: [
+          model: "anthropic/claude-opus-5.5",
+          choices: [
             {
-              type: "text",
-              text: JSON.stringify({
-                theme: "",
-                keyMessage: "",
-                targetAudience: "",
-                callToAction: "",
-                contentIdeas: [],
-              }),
+              finish_reason: "stop",
+              message: {
+                role: "assistant",
+                content: JSON.stringify({
+                  theme: "",
+                  keyMessage: "",
+                  targetAudience: "",
+                  callToAction: "",
+                  contentIdeas: [],
+                }),
+              },
             },
           ],
         }),
@@ -93,6 +101,6 @@ describe("campaignGenerationWorkflow", () => {
 
     expect(result.status).toBe("success");
     const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-    expect(request.messages[0].content).toContain("(unknown)");
+    expect(request.messages[1].content).toContain("(unknown)");
   });
 });

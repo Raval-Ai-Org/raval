@@ -61,7 +61,9 @@ export type RateLimitTier =
   | "links-checkout"
   | "billing-checkout"
   | "experiment-propose"
-  | "experiment-action";
+  | "experiment-action"
+  | "brand-kit-upload"
+  | "brand-kit-analyze";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -154,6 +156,12 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // Creating, assigning, cancelling experiments (database work, some reads of
   // Google data). Ship/rollout/rollback PRs use connector-write.
   "experiment-action": { limit: 40, windowSeconds: 3600, label: "experiment action" },
+  // Brand Kit: adding files and writing samples (storage + a page fetch for
+  // sample links). No model call here; analysis is its own tier.
+  "brand-kit-upload": { limit: 120, windowSeconds: 3600, label: "brand kit upload" },
+  // Studying examples with Claude vision, or turning a description into a
+  // style — one paid model call per example.
+  "brand-kit-analyze": { limit: 60, windowSeconds: 3600, label: "style analysis" },
 };
 
 export type RateLimitResult = {

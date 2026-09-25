@@ -26,6 +26,7 @@ import {
   useSetCompetitorStatus,
 } from "./hooks";
 import { CompetitorCard } from "./CompetitorCard";
+import { bootstrapCompetitors } from "@/lib/competitors.functions";
 import { CompetitorDetail } from "./CompetitorDetail";
 import { DiscoverTab } from "./DiscoverTab";
 import { UpdatesFeed } from "./UpdatesFeed";
@@ -45,6 +46,8 @@ export function CompetitorsPanel({ workspaceId }: { workspaceId: string | null }
 function Panel({ workspaceId }: { workspaceId: string }) {
   const [tab, setTab] = React.useState<TabId>("competitors");
   const [openId, setOpenId] = React.useState<string | null>(null);
+  const [bootstrapping, setBootstrapping] = React.useState(false);
+  const bootstrapStarted = React.useRef(false);
 
   const overview = useCompetitorOverview(workspaceId);
   const discover = useDiscoverCompetitors(workspaceId);
@@ -56,6 +59,41 @@ function Panel({ workspaceId }: { workspaceId: string }) {
 
   const data = overview.data;
   const selected = data?.competitors.find((competitor) => competitor.id === openId) ?? null;
+
+  // Existing workspaces may have completed a Brand DNA scan before this flow
+  // existed. Give them the same researched starting set on their first visit.
+  React.useEffect(() => {
+    if (
+      !data ||
+      bootstrapStarted.current ||
+      !data.researchAvailable ||
+      data.competitors.length ||
+      data.suggestions.length ||
+      data.lastDiscoveryAt
+    )
+      return;
+    const key = `competitors:bootstrap:${workspaceId}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // Private browsing can block storage; the in-memory guard remains.
+    }
+    bootstrapStarted.current = true;
+    setBootstrapping(true);
+    void bootstrapCompetitors({ data: { workspaceId } })
+      .then(() => overview.refetch())
+      .catch(() => {
+        try {
+          sessionStorage.removeItem(key);
+        } catch {
+          // Storage unavailable.
+        }
+      })
+      .finally(() => setBootstrapping(false));
+    // The query's data is the trigger; bootstrapStarted prevents repeat calls.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, workspaceId]);
 
   // Opening the feed is the user reading it; nothing stays "new" behind them.
   React.useEffect(() => {
@@ -102,7 +140,7 @@ function Panel({ workspaceId }: { workspaceId: string }) {
         setTab("discover");
         if (data.researchAvailable) discover.mutate();
       }}
-      disabled={discover.isPending || !data.researchAvailable}
+      disabled={discover.isPending || bootstrapping || !data.researchAvailable}
       className={cn(primaryBtn, "h-10 px-4 text-[13px]", full && "w-full")}
     >
       {discover.isPending ? (
@@ -167,23 +205,62 @@ function Panel({ workspaceId }: { workspaceId: string }) {
         }
       >
         {data.competitors.length ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {data.competitors.map((competitor) => (
-              <CompetitorCard
-                key={competitor.id}
-                competitor={competitor}
-                onOpen={() => setOpenId(competitor.id)}
-                onRefresh={() => refresh.mutate({ competitorId: competitor.id })}
-                refreshing={refresh.isPending && refresh.variables?.competitorId === competitor.id}
-              />
-            ))}
-          </div>
+          <>
+            <div className="mb-5 grid gap-2 sm:grid-cols-3" aria-label="Research progress">
+              <div className="rounded-2xl border border-border/50 bg-primary/[0.06] px-4 py-3">
+                <div className="text-[22px] font-semibold tracking-tight text-foreground">
+                  {data.competitors.length}
+                </div>
+                <div className="text-[11.5px] text-muted-foreground">Competitors found</div>
+              </div>
+              <div className="rounded-2xl border border-border/50 bg-card/60 px-4 py-3">
+                <div className="text-[22px] font-semibold tracking-tight text-foreground">
+                  {data.competitors.filter((entry) => entry.profileStatus === "ready").length}
+                </div>
+                <div className="text-[11.5px] text-muted-foreground">Profiles researched</div>
+              </div>
+              <div className="rounded-2xl border border-border/50 bg-card/60 px-4 py-3">
+                <div className="text-[22px] font-semibold tracking-tight text-foreground">
+                  {
+                    data.competitors.filter(
+                      (entry) =>
+                        entry.profileStatus === "running" || entry.profileStatus === "pending",
+                    ).length
+                  }
+                </div>
+                <div className="text-[11.5px] text-muted-foreground">Researching now</div>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {data.competitors.map((competitor) => (
+                <CompetitorCard
+                  key={competitor.id}
+                  competitor={competitor}
+                  onOpen={() => setOpenId(competitor.id)}
+                  onRefresh={() => refresh.mutate({ competitorId: competitor.id })}
+                  refreshing={
+                    refresh.isPending && refresh.variables?.competitorId === competitor.id
+                  }
+                />
+              ))}
+            </div>
+          </>
         ) : (
           <EmptyState
             icon={Users}
-            title="No competitors yet"
-            description="We can find them from your Brand DNA, or you can add one."
-            action={findButton()}
+            title={bootstrapping ? "Researching your competitors" : "No competitors yet"}
+            description={
+              bootstrapping
+                ? "We're searching from your Brand DNA and reading public sources."
+                : "We can find them from your Brand DNA, or you can add one."
+            }
+            action={
+              bootstrapping ? (
+                <Spinner className="h-5 w-5 animate-spin text-primary" />
+              ) : (
+                findButton()
+              )
+            }
           />
         )}
       </SurfacePage>

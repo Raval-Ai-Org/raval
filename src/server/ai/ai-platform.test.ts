@@ -115,8 +115,8 @@ describe("metering", () => {
     const restoreGuard = setGuardrailSink(async (row) => void events.push(row));
     vi.spyOn(console, "warn").mockImplementation(() => {});
     recordUsage({
-      provider: "anthropic",
-      model: "claude-sonnet-5",
+      provider: "openrouter",
+      model: "anthropic/claude-opus-5.5",
       truncated: true,
       route: "coach",
     });
@@ -186,11 +186,15 @@ describe("structured output", () => {
 });
 
 describe("pricing", () => {
-  it("prices Claude Sonnet 5 at $2 / $10 per million tokens", () => {
-    expect(tokenPrice("claude-sonnet-5")).toEqual({ inPerM: 2, outPerM: 10 });
+  it("prices Claude Opus 5.5 on OpenRouter at $4 / $20 per million tokens", () => {
+    expect(tokenPrice("anthropic/claude-opus-5.5")).toEqual({ inPerM: 4, outPerM: 20 });
     expect(
-      estimateTextCost("claude-sonnet-5", { inputTokens: 1_000_000, outputTokens: 100_000 }),
-    ).toBe(3);
+      estimateTextCost("anthropic/claude-opus-5.5", {
+        inputTokens: 1_000_000,
+        outputTokens: 100_000,
+      }),
+    ).toBe(6);
+    expect(tokenPrice("google/gemini-3.8-flash")).toEqual({ inPerM: 0.75, outPerM: 3.75 });
   });
   it("prices an unknown model conservatively rather than as free", () => {
     expect(
@@ -198,8 +202,8 @@ describe("pricing", () => {
     ).toBeGreaterThan(0);
   });
   it("honours an env override", () => {
-    vi.stubEnv("AI_PRICE_QWEN_QWEN3_MAX_OUT", "9");
-    expect(tokenPrice("qwen/qwen3-max").outPerM).toBe(9);
+    vi.stubEnv("AI_PRICE_GOOGLE_GEMINI_3_8_FLASH_OUT", "9");
+    expect(tokenPrice("google/gemini-3.8-flash").outPerM).toBe(9);
     vi.unstubAllEnvs();
   });
 });
@@ -207,7 +211,7 @@ describe("pricing", () => {
 describe("token budgets", () => {
   it("no longer clamps generation to 1,200 tokens", () => {
     expect(capTokens(2400, "generate")).toBe(2400);
-    expect(capTokens(99_999, "generate")).toBe(6000);
+    expect(capTokens(99_999, "generate")).toBe(8000);
     expect(capTokens(undefined, "chat")).toBe(1500);
   });
 });

@@ -5,6 +5,24 @@ written from the current implementation: Next.js 16, React 19, TypeScript,
 Supabase/PostgreSQL, server-side AI gateways, workspace isolation, and the
 feature routes under `src/app`.
 
+## Current state summary
+
+The repository represents the live product surface for Mellox AI, not an old
+or legacy prototype. The working product combines workspace-scoped identity,
+brand memory, marketing intelligence, AI visibility workflows, publishing,
+content operations, and automation guarded by approvals, role checks, and
+server-side execution.
+
+The documentation is therefore organized around current product behavior and the
+production boundaries that matter to contributors:
+
+- Web app and user flows live primarily under `src/`
+- Authorization, data access, and provider boundaries are enforced on the server
+- AI call paths, budgets, and gateway usage must remain centralized
+- Database schema changes are defined in `supabase/migrations/`
+- Historical documents are kept for reference only unless a canonical page marks
+  them as current
+
 ## Start here
 
 | Need | Guide |
@@ -47,6 +65,11 @@ when they describe an implementation detail. Documents containing older Raval
 AI terminology or unimplemented proposals are historical unless a canonical
 page explicitly marks them current. Do not use a planning document to infer
 runtime behavior.
+
+The current canonical documentation set is the product's current-state source of
+truth. Historical and planning docs remain valuable for context, migration
+review, and decision archaeology, but they are not the default authority when a
+current guide and an old record disagree.
 
 - [Architecture decisions](adr/)
 - [Feature specifications](specs/)

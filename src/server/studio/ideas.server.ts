@@ -62,7 +62,16 @@ export async function generateStudioIdeas(args: {
 }): Promise<{ ideas: StudioIdea[]; generated: "model" | "fallback"; cached: boolean }> {
   const limit = args.limit ?? 5;
   const ctx = await loadStudioContext(args.client as SupabaseClient, args.workspaceId, args.brand);
-  const signals = collectSignals(ctx, args.brand);
+  const signals = collectSignals(ctx, ctx.brand);
+  // An empty workspace only produces cadence/gap boilerplate. Wait for a real
+  // brand, customer, market, or competitor signal before calling it personal.
+  if (!signals.some((signal) => !["gap", "momentum"].includes(signal.source))) {
+    return { ideas: [], generated: "fallback", cached: false };
+  }
+  const rankedSignals = [
+    ...signals.filter((signal) => !["gap", "momentum"].includes(signal.source)),
+    ...signals.filter((signal) => ["gap", "momentum"].includes(signal.source)),
+  ];
   const avoid = [...ctx.recent.map((r) => r.title), ...(args.dismissed ?? [])];
 
   const key = [
@@ -70,6 +79,7 @@ export async function generateStudioIdeas(args: {
     args.type ?? "all",
     digest(signals.map((s) => s.headline).join("|")),
     digest(ctx.brandText),
+    digest(signals.map((s) => `${s.source}:${s.detail}`).join("|")),
     digest(
       ctx.recent
         .slice(0, 10)
@@ -104,6 +114,8 @@ export async function generateStudioIdeas(args: {
       (only ? "." : ", and a mix of formats that genuinely suit each idea."),
     "Do not repeat or lightly reword anything in the recent-content or dismissed lists.",
     "Never invent statistics, customers, or events that aren't in the context.",
+    "Use the brand's actual audience, positioning, voice and offer. Competitor angles must be fair and traceable to a supplied competitor fact. Do not suggest a holiday or platform unless the context supports its relevance.",
+    "Use brand, customer, market, or competitor facts as the creative topic. Activity gaps and momentum may explain timing, but cannot be the only basis for an idea.",
     "Return STRICT JSON only.",
     `Schema: {"ideas":[{"type": ${only ? `"${only}"` : "one of the format ids"}, "title": string, "why": string, "brief": string, "platforms": string[], "source": "season"|"trend"|"competitor"|"gap"|"pillar"|"momentum", "goal": "awareness"|"engagement"|"leads"|"launch"|"education"|"offer"}]}`,
   ].join("\n");
@@ -122,7 +134,7 @@ export async function generateStudioIdeas(args: {
     },
     {
       label: "Signals (strongest first)",
-      body: signals
+      body: rankedSignals
         .slice(0, 10)
         .map((s) => `- [${s.source}] ${s.headline} — ${s.detail}`)
         .join("\n"),
@@ -166,7 +178,7 @@ export async function generateStudioIdeas(args: {
       "[studio-ideas] model pass failed, using fallback",
       error instanceof Error ? error.message : error,
     );
-    ideas = fallbackIdeas(signals, ctx, { only, limit: limit + 2 });
+    ideas = fallbackIdeas(rankedSignals, ctx, { only, limit: limit + 2 });
     generated = "fallback";
   }
 

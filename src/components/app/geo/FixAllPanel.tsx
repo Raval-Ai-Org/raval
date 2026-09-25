@@ -2,7 +2,7 @@
 
 // FixAllPanel — "Fix all automatically": every finding Mellox can fix for a
 // website, generated in one run, reviewed once, approved once, delivered as
-// ONE GitHub pull request. Mellox never merges it; each finding resolves only
+// ONE GitHub pull request (WordPress / Webflow: CmsFixAllPanel). Mellox never merges it; each finding resolves only
 // after the post-merge rescan confirms its own check passes.
 
 import { useCallback, useEffect, useState } from "react";
@@ -22,19 +22,27 @@ import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import type { GeoScanView } from "@/lib/geo/contracts";
-import type { FixAllPreflight, FixBatchView } from "@/lib/geo/fix-contracts";
+import type {
+  FixAllPreflight,
+  FixBatchView,
+  SiteConnections,
+  SiteProviderId,
+} from "@/lib/geo/fix-contracts";
 import {
   approveFixBatch,
   createFixBatch,
   discardFixBatch,
   getFixAllPreflight,
   getFixBatch,
+  getSiteConnections,
   getVerification,
   listFixBranches,
 } from "@/lib/geo-fixes.functions";
 import { cn } from "@/lib/utils";
 import { CheckRow, DiffView, SetupRequirement, VerificationCard } from "./FindingDetail";
+import { CmsFixAllPanel } from "./CmsFixAllPanel";
 import { Chip, pathOf, relativeTime } from "./geo-ui";
+import { SiteConnectPicker } from "./SiteConnectPicker";
 
 const errMsg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const ACTIVE = ["generating", "applying", "pr_open", "merged", "verifying"];
@@ -420,13 +428,17 @@ export function FixAllPanel({
   scan,
   onBack,
   onChanged,
+  onOpenFinding,
 }: {
   workspaceId: string;
   scan: GeoScanView;
   onBack: () => void;
   onChanged: () => void;
+  onOpenFinding?: (findingId: string) => void;
 }) {
   const [preflight, setPreflight] = useState<FixAllPreflight | null>(null);
+  const [connections, setConnections] = useState<SiteConnections | null>(null);
+  const [provider, setProvider] = useState<SiteProviderId | null>(null);
   const [batch, setBatch] = useState<FixBatchView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
@@ -441,10 +453,18 @@ export function FixAllPanel({
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    getFixAllPreflight({ data: { workspaceId, scanId: scan.id } })
-      .then((p) => {
+    Promise.all([
+      getFixAllPreflight({ data: { workspaceId, scanId: scan.id } }),
+      getSiteConnections({ data: { workspaceId, scanId: scan.id } }),
+    ])
+      .then(([p, c]) => {
         if (cancelled) return;
         setPreflight(p);
+        setConnections(c);
+        // The platform that serves the site; else the one the live page says it's built with.
+        setProvider(
+          (cur) => cur ?? p.platform ?? c.active ?? c.detected ?? c.tiles[0]?.provider ?? "github",
+        );
         setBatch(p.batch && p.batch.status !== "discarded" ? p.batch : null);
         setSourceId(p.setup.source?.id ?? null);
       })
@@ -454,7 +474,8 @@ export function FixAllPanel({
     };
   }, [workspaceId, scan.id, nonce]);
 
-  const ready = preflight?.setup.requirement === "ready";
+  const github = provider === "github";
+  const ready = github && preflight?.setup.requirement === "ready";
   useEffect(() => {
     if (!ready || !sourceId || batch) return;
     let cancelled = false;
@@ -488,8 +509,17 @@ export function FixAllPanel({
     }
   };
 
+  const tile = connections?.tiles.find((t) => t.provider === provider) ?? null;
+  const intro = !provider
+    ? ""
+    : github
+      ? "Every fix goes into one pull request. You review it once and merge it yourself."
+      : `You see every change before and after. Changes go live on ${
+          provider === "wordpress" ? "WordPress" : "Webflow"
+        } only when you apply them, and each can be undone.`;
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <button
         type="button"
         onClick={onBack}
@@ -498,21 +528,16 @@ export function FixAllPanel({
         <ArrowLeft className="h-3.5 w-3.5" /> All findings
       </button>
 
-      <header className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+      <header>
         <h3 className="flex items-center gap-2 text-[16px] font-semibold">
-          <Wand className="h-4 w-4 text-primary" /> Fix all automatically
+          <Wand className="h-4 w-4 text-primary" /> Fix all for {scan.host}
         </h3>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-foreground/85">
-          Mellox prepares every fix it can for {scan.host} and puts them in{" "}
-          <strong>one GitHub pull request</strong>. You review once and approve once. Mellox never
-          merges it for you, and each finding is marked resolved only after a rescan of the live
-          site confirms it.
-        </p>
+        {intro ? <p className="mt-1 text-[12.5px] text-muted-foreground">{intro}</p> : null}
       </header>
 
       {error ? (
         <ErrorState size="sm" detail={error} onRetry={reload} />
-      ) : !preflight ? (
+      ) : !preflight || !connections || !provider ? (
         <Skeleton className="h-40 w-full rounded-xl" />
       ) : batch ? (
         <BatchReview
@@ -530,131 +555,112 @@ export function FixAllPanel({
         />
       ) : (
         <>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {[
-              [preflight.fixable.length, "can be fixed automatically"],
-              [preflight.manualCount, "need manual work"],
-              [preflight.inProgressCount, "already have a fix in progress"],
-            ].map(([n, label]) => (
-              <div
-                key={String(label)}
-                className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border px-3 py-2.5"
-              >
-                <div className="text-[19px] font-semibold tabular-nums">{n}</div>
-                <div className="text-[11.5px] text-muted-foreground">{label}</div>
-              </div>
-            ))}
-          </div>
+          <SiteConnectPicker
+            workspaceId={workspaceId}
+            connections={connections}
+            selected={provider}
+            onSelect={(p) => {
+              setProvider(p);
+              setStartError(null);
+            }}
+          />
 
-          {preflight.fixable.length === 0 ? (
-            <p className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border px-4 py-3 text-[12.5px] text-muted-foreground">
-              No open findings in this scan can be fixed automatically. Open a finding for its
-              manual steps.
+          {!github ? (
+            tile?.state === "serves_site" ? (
+              <CmsFixAllPanel
+                workspaceId={workspaceId}
+                scanId={scan.id}
+                onChanged={onChanged}
+                onOpenFinding={onOpenFinding}
+              />
+            ) : null
+          ) : tile?.state === "not_connected" || tile?.state === "unavailable" ? null : !ready ? (
+            <SetupRequirement
+              workspaceId={workspaceId}
+              scan={scan}
+              setup={preflight.setup}
+              onReload={reload}
+            />
+          ) : preflight.fixable.length === 0 ? (
+            <p className="rounded-xl bg-muted/40 px-4 py-3 text-[12.5px] text-muted-foreground">
+              Nothing in this scan can be fixed in code automatically. Open a finding for its steps.
             </p>
           ) : (
-            <section className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
-              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Will be attempted
-                {preflight.fixable.length > preflight.maxFindings
-                  ? ` (first ${preflight.maxFindings} of ${preflight.fixable.length}, highest priority)`
+            <section className="space-y-3">
+              <p className="text-[12px] text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {Math.min(preflight.fixable.length, preflight.maxFindings)} fixes
+                </span>{" "}
+                will be prepared
+                {preflight.manualCount ? ` · ${preflight.manualCount} need manual work` : ""}
+                {preflight.inProgressCount
+                  ? ` · ${preflight.inProgressCount} already in progress`
                   : ""}
-              </h4>
-              <ul className="max-h-56 space-y-1 overflow-y-auto">
+              </p>
+              <ul className="max-h-48 space-y-1 overflow-y-auto">
                 {preflight.fixable.slice(0, preflight.maxFindings).map((f) => (
                   <li key={f.findingId} className="flex min-w-0 items-center gap-2 text-[12px]">
-                    <Chip tone="muted" className="uppercase">
-                      {f.priority}
-                    </Chip>
                     <span className="truncate font-medium">{f.title}</span>
                     <span className="truncate text-muted-foreground">{pathOf(f.pageUrl)}</span>
                   </li>
                 ))}
               </ul>
-            </section>
-          )}
-
-          <section className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
-            <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              GitHub repository
-            </h4>
-            {!ready ? (
-              <SetupRequirement
-                workspaceId={workspaceId}
-                scan={scan}
-                setup={preflight.setup}
-                onReload={reload}
-              />
-            ) : (
-              <div className="space-y-3">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className="space-y-1">
-                    <span className="text-[11px] font-medium text-muted-foreground">
-                      Repository
-                    </span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-[11px] font-medium text-muted-foreground">Repository</span>
+                  <select
+                    value={sourceId ?? ""}
+                    onChange={(e) => setSourceId(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-[12.5px]"
+                  >
+                    {preflight.setup.sources
+                      .filter((s) => s.status === "active" && s.siteUrl?.includes(scan.host))
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.fullName}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[11px] font-medium text-muted-foreground">Into branch</span>
+                  {branches ? (
                     <select
-                      value={sourceId ?? ""}
-                      onChange={(e) => setSourceId(e.target.value)}
+                      value={branch}
+                      onChange={(e) => setBranch(e.target.value)}
                       className="h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-[12.5px]"
                     >
-                      {preflight.setup.sources
-                        .filter((s) => s.status === "active" && s.siteUrl?.includes(scan.host))
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.fullName}
-                          </option>
-                        ))}
+                      {branches.map((b) => (
+                        <option key={b.name} value={b.name}>
+                          {b.name}
+                        </option>
+                      ))}
                     </select>
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-[11px] font-medium text-muted-foreground">
-                      Base branch
-                    </span>
-                    {branches ? (
-                      <select
-                        value={branch}
-                        onChange={(e) => setBranch(e.target.value)}
-                        className="h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-[12.5px]"
-                      >
-                        {branches.map((b) => (
-                          <option key={b.name} value={b.name}>
-                            {b.name}
-                            {b.protected ? " (protected)" : ""}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <Skeleton className="h-9 w-full rounded-lg" />
-                    )}
-                  </label>
-                </div>
-                <p className="text-[11.5px] text-muted-foreground">
-                  Mellox never writes to this branch. It opens one pull request from a new{" "}
-                  <span className="font-mono">mellox/</span> branch into it. Each code fix uses AI
-                  credits.
-                </p>
-                <Button
-                  disabled={
-                    !branch || starting || !preflight.fixable.length || !preflight.setup.canPropose
-                  }
-                  loading={starting}
-                  onClick={() => void start()}
-                >
-                  <Wand className="h-4 w-4" /> Generate all fixes
-                </Button>
-                {!preflight.setup.canPropose && (
-                  <p className="text-[11.5px] text-muted-foreground">Editors can run “Fix all”.</p>
-                )}
+                  ) : (
+                    <Skeleton className="h-9 w-full rounded-lg" />
+                  )}
+                </label>
               </div>
-            )}
-            {startError && (
-              <p
-                role="alert"
-                className="mt-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-[12px] text-destructive"
+              <Button
+                disabled={!branch || starting || !preflight.setup.canPropose}
+                loading={starting}
+                onClick={() => void start()}
               >
-                {startError}
-              </p>
-            )}
-          </section>
+                <Wand className="h-4 w-4" /> Prepare all fixes
+              </Button>
+              {!preflight.setup.canPropose && (
+                <p className="text-[11.5px] text-muted-foreground">An editor can run “Fix all”.</p>
+              )}
+            </section>
+          )}
+          {startError && (
+            <p
+              role="alert"
+              className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-[12px] text-destructive"
+            >
+              {startError}
+            </p>
+          )}
         </>
       )}
     </div>

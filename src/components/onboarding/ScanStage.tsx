@@ -4,11 +4,16 @@ import type { CSSProperties, ReactNode, Ref } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, Check, RefreshCw, Spinner } from "@/components/icons";
 import type { Discoveries } from "@/lib/brand-extract-events";
+import type { CompetitorView } from "@/lib/competitors.functions";
 import { normalizeHex, relLuminance } from "@/lib/color";
 import { duration, ease } from "@/lib/motion";
 import { faviconFor } from "@/lib/site-screenshot";
 import { SCAN_PHASES } from "./phases";
 import { BrandMark } from "./ui";
+import {
+  CompetitorResearchPreview,
+  type CompetitorResearchStatus,
+} from "./CompetitorResearchPreview";
 import { hostOf, normalizeUrl } from "./url";
 
 export type ScanStatus = "idle" | "loading" | "ok" | "error";
@@ -31,6 +36,8 @@ export function ScanStage({
   progress,
   phase,
   discoveries,
+  competitors,
+  competitorResearchStatus,
   error,
   reduce,
   headingRef,
@@ -43,6 +50,8 @@ export function ScanStage({
   progress: ScanProgress;
   phase: number;
   discoveries: Discoveries;
+  competitors: CompetitorView[];
+  competitorResearchStatus: CompetitorResearchStatus;
   error: string | null;
   reduce: boolean;
   headingRef: Ref<HTMLHeadingElement>;
@@ -157,6 +166,14 @@ export function ScanStage({
         )}
 
         <Findings discoveries={discoveries} reduce={reduce} />
+        {!failed && (
+          <CompetitorResearchPreview
+            competitors={competitors}
+            status={competitorResearchStatus}
+            compact
+            reduce={reduce}
+          />
+        )}
       </div>
 
       {!complete && (
