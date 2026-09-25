@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { useNavigate } from "@/lib/navigation";
 import { emitAppEvent } from "@/lib/app-events";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ErrorState } from "@/components/ui/empty-state";
 import {
   ArrowLeft,
   Check,
@@ -45,8 +46,9 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [q, setQ] = useState("");
-  const { data, isLoading: loading } = useWorkspaces({ enabled: open });
+  const { data, isLoading: loading, isError, error, refetch } = useWorkspaces({ enabled: open });
   const workspaces = useMemo(() => data ?? [], [data]);
+  const workspaceListFailed = isError && !data;
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -172,13 +174,23 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
             </div>
           )}
 
-          {!loading && filtered.length === 0 && (
+          {!loading && workspaceListFailed && (
+            <ErrorState
+              size="sm"
+              title="Workspaces didn't load"
+              detail={error instanceof Error ? error.message : null}
+              onRetry={() => void refetch()}
+            />
+          )}
+
+          {!loading && !workspaceListFailed && filtered.length === 0 && (
             <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">
               No workspaces found
             </div>
           )}
 
           {!loading &&
+            !workspaceListFailed &&
             filtered.map((w) => {
               const active = w.id === workspaceId;
               const name = workspaceLabel(w);

@@ -22,6 +22,7 @@ import { readLastWorkspace } from "@/lib/workspace/last-opened";
 import { Logo } from "@/components/brand/Logo";
 import { SecondaryBrandSymbols } from "@/components/brand/SecondaryBrandSymbols";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -107,8 +108,11 @@ function ProjectsPage() {
   const queryClient = useQueryClient();
   const invalidateWorkspaces = useInvalidateWorkspaces();
   const [sessionReady, setSessionReady] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [sessionAttempt, setSessionAttempt] = useState(0);
   const workspacesQuery = useWorkspaces({ enabled: sessionReady });
   const workspaces = useMemo(() => workspacesQuery.data ?? [], [workspacesQuery.data]);
+  const workspaceListFailed = workspacesQuery.isError && !workspacesQuery.data;
   const loading = !sessionReady || workspacesQuery.isLoading;
   const [userEmail, setUserEmail] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
@@ -123,32 +127,41 @@ function ProjectsPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session) {
-        navigate({ to: "/login" });
+      let user: NonNullable<
+        Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]
+      >["user"];
+      try {
+        const { data: sess, error } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (error) throw error;
+        if (!sess.session) {
+          navigate({ to: "/login" });
+          return;
+        }
+        user = sess.session.user;
+      } catch (cause) {
+        if (!cancelled) {
+          setSessionError(
+            cause instanceof Error ? cause.message : "Could not check your sign-in session.",
+          );
+        }
         return;
       }
-      const u = sess.session.user;
-      setUserEmail(u.email ?? "");
-      const meta = (u.user_metadata ?? {}) as Record<string, any>;
-      setUserName(meta.full_name || meta.name || (u.email ? u.email.split("@")[0] : ""));
+      setUserEmail(user.email ?? "");
+      const meta = (user.user_metadata ?? {}) as Record<string, any>;
+      setUserName(meta.full_name || meta.name || (user.email ? user.email.split("@")[0] : ""));
       setUserAvatar(meta.avatar_url || meta.picture || "");
       setLastOpened(readLastWorkspace());
-      try {
-        await ensureWorkspace(); // profile row only — never picks or creates a workspace
-      } catch {
-        /* profile upsert is best effort */
+      void ensureWorkspace().catch(() => {}); // Profile setup must not block workspace loading.
+      if (!cancelled) {
+        setSessionReady(true);
+        setSessionError(null);
       }
-      if (!cancelled) setSessionReady(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [ensureWorkspace, navigate]);
-
-  useEffect(() => {
-    if (workspacesQuery.error) toast.error("Couldn't load workspaces");
-  }, [workspacesQuery.error]);
+  }, [ensureWorkspace, navigate, sessionAttempt]);
 
   const openProject = (w: Workspace) => {
     navigate({ to: openHref(w) });
@@ -212,6 +225,23 @@ function ProjectsPage() {
     toast.success(`Marked ${STATUS_META[status].label.toLowerCase()}`);
   };
 
+  if (sessionError) {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-background p-6">
+        <ErrorState
+          title="Couldn't verify your sign-in"
+          description="Your workspace list cannot load until your session is available."
+          detail={sessionError}
+          onRetry={() => {
+            setSessionError(null);
+            setSessionReady(false);
+            setSessionAttempt((current) => current + 1);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       data-mellox-app
@@ -255,6 +285,8 @@ function ProjectsPage() {
         >
           {loading ? (
             <span className="mx-loader__label">{`Loading your ${copy.nounPlural}…`}</span>
+          ) : workspaceListFailed ? (
+            "Your workspaces couldn't load"
           ) : workspaces.length === 0 ? (
             copy.firstHeadline(userName ? userName.split(" ")[0] : undefined)
           ) : (
@@ -267,7 +299,11 @@ function ProjectsPage() {
           transition={{ delay: 0.15, duration: 0.4 }}
           className="mt-2 text-[14px] text-muted-foreground"
         >
-          {workspaces.length === 0 ? copy.firstSubhead : copy.returningSubhead}
+          {workspaceListFailed
+            ? "Retry the request to see your workspace list."
+            : workspaces.length === 0
+              ? copy.firstSubhead
+              : copy.returningSubhead}
         </motion.p>
 
         <motion.div
@@ -276,11 +312,25 @@ function ProjectsPage() {
           transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="mx-auto mt-8 w-full max-w-xl"
         >
-          <PasteLinkBar
-            existing={workspaces}
-            onCreated={(result) => afterCreate(result, "onboarding")}
-            onOpenAdvanced={() => setDialogOpen(true)}
-          />
+          {workspaceListFailed ? (
+            <ErrorState
+              title="Couldn't load your workspaces"
+              description="Your account may already have workspaces. Reload the list before creating another."
+              detail={workspacesQuery.error instanceof Error ? workspacesQuery.error.message : null}
+              onRetry={() => void workspacesQuery.refetch()}
+              action={
+                <Button variant="outline" onClick={() => setDialogOpen(true)}>
+                  Create workspace
+                </Button>
+              }
+            />
+          ) : (
+            <PasteLinkBar
+              existing={workspaces}
+              onCreated={(result) => afterCreate(result, "onboarding")}
+              onOpenAdvanced={() => setDialogOpen(true)}
+            />
+          )}
           <NewProjectDialog
             open={dialogOpen}
             onOpenChange={setDialogOpen}

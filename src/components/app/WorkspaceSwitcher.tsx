@@ -13,6 +13,7 @@ import {
 import { useWorkspaces, workspaceLabel, type WorkspaceSummary } from "@/hooks/use-workspaces";
 import { workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ErrorState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import { WorkspaceLogo } from "./WorkspaceLogo";
 
@@ -30,8 +31,9 @@ export function WorkspaceSwitcher({
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const { data, isLoading: loading } = useWorkspaces({ enabled: open });
+  const { data, isLoading: loading, isError, error, refetch } = useWorkspaces({ enabled: open });
   const workspaces = useMemo(() => data ?? [], [data]);
+  const workspaceListFailed = isError && !data;
   const switchingId: string | null = null;
 
   const filtered = useMemo(() => {
@@ -104,13 +106,23 @@ export function WorkspaceSwitcher({
             </div>
           )}
 
-          {!loading && filtered.length === 0 && (
+          {!loading && workspaceListFailed && (
+            <ErrorState
+              size="sm"
+              title="Workspaces didn't load"
+              detail={error instanceof Error ? error.message : null}
+              onRetry={() => void refetch()}
+            />
+          )}
+
+          {!loading && !workspaceListFailed && filtered.length === 0 && (
             <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">
               No workspaces found
             </div>
           )}
 
           {!loading &&
+            !workspaceListFailed &&
             filtered.map((w) => {
               const active = w.id === workspaceId;
               const name = workspaceLabel(w);
