@@ -1,6 +1,6 @@
 # Mellox Billing v2 implementation plan
 
-Status: phase 1 verified; phase 2 next on `feat/billing-v2`.
+Status: phases 1 and 2 verified; phase 3 next on `feat/billing-v2`.
 
 ## Inputs and baseline
 
@@ -47,3 +47,4 @@ Each phase ends with `npm run typecheck && npm run lint && npm test && npm run b
 
 - Planning: code map and ADR written before implementation.
 - Phase 1: typed catalog, owner account link and protected workspace column, account grant/hold/charge/ledger schema, SQL meter operations, old backlink wrapper, balance backfill, signup grant, and database/catalog tests. Live legacy holds abort the migration for manual resolution. Gate passed: typecheck, lint, 1,579 tests across 157 files, build, db:verify (82 migrations, 56 idempotent replays, 118 public RLS tables). The working tree's unrelated edits remain unstaged.
+- Phase 2: account lookup and entitlement resolution, typed SQL meter wrappers, `runMetered` with success capture and failure release, structured 402 errors, limit helper, signup/Free/monthly/annual grants, rollover and expiry hook, account usage attribution and budget scope, shadow events, wallet and entitlement endpoints. A Studio social job logs its catalog price in shadow without holding money. Async Studio renders temporarily return 503 only for an account overridden to enforcement `on`, until phase 3 installs completion-time capture. Gate passed: typecheck, lint, 1,604 tests across 162 files, build, db:verify (84 migrations, 58 idempotent replays, 118 public RLS tables).

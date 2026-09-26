@@ -74,6 +74,8 @@ export function toUsageRow(event: UsageEvent): UsageRecord {
     status: event.status ?? "ok",
     run_id: scope.runId ?? null,
     request_id: scope.requestId ?? null,
+    billing_account_id: scope.billingAccountId ?? null,
+    charge_id: scope.billingChargeId ?? null,
   };
 }
 

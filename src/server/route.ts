@@ -33,6 +33,7 @@ import {
   type RateLimitTier,
 } from "./rate-limit";
 import { HttpError } from "./http-error";
+import { BillingError } from "./billing/errors";
 import { SsrfBlockedError } from "./safe-fetch";
 import { UpstreamError } from "./upstream";
 
@@ -92,6 +93,12 @@ export type WorkspaceRouteOptions<TBody, TQuery> = CommonOptions<TBody, TQuery> 
  * Returns null for anything unrecognised (the caller decides how to log it).
  */
 export function knownErrorResponse(error: unknown): Response | null {
+  if (error instanceof BillingError) {
+    return Response.json(error.toJSON(), {
+      status: 402,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
   if (error instanceof RateLimitedError) return rateLimitResponse(error.tier, error.result);
   if (error instanceof BudgetExceededError) {
     const res = jsonError(429, error.message);

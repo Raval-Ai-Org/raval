@@ -85,6 +85,45 @@ afterAll(async () => {
 });
 
 describe("account meter foundation", () => {
+  it("attributes provider usage to the owner account and charge", async () => {
+    const charge = "c3333333-3333-4333-8333-333333333333";
+    const event = {
+      workspace_id: workspace,
+      user_id: EDITOR,
+      route: "studio.social",
+      provider: "openrouter",
+      model: "test-model",
+      kind: "text",
+      est_cost_usd: 0.025,
+      charge_id: charge,
+      billing_account_id: OTHER,
+    };
+    const { rows } = await db.query<{ id: string }>(
+      `select public.record_ai_usage($1::jsonb) as id`,
+      [JSON.stringify(event)],
+    );
+    const stored = await db.query<{ billing_account_id: string; charge_id: string }>(
+      `select billing_account_id,charge_id from public.ai_usage_events where id=$1`,
+      [rows[0].id],
+    );
+    expect(stored.rows[0]).toEqual({ billing_account_id: account, charge_id: charge });
+    const rollup = await db.query<{ cost_usd: string }>(
+      `select cost_usd from public.ai_usage_daily where scope_key=$1`,
+      [`acct:${account}`],
+    );
+    expect(Number(rollup.rows[0].cost_usd)).toBeCloseTo(0.025);
+    await as(EDITOR, async () => {
+      const visible = await db.query<{ route: string }>(
+        `select route from public.ai_usage_events where id=$1`,
+        [rows[0].id],
+      );
+      expect(visible.rows[0].route).toBe("studio.social");
+      await expect(
+        db.query(`select billing_account_id from public.ai_usage_events where id=$1`, [rows[0].id]),
+      ).rejects.toThrow(/permission denied/);
+    });
+  });
+
   it("links every new brand of an owner to one account", async () => {
     const made = await db.query<{ workspace_id: string }>(
       `select workspace_id from private.create_workspace_for_user($1,'Second','https://second.test','billing-test-2')`,

@@ -60,6 +60,7 @@ export type RateLimitTier =
   | "links-brief"
   | "links-checkout"
   | "billing-checkout"
+  | "billing-read"
   | "experiment-propose"
   | "experiment-action"
   | "brand-kit-upload"
@@ -151,6 +152,7 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   "links-checkout": { limit: 10, windowSeconds: 3600, label: "placement order" },
   // Opening a Stripe checkout session.
   "billing-checkout": { limit: 10, windowSeconds: 3600, label: "credit purchase" },
+  "billing-read": { limit: 120, windowSeconds: 60, label: "billing" },
   // Proof Engine: change proposals and per-page copy — paid model calls.
   "experiment-propose": { limit: 10, windowSeconds: 3600, label: "experiment proposal" },
   // Creating, assigning, cancelling experiments (database work, some reads of

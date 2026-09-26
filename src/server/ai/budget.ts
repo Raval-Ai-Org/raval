@@ -18,6 +18,9 @@ import "server-only";
 import { cache } from "@/server/cache/store";
 import { getRequestScope, setRequestScope } from "@/server/request-context";
 import { logGuardrailEvent } from "@/server/guardrails/events";
+import { PLANS } from "@/lib/billing/catalog";
+import { accountForUser, accountForWorkspace } from "@/server/billing/accounts.server";
+import { enforcementFor, entitledPlanFor } from "@/server/billing/entitlements.server";
 import {
   getPlanLimits,
   SOFT_LIMIT_RATIO,
@@ -40,7 +43,7 @@ export type UsageSummary = {
 
 export type BudgetDecision = {
   mode: BudgetMode;
-  scope: "workspace" | "user" | "none";
+  scope: "account" | "workspace" | "user" | "none";
   reason?: string;
   usage?: UsageSummary;
   limits?: Pick<PlanLimits, "dailyUsd" | "monthlyUsd" | "monthlyImages" | "monthlyVideos"> & {
@@ -195,6 +198,25 @@ export async function checkBudget(
 
   try {
     if (workspaceId) {
+      const linked = await accountForWorkspace(workspaceId).catch(() => null);
+      if (linked && enforcementFor(linked.account) === "on") {
+        const plan = entitledPlanFor(linked.account);
+        const safety = PLANS[plan].safety;
+        const scopeKey = `acct:${linked.account.id}`;
+        const summary = (await cachedSummary(scopeKey)) ?? emptySummary();
+        const limits = {
+          dailyUsd: safety.dailyUsd,
+          monthlyUsd: safety.monthlyUsd,
+          monthlyImages: Number.MAX_SAFE_INTEGER,
+          monthlyVideos: Number.MAX_SAFE_INTEGER,
+        };
+        const verdict = decide(kind, summary, limits);
+        await noteBudgetEvent(scopeKey, verdict.mode, kind, verdict.reason);
+        if (verdict.mode === "warn" && verdict.reason)
+          setRequestScope({ usageWarning: verdict.reason });
+        setRequestScope({ billingAccountId: linked.account.id });
+        return { ...verdict, scope: "account", usage: summary, limits: { plan, ...limits } };
+      }
       const scopeKey = `ws:${workspaceId}`;
       const [usage, planId] = await Promise.all([cachedSummary(scopeKey), cachedPlan(workspaceId)]);
       const limits = getPlanLimits(planId);
@@ -217,6 +239,25 @@ export async function checkBudget(
       };
     }
     if (userId) {
+      const account = await accountForUser(userId).catch(() => null);
+      if (account && enforcementFor(account) === "on") {
+        const plan = entitledPlanFor(account);
+        const safety = PLANS[plan].safety;
+        const scopeKey = `acct:${account.id}`;
+        const summary = (await cachedSummary(scopeKey)) ?? emptySummary();
+        const limits = {
+          dailyUsd: safety.dailyUsd,
+          monthlyUsd: safety.monthlyUsd,
+          monthlyImages: Number.MAX_SAFE_INTEGER,
+          monthlyVideos: Number.MAX_SAFE_INTEGER,
+        };
+        const verdict = decide(kind, summary, limits);
+        await noteBudgetEvent(scopeKey, verdict.mode, kind, verdict.reason);
+        if (verdict.mode === "warn" && verdict.reason)
+          setRequestScope({ usageWarning: verdict.reason });
+        setRequestScope({ billingAccountId: account.id });
+        return { ...verdict, scope: "account", usage: summary, limits: { plan, ...limits } };
+      }
       const scopeKey = `user:${userId}`;
       const summary = (await cachedSummary(scopeKey)) ?? emptySummary();
       const daily = userDailyCeilingUsd();

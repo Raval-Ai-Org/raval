@@ -18,6 +18,10 @@ export type RequestScope = {
   route?: string;
   /** Agent run this work belongs to, when executed by the agent runtime. */
   runId?: string;
+  /** Owner wallet used by the current paid action. */
+  billingAccountId?: string;
+  /** Preallocated charge id, shared by provider usage rows and the capture. */
+  billingChargeId?: string;
   /** Correlation id echoed in logs. */
   requestId?: string;
   /** Soft-limit notice set by the budget module; the /api kernel returns it as X-Usage-Warning. */
