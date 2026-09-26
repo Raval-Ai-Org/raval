@@ -5,7 +5,11 @@ import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { getPendingHandler, selectPendingHandler } from "@/lib/socialapi/handlers";
 import { withSocialApi } from "@/lib/socialapi/route.server";
-import { assertSocialProfileConnection } from "@/server/billing/social-profiles.server";
+import {
+  activateSocialProfileSlot,
+  assertSocialProfileConnection,
+  reserveSocialProfileSlot,
+} from "@/server/billing/social-profiles.server";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +36,23 @@ export const POST = defineRoute({
   workspaceId: ({ body }) => body.workspaceId,
   minRole: "editor",
   handler: async ({ body, workspaceId, userId, role }) => {
-    await assertSocialProfileConnection({ workspaceId, userId, role });
-    return withSocialApi(workspaceId, (deps) =>
+    const entitlements = await assertSocialProfileConnection({ workspaceId, userId, role });
+    await reserveSocialProfileSlot(entitlements, workspaceId);
+    const response = await withSocialApi(workspaceId, (deps) =>
       selectPendingHandler(
         { workspaceId, userId, connectionId: body.connectionId, pageIds: body.pageIds },
         deps,
       ),
     );
+    if (response.ok) {
+      const result = (await response
+        .clone()
+        .json()
+        .catch(() => null)) as { status?: string } | null;
+      if (result?.status === "connected") {
+        await activateSocialProfileSlot(entitlements, workspaceId);
+      }
+    }
+    return response;
   },
 });

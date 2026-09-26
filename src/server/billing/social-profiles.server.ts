@@ -3,9 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { HttpError } from "@/server/http-error";
-import { getEntitlements } from "./entitlements.server";
-import { assertWithinLimit } from "./limits.server";
-import { BrandFrozenError, UpgradeRequiredError } from "./errors";
+import { getEntitlements, type Entitlements } from "./entitlements.server";
+import { BrandFrozenError, LimitReachedError, UpgradeRequiredError } from "./errors";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 
@@ -48,9 +47,9 @@ export async function assertSocialProfileConnection(args: {
   workspaceId: string;
   userId: string;
   role: "owner" | "admin" | "editor" | "viewer";
-}): Promise<void> {
+}): Promise<Entitlements> {
   const entitlements = await getEntitlements(args);
-  if (entitlements.enforcement === "off") return;
+  if (entitlements.enforcement === "off") return entitlements;
 
   // A brand with a profile may connect more networks without consuming another
   // allowance. Reconnects retain their provider profile until disconnected.
@@ -89,7 +88,7 @@ export async function assertSocialProfileConnection(args: {
       });
       if (logError) console.error("[billing] social profile shadow event failed", logError.code);
     }
-    return;
+    return entitlements;
   }
   if (blockedFrozen) throw new BrandFrozenError();
   if (blockedFeature) {
@@ -99,5 +98,43 @@ export async function assertSocialProfileConnection(args: {
       currentPlan: entitlements.entitledPlan,
     });
   }
-  if (!alreadyConnected) assertWithinLimit(entitlements, "socialProfiles");
+  // The account-locked slot reservation at OAuth start is authoritative.
+  return entitlements;
+}
+
+export async function reserveSocialProfileSlot(
+  entitlements: Entitlements,
+  workspaceId: string,
+): Promise<void> {
+  if (entitlements.enforcement !== "on") return;
+  const { error } = await admin.rpc("reserve_billing_social_profile_slot", {
+    p_workspace: workspaceId,
+    p_limit: entitlements.limits.socialProfiles,
+  });
+  if (error?.message.includes("billing_social_profile_limit")) {
+    throw new LimitReachedError({
+      limit: "socialProfiles",
+      used: entitlements.usage.socialProfiles,
+      max: entitlements.limits.socialProfiles,
+    });
+  }
+  if (error) throw new HttpError(503, "Could not reserve a social profile.");
+}
+
+export async function activateSocialProfileSlot(
+  entitlements: Entitlements,
+  workspaceId: string,
+): Promise<void> {
+  if (entitlements.enforcement !== "on") return;
+  const { error } = await admin.rpc("activate_billing_social_profile_slot", {
+    p_workspace: workspaceId,
+  });
+  if (error) throw new HttpError(503, "Could not complete social profile billing.");
+}
+
+export async function releaseSocialProfileSlotIfEmpty(workspaceId: string): Promise<void> {
+  const { error } = await admin.rpc("release_billing_social_profile_slot_if_empty", {
+    p_workspace: workspaceId,
+  });
+  if (error) throw new HttpError(503, "Could not release social profile allowance.");
 }

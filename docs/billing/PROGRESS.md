@@ -18,6 +18,7 @@
 - Added first-access Free grants, recurring grant logic, annual rollover, the five-minute billing hook, shadow events, and entitlement/wallet GET routes.
 - Studio social jobs now log a 12-credit would-charge in shadow mode without a hold. Unit, route and database tests cover this path, budget mode selection, 402 mapping, account attribution and grant window maths.
 - Phase 2 gate passed: typecheck, lint, 162 test files / 1,604 tests, build, and db:verify (84 migrations, 58 reapplied cleanly, 118 public tables with RLS).
+- Phase 3 checkpoint committed as `9a915d4` (`wip(billing): checkpoint phase 3 enforcement wiring`). This is not the phase completion commit.
 
 ## Phase 3 work in progress
 
@@ -28,7 +29,8 @@
 - UGC renders now hold Video Credits before their workers can claim work. The database readiness flag prevents early claims; terminal webhooks and billing cron reconcile capture or release. Added worker and database claim tests.
 - Brand DNA reserves one free scan per account and domain, charges catalog credits for later scans, and withholds the final streamed result until billing succeeds. Campaign briefs and the synchronous Studio video route now use server holds and success-only capture.
 - Long AI generation now charges the Standard article action on Workhorse, and uses the Premium model and action only for accounts entitled to premium articles.
-- Focused Studio, UGC, metering, brand, seat, and database migration checks passed. The full test suite passed at the checkpoint (167 files, 1,620 tests); lint passed with 450 warnings, build passed, and db:verify replayed 88 migrations. The complete Phase 3 gate and manual shadow/on pass have **not** run, so Phase 3 is not complete.
+- SocialAPI OAuth now reserves a brand-level profile slot under an account lock before provider work. Callback and selection refresh the reservation and activate it on success; disconnect releases an empty brand's slot. PGlite tests cover account capacity and same-brand reuse.
+- Focused Studio, UGC, metering, brand, seat, social profile, and database migration checks passed. The full test suite passed before the latest SocialAPI slot change (167 files, 1,620 tests); focused SocialAPI tests, typecheck and changed-file lint passed after it. Full lint passed with 450 warnings, build passed, and db:verify replayed 89 migrations. The complete Phase 3 gate and manual shadow/on pass have **not** run, so Phase 3 is not complete.
 
 ## Next
 
@@ -45,6 +47,6 @@
 - PGlite covers function behavior and RLS but cannot prove concurrent holds. Run the real PostgreSQL concurrency test in phase 9.
 - The Phase 3 enforcement map remains incomplete. Keep `BILLING_ENFORCEMENT=off` outside local tests until every paid entry path and background-work rule is gated.
 - UGC pricing currently caps actual-provider-cost capture at the quoted hold; phase 7 provider routing must make the quoted Video Credits cover the chosen provider and fallback.
-- Concurrent SocialAPI connects can both pass the current application-level profile check; a database-serialized profile acquisition is still needed.
+- A failed or abandoned OAuth attempt holds a SocialAPI profile slot for up to 35 minutes; the next phase should expose this pending state in billing UI and operator diagnostics.
 - The Brand DNA stream holds its final result until capture, but a persistent recovery path is still needed if the capture RPC is unavailable after provider work succeeds.
 - Tracked prompt usage is zero until the new tracked-prompt feature arrives in phase 7. The entitlement shape already includes it.

@@ -8,6 +8,7 @@ import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import { disconnectHandler } from "@/lib/sdr.handlers";
 import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { disconnectHandler as disconnectSocialAccount } from "@/lib/socialapi/handlers";
+import { releaseSocialProfileSlotIfEmpty } from "@/server/billing/social-profiles.server";
 import {
   distributionDisabledResponse,
   handlerResponse,
@@ -29,9 +30,11 @@ export const POST = defineRoute({
     const accountId = typeof body.accountId === "string" ? body.accountId : "";
     const provider = getDistributionProviderForWorkspace(workspaceId);
     if (provider === "socialapi") {
-      return withSocialApi(workspaceId, (deps) =>
+      const response = await withSocialApi(workspaceId, (deps) =>
         disconnectSocialAccount({ workspaceId, accountId }, deps),
       );
+      if (response.ok) await releaseSocialProfileSlotIfEmpty(workspaceId);
+      return response;
     }
     if (!provider) return distributionDisabledResponse();
     try {

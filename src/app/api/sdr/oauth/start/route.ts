@@ -9,7 +9,11 @@ import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import { oauthStartHandler } from "@/lib/sdr.handlers";
 import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { startConnectHandler } from "@/lib/socialapi/handlers";
-import { assertSocialProfileConnection } from "@/server/billing/social-profiles.server";
+import {
+  activateSocialProfileSlot,
+  assertSocialProfileConnection,
+  reserveSocialProfileSlot,
+} from "@/server/billing/social-profiles.server";
 import {
   distributionDisabledResponse,
   resolveConnectRedirect,
@@ -36,13 +40,22 @@ export const POST = defineRoute({
     const provider = getDistributionProviderForWorkspace(workspaceId);
     if (!provider) return distributionDisabledResponse();
     if (provider === "socialapi") {
-      await assertSocialProfileConnection({ workspaceId, userId, role });
-      return withSocialApi(workspaceId, (deps) =>
+      const entitlements = await assertSocialProfileConnection({ workspaceId, userId, role });
+      await reserveSocialProfileSlot(entitlements, workspaceId);
+      const response = await withSocialApi(workspaceId, (deps) =>
         startConnectHandler(
           { workspaceId, userId, platform, redirectUri: resolveConnectRedirect(body.origin) },
           deps,
         ),
       );
+      if (response.ok) {
+        const body = (await response
+          .clone()
+          .json()
+          .catch(() => null)) as { connected?: boolean } | null;
+        if (body?.connected) await activateSocialProfileSlot(entitlements, workspaceId);
+      }
+      return response;
     }
     try {
       const { token, baseUrl } = await getWorkspaceSdrConfig(workspaceId);
