@@ -5,13 +5,21 @@ import type { Entitlements } from "./entitlements.server";
 import { LimitReachedError } from "./errors";
 
 type LimitKey =
-  "trackedPrompts" | "competitors" | "brands" | "seats" | "experiments" | "renders" | "scans";
+  | "trackedPrompts"
+  | "competitors"
+  | "brands"
+  | "seats"
+  | "socialProfiles"
+  | "experiments"
+  | "renders"
+  | "scans";
 
 const usageKey: Record<LimitKey, keyof Entitlements["usage"]> = {
   trackedPrompts: "trackedPrompts",
   competitors: "competitors",
   brands: "brands",
   seats: "seats",
+  socialProfiles: "socialProfiles",
   experiments: "openExperiments",
   renders: "rendersRunning",
   scans: "scansUsed",

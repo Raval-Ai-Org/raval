@@ -5,6 +5,7 @@ import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { getPendingHandler, selectPendingHandler } from "@/lib/socialapi/handlers";
 import { withSocialApi } from "@/lib/socialapi/route.server";
+import { assertSocialProfileConnection } from "@/server/billing/social-profiles.server";
 
 export const dynamic = "force-dynamic";
 
@@ -30,11 +31,13 @@ export const POST = defineRoute({
   }),
   workspaceId: ({ body }) => body.workspaceId,
   minRole: "editor",
-  handler: ({ body, workspaceId, userId }) =>
-    withSocialApi(workspaceId, (deps) =>
+  handler: async ({ body, workspaceId, userId, role }) => {
+    await assertSocialProfileConnection({ workspaceId, userId, role });
+    return withSocialApi(workspaceId, (deps) =>
       selectPendingHandler(
         { workspaceId, userId, connectionId: body.connectionId, pageIds: body.pageIds },
         deps,
       ),
-    ),
+    );
+  },
 });

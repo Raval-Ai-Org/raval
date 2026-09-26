@@ -10,6 +10,7 @@ export type RenderRow = {
   created_by: string | null;
   idempotency_key: string;
   status: RenderStatus;
+  billing_ready: boolean;
   model_key: string;
   provider: string;
   provider_model: string;
@@ -66,7 +67,7 @@ export type NewRenderRow = Pick<
   | "prompt"
   | "reservation_id"
   | "est_cost_usd"
->;
+> & { billing_ready?: boolean };
 
 export type RenderPatch = Partial<Omit<RenderRow, "id" | "workspace_id" | "created_at">>;
 

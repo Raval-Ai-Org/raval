@@ -99,6 +99,15 @@ beforeEach(() => {
 });
 
 describe("UGC render engine", () => {
+  it("cannot claim a render until billing activates it", async () => {
+    const row = await start({ billing_ready: false });
+    await engine.runDue({ worker: "w", budgetMs: 10_000, max: 5, id: row.id });
+    expect(provider.submits).toHaveLength(0);
+    await store.transition(row.id, ["queued"], { billing_ready: true });
+    await engine.runDue({ worker: "w", budgetMs: 10_000, max: 5, id: row.id });
+    expect(provider.submits).toHaveLength(1);
+  });
+
   it("submits, polls, stores the video and captures the allowance exactly once", async () => {
     const row = await start();
     provider.checks = [{ state: "pending", providerState: "generating" }, success];

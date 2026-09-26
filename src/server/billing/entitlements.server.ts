@@ -36,6 +36,7 @@ export type Entitlements = {
   usage: {
     brands: number;
     seats: number;
+    socialProfiles: number;
     trackedPrompts: number;
     scansUsed: number;
     competitors: number;
@@ -166,6 +167,7 @@ export function resolveEntitlements(args: {
     usage: args.usage ?? {
       brands: 0,
       seats: 0,
+      socialProfiles: 0,
       trackedPrompts: 0,
       scansUsed: 0,
       competitors: 0,
@@ -217,7 +219,7 @@ export async function getEntitlements(args: {
   const monthStart = new Date();
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);
-  const [scans, competitors, experiments, renders] = await Promise.all([
+  const [scans, competitors, experiments, renders, profiles] = await Promise.all([
     admin
       .from("allowance_usage")
       .select("scans_used")
@@ -244,8 +246,16 @@ export async function getEntitlements(args: {
           .in("workspace_id", workspaceIds)
           .in("status", ["queued", "processing", "persisting"])
       : Promise.resolve({ count: 0, error: null }),
+    workspaceIds.length
+      ? admin
+          .from("social_accounts")
+          .select("workspace_id")
+          .in("workspace_id", workspaceIds)
+          .eq("provider", "socialapi")
+          .in("status", ["active", "reconnect_required"])
+      : Promise.resolve({ data: [], error: null }),
   ]);
-  if (scans.error || competitors.error || experiments.error || renders.error) {
+  if (scans.error || competitors.error || experiments.error || renders.error || profiles.error) {
     throw new Error("Could not load billing usage limits.");
   }
   const meters = emptyMeters();
@@ -276,6 +286,7 @@ export async function getEntitlements(args: {
     usage: {
       brands: workspaceIds.length,
       seats: seats.size,
+      socialProfiles: new Set((profiles.data ?? []).map((row) => String(row.workspace_id))).size,
       trackedPrompts: 0,
       scansUsed: (scans.data ?? []).reduce((sum, row) => sum + Number(row.scans_used ?? 0), 0),
       competitors: competitors.count ?? 0,

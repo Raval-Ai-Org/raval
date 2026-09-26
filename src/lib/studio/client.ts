@@ -81,7 +81,11 @@ export const studioApi = {
   }) {
     return call<{ ideas: StudioIdea[]; generated: "model" | "fallback"; cached: boolean }>(
       "/api/studio/ideas",
-      { method: "POST", body: JSON.stringify(args) },
+      {
+        method: "POST",
+        body: JSON.stringify(args),
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      },
     );
   },
   writePrompt(args: {
@@ -97,6 +101,7 @@ export const studioApi = {
     return call<WrittenPrompt>("/api/studio/prompt", {
       method: "POST",
       body: JSON.stringify(args),
+      headers: { "Idempotency-Key": crypto.randomUUID() },
     });
   },
 };

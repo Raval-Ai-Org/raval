@@ -6,6 +6,7 @@ const mocked = vi.hoisted(() => ({
   capture: vi.fn(),
   release: vi.fn(),
   insert: vi.fn(),
+  heldRecord: vi.fn(),
 }));
 
 vi.mock("./entitlements.server", () => ({ getEntitlements: mocked.entitlements }));
@@ -15,10 +16,15 @@ vi.mock("./meters.server", () => ({
   releaseMeter: mocked.release,
 }));
 vi.mock("@/integrations/supabase/client.server", () => ({
-  supabaseAdmin: { from: () => ({ insert: mocked.insert }) },
+  supabaseAdmin: {
+    from: () => ({
+      insert: mocked.insert,
+      select: () => ({ eq: () => ({ single: mocked.heldRecord }) }),
+    }),
+  },
 }));
 
-import { runMetered } from "./metered.server";
+import { beginDeferredMetered, runMetered } from "./metered.server";
 import { BillingError } from "./errors";
 
 function entitlements(mode: "off" | "shadow" | "on", patch: Record<string, unknown> = {}) {
@@ -48,6 +54,10 @@ beforeEach(() => {
   mocked.hold.mockResolvedValue({ ok: true, id: "hold-1", available: 988 });
   mocked.capture.mockResolvedValue({ ok: true, available: 988, charge_id: "charge-1" });
   mocked.release.mockResolvedValue({ ok: true, available: 1000 });
+  mocked.heldRecord.mockResolvedValue({
+    data: { amount: 12, action: "post_set", user_id: "user-1", workspace_id: "workspace-1" },
+    error: null,
+  });
 });
 
 describe("runMetered", () => {
@@ -109,11 +119,68 @@ describe("runMetered", () => {
     expect(mocked.capture).not.toHaveBeenCalled();
   });
 
+  it("never runs a second provider call for an already held action", async () => {
+    mocked.entitlements.mockResolvedValue(entitlements("on"));
+    mocked.hold.mockResolvedValue({ ok: true, replayed: true, state: "held", id: "hold-1" });
+    const run = vi.fn(async () => "duplicate");
+    await expect(runMetered(args, run)).rejects.toMatchObject({ status: 409 });
+    expect(run).not.toHaveBeenCalled();
+    expect(mocked.capture).not.toHaveBeenCalled();
+    expect(mocked.release).not.toHaveBeenCalled();
+  });
+
   it("refuses viewer spending before a hold", async () => {
     mocked.entitlements.mockResolvedValue(entitlements("on", { role: "viewer" }));
     await expect(runMetered(args, async () => "should not run")).rejects.toMatchObject({
       code: "spend_not_allowed",
     } satisfies Partial<BillingError>);
     expect(mocked.hold).not.toHaveBeenCalled();
+  });
+});
+
+describe("deferred stream charges", () => {
+  const streamArgs = {
+    workspaceId: "workspace-1",
+    userId: "user-1",
+    role: "editor" as const,
+    actionName: "flash_message_included",
+    meter: "flash_messages" as const,
+    amount: 1,
+    idempotencyKey: "chat-click-1",
+    route: "chat",
+  };
+
+  it("reserves before streaming and captures only after completion", async () => {
+    mocked.entitlements.mockResolvedValue(
+      entitlements("on", {
+        meters: { flash_messages: { available: 10 } },
+      }),
+    );
+    const charge = await beginDeferredMetered(streamArgs);
+    expect(mocked.hold).toHaveBeenCalledOnce();
+    expect(mocked.capture).not.toHaveBeenCalled();
+    await charge.capture();
+    expect(mocked.capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        holdId: "hold-1",
+        amount: 1,
+        route: "chat",
+      }),
+    );
+    expect(mocked.release).not.toHaveBeenCalled();
+  });
+
+  it("releases an abandoned stream and refuses duplicate execution", async () => {
+    mocked.entitlements.mockResolvedValue(
+      entitlements("on", {
+        meters: { flash_messages: { available: 10 } },
+      }),
+    );
+    const charge = await beginDeferredMetered(streamArgs);
+    await charge.release();
+    expect(mocked.release).toHaveBeenCalledWith(expect.objectContaining({ holdId: "hold-1" }));
+    expect(mocked.capture).not.toHaveBeenCalled();
+    mocked.hold.mockResolvedValue({ ok: true, replayed: true, state: "held", id: "hold-1" });
+    await expect(beginDeferredMetered(streamArgs)).rejects.toMatchObject({ status: 409 });
   });
 });

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { jsonError, UUID_RE } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { cancelStudioJob, StudioJobError } from "@/server/studio/runner.server";
+import { settleStudioBilling } from "@/server/billing/studio-async.server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,9 @@ export const POST = defineRoute({
     const id = parts[parts.indexOf("jobs") + 1];
     if (!id || !UUID_RE.test(id)) return jsonError(400, "Invalid job id");
     try {
-      return { job: await cancelStudioJob(supabase, workspaceId, id) };
+      const job = await cancelStudioJob(supabase, workspaceId, id);
+      await settleStudioBilling(job);
+      return { job };
     } catch (error) {
       if (error instanceof StudioJobError) return jsonError(error.status, error.message);
       throw error;

@@ -25,7 +25,7 @@ type Usage = {
   quotas: {
     images: { used: number; limit: number };
     videos: { used: number; limit: number };
-    /** Social publishing credits; null when the ledger isn't available. */
+    /** Daily fair-use guard; plans include unlimited posts. */
     posts?: { used: number; limit: number } | null;
   };
   cache: {
@@ -195,7 +195,7 @@ export function UsagePanel() {
             />
             {data.quotas.posts ? (
               <Meter
-                label="Social publishing credits this month"
+                label="Publishing activity today (fair use)"
                 used={data.quotas.posts.used}
                 limit={data.quotas.posts.limit}
                 format={count}

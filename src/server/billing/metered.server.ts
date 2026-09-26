@@ -46,6 +46,114 @@ export type MeteredCharge = {
 
 export type MeteredResult<T> = { result: T; balance: number | null; chargeId: string | null };
 
+/** A hold that remains open while a streamed response is consumed. */
+export async function beginDeferredMetered(args: {
+  workspaceId?: string;
+  userId: string;
+  role: "owner" | "admin" | "editor" | "viewer";
+  actionName: string;
+  meter: Meter;
+  amount: number;
+  feature?: FeatureKey | null;
+  idempotencyKey: string;
+  route?: string;
+  expiresAt?: string;
+}): Promise<{
+  accountId: string;
+  chargeId: string | null;
+  holdId: string | null;
+  shadowDecision: string;
+  mode: "off" | "shadow" | "on";
+  capture: (amount?: number) => Promise<void>;
+  release: () => Promise<void>;
+}> {
+  if (!Number.isSafeInteger(args.amount) || args.amount < 1 || !args.idempotencyKey.trim()) {
+    throw new HttpError(400, "Invalid deferred charge.");
+  }
+  const entitlements = await getEntitlements(args);
+  const mode = entitlements.enforcement;
+  const feature = args.feature ?? null;
+  const would = decision(entitlements, feature, args.meter, args.amount);
+  const shadowArgs = {
+    entitlements,
+    workspaceId: args.workspaceId,
+    action: args.actionName,
+    meter: args.meter,
+    amount: args.amount,
+  };
+  if (mode === "shadow" && would.code !== "would_charge") {
+    await logShadow({ ...shadowArgs, code: would.code, reason: would.reason });
+  }
+  if (mode === "on") {
+    if (entitlements.frozen) throw new BrandFrozenError();
+    if (entitlements.role === "viewer") throw new SpendNotAllowedError();
+    if (feature && !entitlements.features[feature].allowed) {
+      throw new UpgradeRequiredError({
+        feature,
+        requiredPlan: entitlements.features[feature].requiredPlan,
+        currentPlan: entitlements.entitledPlan,
+      });
+    }
+  }
+  const key = `${args.userId}:${args.actionName}:${args.idempotencyKey}`;
+  const held =
+    mode === "on"
+      ? await holdMeter({
+          accountId: entitlements.accountId,
+          workspaceId: args.workspaceId,
+          userId: args.userId,
+          action: args.actionName,
+          meter: args.meter,
+          amount: args.amount,
+          idempotencyKey: key,
+          expiresAt: args.expiresAt,
+        })
+      : null;
+  if (held?.replayed) throw new HttpError(409, "This action is already running or completed.");
+  const chargeId = held?.id ? crypto.randomUUID() : null;
+  let settled = false;
+  const release = async () => {
+    if (settled) return;
+    if (held?.id) {
+      await releaseMeter({
+        accountId: entitlements.accountId,
+        holdId: held.id,
+        idempotencyKey: `${key}:failed`,
+        reason: "Stream failed or was cancelled",
+      });
+    }
+    settled = true;
+  };
+  return {
+    accountId: entitlements.accountId,
+    chargeId,
+    holdId: held?.id ?? null,
+    shadowDecision: would.code,
+    mode,
+    async capture(amount = args.amount) {
+      if (settled) return;
+      if (!Number.isSafeInteger(amount) || amount < 0 || amount > args.amount) {
+        throw new HttpError(400, "Invalid captured amount.");
+      }
+      if (amount === 0) return release();
+      if (held?.id) {
+        await captureMeter({
+          accountId: entitlements.accountId,
+          holdId: held.id,
+          amount,
+          idempotencyKey: key,
+          route: args.route,
+          chargeId: chargeId ?? undefined,
+        });
+      } else if (mode === "shadow" && would.code === "would_charge") {
+        await logShadow({ ...shadowArgs, amount, code: "would_charge", reason: null });
+      }
+      settled = true;
+    },
+    release,
+  };
+}
+
 function price(
   action: MeteredAction,
   quantity: number,
@@ -103,7 +211,7 @@ function decision(
 
 async function logShadow(args: {
   entitlements: Entitlements;
-  workspaceId: string;
+  workspaceId?: string;
   action: string;
   meter: Meter;
   amount: number;
@@ -125,7 +233,7 @@ async function logShadow(args: {
 /** The caller must verify workspace membership before calling this function. */
 export async function runMetered<T>(
   args: {
-    workspaceId: string;
+    workspaceId?: string;
     userId: string;
     role: "owner" | "admin" | "editor" | "viewer";
     action: MeteredAction;
@@ -185,9 +293,8 @@ export async function runMetered<T>(
           idempotencyKey: key,
         })
       : null;
-  if (held?.replayed && held.state !== "held") {
-    throw new HttpError(409, "This action already completed. Refresh to see its result.");
-  }
+  // A replay is never permission to run the provider again. Even a still-held
+  // action may already be running in another request or worker.
   if (held?.replayed && held.id) {
     const { data, error } = await admin
       .from("meter_holds")
@@ -200,10 +307,16 @@ export async function runMetered<T>(
       Number(data.amount) !== priced.amount ||
       data.action !== priced.actionName ||
       data.user_id !== args.userId ||
-      data.workspace_id !== args.workspaceId
+      (data.workspace_id ?? null) !== (args.workspaceId ?? null)
     ) {
       throw new HttpError(409, "This request key was already used for a different action.");
     }
+  }
+  if (held?.replayed) {
+    throw new HttpError(
+      409,
+      "This action is already running or completed. Refresh to see its status.",
+    );
   }
   let capturedAmount = priced.amount;
   const charge: MeteredCharge = {

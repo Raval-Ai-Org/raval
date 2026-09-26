@@ -24,6 +24,7 @@ export type BillingAccount = {
   comped_plan_id: string | null;
   comped_until: string | null;
   enforcement_override: "off" | "shadow" | "on" | null;
+  pro_overage_mode: "credits" | "flash";
   created_at: string;
 };
 
@@ -129,4 +130,27 @@ export async function accountForWorkspace(workspaceId: string): Promise<Workspac
     monthlyCreditCap: data.monthly_credit_cap == null ? null : Number(data.monthly_credit_cap),
   };
   return cache(workspaceCache, workspaceId, value);
+}
+
+/** Resolve the wallet for a user-auth route after the route kernel checked attribution. */
+export async function paidTargetForUserRoute(args: {
+  attributedWorkspaceId?: string;
+  userId: string;
+  supabase: SupabaseClient;
+}): Promise<{
+  workspaceId?: string;
+  role: "owner" | "admin" | "editor" | "viewer";
+}> {
+  if (!args.attributedWorkspaceId) return { role: "owner" };
+  const { data, error } = await args.supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", args.attributedWorkspaceId)
+    .eq("user_id", args.userId)
+    .maybeSingle();
+  if (error || !data) throw new HttpError(404, "Workspace not found.");
+  return {
+    workspaceId: args.attributedWorkspaceId,
+    role: data.role as "owner" | "admin" | "editor" | "viewer",
+  };
 }

@@ -215,6 +215,8 @@ export const acceptWorkspaceInvite = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { getEntitlements } = await import("@/server/billing/entitlements.server");
+    const { BrandFrozenError, LimitReachedError } = await import("@/server/billing/errors");
     const email = String(context.claims.email ?? "")
       .trim()
       .toLowerCase();
@@ -234,6 +236,33 @@ export const acceptWorkspaceInvite = createServerFn({ method: "POST" })
         403,
         `This invite is for ${invite.email}. You are signed in as ${email}. Sign in with the invited email to join.`,
       );
+    }
+
+    const entitlements = await getEntitlements({
+      workspaceId: invite.workspace_id,
+      userId: context.userId,
+      role: "viewer",
+    });
+    if (entitlements.enforcement === "on") {
+      if (entitlements.frozen) throw new BrandFrozenError();
+      const { data: accepted, error } = await supabaseAdmin.rpc(
+        "accept_billed_workspace_invite" as never,
+        {
+          p_token: data.token,
+          p_user: context.userId,
+          p_email: email,
+          p_seat_limit: entitlements.limits.seats,
+        } as never,
+      );
+      if (error?.message.includes("billing_seat_limit")) {
+        throw new LimitReachedError({
+          limit: "seats",
+          used: entitlements.usage.seats,
+          max: entitlements.limits.seats ?? entitlements.usage.seats,
+        });
+      }
+      if (error || !accepted) throw new Error("Could not join workspace");
+      return String(accepted);
     }
 
     const { data: existing } = await supabaseAdmin
@@ -328,6 +357,38 @@ export const createWorkspaceInvite = createServerFn({ method: "POST" })
     const email = data.email.toLowerCase();
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { getEntitlements } = await import("@/server/billing/entitlements.server");
+    const entitlements = await getEntitlements({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role: "admin",
+    });
+    if (entitlements.enforcement === "on") {
+      const { BrandFrozenError } = await import("@/server/billing/errors");
+      if (entitlements.frozen) throw new BrandFrozenError();
+      if (data.role !== "viewer" && entitlements.limits.seats !== null) {
+        const { assertWithinLimit } = await import("@/server/billing/limits.server");
+        const { data: brands, error: brandsError } = await supabaseAdmin
+          .from("workspaces")
+          .select("id")
+          .eq("billing_account_id", entitlements.accountId);
+        if (brandsError) throw new Error("Could not check billing seats");
+        const ids = (brands ?? []).map((brand) => brand.id);
+        const { data: seated, error: seatsError } = ids.length
+          ? await supabaseAdmin
+              .from("workspace_members")
+              .select("user_id,role")
+              .in("workspace_id", ids)
+              .in("role", ["owner", "admin", "editor"])
+          : { data: [], error: null };
+        if (seatsError) throw new Error("Could not check billing seats");
+        const seatEmails = await memberEmails([
+          entitlements.ownerUserId,
+          ...new Set((seated ?? []).map((seat) => seat.user_id)),
+        ]);
+        if (![...seatEmails.values()].includes(email)) assertWithinLimit(entitlements, "seats");
+      }
+    }
     const { data: members } = await supabaseAdmin
       .from("workspace_members")
       .select("user_id")
@@ -377,7 +438,37 @@ export const updateWorkspaceMemberRole = createServerFn({ method: "POST" })
   .inputValidator((data) => memberRoleSchema.parse(data))
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "owner");
-    const { data: updated, error } = await context.supabase
+    const { getEntitlements } = await import("@/server/billing/entitlements.server");
+    const entitlements = await getEntitlements({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role: "owner",
+    });
+    if (entitlements.enforcement === "on") {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { BrandFrozenError, LimitReachedError } = await import("@/server/billing/errors");
+      if (entitlements.frozen) throw new BrandFrozenError();
+      const { error } = await supabaseAdmin.rpc(
+        "change_billed_workspace_member_role" as never,
+        {
+          p_workspace: data.workspaceId,
+          p_user: data.userId,
+          p_role: data.role,
+          p_seat_limit: entitlements.limits.seats,
+        } as never,
+      );
+      if (error?.message.includes("billing_seat_limit")) {
+        throw new LimitReachedError({
+          limit: "seats",
+          used: entitlements.usage.seats,
+          max: entitlements.limits.seats ?? entitlements.usage.seats,
+        });
+      }
+      if (error) throw new Error("Could not change member role");
+      return { user_id: data.userId, role: data.role };
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: updated, error } = await supabaseAdmin
       .from("workspace_members")
       .update({ role: data.role })
       .eq("workspace_id", data.workspaceId)

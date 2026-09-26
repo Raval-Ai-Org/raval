@@ -18,7 +18,7 @@ import type {
 } from "./store";
 
 export const RENDER_COLS =
-  "id, workspace_id, project_id, created_by, idempotency_key, status, model_key, provider, provider_model, provider_variant, generation_type, duration_sec, aspect_ratio, resolution, audio, reference_asset_ids, script, settings, prompt, provider_task_id, provider_state, provider_meta, error_code, error_message, reservation_id, est_cost_usd, actual_cost_usd, asset_id, attempts, max_attempts, submit_attempts, next_attempt_at, lease_until, locked_by, submitted_at, completed_at, created_at, updated_at";
+  "id, workspace_id, project_id, created_by, idempotency_key, status, billing_ready, model_key, provider, provider_model, provider_variant, generation_type, duration_sec, aspect_ratio, resolution, audio, reference_asset_ids, script, settings, prompt, provider_task_id, provider_state, provider_meta, error_code, error_message, reservation_id, est_cost_usd, actual_cost_usd, asset_id, attempts, max_attempts, submit_attempts, next_attempt_at, lease_until, locked_by, submitted_at, completed_at, created_at, updated_at";
 
 function toRow(data: unknown): RenderRow {
   const r = data as RenderRow;

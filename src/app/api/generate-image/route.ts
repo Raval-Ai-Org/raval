@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { defineRoute } from "@/server/route";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { paidTargetForUserRoute } from "@/server/billing/accounts.server";
+import { runMetered } from "@/server/billing/metered.server";
+import { routeImageModel } from "@/lib/model-router.server";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +75,7 @@ export const POST = defineRoute({
   body: BodySchema,
   // Billed per image.
   rateLimit: "image",
-  handler: async ({ body, attributedWorkspaceId }) => {
+  handler: async ({ body, request, attributedWorkspaceId, userId, supabase }) => {
     const given = Array.isArray(body.referenceAssets)
       ? body.referenceAssets
           .filter(
@@ -101,12 +105,37 @@ export const POST = defineRoute({
     const maxAttempts = typeof body.maxAttempts === "number" ? body.maxAttempts : undefined;
 
     const { imageGenerationStream } = await import("@/lib/openrouter-image.server");
-    return imageGenerationStream({
-      prompt: withStyle.prompt,
-      size: body.size,
-      routing,
-      metadata,
-      maxAttempts,
+    const imagePlan = routeImageModel({ prompt: withStyle.prompt, ...routing });
+    const action = imagePlan.route.endsWith("-edit")
+      ? "image_edit"
+      : imagePlan.route === "sunburst"
+        ? "image_premium"
+        : "image_standard";
+    const target = await paidTargetForUserRoute({
+      attributedWorkspaceId,
+      userId,
+      supabase: supabase as unknown as SupabaseClient,
     });
+    const metered = await runMetered(
+      {
+        ...target,
+        userId,
+        action,
+        idempotencyKey: request.headers.get("Idempotency-Key") ?? crypto.randomUUID(),
+        route: "generate-image",
+      },
+      () =>
+        imageGenerationStream({
+          prompt: withStyle.prompt,
+          size: body.size,
+          routing,
+          metadata,
+          maxAttempts,
+        }),
+    );
+    if (metered.balance !== null) {
+      metered.result.headers.set("X-Billing-Balance", String(metered.balance));
+    }
+    return metered.result;
   },
 });

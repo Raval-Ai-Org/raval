@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { HttpError } from "@/server/http-error";
+import { paidTargetForUserRoute } from "@/server/billing/accounts.server";
+import { runMetered } from "@/server/billing/metered.server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -38,86 +41,109 @@ export const POST = defineRoute({
   body: BodySchema,
   // The most expensive call in the product, billed per video.
   rateLimit: "video",
-  handler: async ({ body, attributedWorkspaceId }) => {
-    const [{ enforceBudget }, { recordUsage }, { activeModel }, { routedVideoProvider }] =
-      await Promise.all([
-        import("@/server/ai/budget"),
-        import("@/server/ai/metering"),
-        import("@/server/ugc/models.server"),
-        import("@/server/ugc/providers/routed.server"),
-      ]);
-    await enforceBudget("video");
-    const aspectRatio = body.aspectRatio === "adaptive" ? "16:9" : body.aspectRatio;
-    const started = Date.now();
-    const submitted = await routedVideoProvider.submit({
-      model: activeModel(MODEL_KEY),
-      prompt: body.prompt,
-      durationSec: body.duration,
-      aspectRatio,
-      resolution: body.resolution.toLowerCase() as "480p" | "720p" | "1080p",
-      audio: body.audio,
-      imageUrls: [],
+  handler: async ({ body, attributedWorkspaceId, userId, request, supabase }) => {
+    const target = await paidTargetForUserRoute({
+      attributedWorkspaceId,
+      userId,
+      supabase: supabase as unknown as SupabaseClient,
     });
-    if (!submitted.ok) throw new HttpError(submitted.retryable ? 503 : 502, submitted.message);
-
-    while (Date.now() - started < DEADLINE_MS) {
-      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-      const check = await routedVideoProvider.check(submitted.taskId, submitted.provider);
-      if (check.state === "pending") continue;
-      if (check.state === "failed") {
-        recordUsage({
-          provider: submitted.provider,
-          model: submitted.providerModel,
-          kind: "video",
-          status: "error",
-          latencyMs: Date.now() - started,
-        });
-        throw new HttpError(502, check.message);
-      }
-      recordUsage({
-        provider: submitted.provider,
-        model: submitted.providerModel,
-        kind: "video",
-        units: 1,
-        estCostUsd: check.costUsd ?? undefined,
-        latencyMs: Date.now() - started,
-      });
-      let videoUrl = check.videoUrl;
-      const downloaded = await routedVideoProvider.download?.(check.videoUrl, submitted.provider);
-      if (downloaded) {
-        if (!attributedWorkspaceId) {
-          throw new HttpError(400, "Send x-workspace-id so the finished video can be stored.");
-        }
-        const { persistAsset } = await import("@/server/assets/persist.server");
-        const stored = await persistAsset({
-          workspaceId: attributedWorkspaceId,
-          idempotencyKey: `generate-video:${submitted.taskId}`,
-          dataUrl: downloaded.dataUrl,
-          assetType: "video",
-          filename: `mellox-video-${randomUUID().slice(0, 8)}.mp4`,
-          provider: submitted.provider,
-          model: submitted.providerModel,
-          metadata: { source: "generate-video", aspect_ratio: aspectRatio },
-        });
-        if (!stored.ok) throw new HttpError(stored.status, stored.message);
-        videoUrl = stored.asset.public_url ?? "";
-      }
-      return Response.json(
-        {
-          type: "video",
-          provider: submitted.provider,
-          generationId: submitted.taskId,
-          videoUrl,
-          thumbnailUrl: check.thumbnailUrl,
-          duration: body.duration,
+    const metered = await runMetered(
+      {
+        ...target,
+        userId,
+        action: "studio_video",
+        idempotencyKey: request.headers.get("Idempotency-Key") ?? randomUUID(),
+        route: "video",
+      },
+      async () => {
+        const [{ enforceBudget }, { recordUsage }, { activeModel }, { routedVideoProvider }] =
+          await Promise.all([
+            import("@/server/ai/budget"),
+            import("@/server/ai/metering"),
+            import("@/server/ugc/models.server"),
+            import("@/server/ugc/providers/routed.server"),
+          ]);
+        await enforceBudget("video");
+        const aspectRatio = body.aspectRatio === "adaptive" ? "16:9" : body.aspectRatio;
+        const started = Date.now();
+        const submitted = await routedVideoProvider.submit({
+          model: activeModel(MODEL_KEY),
+          prompt: body.prompt,
+          durationSec: body.duration,
           aspectRatio,
-          model: submitted.providerModel,
-          status: "completed",
-          metadata: { resolution: body.resolution, audio: body.audio },
-        },
-        { headers: { "Cache-Control": "no-store" } },
-      );
+          resolution: body.resolution.toLowerCase() as "480p" | "720p" | "1080p",
+          audio: body.audio,
+          imageUrls: [],
+        });
+        if (!submitted.ok) throw new HttpError(submitted.retryable ? 503 : 502, submitted.message);
+
+        while (Date.now() - started < DEADLINE_MS) {
+          await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+          const check = await routedVideoProvider.check(submitted.taskId, submitted.provider);
+          if (check.state === "pending") continue;
+          if (check.state === "failed") {
+            recordUsage({
+              provider: submitted.provider,
+              model: submitted.providerModel,
+              kind: "video",
+              status: "error",
+              latencyMs: Date.now() - started,
+            });
+            throw new HttpError(502, check.message);
+          }
+          recordUsage({
+            provider: submitted.provider,
+            model: submitted.providerModel,
+            kind: "video",
+            units: 1,
+            estCostUsd: check.costUsd ?? undefined,
+            latencyMs: Date.now() - started,
+          });
+          let videoUrl = check.videoUrl;
+          const downloaded = await routedVideoProvider.download?.(
+            check.videoUrl,
+            submitted.provider,
+          );
+          if (downloaded) {
+            if (!attributedWorkspaceId) {
+              throw new HttpError(400, "Send x-workspace-id so the finished video can be stored.");
+            }
+            const { persistAsset } = await import("@/server/assets/persist.server");
+            const stored = await persistAsset({
+              workspaceId: attributedWorkspaceId,
+              idempotencyKey: `generate-video:${submitted.taskId}`,
+              dataUrl: downloaded.dataUrl,
+              assetType: "video",
+              filename: `mellox-video-${randomUUID().slice(0, 8)}.mp4`,
+              provider: submitted.provider,
+              model: submitted.providerModel,
+              metadata: { source: "generate-video", aspect_ratio: aspectRatio },
+            });
+            if (!stored.ok) throw new HttpError(stored.status, stored.message);
+            videoUrl = stored.asset.public_url ?? "";
+          }
+          return Response.json(
+            {
+              type: "video",
+              provider: submitted.provider,
+              generationId: submitted.taskId,
+              videoUrl,
+              thumbnailUrl: check.thumbnailUrl,
+              duration: body.duration,
+              aspectRatio,
+              model: submitted.providerModel,
+              status: "completed",
+              metadata: { resolution: body.resolution, audio: body.audio },
+            },
+            { headers: { "Cache-Control": "no-store" } },
+          );
+        }
+        throw new HttpError(504, "Video generation took too long and timed out.");
+      },
+    );
+    if (metered.balance !== null) {
+      metered.result.headers.set("X-Billing-Balance", String(metered.balance));
     }
-    throw new HttpError(504, "Video generation took too long and timed out.");
+    return metered.result;
   },
 });

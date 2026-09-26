@@ -273,4 +273,23 @@ describe("ugc tables", () => {
     expect(first.rows).toHaveLength(1);
     expect(second.rows).toHaveLength(0);
   });
+
+  it("does not lease a new render before its billing hold is linked", async () => {
+    const { rows } = await db.query<{ id: string }>(
+      `insert into public.ugc_renders (workspace_id, project_id, created_by, idempotency_key, model_key,
+         provider, provider_model, generation_type, duration_sec, aspect_ratio, resolution, script, prompt, billing_ready)
+       select workspace_id, project_id, created_by, 'pending-billing', model_key,
+         provider, provider_model, generation_type, duration_sec, aspect_ratio, resolution, script, prompt, false
+       from public.ugc_renders where id=$1 returning id`,
+      [renderId],
+    );
+    const id = rows[0].id;
+    expect(
+      (await db.query("select id from public.claim_ugc_renders('w1',1,60,$1)", [id])).rows,
+    ).toHaveLength(0);
+    await db.query("update public.ugc_renders set billing_ready=true where id=$1", [id]);
+    expect(
+      (await db.query("select id from public.claim_ugc_renders('w1',1,60,$1)", [id])).rows,
+    ).toHaveLength(1);
+  });
 });

@@ -9,8 +9,7 @@ if (existsSync(".env")) process.loadEnvFile(".env");
 
 const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 const handlers = await import("@/lib/socialapi/handlers");
-const { getSocialApiDeps, monthlyPostLimit, monthlyPostUsage } =
-  await import("@/lib/socialapi/workspace.server");
+const { getSocialApiDeps, dailyPostUsage } = await import("@/lib/socialapi/workspace.server");
 const { reconcileSocialApi } = await import("@/lib/socialapi/reconcile");
 
 const db = supabaseAdmin as any;
@@ -102,13 +101,9 @@ describe("SocialAPI.ai live", () => {
     expect(typeof out.swept).toBe("number");
   });
 
-  it("reads the plan's publishing credits from the ledger", async () => {
-    const [used, limit] = await Promise.all([
-      monthlyPostUsage(workspaceId),
-      monthlyPostLimit(workspaceId),
-    ]);
+  it("reads daily publishing activity from the ledger", async () => {
+    const used = await dailyPostUsage(workspaceId);
     expect(used).toBeGreaterThanOrEqual(0);
-    expect(limit).toBeGreaterThan(0);
   });
 
   it("refuses to disconnect an account outside this workspace's brand", async () => {

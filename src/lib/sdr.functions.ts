@@ -48,7 +48,7 @@ const ERROR_MESSAGES: Record<string, string> = {
     "This social account's authorization has expired. Reconnect it to publish again.",
   BYOK_REQUIRED:
     "X needs your own X developer app credentials configured with the publishing provider before it can connect.",
-  QUOTA_EXCEEDED: "This workspace has used this month's publishing credits.",
+  QUOTA_EXCEEDED: "This brand has reached today's publishing fair-use guard.",
   RATE_LIMITED: "The platform is limiting requests right now. Try again in a few minutes.",
   PLATFORM_VALIDATION:
     "This post doesn't meet the platform's requirements. Check the message and try again.",
@@ -351,7 +351,7 @@ export type SocialAnalytics = {
     at: string;
   }>;
   accounts: { active: number; reconnect: number };
-  credits: { used: number; limit: number } | null;
+  fairUse: { used: number; limit: number } | null;
   metricsSyncedAt: string | null;
 };
 

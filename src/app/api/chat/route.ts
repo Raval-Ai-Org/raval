@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { CHAT_ROUTE_CHOICES, chatCompletionStream } from "@/lib/ai-gateway.server";
+import { chatUnitsFor, creditsFor } from "@/lib/billing/catalog";
+import { getEntitlements } from "@/server/billing/entitlements.server";
+import { accountForWorkspace } from "@/server/billing/accounts.server";
+import { beginDeferredMetered } from "@/server/billing/metered.server";
+import { runWithScope } from "@/server/request-context";
+import { HttpError } from "@/server/http-error";
 import { isStrategyTurn } from "@/lib/chat-intent";
 import { chatSystem, chatContextBlock } from "@/lib/ai/prompts";
 import { summarizeHistory } from "@/lib/ai/history-summary.server";
@@ -104,59 +110,171 @@ export const POST = defineRoute({
   workspaceId: ({ body }) => body.workspaceId,
   body: MessagesSchema,
   rateLimit: "chat",
-  handler: async ({ body, supabase, workspaceId }) => {
-    // Anchor the brand identity to the verified workspace, not browser state.
-    const { data: ws } = await supabase
-      .from("workspaces")
-      .select("name, website_url")
-      .eq("id", workspaceId)
-      .maybeSingle();
-    const identity = ws
-      ? `Workspace brand: ${ws.name}${ws.website_url ? ` (${ws.website_url})` : ""}. Only use context for this brand.`
-      : "";
-    // Client-supplied "system" turns are dropped: only the server writes system prompts.
-    const turns = body.messages
-      .filter((m) => m.role !== "system")
-      .map((m) => ({ role: m.role, content: sanitizeModelInput(m.content) }));
-
-    const lastUser = [...turns].reverse().find((turn) => turn.role === "user")?.content ?? "";
-    // Older turns are summarised (decisions, facts, open questions) instead of
-    // clipped to first sentences; the newest 12 stay verbatim.
-    const [history, research, style] = await Promise.all([
-      summarizeHistory(turns as never),
-      researchBlock(lastUser),
-      styleBlock(workspaceId, body.styleId),
-    ]);
-
-    // The picker id selects a route; the route's plan selects the model.
-    const route = (body.modelId && CHAT_ROUTE_CHOICES[body.modelId]) || "chat";
-    return chatCompletionStream({
-      stream: true,
+  handler: async ({ body, request, supabase, workspaceId, userId, role }) => {
+    const selectedRoute = (body.modelId && CHAT_ROUTE_CHOICES[body.modelId]) || "chat";
+    const entitlements = await getEntitlements({ workspaceId, userId, role });
+    const pro = selectedRoute === "chat.pro";
+    // The gateway caps ordinary chat input at 16,000 characters after trimming.
+    // Estimate from that same cap before the hold; the provider's exact token
+    // count is recorded separately in ai_usage_events after the stream ends.
+    const inputChars = Math.min(
+      16_000,
+      body.messages.reduce((n, m) => n + m.content.length, 0) + (body.context?.length ?? 0),
+    );
+    const units = chatUnitsFor(pro ? "pro" : "flash", Math.ceil(inputChars / 4));
+    let route = selectedRoute;
+    let meter: "pro_messages" | "flash_messages" | "credits" = pro
+      ? "pro_messages"
+      : "flash_messages";
+    let actionName = pro ? "pro_message_included" : "flash_message_included";
+    let amount = units;
+    let notice: string | null = null;
+    if (
+      pro &&
+      entitlements.meters.pro_messages.available < units &&
+      entitlements.enforcement === "on"
+    ) {
+      const workspace = await accountForWorkspace(workspaceId);
+      if (workspace.account.pro_overage_mode === "flash") {
+        route = "chat";
+        meter =
+          entitlements.meters.flash_messages.available >= units ? "flash_messages" : "credits";
+        actionName = meter === "credits" ? "flash_message_over_cap" : "flash_message_included";
+        amount = meter === "credits" ? creditsFor("flash_message_over_cap", units) : units;
+        notice = "Pro allowance is used. Mellox Flash answered this message.";
+      } else {
+        meter = "credits";
+        actionName = "pro_message";
+        amount = creditsFor("pro_message", units);
+      }
+    } else if (
+      !pro &&
+      entitlements.meters.flash_messages.available < units &&
+      entitlements.enforcement === "on"
+    ) {
+      meter = "credits";
+      actionName = "flash_message_over_cap";
+      amount = creditsFor("flash_message_over_cap", units);
+    }
+    const idempotencyKey = request.headers.get("Idempotency-Key");
+    if (entitlements.enforcement === "on" && !idempotencyKey) {
+      throw new HttpError(400, "Idempotency-Key header is required for chat.");
+    }
+    const charge = await beginDeferredMetered({
+      workspaceId,
+      userId,
+      role,
+      actionName,
+      meter,
+      amount,
+      feature: pro ? "pro_chat" : null,
+      idempotencyKey: idempotencyKey ?? crypto.randomUUID(),
       route,
-      // Strategy/analysis turns on the premium model think harder (chat.pro).
-      escalate: route === "chat.pro" && isStrategyTurn(lastUser),
-      task: "chat",
-      // The identity prompt and brand context are the stable, cacheable prefix.
-      cacheBreakpoint: 1,
-      // A researched turn is about the world as it is today, so its answer must
-      // not be served from the shared completion cache to another question.
-      noCache: Boolean(research),
-      messages: [
-        { role: "system", content: chatSystem() },
-        // Brand DNA / workspace context is user-provided and partly scraped:
-        // chatContextBlock fences it as untrusted data, not instructions.
-        {
-          role: "system",
-          content: chatContextBlock(
-            wrapUntrusted("brand-dna", [identity, body.context].filter(Boolean).join("\n\n"), {
-              route: "chat",
-            }),
-          ),
-        },
-        ...(style ? [{ role: "system" as const, content: style }] : []),
-        ...(research ? [{ role: "system" as const, content: research }] : []),
-        ...history,
-      ],
     });
+    try {
+      // Anchor the brand identity to the verified workspace, not browser state.
+      const { data: ws } = await supabase
+        .from("workspaces")
+        .select("name, website_url")
+        .eq("id", workspaceId)
+        .maybeSingle();
+      const identity = ws
+        ? `Workspace brand: ${ws.name}${ws.website_url ? ` (${ws.website_url})` : ""}. Only use context for this brand.`
+        : "";
+      // Client-supplied "system" turns are dropped: only the server writes system prompts.
+      const turns = body.messages
+        .filter((m) => m.role !== "system")
+        .map((m) => ({ role: m.role, content: sanitizeModelInput(m.content) }));
+
+      const lastUser = [...turns].reverse().find((turn) => turn.role === "user")?.content ?? "";
+      // Older turns are summarised (decisions, facts, open questions) instead of
+      // clipped to first sentences; the newest 12 stay verbatim.
+      const [history, research, style] = await Promise.all([
+        summarizeHistory(turns as never),
+        researchBlock(lastUser),
+        styleBlock(workspaceId, body.styleId),
+      ]);
+
+      // The picker id selects a route; the route's plan selects the model.
+      const response = await runWithScope(
+        { billingAccountId: charge.accountId, billingChargeId: charge.chargeId ?? undefined },
+        () =>
+          chatCompletionStream({
+            stream: true,
+            route,
+            // Strategy/analysis turns on the premium model think harder (chat.pro).
+            escalate: route === "chat.pro" && isStrategyTurn(lastUser),
+            task: "chat",
+            // The identity prompt and brand context are the stable, cacheable prefix.
+            cacheBreakpoint: 1,
+            // A researched turn is about the world as it is today, so its answer must
+            // not be served from the shared completion cache to another question.
+            noCache: Boolean(research),
+            messages: [
+              { role: "system", content: chatSystem() },
+              // Brand DNA / workspace context is user-provided and partly scraped:
+              // chatContextBlock fences it as untrusted data, not instructions.
+              {
+                role: "system",
+                content: chatContextBlock(
+                  wrapUntrusted(
+                    "brand-dna",
+                    [identity, body.context].filter(Boolean).join("\n\n"),
+                    {
+                      route: "chat",
+                    },
+                  ),
+                ),
+              },
+              ...(style ? [{ role: "system" as const, content: style }] : []),
+              ...(research ? [{ role: "system" as const, content: research }] : []),
+              ...history,
+            ],
+          }),
+      );
+      if (!response.body) {
+        await charge.release();
+        return response;
+      }
+      const reader = response.body.getReader();
+      let upstreamDone = false;
+      const settled = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            const next = await reader.read();
+            if (next.done) {
+              upstreamDone = true;
+              await charge.capture();
+              controller.close();
+            } else controller.enqueue(next.value);
+          } catch (error) {
+            // An ambiguous capture may have succeeded in PostgreSQL. Keep the
+            // hold for reconciliation instead of undoing a successful answer.
+            if (!upstreamDone) {
+              await charge
+                .release()
+                .catch((releaseError) =>
+                  console.error("[billing] chat release failed", releaseError),
+                );
+            } else console.error("[billing] chat capture failed", error);
+            controller.error(error);
+          }
+        },
+        async cancel(reason) {
+          await reader.cancel(reason).catch(() => undefined);
+          await charge
+            .release()
+            .catch((error) => console.error("[billing] chat release failed", error));
+        },
+      });
+      const headers = new Headers(response.headers);
+      if (notice) headers.set("X-Mellox-Notice", notice);
+      return new Response(settled, { status: response.status, headers });
+    } catch (error) {
+      await charge
+        .release()
+        .catch((releaseError) => console.error("[billing] chat release failed", releaseError));
+      throw error;
+    }
   },
 });

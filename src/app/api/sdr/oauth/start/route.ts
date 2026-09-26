@@ -9,6 +9,7 @@ import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import { oauthStartHandler } from "@/lib/sdr.handlers";
 import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { startConnectHandler } from "@/lib/socialapi/handlers";
+import { assertSocialProfileConnection } from "@/server/billing/social-profiles.server";
 import {
   distributionDisabledResponse,
   resolveConnectRedirect,
@@ -30,11 +31,12 @@ export const POST = defineRoute({
   body: BodySchema,
   workspaceId: ({ body }) => body.workspaceId,
   minRole: "editor",
-  handler: async ({ body, workspaceId, userId }) => {
+  handler: async ({ body, workspaceId, userId, role }) => {
     const platform = typeof body.platform === "string" ? body.platform : "";
     const provider = getDistributionProviderForWorkspace(workspaceId);
     if (!provider) return distributionDisabledResponse();
     if (provider === "socialapi") {
+      await assertSocialProfileConnection({ workspaceId, userId, role });
       return withSocialApi(workspaceId, (deps) =>
         startConnectHandler(
           { workspaceId, userId, platform, redirectUri: resolveConnectRedirect(body.origin) },

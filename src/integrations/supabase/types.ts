@@ -5879,6 +5879,7 @@ export type Database = {
       };
       ugc_renders: {
         Row: {
+          billing_ready: boolean;
           actual_cost_usd: number | null;
           aspect_ratio: string;
           asset_id: string | null;
@@ -5919,6 +5920,7 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          billing_ready?: boolean;
           actual_cost_usd?: number | null;
           aspect_ratio: string;
           asset_id?: string | null;
@@ -5959,6 +5961,7 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          billing_ready?: boolean;
           actual_cost_usd?: number | null;
           aspect_ratio?: string;
           asset_id?: string | null;
@@ -7042,6 +7045,7 @@ export type Database = {
       workspaces: {
         Row: {
           audience: string | null;
+          billing_account_id: string;
           brand_voice: Json;
           client_status: Database["public"]["Enums"]["client_status"];
           connected_provider: string | null;
@@ -7049,6 +7053,7 @@ export type Database = {
           domain: string | null;
           duplicate_of: string | null;
           first_prompt: string | null;
+          frozen_at: string | null;
           goals: string | null;
           id: string;
           industry: string | null;
@@ -7060,6 +7065,7 @@ export type Database = {
         };
         Insert: {
           audience?: string | null;
+          billing_account_id?: string;
           brand_voice?: Json;
           client_status?: Database["public"]["Enums"]["client_status"];
           connected_provider?: string | null;
@@ -7067,6 +7073,7 @@ export type Database = {
           domain?: string | null;
           duplicate_of?: string | null;
           first_prompt?: string | null;
+          frozen_at?: string | null;
           goals?: string | null;
           id?: string;
           industry?: string | null;
@@ -7078,6 +7085,7 @@ export type Database = {
         };
         Update: {
           audience?: string | null;
+          billing_account_id?: string;
           brand_voice?: Json;
           client_status?: Database["public"]["Enums"]["client_status"];
           connected_provider?: string | null;
@@ -7085,6 +7093,7 @@ export type Database = {
           domain?: string | null;
           duplicate_of?: string | null;
           first_prompt?: string | null;
+          frozen_at?: string | null;
           goals?: string | null;
           id?: string;
           industry?: string | null;

@@ -256,7 +256,7 @@ Rules:
 
   const res = await authedFetch("/api/ai-generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify({
       task: "freeform",
       // A calendar is a multi-item batch: ask for the long output budget.
@@ -304,7 +304,7 @@ Return ONLY a JSON object (no prose, no fences):
 Make it noticeably different from any previous version. Be specific and useful.`;
   const res = await authedFetch("/api/ai-generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify({
       task: "freeform",
       // A rewrite must never be answered from the response cache.

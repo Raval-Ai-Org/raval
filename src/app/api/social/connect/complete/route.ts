@@ -6,6 +6,7 @@ import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { completeConnectHandler } from "@/lib/socialapi/handlers";
 import { withSocialApi } from "@/lib/socialapi/route.server";
+import { assertSocialProfileConnection } from "@/server/billing/social-profiles.server";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +26,11 @@ export const POST = defineRoute({
   body: Body,
   workspaceId: ({ body }) => body.workspaceId,
   minRole: "editor",
-  handler: ({ body, workspaceId, userId }) =>
-    withSocialApi(workspaceId, (deps) =>
+  handler: async ({ body, workspaceId, userId, role }) => {
+    if (body.status === "success")
+      await assertSocialProfileConnection({ workspaceId, userId, role });
+    return withSocialApi(workspaceId, (deps) =>
       completeConnectHandler({ ...body, workspaceId, userId }, deps),
-    ),
+    );
+  },
 });

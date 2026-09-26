@@ -1,10 +1,9 @@
 // workspace.server.ts — per-workspace SocialAPI.ai wiring (server-only):
-// the provider client from env, workspace ↔ brand provisioning, and the plan
-// post-credit quota. Routes call getSocialApiDeps(workspaceId) and hand the
+// the provider client from env, workspace ↔ brand provisioning, and the daily
+// fair-use guard. Routes call getSocialApiDeps(workspaceId) and hand the
 // result to the pure handlers.
 import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { getPlanLimits } from "@/server/plans";
 import { createSocialApiClient, type SocialApiCall } from "@/lib/socialapi/client.server";
 import { DistributionError, type PostQuota, type SocialApiDeps } from "@/lib/socialapi/handlers";
 
@@ -170,11 +169,11 @@ async function provisionBrand(workspaceId: string, api: SocialApiCall): Promise<
   return brandId;
 }
 
-/** Plan quota backed by the social_usage_events ledger (UTC calendar month). */
+/** Abuse guard only; connected profiles, not posts, are the plan allowance. */
 export const socialPostQuota: PostQuota = {
   async check(workspaceId, needed) {
-    const used = await monthlyPostUsage(workspaceId);
-    const limit = await monthlyPostLimit(workspaceId);
+    const used = await dailyPostUsage(workspaceId);
+    const limit = 100;
     return { ok: used + needed <= limit, used, limit };
   },
   async record(event) {
@@ -191,24 +190,19 @@ export const socialPostQuota: PostQuota = {
   },
 };
 
-function monthStartIso(): string {
+function dayStartIso(): string {
   const d = new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString();
 }
 
-export async function monthlyPostUsage(workspaceId: string): Promise<number> {
+export async function dailyPostUsage(workspaceId: string): Promise<number> {
   const { count, error } = await db
     .from("social_usage_events")
     .select("id", { count: "exact", head: true })
     .eq("workspace_id", workspaceId)
-    .gte("created_at", monthStartIso());
-  if (error) throw new DistributionError(500, "UNKNOWN", "Couldn't check publishing credits.");
+    .gte("created_at", dayStartIso());
+  if (error) throw new DistributionError(500, "UNKNOWN", "Couldn't check publishing activity.");
   return count ?? 0;
-}
-
-export async function monthlyPostLimit(workspaceId: string): Promise<number> {
-  const { data } = await db.from("workspaces").select("plan").eq("id", workspaceId).maybeSingle();
-  return getPlanLimits(data?.plan ?? null).monthlyPosts;
 }
 
 export async function getSocialApiDeps(workspaceId: string): Promise<SocialApiDeps> {

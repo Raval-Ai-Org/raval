@@ -34,6 +34,7 @@ export type EngineDeps = {
   provider: VideoProvider;
   now?: () => number;
   callbackUrl?: () => string | undefined;
+  onTerminal?: (row: RenderRow) => Promise<void>;
   log?: Pick<typeof defaultLog, "info" | "warn" | "error">;
 };
 
@@ -325,6 +326,13 @@ export function createRenderEngine(deps: EngineDeps) {
       if (!rows.length) break;
       for (const row of rows) {
         const next = await advance(row);
+        if (
+          next.status === "succeeded" ||
+          next.status === "failed" ||
+          next.status === "cancelled"
+        ) {
+          await deps.onTerminal?.(next);
+        }
         out.advanced++;
         if (next.status === "succeeded") out.succeeded++;
         if (next.status === "failed") out.failed++;
@@ -345,6 +353,7 @@ export function createRenderEngine(deps: EngineDeps) {
     });
     if (!cancelled) return { ok: false, row: (await store.getRender(row.id)) ?? row };
     if (cancelled.reservation_id) await store.release(cancelled.reservation_id, "cancelled");
+    await deps.onTerminal?.(cancelled);
     return { ok: true, row: cancelled };
   }
 

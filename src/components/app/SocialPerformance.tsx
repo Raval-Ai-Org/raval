@@ -335,9 +335,10 @@ export function SocialPerformance({
           </>
         )}
 
-        {data.credits ? (
+        {data.fairUse ? (
           <p className="text-[11px] text-muted-foreground">
-            Publishing credits this month: {data.credits.used} of {data.credits.limit} used.
+            Publishing activity today: {data.fairUse.used} posts. Plans include unlimited posts; a
+            daily fair-use guard applies.
           </p>
         ) : null}
       </div>

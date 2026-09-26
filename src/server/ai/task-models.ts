@@ -212,6 +212,8 @@ export const NON_MODEL_ROUTES: readonly string[] = [
   "competitors.advance",
   "market-brain.scheduled",
   "ugc/renders:create",
+  "generate-image",
+  "studio/jobs:advance",
   "video",
   // Prefixes of labels built at runtime.
   "cron.*",

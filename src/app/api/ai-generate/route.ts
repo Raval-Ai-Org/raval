@@ -1,6 +1,10 @@
 import { z } from "zod";
-import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
+import { HttpError } from "@/server/http-error";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { paidTargetForUserRoute } from "@/server/billing/accounts.server";
+import { runMetered } from "@/server/billing/metered.server";
+import { getEntitlements } from "@/server/billing/entitlements.server";
 import { fetchPublicText } from "@/server/safe-fetch";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 import { chatCompletion } from "@/lib/ai";
@@ -46,52 +50,80 @@ export const POST = defineRoute({
   body: BodySchema,
   // `seo-audit` crawls a page and runs a long completion, so it bills like an analysis.
   rateLimit: ({ body }) => ({ tier: body.task === "seo-audit" ? "audit" : "generate" }),
-  handler: async ({ body }) => {
-    const system = TASK_SYSTEMS[body.task] ?? TASK_SYSTEMS.freeform;
-
-    // Optional page scrape. safeFetch rejects private targets and re-checks
-    // every redirect; a failed scrape just means no page context.
-    const scraped = body.url
-      ? stripHtml(
-          await fetchPublicText(body.url, {
-            headers: { "User-Agent": "Mozilla/5.0 MelloxAI-Bot" },
-            timeoutMs: 8000,
-            maxBytes: 2 * 1024 * 1024,
-          }),
-          4000,
-        )
-      : "";
-
-    const user =
-      assemble([
-        { label: "Request", body: body.prompt },
-        { label: "Context", body: body.context, maxChars: 3800 },
-        { label: "Target URL", body: body.url },
-        {
-          label: "Page content",
-          body: scraped
-            ? `${UNTRUSTED_DATA_RULE}\n${wrapUntrusted("page-scrape", scraped, { maxChars: 4000, route: "ai-generate" })}`
-            : "",
-        },
-      ]) || "Generate a useful default response.";
-
-    const json: any = await chatCompletion({
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      max_tokens: OUTPUT_TOKENS[body.size ?? "standard"],
-      task: "generate",
-      temperature: 0.72,
-      regenerate: body.regenerate,
-      route: `ai-generate.${body.task}`,
-      // Long-form output (over ~1,500 words) escalates to the premium tier.
-      escalate: OUTPUT_TOKENS[body.size ?? "standard"] > LONG_FORM_TOKENS,
+  handler: async ({ body, request, userId, supabase, attributedWorkspaceId }) => {
+    const target = await paidTargetForUserRoute({
+      attributedWorkspaceId,
+      userId,
+      supabase: supabase as unknown as SupabaseClient,
     });
-    const text = humanizeText(String(json?.choices?.[0]?.message?.content ?? "").trim());
-    if (!text) return jsonError(502, "AI returned an empty draft");
-    // `truncated` tells the client the draft was cut off at the output ceiling
-    // (also metered + logged server-side) instead of failing to parse silently.
-    return { text, truncated: json?._truncated === true };
+    const longForm = body.size === "long";
+    const entitlements = longForm ? await getEntitlements({ ...target, userId }) : null;
+    const premium = longForm && Boolean(entitlements?.features.premium_articles.allowed);
+    const action = longForm ? (premium ? "article_premium" : "article_standard") : "social_multi";
+    const metered = await runMetered(
+      {
+        ...target,
+        userId,
+        action,
+        idempotencyKey: request.headers.get("Idempotency-Key") ?? crypto.randomUUID(),
+        route: `ai-generate.${body.task}`,
+      },
+      async () => {
+        const system = TASK_SYSTEMS[body.task] ?? TASK_SYSTEMS.freeform;
+
+        // Optional page scrape. safeFetch rejects private targets and re-checks
+        // every redirect; a failed scrape just means no page context.
+        const scraped = body.url
+          ? stripHtml(
+              await fetchPublicText(body.url, {
+                headers: { "User-Agent": "Mozilla/5.0 MelloxAI-Bot" },
+                timeoutMs: 8000,
+                maxBytes: 2 * 1024 * 1024,
+              }),
+              4000,
+            )
+          : "";
+
+        const user =
+          assemble([
+            { label: "Request", body: body.prompt },
+            { label: "Context", body: body.context, maxChars: 3800 },
+            { label: "Target URL", body: body.url },
+            {
+              label: "Page content",
+              body: scraped
+                ? `${UNTRUSTED_DATA_RULE}\n${wrapUntrusted("page-scrape", scraped, { maxChars: 4000, route: "ai-generate" })}`
+                : "",
+            },
+          ]) || "Generate a useful default response.";
+
+        const json: any = await chatCompletion({
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: user },
+          ],
+          max_tokens: OUTPUT_TOKENS[body.size ?? "standard"],
+          task: "generate",
+          temperature: 0.72,
+          regenerate: body.regenerate,
+          route: `ai-generate.${body.task}`,
+          // Long-form output (over ~1,500 words) escalates to the premium tier.
+          escalate: premium && OUTPUT_TOKENS[body.size ?? "standard"] > LONG_FORM_TOKENS,
+        });
+        const text = humanizeText(String(json?.choices?.[0]?.message?.content ?? "").trim());
+        if (!text) throw new HttpError(502, "AI returned an empty draft");
+        // `truncated` tells the client the draft was cut off at the output ceiling
+        // (also metered + logged server-side) instead of failing to parse silently.
+        return { text, truncated: json?._truncated === true };
+      },
+    );
+    return Response.json(
+      metered.result,
+      metered.balance === null
+        ? undefined
+        : {
+            headers: { "X-Billing-Balance": String(metered.balance) },
+          },
+    );
   },
 });

@@ -241,7 +241,7 @@ function Onboarding() {
     try {
       const response = await authedFetch("/api/brand-extract", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({ url }),
         signal: controller.signal,
       });

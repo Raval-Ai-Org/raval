@@ -1,7 +1,7 @@
 # Billing v2 progress
 
 - **Branch:** `feat/billing-v2`
-- **Current phase:** 3 — enforcement, next
+- **Current phase:** 3 — enforcement, in progress
 - **Last verified phase:** 2 — engine
 
 ## Landed
@@ -19,10 +19,21 @@
 - Studio social jobs now log a 12-credit would-charge in shadow mode without a hold. Unit, route and database tests cover this path, budget mode selection, 402 mapping, account attribution and grant window maths.
 - Phase 2 gate passed: typecheck, lint, 162 test files / 1,604 tests, build, and db:verify (84 migrations, 58 reapplied cleanly, 118 public tables with RLS).
 
+## Phase 3 work in progress
+
+- Added success-only holds to Studio ideas and prompts, file extraction, image generation, social generation and chat; chat uses deferred holds that settle after the stream and supports separate Flash and Pro message meters with Pro overage behavior.
+- Added account-level brand and seat checks, including transactional database enforcement at brand creation, invite acceptance and paid-role promotion. Added PGlite tests for brand and seat limits.
+- Removed the legacy monthly social post quota. Connected SocialAPI profiles now determine the publishing limit; posting has a daily fair-use ceiling instead of a monthly plan quota.
+- Studio image and video jobs now link the hold before provider work starts, then settle on completion, failure or cancellation. Billing cron advances and reconciles jobs when the browser closes.
+- UGC renders now hold Video Credits before their workers can claim work. The database readiness flag prevents early claims; terminal webhooks and billing cron reconcile capture or release. Added worker and database claim tests.
+- Brand DNA reserves one free scan per account and domain, charges catalog credits for later scans, and withholds the final streamed result until billing succeeds. Campaign briefs and the synchronous Studio video route now use server holds and success-only capture.
+- Long AI generation now charges the Standard article action on Workhorse, and uses the Premium model and action only for accounts entitled to premium articles.
+- Focused Studio, UGC, metering, brand, seat, and database migration checks passed. The full test suite passed at the checkpoint (167 files, 1,620 tests); lint passed with 450 warnings, build passed, and db:verify replayed 88 migrations. The complete Phase 3 gate and manual shadow/on pass have **not** run, so Phase 3 is not complete.
+
 ## Next
 
-1. Wire section 7 and 10b paid entry points through server holds, including completion-time capture for streams, Studio media, UGC renders, schedules and agents.
-2. Enforce account brand, seat, profile, included-work and frozen limits, remove the monthly post quota, add route coverage and manual shadow/on checks, then run the full phase 3 gate and commit.
+1. Wire the remaining section 7 and 10b paid entry points, especially Brand DNA, Brand Kit, campaigns, Market Brain, Coach, competitors, analytics, GEO, experiments, schedules, agents and backlinks; finish included-work and frozen checks.
+2. Add the paid-route coverage test and manual shadow/on checks, resolve failures, then run the full Phase 3 gate and commit.
 
 ## Open questions and risks
 
@@ -32,5 +43,8 @@
 - The migration refuses to backfill live legacy holds, since moving a partially held backlink balance would risk double spending. Its production precondition needs review against real data before application.
 - Teammates can still read legacy `workspaces.owner_id` under existing workspace grants. The new `billing_account_id` is hidden from nonowners; owner-id privacy needs further enforcement work.
 - PGlite covers function behavior and RLS but cannot prove concurrent holds. Run the real PostgreSQL concurrency test in phase 9.
-- Studio image and video jobs currently return 503 if an account override enables enforcement `on`; phase 3 must replace this guard with persistent async holds and completion-time capture before anyone is switched on.
+- The Phase 3 enforcement map remains incomplete. Keep `BILLING_ENFORCEMENT=off` outside local tests until every paid entry path and background-work rule is gated.
+- UGC pricing currently caps actual-provider-cost capture at the quoted hold; phase 7 provider routing must make the quoted Video Credits cover the chosen provider and fallback.
+- Concurrent SocialAPI connects can both pass the current application-level profile check; a database-serialized profile acquisition is still needed.
+- The Brand DNA stream holds its final result until capture, but a persistent recovery path is still needed if the capture RPC is unavailable after provider work succeeds.
 - Tracked prompt usage is zero until the new tracked-prompt feature arrives in phase 7. The entitlement shape already includes it.

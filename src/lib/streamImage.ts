@@ -57,7 +57,7 @@ export async function streamImage(
 ): Promise<void> {
   const res = await authedFetch("/api/generate-image", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify({
       prompt,
       size: opts.size ?? "1024x1024",

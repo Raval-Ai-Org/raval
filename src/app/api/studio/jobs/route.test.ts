@@ -5,6 +5,8 @@ const mocked = vi.hoisted(() => ({
   getEntitlements: vi.fn(),
   insertShadow: vi.fn(),
   hold: vi.fn(),
+  saveLink: vi.fn(),
+  capture: vi.fn(),
 }));
 
 vi.mock("@/server/api-auth", () => ({
@@ -36,9 +38,10 @@ vi.mock("@/server/billing/entitlements.server", () => ({
 }));
 vi.mock("@/server/billing/meters.server", () => ({
   holdMeter: mocked.hold,
-  captureMeter: vi.fn(),
+  captureMeter: mocked.capture,
   releaseMeter: vi.fn(),
 }));
+vi.mock("@/server/billing/studio-async.server", () => ({ saveStudioBillingLink: mocked.saveLink }));
 vi.mock("@/integrations/supabase/client.server", () => ({
   supabaseAdmin: { from: () => ({ insert: mocked.insertShadow }) },
 }));
@@ -49,6 +52,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocked.createJob.mockResolvedValue({ id: "job-1", status: "succeeded" });
   mocked.insertShadow.mockResolvedValue({ error: null });
+  mocked.saveLink.mockResolvedValue(undefined);
+  mocked.hold.mockResolvedValue({ ok: true, id: "hold-1" });
   mocked.getEntitlements.mockResolvedValue({
     accountId: "account-1",
     enforcement: "shadow",
@@ -87,5 +92,47 @@ describe("Studio billing shadow path", () => {
       }),
     );
     expect(mocked.hold).not.toHaveBeenCalled();
+  });
+});
+
+describe("Studio async billing", () => {
+  it("keeps a render hold linked to the job instead of capturing on submission", async () => {
+    mocked.createJob.mockImplementation(async ({ onCreated }) => {
+      await onCreated({ id: "job-1", status: "running" });
+      return { id: "job-1", status: "running" };
+    });
+    mocked.getEntitlements.mockResolvedValue({
+      accountId: "account-1",
+      enforcement: "on",
+      role: "editor",
+      frozen: false,
+      entitledPlan: "starter",
+      features: { studio: { allowed: true, requiredPlan: "free" } },
+      meters: { credits: { available: 100 } },
+    });
+    const response = await POST(
+      new Request("http://localhost/api/studio/jobs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: "00000000-0000-4000-8000-000000000002",
+          type: "image",
+          idempotencyKey: "image-click-001",
+          intent: { brief: "A campaign visual" },
+          controls: {},
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(mocked.hold).toHaveBeenCalledWith(expect.objectContaining({ amount: 30 }));
+    expect(mocked.saveLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        job_id: "job-1",
+        hold_id: "hold-1",
+        action: "image_post",
+        mode: "on",
+      }),
+    );
+    expect(mocked.capture).not.toHaveBeenCalled();
   });
 });

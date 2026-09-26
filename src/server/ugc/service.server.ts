@@ -42,6 +42,8 @@ import { ASSET_BUCKET } from "@/server/assets/persist.server";
 import { getAppUrl } from "@/server/env";
 import { HttpError } from "@/server/http-error";
 import { getPlanLimits } from "@/server/plans";
+import { getEntitlements } from "@/server/billing/entitlements.server";
+import { settleUgcBilling } from "@/server/billing/ugc-async.server";
 import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import { createRenderEngine } from "./engine.server";
 import {
@@ -71,6 +73,7 @@ export const renderEngine = createRenderEngine({
   store: supabaseUgcStore,
   provider: routedVideoProvider,
   callbackUrl: kieCallbackUrl,
+  onTerminal: settleUgcBilling,
 });
 
 /** Advance one render right after the response is sent (Vercel/Node after()). */
@@ -550,6 +553,7 @@ export async function startRender(
     resolution: string;
     referenceAssetIds: string[];
   },
+  options: { deferKick?: boolean } = {},
 ): Promise<{ render: RenderView; created: boolean }> {
   const existing = await supabaseUgcStore.findByIdempotencyKey(
     input.workspaceId,
@@ -594,9 +598,22 @@ export async function startRender(
   if (problems.length) throw new HttpError(400, problems[0].message);
 
   const estimate = estimateRender(model, settings.resolution, settings.durationSec);
-  const limits = await workspacePlan(input.workspaceId);
+  const entitlements = await getEntitlements({
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    role: "editor",
+  });
+  const enforcing = entitlements.enforcement === "on";
+  const limits = enforcing ? null : await workspacePlan(input.workspaceId);
+  const configuredCap = Number(process.env.UGC_MAX_CONCURRENT_RENDERS);
+  const concurrent = enforcing
+    ? Math.min(
+        entitlements.limits.maxConcurrentRenders,
+        Number.isFinite(configuredCap) && configuredCap > 0 ? Math.floor(configuredCap) : Infinity,
+      )
+    : maxConcurrentRenders();
   const reservation = await supabaseUgcStore.reserve({
-    scopeKey: `ws:${input.workspaceId}`,
+    scopeKey: enforcing ? `acct:${entitlements.accountId}` : `ws:${input.workspaceId}`,
     workspaceId: input.workspaceId,
     userId: input.userId,
     units: estimate.units,
@@ -609,11 +626,11 @@ export async function startRender(
     sourceId: `${input.workspaceId}:${input.idempotencyKey}`,
     ttlSeconds: RESERVATION_TTL_SECONDS,
     limits: {
-      dailyUsd: limits.dailyUsd,
-      monthlyUsd: limits.monthlyUsd,
-      monthlyUnits: limits.monthlyVideos,
+      dailyUsd: limits?.dailyUsd ?? 1_000_000,
+      monthlyUsd: limits?.monthlyUsd ?? 1_000_000,
+      monthlyUnits: limits?.monthlyVideos ?? 1_000_000,
     },
-    maxConcurrent: maxConcurrentRenders(),
+    maxConcurrent: concurrent,
   });
   if (!reservation.ok) {
     if (reservation.code === "concurrency") throw new HttpError(429, reservation.reason);
@@ -642,6 +659,7 @@ export async function startRender(
       project_id: input.projectId,
       created_by: input.userId,
       idempotency_key: input.idempotencyKey,
+      billing_ready: !options.deferKick,
       model_key: model.key,
       // The planned provider; submit records the one that actually accepted it.
       provider: model.provider,
@@ -672,11 +690,17 @@ export async function startRender(
     await supabaseUgcStore.release(reservation.id, "insert_failed").catch(() => {});
     throw error;
   }
-  if (inserted.created) kickRender(inserted.row.id);
+  if (inserted.created && !options.deferKick) kickRender(inserted.row.id);
   return {
     render: (await presentRenders(input.workspaceId, [inserted.row]))[0],
     created: inserted.created,
   };
+}
+
+/** Make a queued render claimable only after its billing link has been saved. */
+export async function activateUgcRender(id: string): Promise<void> {
+  const row = await supabaseUgcStore.transition(id, ["queued"], { billing_ready: true });
+  if (!row) throw new HttpError(503, "Could not activate video render.");
 }
 
 async function loadRender(db: UserSupabaseClient, workspaceId: string, id: string) {
@@ -709,6 +733,7 @@ export async function getRenderView(db: UserSupabaseClient, workspaceId: string,
     await renderEngine.runDue({ worker: WORKER, budgetMs: 20_000, max: 1, id });
     row = (await supabaseUgcStore.getRender(id)) ?? row;
   }
+  await settleUgcBilling(row);
   return (await presentRenders(workspaceId, [row]))[0];
 }
 

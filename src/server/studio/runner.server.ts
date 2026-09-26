@@ -731,6 +731,8 @@ export async function createStudioJob(args: {
   workspaceId: string;
   userId: string;
   input: CreateJobInput;
+  /** Persist the billing hold before provider work can begin. */
+  onCreated?: (job: StudioJob) => Promise<void>;
 }): Promise<StudioJob> {
   const client = db(args.client);
   const { workspaceId, input } = args;
@@ -813,6 +815,7 @@ export async function createStudioJob(args: {
 
   const job = inserted as JobRow;
   try {
+    if (args.onCreated) await args.onCreated(await presentJob(job));
     await executeJob(client, job, input, parent);
   } catch (err) {
     const classified = classify(err);

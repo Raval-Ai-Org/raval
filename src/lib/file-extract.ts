@@ -210,7 +210,7 @@ async function extractImageOnServer(file: File): Promise<string> {
   const dataUrl = await visionDataUrl(file);
   const res = await authedFetch("/api/file-extract", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify({ filename: file.name, mime: file.type || "image/png", dataUrl }),
   });
   if (!res.ok) throw new Error(`Vision extract failed (${res.status})`);

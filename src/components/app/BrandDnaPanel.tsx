@@ -235,7 +235,7 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
     try {
       const res = await authedFetch("/api/brand-extract", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({ url }),
       });
       if (!res.ok || !res.body) {

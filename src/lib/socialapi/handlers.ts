@@ -1151,7 +1151,7 @@ async function distribute(
       continue;
     }
 
-    // 2. Plan quota (each created post uses one post credit).
+    // 2. Daily fair-use guard. Plans include unlimited posts.
     if (deps.quota) {
       const q = await deps.quota.check(args.workspaceId, 1);
       if (!q.ok) {
@@ -1160,7 +1160,7 @@ async function distribute(
           body: {
             error: {
               code: "QUOTA_EXCEEDED",
-              detail: `This workspace has used its ${q.limit} publishing credits for this month.`,
+              detail: `This brand has reached the fair-use guard of ${q.limit} posts today. Try again tomorrow.`,
             },
             results,
           },
@@ -1350,7 +1350,7 @@ async function publishExistingPost(
       return fail(
         429,
         "QUOTA_EXCEEDED",
-        `This workspace has used its ${q.limit} publishing credits for this month.`,
+        `This brand has reached the fair-use guard of ${q.limit} posts today. Try again tomorrow.`,
       );
     }
   }
@@ -1514,7 +1514,7 @@ export async function retryHandler(
         return fail(
           429,
           "QUOTA_EXCEEDED",
-          `This workspace has used its ${q.limit} publishing credits for this month.`,
+          `This brand has reached the fair-use guard of ${q.limit} posts today. Try again tomorrow.`,
         );
       }
     }

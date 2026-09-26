@@ -58,6 +58,7 @@ export class MemoryUgcStore implements UgcRenderStore {
     if (existing) return { row: existing, created: false };
     const full: RenderRow = {
       ...row,
+      billing_ready: row.billing_ready ?? true,
       status: "queued",
       provider_task_id: null,
       provider_state: null,
@@ -93,6 +94,7 @@ export class MemoryUgcStore implements UgcRenderStore {
     const due = [...this.renders.values()]
       .filter(
         (r) =>
+          r.billing_ready &&
           ["queued", "submitting", "processing", "persisting"].includes(r.status) &&
           (!id || r.id === id) &&
           Date.parse(r.next_attempt_at) <= t &&

@@ -5,7 +5,6 @@
 // workspace. Nothing here is estimated: empty data stays empty.
 import { z } from "zod";
 import { defineRoute } from "@/server/route";
-import { getPlanLimits } from "@/server/plans";
 import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import type { SocialAnalytics } from "@/lib/sdr.functions";
 
@@ -43,11 +42,12 @@ export const GET = defineRoute({
   handler: async ({ query, workspaceId, supabase }): Promise<SocialAnalytics | Response> => {
     const sb = supabase as any;
     const since = new Date(Date.now() - query.days * 24 * 3600 * 1000).toISOString();
-    const monthStart = new Date(
-      Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+    const now = new Date();
+    const dayStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     ).toISOString();
 
-    const [pubs, accounts, credits, workspace] = await Promise.all([
+    const [pubs, accounts, activity] = await Promise.all([
       sb
         .from("content_publications")
         .select(
@@ -62,8 +62,7 @@ export const GET = defineRoute({
         .from("social_usage_events")
         .select("id", { count: "exact", head: true })
         .eq("workspace_id", workspaceId)
-        .gte("created_at", monthStart),
-      sb.from("workspaces").select("plan").eq("id", workspaceId).maybeSingle(),
+        .gte("created_at", dayStart),
     ]);
     if (pubs.error) return Response.json({ error: pubs.error.message }, { status: 500 });
 
@@ -170,11 +169,11 @@ export const GET = defineRoute({
         active: accountRows.filter((a) => a.status === "active").length,
         reconnect: accountRows.filter((a) => a.status === "reconnect_required").length,
       },
-      credits: credits.error
+      fairUse: activity.error
         ? null
         : {
-            used: credits.count ?? 0,
-            limit: getPlanLimits(workspace.data?.plan ?? null).monthlyPosts,
+            used: activity.count ?? 0,
+            limit: 100,
           },
       metricsSyncedAt,
     };

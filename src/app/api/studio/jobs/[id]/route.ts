@@ -2,6 +2,8 @@ import { z } from "zod";
 import { jsonError, UUID_RE } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { advanceStudioJob, getJobRow, presentJob } from "@/server/studio/runner.server";
+import { settleStudioBilling, studioBillingLink } from "@/server/billing/studio-async.server";
+import { runWithScope } from "@/server/request-context";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 90;
@@ -27,7 +29,14 @@ export const GET = defineRoute({
     if (!id) return jsonError(400, "Invalid job id");
     const row = await getJobRow(supabase, workspaceId, id);
     if (!row) return jsonError(404, "Job not found");
-    const advanced = await advanceStudioJob(supabase, row);
+    const billing = await studioBillingLink(row.id);
+    const advanced = billing
+      ? await runWithScope(
+          { billingAccountId: billing.account_id, billingChargeId: billing.charge_id ?? undefined },
+          () => advanceStudioJob(supabase, row),
+        )
+      : await advanceStudioJob(supabase, row);
+    await settleStudioBilling(advanced);
     return { job: await presentJob(advanced) };
   },
 });

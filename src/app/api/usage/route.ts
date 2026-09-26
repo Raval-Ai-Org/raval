@@ -17,7 +17,9 @@ export const GET = defineRoute({
   workspaceId: ({ query }) => query.workspaceId,
   handler: async ({ workspaceId, supabase }) => {
     const now = new Date();
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    const dayStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    ).toISOString();
     const [decision, cacheStats, recent, socialPosts] = await Promise.all([
       checkBudget("text", { workspaceId }),
       getCacheStats(["ai", "image"]),
@@ -28,12 +30,12 @@ export const GET = defineRoute({
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: false })
         .limit(25),
-      // Social publishing credits (publish / schedule / retry), same RLS scope.
+      // Daily publishing fair use (publish / schedule / retry), same RLS scope.
       supabase
         .from("social_usage_events")
         .select("id", { count: "exact", head: true })
         .eq("workspace_id", workspaceId)
-        .gte("created_at", monthStart),
+        .gte("created_at", dayStart),
     ]);
     const limits = decision.limits ?? { ...getPlanLimits(null), plan: "starter" };
     const usage = decision.usage;
@@ -53,9 +55,7 @@ export const GET = defineRoute({
       quotas: {
         images: { used: usage?.monthImages ?? 0, limit: limits.monthlyImages },
         videos: { used: usage?.monthVideos ?? 0, limit: limits.monthlyVideos },
-        posts: socialPosts.error
-          ? null
-          : { used: socialPosts.count ?? 0, limit: getPlanLimits(limits.plan).monthlyPosts },
+        posts: socialPosts.error ? null : { used: socialPosts.count ?? 0, limit: 100 },
       },
       cache: {
         monthCalls: usage?.monthCalls ?? 0,

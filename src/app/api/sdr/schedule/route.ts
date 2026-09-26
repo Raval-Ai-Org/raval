@@ -17,6 +17,7 @@ import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { scheduleHandler } from "@/lib/socialapi/handlers";
 import { withSocialApi } from "@/lib/socialapi/route.server";
 import { readDistributionOptions } from "@/app/api/sdr/publish/route";
+import { assertPublishingAction } from "@/server/billing/social-profiles.server";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export const POST = defineRoute({
   body: BodySchema,
   workspaceId: ({ body }) => body.workspaceId,
   minRole: "editor",
-  handler: async ({ body, workspaceId, userId }) => {
+  handler: async ({ body, workspaceId, userId, role }) => {
     const items: ScheduleItem[] = Array.isArray(body.items)
       ? body.items.filter(isScheduleItem)
       : [];
@@ -47,6 +48,7 @@ export const POST = defineRoute({
     if (!selection || !SELECTION_TYPES.includes(selection.type)) {
       return jsonError(400, "Invalid destination selection");
     }
+    await assertPublishingAction({ workspaceId, userId, role, action: "social_schedule" });
 
     const provider = getDistributionProviderForWorkspace(workspaceId);
     // Distribution off → refuse honestly; nothing is marked scheduled.

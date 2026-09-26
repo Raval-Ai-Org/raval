@@ -14,6 +14,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { normalizeDomain } from "@/lib/workspace/domain";
 import { HttpError } from "@/server/http-error";
+import { getEntitlements } from "@/server/billing/entitlements.server";
+import { LimitReachedError } from "@/server/billing/errors";
 
 export const DELETE_CONFIRMATION = "CONFIRM";
 const STORAGE_BUCKET = "generated-assets";
@@ -36,13 +38,26 @@ export async function createOrGetWorkspace(args: {
   websiteUrl: string | null;
   idempotencyKey: string | null;
 }): Promise<CreateWorkspaceResult> {
-  const { data, error } = await admin.rpc("create_workspace_for_user", {
-    p_user_id: args.userId,
-    p_name: args.name,
-    p_website_url: args.websiteUrl,
-    p_idempotency_key: args.idempotencyKey ? `${args.userId}:${args.idempotencyKey}` : null,
-  });
+  const entitlements = await getEntitlements({ userId: args.userId });
+  const enforcing = entitlements.enforcement === "on";
+  const { data, error } = await admin.rpc(
+    enforcing ? "create_billed_workspace_for_user" : "create_workspace_for_user",
+    {
+      p_user_id: args.userId,
+      p_name: args.name,
+      p_website_url: args.websiteUrl,
+      p_idempotency_key: args.idempotencyKey ? `${args.userId}:${args.idempotencyKey}` : null,
+      ...(enforcing ? { p_brand_limit: entitlements.limits.brands } : {}),
+    },
+  );
   if (error) {
+    if (error.message.includes("billing_brand_limit")) {
+      throw new LimitReachedError({
+        limit: "brands",
+        used: entitlements.usage.brands,
+        max: entitlements.limits.brands,
+      });
+    }
     console.error("[workspaces] create failed", error.code, error.message);
     throw new HttpError(500, "Could not create workspace");
   }

@@ -1092,7 +1092,7 @@ export function ChatPanel({
 
       const res = await authedFetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({
           messages: recentMessages,
           context: smartCtx,
@@ -1103,6 +1103,9 @@ export function ChatPanel({
         signal: controller.signal,
         workspaceId: streamWorkspaceId,
       });
+
+      const billingNotice = res.headers.get("X-Mellox-Notice");
+      if (billingNotice) toast.message(billingNotice);
 
       if (!res.ok || !res.body) {
         const errorPayload = await res.json().catch(() => null);

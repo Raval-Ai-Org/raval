@@ -22,6 +22,7 @@ function account(patch: Partial<BillingAccount> = {}): BillingAccount {
     comped_plan_id: null,
     comped_until: null,
     enforcement_override: null,
+    pro_overage_mode: "credits",
     created_at: "2026-01-01T00:00:00.000Z",
     ...patch,
   };
