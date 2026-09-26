@@ -164,7 +164,7 @@ export function AccountMenu({
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" />
-          Plan & usage
+          Plan & billing
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
@@ -267,7 +267,7 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           onSelect={() => emitAppEvent("open:usage")}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
-          <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" /> Plan & usage
+          <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" /> Plan & billing
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => window.open("mailto:support@mellox.ai", "_blank", "noopener,noreferrer")}

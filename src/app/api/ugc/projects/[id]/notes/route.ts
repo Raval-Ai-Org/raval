@@ -7,6 +7,7 @@ import { defineRoute } from "@/server/route";
 import { writeCreativeNotes } from "@/server/ugc/notes-writer.server";
 import { assertUgcEnabled, idAfter } from "@/server/ugc/route-helpers";
 import { projectContext } from "@/server/ugc/service.server";
+import { requireBillingFeature } from "@/server/billing/feature.server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -25,8 +26,9 @@ export const POST = defineRoute({
   body: Body,
   workspaceId: ({ body }) => body.workspaceId,
   rateLimit: "ugc-draft",
-  handler: async ({ request, body, workspaceId, supabase }) => {
+  handler: async ({ request, body, workspaceId, userId, role, supabase }) => {
     assertUgcEnabled(workspaceId);
+    await requireBillingFeature({ workspaceId, userId, role, feature: "ugc", spending: true });
     const id = idAfter(request, "projects");
     const ctx = await projectContext(supabase, workspaceId, id);
     if (!ctx.product.name) throw new HttpError(400, "Add the product first.");

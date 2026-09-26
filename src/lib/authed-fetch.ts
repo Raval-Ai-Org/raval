@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { workspaceIdFromPath } from "@/lib/workspace/paths";
+import { emitAppEvent } from "@/lib/app-events";
 
 // Authenticated fetch for our /api/* server routes.
 // Attaches the Supabase access token as a Bearer header, and the workspace as
@@ -39,5 +40,17 @@ export async function authedFetch(input: RequestInfo | URL, init: AuthedFetchIni
   if (workspaceId && !headers.has("x-workspace-id")) {
     headers.set("x-workspace-id", workspaceId);
   }
-  return fetch(input, { ...rest, headers });
+  const response = await fetch(input, { ...rest, headers });
+  const balance = response.headers.get("X-Billing-Balance");
+  if (balance !== null) emitAppEvent("billing:changed", { balance: Number(balance) });
+  if (response.status === 402) {
+    const payload = await response
+      .clone()
+      .json()
+      .catch(() => null);
+    if (payload && typeof payload.code === "string") {
+      emitAppEvent("billing:blocked", payload);
+    }
+  }
+  return response;
 }

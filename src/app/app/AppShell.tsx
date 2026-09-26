@@ -110,7 +110,7 @@ import { useRealtimeContent } from "@/hooks/use-realtime-content";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
-import { UsagePanel } from "@/components/app/UsagePanel";
+import { BillingPanel, WalletPill } from "@/components/app/BillingPanel";
 
 function AppShell() {
   // The workspace comes from the route and is verified by WorkspaceProvider
@@ -767,8 +767,8 @@ function AppShell() {
                   brandKeywords={brandDna.keywords}
                 />
               </Suspense>
-              {/* Self-mounting usage panel opens on open:usage. */}
-              <UsagePanel />
+              <BillingPanel />
+              <WalletPill />
               <button
                 type="button"
                 onClick={() => emitAppEvent("toggle:studio")}

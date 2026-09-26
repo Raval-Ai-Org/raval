@@ -2,6 +2,7 @@
 
 - **Branch:** local `master` (the user requested the feature branch be merged locally; no push)
 - **Current phase:** 3 — enforcement, in progress
+- **Delivery priority:** end-to-end billing UI and server flow before more backend-only routes, per the user's latest direction.
 - **Last verified phase:** 2 — engine
 
 ## Landed
@@ -32,12 +33,14 @@
 - SocialAPI OAuth now reserves a brand-level profile slot under an account lock before provider work. Callback and selection refresh the reservation and activate it on success; disconnect releases an empty brand's slot. PGlite tests cover account capacity and same-brand reuse.
 - Manual Market Brain refresh now uses a success-only hold. Cached, pending, and failed results release it; the follow-up intelligence request checks the feature without a second charge. UGC concept generation and on-demand analytics insight refresh now use success-only holds, with browser idempotency keys on these paths.
 - Added a route coverage test for the model registry against paid catalog actions and included work. It passes. A shared feature check now protects included Market Brain analysis in enforcement-on mode.
+- Added a live account wallet pill and Plan & billing panel with five catalog plans, monthly/annual prices, shared balances, and clear 402 upgrade, balance, limit and frozen-brand messages. Authenticated REST fetches now emit billing events on structured 402 and balance headers. UGC extraction and notes check the UGC feature; included feature checks log would-blocks in shadow mode.
+- After the UI slice, typecheck, production build, db:verify (89 migrations, 121 RLS tables), changed-file lint, and focused event/feature tests (7 tests) passed. The full test suite and manual UI pass remain unverified for this checkpoint.
 - Focused Studio, UGC, metering, brand, seat, social profile, and database migration checks passed. The full test suite passed before the latest SocialAPI slot change (167 files, 1,620 tests); focused SocialAPI tests, typecheck and changed-file lint passed after it. Full lint passed with 450 warnings, build passed, and db:verify replayed 89 migrations. The complete Phase 3 gate and manual shadow/on pass have **not** run, so Phase 3 is not complete.
 
 ## Next
 
-1. Wire the remaining section 7 and 10b paid entry points, especially Brand DNA, Brand Kit, campaigns, Market Brain, Coach, competitors, analytics, GEO, experiments, schedules, agents and backlinks; finish included-work and frozen checks.
-2. Add the paid-route coverage test and manual shadow/on checks, resolve failures, then run the full Phase 3 gate and commit.
+1. Build the Paddle checkout, webhook and subscription flow behind the new UI; replace the legacy Stripe pack-only checkout route without touching Paddle production.
+2. Complete remaining paid paths and client FeatureGate/CostChip coverage, then run full tests and manual shadow/on checks. Continue lifecycle, included work, admin and launch hardening against the brief's acceptance criteria.
 
 ## Open questions and risks
 

@@ -2,6 +2,8 @@
 
 Status: phases 1 and 2 verified; phase 3 in progress on local `master` after the user-requested merge. No push has been made.
 
+The user asked to prioritize a working UI and reduce time spent on phase bookkeeping. The next implementation pass now delivers a vertical billing slice first: account wallet and entitlement display, global 402 handling, clear plan comparison, and tested server enforcement. The phase definitions remain acceptance criteria; this reordering does not mark unfinished Paddle, lifecycle, admin, or launch checks complete.
+
 ## Inputs and baseline
 
 - Authority for prices and feature copy: `docs/pricing/v2/catalog.reference.ts.txt`. The attached “New IMPLEMENTATION_BRIEF.md” only changes agent wording, adds a progress log, and requests an `AGENTS.md` pointer at phase 9; it does not change product requirements.
@@ -51,3 +53,4 @@ Each phase ends with `npm run typecheck && npm run lint && npm test && npm run b
 - Phase 3 in progress: paid holds and completion-time settlement for several REST actions, Studio media, UGC renders and chat; account brand/seat/profile enforcement; removal of monthly post quota. The remaining enforcement map, coverage test, manual shadow/on pass and full phase gate are outstanding.
 - Phase 3 checkpoint `9a915d4`: documented incomplete enforcement work and committed the verified account brand/seat, Studio/UGC async, chat, Brand DNA, campaign, image and social changes without declaring the phase complete. A subsequent local migration added account-locked SocialAPI profile reservations to prevent concurrent OAuth connections from exceeding the profile cap; its phase gate is still pending.
 - Phase 3 next checkpoint: added success-only charging for a manual Market Brain refresh, UGC concept generation and on-demand analytics insights; kept follow-up Market Brain analysis inside the same refresh price. Added a feature check for included analysis and a model-route-to-catalog coverage test. Focused tests pass. A full gate run reached tests and exposed two new billing labels in the AI route scanner; they are now classified as non-model labels, but the full gate has not been rerun.
+- Vertical UI slice: a live wallet pill and Plan & billing panel show the shared account meters, plan status, all five catalog plans and annual pricing. Global authenticated REST calls surface structured 402 billing errors in that panel and refresh the wallet after a balance header. UGC extraction and notes now check the UGC entitlement, including shadow would-block logging. Paddle purchase actions are deliberately not presented as working until the checkout and webhook path exists. Build, typecheck, focused tests and db:verify passed for this slice; the full suite and manual UI pass remain outstanding.

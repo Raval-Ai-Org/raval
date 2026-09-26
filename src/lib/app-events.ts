@@ -28,6 +28,18 @@ export type AppEventMap = {
   "open:operations": { tab?: "findings" | "approvals" | "runs" } | undefined;
   /** Open the Plan & usage panel (real metered AI usage vs plan limits). */
   "open:usage": undefined;
+  "billing:changed": { balance?: number } | undefined;
+  "billing:blocked": {
+    code: string;
+    feature?: string;
+    requiredPlan?: string;
+    meter?: string;
+    needed?: number;
+    available?: number;
+    limit?: string;
+    used?: number;
+    max?: number;
+  };
   "brand-dna:saved": undefined;
   /** Brand Kit styles or files changed (pickers refetch their options). */
   "brand-kit:changed": { workspaceId: string | null } | undefined;
