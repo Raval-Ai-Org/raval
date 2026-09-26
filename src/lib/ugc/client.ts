@@ -135,6 +135,7 @@ export const ugcApi = {
     return call<{ project: ProjectView; warnings: string[] }>(`/api/ugc/projects/${id}/concepts`, {
       method: "POST",
       workspaceId,
+      headers: { "Idempotency-Key": crypto.randomUUID() },
       body: JSON.stringify({ workspaceId, mode: "concepts", durationSec }),
     });
   },
@@ -142,6 +143,7 @@ export const ugcApi = {
     return call<{ project: ProjectView; warnings: string[] }>(`/api/ugc/projects/${id}/concepts`, {
       method: "POST",
       workspaceId,
+      headers: { "Idempotency-Key": crypto.randomUUID() },
       body: JSON.stringify({ workspaceId, mode: "rewrite", instruction, durationSec }),
     });
   },

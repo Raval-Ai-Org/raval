@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireBillingFeature } from "@/server/billing/feature.server";
 import { defineRoute } from "@/server/route";
 import { analyzeMarketCollection, MarketIntelligenceError } from "@/lib/market-intelligence.server";
 import {
@@ -26,7 +27,14 @@ export const POST = defineRoute({
   // A Tavily search plus a Claude analysis, both billed per run, scoped to
   // the validated user+workspace.
   rateLimit: ({ userId, workspaceId }) => ({ tier: "audit", subject: `${userId}:${workspaceId}` }),
-  handler: async ({ body }) => {
+  handler: async ({ body, workspaceId, userId, role }) => {
+    await requireBillingFeature({
+      workspaceId,
+      userId,
+      role,
+      feature: "market_brain",
+      spending: true,
+    });
     const operation = operationId("market-intelligence");
     marketLog("intelligence API request received", { operation, collectionId: body.collectionId });
 

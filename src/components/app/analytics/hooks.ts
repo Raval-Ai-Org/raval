@@ -138,7 +138,8 @@ export function useRefreshInsights() {
   const fn = useServerFn(refreshAnalyticsInsights);
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => fn({ data: { workspaceId: ws as string, range } }),
+    mutationFn: () =>
+      fn({ data: { workspaceId: ws as string, range, idempotencyKey: crypto.randomUUID() } }),
     onSuccess: (view) => {
       qc.setQueryData(analyticsKeys.insights(ws, key), view);
       emitAppEvent("analytics:changed");

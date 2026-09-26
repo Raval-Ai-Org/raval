@@ -212,6 +212,8 @@ export const NON_MODEL_ROUTES: readonly string[] = [
   "competitors.advance",
   "market-brain.scheduled",
   "ugc/renders:create",
+  "ugc/projects:concepts",
+  "market/trends",
   "generate-image",
   "studio/jobs:advance",
   "video",

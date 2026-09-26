@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const checkWorkspaceMembership = vi.hoisted(() => vi.fn());
 const analyzeMarketCollection = vi.hoisted(() => vi.fn());
+const requireBillingFeature = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("@/server/billing/feature.server", () => ({ requireBillingFeature }));
 
 vi.mock("@/server/api-auth", async (importActual) => ({
   ...(await importActual<typeof import("@/server/api-auth")>()),

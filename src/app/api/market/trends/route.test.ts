@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const runMetered = vi.hoisted(() =>
+  vi.fn(async (_args, run) => ({
+    result: await run({ setCapturedAmount: vi.fn() }),
+    balance: null,
+    chargeId: null,
+  })),
+);
+vi.mock("@/server/billing/metered.server", () => ({ runMetered }));
+
 vi.mock("@/server/api-auth", async (importActual) => ({
   ...(await importActual<typeof import("@/server/api-auth")>()),
   requireUserId: vi.fn(async () => ({ ok: true, userId: "test-user", claims: {}, supabase: {} })),
@@ -72,6 +81,13 @@ describe("POST /api/market/trends", () => {
     expect(response.status).toBe(200);
     expect((await response.json()).state).toBe("completed");
     expect(requestMarketSignalsCollection).toHaveBeenCalledOnce();
+    expect(runMetered).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "market_brain_manual",
+        workspaceId: "22222222-2222-2222-2222-222222222222",
+      }),
+      expect.any(Function),
+    );
   });
 
   it("polls a collection without blocking the original request", async () => {

@@ -524,7 +524,7 @@ export async function startMarketScan(workspaceId: string, lens: MarketLens): Pr
   try {
     const started = (await run.fetchJson("/api/market/trends", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
       body: JSON.stringify({
         workspaceId,
         keywords: lens.keywords,

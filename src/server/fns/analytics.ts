@@ -6,6 +6,7 @@ import { addDays, RangeInputSchema, resolveRange, todayIn } from "@/lib/analytic
 import { rateLimitFor } from "@/server/rate-limit";
 import { requireWorkspaceRole } from "@/server/workspace-access.server";
 import { roleAtLeast } from "@/server/api-auth";
+import { runMetered } from "@/server/billing/metered.server";
 
 const uuid = z.string().uuid();
 
@@ -401,12 +402,35 @@ export const getAnalyticsInsights = createServerFn({ method: "POST" })
 
 export const refreshAnalyticsInsights = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("analytics-insights")])
-  .inputValidator((data) => z.object({ workspaceId: uuid, range: RangeInputSchema }).parse(data))
+  .inputValidator((data) =>
+    z
+      .object({ workspaceId: uuid, range: RangeInputSchema, idempotencyKey: uuid.optional() })
+      .parse(data),
+  )
   .handler(async ({ data, context }) => {
     // Spends AI: editor or above; metered against the verified workspace.
-    await requireWorkspaceRole(context, data.workspaceId, "editor");
-    const { generateInsights } = await import("@/server/analytics/insights.server");
-    return generateInsights(context.supabase, data.workspaceId, data.range);
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const { generateInsights, getInsightsView } =
+      await import("@/server/analytics/insights.server");
+    const metered = await runMetered(
+      {
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role,
+        action: "insights_refresh",
+        idempotencyKey: data.idempotencyKey ?? crypto.randomUUID(),
+        route: "analytics/insights",
+      },
+      async (charge) => {
+        const before = await getInsightsView(context.supabase, data.workspaceId, data.range, true);
+        if (before.insight || before.signals.length === 0) {
+          charge.setCapturedAmount(0);
+          return { ...before, canGenerate: false };
+        }
+        return generateInsights(context.supabase, data.workspaceId, data.range);
+      },
+    );
+    return metered.result;
   });
 
 /**

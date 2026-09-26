@@ -1,6 +1,6 @@
 # Mellox Billing v2 implementation plan
 
-Status: phases 1 and 2 verified; phase 3 in progress on `feat/billing-v2`.
+Status: phases 1 and 2 verified; phase 3 in progress on local `master` after the user-requested merge. No push has been made.
 
 ## Inputs and baseline
 
@@ -50,3 +50,4 @@ Each phase ends with `npm run typecheck && npm run lint && npm test && npm run b
 - Phase 2: account lookup and entitlement resolution, typed SQL meter wrappers, `runMetered` with success capture and failure release, structured 402 errors, limit helper, signup/Free/monthly/annual grants, rollover and expiry hook, account usage attribution and budget scope, shadow events, wallet and entitlement endpoints. A Studio social job logs its catalog price in shadow without holding money. Async Studio renders temporarily return 503 only for an account overridden to enforcement `on`, until phase 3 installs completion-time capture. Gate passed: typecheck, lint, 1,604 tests across 162 files, build, db:verify (84 migrations, 58 idempotent replays, 118 public RLS tables).
 - Phase 3 in progress: paid holds and completion-time settlement for several REST actions, Studio media, UGC renders and chat; account brand/seat/profile enforcement; removal of monthly post quota. The remaining enforcement map, coverage test, manual shadow/on pass and full phase gate are outstanding.
 - Phase 3 checkpoint `9a915d4`: documented incomplete enforcement work and committed the verified account brand/seat, Studio/UGC async, chat, Brand DNA, campaign, image and social changes without declaring the phase complete. A subsequent local migration added account-locked SocialAPI profile reservations to prevent concurrent OAuth connections from exceeding the profile cap; its phase gate is still pending.
+- Phase 3 next checkpoint: added success-only charging for a manual Market Brain refresh, UGC concept generation and on-demand analytics insights; kept follow-up Market Brain analysis inside the same refresh price. Added a feature check for included analysis and a model-route-to-catalog coverage test. Focused tests pass. A full gate run reached tests and exposed two new billing labels in the AI route scanner; they are now classified as non-model labels, but the full gate has not been rerun.

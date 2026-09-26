@@ -3,6 +3,7 @@
 import { GenerateConceptsBody } from "@/lib/ugc/schemas";
 import { HttpError } from "@/server/http-error";
 import { defineRoute } from "@/server/route";
+import { runMetered } from "@/server/billing/metered.server";
 import { generateConcepts, rewriteScript } from "@/server/ugc/concepts.server";
 import { assertUgcEnabled, idAfter } from "@/server/ugc/route-helpers";
 import {
@@ -22,7 +23,7 @@ export const POST = defineRoute({
   body: GenerateConceptsBody,
   workspaceId: ({ body }) => body.workspaceId,
   rateLimit: "ugc-draft",
-  handler: async ({ request, body, workspaceId, supabase }) => {
+  handler: async ({ request, body, workspaceId, userId, role, supabase }) => {
     assertUgcEnabled(workspaceId);
     const id = idAfter(request, "projects");
     const ctx = await projectContext(supabase, workspaceId, id);
@@ -35,15 +36,40 @@ export const POST = defineRoute({
       durationSec: body.durationSec ?? 8,
       styleText: ctx.styleText || undefined,
     };
-    if (body.mode === "rewrite") {
-      if (!ctx.script) throw new HttpError(400, "Pick a concept before rewriting its script.");
-      if (!body.instruction?.trim()) throw new HttpError(400, "Say how the script should change.");
-      const { script, warnings } = await rewriteScript(conceptCtx, ctx.script, body.instruction);
-      const project = await updateProject(supabase, workspaceId, id, { script });
-      return { project, warnings };
-    }
-    const concepts = await generateConcepts(conceptCtx);
-    await saveConcepts(supabase, workspaceId, id, concepts, ctx.brand);
-    return { project: await getProjectView(supabase, workspaceId, id), warnings: [] };
+    const metered = await runMetered(
+      {
+        workspaceId,
+        userId,
+        role,
+        action: "ugc_concepts",
+        idempotencyKey: request.headers.get("Idempotency-Key") ?? crypto.randomUUID(),
+        route: "ugc/projects:concepts",
+      },
+      async () => {
+        if (body.mode === "rewrite") {
+          if (!ctx.script) throw new HttpError(400, "Pick a concept before rewriting its script.");
+          if (!body.instruction?.trim())
+            throw new HttpError(400, "Say how the script should change.");
+          const { script, warnings } = await rewriteScript(
+            conceptCtx,
+            ctx.script,
+            body.instruction,
+          );
+          const project = await updateProject(supabase, workspaceId, id, { script });
+          return { project, warnings };
+        }
+        const concepts = await generateConcepts(conceptCtx);
+        await saveConcepts(supabase, workspaceId, id, concepts, ctx.brand);
+        return { project: await getProjectView(supabase, workspaceId, id), warnings: [] };
+      },
+    );
+    return Response.json(
+      metered.result,
+      metered.balance === null
+        ? undefined
+        : {
+            headers: { "X-Billing-Balance": String(metered.balance) },
+          },
+    );
   },
 });

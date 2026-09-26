@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { BillingError } from "@/server/billing/errors";
+import { runMetered } from "@/server/billing/metered.server";
+import { HttpError } from "@/server/http-error";
 import { defineRoute } from "@/server/route";
 import {
   pollMarketSignalsCollection,
@@ -52,7 +55,7 @@ export const POST = defineRoute({
   // Each scan is a billed Tavily search and feeds a billed analysis; shares
   // the per-workspace "audit" bucket with /api/market/intelligence.
   rateLimit: ({ userId, workspaceId }) => ({ tier: "audit", subject: `${userId}:${workspaceId}` }),
-  handler: async ({ body }) => {
+  handler: async ({ body, workspaceId, userId, role, request }) => {
     const operation = operationId("market-scan");
     marketLog("scan request received", { operation });
     marketLog("workspace resolved", { operation, workspaceId: body.workspaceId });
@@ -62,15 +65,30 @@ export const POST = defineRoute({
       // request; there is no provider task to create and poll for), so the
       // whole scan is bounded the same way the intelligence route bounds its
       // Claude call.
-      const result = await withMarketTimeout(
-        requestMarketSignalsCollection(
-          { keywords: body.keywords, location: body.location },
-          body.workspaceId,
-          operation,
-        ),
-        MARKET_SCAN_ROUTE_TIMEOUT_MS,
-        "Market scan took too long. Please retry.",
+      const metered = await runMetered(
+        {
+          workspaceId,
+          userId,
+          role,
+          action: "market_brain_manual",
+          idempotencyKey: request.headers.get("Idempotency-Key") ?? crypto.randomUUID(),
+          route: "market/trends",
+        },
+        async (charge) => {
+          const result = await withMarketTimeout(
+            requestMarketSignalsCollection(
+              { keywords: body.keywords, location: body.location },
+              body.workspaceId,
+              operation,
+            ),
+            MARKET_SCAN_ROUTE_TIMEOUT_MS,
+            "Market scan took too long. Please retry.",
+          );
+          if (result.state !== "completed") charge.setCapturedAmount(0);
+          return result;
+        },
       );
+      const result = metered.result;
       marketLog("keywords generated", { operation, count: body.keywords.length });
 
       await withMarketTimeout(
@@ -93,12 +111,18 @@ export const POST = defineRoute({
         collectionId: result.collectionId,
         error: result.error?.message,
       });
-      return Response.json({
-        success: result.state !== "failed",
-        source: "tavily_market_signals",
-        ...result,
-      });
+      return Response.json(
+        {
+          success: result.state !== "failed",
+          source: "tavily_market_signals",
+          ...result,
+        },
+        metered.balance === null
+          ? undefined
+          : { headers: { "X-Billing-Balance": String(metered.balance) } },
+      );
     } catch (error) {
+      if (error instanceof BillingError || error instanceof HttpError) throw error;
       if (error instanceof MarketTimeoutError) {
         marketLog("scan request timed out", { operation, message: error.message });
         return marketFailure(504, { message: error.message, code: error.code });
