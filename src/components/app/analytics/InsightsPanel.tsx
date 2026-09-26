@@ -13,6 +13,7 @@ import { DATA_SOURCES, type DataSource } from "@/lib/analytics/sources";
 import type { InsightItem } from "@/lib/analytics/types";
 import { cn } from "@/lib/utils";
 import { useInsights, useRefreshInsights } from "./hooks";
+import { CostChip } from "@/components/app/CostChip";
 import { ReportError, ReportSkeleton } from "./SourceGate";
 import { askMellox, Card, SourceBadge } from "./ui";
 
@@ -116,6 +117,7 @@ export function InsightsPanel() {
             >
               {!refresh.isPending && <Sparkles className="h-3.5 w-3.5" aria-hidden />}
               {data.stale ? "Update insights" : "Explain these changes"}
+              <CostChip action="insights_refresh" />
             </Button>
           ) : null
         }

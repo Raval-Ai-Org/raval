@@ -193,17 +193,6 @@ const OR_SEEDANCE_FAST: ProviderVideoSpec = {
   // Billed per video token ($4.2/M); ≈ these per-second figures at 24 fps.
   pricing: usd("second", { "480p": 0.04, "720p": 0.091 }),
 };
-const OR_GROK_VIDEO: ProviderVideoSpec = {
-  model: "x-ai/grok-imagine-video-1.5",
-  durations: range(1, 15),
-  aspectRatios: ["9:16", "1:1", "16:9", "4:3", "3:4"],
-  resolutions: ["480p", "720p", "1080p"],
-  defaultResolution: "720p",
-  nativeAudio: false,
-  spokenDialogue: false,
-  images: { mode: "first_frame", max: 1 },
-  pricing: usd("second", { "480p": 0.08, "720p": 0.14, "1080p": 0.25 }),
-};
 
 // ─── KIE specs ───
 const KIE_VEO_FAST: ProviderVideoSpec = {
@@ -334,7 +323,9 @@ const ENTRIES: Record<UgcModelKey, Entry> = {
     displayName: "Quick variation",
     tier: "draft",
     description: "Fast, low-cost animation of a product photo for creative variations.",
-    providers: { kie: KIE_GROK_I2V, openrouter: OR_GROK_VIDEO },
+    // OpenRouter Grok costs more than this option's quoted Video Credits.
+    // A KIE refusal falls back to a 6s Veo Lite variation instead.
+    providers: { kie: KIE_GROK_I2V, openrouter: { ...OR_VEO_LITE, durations: [6] } },
     enabledByDefault: true,
   },
 };

@@ -12,6 +12,8 @@ import { rateLimitFor } from "@/server/rate-limit";
 import { requireWorkspaceRole } from "@/server/workspace-access.server";
 import { assertPublicUrl } from "@/server/safe-fetch";
 import type { CompetitorOverview, CompetitorView } from "@/lib/competitors/contracts";
+import { runMetered } from "@/server/billing/metered.server";
+import { requireBillingFeature } from "@/server/billing/feature.server";
 
 export type {
   CompetitorOverview,
@@ -44,19 +46,36 @@ export const getCompetitorOverview = createServerFn({ method: "POST" })
  */
 export const discoverCompetitors = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("competitor-discovery")])
-  .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))
+  .inputValidator((data) =>
+    z.object({ workspaceId: uuid, idempotencyKey: uuid.optional() }).parse(data),
+  )
   .handler(
     async ({
       data,
       context,
     }): Promise<{ suggestions: CompetitorView[]; searched: number; available: boolean }> => {
-      await requireWorkspaceRole(context, data.workspaceId, "editor");
+      const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
       const { runDiscoveryForWorkspace } = await import("@/server/competitors/workspace.server");
-      return runDiscoveryForWorkspace({
-        supabase: context.supabase,
-        workspaceId: data.workspaceId,
-        userId: context.userId,
-      });
+      const metered = await runMetered(
+        {
+          workspaceId: data.workspaceId,
+          userId: context.userId,
+          role,
+          action: "competitor_discovery",
+          idempotencyKey: data.idempotencyKey ?? crypto.randomUUID(),
+          route: "competitors.discovery",
+        },
+        async (charge) => {
+          const result = await runDiscoveryForWorkspace({
+            supabase: context.supabase,
+            workspaceId: data.workspaceId,
+            userId: context.userId,
+          });
+          if (result.searched === 0) charge.setCapturedAmount(0);
+          return result;
+        },
+      );
+      return metered.result;
     },
   );
 
@@ -82,7 +101,14 @@ export const bootstrapCompetitors = createServerFn({ method: "POST" })
       data,
       context,
     }): Promise<{ competitors: CompetitorView[]; searched: number; available: boolean }> => {
-      await requireWorkspaceRole(context, data.workspaceId, "editor");
+      const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+      await requireBillingFeature({
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role,
+        feature: "competitors",
+        spending: true,
+      });
       const { bootstrapCompetitorsForWorkspace } =
         await import("@/server/competitors/workspace.server");
       return bootstrapCompetitorsForWorkspace({

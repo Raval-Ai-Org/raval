@@ -41,7 +41,7 @@ const PROVIDERS: Record<VideoProviderId, VideoProvider> = {
 export type RoutedProviderDeps = {
   providers?: Partial<Record<VideoProviderId, VideoProvider>>;
   primary?: () => VideoProviderId;
-  fallback?: () => VideoProviderId | null;
+  fallback?: (primary?: VideoProviderId) => VideoProviderId | null;
 };
 
 /** Adapt a request to another provider's view of the same model (nearest valid settings). */
@@ -82,12 +82,12 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
     },
 
     async submit(req: VideoRenderRequest): Promise<SubmitResult> {
-      const first = primary();
+      const first = deps.primary ? primary() : req.model.provider;
       const firstReq = requestFor(req, first);
       let result: SubmitResult | null = firstReq ? await providers[first].submit(firstReq) : null;
       if (result?.ok) return result;
 
-      const second = fallback();
+      const second = first === "kie" ? fallback(first) : null;
       const refusedOutright =
         !result || (!result.ok && result.definite === true && FALLBACK_CODES.has(result.code));
       if (!second || !refusedOutright) {

@@ -2,7 +2,7 @@
 
 Status: phases 1 and 2 verified; phase 3 in progress on local `master` after the user-requested merge. No push has been made.
 
-The user asked to prioritize a working UI and reduce time spent on phase bookkeeping. The next implementation pass now delivers a vertical billing slice first: account wallet and entitlement display, global 402 handling, clear plan comparison, and tested server enforcement. The phase definitions remain acceptance criteria; this reordering does not mark unfinished Paddle, lifecycle, admin, or launch checks complete.
+The user asked to prioritize a working UI and reduce time spent on phase bookkeeping. The next implementation pass now delivers a vertical billing slice first: account wallet and entitlement display, global 402 handling, clear plan comparison, and tested server enforcement. The user subsequently chose Stripe in place of Paddle; Stripe implementation and credentials are separate from the local wallet UI. The phase definitions remain acceptance criteria; this reordering does not mark unfinished payment integration, lifecycle, admin, or launch checks complete.
 
 ## Inputs and baseline
 
@@ -32,7 +32,7 @@ Each phase ends with `npm run typecheck && npm run lint && npm test && npm run b
 2. **Engine:** account and entitlement resolution, typed meter operations, `runMetered`, structured 402 errors, grants and sweeper, account usage attribution and budget scope, shadow logging, wallet and entitlement reads.
 3. **Enforcement:** connect all paid paths and included-work limits, account brand/seat/profile limits, frozen behavior, chat meters, and route coverage.
 4. **Experience:** provider, locks/prices/modals, global 402 handling, plan and billing surface, onboarding, landing page pricing, accessibility and end-to-end checks.
-5. **Paddle:** verify current official API documentation, sync script, server-only API adapter, checkout/changes/packs/add-ons/portal/trials, signed webhook inbox and reconciliation; test the sandbox flow.
+5. **Stripe:** verify current official API documentation, sync script, server-only API adapter, checkout/changes/packs/add-ons/portal/trials, signed webhook inbox and reconciliation; test the test-mode flow.
 6. **Lifecycle:** grants and rollover at renewals, scheduled changes, grace, pause, refunds and debt, comps, notifications and email with dedupe.
 7. **Included work and cost:** video provider routing, tracked prompts, schedules, Monday briefing, competitors cadence and model cost fixes.
 8. **Admin and monitoring:** guarded audited console, margins, capacity/fallback alerts, shadow report and webhook replay.
@@ -40,7 +40,7 @@ Each phase ends with `npm run typecheck && npm run lint && npm test && npm run b
 
 ## Verification and migration gates
 
-- Replay migrations locally or on staging only. Check idempotency and RLS; no production database or Paddle production mutation in this branch.
+- Replay migrations locally or on staging only. Check idempotency and RLS; no production database or Stripe production mutation without the user's approval.
 - The historical backlink ledger is append-only. Refuse migration when an order is non-terminal unless its live hold can be reproduced exactly; record the actual decision in ADR-0027.
 - Manual shadow/on checks must cover streams, async jobs, failure release, multi-brand account sharing, viewer denial, teammate privacy, and owner-only purchase.
 - Before merge ask Zain to choose grandfathered accounts and approve the comp rule; ask separately before merge itself. Record any unavailable sandbox credentials or services as unverified, not green.
@@ -53,4 +53,5 @@ Each phase ends with `npm run typecheck && npm run lint && npm test && npm run b
 - Phase 3 in progress: paid holds and completion-time settlement for several REST actions, Studio media, UGC renders and chat; account brand/seat/profile enforcement; removal of monthly post quota. The remaining enforcement map, coverage test, manual shadow/on pass and full phase gate are outstanding.
 - Phase 3 checkpoint `9a915d4`: documented incomplete enforcement work and committed the verified account brand/seat, Studio/UGC async, chat, Brand DNA, campaign, image and social changes without declaring the phase complete. A subsequent local migration added account-locked SocialAPI profile reservations to prevent concurrent OAuth connections from exceeding the profile cap; its phase gate is still pending.
 - Phase 3 next checkpoint: added success-only charging for a manual Market Brain refresh, UGC concept generation and on-demand analytics insights; kept follow-up Market Brain analysis inside the same refresh price. Added a feature check for included analysis and a model-route-to-catalog coverage test. Focused tests pass. A full gate run reached tests and exposed two new billing labels in the AI route scanner; they are now classified as non-model labels, but the full gate has not been rerun.
-- Vertical UI slice: a live wallet pill and Plan & billing panel show the shared account meters, plan status, all five catalog plans and annual pricing. Global authenticated REST calls surface structured 402 billing errors in that panel and refresh the wallet after a balance header. UGC extraction and notes now check the UGC entitlement, including shadow would-block logging. Paddle purchase actions are deliberately not presented as working until the checkout and webhook path exists. Build, typecheck, focused tests and db:verify passed for this slice; the full suite and manual UI pass remain outstanding.
+- Vertical UI slice: a live wallet pill and Plan & billing panel show the shared account meters, plan status, all five catalog plans and annual pricing. Global authenticated REST calls surface structured 402 billing errors in that panel and refresh the wallet after a balance header. UGC extraction and notes now check the UGC entitlement, including shadow would-block logging. Payment purchase actions are deliberately not presented as working until the Stripe checkout and webhook path exists. Build, typecheck, focused tests and db:verify passed for this slice; the full suite and manual UI pass remain outstanding.
+- Follow-up checkpoint: added visible locks to Schedule and Client Portal, catalog cost chips to manual insights and competitor discovery, success-only competitor discovery charging, Stripe defaults for unlinked accounts, and the catalog video provider split with a Veo Lite fallback for Variation. Full gate passed: typecheck, lint (0 errors), 1,626 tests, build and db:verify (90 migrations). Manual UI and provider checks remain outstanding; Phase 3 is still incomplete.

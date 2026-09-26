@@ -111,6 +111,7 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
 import { BillingPanel, WalletPill } from "@/components/app/BillingPanel";
+import { FeatureGate } from "@/components/app/FeatureGate";
 
 function AppShell() {
   // The workspace comes from the route and is verified by WorkspaceProvider
@@ -494,22 +495,26 @@ function AppShell() {
               setNavOpen(false);
             },
           })}
-          {sidebarAction({
-            icon: CalendarIcon,
-            label: "Schedule",
-            onClick: () => emitAppEvent("open:schedule"),
-          })}
+          <FeatureGate feature="publishing" className="w-full">
+            {sidebarAction({
+              icon: CalendarIcon,
+              label: "Schedule",
+              onClick: () => emitAppEvent("open:schedule"),
+            })}
+          </FeatureGate>
         </SidebarSection>
 
         <div className="h-px bg-border/50" />
 
         {/* Collaborate */}
         <SidebarSection label="Collaborate">
-          {sidebarAction({
-            icon: Rocket,
-            label: "Client Portal",
-            onClick: () => emitAppEvent("open:client-portal"),
-          })}
+          <FeatureGate feature="client_portal" className="w-full">
+            {sidebarAction({
+              icon: Rocket,
+              label: "Client Portal",
+              onClick: () => emitAppEvent("open:client-portal"),
+            })}
+          </FeatureGate>
           {sidebarAction({
             icon: Share2,
             label: "Share",

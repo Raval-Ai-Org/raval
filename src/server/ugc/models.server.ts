@@ -53,12 +53,19 @@ export function videoProvider(): VideoProviderId {
     : "kie";
 }
 
+/** Catalog default per option; an explicit per-option override is operational. */
+export function videoProviderForModel(key: UgcModelKey): VideoProviderId {
+  const override = process.env[`VIDEO_PROVIDER_${envKey(key)}`]?.trim().toLowerCase();
+  if (override === "kie" || override === "openrouter") return override;
+  return key === "standard" || key === "draft" || key === "variation" ? "kie" : "openrouter";
+}
+
 /** Where a render goes when the primary refuses it outright (null: nowhere). */
-export function videoFallbackProvider(): VideoProviderId | null {
+export function videoFallbackProvider(primary = videoProvider()): VideoProviderId | null {
   const raw = (process.env.VIDEO_PROVIDER_FALLBACK ?? "openrouter").trim().toLowerCase();
   if (["", "none", "off", "false"].includes(raw)) return null;
   const fallback: VideoProviderId = raw === "kie" ? "kie" : "openrouter";
-  return fallback === videoProvider() ? null : fallback;
+  return fallback === primary ? null : fallback;
 }
 
 export function kieUsdPerCredit(): number {
@@ -66,7 +73,10 @@ export function kieUsdPerCredit(): number {
 }
 
 /** The model as the configured primary provider runs it (falls back to any provider it has). */
-export function activeModel(key: AnyUgcModelKey, provider = videoProvider()): UgcModel {
+export function activeModel(
+  key: AnyUgcModelKey,
+  provider = videoProviderForModel(key as UgcModelKey),
+): UgcModel {
   const model = resolveUgcModel(key, provider);
   return specFor(model, provider) ?? model;
 }

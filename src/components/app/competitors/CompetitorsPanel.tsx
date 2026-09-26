@@ -30,6 +30,7 @@ import { bootstrapCompetitors } from "@/lib/competitors.functions";
 import { CompetitorDetail } from "./CompetitorDetail";
 import { DiscoverTab } from "./DiscoverTab";
 import { UpdatesFeed } from "./UpdatesFeed";
+import { CostChip } from "@/components/app/CostChip";
 
 type TabId = "competitors" | "updates" | "discover";
 
@@ -149,6 +150,7 @@ function Panel({ workspaceId }: { workspaceId: string }) {
         <Search className="h-3.5 w-3.5" />
       )}
       {discover.isPending ? "Looking" : "Find competitors"}
+      {!discover.isPending && <CostChip action="competitor_discovery" />}
     </button>
   );
 

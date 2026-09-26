@@ -40,4 +40,8 @@ Plans, AI safety budgets, image/video quotas and backlink credit balances curren
 
 ## Consequences
 
-Account-level pooling makes multi-brand usage and teammate spend consistent, but requires strict account resolution and privacy projections at every API. Immutable grants and allocations make refunds, expiry, rollover and replay auditable. Shadow mode allows comparison against actual costs before charging begins; no phase is launch-ready until full tests and Paddle sandbox verification complete.
+Account-level pooling makes multi-brand usage and teammate spend consistent, but requires strict account resolution and privacy projections at every API. Immutable grants and allocations make refunds, expiry, rollover and replay auditable. Shadow mode allows comparison against actual costs before charging begins; no phase is launch-ready until full tests and Stripe test-mode verification complete.
+
+## Provider amendment (user decision, 2026-09-27)
+
+The user explicitly chose Stripe in place of Paddle and will add Stripe setup later. Stripe is now the intended subscription and pack provider. The existing Stripe code only sells workspace-scoped backlink packs; it must be adapted to the account-owned wallet and subscription lifecycle before purchase buttons can be enabled. Existing `paddle` defaults and configuration names are legacy implementation artifacts, not evidence of a functioning payment path. No live Stripe or production database operation is authorized by this amendment.

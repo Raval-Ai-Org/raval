@@ -57,7 +57,10 @@ function useInvalidate(workspaceId: string | null) {
 export function useDiscoverCompetitors(workspaceId: string | null) {
   const invalidate = useInvalidate(workspaceId);
   return useMutation({
-    mutationFn: () => discoverCompetitors({ data: { workspaceId: workspaceId as string } }),
+    mutationFn: () =>
+      discoverCompetitors({
+        data: { workspaceId: workspaceId as string, idempotencyKey: crypto.randomUUID() },
+      }),
     onSuccess: (result) => {
       invalidate();
       if (!result.available) {

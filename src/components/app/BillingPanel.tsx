@@ -268,7 +268,7 @@ export function BillingPanel() {
               </div>
             </section>
             <p className="text-xs text-muted-foreground">
-              Plan changes and pack purchases will become available when Paddle checkout is
+              Plan changes and pack purchases will become available when Stripe checkout is
               connected. Your balances above are live.
             </p>
           </>

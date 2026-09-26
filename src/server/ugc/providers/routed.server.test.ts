@@ -12,6 +12,7 @@ import { AiGatewayError } from "@/lib/ai-gateway.server";
 import { signOpenRouterCallback, verifyOpenRouterCallback } from "../webhook.server";
 import { buildOpenRouterVideoBody, openRouterFailure } from "./openrouter.server";
 import { createRoutedVideoProvider } from "./routed.server";
+import { videoProviderForModel } from "../models.server";
 import type { SubmitResult, VideoProvider, VideoRenderRequest } from "./types";
 
 function fake(id: "kie" | "openrouter", results: SubmitResult[]) {
@@ -47,6 +48,17 @@ const request = (over: Partial<VideoRenderRequest> = {}): VideoRenderRequest => 
 });
 
 describe("video provider fallback", () => {
+  it("uses the catalog provider split and supports a per-option override", () => {
+    expect(videoProviderForModel("standard")).toBe("kie");
+    expect(videoProviderForModel("draft")).toBe("kie");
+    expect(videoProviderForModel("variation")).toBe("kie");
+    expect(videoProviderForModel("premium")).toBe("openrouter");
+    expect(videoProviderForModel("cinematic")).toBe("openrouter");
+    expect(videoProviderForModel("long")).toBe("openrouter");
+    vi.stubEnv("VIDEO_PROVIDER_PREMIUM", "kie");
+    expect(videoProviderForModel("premium")).toBe("kie");
+    vi.unstubAllEnvs();
+  });
   it("falls back from KIE to OpenRouter when KIE is out of credits", async () => {
     const kie = fake("kie", [
       {
@@ -176,10 +188,10 @@ describe("OpenRouter video requests", () => {
       callback_url: "https://app.example.com/api/public/hooks/openrouter-video",
     });
     expect(body).not.toHaveProperty("frame_images");
-    // Grok Imagine has no audio track to ask for.
-    expect(
-      buildOpenRouterVideoBody(request({ model: specFor(UGC_MODELS.variation, "openrouter")! })),
-    ).not.toHaveProperty("generate_audio");
+    // Variation never falls back to expensive Grok on OpenRouter.
+    const variation = specFor(UGC_MODELS.variation, "openrouter")!;
+    expect(variation.providerModel).toBe("google/veo-3.1-lite");
+    expect(variation.durations).toEqual([6]);
   });
 
   it("marks credit and auth errors definite, and transport errors unknown", () => {
