@@ -23,9 +23,9 @@ import {
 import { cn } from "@/lib/utils";
 import { niceSize, type Attachment } from "@/lib/file-extract";
 
-export const CHAT_MODELS: { id: string; label: string; hint: string }[] = [
-  { id: "mellox-flash", label: "Mellox Flash", hint: "Fast answers" },
-  { id: "mellox-pro", label: "Mellox Pro", hint: "Deeper thinking" },
+export const CHAT_MODELS: { id: string; label: string; shortLabel: string; hint: string }[] = [
+  { id: "mellox-flash", label: "Mellox Flash", shortLabel: "Flash", hint: "Fast answers" },
+  { id: "mellox-pro", label: "Mellox Pro", shortLabel: "Pro", hint: "Deeper thinking" },
 ];
 
 export type ChatComposerHandle = { focus: () => void };
@@ -156,7 +156,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          // Enter sends; Shift+Enter adds a line. Never intercept IME composition.
+          // Physical keyboards can send with Enter. On phones, Enter inserts a
+          // line break; the visible Send button avoids accidental sends.
           const composing = (e.nativeEvent as KeyboardEvent).isComposing || e.keyCode === 229;
           if (
             e.key === "Enter" &&
@@ -164,7 +165,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
             !e.ctrlKey &&
             !e.metaKey &&
             !e.altKey &&
-            !composing
+            !composing &&
+            !window.matchMedia("(max-width: 767px)").matches
           ) {
             e.preventDefault();
             if (!streaming) onSend();
@@ -188,11 +190,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
         className="mx-composer__input"
       />
 
-      <div className="flex items-center gap-1.5 px-2.5 pb-2.5">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2.5 pb-2.5 sm:flex-nowrap">
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="mx-icon-btn size-8"
+          className="mx-icon-btn size-8 shrink-0"
           aria-label="Add files"
           title="Add files (PDF, Word, Excel, images, text)"
         >
@@ -200,11 +202,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
         </button>
         {toolbarSlot}
 
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button type="button" className="mx-model-btn" aria-label={`Model: ${model.label}`}>
-                {model.label}
+                <span className="sm:hidden">{model.shortLabel}</span>
+                <span className="hidden sm:inline">{model.label}</span>
                 <ChevronDown className="size-3.5 opacity-60 transition-transform group-data-[state=open]:rotate-180" />
               </button>
             </DropdownMenuTrigger>

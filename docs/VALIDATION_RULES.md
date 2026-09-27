@@ -1,9 +1,9 @@
-# Raval Validation Rules & Technical Decisions
+# Mellox Validation Rules & Technical Decisions
 
 ## 1. Purpose
 
 This document defines validation rules and technical
-decisions for the Raval core data and API foundation.
+decisions for the Mellox core data and API foundation.
 
 ## 2. Validation Layers
 

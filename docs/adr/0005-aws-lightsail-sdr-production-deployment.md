@@ -9,7 +9,7 @@
 
 ## Context and Problem Statement
 
-The Social Distribution Engine (SDR) backend service needs to be deployed to production cloud infrastructure to enable the RavalAI platform (deployed on Vercel at `https://raval.it.com`) to publish social media posts on behalf of clients. The SDR consists of 5 Docker containers (FastAPI API, Celery worker, Celery beat, PostgreSQL, Redis) requiring minimum 2 GB RAM and 24/7 uptime with public HTTPS access.
+The Social Distribution Engine (SDR) backend service needs to be deployed to production cloud infrastructure to enable the MelloxAI platform (deployed on Vercel at `https://mellox.ai`) to publish social media posts on behalf of clients. The SDR consists of 5 Docker containers (FastAPI API, Celery worker, Celery beat, PostgreSQL, Redis) requiring minimum 2 GB RAM and 24/7 uptime with public HTTPS access.
 
 **Key Requirements:**
 
@@ -110,7 +110,7 @@ Docker Engine 29.7.2
 Docker Compose v5.4.0
 
 # Repository
-GitHub: Muhammad-Junaid-Sajjad/Social-Distribtion-Engine-RavalAI-SDE- (private)
+GitHub: Muhammad-Junaid-Sajjad/Social-Distribtion-Engine-MelloxAI-SDE- (private)
 Cloned: 13,205 files, 94.23 MB
 Location: /home/ubuntu/sdr/
 ```
@@ -139,9 +139,9 @@ manager — never in the repository. Variable names:
 ENV=production
 POSTGRES_USER=sde
 POSTGRES_PASSWORD=<set on the server>
-POSTGRES_DB=raval_sde
-DATABASE_URL=postgresql+asyncpg://sde:<password>@postgres:5432/raval_sde
-DATABASE_URL_SYNC=postgresql://sde:<password>@postgres:5432/raval_sde
+POSTGRES_DB=mellox_sde
+DATABASE_URL=postgresql+asyncpg://sde:<password>@postgres:5432/mellox_sde
+DATABASE_URL_SYNC=postgresql://sde:<password>@postgres:5432/mellox_sde
 REDIS_URL=redis://:<redis-password>@redis:6379/0
 SDE_API_TOKEN=<set on the server>
 WEBHOOK_SECRET=<set on the server>
@@ -170,11 +170,11 @@ LOG_LEVEL=INFO
 
 ```bash
 NAME                 STATUS                  PORTS
-raval-sde-api        Up 8 minutes (healthy)  0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
-raval-sde-postgres   Up 9 minutes (healthy)  0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
-raval-sde-redis      Up 9 minutes (healthy)  0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp
-raval-sde-beat       Up 8 minutes (unhealthy) - but functioning (sending scheduled tasks)
-raval-sde-worker     Up 8 minutes (unhealthy) - but functioning (processing tasks)
+mellox-sde-api        Up 8 minutes (healthy)  0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+mellox-sde-postgres   Up 9 minutes (healthy)  0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+mellox-sde-redis      Up 9 minutes (healthy)  0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp
+mellox-sde-beat       Up 8 minutes (unhealthy) - but functioning (sending scheduled tasks)
+mellox-sde-worker     Up 8 minutes (unhealthy) - but functioning (processing tasks)
 ```
 
 **Note**: Beat and Worker show "unhealthy" status but logs confirm they ARE working:
@@ -205,30 +205,30 @@ raval-sde-worker     Up 8 minutes (unhealthy) - but functioning (processing task
 
 1. **Install Cloudflared** ✅ (completed: version 2026.8.0 installed)
 2. **Authenticate with Cloudflare** (pending: `cloudflared tunnel login`)
-3. **Create Cloudflare Tunnel** (pending: `cloudflared tunnel create raval-sdr-test`)
+3. **Create Cloudflare Tunnel** (pending: `cloudflared tunnel create mellox-sdr-test`)
 4. **Configure tunnel routing** (pending: map subdomain to localhost:8000)
 5. **Route DNS** (pending: add CNAME record)
 6. **Start tunnel as systemd service** (pending: enable auto-start)
-7. **Verify HTTPS access** (pending: test `https://sdr-test.raval.it.com/healthz`)
+7. **Verify HTTPS access** (pending: test `https://sdr-test.mellox.ai/healthz`)
 
 ### **Subdomain Decision (CRITICAL)**
 
 **⚠️ IMPORTANT SAFETY CONSIDERATION:**
 
-User raised critical concern: The real production site (`raval.it.com`) is **ALREADY LIVE with REAL CLIENTS**. This deployment is a **COPY/TEST environment**.
+User raised critical concern: The real production site (`mellox.ai`) is **ALREADY LIVE with REAL CLIENTS**. This deployment is a **COPY/TEST environment**.
 
 **Two options identified:**
 
 **Option A: Use test subdomain** (RECOMMENDED for safety)
 
-- `sdr-test.raval.it.com` or `sdr-staging.raval.it.com`
+- `sdr-test.mellox.ai` or `sdr-staging.mellox.ai`
 - Zero risk to real production
 - Clear separation (test vs production)
 - Can test safely without affecting real clients
 
 **Option B: Use production subdomain**
 
-- `sdr.raval.it.com`
+- `sdr.mellox.ai`
 - Only if real production is NOT using SDR yet
 - Requires confirmation that Supabase databases are separate
 
@@ -236,9 +236,9 @@ User raised critical concern: The real production site (`raval.it.com`) is **ALR
 
 ### **After Tunnel Setup**
 
-1. Update Vercel environment variable: `SDR_BASE_URL` from `http://localhost:8000` to `https://sdr-test.raval.it.com` (or chosen subdomain)
+1. Update Vercel environment variable: `SDR_BASE_URL` from `http://localhost:8000` to `https://sdr-test.mellox.ai` (or chosen subdomain)
 2. Redeploy Vercel to pick up new SDR_BASE_URL
-3. Test integration: RavalAI production → deployed SDR
+3. Test integration: MelloxAI production → deployed SDR
 4. Verify webhooks: LinkedIn/X/Facebook/Instagram → SDR delivery callbacks
 
 ### **Subsequent Tasks (T081-T083)**
@@ -289,7 +289,7 @@ User raised critical concern: The real production site (`raval.it.com`) is **ALR
 
 **Decision**: Paused for user confirmation (test vs production subdomain)
 
-**Rationale**: User raised critical concern about real production site already running with real clients. Must ensure test deployment does not interfere with live business operations. Recommending `sdr-test.raval.it.com` for isolation unless confirmed that production is not using SDR yet.
+**Rationale**: User raised critical concern about real production site already running with real clients. Must ensure test deployment does not interfere with live business operations. Recommending `sdr-test.mellox.ai` for isolation unless confirmed that production is not using SDR yet.
 
 ---
 
@@ -342,10 +342,10 @@ docker compose logs beat --tail=50
 
 ```bash
 # Connect to PostgreSQL
-docker compose exec postgres psql -U sde -d raval_sde
+docker compose exec postgres psql -U sde -d mellox_sde
 
 # List tables
-docker compose exec postgres psql -U sde -d raval_sde -c "\dt"
+docker compose exec postgres psql -U sde -d mellox_sde -c "\dt"
 ```
 
 ### **System Resources**
@@ -414,7 +414,7 @@ docker compose up -d
 
 **To resume**:
 
-1. Confirm subdomain choice: `sdr-test.raval.it.com` (safe) or `sdr.raval.it.com` (production)
+1. Confirm subdomain choice: `sdr-test.mellox.ai` (safe) or `sdr.mellox.ai` (production)
 2. Run: `cloudflared tunnel login` (authenticate via browser)
 3. Continue with Cloudflare Tunnel setup (ADR AWS-LIGHTSAIL-DEPLOYMENT-STEPS.md Step 8.2+)
 4. Update Vercel `SDR_BASE_URL` after tunnel operational

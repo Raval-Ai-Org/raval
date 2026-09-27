@@ -96,7 +96,7 @@ async function seed(page: Page) {
       try {
         window.localStorage.setItem(storageKey, JSON.stringify(sess));
         window.localStorage.setItem("workspace:selected", wsId);
-        window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
+        window.localStorage.setItem(`mellox:first-prompt-fired:${wsId}`, "1");
         // Ensure the "last canvas" hint is empty so malformed events can't
         // accidentally fall back to a previously-persisted value.
         window.localStorage.removeItem("studio:last-canvas");

@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The **Raval AI Website Connector & Safe Auto-Fix Execution Engine** is the execution subsystem of the Raval AI GEO/AEO/SEO Intelligence platform. While Tasks 1–10 discover website issues, extract DOM and semantic structures, calculate deterministic scores, and generate structured `Finding`, `Recommendation`, and `FixPlan` models, Task 11 safely bridges these intelligence artifacts to external content repositories and CMS platforms.
+The **Mellox AI Website Connector & Safe Auto-Fix Execution Engine** is the execution subsystem of the Mellox AI GEO/AEO/SEO Intelligence platform. While Tasks 1–10 discover website issues, extract DOM and semantic structures, calculate deterministic scores, and generate structured `Finding`, `Recommendation`, and `FixPlan` models, Task 11 safely bridges these intelligence artifacts to external content repositories and CMS platforms.
 
 The engine executes safe, deterministic, and reversible remediations while enforcing multi-layered safety gates, dry-run previews, human approvals, targeted post-mutation rescans, before/after evidence comparisons, regression detection, and automated rollback capabilities.
 
@@ -63,7 +63,7 @@ Every provider-specific connector inherits from `BaseWebsiteConnector` and provi
 
 ### A. GitHub Connector (`GitHubConnector`)
 * **Underlying Mechanism**: Git Trees, Blobs, Commits, and Pull Request Branches.
-* **Safe Branching Model**: All auto-fix mutations are committed to dedicated isolated branches (e.g., `raval-fix/<timestamp>-<hash>`) to prevent direct main/production branch corruption.
+* **Safe Branching Model**: All auto-fix mutations are committed to dedicated isolated branches (e.g., `mellox-fix/<timestamp>-<hash>`) to prevent direct main/production branch corruption.
 * **Rollback Mechanism**: Git Revert commits or tree-restoration commits referencing the exact pre-change commit SHA.
 * **Limitations**:
   * Direct merges to protected branches without PR approval are restricted by GitHub repository rules.

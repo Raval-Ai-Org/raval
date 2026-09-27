@@ -27,7 +27,7 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval.ai";
+const CANONICAL_HOST = "https://mellox.ai";
 
 type GuardCase = {
   /** The path the user (or an external link) navigates to. */

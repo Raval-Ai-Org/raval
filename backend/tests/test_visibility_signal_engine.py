@@ -26,9 +26,9 @@ from backend.app.visibility_signal_service import (
 def target_identity():
     return TargetIdentity(
         website_id=1,
-        brand_name="Raval AI",
-        domain="raval.ai",
-        aliases=["Raval"],
+        brand_name="Mellox AI",
+        domain="mellox.ai",
+        aliases=["Mellox"],
         product_entities=[{"name": "GEO Platform", "entity_id": 10}],
     )
 
@@ -47,7 +47,7 @@ def configured_competitors():
 
 
 def test_target_mentioned_and_cited(target_identity):
-    text = "Raval AI is a leading engine in generative intelligence. See [Docs](https://raval.ai/docs)."
+    text = "Mellox AI is a leading engine in generative intelligence. See [Docs](https://mellox.ai/docs)."
     mentions = detect_mentions(text, target_identity)
     citations = detect_citations(text, target_identity)
 
@@ -82,7 +82,7 @@ def test_target_mentioned_and_cited(target_identity):
     ]
 
     resp = AIResponse(id=1, query_id=1, query_set_id=1, website_id=1, provider="mock", model="mock-v1", response_text=text)
-    query = Query(id=1, query_set_id=1, website_id=1, query_text="What is Raval AI?")
+    query = Query(id=1, query_set_id=1, website_id=1, query_text="What is Mellox AI?")
 
     obs = VisibilitySignalService.evaluate_visibility_observation(
         response=resp,
@@ -101,7 +101,7 @@ def test_target_mentioned_and_cited(target_identity):
 
 
 def test_target_mentioned_not_cited(target_identity):
-    text = "Raval AI is recognized for answer engine optimization."
+    text = "Mellox AI is recognized for answer engine optimization."
     mentions = detect_mentions(text, target_identity)
     citations = detect_citations(text, target_identity)
 
@@ -120,7 +120,7 @@ def test_target_mentioned_not_cited(target_identity):
     ]
 
     resp = AIResponse(id=1, query_id=1, query_set_id=1, website_id=1, provider="mock", model="mock-v1", response_text=text)
-    query = Query(id=1, query_set_id=1, website_id=1, query_text="Tell me about Raval AI")
+    query = Query(id=1, query_set_id=1, website_id=1, query_text="Tell me about Mellox AI")
 
     obs = VisibilitySignalService.evaluate_visibility_observation(
         response=resp,
@@ -138,8 +138,8 @@ def test_target_mentioned_not_cited(target_identity):
 
 
 def test_target_cited_without_brand_mention(target_identity):
-    # A reference URL is provided without explicitly saying "Raval AI" in text
-    text = "Refer to the comprehensive technical guide at https://raval.ai/docs/overview for details."
+    # A reference URL is provided without explicitly saying "Mellox AI" in text
+    text = "Refer to the comprehensive technical guide at https://mellox.ai/docs/overview for details."
     mentions = detect_mentions(text, target_identity)
     citations = detect_citations(text, target_identity)
 
@@ -178,7 +178,7 @@ def test_target_cited_without_brand_mention(target_identity):
 def test_target_completely_absent(target_identity):
     text = "Search engine crawlers index web pages by parsing HTML tags and following backlinks."
     resp = AIResponse(id=1, query_id=1, query_set_id=1, website_id=1, provider="mock", model="mock-v1", response_text=text)
-    query = Query(id=1, query_set_id=1, website_id=1, query_text="What is Raval AI?")
+    query = Query(id=1, query_set_id=1, website_id=1, query_text="What is Mellox AI?")
 
     obs = VisibilitySignalService.evaluate_visibility_observation(
         response=resp,
@@ -274,12 +274,12 @@ def test_competitor_safety_generic_word_collision():
 
 def test_calculate_observable_positions():
     mentions = [
-        AIMention(id=1, response_id=1, website_id=1, query_id=1, matched_text="Raval", match_type="EXACT_BRAND", normalized_text="Raval", start_pos=15),
-        AIMention(id=2, response_id=1, website_id=1, query_id=1, matched_text="Raval AI", match_type="EXACT_BRAND", normalized_text="Raval AI", start_pos=4),
+        AIMention(id=1, response_id=1, website_id=1, query_id=1, matched_text="Mellox", match_type="EXACT_BRAND", normalized_text="Mellox", start_pos=15),
+        AIMention(id=2, response_id=1, website_id=1, query_id=1, matched_text="Mellox AI", match_type="EXACT_BRAND", normalized_text="Mellox AI", start_pos=4),
     ]
     citations = [
         AICitation(id=1, response_id=1, website_id=1, query_id=1, url="https://other.com", normalized_url="https://other.com", domain="other.com", is_target_domain=False, position=1),
-        AICitation(id=2, response_id=1, website_id=1, query_id=1, url="https://raval.ai", normalized_url="https://raval.ai", domain="raval.ai", is_target_domain=True, position=2),
+        AICitation(id=2, response_id=1, website_id=1, query_id=1, url="https://mellox.ai", normalized_url="https://mellox.ai", domain="mellox.ai", is_target_domain=True, position=2),
     ]
 
     mention_pos, cite_pos = calculate_observable_positions(mentions, citations)
@@ -288,9 +288,9 @@ def test_calculate_observable_positions():
 
 
 def test_classify_answer_relevance():
-    query_text = "What is Raval AI and how does it optimize answers?"
-    resp_relevant = "Raval AI is a platform designed to optimize answer engines and search visibility."
-    m = [AIMention(id=1, response_id=1, website_id=1, query_id=1, matched_text="Raval AI", match_type="EXACT_BRAND", normalized_text="Raval AI", start_pos=0)]
+    query_text = "What is Mellox AI and how does it optimize answers?"
+    resp_relevant = "Mellox AI is a platform designed to optimize answer engines and search visibility."
+    m = [AIMention(id=1, response_id=1, website_id=1, query_id=1, matched_text="Mellox AI", match_type="EXACT_BRAND", normalized_text="Mellox AI", start_pos=0)]
 
     rel = classify_answer_relevance(
         query_text=query_text,

@@ -1,4 +1,4 @@
-# Historical client launch plan: RavalAI
+# Historical client launch plan: MelloxAI
 
 > This dated launch plan is retained for project history and is not the
 > authoritative current-state guide. Use [../../social.md](../../social.md),
@@ -17,11 +17,11 @@
 
 ## 0. Executive Summary
 
-RavalAI platform and the Social Distribution Engine (SDR) are both **fully live** as of 2026-08-27. The dev server, vitest suite (115/115), live e2e suite (7/7), Supabase auth, and the live Cloudflare SDR tunnel are all healthy and verified.
+MelloxAI platform and the Social Distribution Engine (SDR) are both **fully live** as of 2026-08-27. The dev server, vitest suite (115/115), live e2e suite (7/7), Supabase auth, and the live Cloudflare SDR tunnel are all healthy and verified.
 
 **What is left for a public client launch:**
 
-1. The four **developer apps** (RavalAI's registered apps on LinkedIn, X, Facebook, Instagram) — owned by RavalAI, not by clients. Status: **2/4 partial** (LinkedIn ✅, X ✅ done per CLAUDE.md; Facebook ❌, Instagram ❌ not done).
+1. The four **developer apps** (MelloxAI's registered apps on LinkedIn, X, Facebook, Instagram) — owned by MelloxAI, not by clients. Status: **2/4 partial** (LinkedIn ✅, X ✅ done per CLAUDE.md; Facebook ❌, Instagram ❌ not done).
 2. **Production deployment** — replace `localhost:8080` and the Cloudflare tunnel with stable HTTPS URLs.
 3. **Pricing + billing** — Stripe integration so clients can pay.
 4. **Dogfood + launch sprint** — onboard 1 friendly client, fix friction, then go public.
@@ -36,7 +36,7 @@ This document is the **single source of truth** for everything that must happen 
 
 | Component                               | Status | Evidence                                                  |
 | --------------------------------------- | ------ | --------------------------------------------------------- |
-| RavalAI app boots                       | ✅     | `npm run dev` → http://localhost:8080, HTTP 200           |
+| MelloxAI app boots                       | ✅     | `npm run dev` → http://localhost:8080, HTTP 200           |
 | Login with an approved test account | ✅     | e2e test evidence                                         |
 | All major routes load                   | ✅     | e2e test 2, 8/8 routes                                    |
 | Hydration warnings resolved             | ✅     | commit `50469ed`                                          |
@@ -44,7 +44,7 @@ This document is the **single source of truth** for everything that must happen 
 | Vitest unit tests                       | ✅     | 115/115 in 5.88s                                          |
 | Live e2e tests                          | ✅     | 7/7 in 2.6 min                                            |
 | Supabase auth + workspace               | ✅     | verified in the then-current test environment             |
-| SDR proxy from RavalAI                  | ✅     | `/api/sdr/accounts` returns 401 (auth-protected)          |
+| SDR proxy from MelloxAI                  | ✅     | `/api/sdr/accounts` returns 401 (auth-protected)          |
 | SDR tunnel live                         | ✅     | verified in the then-current test environment             |
 | LinkedIn OAuth code                     | ✅     | `app/api/accounts.py` lines for `linkedin`                |
 | X/Twitter OAuth code                    | ✅     | `app/api/accounts.py` lines for `twitter`                 |
@@ -62,9 +62,9 @@ This document is the **single source of truth** for everything that must happen 
 | Instagram enabled on Meta app           | **CRITICAL** | Junaid            | Same as above                  |
 | X/Twitter production credentials        | High         | Junaid            | 1-2 days                       |
 | LinkedIn production credentials         | High         | Junaid            | 1-2 days                       |
-| SDR permanent URL (`sdr.raval.ai`)      | **CRITICAL** | Junaid            | 1 day (ADR-0005)               |
-| RavalAI production URL (`app.raval.ai`) | **CRITICAL** | Junaid            | 0.5 day (Vercel)               |
-| Landing page (`raval.ai`)               | High         | Junaid            | 1 day                          |
+| SDR permanent URL (`sdr.mellox.ai`)      | **CRITICAL** | Junaid            | 1 day (ADR-0005)               |
+| MelloxAI production URL (`app.mellox.ai`) | **CRITICAL** | Junaid            | 0.5 day (Vercel)               |
+| Landing page (`mellox.ai`)               | High         | Junaid            | 1 day                          |
 | Stripe integration                      | High         | Junaid            | 1-2 days                       |
 | Friendly-client dogfood                 | Medium       | Junaid + 1 client | 2-3 days                       |
 | Public launch announcement              | Low          | Zian              | 0.5 day                        |
@@ -76,7 +76,7 @@ If a client tried to sign up **today**, they would:
 1. Land on `https://localhost:8080` ❌ — wrong URL, only works on Junaid's machine
 2. Sign up via Supabase auth ✅
 3. Create a workspace ✅
-4. Click "Connect LinkedIn" ✅ — but get a `redirect_uri_mismatch` because the callback URL `localhost:8080` isn't registered with LinkedIn's developer portal (because RavalAI's developer app isn't fully set up yet)
+4. Click "Connect LinkedIn" ✅ — but get a `redirect_uri_mismatch` because the callback URL `localhost:8080` isn't registered with LinkedIn's developer portal (because MelloxAI's developer app isn't fully set up yet)
 5. Never be able to publish ❌
 
 **Bottom line:** Everything in our control works. The blocker is external — the developer app registrations on LinkedIn, X, and Meta.
@@ -89,7 +89,7 @@ If a client tried to sign up **today**, they would:
 
 A **developer app** is an application you register on a social platform (LinkedIn, X, Meta) that lets **your code** act on behalf of **users who authorize you**. It is:
 
-- ✅ Owned by **RavalAI** (your company), not by clients
+- ✅ Owned by **MelloxAI** (your company), not by clients
 - ✅ One app per platform (not per client)
 - ✅ Has a Client ID + Client Secret (think: a username and password for your app)
 - ✅ Has authorized redirect URLs (where the platform sends users after they click "Authorize")
@@ -99,13 +99,13 @@ A **developer app** is an application you register on a social platform (LinkedI
 
 ### 2.2 What the client actually experiences
 
-When a client clicks "Connect LinkedIn" inside RavalAI:
+When a client clicks "Connect LinkedIn" inside MelloxAI:
 
 ```
 ┌─────────────────────────────────────────────────┐
 │ linkedin.com — Real LinkedIn consent screen     │
 │                                                 │
-│ RavalAI wants to:                               │
+│ MelloxAI wants to:                               │
 │   ✓ Post on your behalf                         │
 │   ✓ See your profile                            │
 │                                                 │
@@ -113,7 +113,7 @@ When a client clicks "Connect LinkedIn" inside RavalAI:
 └─────────────────────────────────────────────────┘
 ```
 
-The client clicks "Authorize" and is sent back to RavalAI. **They never see a developer console, an API key, or a webhook URL.** That is the entire experience from their side.
+The client clicks "Authorize" and is sent back to MelloxAI. **They never see a developer console, an API key, or a webhook URL.** That is the entire experience from their side.
 
 ### 2.3 The four developer apps — current status
 
@@ -190,13 +190,13 @@ When you have these ready, I will execute Phase 1 below.
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    CLIENT BROWSER                            │
-│           (https://app.raval.ai)                             │
+│           (https://app.mellox.ai)                             │
 └────────────┬────────────────────────────────┬───────────────┘
              │                                 │
              │ HTTPS                           │ HTTPS
              ▼                                 ▼
 ┌─────────────────────────┐     ┌──────────────────────────┐
-│   RAVALAI APP           │     │   SDR                    │
+│   MELLOXAI APP           │     │   SDR                    │
 │   (Vercel)              │◄───►│   (AWS Lightsail)        │
 │                         │     │                          │
 │ - Supabase auth         │     │ - FastAPI                │
@@ -222,12 +222,12 @@ When you have these ready, I will execute Phase 1 below.
                                           ▼
                           ┌──────────────────────────────────┐
                           │  LinkedIn / X / Meta / Instagram  │
-                          │  (RavalAI's developer apps)        │
+                          │  (MelloxAI's developer apps)        │
                           │  (acting on behalf of clients)    │
                           └──────────────────────────────────┘
 ```
 
-**Key principle:** RavalAI owns the developer apps. Clients just authorize them.
+**Key principle:** MelloxAI owns the developer apps. Clients just authorize them.
 
 ---
 
@@ -246,17 +246,17 @@ Reference: [`history/adr/0005-aws-lightsail-sdr-production-deployment.md`](../..
 Steps:
 
 - [ ] Provision AWS Lightsail instance (Ubuntu 22.04, 1GB RAM, $5/mo)
-- [ ] Point DNS `sdr.raval.ai` → instance IP
+- [ ] Point DNS `sdr.mellox.ai` → instance IP
 - [ ] SSH in, install Python 3.12, Docker, docker-compose, Caddy
-- [ ] Clone `https://github.com/Raval-Ai-Org/raval` (or the SDR-only repo)
-- [ ] Apply Alembic migrations: `cd Social-Distribtion-Engine-RavalAI-SDE && alembic upgrade head`
+- [ ] Clone `https://github.com/Mellox-Ai-Org/mellox` (or the SDR-only repo)
+- [ ] Apply Alembic migrations: `cd Social-Distribtion-Engine-MelloxAI-SDE && alembic upgrade head`
 - [ ] Set up systemd service for `uvicorn app.main:app`
 - [ ] Set up systemd service for `celery -A app.celery_app worker`
 - [ ] Set up systemd service for `celery -A app.celery_app beat`
 - [ ] Configure Caddy for HTTPS (Let's Encrypt auto-renews)
-- [ ] Verify `https://sdr.raval.ai/health` returns 200
+- [ ] Verify `https://sdr.mellox.ai/health` returns 200
 
-**Done when:** `curl https://sdr.raval.ai/health` returns `{"status": "ok"}`
+**Done when:** `curl https://sdr.mellox.ai/health` returns `{"status": "ok"}`
 
 #### 0.2 — Start Meta App Review (Day 0, ~2 hours + 5-7 days waiting)
 
@@ -265,13 +265,13 @@ Steps:
 Steps:
 
 - [ ] Go to https://developers.facebook.com/apps
-- [ ] Click "Create App" → Type: **Business** → Name: "RavalAI" → Contact email: `team@raval.ai`
+- [ ] Click "Create App" → Type: **Business** → Name: "MelloxAI" → Contact email: `team@mellox.ai`
 - [ ] Add product: **Facebook Login for Business**
 - [ ] Add product: **Instagram Graph API**
-- [ ] Settings → Basic: fill in Privacy Policy URL (`https://raval.ai/privacy`), Terms of Service URL, App Icon (use RavalAI logo)
-- [ ] Facebook Login for Business → Settings: add `https://sdr.raval.ai/api/v1/oauth/facebook/callback` as valid OAuth redirect URI
+- [ ] Settings → Basic: fill in Privacy Policy URL (`https://mellox.ai/privacy`), Terms of Service URL, App Icon (use MelloxAI logo)
+- [ ] Facebook Login for Business → Settings: add `https://sdr.mellox.ai/api/v1/oauth/facebook/callback` as valid OAuth redirect URI
 - [ ] App Review → Permissions and Features: request `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`, `instagram_basic`, `instagram_content_publish`, `business_management`
-- [ ] For each permission, write a 1-paragraph "use case" and provide a screencast video showing how RavalAI uses it (a 2-min Loom recording of you clicking through the RavalAI Studio is enough)
+- [ ] For each permission, write a 1-paragraph "use case" and provide a screencast video showing how MelloxAI uses it (a 2-min Loom recording of you clicking through the MelloxAI Studio is enough)
 - [ ] Submit for review
 - [ ] Add Junaid and Zian as "Test Users" so you can develop without waiting for review
 
@@ -281,8 +281,8 @@ Steps:
 
 Steps:
 
-- [ ] LinkedIn: log into https://www.linkedin.com/developers/apps, find RavalAI app, copy Client ID and Client Secret
-- [ ] X: log into https://developer.twitter.com/en/portal, find RavalAI app, copy OAuth 2.0 Client ID, Client Secret, and Bearer Token
+- [ ] LinkedIn: log into https://www.linkedin.com/developers/apps, find MelloxAI app, copy Client ID and Client Secret
+- [ ] X: log into https://developer.twitter.com/en/portal, find MelloxAI app, copy OAuth 2.0 Client ID, Client Secret, and Bearer Token
 - [ ] Verify each app is in "Live" or "Production" mode (not "Development")
 - [ ] Verify app verification is still active (LinkedIn sends a re-verification email yearly)
 
@@ -296,32 +296,32 @@ Steps:
 
 #### 1.1 — Add credentials to SDR `.env` (5 min)
 
-Create `Social-Distribtion-Engine-RavalAI-SDE/.env` on the production Lightsail instance:
+Create `Social-Distribtion-Engine-MelloxAI-SDE/.env` on the production Lightsail instance:
 
 ```bash
 # LinkedIn
 LINKEDIN_CLIENT_ID=86xxxxxxxxxxxx
 LINKEDIN_CLIENT_SECRET=WPLxxxxxxxxxxxx
-LINKEDIN_CALLBACK_URL=https://sdr.raval.ai/api/v1/oauth/linkedin/callback
+LINKEDIN_CALLBACK_URL=https://sdr.mellox.ai/api/v1/oauth/linkedin/callback
 
 # X / Twitter
 TWITTER_CLIENT_ID=ABCxxxxxxxxxxxxxx
 TWITTER_CLIENT_SECRET=DEFxxxxxxxxxxxxxx
 TWITTER_BEARER_TOKEN=AAAAAAAAAAAAAAAAAAAAAxxxxxxxxxxxxxx
-TWITTER_CALLBACK_URL=https://sdr.raval.ai/api/v1/oauth/x/callback
+TWITTER_CALLBACK_URL=https://sdr.mellox.ai/api/v1/oauth/x/callback
 
 # Facebook + Instagram
 FACEBOOK_CLIENT_ID=1234567890
 FACEBOOK_CLIENT_SECRET=abcdef1234567890...
-FACEBOOK_CALLBACK_URL=https://sdr.raval.ai/api/v1/oauth/facebook/callback
+FACEBOOK_CALLBACK_URL=https://sdr.mellox.ai/api/v1/oauth/facebook/callback
 ```
 
 #### 1.2 — Restart SDR FastAPI process (1 min)
 
 ```bash
-ssh ubuntu@sdr.raval.ai
-sudo systemctl restart raval-sdr-api
-sudo systemctl status raval-sdr-api  # verify "active (running)"
+ssh ubuntu@sdr.mellox.ai
+sudo systemctl restart mellox-sdr-api
+sudo systemctl status mellox-sdr-api  # verify "active (running)"
 ```
 
 **Do NOT restart Celery or Postgres** — OAuth state in Redis must survive.
@@ -332,25 +332,25 @@ For each platform, run:
 
 ```bash
 # LinkedIn
-curl -X POST https://sdr.raval.ai/api/v1/accounts/oauth/start \
+curl -X POST https://sdr.mellox.ai/api/v1/accounts/oauth/start \
   -H "Authorization: Bearer $SDR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"platform":"linkedin","workspace_id":"workspace_001"}'
 
 # X / Twitter
-curl -X POST https://sdr.raval.ai/api/v1/accounts/oauth/start \
+curl -X POST https://sdr.mellox.ai/api/v1/accounts/oauth/start \
   -H "Authorization: Bearer $SDR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"platform":"twitter","workspace_id":"workspace_001"}'
 
 # Facebook
-curl -X POST https://sdr.raval.ai/api/v1/accounts/oauth/start \
+curl -X POST https://sdr.mellox.ai/api/v1/accounts/oauth/start \
   -H "Authorization: Bearer $SDR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"platform":"facebook","workspace_id":"workspace_001"}'
 
 # Instagram
-curl -X POST https://sdr.raval.ai/api/v1/accounts/oauth/start \
+curl -X POST https://sdr.mellox.ai/api/v1/accounts/oauth/start \
   -H "Authorization: Bearer $SDR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"platform":"instagram","workspace_id":"workspace_001"}'
@@ -365,17 +365,17 @@ curl -X POST https://sdr.raval.ai/api/v1/accounts/oauth/start \
 }
 ```
 
-**If you get an error like `Unsupported platform: X`:** the platform string in your request doesn't match what the SDR expects. Check `Social-Distribtion-Engine-RavalAI-SDE/app/api/accounts.py` line ~250 for the allowed values (currently `linkedin`, `twitter`, `facebook`, `instagram`).
+**If you get an error like `Unsupported platform: X`:** the platform string in your request doesn't match what the SDR expects. Check `Social-Distribtion-Engine-MelloxAI-SDE/app/api/accounts.py` line ~250 for the allowed values (currently `linkedin`, `twitter`, `facebook`, `instagram`).
 
-#### 1.4 — Add credentials to RavalAI `.env` (template only) (5 min)
+#### 1.4 — Add credentials to MelloxAI `.env` (template only) (5 min)
 
-Update `raval/.env.example` (the template, not the actual `.env`):
+Update `mellox/.env.example` (the template, not the actual `.env`):
 
 ```bash
-# raval/.env.example
+# mellox/.env.example
 # (existing entries)
 
-# Developer app credentials (RavalAI's apps, not per-client)
+# Developer app credentials (MelloxAI's apps, not per-client)
 LINKEDIN_CLIENT_ID=
 TWITTER_CLIENT_ID=
 FACEBOOK_CLIENT_ID=
@@ -399,31 +399,31 @@ This is the step most teams miss. If your callback URL isn't registered with the
 
 #### 2.1 — LinkedIn
 
-In https://www.linkedin.com/developers/apps → RavalAI app → **Auth** tab:
+In https://www.linkedin.com/developers/apps → MelloxAI app → **Auth** tab:
 
 - **Authorized redirect URLs:** add:
-  - `https://sdr.raval.ai/api/v1/oauth/linkedin/callback` (production)
+  - `https://sdr.mellox.ai/api/v1/oauth/linkedin/callback` (production)
   - `http://localhost:8080/api/sdr/oauth/linkedin/callback` (dev — for local testing)
 
 #### 2.2 — X / Twitter
 
-In https://developer.twitter.com/en/portal → RavalAI app → **User authentication settings** → **Callback URI / Redirect URL**:
+In https://developer.twitter.com/en/portal → MelloxAI app → **User authentication settings** → **Callback URI / Redirect URL**:
 
-- Add: `https://sdr.raval.ai/api/v1/oauth/x/callback`
+- Add: `https://sdr.mellox.ai/api/v1/oauth/x/callback`
 - Add: `http://localhost:8080/api/sdr/oauth/x/callback` (dev)
 
 #### 2.3 — Facebook
 
-In https://developers.facebook.com/apps → RavalAI app → **Facebook Login for Business** → **Settings** → **Valid OAuth Redirect URIs**:
+In https://developers.facebook.com/apps → MelloxAI app → **Facebook Login for Business** → **Settings** → **Valid OAuth Redirect URIs**:
 
-- Add: `https://sdr.raval.ai/api/v1/oauth/facebook/callback`
+- Add: `https://sdr.mellox.ai/api/v1/oauth/facebook/callback`
 - Add: `http://localhost:8080/api/sdr/oauth/facebook/callback` (dev)
 
 #### 2.4 — Instagram
 
 Same Meta app. Instagram uses the same Facebook Login redirect URI. The SDR distinguishes the two by the `state` parameter and the requested scopes.
 
-**Done when:** All 4 platforms have `https://sdr.raval.ai/...` registered as a valid callback URL.
+**Done when:** All 4 platforms have `https://sdr.mellox.ai/...` registered as a valid callback URL.
 
 ---
 
@@ -433,14 +433,14 @@ Same Meta app. Instagram uses the same Facebook Login redirect URI. The SDR dist
 
 #### 3.1 — Write a Playwright e2e test that exercises the full flow
 
-Create `raval/tests/e2e/live-oauth-e2e.spec.ts`:
+Create `mellox/tests/e2e/live-oauth-e2e.spec.ts`:
 
 ```typescript
 import { test, expect, Page } from "@playwright/test";
 
 const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "";
 const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "";
-const BASE_URL = process.env.RAVAL_BASE_URL || "http://localhost:8080";
+const BASE_URL = process.env.MELLOX_BASE_URL || "http://localhost:8080";
 
 async function loginAndGoToSocial(page: Page) {
   await page.goto(`${BASE_URL}/login`);
@@ -491,18 +491,18 @@ For each platform:
 
 1. Run the test
 2. When the consent screen appears, **manually click "Authorize"** in the browser
-3. Verify you land back in RavalAI with the connection marked "Connected"
+3. Verify you land back in MelloxAI with the connection marked "Connected"
 4. Verify the SDR has the encrypted token:
    ```bash
-   ssh ubuntu@sdr.raval.ai
-   sudo -u postgres psql raval_sde -c "SELECT id, platform, display_name, created_at FROM accounts ORDER BY created_at DESC LIMIT 5;"
+   ssh ubuntu@sdr.mellox.ai
+   sudo -u postgres psql mellox_sde -c "SELECT id, platform, display_name, created_at FROM accounts ORDER BY created_at DESC LIMIT 5;"
    ```
 5. Verify a real post can be published:
    ```bash
-   curl -X POST https://sdr.raval.ai/api/v1/posts \
+   curl -X POST https://sdr.mellox.ai/api/v1/posts \
      -H "Authorization: Bearer $SDR_ADMIN_TOKEN" \
      -H "Content-Type: application/json" \
-     -d '{"text": "Test post from RavalAI launch verification", "platforms": ["linkedin"], "account_ids": ["..."]}'
+     -d '{"text": "Test post from MelloxAI launch verification", "platforms": ["linkedin"], "account_ids": ["..."]}'
    ```
 
 #### 3.3 — Verify token refresh works (programmatic, 30 min)
@@ -533,50 +533,50 @@ git commit -am "test: add live OAuth e2e tests for all 4 platforms"
 
 **Goal:** Stable URLs instead of `localhost` and Cloudflare tunnels.
 
-#### 4.1 — Deploy RavalAI to Vercel (Day 3, ~2 hours)
+#### 4.1 — Deploy MelloxAI to Vercel (Day 3, ~2 hours)
 
 Vercel has first-class TanStack Start support.
 
 Steps:
 
-- [ ] Sign up at https://vercel.com with `team@raval.ai`
-- [ ] Click "Add New Project" → Import `Raval-Ai-Org/raval` from GitHub
+- [ ] Sign up at https://vercel.com with `team@mellox.ai`
+- [ ] Click "Add New Project" → Import `Mellox-Ai-Org/mellox` from GitHub
 - [ ] Framework preset: **TanStack Start** (Vercel auto-detects)
-- [ ] Root directory: `./` (the raval repo root)
+- [ ] Root directory: `./` (the mellox repo root)
 - [ ] Build command: leave default (Vite build)
-- [ ] Environment variables: copy all from `raval/.env`, including:
+- [ ] Environment variables: copy all from `mellox/.env`, including:
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_PUBLISHABLE_KEY`
   - `SUPABASE_URL`
   - `SUPABASE_PUBLISHABLE_KEY`
   - `SUPABASE_SERVICE_ROLE_KEY`
-  - `SDR_BASE_URL=https://sdr.raval.ai` (now using production URL!)
+  - `SDR_BASE_URL=https://sdr.mellox.ai` (now using production URL!)
   - `SDR_ADMIN_TOKEN`
   - `CRON_SECRET`
   - `FEATURE_FLAG_SDR_ENABLED=true`
   - `SDR_SECRET_ENCRYPTION_KEY`
 - [ ] Click "Deploy"
 - [ ] Vercel will give you a `*.vercel.app` URL — verify it works
-- [ ] In **Domains** settings, add custom domain `app.raval.ai` (and `raval.ai` for the landing page)
-- [ ] Update DNS: add a CNAME record pointing `app.raval.ai` to the Vercel-provided target
+- [ ] In **Domains** settings, add custom domain `app.mellox.ai` (and `mellox.ai` for the landing page)
+- [ ] Update DNS: add a CNAME record pointing `app.mellox.ai` to the Vercel-provided target
 - [ ] Wait for Vercel to issue SSL (usually <5 min)
 
-**Done when:** `https://app.raval.ai` returns HTTP 200 with the RavalAI landing page.
+**Done when:** `https://app.mellox.ai` returns HTTP 200 with the MelloxAI landing page.
 
 #### 4.2 — Update callback URLs everywhere (15 min)
 
-Now that `sdr.raval.ai` and `app.raval.ai` exist, update all 4 platform developer portals:
+Now that `sdr.mellox.ai` and `app.mellox.ai` exist, update all 4 platform developer portals:
 
-- LinkedIn: add `https://app.raval.ai/api/sdr/oauth/linkedin/callback` (RavalAI's own callback, not just SDR's)
-- X: add `https://app.raval.ai/api/sdr/oauth/x/callback`
-- Facebook: add `https://app.raval.ai/api/sdr/oauth/facebook/callback`
+- LinkedIn: add `https://app.mellox.ai/api/sdr/oauth/linkedin/callback` (MelloxAI's own callback, not just SDR's)
+- X: add `https://app.mellox.ai/api/sdr/oauth/x/callback`
+- Facebook: add `https://app.mellox.ai/api/sdr/oauth/facebook/callback`
 - Instagram: same
 
-(These are in addition to the SDR-direct callbacks. RavalAI's UI uses the app.raval.ai callbacks; the SDR receives the redirect.)
+(These are in addition to the SDR-direct callbacks. MelloxAI's UI uses the app.mellox.ai callbacks; the SDR receives the redirect.)
 
 #### 4.3 — Verify production end-to-end (Day 4, ~2 hours)
 
-- [ ] Log into `https://app.raval.ai` with your credentials
+- [ ] Log into `https://app.mellox.ai` with your credentials
 - [ ] Connect LinkedIn → real consent → connected ✅
 - [ ] Connect X → real consent → connected ✅
 - [ ] Connect Facebook → real consent → connected ✅
@@ -591,7 +591,7 @@ Commit:
 git commit -am "chore: configure production deployment (Vercel + Lightsail)"
 ```
 
-**Done when:** Full platform publish to all 4 platforms works from `https://app.raval.ai` against real social accounts.
+**Done when:** Full platform publish to all 4 platforms works from `https://app.mellox.ai` against real social accounts.
 
 ---
 
@@ -610,13 +610,13 @@ Zian's network, your network — anyone with:
 
 #### 5.2 — Walk them through the flow (1 hour)
 
-1. They go to `https://app.raval.ai/signup`
+1. They go to `https://app.mellox.ai/signup`
 2. They create an account (Supabase auth)
 3. They get an empty workspace
 4. They click "Connect LinkedIn" → real LinkedIn consent → connected
 5. They click "Connect X" → real X consent → connected
 6. They run `/onboarding` → enter their brand website
-7. RavalAI generates their first 7 days of content
+7. MelloxAI generates their first 7 days of content
 8. They review, edit, approve
 9. They click "Publish to LinkedIn" → SDR posts → appears on their LinkedIn within 30 seconds
 
@@ -637,7 +637,7 @@ Commit each fix:
 git commit -am "fix: address first client feedback (e.g. onboarding wizard too long)"
 ```
 
-**Done when:** One real client has successfully published a real post from `https://app.raval.ai`.
+**Done when:** One real client has successfully published a real post from `https://app.mellox.ai`.
 
 ---
 
@@ -645,9 +645,9 @@ git commit -am "fix: address first client feedback (e.g. onboarding wizard too l
 
 **Goal:** Announce, onboard 5 more clients, iterate.
 
-#### 6.1 — Landing page at `raval.ai` (Day 6, ~4 hours)
+#### 6.1 — Landing page at `mellox.ai` (Day 6, ~4 hours)
 
-You need a marketing site (not the app) at `https://raval.ai`.
+You need a marketing site (not the app) at `https://mellox.ai`.
 
 I can build it as a route in the same TanStack Start app:
 
@@ -655,7 +655,7 @@ I can build it as a route in the same TanStack Start app:
 - Hero section: "AI-native marketing that posts for you"
 - "How it works" 3-step section
 - Pricing (Solo / Studio / Agency)
-- "Get started" CTA → `https://app.raval.ai/signup`
+- "Get started" CTA → `https://app.mellox.ai/signup`
 
 Or use a separate static site (Astro, Next.js, etc.) if you prefer.
 
@@ -674,7 +674,7 @@ Stripe Checkout integration:
 - Sign up at https://stripe.com
 - Create 3 products matching the tiers
 - Add a `subscriptions` table to Supabase
-- Webhook handler in RavalAI: `POST /api/stripe/webhook`
+- Webhook handler in MelloxAI: `POST /api/stripe/webhook`
 - On `checkout.session.completed` → set `subscriptions.status = 'active'`
 - On `customer.subscription.deleted` → downgrade to free tier
 
@@ -682,8 +682,8 @@ Stripe Checkout integration:
 
 Zian posts on LinkedIn and X:
 
-- Personal story of building RavalAI
-- "Try it free for 14 days" link to `https://raval.ai`
+- Personal story of building MelloxAI
+- "Try it free for 14 days" link to `https://mellox.ai`
 - Demo video (2 min Loom of using the platform)
 
 #### 6.4 — Onboard 5 more clients in the first week (Day 7-14)
@@ -718,13 +718,13 @@ Track each:
 
 ### One-time costs
 
-- Domain registration (`raval.ai`): ~$15/year
+- Domain registration (`mellox.ai`): ~$15/year
 - AWS Lightsail setup: $0 (free tier covers initial setup)
 
 ### Recurring monthly costs (at launch)
 
 - AWS Lightsail (SDR): $5-10/mo
-- Vercel Pro (RavalAI): $20/mo (free tier works for first 3 months)
+- Vercel Pro (MelloxAI): $20/mo (free tier works for first 3 months)
 - Supabase Pro: $25/mo (free tier works for first 3 clients)
 - Stripe fees: 2.9% + 30¢ per transaction
 - **Total: ~$50-60/mo + Stripe fees** before any clients
@@ -777,9 +777,9 @@ Before I start executing, I need answers to:
 
 ## 8. References
 
-- [RavalAI integration spec](spec.md) — original FRD for SDR integration
-- [RavalAI integration plan](plan.md) — original architecture
-- [RavalAI integration tasks](tasks.md) — task breakdown
+- [MelloxAI integration spec](spec.md) — original FRD for SDR integration
+- [MelloxAI integration plan](plan.md) — original architecture
+- [MelloxAI integration tasks](tasks.md) — task breakdown
 - [INTEGRATION-HOLD.md](INTEGRATION-HOLD.md) — current state of integration work
 - [ADR-0001: Proxy through server for SDR access](../../history/adr/0001-proxy-through-server-for-sdr-access.md)
 - [ADR-0002: Split scheduling (generation vs distribution)](../../history/adr/0002-split-scheduling-generation-vs-distribution.md)

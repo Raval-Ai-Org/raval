@@ -1,6 +1,6 @@
 # Authentication & User Management - Complete Codebase Report
 
-**Project**: Mellox AI (formerly "Raval")  
+**Project**: Mellox AI  
 **Date**: 2026-09-04  
 **Framework**: Next.js 16 + Supabase  
 **Supabase Project ID**: `slcmqbbjzyztqyucauol`
@@ -264,7 +264,7 @@ Routes wrapped with `<SessionGate>`:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL="https://slcmqbbjzyztqyucauol.supabase.co"
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="sb_publishable_[key]"
-NEXT_PUBLIC_APP_URL="https://raval.ai"  # or http://localhost:8080 for dev
+NEXT_PUBLIC_APP_URL="https://mellox.ai"  # or http://localhost:8080 for dev
 ```
 
 ### Server-only

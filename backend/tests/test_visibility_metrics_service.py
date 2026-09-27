@@ -39,7 +39,7 @@ def db_session():
 @pytest.fixture
 def sample_dataset(db_session):
     now = datetime.now(timezone.utc)
-    website = Website(name="Raval AI", url="https://raval.ai", created_at=now)
+    website = Website(name="Mellox AI", url="https://mellox.ai", created_at=now)
     db_session.add(website)
     db_session.commit()
     db_session.refresh(website)
@@ -49,7 +49,7 @@ def sample_dataset(db_session):
     db_session.commit()
     db_session.refresh(scan)
 
-    page = PageResult(scan_id=scan.id, url="https://raval.ai/geo-guide", status_code=200, created_at=now)
+    page = PageResult(scan_id=scan.id, url="https://mellox.ai/geo-guide", status_code=200, created_at=now)
     db_session.add(page)
     db_session.commit()
     db_session.refresh(page)
@@ -92,7 +92,7 @@ def sample_dataset(db_session):
         provider="openai",
         model="gpt-4o",
         status="SUCCESS",
-        response_text="Raval AI provides cutting-edge GEO. Source: https://raval.ai/geo-guide",
+        response_text="Mellox AI provides cutting-edge GEO. Source: https://mellox.ai/geo-guide",
         latency_ms=250,
         input_tokens=100,
         output_tokens=50,
@@ -108,7 +108,7 @@ def sample_dataset(db_session):
         provider="openai",
         model="gpt-4o",
         status="SUCCESS",
-        response_text="Raval AI and SearchOptima are leading platforms in GEO.",
+        response_text="Mellox AI and SearchOptima are leading platforms in GEO.",
         latency_ms=300,
         input_tokens=120,
         output_tokens=60,

@@ -2,7 +2,7 @@
 
 ## 1. Architectural Philosophy
 
-The Raval GEO & AEO Content Intelligence Engine operates on three inviolable foundational principles:
+The Mellox GEO & AEO Content Intelligence Engine operates on three inviolable foundational principles:
 
 1. **Evidence != Conclusion**:
    - Extraction layers extract objective observable facts (e.g. heading tags, numbers, keywords, schema blocks).

@@ -95,14 +95,23 @@ export const getOverview = createServerFn({ method: "GET" })
     const db = context.supabase;
 
     const { workspaceSite } = await import("@/server/links/service.server");
-    const { CREDIT_PACKS, stripeConfigured } = await import("@/server/billing/stripe.server");
+    const { CREDIT_PACKS } = await import("@/lib/billing/catalog");
+    const { stripeAccountReady } = await import("@/server/billing/stripe-account.server");
+    const { accountForWorkspace } = await import("@/server/billing/accounts.server");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const account = (await accountForWorkspace(data.workspaceId)).account;
 
-    const [balance, orders, lines, catalog, siteHost] = await Promise.all([
-      db
-        .from("workspace_credit_balances")
-        .select("available, held, lifetime_topped_up, lifetime_spent")
-        .eq("workspace_id", data.workspaceId)
+    const [balance, spent, orders, lines, catalog, siteHost] = await Promise.all([
+      supabaseAdmin
+        .from("meter_balances" as never)
+        .select("available_any,held" as never)
+        .eq("account_id" as never, account.id)
+        .eq("meter" as never, "credits")
         .maybeSingle(),
+      supabaseAdmin.rpc(
+        "backlink_spent_credits" as never,
+        { p_workspace: data.workspaceId } as never,
+      ),
       db
         .from("link_orders")
         .select(ORDER_COLS)
@@ -119,6 +128,7 @@ export const getOverview = createServerFn({ method: "GET" })
       db.from("rixot_donors").select("id", { count: "exact", head: true }),
       workspaceSite(data.workspaceId),
     ]);
+    if (balance.error || spent.error) throw new Error("Could not load backlink balance.");
 
     const orderRows = orders.data ?? [];
     const lineRows = lines.data ?? [];
@@ -148,24 +158,28 @@ export const getOverview = createServerFn({ method: "GET" })
       canEdit: role === "owner" || role === "admin" || role === "editor",
       // The packs come from the server so a price can never be set in a browser.
       packs: CREDIT_PACKS.map((pack) => ({
-        id: pack.id,
+        id: pack.key,
         usd: pack.usd,
-        valueUsd: pack.valueUsd,
-        bonusUsd: Math.round((pack.valueUsd - pack.usd) * 100) / 100,
+        valueUsd: pack.credits / 100,
+        bonusUsd: pack.bonusCredits / 100,
       })),
       // Whether a card payment can actually complete, so the UI can say so up
       // front rather than at the moment someone clicks Buy.
-      billingEnabled: stripeConfigured(),
+      billingEnabled: role === "owner" && (await stripeAccountReady()),
       catalogSize: catalog.count ?? 0,
       siteHost,
       // Balance is shown to people as money. Credits stay the ledger unit
       // underneath, converted here at the one rate the server owns.
       balance: {
-        availableUsd: creditsToUsd(Number(balance.data?.available ?? 0)),
-        heldUsd: creditsToUsd(Number(balance.data?.held ?? 0)),
-        spentUsd: creditsToUsd(Number(balance.data?.lifetime_spent ?? 0)),
-        availableCredits: Number(balance.data?.available ?? 0),
-        heldCredits: Number(balance.data?.held ?? 0),
+        availableUsd: creditsToUsd(
+          Number((balance.data as { available_any?: number } | null)?.available_any ?? 0),
+        ),
+        heldUsd: creditsToUsd(Number((balance.data as { held?: number } | null)?.held ?? 0)),
+        spentUsd: creditsToUsd(Number(spent.data ?? 0)),
+        availableCredits: Number(
+          (balance.data as { available_any?: number } | null)?.available_any ?? 0,
+        ),
+        heldCredits: Number((balance.data as { held?: number } | null)?.held ?? 0),
       },
       stats: {
         live: live.length,
@@ -453,19 +467,41 @@ export const getCreditHistory = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     await requireViewer(context, data.workspaceId);
 
-    const { data: rows } = await context.supabase
+    const { data: rows, error: legacyError } = await context.supabase
       .from("workspace_credit_ledger")
       .select("id, kind, delta_available, delta_held, balance_after, reason, created_at")
       .eq("workspace_id", data.workspaceId)
       .order("created_at", { ascending: false })
       .limit(60);
+    if (legacyError) throw new Error("Could not load historical backlink credits.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: current, error: currentError } = await supabaseAdmin
+      .from("meter_ledger" as never)
+      .select("id,kind,delta_available,available_after,reason,created_at" as never)
+      .eq("workspace_id" as never, data.workspaceId)
+      .eq("meter" as never, "credits")
+      .order("created_at" as never, { ascending: false })
+      .limit(60);
+    if (currentError) throw new Error("Could not load account backlink credits.");
 
-    return (rows ?? []).map((row) => ({
-      id: Number(row.id),
-      kind: String(row.kind),
-      deltaUsd: creditsToUsd(Number(row.delta_available ?? 0)),
-      balanceAfterUsd: creditsToUsd(Number(row.balance_after ?? 0)),
-      reason: (row.reason as string | null) ?? null,
-      at: String(row.created_at),
-    }));
+    return [
+      ...(rows ?? []).map((row) => ({
+        id: `legacy:${row.id}`,
+        kind: String(row.kind),
+        deltaUsd: creditsToUsd(Number(row.delta_available ?? 0)),
+        balanceAfterUsd: creditsToUsd(Number(row.balance_after ?? 0)),
+        reason: (row.reason as string | null) ?? null,
+        at: String(row.created_at),
+      })),
+      ...((current ?? []) as Array<Record<string, unknown>>).map((row) => ({
+        id: `account:${row.id}`,
+        kind: String(row.kind),
+        deltaUsd: creditsToUsd(Number(row.delta_available ?? 0)),
+        balanceAfterUsd: creditsToUsd(Number(row.available_after ?? 0)),
+        reason: (row.reason as string | null) ?? null,
+        at: String(row.created_at),
+      })),
+    ]
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, 60);
   });

@@ -1,8 +1,8 @@
-# Contract: RavalAI → SDR Server Proxy
+# Contract: MelloxAI → SDR Server Proxy
 
 **Branch**: `001-sdr-integration` | **Date**: 2026-08-08
 
-The RavalAI-internal server surface that the Studio calls. Every handler lives in the Cloudflare Worker (TanStack server fn or file route), validates the caller's Supabase session + workspace membership, then proxies to the SDR using the workspace's per-workspace key. **The SDR is never reachable from the browser.**
+The MelloxAI-internal server surface that the Studio calls. Every handler lives in the Cloudflare Worker (TanStack server fn or file route), validates the caller's Supabase session + workspace membership, then proxies to the SDR using the workspace's per-workspace key. **The SDR is never reachable from the browser.**
 
 The SDR's own external contract is authoritative and unchanged: `app/api/*`, `app/schemas.py`, and `specs/001-social-sde/integration/INTEGRATION.md` in the SDR repo (the SDR's `openapi.yaml`/`quickstart.md` are superseded design intent).
 
@@ -17,7 +17,7 @@ The SDR's own external contract is authoritative and unchanged: `app/api/*`, `ap
 
 ### `POST /api/sdr/oauth/start` (connect **and** reconnect — FR-001/FR-004)
 
-Body: `{ workspaceId, platform }` (`platform` ∈ twitter|linkedin|facebook|instagram — wire-id is `twitter` per the SDR contract and RavalAI's `PlatformId`; the UI label is "X").
+Body: `{ workspaceId, platform }` (`platform` ∈ twitter|linkedin|facebook|instagram — wire-id is `twitter` per the SDR contract and MelloxAI's `PlatformId`; the UI label is "X").
 Flow: `ensureWorkspaceSdrProvisioning(workspaceId)` → proxy `GET /api/v1/oauth/{platform}/start` with the workspace key → return `{ authorizationUrl, stateToken }`.
 Reconnect: an expired account (status `expired`) triggers the same `oauth/start` for its platform; on successful callback the account returns to `active` and is re-offered as a target (FR-004).
 Errors: 400 unknown platform · 401/403 auth · 500 provisioning failure.
@@ -67,7 +67,7 @@ Proxy `GET /api/v1/jobs/{id}` (used for reconciliation/debug; primary status pat
 
 Body: `{ workspaceId, contentItemId }`. Cancels the pending schedule via SDR `DELETE /api/v1/jobs/{id}`; sets `content_publications.status=cancelled` for pending rows + item back to a cancellable state. Only valid while not yet fired.
 
-## Error envelope (RavalAI → Studio)
+## Error envelope (MelloxAI → Studio)
 
 ```json
 {
@@ -85,4 +85,4 @@ Body: `{ workspaceId, contentItemId }`. Cancels the pending schedule via SDR `DE
 - Publish submit and webhook apply can race; the webhook receiver is the authority for terminal delivery state.
 - The 3 existing call sites that change to server fns: `StudioCanvasModal.tsx:891-922` (publish now), `:850-889` (schedule), `StudioRail.tsx:465-478` (approve→publish). **Approval-rail behavior (FR-024):** the rail's `approved` decision stays _editorial_ (sets `approved`); only an explicit Publish/Schedule action in the canvas (or the rail's explicit "Publish now") triggers distribution — an approve alone never posts.
 - Everything else (SEO/email/article/landing canvases) is untouched, and SDR aggregation never recomputes their status (no `content_publications` rows).
-- **Dev-mode (R2h):** a localhost RavalAI cannot receive SDR webhooks (the SDR can't reach `localhost`). In dev, the client/server polls `GET /api/v1/jobs/{id}` for status until the webhook receiver is deployed behind a public URL; the webhook path is the production mechanism.
+- **Dev-mode (R2h):** a localhost MelloxAI cannot receive SDR webhooks (the SDR can't reach `localhost`). In dev, the client/server polls `GET /api/v1/jobs/{id}` for status until the webhook receiver is deployed behind a public URL; the webhook path is the production mechanism.

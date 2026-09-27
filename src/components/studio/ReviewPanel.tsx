@@ -9,7 +9,6 @@ import {
   CalendarClock,
   Check,
   Copy,
-  Download,
   Eye,
   Info,
   Pencil,
@@ -170,7 +169,12 @@ function CheckRow({ check, index }: { check: Check; index: number }) {
           <AlertTriangle className="size-3" />
         )}
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{check.label}</span>
+      <span
+        className="min-w-0 flex-1 truncate text-sm text-foreground"
+        title={typeof check.label === "string" ? check.label : undefined}
+      >
+        {check.label}
+      </span>
       {check.detail ? (
         <span
           className={cn(
@@ -706,6 +710,24 @@ export function ReviewPanel({
               ),
             },
     );
+  }
+  for (const [index, warning] of (draft.warnings ?? []).entries()) {
+    checks.push({
+      key: `visual-warning-${index}`,
+      state: "warn",
+      label: warning,
+      action:
+        media?.kind === "image" ? (
+          <button
+            type="button"
+            onClick={retryMedia}
+            disabled={revising}
+            className="shrink-0 text-xs font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50"
+          >
+            Refine visual
+          </button>
+        ) : undefined,
+    });
   }
   if (draft.article) {
     checks.push({

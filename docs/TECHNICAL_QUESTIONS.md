@@ -120,7 +120,7 @@ The connector boundary is documented, but the initial production integration sco
 
 ### Question
 
-How will authentication and authorization be handled when this independent module is eventually integrated with the wider Raval AI platform?
+How will authentication and authorization be handled when this independent module is eventually integrated with the wider Mellox AI platform?
 
 ### Why It Matters
 
@@ -214,7 +214,7 @@ Monitoring is included in the architecture, but the production tooling requires 
 
 ### Question
 
-What exact interface will be used when this independent module is eventually integrated with the Raval AI production system?
+What exact interface will be used when this independent module is eventually integrated with the Mellox AI production system?
 
 ### Why It Matters
 

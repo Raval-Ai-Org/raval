@@ -1,4 +1,4 @@
-# Raval AI GEO / AEO / SEO Intelligence — Authority, Citation & Trust Intelligence (Task 7)
+# Mellox AI GEO / AEO / SEO Intelligence — Authority, Citation & Trust Intelligence (Task 7)
 
 ## 1. Overview & Architectural Role
 
@@ -163,7 +163,7 @@ Task 7 establishes 13 canonical finding types registered across 7 intelligence n
 | `citation_readiness` | `readiness_low_structural` | `low_structural_citation_readiness` | `authority` | `high` | `high` |
 
 ### 4.2 Finding-to-Recommendation Mapping
-Mapped directly into `FINDING_RECOMMENDATION_MAP` in [`backend/app/recommendation_service.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/app/recommendation_service.py#L124) with explainable rationale:
+Mapped directly into `FINDING_RECOMMENDATION_MAP` in [`backend/app/recommendation_service.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/app/recommendation_service.py#L124) with explainable rationale:
 - **`missing_trust_signals`** $\rightarrow$ `Publish Verifiable Organizational & Contact Disclosures` (Action: `add_trust_signals`)
 - **`business_name_conflict`** $\rightarrow$ `Standardize Business Entity Names Across DOM and Metadata` (Action: `resolve_business_name_conflict`)
 - **`shallow_topical_depth`** $\rightarrow$ `Expand Topical Substance and Subheading Hierarchy` (Action: `expand_topical_content`)
@@ -178,13 +178,13 @@ Mapped directly into `FINDING_RECOMMENDATION_MAP` in [`backend/app/recommendatio
 - **`low_structural_citation_readiness`** $\rightarrow$ `Enhance Structural Citation Readiness and Source Backing` (Action: `enhance_citation_readiness`)
 
 ### 4.3 Idempotent Persistence & Deduplication
-The persistence service ([`persist_authority_citation_findings_and_recommendations`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/app/authority_citation_recommendations.py#L484)) queries existing open findings by `(website_id, page_id, finding_type)` and updates `evidence`, `severity`, and `status` in place without generating duplicate database rows upon repeated executions.
+The persistence service ([`persist_authority_citation_findings_and_recommendations`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/app/authority_citation_recommendations.py#L484)) queries existing open findings by `(website_id, page_id, finding_type)` and updates `evidence`, `severity`, and `status` in place without generating duplicate database rows upon repeated executions.
 
 ---
 
 ## 5. API Integration Layer
 
-The module exposes 7 RESTful API endpoints in [`backend/app/main.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/app/main.py#L2406):
+The module exposes 7 RESTful API endpoints in [`backend/app/main.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/app/main.py#L2406):
 
 | HTTP Method | Route Endpoint | Request / Parameters | Response Model | Description |
 |---|---|---|---|---|
@@ -225,7 +225,7 @@ The module contains a dedicated 13-file test suite guaranteeing 100% test pass r
 ## 7. Real-Site Validation & Tuning (Step 13)
 
 ### 7.1 Real-Site Archetypes Validated
-The system was validated against 5 diverse real-world page archetypes using [`backend/scripts/run_real_site_step13_validation.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/scripts/run_real_site_step13_validation.py) and verified deterministically in [`backend/tests/test_authority_citation_real_site.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_authority_citation_real_site.py):
+The system was validated against 5 diverse real-world page archetypes using [`backend/scripts/run_real_site_step13_validation.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/scripts/run_real_site_step13_validation.py) and verified deterministically in [`backend/tests/test_authority_citation_real_site.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_authority_citation_real_site.py):
 
 1. **Strong Organization Page** (`https://www.python.org/psf/`):
    - Verified nonprofit organization identity in schema, about section, direct contact channels.

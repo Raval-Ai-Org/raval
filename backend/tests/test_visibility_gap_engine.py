@@ -164,7 +164,7 @@ def test_gap_mention_without_citation(base_query):
         provider="mock",
         model="mock-v1",
         status="SUCCESS",
-        response_text="Raval AI provides specialized answer optimization algorithms.",
+        response_text="Mellox AI provides specialized answer optimization algorithms.",
     )
     obs = AIVisibilityObservation(
         id=1,
@@ -195,7 +195,7 @@ def test_gap_target_cited_not_relevant(base_query):
         provider="mock",
         model="mock-v1",
         status="SUCCESS",
-        response_text="Irrelevant text citing https://raval.ai/random.",
+        response_text="Irrelevant text citing https://mellox.ai/random.",
     )
     obs = AIVisibilityObservation(
         id=1,
@@ -225,7 +225,7 @@ def test_valid_response_no_gaps(base_query):
         provider="mock",
         model="mock-v1",
         status="SUCCESS",
-        response_text="Raval AI is leading in GEO. See [Docs](https://raval.ai/docs).",
+        response_text="Mellox AI is leading in GEO. See [Docs](https://mellox.ai/docs).",
     )
     obs = AIVisibilityObservation(
         id=1,

@@ -139,7 +139,7 @@ explicit control points.
 
 ## Terminology
 
-The canonical product name is **Mellox AI**. Older documents may say Raval AI or
-RavalAI; those are historical labels unless explicitly marked current. GEO means
+The canonical product name is **Mellox AI**. Older documents may describe
+superseded product plans. GEO means
 Generative Engine Optimization in this repository's AI Visibility feature;
 AEO and SEO are related dimensions, not interchangeable product names.

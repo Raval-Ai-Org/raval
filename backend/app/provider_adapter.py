@@ -434,7 +434,7 @@ class MockProviderAdapter(BaseProviderAdapter):
         )
 
         metadata = {
-            "mock_engine": "raval_mock_v1",
+            "mock_engine": "mellox_mock_v1",
             "is_simulation": True,
             "simulated_model": model,
         }

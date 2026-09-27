@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const readBrandDna = vi.hoisted(() => vi.fn());
+const getLatestMarketBrain = vi.hoisted(() => vi.fn());
 vi.mock("@/server/workspaces/brand-dna.server", () => ({ readBrandDna }));
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: {} }));
+vi.mock("@/lib/market-brain-latest.server", () => ({ getLatestMarketBrain }));
 
 import { campaignGenerationWorkflow } from "./campaign-generation.workflow";
 
 afterEach(() => {
   readBrandDna.mockReset();
+  getLatestMarketBrain.mockReset();
   delete process.env.OPENROUTER_API_KEY;
   vi.unstubAllGlobals();
 });
@@ -23,11 +26,17 @@ describe("campaignGenerationWorkflow", () => {
         voice: "Confident, direct",
         values: "Speed, clarity",
         products: "Brand DNA, GEO audits, Studio",
+        customer: { painPoints: "No time to plan useful weekly content" },
+        competitors: [{ name: "AgencyCo", positioning: "Enterprise campaigns" }],
       },
       version: 1,
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
     process.env.OPENROUTER_API_KEY = "sk-or-test-key";
+    getLatestMarketBrain.mockResolvedValue({
+      result: { completedAt: new Date().toISOString() },
+      intelligence: { opportunities: [{ title: "Founder search questions" }], relatedQueries: [] },
+    });
     const brief = {
       theme: "Launch week",
       keyMessage: "Market like an agency, without one",
@@ -64,10 +73,14 @@ describe("campaignGenerationWorkflow", () => {
     expect(request.messages[1].content).toContain("<untrusted_data");
     expect(request.messages[1].content).toContain("Mellox");
     expect(request.messages[1].content).toContain("Launch week signups");
+    expect(request.messages[1].content).toContain("No time to plan useful weekly content");
+    expect(request.messages[1].content).toContain("AgencyCo");
+    expect(request.messages[1].content).toContain("Founder search questions");
   });
 
-  it("falls back to empty brand fields when no Brand DNA is stored yet", async () => {
+  it("does not present an empty model result as a successful campaign", async () => {
     readBrandDna.mockResolvedValue(null);
+    getLatestMarketBrain.mockResolvedValue(null);
     process.env.OPENROUTER_API_KEY = "sk-or-test-key";
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -99,7 +112,7 @@ describe("campaignGenerationWorkflow", () => {
       inputData: { workspaceId: "ws-1", goal: "Awareness", channels: ["social"] },
     });
 
-    expect(result.status).toBe("success");
+    expect(result.status).toBe("failed");
     const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     expect(request.messages[1].content).toContain("(unknown)");
   });

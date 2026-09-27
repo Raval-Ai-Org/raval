@@ -20,7 +20,7 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval.ai";
+const CANONICAL_HOST = "https://mellox.ai";
 
 // Phrases from the approved Mellox AI pitch deck. Every public route snapshot
 // must contain at least one; app/private route snapshots are exempt because

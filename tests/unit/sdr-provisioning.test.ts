@@ -39,7 +39,7 @@ describe("ensureWorkspaceSdrProvisioning", () => {
     const record = await ensureWorkspaceSdrProvisioning("ws-1", {
       db,
       callSdrFn: callSdrMock,
-      webhookBaseUrl: "https://raval.example",
+      webhookBaseUrl: "https://mellox.example",
     });
 
     expect(record.status).toBe("active");
@@ -54,14 +54,14 @@ describe("ensureWorkspaceSdrProvisioning", () => {
     await ensureWorkspaceSdrProvisioning("ws-2", {
       db,
       callSdrFn: callSdrMock,
-      webhookBaseUrl: "https://raval.example",
+      webhookBaseUrl: "https://mellox.example",
     });
 
     const adminCall = callSdrMock.mock.calls.find((c) => c[0].path === "/api/v1/admin/api-keys");
     const webhookCall = callSdrMock.mock.calls.find((c) => c[0].path === "/api/v1/webhooks/config");
     expect(adminCall?.[0].token).toBe("test-admin-token");
     expect(webhookCall?.[0].token).toBe("per-workspace-key-1");
-    expect(webhookCall?.[0].body.url).toBe("https://raval.example/api/public/hooks/sdr");
+    expect(webhookCall?.[0].body.url).toBe("https://mellox.example/api/public/hooks/sdr");
   });
 
   it("is idempotent — an existing active row short-circuits (no SDR calls)", async () => {
@@ -102,7 +102,7 @@ describe("ensureWorkspaceSdrProvisioning", () => {
       ensureWorkspaceSdrProvisioning("ws-5", {
         db,
         callSdrFn: failingSdr as any,
-        webhookBaseUrl: "https://raval.example",
+        webhookBaseUrl: "https://mellox.example",
       }),
     ).rejects.toThrow("mint failed");
   });

@@ -1,4 +1,4 @@
-// POST /api/public/hooks/sdr — SDR → RavalAI webhook receiver (FR-021/SC-009).
+// POST /api/public/hooks/sdr — SDR → MelloxAI webhook receiver (FR-021/SC-009).
 // Unauthenticated by design (the SDR must reach it); the HMAC signature IS the
 // auth — no state change is applied to an unverified or stale callback.
 // C1: 1 MB body cap. Every receipt (verified or rejected, never the body) is

@@ -450,21 +450,21 @@ def test_api_with_page_extractor_pipeline():
         website, scan = _create_test_website_and_scan(db, "Pipeline Test Site", "https://pipe-test.com")
         raw_html = """<html lang="en">
         <head>
-        <title>Pricing & Plans | Raval AI Intelligence</title>
+        <title>Pricing & Plans | Mellox AI Intelligence</title>
         <meta name="description" content="Discover powerful GEO and SEO intelligence tools and pricing plans.">
         <link rel="canonical" href="https://pipe-test.com/pricing">
         <meta name="robots" content="index, follow, noarchive">
-        <meta property="og:title" content="Raval AI Pricing">
+        <meta property="og:title" content="Mellox AI Pricing">
         <meta property="og:type" content="website">
         <meta property="og:image" content="https://pipe-test.com/og.jpg">
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="Raval AI Pricing Card">
+        <meta name="twitter:title" content="Mellox AI Pricing Card">
         <link rel="alternate" hreflang="en-GB" href="https://pipe-test.com/uk/pricing">
         <script type="application/ld+json">
         {
             "@context": "https://schema.org",
             "@type": "Product",
-            "name": "Raval Pro",
+            "name": "Mellox Pro",
             "url": "https://pipe-test.com/pricing"
         }
         </script>
@@ -502,7 +502,7 @@ def test_api_with_page_extractor_pipeline():
         intel_resp = client.get(f"/api/v1/pages/{page.id}/intelligence")
         assert intel_resp.status_code == 200
         intel = intel_resp.json()
-        assert intel["extraction"]["title_text"] == "Pricing & Plans | Raval AI Intelligence"
+        assert intel["extraction"]["title_text"] == "Pricing & Plans | Mellox AI Intelligence"
         assert intel["extraction"]["title_present"] is True
         assert intel["extraction"]["canonical_present"] is True
         assert intel["extraction"]["image_count"] == 1
@@ -533,7 +533,7 @@ def test_api_with_page_extractor_pipeline():
         assert meta_resp.status_code == 200
         meta = meta_resp.json()
         assert meta["title_present"] is True
-        assert meta["title_text"] == "Pricing & Plans | Raval AI Intelligence"
+        assert meta["title_text"] == "Pricing & Plans | Mellox AI Intelligence"
         assert meta["robots"]["noarchive"] is True
         assert len(meta["canonicals"]) == 1
         assert len(meta["social_metadata"]) == 5

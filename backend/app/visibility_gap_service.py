@@ -1,7 +1,7 @@
 """
 Visibility Gap Analysis and Existing Finding Linkage Engine (Task 10 Step 5).
 Evaluates deterministic, evidence-backed AI visibility gaps from Step 4 observations
-and links them to existing Raval findings/opportunities without duplicating issue models.
+and links them to existing Mellox findings/opportunities without duplicating issue models.
 """
 
 from dataclasses import dataclass, field

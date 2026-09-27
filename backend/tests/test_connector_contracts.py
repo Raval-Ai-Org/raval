@@ -469,7 +469,7 @@ class TestExecutionFoundationModels:
         """ExecutionRequest cleanly references Task 9 FixPlan, Recommendation, and SafetyTier."""
         site_ctx = SiteContext(
             site_id=101,
-            site_url="https://raval-test.com",
+            site_url="https://mellox-test.com",
             provider="mock",
             auth_state=AuthState.CONNECTED,
             capabilities=ConnectorCapabilities.full_mutation(),
@@ -478,7 +478,7 @@ class TestExecutionFoundationModels:
             site_context=site_ctx,
             resource=ResourceReference(
                 resource_type=ResourceType.WEBSITE_PAGE,
-                resource_id="https://raval-test.com/service",
+                resource_id="https://mellox-test.com/service",
             ),
         )
         proposal = ChangeProposal(
@@ -509,7 +509,7 @@ class TestExecutionFoundationModels:
         """ExecutionResult aggregates change result, timing telemetry, and status."""
         site_ctx = SiteContext(
             site_id=101,
-            site_url="https://raval-test.com",
+            site_url="https://mellox-test.com",
             provider="mock",
             auth_state=AuthState.CONNECTED,
         )
@@ -517,7 +517,7 @@ class TestExecutionFoundationModels:
             site_context=site_ctx,
             resource=ResourceReference(
                 resource_type=ResourceType.WEBSITE_PAGE,
-                resource_id="https://raval-test.com/service",
+                resource_id="https://mellox-test.com/service",
             ),
         )
         change_res = ChangeResult(

@@ -3,11 +3,11 @@
 - **Status:** Accepted
 - **Date:** 2026-08-08
 - **Feature:** 001-sdr-integration
-- **Context:** RavalAI must publish client content to LinkedIn, X, Facebook, and Instagram via the standalone Social Distribution Engine (SDR). The SDR holds platform OAuth tokens and the per-workspace credentials that authorize publishing. Spec FR-014 requires that publishing credentials never reach the browser, and FR-013 requires full workspace isolation. The SDR's own auth model is per-workspace Bearer keys, so a decision about where those keys live and how the browser reaches the SDR is forced before any integration work.
+- **Context:** MelloxAI must publish client content to LinkedIn, X, Facebook, and Instagram via the standalone Social Distribution Engine (SDR). The SDR holds platform OAuth tokens and the per-workspace credentials that authorize publishing. Spec FR-014 requires that publishing credentials never reach the browser, and FR-013 requires full workspace isolation. The SDR's own auth model is per-workspace Bearer keys, so a decision about where those keys live and how the browser reaches the SDR is forced before any integration work.
 
 ## Decision
 
-The browser **never calls the SDR directly**. Every SDR operation flows through a RavalAI server function / file route:
+The browser **never calls the SDR directly**. Every SDR operation flows through a MelloxAI server function / file route:
 
 ```text
 Browser (Studio) ── Supabase JWT + RLS ──▶ TanStack server fn ──▶ SDR (Bearer: per-workspace key)
@@ -25,7 +25,7 @@ Browser (Studio) ── Supabase JWT + RLS ──▶ TanStack server fn ──�
 - **Credentials never reach the browser** (FR-014): the raw per-workspace key and webhook secret are service-role-only, so a client-side compromise cannot exfiltrate them.
 - **Isolation is enforced by RLS + per-workspace key together** (FR-013): the server fn scopes every call to the caller's workspace, and the SDR key itself is workspace-specific — defense in depth.
 - **One choke point** for request-id, latency logging, idempotency-key derivation, and error-taxonomy mapping (already used for observability, T074).
-- **Server-side only**: the SDR's token refresh and OAuth consent still land on RavalAI server routes, keeping the flow intact end-to-end.
+- **Server-side only**: the SDR's token refresh and OAuth consent still land on MelloxAI server routes, keeping the flow intact end-to-end.
 
 ### Negative
 
@@ -36,8 +36,8 @@ Browser (Studio) ── Supabase JWT + RLS ──▶ TanStack server fn ──�
 ## Alternatives Considered
 
 - **(a) Direct browser→SDR**: exposes per-workspace keys to the client, no RLS, breaks isolation — **rejected** (FR-014).
-- **(b) Shared Supabase DB between RavalAI and SDR**: couples data planes, violates the SDR's own-DB "build for extraction" doctrine — **rejected**.
-- **(c) Merge SDR into `raval/`**: one failure domain, kills service independence and the SDR's modular-monolith extraction goal — **rejected**.
+- **(b) Shared Supabase DB between MelloxAI and SDR**: couples data planes, violates the SDR's own-DB "build for extraction" doctrine — **rejected**.
+- **(c) Merge SDR into `mellox/`**: one failure domain, kills service independence and the SDR's modular-monolith extraction goal — **rejected**.
 
 ## References
 

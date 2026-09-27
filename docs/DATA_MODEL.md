@@ -1,10 +1,10 @@
-# Raval AI GEO / AEO / SEO Intelligence
+# Mellox AI GEO / AEO / SEO Intelligence
 # Core Data Model
 
 ## 1. Purpose
 
 This document defines the Day 2 core data model
-for the Raval AI GEO / AEO / SEO Intelligence module.
+for the Mellox AI GEO / AEO / SEO Intelligence module.
 
 The model is designed to support:
 - historical scans
@@ -29,7 +29,7 @@ The model is designed to support:
 
 ### Workspace
 Purpose:
-Tenant boundary for Raval data.
+Tenant boundary for Mellox data.
 
 ### User
 Purpose:
@@ -161,7 +161,7 @@ See:
 
 ## Scan and Run States
 
-Raval uses a common lifecycle model for long-running
+Mellox uses a common lifecycle model for long-running
 operations such as website scans and AI benchmark runs.
 
 ### Supported States

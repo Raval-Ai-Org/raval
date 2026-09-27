@@ -8,7 +8,7 @@
  */
 import { test, expect, type APIRequestContext } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval.ai";
+const CANONICAL_HOST = "https://mellox.ai";
 
 const FORBIDDEN = [
   /AI marketing OS/i,

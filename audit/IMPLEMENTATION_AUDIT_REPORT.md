@@ -1,8 +1,8 @@
-# Raval GEO Intelligence — Implementation Audit Report
+# Mellox GEO Intelligence — Implementation Audit Report
 
 **Audit Date**: August 27, 2026  
 **Auditor**: Antigravity Autonomous Code Intelligence  
-**Repository Root**: `C:\Users\HP\Documents\raval-geo-intelligence`  
+**Repository Root**: `C:\Users\HP\Documents\mellox-geo-intelligence`  
 **Git Branch / Commit**: `main` (commit `6062095`)  
 
 ---
@@ -33,7 +33,7 @@ The **"WITH MINOR ISSUES"** qualification is assigned due to:
 
 ## 2. Repository Verification
 
-- **Repository Path**: `C:\Users\HP\Documents\raval-geo-intelligence`
+- **Repository Path**: `C:\Users\HP\Documents\mellox-geo-intelligence`
 - **Git Status**: On branch `main`, up to date with `personal/main`, clean working tree (untracked: `.vscode/`).
 - **Recent Commits**:
   - `6062095`: Fix indentation and Python project configuration
@@ -52,7 +52,7 @@ The **"WITH MINOR ISSUES"** qualification is assigned due to:
   - `httpx`: `0.28.1`
   - `requests`: `2.34.2`
   - `uvicorn`: `0.52.4`
-- **Active Database**: SQLite file `raval.db` (configured in `backend/app/config.py`).
+- **Active Database**: SQLite file `mellox.db` (configured in `backend/app/config.py`).
 
 ---
 
@@ -72,7 +72,7 @@ The **"WITH MINOR ISSUES"** qualification is assigned due to:
 
 | Item | Status | Evidence File / Path | Findings & Notes |
 |---|---|---|---|
-| Independent Repository | **PASS** | `C:\Users\HP\Documents\raval-geo-intelligence` | Self-contained Git repository with independent remote `personal/main`. |
+| Independent Repository | **PASS** | `C:\Users\HP\Documents\mellox-geo-intelligence` | Self-contained Git repository with independent remote `personal/main`. |
 | Git Repository | **PASS** | `.git/` | Active version control history tracking all 5 tasks across descriptive commits. |
 | Project Structure | **PASS** | Repository root directories | Structure follows Day 1 design. Downstream engine folders exist as empty directories. |
 | Architecture Documentation | **PASS** | `docs/ARCHITECTURE.md` (2,018 lines, 47,007 bytes) | Exhaustive multi-layer architecture specification with Mermaid diagrams and data flows. |
@@ -89,7 +89,7 @@ The **"WITH MINOR ISSUES"** qualification is assigned due to:
 ## 5. Task 2 Detailed Audit — Backend Foundation
 
 ### Implementation Details
-- **FastAPI Core**: `backend/app/main.py` instantiates `app = FastAPI(title="Raval GEO Intelligence")`.
+- **FastAPI Core**: `backend/app/main.py` instantiates `app = FastAPI(title="Mellox GEO Intelligence")`.
 - **Database Layer**: `backend/app/database.py` defines `engine`, `SessionLocal`, `Base`, and the dependency generator `get_db()`.
 - **Core Models**:
   - `Website`: `id`, `name`, `url`, `created_at`, relationships to `scans`, `findings`, `question_sets`, `ai_runs`, `entities`.

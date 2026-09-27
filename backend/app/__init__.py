@@ -1,5 +1,5 @@
 """
-Raval AI Search Intelligence Application Package
+Mellox AI Search Intelligence Application Package
 """
 from .applicability_engine import (
     ApplicabilityContext,

@@ -32,5 +32,5 @@ by default. Both paths use SSRF-guarded fetching and explicit budgets.
 
 Current detailed references: [geo-intelligence](geo-intelligence.md),
 [validation rules](VALIDATION_RULES.md), [deterministic scoring](DETERMINISTIC_SCORING_AND_TRACEABILITY.md),
-and [fix engine](FIX_ENGINE.md). Older Raval AI naming in those documents is
+and [fix engine](FIX_ENGINE.md). Older Mellox AI naming in those documents is
 historical terminology, not a separate runtime product.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * RavalAI — predev sanity check (cross-platform wrapper)
+ * MelloxAI — predev sanity check (cross-platform wrapper)
  * -----------------------------------------------------------------------
  * Detects the OS and runs the right predev check script:
  *   - Linux/macOS:  scripts/predev-check.sh

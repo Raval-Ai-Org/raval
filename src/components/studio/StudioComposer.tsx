@@ -258,7 +258,7 @@ export function ComposerBody({
           <Button
             size="icon-sm"
             variant="ghost"
-            className="rounded-full"
+            className="size-11 rounded-full lg:size-8"
             onClick={() => backToBrief(session.id)}
             aria-label="Back to description"
             title="Back to description"
@@ -460,7 +460,7 @@ const WindowButton = forwardRef<
           {...rest}
           aria-label={label}
           className={cn(
-            "grid size-8 place-items-center rounded-full text-muted-foreground transition-colors duration-[--motion-duration-fast] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 [&_svg]:size-4",
+            "grid size-11 place-items-center rounded-full text-muted-foreground transition-colors duration-[--motion-duration-fast] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 lg:size-8 [&_svg]:size-4",
             className,
           )}
         >
@@ -480,7 +480,7 @@ function TypeSwitcher({ session }: { session: StudioSession }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex min-h-9 items-center gap-2 rounded-lg px-1.5 pr-2 text-left transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+          className="flex min-h-11 items-center gap-2 rounded-lg px-1.5 pr-2 text-left transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 lg:min-h-9"
           aria-label={`Format: ${format.label}. Change format`}
         >
           <TypeGlyph type={session.type} size="sm" />

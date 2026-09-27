@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# RavalAI — first-time developer setup
+# MelloxAI — first-time developer setup
 # ─────────────────────────────────────────────────────────────────────────────
 # Run this once after `git pull` to make sure your local environment is ready.
 # Idempotent: safe to run multiple times. Skips steps that are already done.
@@ -100,7 +100,7 @@ fi
 step "Step 4/4: Final report"
 echo ""
 echo -e "${BOLD}═══════════════════════════════════════════════════════════${RESET}"
-echo -e "${BOLD}  RavalAI local setup status${RESET}"
+echo -e "${BOLD}  MelloxAI local setup status${RESET}"
 echo -e "${BOLD}═══════════════════════════════════════════════════════════${RESET}"
 echo ""
 
@@ -134,7 +134,7 @@ else
   echo -e "  ${YELLOW}→ Re-run this script${RESET}  (./scripts/setup.sh)"
   echo ""
   echo -e "  ${BOLD}How to get the real values safely:${RESET}"
-  echo "  1. Ask Junaid to share the 'RavalAI local dev .env' item in 1Password"
+  echo "  1. Ask Junaid to share the 'MelloxAI local dev .env' item in 1Password"
   echo "  2. Copy each line from 1Password into your .env"
   echo "  3. See docs/TEAM-CREDENTIALS.md for details on each value"
   echo ""

@@ -101,7 +101,7 @@ async function seed(page: Page, opts: SeedOpts = {}) {
       try {
         window.localStorage.setItem(storageKey, JSON.stringify(sess));
         window.localStorage.setItem("workspace:selected", wsId);
-        window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
+        window.localStorage.setItem(`mellox:first-prompt-fired:${wsId}`, "1");
         window.localStorage.removeItem("studio:suggest-dismissed");
         window.localStorage.removeItem(`studio:suggestions:${wsId}`);
         if (brandDna) {

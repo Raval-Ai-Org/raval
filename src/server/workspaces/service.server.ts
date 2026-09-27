@@ -14,7 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { normalizeDomain } from "@/lib/workspace/domain";
 import { HttpError } from "@/server/http-error";
-import { getEntitlements } from "@/server/billing/entitlements.server";
+import { optionalWorkspaceEntitlements } from "@/server/billing/readiness.server";
 import { LimitReachedError } from "@/server/billing/errors";
 
 export const DELETE_CONFIRMATION = "CONFIRM";
@@ -38,8 +38,8 @@ export async function createOrGetWorkspace(args: {
   websiteUrl: string | null;
   idempotencyKey: string | null;
 }): Promise<CreateWorkspaceResult> {
-  const entitlements = await getEntitlements({ userId: args.userId });
-  const enforcing = entitlements.enforcement === "on";
+  const entitlements = await optionalWorkspaceEntitlements({ userId: args.userId });
+  const enforcing = entitlements?.enforcement === "on";
   const { data, error } = await admin.rpc(
     enforcing ? "create_billed_workspace_for_user" : "create_workspace_for_user",
     {
@@ -54,8 +54,8 @@ export async function createOrGetWorkspace(args: {
     if (error.message.includes("billing_brand_limit")) {
       throw new LimitReachedError({
         limit: "brands",
-        used: entitlements.usage.brands,
-        max: entitlements.limits.brands,
+        used: entitlements?.usage.brands ?? 0,
+        max: entitlements?.limits.brands ?? 0,
       });
     }
     console.error("[workspaces] create failed", error.code, error.message);

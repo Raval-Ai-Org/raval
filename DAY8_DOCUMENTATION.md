@@ -1,8 +1,8 @@
-# Day 8 Documentation — Raval AI Search Intelligence
+# Day 8 Documentation — Mellox AI Search Intelligence
 
-> **Canonical Document**: [`docs/DAY8_DOCUMENTATION.md`](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/DAY8_DOCUMENTATION.md)
+> **Canonical Document**: [`docs/DAY8_DOCUMENTATION.md`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/docs/DAY8_DOCUMENTATION.md)
 
-**Module**: Raval AI Search Intelligence / GEO Intelligence Backend  
+**Module**: Mellox AI Search Intelligence / GEO Intelligence Backend  
 **Document Version**: 1.0  
 **Status**: Verified & Complete  
 **Repository Branch**: `GEO-Module`  
@@ -12,7 +12,7 @@
 
 ## 1. Day 8 Overview
 
-Day 8 establishes the **Deterministic Scoring, Traceability, Explainability, Recommendation, and Site-Level Intelligence Layer** for the Raval AI Search Intelligence backend.
+Day 8 establishes the **Deterministic Scoring, Traceability, Explainability, Recommendation, and Site-Level Intelligence Layer** for the Mellox AI Search Intelligence backend.
 
 ### Purpose and Architecture Fit
 Prior development phases (Tasks 1–7) implemented foundational crawlers, extractors, content quality/structure analyzers, entity and topical readiness evaluators, trust and authority citation verifiers, opportunity detectors, fix validation pipelines, and health monitoring systems. 
@@ -50,7 +50,7 @@ The scoring system defines 5 canonical categories with normalized weights summin
 | **TOTAL** | | **1.00 (100%)** | |
 
 ### 2.2 Mathematical Scoring & Deduction Rules
-Implemented in [`backend/app/scoring_engine.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/app/scoring_engine.py):
+Implemented in [`backend/app/scoring_engine.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/app/scoring_engine.py):
 
 1. **Category Score Calculation**:
    $$\text{CatScore}_c = \begin{cases}
@@ -79,7 +79,7 @@ Implemented in [`backend/app/scoring_engine.py`](file:///c:/Users/HP/Documents/r
 - If identical signals or findings targeting the same defect are submitted repeatedly, only the primary instance applies a point deduction. Subsequent instances are marked `is_skipped=True` with `skip_reason="duplicate_prevention"`.
 
 ### 2.4 Traceability & Provenance
-Every deduction produces an immutable [`ScoreContribution`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/app/scoring_engine.py) containing:
+Every deduction produces an immutable [`ScoreContribution`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/app/scoring_engine.py) containing:
 - `rule_id`, `category`, `source_module`, `status`, `credit_ratio`
 - `category_point_impact` (points deducted from category, e.g., $-50.0$)
 - `overall_point_impact` (points deducted from total score, e.g., $-12.5$)
@@ -92,7 +92,7 @@ Every deduction produces an immutable [`ScoreContribution`](file:///c:/Users/HP/
 
 ## 3. Recommendation and Opportunity Verification
 
-Implemented in [`backend/app/priority_engine.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/app/priority_engine.py):
+Implemented in [`backend/app/priority_engine.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/app/priority_engine.py):
 
 ### 3.1 Recommendation Generation & Priority Rules
 Findings and penalized signals are transformed into prioritized recommendations:
@@ -116,7 +116,7 @@ $$\text{Raw Telemetry / Extraction} \rightarrow \text{Finding} \rightarrow \text
 
 ## 4. Analytics and Site-Level Aggregation
 
-Implemented in [`backend/app/score_explanation.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/app/score_explanation.py), [`backend/app/site_aggregator.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/app/site_aggregator.py), and [`backend/app/main.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/app/main.py):
+Implemented in [`backend/app/score_explanation.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/app/score_explanation.py), [`backend/app/site_aggregator.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/app/site_aggregator.py), and [`backend/app/main.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/app/main.py):
 
 ### 4.1 Score Explanation Envelope (`ScoreExplanationResponse`)
 Provides structured human-readable explanations:
@@ -164,7 +164,7 @@ The test suite covers:
 - **Traceability Chains**: Complete deduction provenance verified across API and Pydantic serialization.
 - **Fixture-Based Regression**: Healthy, Partially Compliant, Poor Quality, Missing Data, N/A Rules, Duplicate Evidence, and Mixed Results page fixtures.
 - **API Regression**: Page scores, recommendations, site summaries, histories, and 404 boundaries.
-- **Real Public-Page Validation**: Standalone CLI runner [`backend/scripts/validate_real_site_scoring.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/scripts/validate_real_site_scoring.py) validating Homepage, About, Documentation, and Privacy Policy page types.
+- **Real Public-Page Validation**: Standalone CLI runner [`backend/scripts/validate_real_site_scoring.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/scripts/validate_real_site_scoring.py) validating Homepage, About, Documentation, and Privacy Policy page types.
 
 ### 5.2 Actual Repository Verification Results
 

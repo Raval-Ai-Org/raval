@@ -45,7 +45,7 @@ def db_session():
 @pytest.fixture
 def sample_monitoring_setup(db_session):
     now = datetime.now(timezone.utc)
-    website = Website(name="Raval AI", url="https://raval.ai", created_at=now)
+    website = Website(name="Mellox AI", url="https://mellox.ai", created_at=now)
     db_session.add(website)
     db_session.commit()
     db_session.refresh(website)
@@ -55,7 +55,7 @@ def sample_monitoring_setup(db_session):
     db_session.commit()
     db_session.refresh(scan)
 
-    page = PageResult(scan_id=scan.id, url="https://raval.ai/docs/geo", status_code=200, created_at=now)
+    page = PageResult(scan_id=scan.id, url="https://mellox.ai/docs/geo", status_code=200, created_at=now)
     db_session.add(page)
     db_session.commit()
     db_session.refresh(page)
@@ -125,8 +125,8 @@ def test_monitoring_pipeline_full_lifecycle_success(db_session, sample_monitorin
     query_set = sample_monitoring_setup["query_set"]
 
     mock_texts = [
-        "Raval AI leads in generative engine optimization. See https://raval.ai/docs/geo for guide.",
-        "Raval AI and SearchOptima are top platforms for AI search intelligence.",
+        "Mellox AI leads in generative engine optimization. See https://mellox.ai/docs/geo for guide.",
+        "Mellox AI and SearchOptima are top platforms for AI search intelligence.",
     ]
 
     run = MonitoringPipelineService.start_monitoring_run(
@@ -151,7 +151,7 @@ def test_monitoring_pipeline_full_lifecycle_success(db_session, sample_monitorin
     assert run.failed_responses == 0
     assert run.detected_mentions >= 2
     assert run.detected_citations >= 1
-    assert run.mention_rate == 1.0  # 2/2 responses mentioned Raval AI
+    assert run.mention_rate == 1.0  # 2/2 responses mentioned Mellox AI
 
     # 3. Response and observation records persisted
     responses = db_session.query(AIResponse).filter(AIResponse.query_set_id == query_set.id).all()
@@ -194,7 +194,7 @@ def test_monitoring_pipeline_active_query_filtering(db_session, sample_monitorin
         db=db_session,
         query_set_id=query_set.id,
         provider="mock",
-        mock_responses=["Raval AI is the leader."],
+        mock_responses=["Mellox AI is the leader."],
     )
 
     assert run.total_queries == 1  # Only q1 is active
@@ -207,7 +207,7 @@ def test_monitoring_pipeline_failure_isolation_partial(db_session, sample_monito
 
     # Provide 1 valid mock response and 1 failure mode (e.g. empty mock text triggering failure)
     mock_texts = [
-        "Raval AI provides cutting edge GEO intelligence.",
+        "Mellox AI provides cutting edge GEO intelligence.",
         "",  # Empty response -> Provider failure
     ]
 
@@ -235,14 +235,14 @@ def test_repeated_runs_preserve_history(db_session, sample_monitoring_setup):
         db=db_session,
         query_set_id=query_set.id,
         provider="mock",
-        mock_responses=["Raval AI answer run 1."],
+        mock_responses=["Mellox AI answer run 1."],
     )
 
     run2 = MonitoringPipelineService.start_monitoring_run(
         db=db_session,
         query_set_id=query_set.id,
         provider="mock",
-        mock_responses=["Raval AI answer run 2."],
+        mock_responses=["Mellox AI answer run 2."],
     )
 
     assert run1.id != run2.id
@@ -260,7 +260,7 @@ def test_get_monitoring_run_results(db_session, sample_monitoring_setup):
     query_set = sample_monitoring_setup["query_set"]
 
     mock_texts = [
-        "Raval AI leads in GEO. Source: https://raval.ai/docs/geo",
+        "Mellox AI leads in GEO. Source: https://mellox.ai/docs/geo",
         "SearchOptima is a competitor platform without target presence.",
     ]
 
@@ -318,7 +318,7 @@ def test_monitoring_pipeline_query_subset_selection(db_session, sample_monitorin
         query_set_id=query_set.id,
         provider="mock",
         query_ids=[q1.id],
-        mock_responses=["Raval AI single query response."],
+        mock_responses=["Mellox AI single query response."],
     )
 
     assert run.total_queries == 1
@@ -360,7 +360,7 @@ def test_monitoring_pipeline_list_runs_with_status_filter(db_session, sample_mon
         db=db_session,
         query_set_id=query_set.id,
         provider="mock",
-        mock_responses=["Raval AI response."],
+        mock_responses=["Mellox AI response."],
     )
     MonitoringPipelineService.start_monitoring_run(
         db=db_session,

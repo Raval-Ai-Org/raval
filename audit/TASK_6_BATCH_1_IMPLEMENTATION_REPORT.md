@@ -2,7 +2,7 @@
 
 **Implementation Date**: August 27, 2026  
 **Implemented Tasks**: Task 6.1 (Opportunity Engine) & Task 6.2 (Opportunity Prioritization)  
-**Repository Root**: `C:\Users\HP\Documents\raval-geo-intelligence`  
+**Repository Root**: `C:\Users\HP\Documents\mellox-geo-intelligence`  
 **Git Branch**: `main`  
 **Runtime**: Python 3.14.7  
 

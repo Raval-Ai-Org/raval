@@ -243,7 +243,7 @@ function StylesGallery({
         data.canEdit ? (
           <button
             type="button"
-            className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px] md:hidden")}
+            className={cn(dsPrimaryBtn, "h-11 px-4 text-[13px] lg:hidden")}
             onClick={onCreate}
           >
             <Plus className="h-4 w-4" /> New style

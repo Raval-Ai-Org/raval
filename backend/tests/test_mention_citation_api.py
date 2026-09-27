@@ -45,8 +45,8 @@ def test_app_and_db():
 
     db = TestingSessionLocal()
     website = Website(
-        name="Raval AI",
-        url="https://raval.ai",
+        name="Mellox AI",
+        url="https://mellox.ai",
         created_at=datetime.now(timezone.utc),
     )
     db.add(website)
@@ -65,8 +65,8 @@ def test_app_and_db():
 
     page = PageResult(
         scan_id=scan.id,
-        url="https://raval.ai/docs",
-        final_url="https://raval.ai/docs",
+        url="https://mellox.ai/docs",
+        final_url="https://mellox.ai/docs",
         status_code=200,
         content="Docs content",
         created_at=datetime.now(timezone.utc),
@@ -75,7 +75,7 @@ def test_app_and_db():
 
     entity = Entity(
         website_id=website.id,
-        name="Raval GEO Intelligence",
+        name="Mellox GEO Intelligence",
         entity_type="product",
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
@@ -97,7 +97,7 @@ def test_app_and_db():
     q = Query(
         query_set_id=qs.id,
         website_id=website.id,
-        query_text="What is Raval AI?",
+        query_text="What is Mellox AI?",
         intent="INFORMATIONAL",
         generation_source="TOPIC_INTELLIGENCE",
         created_at=datetime.now(timezone.utc),
@@ -115,7 +115,7 @@ def test_app_and_db():
         provider="mock",
         model="mock-ai-search-v1",
         status="SUCCESS",
-        response_text="Raval AI provides intelligence solutions. Documentation at https://raval.ai/docs.",
+        response_text="Mellox AI provides intelligence solutions. Documentation at https://mellox.ai/docs.",
         latency_ms=150,
         request_timestamp=datetime.now(timezone.utc),
         response_timestamp=datetime.now(timezone.utc),

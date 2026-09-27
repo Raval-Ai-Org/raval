@@ -215,7 +215,7 @@ export const acceptWorkspaceInvite = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { getEntitlements } = await import("@/server/billing/entitlements.server");
+    const { optionalWorkspaceEntitlements } = await import("@/server/billing/readiness.server");
     const { BrandFrozenError, LimitReachedError } = await import("@/server/billing/errors");
     const email = String(context.claims.email ?? "")
       .trim()
@@ -238,12 +238,12 @@ export const acceptWorkspaceInvite = createServerFn({ method: "POST" })
       );
     }
 
-    const entitlements = await getEntitlements({
+    const entitlements = await optionalWorkspaceEntitlements({
       workspaceId: invite.workspace_id,
       userId: context.userId,
       role: "viewer",
     });
-    if (entitlements.enforcement === "on") {
+    if (entitlements?.enforcement === "on") {
       if (entitlements.frozen) throw new BrandFrozenError();
       const { data: accepted, error } = await supabaseAdmin.rpc(
         "accept_billed_workspace_invite" as never,
@@ -357,13 +357,13 @@ export const createWorkspaceInvite = createServerFn({ method: "POST" })
     const email = data.email.toLowerCase();
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { getEntitlements } = await import("@/server/billing/entitlements.server");
-    const entitlements = await getEntitlements({
+    const { optionalWorkspaceEntitlements } = await import("@/server/billing/readiness.server");
+    const entitlements = await optionalWorkspaceEntitlements({
       workspaceId: data.workspaceId,
       userId: context.userId,
       role: "admin",
     });
-    if (entitlements.enforcement === "on") {
+    if (entitlements?.enforcement === "on") {
       const { BrandFrozenError } = await import("@/server/billing/errors");
       if (entitlements.frozen) throw new BrandFrozenError();
       if (data.role !== "viewer" && entitlements.limits.seats !== null) {
@@ -438,13 +438,13 @@ export const updateWorkspaceMemberRole = createServerFn({ method: "POST" })
   .inputValidator((data) => memberRoleSchema.parse(data))
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "owner");
-    const { getEntitlements } = await import("@/server/billing/entitlements.server");
-    const entitlements = await getEntitlements({
+    const { optionalWorkspaceEntitlements } = await import("@/server/billing/readiness.server");
+    const entitlements = await optionalWorkspaceEntitlements({
       workspaceId: data.workspaceId,
       userId: context.userId,
       role: "owner",
     });
-    if (entitlements.enforcement === "on") {
+    if (entitlements?.enforcement === "on") {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { BrandFrozenError, LimitReachedError } = await import("@/server/billing/errors");
       if (entitlements.frozen) throw new BrandFrozenError();

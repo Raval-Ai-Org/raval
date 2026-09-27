@@ -46,7 +46,7 @@ contributors:
   migration state
 - `backend/`, `crawler/`, `analytics/`, `content-engine/`, and similar folders
   hold supporting Python intelligence and automation packages
-- `Social-Distribtion-Engine-RavalAI-SDE/` contains the separate distribution
+- `Social-Distribtion-Engine-MelloxAI-SDE/` contains the separate distribution
   runtime used for social publishing and delivery operations
 
 This separation reflects the real architecture of the product: the web app is a

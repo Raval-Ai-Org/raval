@@ -70,8 +70,8 @@ from connectors.wordpress.connector import WordPressConnector
 
 @pytest.fixture
 def github_connector() -> GitHubConnector:
-    client = MockGitHubClient(owner="raval-ai", repo="intelligence-web")
-    connector = GitHubConnector(owner="raval-ai", repo="intelligence-web", client=client)
+    client = MockGitHubClient(owner="mellox-ai", repo="intelligence-web")
+    connector = GitHubConnector(owner="mellox-ai", repo="intelligence-web", client=client)
     connector.connect({"token": "ghp_mock_token_12345"})
     return connector
 

@@ -1,8 +1,8 @@
-# Data Model: RavalAI × SDR Integration
+# Data Model: MelloxAI × SDR Integration
 
 **Branch**: `001-sdr-integration` | **Date**: 2026-08-08
 
-Additive changes to RavalAI's Supabase schema. The SDR's own Postgres schema is **untouched** — it remains the authoritative store for accounts, tokens, posts, post_targets, api_keys, webhook_endpoints, and delivery_logs.
+Additive changes to MelloxAI's Supabase schema. The SDR's own Postgres schema is **untouched** — it remains the authoritative store for accounts, tokens, posts, post_targets, api_keys, webhook_endpoints, and delivery_logs.
 
 > **Pre-schema gate**: reconcile the divergent `20260707*` migrations (e.g. `20260707193010_*.sql`, `20260707193303`, `20260707193445`) that re-`CREATE TABLE content_items` with a different shape (`metadata`, `scheduled_for`, `published_at`, no `agent`/`kind`/`media_url`/`metrics`/`meta`) than the shape the app uses. No SDR columns are added until this is resolved.
 
@@ -10,7 +10,7 @@ Additive changes to RavalAI's Supabase schema. The SDR's own Postgres schema is 
 
 ## 1. `workspace_sdr` (new) — per-workspace distribution identity
 
-Purpose: the server-side-only mapping between a RavalAI workspace and its SDR identity (key + webhook secret). **Never readable by the user client.**
+Purpose: the server-side-only mapping between a MelloxAI workspace and its SDR identity (key + webhook secret). **Never readable by the user client.**
 
 | Column                      | Type                              | Notes                                                                                                                                                                       |
 | --------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -46,7 +46,7 @@ Purpose: the queryable per-platform delivery truth that drives the Studio's stat
 | `content_item_id`           | uuid FK → `content_items(id)` ON DELETE CASCADE | the editorial item being distributed                                                                                         |
 | `sdr_post_id`               | text                                            | the SDR job id (`job_id`)                                                                                                    |
 | `sdr_target_id`             | text                                            | the SDR target id (`target_id`) — per-account delivery unit                                                                  |
-| `platform`                  | text                                            | `twitter` \| `linkedin` \| `facebook` \| `instagram` (wire-id `twitter`, per SDR contract + RavalAI `PlatformId`; label "X") |
+| `platform`                  | text                                            | `twitter` \| `linkedin` \| `facebook` \| `instagram` (wire-id `twitter`, per SDR contract + MelloxAI `PlatformId`; label "X") |
 | `account_id`                | text                                            | the connected account id (SDR account id) this delivery targeted                                                             |
 | `status`                    | text                                            | `pending` \| `publishing` \| `published` \| `failed` \| `retrying` \| `cancelled` \| `partial_failed`                        |
 | `platform_post_id`          | text nullable                                   | platform-native post id (from SDR `target.platform_post_id`)                                                                 |

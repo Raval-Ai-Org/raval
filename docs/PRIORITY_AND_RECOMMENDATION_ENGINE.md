@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-Step 8.6 establishes the **Centralized Priority & Recommendation Engine** for the Raval AI Search Intelligence backend.
+Step 8.6 establishes the **Centralized Priority & Recommendation Engine** for the Mellox AI Search Intelligence backend.
 
 The engine transforms evaluated intelligence signals and score contributions into:
 1. **Deterministic Priorities**: `Critical`, `High`, `Medium`, `Low`, and `Info`.

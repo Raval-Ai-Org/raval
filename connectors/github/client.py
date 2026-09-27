@@ -107,8 +107,8 @@ class MockGitHubClient:
 
     def __init__(
         self,
-        owner: str = "raval-ai-org",
-        repo: str = "raval-website",
+        owner: str = "mellox-ai-org",
+        repo: str = "mellox-website",
         default_branch: str = "main",
         initial_files: dict[str, str] | None = None,
         simulate_auth_failure: bool = False,
@@ -161,7 +161,7 @@ class MockGitHubClient:
         if token == "invalid_token":
             raise AuthenticationError("Bad credentials: token is invalid", provider_code="401")
         return {
-            "login": "raval-bot",
+            "login": "mellox-bot",
             "id": 12345678,
             "type": "User",
             "site_admin": False,
@@ -322,7 +322,7 @@ class LiveGitHubClient:
     def _get_headers(self) -> dict[str, str]:
         headers = {
             "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "Raval-AI-Fix-Engine/1.0",
+            "User-Agent": "Mellox-AI-Fix-Engine/1.0",
         }
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"

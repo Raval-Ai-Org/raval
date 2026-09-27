@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary & Motivation
 
-Across Tasks 5, 6, and 7, Raval AI Search Intelligence introduced specialized, deterministic analytical engines:
+Across Tasks 5, 6, and 7, Mellox AI Search Intelligence introduced specialized, deterministic analytical engines:
 - **Task 5**: Content Intelligence (structure, topics, entities, questions, answers, gaps, quality evidence, search intent, semantic coverage).
 - **Task 6**: Opportunity Generation, Fix Plan Generation, and Automated Fix Validation.
 - **Task 7**: Authority, Citation, Trust, External Sources, Claim-Support, and First-Party Transparency.

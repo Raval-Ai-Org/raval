@@ -51,7 +51,7 @@ test.describe("Studio Connections (US1)", () => {
       );
     await page.getByRole("button", { name: "Connect social media" }).click();
     await page.getByRole("button", { name: /Instagram/ }).click();
-    await expect(page.getByRole("dialog")).toContainText("RavalAI will redirect you");
+    await expect(page.getByRole("dialog")).toContainText("MelloxAI will redirect you");
     const popup = page.waitForEvent("popup");
     await page.getByRole("button", { name: "Continue to Instagram" }).click();
     const oauthPage = await popup;

@@ -3,7 +3,7 @@ import { test, expect, Page } from "@playwright/test";
 /**
  * LIVE PLATFORM E2E TEST
  * ----------------------
- * Runs against the real RavalAI dev server (http://localhost:8080)
+ * Runs against the real MelloxAI dev server (http://localhost:8080)
  * with real Supabase auth + real SDR tunnel.
  *
  * Credentials: E2E_TEST_EMAIL / E2E_TEST_PASSWORD from the environment (never

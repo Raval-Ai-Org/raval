@@ -10,7 +10,7 @@ The SDR integration is **built and live-verified locally** (vitest 115/115, SDR 
 real-login E2E against live Supabase + live SDR passed). Two things changed outside our
 SDR work that we are treating as **on hold** until discussed:
 
-1. **Live Vercel deployment is missing** — `https://raval-mu.vercel.app` returns
+1. **Live Vercel deployment is missing** — `https://mellox-mu.vercel.app` returns
    `DEPLOYMENT_NOT_FOUND` on every route. This is a dashboard-side issue (deployment
   removed/re-created), separate from code. Needs a dashboard check by the deployment owner.
 2. A historical change on the legacy branch ("Replace the external OAuth broker with native Supabase
@@ -30,12 +30,12 @@ SDR work that we are treating as **on hold** until discussed:
 
 - **Supabase project:** use the approved current deployment project (identifiers
   intentionally omitted) versus provisioning a separate test project properly.
-- **Vercel:** restore/rebuild the `raval-mu` deployment (dashboard-side; env vars need the
-  SDR server-only keys added per `raval/README.md`).
+- **Vercel:** restore/rebuild the `mellox-mu` deployment (dashboard-side; env vars need the
+  SDR server-only keys added per `mellox/README.md`).
 - **Zian's OAuth code:** keep as a future login modernization (parked), or revert the
   project re-point only.
 
 ## Guardrail
 
-No branch switches, stashes, resets, reverts, or force-pushes on `raval` without explicit
+No branch switches, stashes, resets, reverts, or force-pushes on `mellox` without explicit
 user go-ahead. Documentation + commits to the planning branch (`001-sdr-integration`) only.

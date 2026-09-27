@@ -313,7 +313,7 @@ class CitationReadinessEngine:
             findings=all_findings,
             recommendations=all_recs,
             metadata={
-                "system": "RavalAI-GEO-Intelligence",
+                "system": "MelloxAI-GEO-Intelligence",
                 "pipeline": "AuthorityCitationTrustPipeline",
                 "version": "1.0.0",
                 "generated_at": datetime.now(timezone.utc).isoformat(),

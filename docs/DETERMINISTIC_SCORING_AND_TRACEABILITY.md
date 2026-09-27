@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary & Objective
 
-Steps 8.4 and 8.5 establish the **Centralized Deterministic 0–100 Scoring Engine** and the **End-to-End Score & Finding Traceability System** for the Raval AI Search Intelligence backend.
+Steps 8.4 and 8.5 establish the **Centralized Deterministic 0–100 Scoring Engine** and the **End-to-End Score & Finding Traceability System** for the Mellox AI Search Intelligence backend.
 
 The engine transforms multi-engine intelligence signals into bounded, explainable category scores and an overall score, while preserving complete auditability through the full provenance chain:
 

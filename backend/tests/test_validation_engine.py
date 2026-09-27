@@ -164,7 +164,7 @@ def test_evaluate_heading_and_content_rules():
 
 def test_evaluate_aeo_and_entity_rules():
     # AEO PASS (direct concise answer 15-85 words)
-    good_answer = "Raval GEO Intelligence provides deterministic search visibility analysis and AI citation monitoring for enterprise brands across global search engines."
+    good_answer = "Mellox GEO Intelligence provides deterministic search visibility analysis and AI citation monitoring for enterprise brands across global search engines."
     res_a, score_a, _, _, _ = evaluate_validation_rule(
         "aeo_validation",
         before_state=None,

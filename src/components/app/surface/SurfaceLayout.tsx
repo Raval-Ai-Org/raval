@@ -3,7 +3,7 @@
 // SurfaceLayout — the one structure every large Mellox popup uses (AI
 // Visibility, Analytics, Brand DNA, Library, Backlinks, Competitors, Settings):
 // a quiet navigation rail on the left and a scrolling page on the right, in the
-// manner of Gemini's and ChatGPT's settings. On phones the rail becomes a row
+// manner of Gemini's and ChatGPT's settings. On compact screens the rail becomes a row
 // of pills above the page.
 //
 // The layout owns scrolling, so nothing has to be sticky with negative
@@ -47,15 +47,15 @@ export function SurfaceLayout<T extends string>({
   // One animated highlight per rail, so two open surfaces never share it.
   const group = useId();
   return (
-    <div className="flex h-full min-h-0 flex-col md:flex-row">
+    <div className="flex h-full min-h-0 flex-col lg:flex-row">
       <nav
         aria-label={label}
-        className="shrink-0 border-b border-border/60 md:flex md:w-[216px] md:flex-col md:border-b-0 md:border-r md:bg-surface-2/40 md:px-3 md:py-4"
+        className="shrink-0 border-b border-border/60 lg:flex lg:w-[216px] lg:flex-col lg:border-b-0 lg:border-r lg:bg-surface-2/40 lg:px-3 lg:py-4"
       >
-        {railTop && <div className="mb-4 hidden px-1 md:block">{railTop}</div>}
+        {railTop && <div className="mb-4 hidden px-1 lg:block">{railTop}</div>}
         <LayoutGroup id={group}>
           <ul
-            className="flex gap-1 overflow-x-auto px-3 py-2 [scrollbar-width:none] md:flex-col md:overflow-visible md:p-0 [&::-webkit-scrollbar]:hidden"
+            className="flex gap-1 overflow-x-auto px-3 py-2 [scrollbar-width:none] lg:flex-col lg:overflow-visible lg:p-0 [&::-webkit-scrollbar]:hidden"
             role="list"
           >
             {items.map((item) => {
@@ -68,7 +68,7 @@ export function SurfaceLayout<T extends string>({
                     aria-current={active ? "page" : undefined}
                     onClick={() => onChange(item.id)}
                     className={cn(
-                      "group relative flex h-9 w-full items-center gap-2.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-colors",
+                      "group relative flex h-11 w-full items-center gap-2.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-colors lg:h-9",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                       active
                         ? "text-foreground"
@@ -111,7 +111,7 @@ export function SurfaceLayout<T extends string>({
             })}
           </ul>
         </LayoutGroup>
-        {railBottom && <div className="mt-auto hidden px-1 pt-4 md:block">{railBottom}</div>}
+        {railBottom && <div className="mt-auto hidden px-1 pt-4 lg:block">{railBottom}</div>}
       </nav>
       <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin">
         {children}

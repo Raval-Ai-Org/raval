@@ -1562,7 +1562,7 @@ export function ChatPanel({
           className={cn(
             "shrink-0 px-3 md:px-6",
             empty
-              ? "flex flex-[1_1_0%] flex-col items-center pt-5"
+              ? "flex min-h-0 flex-[1_1_0%] flex-col items-center overflow-y-auto overscroll-contain pb-4 pt-5"
               : "pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2",
           )}
         >

@@ -36,7 +36,8 @@ import {
   type CoachInsight,
   type CoachAction,
 } from "@/lib/coach.functions";
-import { exportBriefingPDF, exportBriefingDoc } from "@/lib/coach-export";
+import { CostChip } from "@/components/app/CostChip";
+import { FeatureGate } from "@/components/app/FeatureGate";
 import { useCompetitorOverview, useMarkUpdatesRead } from "./competitors/hooks";
 import { UpdateRow } from "./competitors/UpdatesFeed";
 import type { CompetitorView, CompetitorUpdateView } from "@/lib/competitors.functions";
@@ -204,7 +205,12 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
       setError(null);
       try {
         const b = await fetchBriefing({
-          data: { workspaceId, brandContext, force: opts?.force },
+          data: {
+            workspaceId,
+            brandContext,
+            force: opts?.force,
+            idempotencyKey: crypto.randomUUID(),
+          },
         });
         if (requestId !== requestRef.current) return;
         setBriefing(b);
@@ -222,26 +228,13 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
     [workspaceId, brandContext, fetchBriefing],
   );
 
-  // No waiting when the panel opens: show the last saved briefing at once (even
-  // an old one), and prepare a fresh one in the background shortly after the
-  // workspace loads, so it is usually ready before anyone clicks.
-  const prefetchedRef = useRef<string | null>(null);
+  // Opening the panel must not silently start a paid on-demand briefing.
+  // Show the latest saved briefing and let the user start a priced refresh.
   useEffect(() => {
     if (!workspaceId) return;
     const saved = readCache(workspaceId, { allowStale: true });
     setBriefing(saved);
-    if (prefetchedRef.current === workspaceId) return;
-    prefetchedRef.current = workspaceId;
-    if (saved && !isStale(saved)) return;
-    const timer = window.setTimeout(() => void load({ force: false, background: true }), 2500);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
-
-  // Fallback: opened before the background load started.
-  useEffect(() => {
-    if ((open || maximized) && !briefing && !loading && !error) void load({ background: true });
-  }, [open, maximized, briefing, loading, error, load]);
 
   useEffect(() => {
     if (!briefing?.generatedAt) return;
@@ -297,6 +290,23 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
   // so tab and briefing state carry over when switching.
   const coachContent = (
     <>
+      {!briefing && !loading && !error && (
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-border p-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            Build a fresh strategy briefing from your brand and current signals.
+          </p>
+          <FeatureGate feature="market_brain">
+            <button
+              type="button"
+              onClick={() => void load({ force: true })}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            >
+              Generate briefing
+            </button>
+          </FeatureGate>
+          <CostChip action="coach_briefing" />
+        </div>
+      )}
       {loading && !briefing && <SkeletonBrief />}
       {error && !loading && (
         <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3">
@@ -311,13 +321,16 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
               </div>
               <div className="mt-0.5 text-[11.5px] leading-snug text-destructive/85">{error}</div>
               <div className="mt-2 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void load({ force: true })}
-                  className="inline-flex items-center gap-1 rounded-md bg-destructive px-2 py-1 text-[11px] font-semibold text-destructive-foreground hover:opacity-90"
-                >
-                  <RefreshCw className="h-3 w-3" aria-hidden="true" /> Try again
-                </button>
+                <FeatureGate feature="market_brain">
+                  <button
+                    type="button"
+                    onClick={() => void load({ force: true })}
+                    className="inline-flex items-center gap-1 rounded-md bg-destructive px-2 py-1 text-[11px] font-semibold text-destructive-foreground hover:opacity-90"
+                  >
+                    <RefreshCw className="h-3 w-3" aria-hidden="true" /> Try again
+                  </button>
+                </FeatureGate>
+                <CostChip action="coach_briefing" />
                 <button
                   type="button"
                   onClick={() =>
@@ -708,21 +721,24 @@ function CoachBody({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={loading}
-            aria-label={loading ? "Updating briefing" : "Update briefing"}
-            aria-busy={loading}
-            title="Update"
-            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:cursor-wait disabled:opacity-60 disabled:hover:bg-transparent"
-          >
-            {loading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
-            )}
-          </button>
+          <CostChip action="coach_briefing" />
+          <FeatureGate feature="market_brain">
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={loading}
+              aria-label={loading ? "Updating briefing" : "Update briefing"}
+              aria-busy={loading}
+              title="Update briefing · 100 credits"
+              className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:cursor-wait disabled:opacity-60 disabled:hover:bg-transparent"
+            >
+              {loading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </FeatureGate>
           <ExportMenu briefing={briefing} disabled={loading} />
         </div>
       </div>
@@ -1420,6 +1436,7 @@ function ExportMenu({ briefing, disabled }: { briefing: CoachBriefing; disabled?
     if (busy) return;
     setBusy(kind);
     try {
+      const { exportBriefingPDF, exportBriefingDoc } = await import("@/lib/coach-export");
       if (kind === "pdf") await exportBriefingPDF(briefing);
       else await exportBriefingDoc(briefing);
     } finally {

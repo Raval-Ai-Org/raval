@@ -5,7 +5,7 @@
 - Task 6.8 — Opportunity Engine
 - Task 6.9 — Fix Engine + Validation Engine
 - Task 6.10 — Monitoring + Final Task-6 Integration
-**Repository Root**: `C:\Users\HP\Documents\raval-geo-intelligence`  
+**Repository Root**: `C:\Users\HP\Documents\mellox-geo-intelligence`  
 **Git Branch**: `main`  
 **Runtime**: Python 3.14.7  
 

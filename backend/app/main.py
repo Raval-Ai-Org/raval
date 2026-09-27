@@ -300,7 +300,7 @@ Base.metadata.create_all(
 
 
 app = FastAPI(
-    title="Raval GEO Intelligence",
+    title="Mellox GEO Intelligence",
 )
 
 

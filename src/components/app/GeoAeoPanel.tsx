@@ -326,7 +326,7 @@ function Panel({
                   setTab("overview");
                 }}
                 className={cn(
-                  "max-w-full truncate rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-colors disabled:opacity-60",
+                  "min-h-11 max-w-full truncate rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-colors disabled:opacity-60 lg:min-h-0",
                   selected
                     ? "bg-primary text-primary-foreground"
                     : "bg-foreground/[0.06] text-muted-foreground hover:text-foreground",
@@ -393,6 +393,7 @@ function Panel({
           title={issuesSubview ? undefined : pageTitle[tab]}
           actions={issuesSubview ? undefined : actions}
         >
+          {sites.length > 1 && <div className="mb-4 lg:hidden">{siteCard}</div>}
           {errorBanner}
           {tab === "overview" && (
             <div className="mb-5 space-y-4">

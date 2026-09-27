@@ -302,7 +302,7 @@ class TestTargetedRescan:
     {
         "@context": "https://schema.org",
         "@type": "Organization",
-        "name": "Raval AI",
+        "name": "Mellox AI",
         "url": "https://example.com"
     }
     </script>
@@ -663,7 +663,7 @@ class TestTraceabilityAndSecurity:
         proposal = ChangeProposal(
             target_resource=page_resource,
             action_type="inject_structured_data",
-            suggested_content='{"@context": "https://schema.org", "@type": "Organization", "name": "Raval AI"}',
+            suggested_content='{"@context": "https://schema.org", "@type": "Organization", "name": "Mellox AI"}',
             original_content="",
             description="Inject Organization structured data",
         )
@@ -684,7 +684,7 @@ class TestTraceabilityAndSecurity:
 {
   "@context": "https://schema.org",
   "@type": "Organization",
-  "name": "Raval AI"
+  "name": "Mellox AI"
 }
 </script>
 </head>

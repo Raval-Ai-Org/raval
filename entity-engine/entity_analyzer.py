@@ -1,5 +1,5 @@
 """
-Entity Engine (Raval AI GEO / AEO / SEO Intelligence)
+Entity Engine (Mellox AI GEO / AEO / SEO Intelligence)
 """
 
 import os

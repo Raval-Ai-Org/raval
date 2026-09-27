@@ -29,13 +29,13 @@ from app.page_extractor import extract_html, extract_page, extract_scan_pages
 
 def test_1_normal_title():
     html_doc = """<html lang="en">
-    <head><title>Raval AI - Advanced GEO and SEO Intelligence Platform</title></head>
+    <head><title>Mellox AI - Advanced GEO and SEO Intelligence Platform</title></head>
     <body><h1>Welcome</h1></body>
     </html>"""
     res = extract_html(html_doc)
     assert res.title_present is True
-    assert res.title_text == "Raval AI - Advanced GEO and SEO Intelligence Platform"
-    assert res.title_length == len("Raval AI - Advanced GEO and SEO Intelligence Platform")
+    assert res.title_text == "Mellox AI - Advanced GEO and SEO Intelligence Platform"
+    assert res.title_length == len("Mellox AI - Advanced GEO and SEO Intelligence Platform")
     assert res.title_word_count == 9
     assert res.title_empty is False
     assert res.title_too_short is False
@@ -533,12 +533,12 @@ def test_34_empty_robots_content():
 def test_35_all_required_og_fields():
     html_doc = """<html>
     <head>
-    <meta property="og:title" content="Raval Open Graph Title">
-    <meta property="og:description" content="Raval Open Graph Description">
+    <meta property="og:title" content="Mellox Open Graph Title">
+    <meta property="og:description" content="Mellox Open Graph Description">
     <meta property="og:image" content="https://example.com/og.png">
     <meta property="og:url" content="https://example.com/page">
     <meta property="og:type" content="website">
-    <meta property="og:site_name" content="Raval AI">
+    <meta property="og:site_name" content="Mellox AI">
     </head>
     <body><h1>OG Content</h1></body>
     </html>"""
@@ -597,8 +597,8 @@ def test_39_all_required_twitter_fields():
     html_doc = """<html>
     <head>
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Raval Twitter Card Title">
-    <meta name="twitter:description" content="Raval Twitter Description">
+    <meta name="twitter:title" content="Mellox Twitter Card Title">
+    <meta name="twitter:description" content="Mellox Twitter Description">
     <meta name="twitter:image" content="https://example.com/card.png">
     </head>
     <body><h1>Twitter Content</h1></body>
@@ -680,7 +680,7 @@ def test_44_valid_multiple_json_ld_blocks():
     html_doc = """<html>
     <head>
     <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "Organization", "name": "Raval AI"}
+    {"@context": "https://schema.org", "@type": "Organization", "name": "Mellox AI"}
     </script>
     <script type="application/ld+json">
     {"@context": "https://schema.org", "@type": "Product", "name": "AI Intelligence"}
@@ -829,7 +829,7 @@ def test_50_invalid_json_ld_does_not_crash_scan():
 def test_51_microdata_itemscope_itemtype():
     html_doc = """<html><body>
     <div itemscope itemtype="https://schema.org/Product">
-        <span itemprop="name">Raval GEO Pro</span>
+        <span itemprop="name">Mellox GEO Pro</span>
         <span itemprop="price">$99</span>
     </div>
     </body></html>"""
@@ -837,7 +837,7 @@ def test_51_microdata_itemscope_itemtype():
     assert len(res.microdata) == 1
     m = res.microdata[0]
     assert m.item_type == "https://schema.org/Product"
-    assert m.properties.get("name") == "Raval GEO Pro"
+    assert m.properties.get("name") == "Mellox GEO Pro"
     assert m.properties.get("price") == "$99"
 
 
@@ -1156,7 +1156,7 @@ def test_extract_page_full_pipeline_persistence_all_domains():
         {
             "@context": "https://schema.org",
             "@type": "SoftwareApplication",
-            "name": "Raval Intelligence Suite",
+            "name": "Mellox Intelligence Suite",
             "url": "https://master-test.com/analytics"
         }
         </script>

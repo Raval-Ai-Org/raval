@@ -46,8 +46,8 @@ def db_session():
 @pytest.fixture
 def test_setup(db_session):
     website = Website(
-        name="Raval AI",
-        url="https://raval.ai",
+        name="Mellox AI",
+        url="https://mellox.ai",
         created_at=datetime.now(timezone.utc),
     )
     db_session.add(website)
@@ -89,7 +89,7 @@ def test_setup(db_session):
     q = Query(
         query_set_id=qs.id,
         website_id=website.id,
-        query_text="Compare Raval AI and SearchOptima",
+        query_text="Compare Mellox AI and SearchOptima",
         intent="COMPARISON",
         generation_source="ENTITY_INTELLIGENCE",
         created_at=datetime.now(timezone.utc),
@@ -108,8 +108,8 @@ def test_setup(db_session):
         model="mock-ai-search-v1",
         status="SUCCESS",
         response_text=(
-            "Raval AI leads in GEO capabilities. SearchOptima offers traditional rank tracking. "
-            "Visit https://raval.ai/docs and https://searchoptima.com for comparisons."
+            "Mellox AI leads in GEO capabilities. SearchOptima offers traditional rank tracking. "
+            "Visit https://mellox.ai/docs and https://searchoptima.com for comparisons."
         ),
         latency_ms=130,
         request_timestamp=datetime.now(timezone.utc),

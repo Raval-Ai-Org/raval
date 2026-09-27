@@ -1,4 +1,4 @@
-# Raval GEO Intelligence — Recommendation Engine (Task 6.3)
+# Mellox GEO Intelligence — Recommendation Engine (Task 6.3)
 
 ## 1. Engine Purpose
 The Recommendation Engine translates raw findings and prioritized opportunities into actionable, structured, and explainable recommendations.

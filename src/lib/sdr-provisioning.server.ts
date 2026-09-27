@@ -76,7 +76,7 @@ export async function ensureWorkspaceSdrProvisioning(
   // 2. Mint a per-workspace key via the SDR admin endpoint (global token is
   //    admin-only; tenant traffic uses the minted key — never the global one).
   //    The SDR contract requires BOTH workspace_id and brand_id (its admin
-  //    schema: `workspace_id` + `brand_id`, each 1–64 chars). RavalAI's model is
+  //    schema: `workspace_id` + `brand_id`, each 1–64 chars). MelloxAI's model is
   //    one workspace per client brand, so brand_id maps to the same workspace id.
   const keyRes = await call({
     baseUrl,
@@ -111,7 +111,7 @@ export async function ensureWorkspaceSdrProvisioning(
   const row: WorkspaceSdrRecord = {
     id: randomUUID(),
     workspace_id: workspaceId,
-    sdr_workspace_id: workspaceId, // SDR accepts the RavalAI workspace id directly
+    sdr_workspace_id: workspaceId, // SDR accepts the MelloxAI workspace id directly
     encrypted_api_key: encryptSecret(apiKey),
     webhook_secret: webhookSecret ? encryptSecret(webhookSecret) : null,
     sdr_base_url: baseUrl,

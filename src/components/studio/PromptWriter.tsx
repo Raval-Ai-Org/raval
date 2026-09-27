@@ -115,6 +115,7 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
         template: session.template,
         goal: session.goal,
         controls: session.controls,
+        styleId: session.styleId,
         avoid: [
           ...(result ? [result.title, result.signal ?? ""] : []),
           ...readHistory(session.workspaceId),

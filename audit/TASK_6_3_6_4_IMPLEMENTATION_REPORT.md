@@ -4,7 +4,7 @@
 **Tasks Covered**: 
 - Task 6.3 — Recommendation Engine
 - Task 6.4 — Fix / Action Planning Foundation
-**Repository Root**: `C:\Users\HP\Documents\raval-geo-intelligence`  
+**Repository Root**: `C:\Users\HP\Documents\mellox-geo-intelligence`  
 **Git Branch**: `main`  
 **Runtime**: Python 3.14.7  
 

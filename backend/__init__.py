@@ -1,3 +1,3 @@
 """
-Backend package for Raval AI GEO / AEO / SEO Intelligence.
+Backend package for Mellox AI GEO / AEO / SEO Intelligence.
 """

@@ -22,8 +22,8 @@ Mailhog, SearXNG) as images, and builds each project's own application
 services from a **sibling checkout** next to this repository:
 
 ```
-Raval Ai/
-├── Raval Ai Codebase/        (this repo)
+Mellox AI/
+├── Mellox AI Codebase/        (this repo)
 │   ├── docker-compose.yml
 │   └── docker-compose.integrations.yml
 └── helicone/                 (sibling checkout, not tracked by this repo)
@@ -68,11 +68,12 @@ Raval Ai/
    HELICONE_API_KEY=<key from the Helicone dashboard>
    ```
 
-5. Restart the app. Every AI call already routed through
-   `src/server/ai/metering.ts`'s `recordUsage()` (OpenRouter, Anthropic, KIE,
-   Tavily, Firecrawl) now also logs to Helicone — token counts, estimated cost,
-   latency, status and provider — with full request/response bodies included
-   only if `HELICONE_LOG_PROMPTS=true` is also set. Stop the Helicone
+5. Restart the app. Usage events already recorded by the application's
+   metering path are also sent to Helicone — token counts, estimated cost,
+   latency, status, route, and provider. Text, vision, tool-use, and image
+   requests use OpenRouter; video uses the configured video provider. Request
+   and response bodies are included only if `HELICONE_LOG_PROMPTS=true` is
+   also set. Stop the Helicone
    containers (or unset `HELICONE_BASE_URL`) at any time; nothing else
    changes.
 
@@ -140,9 +141,10 @@ falls back to the existing inline path instead of leaving a run stuck.
 ## Promptfoo evaluations
 
 Promptfoo providers call the production server functions, never provider SDKs
-directly. Evaluations require an opt-in `ANTHROPIC_API_KEY`; they are not part
-of the no-credential unit test suite and secrets must be supplied through the
-environment or CI secret store, never YAML fixtures.
+directly. Model calls use the app's OpenRouter gateway. The CI eval job maps its
+dedicated `OPENROUTER_API_KEY_EVALS` secret to `OPENROUTER_API_KEY`; local evals
+need an approved OpenRouter key in the environment. Evals are not part of the
+no-credential unit test suite. Never put credentials in YAML fixtures.
 
 ```bash
 npm run eval

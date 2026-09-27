@@ -8,11 +8,15 @@ export const POST = defineCronRoute({
   expectedIntervalSeconds: 300,
   handler: async () => {
     const { issueDueGrants } = await import("@/server/billing/grants.server");
+    const { replayFailedBillingEvents } = await import("@/server/billing/stripe-account.server");
+    const { reconcilePendingBillingCapacity } = await import("@/server/billing/capacity.server");
     const { advanceStudioBillingJobs } = await import("@/server/billing/studio-async.server");
     const { settleTerminalUgcBilling } = await import("@/server/billing/ugc-async.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // Rollover runs inside issueDueGrants before old grants expire.
     const grants = await issueDueGrants();
+    const stripeReplay = await replayFailedBillingEvents();
+    const capacity = await reconcilePendingBillingCapacity();
     const studio = await advanceStudioBillingJobs();
     const ugc = await settleTerminalUgcBilling();
     const expired = await supabaseAdmin.rpc("meter_expire_due" as never);
@@ -25,6 +29,14 @@ export const POST = defineCronRoute({
       .delete()
       .lt("created_at", cutoff);
     if (purged.error) throw new Error("Could not purge old billing shadow events.");
-    return { ...grants, studio, ugc, expired: expired.data, releasedHolds: holds.data };
+    return {
+      ...grants,
+      stripeReplay,
+      capacity,
+      studio,
+      ugc,
+      expired: expired.data,
+      releasedHolds: holds.data,
+    };
   },
 });

@@ -1,5 +1,5 @@
 """
-Audit Subsystem for Raval AI Connectors (Task 11 Step 6).
+Audit Subsystem for Mellox AI Connectors (Task 11 Step 6).
 
 Provides:
 - Immutable audit event data models

@@ -45,8 +45,8 @@ def db_session():
 @pytest.fixture
 def test_setup(db_session):
     website = Website(
-        name="Raval AI",
-        url="https://raval.ai",
+        name="Mellox AI",
+        url="https://mellox.ai",
         created_at=datetime.now(timezone.utc),
     )
     db_session.add(website)
@@ -64,7 +64,7 @@ def test_setup(db_session):
 
     page = PageResult(
         scan_id=scan.id,
-        url="https://raval.ai/docs/geo-guide",
+        url="https://mellox.ai/docs/geo-guide",
         status_code=200,
         created_at=datetime.now(timezone.utc),
     )
@@ -95,8 +95,8 @@ def test_setup(db_session):
         page_id=page.id,
         finding_type="unanswered_high_value_question",
         category="content",
-        title="How does Raval AI optimize answer engine citations?",
-        description="Content does not directly answer how Raval AI optimizes answer engine citations.",
+        title="How does Mellox AI optimize answer engine citations?",
+        description="Content does not directly answer how Mellox AI optimizes answer engine citations.",
         severity="high",
         status="open",
         created_at=datetime.now(timezone.utc),
@@ -132,7 +132,7 @@ def test_setup(db_session):
     q1 = Query(
         query_set_id=qs.id,
         website_id=website.id,
-        query_text="How does Raval AI optimize answer engine citations?",
+        query_text="How does Mellox AI optimize answer engine citations?",
         intent="INFORMATIONAL",
         priority="HIGH",
         created_at=datetime.now(timezone.utc),
@@ -178,7 +178,7 @@ def test_setup(db_session):
         provider="mock",
         model="mock-v1",
         status="SUCCESS",
-        response_text="Raval AI is a top GEO platform with advanced features.",
+        response_text="Mellox AI is a top GEO platform with advanced features.",
         latency_ms=110,
         request_timestamp=datetime.now(timezone.utc),
         response_timestamp=datetime.now(timezone.utc),

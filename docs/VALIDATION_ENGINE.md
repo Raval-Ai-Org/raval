@@ -1,4 +1,4 @@
-# Raval GEO Intelligence — Validation Engine & Pipeline (Tasks 6.5, 6.6, 6.7)
+# Mellox GEO Intelligence — Validation Engine & Pipeline (Tasks 6.5, 6.6, 6.7)
 
 ## 1. Engine Purpose & Overview
 The Validation Engine provides evidence-based, deterministic verification of proposed remediations and fixes. It closes the feedback loop between the intelligence pipeline and remediation planning:

@@ -1,4 +1,4 @@
-# Contract: SDR → RavalAI Webhook Receiver
+# Contract: SDR → MelloxAI Webhook Receiver
 
 **Branch**: `001-sdr-integration` | **Date**: 2026-08-08
 
@@ -8,7 +8,7 @@ The receiver is `src/routes/api/public/hooks/sdr.ts` (file route, cloned from th
 
 `POST /api/public/hooks/sdr`
 
-## SDR→RavalAI payload (as sent by the SDR's `webhook_out.py`)
+## SDR→MelloxAI payload (as sent by the SDR's `webhook_out.py`)
 
 SDR sends one event per **target** (per-account delivery unit). Wrapped payload:
 

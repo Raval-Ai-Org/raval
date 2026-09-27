@@ -45,8 +45,8 @@ def test_app_and_db():
 
     db = TestingSessionLocal()
     website = Website(
-        name="Raval AI",
-        url="https://raval.ai",
+        name="Mellox AI",
+        url="https://mellox.ai",
         created_at=datetime.now(timezone.utc),
     )
     db.add(website)
@@ -88,7 +88,7 @@ def test_app_and_db():
     q = Query(
         query_set_id=qs.id,
         website_id=website.id,
-        query_text="Raval AI vs MarketLeader",
+        query_text="Mellox AI vs MarketLeader",
         intent="COMPARISON",
         generation_source="ENTITY_INTELLIGENCE",
         created_at=datetime.now(timezone.utc),
@@ -105,7 +105,7 @@ def test_app_and_db():
         provider="mock",
         model="mock-ai-search-v1",
         status="SUCCESS",
-        response_text="Raval AI is leading in GEO. MarketLeader is another tool available at https://marketleader.com.",
+        response_text="Mellox AI is leading in GEO. MarketLeader is another tool available at https://marketleader.com.",
         latency_ms=110,
         request_timestamp=datetime.now(timezone.utc),
         response_timestamp=datetime.now(timezone.utc),

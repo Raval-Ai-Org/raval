@@ -1,7 +1,7 @@
 # Monitoring Engine & Pipeline Integration Guide (Task 6.10)
 
 ## 1. Executive Overview
-The **Monitoring Engine** provides continuous internal intelligence metric tracking, delta evaluations, and historical event detection over time for domains audited by Raval AI GEO Intelligence. It operates strictly on database-persisted signals from Scans, Opportunities, Fix Plans, and Validations.
+The **Monitoring Engine** provides continuous internal intelligence metric tracking, delta evaluations, and historical event detection over time for domains audited by Mellox AI GEO Intelligence. It operates strictly on database-persisted signals from Scans, Opportunities, Fix Plans, and Validations.
 
 ### Architectural Principles
 - **Purely Internal & Deterministic**: Metric evaluation is calculated on stored relational records without external daemons, cloud cron tasks, or third-party monitoring dependencies.

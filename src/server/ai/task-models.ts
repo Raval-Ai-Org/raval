@@ -133,6 +133,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.ideas": tier(WORKHORSE, "low", { temperature: 0.9 }),
   "studio.prompt": tier(WORKHORSE, "low"),
   "studio.research": tier(WORKHORSE, "medium"),
+  "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 350 }),
   "campaign-generation": tier(PREMIUM, "low"),
   "schedule.*": tier(WORKHORSE, "medium"),
 

@@ -80,7 +80,7 @@ def _utc_now() -> datetime:
 class ProductionOrchestrator:
     """
     Deterministic end-to-end production orchestrator coordinating all phases
-    of the Raval AI Search Intelligence lifecycle.
+    of the Mellox AI Search Intelligence lifecycle.
     """
 
     def __init__(

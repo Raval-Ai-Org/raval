@@ -148,7 +148,7 @@ def test_successful_request_no_unnecessary_retries():
     mock_get.assert_called_once_with(
         "https://example.com/",
         timeout=7.5,
-        headers={"User-Agent": "RavalGeoIntelligenceCrawler/1.0"},
+        headers={"User-Agent": "MelloxGeoIntelligenceCrawler/1.0"},
     )
 
 

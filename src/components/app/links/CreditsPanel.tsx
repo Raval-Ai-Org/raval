@@ -54,8 +54,9 @@ export function CreditsPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workspaceId,
-          packId,
+          kind: "credit_pack",
+          key: packId,
+          quantity: 1,
           returnPath: `/w/${workspaceId}/app/backlinks`,
         }),
       });
@@ -114,8 +115,8 @@ export function CreditsPanel({
         {!canBuy && (
           <p className="rounded-2xl border border-border bg-secondary/50 p-4 text-[13.5px] leading-relaxed text-muted-foreground">
             {canEdit
-              ? "Card payments aren’t switched on for this workspace yet, so balance has to be added for you. Everything else works as normal."
-              : "Adding balance needs admin access. Ask an owner or admin of this workspace."}
+              ? "Only the billing account owner can buy packs after Stripe setup is complete."
+              : "Ask the billing account owner to add balance."}
           </p>
         )}
 
@@ -132,12 +133,14 @@ export function CreditsPanel({
                   usd={pack.valueUsd}
                   className="text-[26px] font-semibold tracking-tight text-foreground"
                 />
-                <p className="mt-0.5 text-[12.5px] text-muted-foreground">added to balance</p>
+                <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                  for backlinks or AI work
+                </p>
                 {/* Reserve the line either way, so every Pay button sits at the same height. */}
                 <p className="mb-4 mt-2 h-5 text-[12.5px] font-medium text-success">
                   {pack.bonusUsd > 0 && (
                     <>
-                      <Money usd={pack.bonusUsd} /> free
+                      <Money usd={pack.bonusUsd} /> bonus for AI work only
                     </>
                   )}
                 </p>

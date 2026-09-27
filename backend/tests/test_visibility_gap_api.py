@@ -45,8 +45,8 @@ def test_app_and_db():
 
     db = TestingSessionLocal()
     website = Website(
-        name="Raval AI",
-        url="https://raval.ai",
+        name="Mellox AI",
+        url="https://mellox.ai",
         created_at=datetime.now(timezone.utc),
     )
     db.add(website)

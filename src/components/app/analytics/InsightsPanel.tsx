@@ -14,6 +14,7 @@ import type { InsightItem } from "@/lib/analytics/types";
 import { cn } from "@/lib/utils";
 import { useInsights, useRefreshInsights } from "./hooks";
 import { CostChip } from "@/components/app/CostChip";
+import { FeatureGate } from "@/components/app/FeatureGate";
 import { ReportError, ReportSkeleton } from "./SourceGate";
 import { askMellox, Card, SourceBadge } from "./ui";
 
@@ -104,21 +105,23 @@ export function InsightsPanel() {
         window={data.window}
         action={
           data.canGenerate && canEdit ? (
-            <Button
-              size="sm"
-              className="gap-1.5"
-              loading={refresh.isPending}
-              onClick={() =>
-                refresh.mutate(undefined, {
-                  onError: (e) =>
-                    toast.error(e instanceof Error ? e.message : "Couldn't create insights"),
-                })
-              }
-            >
-              {!refresh.isPending && <Sparkles className="h-3.5 w-3.5" aria-hidden />}
-              {data.stale ? "Update insights" : "Explain these changes"}
-              <CostChip action="insights_refresh" />
-            </Button>
+            <FeatureGate feature="analytics_insights">
+              <Button
+                size="sm"
+                className="gap-1.5"
+                loading={refresh.isPending}
+                onClick={() =>
+                  refresh.mutate(undefined, {
+                    onError: (e) =>
+                      toast.error(e instanceof Error ? e.message : "Couldn't create insights"),
+                  })
+                }
+              >
+                {!refresh.isPending && <Sparkles className="h-3.5 w-3.5" aria-hidden />}
+                {data.stale ? "Update insights" : "Explain these changes"}
+                <CostChip action="insights_refresh" />
+              </Button>
+            </FeatureGate>
           ) : null
         }
       >

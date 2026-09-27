@@ -1,11 +1,11 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PLANS, SIGNUP_GRANT, type Meter, type PlanId } from "@/lib/billing/catalog";
+import { ADDONS, PLANS, SIGNUP_GRANT, type Meter, type PlanId } from "@/lib/billing/catalog";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { invalidateBillingAccount, type BillingAccount } from "./accounts.server";
 import { entitledPlanFor } from "./entitlements.server";
-import { grantMeter, rolloverMeter } from "./meters.server";
+import { clawbackMeter, grantMeter, rolloverMeter } from "./meters.server";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 
@@ -84,6 +84,7 @@ export async function grantPlanWindow(args: {
   windowStart: string;
   expiresAt: string;
   annualRollover?: boolean;
+  providerRef?: string;
 }): Promise<number> {
   const { account, plan, windowStart, expiresAt } = args;
   const allowances = PLANS[plan].allowances;
@@ -111,11 +112,121 @@ export async function grantPlanWindow(args: {
       restriction: "ai_only",
       periodStart: windowStart,
       expiresAt,
-      idempotencyKey: `plan:${account.id}:${meter}:${windowStart}`,
+      idempotencyKey: `plan:${account.id}:${plan}:${meter}:${windowStart}`,
+      providerRef: args.providerRef,
     });
     if (!result.replayed) issued++;
   }
   return issued;
+}
+
+/** An in-period paid upgrade receives only the unused share of the increase. */
+export async function grantPlanUpgrade(args: {
+  account: BillingAccount;
+  from: PlanId;
+  to: PlanId;
+  paymentId: string;
+  expiresAt: string;
+  now?: Date;
+}): Promise<void> {
+  const now = args.now ?? new Date();
+  const start = args.account.current_period_start
+    ? new Date(args.account.current_period_start).getTime()
+    : now.getTime();
+  const end = new Date(args.expiresAt).getTime();
+  const fraction = Math.max(0, Math.min(1, (end - now.getTime()) / Math.max(1, end - start)));
+  const old = PLANS[args.from].allowances;
+  const next = PLANS[args.to].allowances;
+  for (const [meter, delta] of [
+    ["credits", next.credits - old.credits],
+    ["video", next.videoUnits - old.videoUnits],
+    ["pro_messages", next.proMessages - old.proMessages],
+    ["flash_messages", next.flashMessages - old.flashMessages],
+  ] as const) {
+    const amount = Math.ceil(Math.max(0, delta) * fraction);
+    if (amount < 1) continue;
+    await grantMeter({
+      accountId: args.account.id,
+      meter,
+      amount,
+      source: "plan",
+      restriction: "ai_only",
+      idempotencyKey: `upgrade:${args.paymentId}:${meter}`,
+      expiresAt: args.expiresAt,
+      providerRef: args.paymentId,
+    });
+  }
+}
+
+export async function grantAddonWindow(args: {
+  accountId: string;
+  items: Array<{ catalogKey: string; quantity: number }>;
+  windowStart: string;
+  expiresAt: string;
+  providerRef?: string;
+}): Promise<void> {
+  for (const item of args.items) {
+    const addon = ADDONS[item.catalogKey as keyof typeof ADDONS];
+    if (!addon || addon.availability !== "launch") continue;
+    for (const [meter, perUnit] of [
+      ["credits", addon.adds.credits ?? 0],
+      ["video", addon.adds.videoUnits ?? 0],
+      ["pro_messages", addon.adds.proMessages ?? 0],
+    ] as const) {
+      const amount = perUnit * item.quantity;
+      if (amount < 1) continue;
+      await grantMeter({
+        accountId: args.accountId,
+        meter,
+        amount,
+        source: "addon",
+        restriction: "ai_only",
+        expiresAt: args.expiresAt,
+        providerRef: args.providerRef,
+        periodStart: args.windowStart,
+        idempotencyKey: `addon:${args.accountId}:${item.catalogKey}:${meter}:${args.windowStart}`,
+      });
+    }
+  }
+}
+
+export async function grantAddonUpgrade(args: {
+  account: BillingAccount;
+  before: Array<{ catalogKey: string; quantity: number }>;
+  after: Array<{ catalogKey: string; quantity: number }>;
+  paymentId: string;
+  expiresAt: string;
+}): Promise<void> {
+  const now = Date.now();
+  const start = args.account.current_period_start
+    ? new Date(args.account.current_period_start).getTime()
+    : now;
+  const end = new Date(args.expiresAt).getTime();
+  const fraction = Math.max(0, Math.min(1, (end - now) / Math.max(1, end - start)));
+  const old = new Map(args.before.map((item) => [item.catalogKey, item.quantity]));
+  for (const item of args.after) {
+    const addon = ADDONS[item.catalogKey as keyof typeof ADDONS];
+    if (!addon || addon.availability !== "launch") continue;
+    const extra = Math.max(0, item.quantity - (old.get(item.catalogKey) ?? 0));
+    for (const [meter, perUnit] of [
+      ["credits", addon.adds.credits ?? 0],
+      ["video", addon.adds.videoUnits ?? 0],
+      ["pro_messages", addon.adds.proMessages ?? 0],
+    ] as const) {
+      const amount = Math.ceil(extra * perUnit * fraction);
+      if (amount < 1) continue;
+      await grantMeter({
+        accountId: args.account.id,
+        meter,
+        amount,
+        source: "addon",
+        restriction: "ai_only",
+        expiresAt: args.expiresAt,
+        providerRef: args.paymentId,
+        idempotencyKey: `addon-upgrade:${args.paymentId}:${item.catalogKey}:${meter}`,
+      });
+    }
+  }
 }
 
 /** Called by the guarded billing cron; payment webhooks call grantPlanWindow directly. */
@@ -159,7 +270,56 @@ export async function issueDueGrants(
         windowStart: start,
         expiresAt: next,
         annualRollover: Boolean(withinPaidYear),
+        providerRef: account.last_paid_invoice_id ?? undefined,
       });
+      const { data: addonItems, error: addonError } = await admin
+        .from("billing_subscription_items")
+        .select("catalog_key,quantity")
+        .eq("account_id", account.id)
+        .eq("status", "active");
+      if (addonError) throw new Error("Could not load due add-on grants.");
+      await grantAddonWindow({
+        accountId: account.id,
+        items: (addonItems ?? []).map((item) => ({
+          catalogKey: item.catalog_key,
+          quantity: item.quantity,
+        })),
+        windowStart: start,
+        expiresAt: next,
+        providerRef: account.last_paid_invoice_id ?? undefined,
+      });
+      if (withinPaidYear && account.last_paid_invoice_id) {
+        const { data: payment, error: paymentError } = await admin
+          .from("billing_payment_records")
+          .select("amount_cents,refunded_cents")
+          .eq("provider_invoice_id", account.last_paid_invoice_id)
+          .maybeSingle();
+        if (paymentError) throw new Error("Could not check annual payment status.");
+        if (payment && Number(payment.refunded_cents) > 0) {
+          const { data: windowGrants, error: grantsError } = await admin
+            .from("meter_grants")
+            .select("id,amount,clawed_back")
+            .eq("account_id", account.id)
+            .eq("provider_ref", account.last_paid_invoice_id)
+            .eq("period_start", start);
+          if (grantsError) throw new Error("Could not check refunded annual grants.");
+          for (const grant of windowGrants ?? []) {
+            const due =
+              Math.floor(
+                (Number(grant.amount) * Number(payment.refunded_cents)) /
+                  Math.max(1, Number(payment.amount_cents)),
+              ) - Number(grant.clawed_back);
+            if (due > 0)
+              await clawbackMeter({
+                accountId: account.id,
+                grantId: String(grant.id),
+                amount: due,
+                idempotencyKey: `annual-refund:${account.last_paid_invoice_id}:${start}:${grant.id}`,
+                reason: "Refunded annual subscription",
+              });
+          }
+        }
+      }
     }
     const { error: updateError } = await admin
       .from("billing_accounts")

@@ -11,7 +11,7 @@
 //     no Supabase. The UI imports it to show prices, locks and upgrade copy; the server
 //     imports it to enforce. Server-side env overrides live in src/server/billing/.
 //   - Every number here was costed. Change a number only together with the workbook.
-//   - Prices are USD. Paddle price ids are NOT here (they live in billing_price_map).
+//   - Prices are USD. Stripe price ids are NOT here (they live in billing_price_map).
 
 /* ───────────────────────────── plans ───────────────────────────── */
 
@@ -1156,7 +1156,7 @@ export const ADDONS: Record<AddonKey, AddonDef> = {
     usdPerMonth: 149,
     plans: ["growth", "agency", "scale"],
     adds: { dailyTrackedPrompts: 100 },
-    availability: "launch",
+    availability: "later",
   },
   daily_market_brain: {
     key: "daily_market_brain",
@@ -1164,7 +1164,7 @@ export const ADDONS: Record<AddonKey, AddonDef> = {
     usdPerMonth: 29,
     plans: ["starter", "growth", "agency", "scale"],
     adds: { marketBrainDailyBrands: 1 },
-    availability: "launch",
+    availability: "later",
   },
   pro_200: {
     key: "pro_200",

@@ -878,7 +878,7 @@ type Device = "phone" | "tablet" | "window" | "wide";
 
 /** Frame sizes that match how the composer window really appears. */
 const FRAME: Record<Device, string> = {
-  phone: "h-[844px] w-[390px] rounded-[28px]",
+  phone: "h-[844px] w-full max-w-[390px] rounded-[28px]",
   tablet: "h-[900px] w-[820px] rounded-2xl",
   window: "h-[860px] w-[1240px] rounded-2xl",
   wide: "h-[960px] w-[1680px] rounded-2xl",
@@ -986,6 +986,7 @@ export function StudioLab() {
         <div className="flex justify-center overflow-x-auto p-6">
           <div
             key={`${scene}-${device}-${runKey}`}
+            data-testid="studio-lab-frame"
             className={cn(
               "flex flex-col overflow-hidden border border-border bg-surface-3 shadow-4",
               FRAME[device],

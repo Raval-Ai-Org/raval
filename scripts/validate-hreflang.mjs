@@ -21,7 +21,7 @@
  * Exits non-zero on any violation so CI blocks merges.
  */
 
-const CANONICAL_HOST = process.env.APP_URL || "https://raval.ai";
+const CANONICAL_HOST = process.env.APP_URL || "https://mellox.ai";
 const SERVER = process.env.SITEMAP_BASE_URL ?? "http://localhost:8080";
 
 const stripTrailingSlash = (u) => (u.endsWith("/") && u.length > 1 ? u.slice(0, -1) : u);

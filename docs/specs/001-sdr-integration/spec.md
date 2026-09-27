@@ -1,9 +1,9 @@
-# Feature Specification: RavalAI × SDR Integration
+# Feature Specification: MelloxAI × SDR Integration
 
 **Feature Branch**: `001-sdr-integration`  
 **Created**: 2026-08-08  
 **Status**: Draft  
-**Input**: User description: "Integrate the Social Distribution Engine (SDR) into the RavalAI platform per the finalized plan: proxy-through-server topology, per-workspace key minting, workspace_sdr + content_publications tables, publishing status, Studio Connections panel + destination picker + inline Connect, split scheduling, non-disruptive phased rollout (Phase 0 local SDR + DryRun smoke test first)."
+**Input**: User description: "Integrate the Social Distribution Engine (SDR) into the MelloxAI platform per the finalized plan: proxy-through-server topology, per-workspace key minting, workspace_sdr + content_publications tables, publishing status, Studio Connections panel + destination picker + inline Connect, split scheduling, non-disruptive phased rollout (Phase 0 local SDR + DryRun smoke test first)."
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -172,10 +172,10 @@ If the distribution capability is temporarily unavailable, the platform keeps wo
 
 ## Assumptions
 
-- The distribution capability is provided by an external service (the Social Distribution Engine) that owns platform authorization, token storage, and delivery execution. RavalAI integrates with it as a trusted counterparty and never re-implements platform APIs.
+- The distribution capability is provided by an external service (the Social Distribution Engine) that owns platform authorization, token storage, and delivery execution. MelloxAI integrates with it as a trusted counterparty and never re-implements platform APIs.
 - Each workspace gets its own distribution identity (per-workspace key) and its own delivery callback secret — no cross-workspace sharing.
 - Supported platforms in scope for launch: LinkedIn, X, Facebook, Instagram. Other platforms (Threads, TikTok, YouTube) are out of scope and behave as "not connected" today.
-- RavalAI's existing generation scheduler (scheduled content production) remains in RavalAI; the distribution service owns only delivery timing. These are separate concepts and are not merged.
+- MelloxAI's existing generation scheduler (scheduled content production) remains in MelloxAI; the distribution service owns only delivery timing. These are separate concepts and are not merged.
 - Rollout is phased and flag-gated; each user story above is independently shippable without regression.
 - Phase 0 (stand up the distribution engine locally and smoke-test it in dry-run mode) is a prerequisite but does not change any user-facing behavior.
 - Media handed to the distribution engine MUST be reachable via durable, public (or long-lived) URLs at publish time — short-lived signed URLs are not acceptable for scheduled posts.

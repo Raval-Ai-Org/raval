@@ -31,6 +31,7 @@ import { CompetitorDetail } from "./CompetitorDetail";
 import { DiscoverTab } from "./DiscoverTab";
 import { UpdatesFeed } from "./UpdatesFeed";
 import { CostChip } from "@/components/app/CostChip";
+import { FeatureGate } from "@/components/app/FeatureGate";
 
 type TabId = "competitors" | "updates" | "discover";
 
@@ -134,24 +135,26 @@ function Panel({ workspaceId }: { workspaceId: string }) {
   if (!data) return null;
 
   const findButton = (full?: boolean) => (
-    <button
-      type="button"
-      onClick={() => {
-        setOpenId(null);
-        setTab("discover");
-        if (data.researchAvailable) discover.mutate();
-      }}
-      disabled={discover.isPending || bootstrapping || !data.researchAvailable}
-      className={cn(primaryBtn, "h-10 px-4 text-[13px]", full && "w-full")}
-    >
-      {discover.isPending ? (
-        <Spinner className="h-3.5 w-3.5 animate-spin" />
-      ) : (
-        <Search className="h-3.5 w-3.5" />
-      )}
-      {discover.isPending ? "Looking" : "Find competitors"}
-      {!discover.isPending && <CostChip action="competitor_discovery" />}
-    </button>
+    <FeatureGate feature="competitors" className={full ? "w-full" : undefined}>
+      <button
+        type="button"
+        onClick={() => {
+          setOpenId(null);
+          setTab("discover");
+          if (data.researchAvailable) discover.mutate();
+        }}
+        disabled={discover.isPending || bootstrapping || !data.researchAvailable}
+        className={cn(primaryBtn, "h-11 px-4 text-[13px] lg:h-10", full && "w-full")}
+      >
+        {discover.isPending ? (
+          <Spinner className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Search className="h-3.5 w-3.5" />
+        )}
+        {discover.isPending ? "Looking" : "Find competitors"}
+        {!discover.isPending && <CostChip action="competitor_discovery" />}
+      </button>
+    </FeatureGate>
   );
 
   const nav: SurfaceNavItem<TabId>[] = [
@@ -195,14 +198,17 @@ function Panel({ workspaceId }: { workspaceId: string }) {
         title="Competitors"
         actions={
           data.competitors.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setTab("discover")}
-              className={cn(ghostBtn, "h-9 px-3.5 text-[12.5px]")}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {data.researchAvailable && <div className="lg:hidden">{findButton()}</div>}
+              <button
+                type="button"
+                onClick={() => setTab("discover")}
+                className={cn(ghostBtn, "h-11 px-3.5 text-[12.5px] lg:h-9")}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </button>
+            </div>
           )
         }
       >

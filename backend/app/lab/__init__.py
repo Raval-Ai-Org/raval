@@ -1,5 +1,5 @@
 """
-Raval AI Controlled Site Lab & End-to-End Pipeline Harness Package (Task 12).
+Mellox AI Controlled Site Lab & End-to-End Pipeline Harness Package (Task 12).
 
 Provides realistic, deterministic test fixtures (Static, SSR, Dynamic, WordPress), local HTTP testing server,
 centralized defect catalog, End-to-End Pipeline Harness with full execution tracing across 13 ordered stages,

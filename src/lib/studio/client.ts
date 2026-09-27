@@ -96,6 +96,7 @@ export const studioApi = {
     template?: string;
     goal?: GoalId;
     controls?: Partial<StudioControls>;
+    styleId?: string | null;
     avoid?: string[];
   }) {
     return call<WrittenPrompt>("/api/studio/prompt", {

@@ -17,11 +17,11 @@ export async function POST(request: Request): Promise<Response> {
   const rawBody = await request.text();
 
   try {
-    const { handleWebhook } = await import("@/server/billing/stripe.server");
-    const outcome = await handleWebhook(rawBody, signature);
+    const { handleAccountStripeWebhook } = await import("@/server/billing/stripe-account.server");
+    await handleAccountStripeWebhook(rawBody, signature);
     // Stripe retries on a non-2xx, so an event Mellox deliberately ignores
     // still answers 200 with a reason rather than inviting a retry storm.
-    return Response.json({ ok: true, handled: outcome.handled, reason: outcome.reason });
+    return Response.json({ ok: true });
   } catch (error) {
     const { knownErrorResponse } = await import("@/server/route");
     const known = knownErrorResponse(error);

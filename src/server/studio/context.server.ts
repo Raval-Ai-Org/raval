@@ -10,6 +10,7 @@ import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
 import { upcomingMoments } from "@/lib/studio/moments";
 import type { StudioContext } from "@/lib/studio/prompts";
+import { recentPerformanceSignals } from "@/lib/studio/performance";
 
 type WorkspaceSnapshot = Omit<StudioContext, "brandText" | "brandName" | "moments" | "today"> & {
   name: string;
@@ -50,7 +51,7 @@ async function loadWorkspaceSnapshot(
   const now = new Date();
   const in14 = new Date(now.getTime() + 14 * 86_400_000).toISOString();
 
-  const [workspace, recent, upcoming, alerts, insights, market] = await Promise.all([
+  const [workspace, recent, upcoming, alerts, insights, market, publications] = await Promise.all([
     settle(
       db
         .from("workspaces")
@@ -63,9 +64,8 @@ async function loadWorkspaceSnapshot(
     settle(
       db
         .from("content_items")
-        .select("title, body, kind, channel, meta, created_at, status")
+        .select("id, title, body, kind, channel, meta, created_at, status")
         .eq("workspace_id", workspaceId)
-        .neq("status", "rejected")
         .order("created_at", { ascending: false })
         .limit(40),
       { data: [], error: null } as never,
@@ -109,6 +109,18 @@ async function loadWorkspaceSnapshot(
       "insights",
     ),
     settle(getLatestMarketBrain(workspaceId), null, "market brain"),
+    settle(
+      db
+        .from("content_publications")
+        .select("content_item_id, platform, status, metrics")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "published")
+        .gte("delivered_at", new Date(now.getTime() - 90 * 86_400_000).toISOString())
+        .order("delivered_at", { ascending: false })
+        .limit(100),
+      { data: [], error: null } as never,
+      "publication outcomes",
+    ),
   ]);
 
   type Row = Record<string, unknown>;
@@ -117,6 +129,7 @@ async function loadWorkspaceSnapshot(
   const upcomingRows = ((upcoming as { data: Row[] | null }).data ?? []) as Row[];
   const alertRows = ((alerts as { data: Row[] | null }).data ?? []) as Row[];
   const insightRows = ((insights as { data: Row[] | null }).data ?? []) as Row[];
+  const publicationRows = ((publications as { data: Row[] | null }).data ?? []) as Row[];
 
   const intelligence = market?.intelligence ?? null;
 
@@ -139,7 +152,22 @@ async function loadWorkspaceSnapshot(
         type: str(meta.studio_type) ?? str(r.kind) ?? "post",
         channel: str(r.channel),
         angle: str(meta.angle),
+        status: str(r.status),
         createdAt: String(r.created_at ?? ""),
+        excerpt: (
+          str(meta.concept) ??
+          (Array.isArray(meta.slides)
+            ? meta.slides
+                .map((slide) => {
+                  const item = record(slide);
+                  return [str(item.heading), str(item.body)].filter(Boolean).join(" ");
+                })
+                .join(" ")
+            : null) ??
+          str(r.body)
+        )
+          ?.replace(/\s+/g, " ")
+          .slice(0, 400),
       };
     }),
     upcoming: upcomingRows.map((r) => ({
@@ -158,6 +186,19 @@ async function loadWorkspaceSnapshot(
       .map((a) => [str(a.title), str(a.summary)].filter(Boolean).join(": ").slice(0, 240))
       .filter(Boolean),
     insights: insightRows.map((i) => (str(i.body) ?? "").slice(0, 240)).filter(Boolean),
+    performanceSignals: recentPerformanceSignals(
+      recentRows.map((r) => ({
+        id: str(r.id) ?? "",
+        title: str(r.title) ?? "Untitled",
+        status: str(r.status) ?? "",
+      })),
+      publicationRows.map((r) => ({
+        content_item_id: str(r.content_item_id) ?? "",
+        platform: str(r.platform) ?? "social",
+        status: str(r.status) ?? "",
+        metrics: r.metrics,
+      })),
+    ),
   };
   cache.set(workspaceId, { at: Date.now(), value });
   return value;

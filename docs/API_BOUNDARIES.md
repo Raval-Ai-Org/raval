@@ -1,9 +1,9 @@
-# Raval Core API Boundaries
+# Mellox Core API Boundaries
 
 ## 1. Purpose
 
 This document defines the initial API/service boundaries
-for the Raval AI GEO / AEO / SEO Intelligence foundation.
+for the Mellox AI GEO / AEO / SEO Intelligence foundation.
 
 The API provides stable boundaries between clients,
 application services, and future workers/connectors.

@@ -33,12 +33,15 @@ export type StudioContext = {
     channel: string | null;
     angle: string | null;
     createdAt: string;
+    excerpt?: string;
+    status?: string | null;
   }[];
   upcoming: { title: string; channel: string | null; scheduledAt: string }[];
   opportunities: string[];
   risingQueries: string[];
   competitorMoves: string[];
   insights: string[];
+  performanceSignals: string[];
   moments: MarketingMoment[];
   /**
    * Current web sources, present only when the brief actually needed them
@@ -64,6 +67,7 @@ export function emptyContext(brandName = "the brand"): StudioContext {
     risingQueries: [],
     competitorMoves: [],
     insights: [],
+    performanceSignals: [],
     moments: [],
   };
 }
@@ -184,7 +188,7 @@ function recentList(ctx: StudioContext, limit = 12): string {
     .slice(0, limit)
     .map(
       (r) =>
-        `- ${r.title}${r.channel ? ` (${r.channel})` : ""}${r.angle ? `, angle: ${r.angle}` : ""}`,
+        `- ${r.title}${r.channel ? ` (${r.channel})` : ""}${r.status === "rejected" ? ", rejected by the user" : ""}${r.angle ? `, angle: ${r.angle}` : ""}${r.excerpt ? `; substance: ${r.excerpt}` : ""}`,
     )
     .join("\n");
 }
@@ -216,6 +220,10 @@ ${ctx.liveResearch.summary}`,
         .join(", ")}`,
     );
   }
+  if (ctx.performanceSignals.length)
+    lines.push(
+      `Recent measured engagement (examples to learn from, not templates to copy): ${ctx.performanceSignals.slice(0, 3).join(" | ")}`,
+    );
   return lines.join("\n");
 }
 
@@ -227,6 +235,9 @@ const CRAFT_RULES = [
   "Avoid clichés: 'game-changer', 'unlock', 'elevate', 'in today's fast-paced world', 'dive in', 'look no further'.",
   "Never invent statistics, clients, awards, or quotes. If proof isn't in the context, use a concrete illustrative scenario and keep it honest.",
   "Do not repeat the topics, hooks, or structures of the recent content listed below.",
+  "Lead with the audience's real question or need. Give a useful answer, example, or next step before promotion. Make the answer understandable without surrounding context.",
+  "Use only supplied brand facts and attributable research. Never turn a competitor claim, market signal, or illustrative scenario into an unqualified fact about this brand.",
+  "For public content, make the topic and relevant entities clear in natural language so people and answer engines can understand it. Never stuff keywords or promise search placement.",
 ].join("\n");
 
 function systemPrompt(role: string, rules: string[], schema: string): string {
@@ -453,6 +464,7 @@ export function buildSocialPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof S
       "You are Mellox, a senior social strategist writing native posts for each platform.",
       [
         "Write ONE native variant per requested platform. Each must be genuinely rewritten for that platform, different length, hook, and rhythm. Never copy-paste between platforms.",
+        "Open with a specific audience problem, observation or answer. Include one useful takeaway grounded in the brief; a caption must work even if a search or AI answer surface quotes it alone.",
         "The body contains line breaks, emojis only where the platform style allows, and the CTA. Hashtags go in the array, not the body.",
         args.controls.cta ? `Use this call to action: ${args.controls.cta}` : "",
         args.controls.tone ? `Tone override: ${args.controls.tone}` : "",
@@ -483,6 +495,7 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
       [
         `Write exactly ${count} slides. Slide 1 is a scroll-stopping cover promise (heading ≤ 8 words, body optional). Middle slides each deliver one idea (heading ≤ 8 words, body ≤ 35 words). The last slide is a clear CTA.`,
         "Headings must read as a coherent story when skimmed alone.",
+        "Each middle slide must deliver a distinct, actionable point with enough context to stand alone. Avoid splitting one shallow idea across several slides.",
         "`visual` is a one-line art direction for a designer (no text-in-image instructions).",
         "`caption` is the post caption: hook line, 1-3 short lines of context, CTA. Hashtags go in the array.",
         args.controls.cta ? `Use this call to action: ${args.controls.cta}` : "",
@@ -509,9 +522,10 @@ export function buildArticlePrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof 
         "Structure: an opening that states the reader's problem in their words (no H1, the title is separate), 3-6 H2 sections with descriptive headings, short paragraphs, lists where they help, and a closing section with a clear next step.",
         "Answer the core question early (a 40-60 word direct answer near the top) so the piece works for search and AI answers.",
         "`dek` is a one-sentence subtitle. `metaDescription` is 120-155 characters. `takeaways` are 3-5 crisp sentences.",
-        "`faq`: 3-5 questions a reader would really ask about this topic, each answered in 1-3 plain sentences that stand on their own (they are published as a visible FAQ and as FAQ structured data). Don't repeat a question already answered by an H2 word for word.",
+        "`faq`: 3-5 questions a reader would really ask about this topic, each answered in 1-3 plain sentences that stand on their own. They are published visibly; do not add filler questions or repeat an H2 word for word.",
         "`slug`: 3-7 lowercase words from the title joined by hyphens. `category`: one short blog category. `tags`: 2-6 short topic tags.",
         "Use H2 for sections and H3 for sub-points; never skip a level. Don't state facts, prices, dates or statistics that aren't in the brief or brand context.",
+        "For research-based claims, link to the supplied source URL next to the claim. Do not invent sources, links, first-hand experience, or authority. Distinguish sourced facts from advice and examples.",
         args.controls.tone ? `Tone override: ${args.controls.tone}` : "",
       ].filter(Boolean),
       `{"title": string, "dek": string, "metaDescription": string, "takeaways": string[], "markdown": string, "faq": [{"question": string, "answer": string}], "slug": string, "category": string, "tags": string[]}`,
@@ -533,6 +547,7 @@ export function buildScriptPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof S
       [
         `Total runtime ≈ ${seconds} seconds for ${PLATFORMS[platform].label}.`,
         "The hook lands in the first 2 seconds, a visual and a line that create a curiosity gap.",
+        "Make each beat filmable and tied to a real customer need; give the viewer a useful payoff before the CTA. Do not imply footage, customers or results the brand has not supplied.",
         "Beats have timestamps (e.g. '0-3s'), what's on camera, the voiceover line, and optional on-screen text (≤ 6 words).",
         "End with a CTA beat. `caption` follows the platform's caption style; hashtags go in the array.",
       ],
@@ -593,6 +608,7 @@ export function buildVisualBriefPrompt(
         video
           ? `\`concept\` is a shot plan for a ${args.controls.durationSec ?? 6}-second clip: opening frame (the hook), camera movement, the key product/service moment, and the closing frame. Concrete and filmable; no dialogue.`
           : "`concept` describes one strong visual idea: subject, setting, composition, lighting, mood, and how it reinforces the brief. Concrete, something a photographer or illustrator could execute.",
+        "Ground the visual in the brand's actual product, audience and identity. Choose a recognizable focal subject and a distinct visual treatment; avoid generic stock imagery or fabricated product details.",
         "`onImageText` is at most a 2-6 word phrase worth showing, or an empty string. `altText` describes the result for accessibility.",
       ],
       `{"title": string, "concept": string, "onImageText": string, "altText": string}`,

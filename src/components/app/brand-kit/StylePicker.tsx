@@ -73,7 +73,7 @@ export function StylePicker({
           type="button"
           aria-label={`Style: ${label}`}
           className={cn(
-            "group inline-flex max-w-full items-center gap-2 rounded-full border border-border/70 bg-card/80 font-medium text-foreground/90 transition-all hover:border-primary/40 hover:bg-secondary",
+            "group inline-flex max-w-[min(50vw,160px)] min-w-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-card/80 font-medium text-foreground/90 transition-all hover:border-primary/40 hover:bg-secondary sm:max-w-full sm:gap-2",
             size === "sm" ? "h-8 pl-2 pr-2.5 text-[12px]" : "h-9 pl-2.5 pr-3 text-[13px]",
             disabled && "opacity-60",
             dsFocus,
@@ -85,8 +85,8 @@ export function StylePicker({
           ) : (
             <BrandKit className={cn("text-primary", size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4")} />
           )}
-          <span className="text-muted-foreground">Style</span>
-          <span className="truncate">{label}</span>
+          <span className="hidden text-muted-foreground sm:inline">Style</span>
+          <span className="min-w-0 truncate">{label}</span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
         </button>
       </PopoverTrigger>

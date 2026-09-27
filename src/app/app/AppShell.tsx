@@ -13,21 +13,18 @@ import { useQuery } from "@tanstack/react-query";
 import { getProofEngineStatus } from "@/lib/experiments.functions";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
 import { brandKitPath, conversationIdFromPath, workspacePath } from "@/lib/workspace/paths";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import {
   ArrowLeft,
   BarChart3,
   BookOpen,
   Brain,
   BrandKit,
-  Building2,
   Calendar as CalendarIcon,
   ChevronDown,
   Link2,
+  Menu,
   PanelRightOpen,
   Plus,
   Rocket,
@@ -102,7 +99,7 @@ const MarketingCoachPanel = lazy(() =>
 import { useStudioEntry } from "@/hooks/use-studio";
 import { StudioDock } from "@/components/studio/StudioDock";
 import { useStudioStore } from "@/lib/studio/session-store";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsCompact } from "@/hooks/use-mobile";
 import { Logo } from "@/components/brand/Logo";
 import { WorkspaceMenu } from "@/components/app/WorkspaceMenu";
 import { useBrandDna } from "@/hooks/use-brand-dna";
@@ -163,13 +160,9 @@ function AppShell() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const activeConversationId = conversationIdFromPath(path);
-  const isMobile = useIsMobile();
+  const isCompact = useIsCompact();
   const [navOpen, setNavOpen] = useState(false);
-  // Sidebar is always inline — reserves its own space at every screen size.
-  const isInlineNav = true;
-  // Narrower on phones so chat still breathes; wider on desktop.
-  // Viewport-aware sidebar width: caps at 86vw on phones so chat still peeks
-  // through the backdrop; grows to 240 on desktop.
+  // Compact widths use an overlay drawer; desktop keeps an inline sidebar.
   const [vw, setVw] = useState<number>(1024);
   useEffect(() => {
     const on = () => setVw(window.innerWidth);
@@ -181,11 +174,11 @@ function AppShell() {
       window.removeEventListener("orientationchange", on);
     };
   }, []);
-  const sidebarWidth = isMobile ? Math.min(280, Math.round(vw * 0.86)) : 240;
+  const sidebarWidth = isCompact ? Math.min(320, Math.round(vw * 0.9)) : 240;
 
   // Swipe gestures on mobile: right-swipe from left edge opens nav; left-swipe closes it.
   useSwipe({
-    enabled: isMobile,
+    enabled: isCompact,
     edgeStartLeftPx: navOpen ? undefined : 24,
     onSwipeRight: () => {
       if (!navOpen) setNavOpen(true);
@@ -199,14 +192,25 @@ function AppShell() {
   useEffect(() => {
     try {
       const v = localStorage.getItem("app:navOpen");
-      if (v === "1") setNavOpen(true);
+      if (v === "1" && window.innerWidth >= 1024) setNavOpen(true);
     } catch {}
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem("app:navOpen", navOpen ? "1" : "0");
+      if (!isCompact) localStorage.setItem("app:navOpen", navOpen ? "1" : "0");
     } catch {}
-  }, [navOpen]);
+  }, [navOpen, isCompact]);
+  useEffect(() => {
+    if (isCompact) setNavOpen(false);
+  }, [isCompact]);
+  useEffect(() => {
+    if (!isCompact || !navOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isCompact, navOpen]);
   const [, setChatOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   useStudioEntry(workspaceId);
@@ -342,7 +346,7 @@ function AppShell() {
         >
           <Icon className="h-4 w-4" strokeWidth={1.9} aria-hidden />
         </span>
-        <span className="flex-1 truncate leading-none">{opts.label}</span>
+        <span className="min-w-0 flex-1 break-words leading-snug">{opts.label}</span>
         {opts.hint && (
           <span className="rounded-md bg-secondary/60 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground/80">
             {opts.hint}
@@ -367,6 +371,7 @@ function AppShell() {
       <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between bg-sidebar/95 px-2 backdrop-blur-xl">
         <Link
           to={homeHref}
+          onClick={() => setNavOpen(false)}
           aria-label="Mellox AI — workspace home"
           title="Workspace home"
           className="group flex h-9 items-center gap-1 rounded-md pl-1 pr-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -468,6 +473,12 @@ function AppShell() {
             accent: "hsl(var(--brand-green))",
             onClick: () => navigate({ to: workspacePath(workspaceId, "backlinks") }),
           })}
+          {sidebarAction({
+            icon: Users,
+            label: "Competitors",
+            accent: "hsl(var(--brand-green))",
+            onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
+          })}
           {proofEngine?.enabled &&
             sidebarAction({
               icon: Trophy,
@@ -523,6 +534,19 @@ function AppShell() {
           })}
         </SidebarSection>
 
+        <div className="flex flex-wrap items-center gap-2 px-2 py-2 lg:hidden">
+          <Suspense fallback={null}>
+            <CompetitorWatchButton workspaceId={workspaceId} />
+            <MarketingCoachPanel
+              workspaceId={workspaceId}
+              brandContext={brandContextForCoach}
+              brandKeywords={brandDna.keywords}
+            />
+          </Suspense>
+          <BillingPanel />
+          <WalletPill />
+        </div>
+
         <div className="mt-2 border-t border-border/50 pt-2">
           <AccountMenu
             onOpenSettings={() => emitAppEvent("open:settings")}
@@ -534,14 +558,17 @@ function AppShell() {
   );
 
   return (
-    <div data-mellox-app className="flex h-[100dvh] w-full bg-sidebar text-foreground">
+    <div
+      data-mellox-app
+      className="flex h-[100dvh] min-h-0 w-full min-w-0 bg-sidebar text-foreground"
+    >
       <h1 className="sr-only">Mellox AI Workspace</h1>
 
       {/* Full-height left rail: sidebar OR collapsed icon rail. Sits alongside header + main, Qwen/ChatGPT style. */}
       {!navOpen && (
         <aside
           aria-label="Sidebar rail"
-          className="flex h-full w-[48px] flex-none flex-col items-center border-r border-border/50 bg-sidebar py-3 sm:w-[56px]"
+          className="hidden h-full w-[56px] flex-none flex-col items-center border-r border-border/50 bg-sidebar py-3 lg:flex"
         >
           {/* Brand mark — always visible; goes to workspace home. */}
           <div className="group relative mb-3 h-9 w-9">
@@ -618,6 +645,11 @@ function AppShell() {
                   onClick: () => emitAppEvent("open:brand-dna"),
                 },
                 {
+                  icon: Users,
+                  label: "Competitors",
+                  onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
+                },
+                {
                   icon: BrandKit,
                   label: "Brand Kit",
                   onClick: () => navigate({ to: brandKitPath(workspaceId) }),
@@ -653,9 +685,9 @@ function AppShell() {
       )}
 
       <AnimatePresence initial={false} mode="sync">
-        {navOpen && isInlineNav && (
+        {navOpen && (
           <>
-            {isMobile && (
+            {isCompact && (
               <motion.div
                 key="app-nav-backdrop"
                 initial={{ opacity: 0 }}
@@ -670,14 +702,14 @@ function AppShell() {
             <motion.aside
               id="app-inline-nav"
               key="app-inline-nav"
-              initial={isMobile ? { x: -sidebarWidth } : { width: 0, opacity: 0 }}
-              animate={isMobile ? { x: 0 } : { width: sidebarWidth, opacity: 1 }}
-              exit={isMobile ? { x: -sidebarWidth } : { width: 0, opacity: 0 }}
+              initial={isCompact ? { x: -sidebarWidth } : { width: 0, opacity: 0 }}
+              animate={isCompact ? { x: 0 } : { width: sidebarWidth, opacity: 1 }}
+              exit={isCompact ? { x: -sidebarWidth } : { width: 0, opacity: 0 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              style={isMobile ? { width: sidebarWidth } : undefined}
+              style={isCompact ? { width: sidebarWidth } : undefined}
               className={cn(
                 "h-full overflow-hidden border-r border-border/60 bg-sidebar [will-change:width,transform]",
-                isMobile ? "fixed inset-y-0 left-0 z-40 shadow-2xl" : "flex-none",
+                isCompact ? "fixed inset-y-0 left-0 z-40 shadow-2xl" : "flex-none",
               )}
             >
               <div style={{ width: sidebarWidth }} className="h-full">
@@ -693,10 +725,20 @@ function AppShell() {
         {/* Top bar — seamless: no border, same bg as chat, sticky at top */}
         <header
           role="banner"
-          className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-3 bg-background px-3 sm:px-4"
+          className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-2 bg-background px-3 sm:px-4"
         >
           {/* LEFT — logo · breadcrumb */}
           <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setNavOpen(true)}
+              aria-label="Open sidebar"
+              aria-controls="app-inline-nav"
+              aria-expanded={navOpen}
+              className="grid size-11 shrink-0 place-items-center rounded-xl text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
+            >
+              <Menu className="size-5" aria-hidden />
+            </button>
             {/* Logo lives in the full-height sidebar / icon rail (Qwen/ChatGPT layout). No duplicate here. */}
 
             {/* Workspace breadcrumb — opens workspace menu */}
@@ -725,7 +767,9 @@ function AppShell() {
                       {(workspaceName?.[0] ?? "W").toUpperCase()}
                     </span>
                   )}
-                  <span className="truncate max-w-[180px]">{workspaceName}</span>
+                  <span className="max-w-[min(34vw,180px)] truncate sm:max-w-[180px]">
+                    {workspaceName}
+                  </span>
                   <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/80 transition group-hover:text-foreground group-data-[state=open]:rotate-180" />
                 </motion.button>
               }
@@ -762,24 +806,26 @@ function AppShell() {
 
             {/* Studio toggle + Publish share one flex container to lock spacing */}
             <div className="flex shrink-0 items-center gap-1.5">
-              <Suspense fallback={null}>
-                <CompetitorWatchButton workspaceId={workspaceId} />
-              </Suspense>
-              <Suspense fallback={null}>
-                <MarketingCoachPanel
-                  workspaceId={workspaceId}
-                  brandContext={brandContextForCoach}
-                  brandKeywords={brandDna.keywords}
-                />
-              </Suspense>
-              <BillingPanel />
-              <WalletPill />
+              <div className="hidden items-center gap-1.5 lg:flex">
+                <Suspense fallback={null}>
+                  <CompetitorWatchButton workspaceId={workspaceId} />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <MarketingCoachPanel
+                    workspaceId={workspaceId}
+                    brandContext={brandContextForCoach}
+                    brandKeywords={brandDna.keywords}
+                  />
+                </Suspense>
+                <BillingPanel />
+                <WalletPill />
+              </div>
               <button
                 type="button"
                 onClick={() => emitAppEvent("toggle:studio")}
                 aria-label="Open Studio"
                 title="Open Studio"
-                className="group relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-primary-border bg-primary-surface px-2.5 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-primary-surface hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97]"
+                className="group relative inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-primary-border bg-primary-surface px-3 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-primary-surface hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97] sm:h-8 sm:rounded-md sm:px-2.5"
               >
                 <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
                 <span className="hidden sm:inline">Studio</span>
@@ -790,7 +836,7 @@ function AppShell() {
                   <button
                     aria-label="Share"
                     title="Share"
-                    className="group relative inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-md bg-primary px-2.5 text-[12px] font-semibold tracking-tight text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md active:scale-[0.97] data-[state=open]:bg-primary/90 sm:px-3"
+                    className="group relative inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-xl bg-primary px-2.5 text-[12px] font-semibold tracking-tight text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md active:scale-[0.97] data-[state=open]:bg-primary/90 sm:h-8 sm:min-w-8 sm:rounded-md sm:px-3"
                   >
                     <span
                       aria-hidden
@@ -886,6 +932,55 @@ function AppShell() {
             />
           </main>
         </div>
+        <nav
+          aria-label="Mobile workspace navigation"
+          className="flex shrink-0 items-center justify-around border-t border-border/60 bg-sidebar px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
+        >
+          <Link
+            to={homeHref}
+            aria-label="Chat home"
+            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Logo height={21} markOnly />
+            <span className="text-[10px] font-medium">Chat</span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => emitAppEvent("open:create-launcher")}
+            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label="Create content"
+          >
+            <Plus className="size-5" aria-hidden />
+            <span className="text-[10px] font-medium">Create</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => emitAppEvent("toggle:studio")}
+            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label="Toggle Studio"
+          >
+            <PanelRightOpen className="size-5" aria-hidden />
+            <span className="text-[10px] font-medium">Studio</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAnalyticsOpen(true)}
+            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label="Open Analytics"
+          >
+            <BarChart3 className="size-5" aria-hidden />
+            <span className="text-[10px] font-medium">Analytics</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setNavOpen(true)}
+            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label="Open menu"
+          >
+            <Menu className="size-5" aria-hidden />
+            <span className="text-[10px] font-medium">Menu</span>
+          </button>
+        </nav>
       </div>
 
       <CommandBar />
@@ -931,22 +1026,34 @@ function WorkspaceSurface({
   workspaceId: string;
   activeConversationId: string | null;
 }) {
-  const isMobile = useIsMobile();
+  const isCompact = useIsCompact();
   const [studioOpen, setStudioOpen] = useState(false);
   useEffect(() => {
     try {
-      if (window.localStorage.getItem("raval:studioOpen") === "1") setStudioOpen(true);
+      if (window.innerWidth >= 1024 && window.localStorage.getItem("mellox:studioOpen") === "1")
+        setStudioOpen(true);
     } catch {
       /* ignore */
     }
   }, []);
   useEffect(() => {
     try {
-      window.localStorage.setItem("raval:studioOpen", studioOpen ? "1" : "0");
+      if (!isCompact) window.localStorage.setItem("mellox:studioOpen", studioOpen ? "1" : "0");
     } catch {
       /* ignore */
     }
-  }, [studioOpen]);
+  }, [studioOpen, isCompact]);
+  useEffect(() => {
+    if (isCompact) setStudioOpen(false);
+  }, [isCompact]);
+  useEffect(() => {
+    if (!isCompact || !studioOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setStudioOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isCompact, studioOpen]);
   useEffect(() => {
     const open = () => setStudioOpen(true);
     const toggle = () => setStudioOpen((v) => !v);
@@ -970,11 +1077,11 @@ function WorkspaceSurface({
       window.removeEventListener("orientationchange", on);
     };
   }, []);
-  const studioWidth = isMobile ? Math.min(320, Math.round(vw * 0.88)) : 320;
+  const studioWidth = isCompact ? Math.min(380, Math.round(vw * 0.92)) : 320;
 
   // Swipe gestures on mobile: left-swipe from right edge opens studio; right-swipe closes it.
   useSwipe({
-    enabled: isMobile,
+    enabled: isCompact,
     edgeStartRightPx: studioOpen ? undefined : 24,
     onSwipeLeft: () => {
       if (!studioOpen) setStudioOpen(true);
@@ -1001,7 +1108,7 @@ function WorkspaceSurface({
       <AnimatePresence initial={false} mode="sync">
         {studioOpen && (
           <>
-            {isMobile && (
+            {isCompact && (
               <motion.div
                 key="studio-backdrop"
                 initial={{ opacity: 0 }}
@@ -1015,18 +1122,33 @@ function WorkspaceSurface({
             )}
             <motion.aside
               key="studio-inline"
-              initial={isMobile ? { x: studioWidth } : { width: 0, opacity: 0 }}
-              animate={isMobile ? { x: 0 } : { width: studioWidth, opacity: 1 }}
-              exit={isMobile ? { x: studioWidth } : { width: 0, opacity: 0 }}
+              initial={isCompact ? { x: studioWidth } : { width: 0, opacity: 0 }}
+              animate={isCompact ? { x: 0 } : { width: studioWidth, opacity: 1 }}
+              exit={isCompact ? { x: studioWidth } : { width: 0, opacity: 0 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              style={isMobile ? { width: studioWidth } : undefined}
+              style={isCompact ? { width: studioWidth } : undefined}
               className={cn(
                 "h-full overflow-hidden border-l border-border/60 bg-sidebar [will-change:width,transform]",
-                isMobile ? "fixed inset-y-0 right-0 z-40 shadow-2xl" : "flex-none",
+                isCompact ? "fixed inset-y-0 right-0 z-40 shadow-2xl" : "flex-none",
               )}
             >
-              <div style={{ width: studioWidth }} className="h-full overflow-y-auto">
-                <StudioRail embedded />
+              <div style={{ width: studioWidth }} className="flex h-full min-h-0 flex-col">
+                {isCompact && (
+                  <div className="flex h-14 shrink-0 items-center justify-between border-b border-border/60 px-4">
+                    <span className="text-sm font-semibold">Studio</span>
+                    <button
+                      type="button"
+                      onClick={() => setStudioOpen(false)}
+                      aria-label="Close Studio"
+                      className="grid size-11 place-items-center rounded-xl hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <ArrowLeft className="size-5" aria-hidden />
+                    </button>
+                  </div>
+                )}
+                <div className="min-h-0 flex-1">
+                  <StudioRail embedded />
+                </div>
               </div>
             </motion.aside>
           </>

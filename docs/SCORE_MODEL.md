@@ -1,8 +1,8 @@
-# Raval AI Search Intelligence — Deterministic Scoring Model Specification
+# Mellox AI Search Intelligence — Deterministic Scoring Model Specification
 
 ## 1. Executive Summary & Architectural Overview
 
-The **Raval AI Search Intelligence Scoring System** (Task 8) is a centralized, deterministic, explainable 0–100 scoring and intelligence engine. It consumes normalized signals produced by the underlying page analysis, opportunity detection, and trust/authority verification modules (Tasks 5–7), computes mathematically bounded category and overall site scores, and produces actionable prioritized recommendations and human-readable explanations.
+The **Mellox AI Search Intelligence Scoring System** (Task 8) is a centralized, deterministic, explainable 0–100 scoring and intelligence engine. It consumes normalized signals produced by the underlying page analysis, opportunity detection, and trust/authority verification modules (Tasks 5–7), computes mathematically bounded category and overall site scores, and produces actionable prioritized recommendations and human-readable explanations.
 
 ### Complete End-to-End Pipeline
 $$\begin{aligned}
@@ -177,20 +177,20 @@ Rather than blind averaging, the site aggregator:
 ## 10. Verification & Test Suite Summary (Step 8.9)
 
 ### 10.1 Test Coverage by Step
-- **Step 8.2 (Normalization)**: [`backend/tests/test_unified_signal_normalization.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_unified_signal_normalization.py) — 31 tests passed
-- **Step 8.3 (Aggregation)**: [`backend/tests/test_signal_aggregation.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_signal_aggregation.py) — 18 tests passed
-- **Step 8.3 (Applicability)**: [`backend/tests/test_applicability_engine.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_applicability_engine.py) — 15 tests passed
-- **Steps 8.4 & 8.5 (Scoring & Traceability)**: [`backend/tests/test_scoring_engine.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_scoring_engine.py) — 15 tests passed
-- **Step 8.6 (Priority & Recommendations)**: [`backend/tests/test_priority_and_recommendations.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_priority_and_recommendations.py) — 10 tests passed
-- **Step 8.7 (Score Explanation & Analytics)**: [`backend/tests/test_score_explanation.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_score_explanation.py) — 4 tests passed
-- **Step 8.8 (Site Aggregation & APIs)**: [`backend/tests/test_site_aggregation_and_api.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_site_aggregation_and_api.py) — 7 tests passed
-- **Step 8.9 (Comprehensive Validation & Boundaries)**: [`backend/tests/test_task8_9_testing_validation.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_task8_9_testing_validation.py) — 34 tests passed
+- **Step 8.2 (Normalization)**: [`backend/tests/test_unified_signal_normalization.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_unified_signal_normalization.py) — 31 tests passed
+- **Step 8.3 (Aggregation)**: [`backend/tests/test_signal_aggregation.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_signal_aggregation.py) — 18 tests passed
+- **Step 8.3 (Applicability)**: [`backend/tests/test_applicability_engine.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_applicability_engine.py) — 15 tests passed
+- **Steps 8.4 & 8.5 (Scoring & Traceability)**: [`backend/tests/test_scoring_engine.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_scoring_engine.py) — 15 tests passed
+- **Step 8.6 (Priority & Recommendations)**: [`backend/tests/test_priority_and_recommendations.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_priority_and_recommendations.py) — 10 tests passed
+- **Step 8.7 (Score Explanation & Analytics)**: [`backend/tests/test_score_explanation.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_score_explanation.py) — 4 tests passed
+- **Step 8.8 (Site Aggregation & APIs)**: [`backend/tests/test_site_aggregation_and_api.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_site_aggregation_and_api.py) — 7 tests passed
+- **Step 8.9 (Comprehensive Validation & Boundaries)**: [`backend/tests/test_task8_9_testing_validation.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_task8_9_testing_validation.py) — 34 tests passed
 
 **Total Task 8 Tests**: **134 passed** (100% passing)  
 **Total Full Backend Suite**: **600 passed, 0 failed, 0 regressions**
 
 ### 10.2 Real-Site Public Page Validation
-The validation runner [`backend/scripts/validate_real_site_scoring.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/scripts/validate_real_site_scoring.py) verifies the pipeline against live public URLs with offline fallback:
+The validation runner [`backend/scripts/validate_real_site_scoring.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/scripts/validate_real_site_scoring.py) verifies the pipeline against live public URLs with offline fallback:
 - **Homepage** (`https://www.python.org/`): Score 75.0/100 (Adequate)
 - **About** (`https://www.python.org/about/`): Score 73.3/100 (Adequate)
 - **Documentation** (`https://docs.python.org/3/`): Score 80.0/100 (Optimal)

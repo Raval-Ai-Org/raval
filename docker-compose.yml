@@ -9,7 +9,7 @@
 # rolls back automatically when the new container fails its health check.
 #
 # The Social Distribution Engine runs as its own stack
-# (Social-Distribtion-Engine-RavalAI-SDE/, ADR-0005).
+# (Social-Distribtion-Engine-MelloxAI-SDE/, ADR-0005).
 
 x-logging: &logging
   driver: json-file

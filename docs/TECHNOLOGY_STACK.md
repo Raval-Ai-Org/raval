@@ -1,9 +1,9 @@
-# Raval AI Search Intelligence
+# Mellox AI Search Intelligence
 # Technology Stack Research & Decisions
 
 ## 1. Purpose
 
-This document records the proposed technology stack for the Raval AI Search Intelligence module.
+This document records the proposed technology stack for the Mellox AI Search Intelligence module.
 
 The purpose is to define the technologies required for:
 
@@ -28,7 +28,7 @@ Technology decisions should prioritize:
 - Cost efficiency
 - Scalability
 
-These decisions are for the independent `raval-geo-intelligence` project and should not introduce direct dependencies on the Raval AI production codebase during Day 1 development.
+These decisions are for the independent `mellox-geo-intelligence` project and should not introduce direct dependencies on the Mellox AI production codebase during Day 1 development.
 
 ---
 
@@ -46,7 +46,7 @@ It will manage website URL discovery, crawling queues, request handling, and cra
 
 ## Why Crawlee
 
-Crawlee is being considered because the Raval crawler will eventually need to:
+Crawlee is being considered because the Mellox crawler will eventually need to:
 
 - Crawl multiple pages
 - Discover internal links
@@ -81,7 +81,7 @@ Playwright will provide browser-based rendering for JavaScript-heavy websites.
 
 ## Why Playwright
 
-Raval must support websites where important content is generated or modified by JavaScript.
+Mellox must support websites where important content is generated or modified by JavaScript.
 
 The crawler should eventually be able to inspect both:
 
@@ -214,7 +214,7 @@ Potential data areas include:
 
 ## Why PostgreSQL
 
-Raval requires relationships between many entities and observations.
+Mellox requires relationships between many entities and observations.
 
 A relational database provides strong support for:
 
@@ -506,9 +506,9 @@ Technology decisions will be evaluated using the following criteria:
 7. Operational complexity
 8. Cost
 9. Ecosystem maturity
-10. Compatibility with the Raval AI architecture
+10. Compatibility with the Mellox AI architecture
 
-A technology should not be selected only because it is popular. The final decision should be based on the requirements of the Raval Search Intelligence module.
+A technology should not be selected only because it is popular. The final decision should be based on the requirements of the Mellox Search Intelligence module.
 
 # 16. Open Technical Questions
 

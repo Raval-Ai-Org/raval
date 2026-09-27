@@ -1,17 +1,17 @@
-# Quickstart: RavalAI × SDR Integration (Phase 0/1)
+# Quickstart: MelloxAI × SDR Integration (Phase 0/1)
 
 **Branch**: `001-sdr-integration` | **Date**: 2026-08-08
 
-How to stand up the SDR locally, smoke-test all 4 adapters in DryRun, and point the RavalAI dev server at it — the host-independent Phase 0 path.
+How to stand up the SDR locally, smoke-test all 4 adapters in DryRun, and point the MelloxAI dev server at it — the host-independent Phase 0 path.
 
 ## 1. Stand up the SDR locally
 
-Repo: `../Social-Distribtion-Engine-RavalAI-SDE-/` (its own git repo, Python 3.12).
+Repo: `../Social-Distribtion-Engine-MelloxAI-SDE-/` (its own git repo, Python 3.12).
 
 **Option A — Docker Compose (full parity):**
 
 ```bash
-cd Social-Distribtion-Engine-RavalAI-SDE-
+cd Social-Distribtion-Engine-MelloxAI-SDE-
 cp .env.example .env
 # fill: POSTGRES_PASSWORD, SDE_API_TOKEN (>=16 chars), SDE_SIGNING_SECRET (>=32 bytes),
 #       FERNET_KEY (Fernet.generate_key())
@@ -24,7 +24,7 @@ docker compose run --rm api alembic upgrade head
 **Option B — local venv (lighter, for tests):**
 
 ```bash
-cd Social-Distribtion-Engine-Ravalai-SDE-   # (note repo dir name)
+cd Social-Distribtion-Engine-Melloxai-SDE-   # (note repo dir name)
 source venv/bin/activate
 pip install -e ".[dev]"
 # run the pytest suite (uses dryrun accounts, no external APIs):
@@ -37,16 +37,16 @@ DryRun activates automatically for accounts whose platform is `dryrun` (or an un
 
 ```bash
 # Option A (against a running compose stack):
-cd Social-Distribtion-Engine-RavalAI-SDE-/specs/001-social-sde/demo
+cd Social-Distribtion-Engine-MelloxAI-SDE-/specs/001-social-sde/demo
 ./run-demo.sh          # health → publish → job status → idempotency → schedule → cancel → 401 → multi-target
 ```
 
 Verify in the output: 201 publish, job reaches `published`, duplicate key returns the same job, cancel returns 204, missing Bearer → 401. Then a DryRun failure pass with `FORCE_FATAL` text → status `failed` with `error_category=fatal`.
 
-**RavalAI dev pointed at the local SDR:**
+**MelloxAI dev pointed at the local SDR:**
 
 ```bash
-cd raval
+cd mellox
 # server-only env (never VITE_*):
 #   SDR_BASE_URL=http://localhost:8000
 #   SDR_ADMIN_TOKEN=<the SDE_API_TOKEN from SDR .env>

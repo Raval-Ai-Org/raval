@@ -71,6 +71,9 @@ import type {
   StudioJobOutput,
 } from "@/lib/studio/jobs";
 import { invalidateStudioContext, loadStudioContext } from "./context.server";
+import { findSimilarRecent, hasResearchCitation } from "@/lib/studio/novelty";
+import { studioOutputQualityIssue } from "@/lib/studio/quality";
+import { reviewGeneratedImage } from "./image-review.server";
 
 type Db = SupabaseClient;
 
@@ -258,7 +261,11 @@ function draftRows(type: StudioType, output: StudioJobOutput, platforms: Platfor
         ).slice(0, 280),
         body: v.body,
         hashtags: v.hashtags,
-        meta: { platform: v.platform, chars: v.chars },
+        meta: {
+          platform: v.platform,
+          chars: v.chars,
+          ...(output.concept ? { concept: output.concept } : {}),
+        },
       }));
     case "carousel":
       return (output.variants ?? []).map((v) => ({
@@ -573,6 +580,7 @@ function imagePrompt(args: {
   platform: PlatformId | null;
   ratio: AspectRatio;
   seed: string;
+  variationKey?: string;
   extra?: string;
   style?: ImageStyleInput | null;
 }): string {
@@ -588,6 +596,7 @@ function imagePrompt(args: {
     platform: args.platform,
     size,
     seedKey: args.seed,
+    variationKey: args.variationKey,
     style: args.style,
   }).prompt;
   return [
@@ -630,7 +639,8 @@ async function startMedia(args: {
 }): Promise<ProviderTask[]> {
   const { job, input, ctx, output, platforms } = args;
   const ratio = mediaRatio(job.type, input, platforms);
-  const seed = `${job.group_id}:${job.attempt}:${job.idempotency_key}`;
+  const seed = job.group_id;
+  const variationKey = `${job.attempt}:${job.idempotency_key}`;
   // The server's own Brand DNA; the browser copy is only a fallback for a
   // workspace whose DNA hasn't been saved yet.
   const serverDna = args.style?.dna && Object.keys(args.style.dna).length ? args.style.dna : null;
@@ -640,6 +650,16 @@ async function startMedia(args: {
     input.refine && ["media", "all"].includes(input.refine.target)
       ? `Revision request: ${input.refine.instruction}`
       : undefined;
+  const visualAvoidance = input.refine
+    ? undefined
+    : ctx.recent
+        .filter((item) => item.type === job.type && item.excerpt)
+        .slice(0, 4)
+        .map((item) => `- ${item.excerpt}`)
+        .join("\n");
+  const noveltyNote = visualAvoidance
+    ? `Recent visual concepts to avoid repeating; preserve the brand identity while changing the scene and focal idea:\n${visualAvoidance}`
+    : undefined;
 
   if (job.type === "video") {
     const seconds = [4, 6, 8].includes(input.controls.durationSec ?? 0)
@@ -649,7 +669,7 @@ async function startMedia(args: {
     // own brief is the fallback if that stage produced nothing.
     const concept = output.concept?.trim() || input.intent.brief;
     const full = videoPrompt(
-      [concept, refineNote].filter(Boolean).join("\n\n"),
+      [concept, refineNote, noveltyNote].filter(Boolean).join("\n\n"),
       ctx,
       ratio,
       seconds,
@@ -701,7 +721,8 @@ async function startMedia(args: {
     platform: platforms[0] ?? null,
     ratio,
     seed,
-    extra: refineNote,
+    variationKey,
+    extra: [refineNote, noveltyNote].filter(Boolean).join("\n\n"),
     style: ctx.style
       ? imageStyleInput(ctx.style, args.referenceUrl ? 0 : referenceAssets.length)
       : null,
@@ -911,26 +932,59 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     if (firstStage !== "writing" && format.stages.some((s) => s.id === "writing")) {
       await setStage(client, job.id, "writing");
     }
-    const parsed = (await runStructuredPrompt({
-      route: built.route,
-      system: built.system,
-      user: built.user,
-      schema: built.schema as never,
-      maxTokens: built.maxTokens,
-      temperature: built.temperature,
-      regenerate: true,
-    })) as Record<string, unknown>;
-    output = await shapeOutput({
-      client,
-      job,
-      type,
-      parsed,
-      platforms,
-      ctx,
-      input,
-      angle,
-      partial,
-    });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      partial.length = 0;
+      const parsed = (await runStructuredPrompt({
+        route: built.route,
+        system: built.system,
+        user:
+          attempt === 0
+            ? built.user
+            : `${built.user}\n\n## Required correction\nThe previous candidate was incomplete, repeated recent work, or omitted an available research citation. Meet the requested format and length exactly. Choose a different audience question, hook, example, structure and visual concept. If current web research is supplied, cite its exact URL beside the relevant article claim. Keep the user's brief and verified brand facts.`,
+        schema: built.schema as never,
+        maxTokens: built.maxTokens,
+        temperature: built.temperature,
+        regenerate: true,
+      })) as Record<string, unknown>;
+      const candidate = await shapeOutput({
+        client,
+        job,
+        type,
+        parsed,
+        platforms,
+        ctx,
+        input,
+        angle,
+        partial,
+      });
+      const similar = input.refine ? null : findSimilarRecent(type, candidate, ctx.recent);
+      const qualityIssue = input.refine
+        ? null
+        : studioOutputQualityIssue(type, candidate, controls, platforms.length);
+      const uncitedResearch =
+        type === "article" &&
+        !!ctx.liveResearch?.sources.length &&
+        !hasResearchCitation(
+          candidate.article?.markdown ?? "",
+          ctx.liveResearch.sources.map((s) => s.url),
+        );
+      if (!similar && !uncitedResearch && !qualityIssue) {
+        output = candidate;
+        break;
+      }
+      if (attempt === 1 && qualityIssue)
+        throw new StudioJobError(502, `${qualityIssue} Try again with a clearer brief.`);
+      if (attempt === 1 && uncitedResearch)
+        throw new StudioJobError(
+          502,
+          "This article needs a citation to the current research used. Try again.",
+        );
+      if (attempt === 1 && similar)
+        throw new StudioJobError(
+          502,
+          `This draft was too similar to “${similar.title}”. Try a more specific brief or a different angle.`,
+        );
+    }
   }
 
   // Copy must read human: no em dashes anywhere, whatever the model returned.
@@ -1248,6 +1302,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
   const tasks = [...row.provider_tasks];
   const media = [...(row.output?.media ?? [])];
   const assetIds = [...(row.asset_ids ?? [])];
+  const warnings = [...(row.output?.warnings ?? [])];
   let stage: StageId = row.stage;
 
   for (const task of tasks) {
@@ -1284,6 +1339,15 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       }
       stage = "save";
       await setStage(c, row.id, "save");
+      const imageReview =
+        task.kind === "image" && check.dataUrl
+          ? await reviewGeneratedImage(
+              check.dataUrl,
+              [row.title, row.output?.concept, task.prompt].filter(Boolean).join("\n"),
+            )
+          : null;
+      if (imageReview?.status === "warn")
+        warnings.push(...imageReview.issues.map((issue) => `Visual review: ${issue}`));
       const persisted = await persistAsset({
         workspaceId: row.workspace_id,
         idempotencyKey: `studio:${row.id}:${task.slot}:${task.taskId}`,
@@ -1301,6 +1365,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           job_id: row.id,
           aspect_ratio: task.ratio,
           studio_type: row.type,
+          ...(imageReview ? { image_review: imageReview } : {}),
         },
       });
       if (task.kind === "video") {
@@ -1335,7 +1400,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
   const done = tasks.every((t) => t.state !== "pending");
   const patch: Record<string, unknown> = {
     provider_tasks: tasks,
-    output: { ...row.output, media },
+    output: { ...row.output, media, warnings: [...new Set(warnings)] },
     asset_ids: [...new Set(assetIds)],
     lease_until: null,
     stage,
@@ -1364,6 +1429,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         output: {
           ...row.output,
           media,
+          warnings: [...new Set(warnings)],
           partial: [
             ...(row.output?.partial ?? []),
             ...failed.map((m) => ({

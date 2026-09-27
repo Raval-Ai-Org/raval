@@ -378,7 +378,7 @@ class LiveWordPressClient:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "RavalAI-Intelligence-Bot/1.0",
+            "User-Agent": "MelloxAI-Intelligence-Bot/1.0",
         }
 
         username = self._credentials.get("username")

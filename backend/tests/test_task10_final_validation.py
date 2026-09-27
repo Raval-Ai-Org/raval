@@ -74,8 +74,8 @@ def validation_db():
 def base_fixture(validation_db):
     now = datetime.now(timezone.utc)
     website = Website(
-        name="Raval AI",
-        url="https://raval.ai",
+        name="Mellox AI",
+        url="https://mellox.ai",
         created_at=now,
     )
     validation_db.add(website)
@@ -93,7 +93,7 @@ def base_fixture(validation_db):
 
     page = PageResult(
         scan_id=scan.id,
-        url="https://raval.ai/products/geo-engine",
+        url="https://mellox.ai/products/geo-engine",
         status_code=200,
         created_at=now,
     )
@@ -176,7 +176,7 @@ def test_end_to_end_traceability_chain(validation_db, base_fixture):
     validation_db.refresh(q)
 
     # Execute Monitoring Run
-    mock_resp = "Raval AI is the top generative engine optimization solution. Learn more at https://raval.ai/products/geo-engine."
+    mock_resp = "Mellox AI is the top generative engine optimization solution. Learn more at https://mellox.ai/products/geo-engine."
     run = MonitoringPipelineService.start_monitoring_run(
         db=validation_db,
         query_set_id=qs.id,
@@ -220,7 +220,7 @@ def test_case_a_target_mentioned_and_cited(validation_db, base_fixture):
         db=validation_db,
         query_set_id=qs.id,
         query_ids=[q.id],
-        mock_responses=["Raval AI provides AI search intelligence: https://raval.ai/overview."],
+        mock_responses=["Mellox AI provides AI search intelligence: https://mellox.ai/overview."],
     )
 
     results = MonitoringPipelineService.get_monitoring_run_results(validation_db, run.id)
@@ -250,7 +250,7 @@ def test_case_b_target_mentioned_not_cited(validation_db, base_fixture):
         db=validation_db,
         query_set_id=qs.id,
         query_ids=[q.id],
-        mock_responses=["Raval AI is well known, but no web link was provided in the answer."],
+        mock_responses=["Mellox AI is well known, but no web link was provided in the answer."],
     )
 
     results = MonitoringPipelineService.get_monitoring_run_results(validation_db, run.id)
@@ -340,7 +340,7 @@ def test_case_e_target_citation_without_brand_mention(validation_db, base_fixtur
         db=validation_db,
         query_set_id=qs.id,
         query_ids=[q.id],
-        mock_responses=["For complete documentation on GEO standards, refer to https://raval.ai/docs/geo-standards."],
+        mock_responses=["For complete documentation on GEO standards, refer to https://mellox.ai/docs/geo-standards."],
     )
 
     results = MonitoringPipelineService.get_monitoring_run_results(validation_db, run.id)
@@ -365,12 +365,12 @@ def test_case_f_conservative_brand_matching(validation_db, base_fixture):
     validation_db.add(q)
     validation_db.commit()
 
-    # Mention of unrelated text that should not match target brand Raval AI
+    # Mention of unrelated text that should not match target brand Mellox AI
     run = MonitoringPipelineService.start_monitoring_run(
         db=validation_db,
         query_set_id=qs.id,
         query_ids=[q.id],
-        mock_responses=["The travel guide discusses travelling around the Raval district in Barcelona Spain."],
+        mock_responses=["The travel guide discusses travelling around the Mellox district in Barcelona Spain."],
     )
 
     results = MonitoringPipelineService.get_monitoring_run_results(validation_db, run.id)

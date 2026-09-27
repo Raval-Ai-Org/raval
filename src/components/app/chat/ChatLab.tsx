@@ -110,8 +110,8 @@ export function ChatLab() {
   const lastAssistant = messages.map((m) => m.kind === "assistant").lastIndexOf(true);
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-background text-foreground">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4 text-[12px] text-muted-foreground">
+    <div data-mellox-app className="flex h-[100dvh] flex-col bg-background text-foreground">
+      <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-[12px] text-muted-foreground">
         <span className="font-medium text-foreground">Chat lab</span>
         <span>· sample data, nothing is sent</span>
         <button
@@ -227,7 +227,9 @@ export function ChatLab() {
           <div
             className={cn(
               "shrink-0 px-3 md:px-6",
-              empty ? "flex flex-[1_1_0%] flex-col items-center pt-5" : "pb-2.5 pt-2",
+              empty
+                ? "flex min-h-0 flex-[1_1_0%] flex-col items-center overflow-y-auto overscroll-contain pb-4 pt-5"
+                : "pb-2.5 pt-2",
             )}
           >
             {empty ? (

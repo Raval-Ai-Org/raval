@@ -86,7 +86,7 @@ class ScoreMetrics(BaseModel):
     is_score_neutral_or_better: bool = Field(default=True, description="True if overall_delta >= 0.0")
     confidence: ObservationConfidence = Field(default=ObservationConfidence.OBSERVED)
     disclaimer: str = Field(
-        default="Score and effectiveness metrics represent changes in Raval's deterministic "
+        default="Score and effectiveness metrics represent changes in Mellox's deterministic "
         "measurement model and does not guarantee third-party external search ranking, traffic, conversion, citation, or AI visibility improvement."
     )
 
@@ -144,7 +144,7 @@ class ExperimentMetricsSummary(BaseModel):
     evidence: EvidenceMetrics = Field(default_factory=EvidenceMetrics)
     operational: OperationalMetrics = Field(default_factory=OperationalMetrics)
     disclaimer: str = Field(
-        default="Score and effectiveness metrics represent changes in Raval's deterministic "
+        default="Score and effectiveness metrics represent changes in Mellox's deterministic "
         "measurement model and does not guarantee third-party external search ranking, traffic, conversion, citation, or AI visibility improvement."
     )
 
@@ -178,7 +178,7 @@ class ExperimentResult(BaseModel):
     created_at: datetime = Field(default_factory=_utc_now)
     completed_at: datetime = Field(default_factory=_utc_now)
     disclaimer: str = Field(
-        default="Score and effectiveness metrics represent changes in Raval's deterministic "
+        default="Score and effectiveness metrics represent changes in Mellox's deterministic "
         "measurement model and does not guarantee third-party external search ranking, traffic, conversion, citation, or AI visibility improvement."
     )
 

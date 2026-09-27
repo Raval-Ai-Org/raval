@@ -126,7 +126,7 @@ test.describe("Schedules → content_items → Studio suggestions", () => {
         try {
           window.localStorage.setItem(storageKey, sess);
           window.localStorage.setItem("workspace:selected", wsId);
-          window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
+          window.localStorage.setItem(`mellox:first-prompt-fired:${wsId}`, "1");
         } catch {
           /* noop */
         }

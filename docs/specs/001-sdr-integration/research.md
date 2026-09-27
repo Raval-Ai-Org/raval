@@ -1,18 +1,18 @@
-# Research: RavalAI × SDR Integration
+# Research: MelloxAI × SDR Integration
 
 **Branch**: `001-sdr-integration` | **Date**: 2026-08-08
 
-Research for this feature was performed via a **codebase audit of both repositories** (SDR: `app/api/*`, `app/schemas.py`, `app/services/*`, `app/adapters/*`, `specs/001-social-sde/integration/*`; RavalAI: `src/routes/*`, `src/lib/*`, `src/components/app/*`, `supabase/migrations/*`) and a **live-deployment research sweep** (PHR 004). Every claim below was verified against code or current vendor data — nothing is assumed.
+Research for this feature was performed via a **codebase audit of both repositories** (SDR: `app/api/*`, `app/schemas.py`, `app/services/*`, `app/adapters/*`, `specs/001-social-sde/integration/*`; MelloxAI: `src/routes/*`, `src/lib/*`, `src/components/app/*`, `supabase/migrations/*`) and a **live-deployment research sweep** (PHR 004). Every claim below was verified against code or current vendor data — nothing is assumed.
 
 ## 1. Integration topology
 
-- **Decision**: Proxy-through-server — the browser never calls the SDR. RavalAI server functions validate the Supabase JWT + workspace RLS, then proxy to the SDR with a per-workspace Bearer key. The SDR pushes delivery status back via HMAC-signed webhooks.
+- **Decision**: Proxy-through-server — the browser never calls the SDR. MelloxAI server functions validate the Supabase JWT + workspace RLS, then proxy to the SDR with a per-workspace Bearer key. The SDR pushes delivery status back via HMAC-signed webhooks.
 - **Rationale**: keeps SDR credentials out of the browser (spec FR-014), preserves RLS workspace isolation (FR-013), gives one auditable choke point for idempotency, and keeps the two services independently deployable.
 - **Alternatives considered**:
   - Direct browser→SDR: exposes per-workspace keys, no RLS, breaks isolation — rejected.
   - Shared Supabase DB: couples data planes, violates the SDR's own-DB "build for extraction" doctrine — rejected.
-  - Merging SDR into `raval/`: one failure domain, kills service independence — rejected.
-- **Evidence**: RavalAI is TanStack Start on **Cloudflare Workers** (`wrangler.jsonc`, `main: src/server.ts`), server code = `createServerFn` + file routes (`src/routes/api.*.ts`), server auth helpers in `src/server/api-auth.ts` (`requireUserId`, `jsonError`, `assertPublicUrl`). SDR is FastAPI + Celery + Redis + Postgres with a clean REST contract.
+  - Merging SDR into `mellox/`: one failure domain, kills service independence — rejected.
+- **Evidence**: MelloxAI is TanStack Start on **Cloudflare Workers** (`wrangler.jsonc`, `main: src/server.ts`), server code = `createServerFn` + file routes (`src/routes/api.*.ts`), server auth helpers in `src/server/api-auth.ts` (`requireUserId`, `jsonError`, `assertPublicUrl`). SDR is FastAPI + Celery + Redis + Postgres with a clean REST contract.
 
 ## 2. SDR contract surface (verified)
 
@@ -27,7 +27,7 @@ Research for this feature was performed via a **codebase audit of both repositor
 - DryRun: activated by account platform `"dryrun"` or an unregistered platform; magic strings `FORCE_429/401/500/FATAL` (`dryrun.py`).
 - Adapters: all four real (twitter v2, linkedin UGC, meta Graph, instagram container→publish). Media is **downloaded from URLs at publish time** (`twitter.py:262`, `meta.py:168`, `linkedin.py:288`). Instagram requires exactly one media.
 
-## 3. RavalAI integration points (verified)
+## 3. MelloxAI integration points (verified)
 
 - Publish is a pure DB status flip in three sites: `StudioCanvasModal.tsx:891-922` (publish now), `:850-889` (schedule), `StudioRail.tsx:465-478` (approve→publish). Status enum `draft|pending|approved|rejected|scheduled|published` (`content.functions.ts:36-43`).
 - `content_items` has `meta jsonb` (free-form, already stores `{source, platform, prompt, chars}`) and single `media_url`; **no external job-id / published-url / per-platform columns** — new `content_publications` mirror needed.

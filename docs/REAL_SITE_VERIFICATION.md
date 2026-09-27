@@ -112,6 +112,6 @@
 
 ## 5. Final Verification Conclusion
 
-The Raval GEO & AEO Content Intelligence Engine has passed real-site manual verification against live production HTML from `https://www.python.org/`.
+The Mellox GEO & AEO Content Intelligence Engine has passed real-site manual verification against live production HTML from `https://www.python.org/`.
 
 All 11 analytical engines operate deterministically, preserve strict website and scan isolation, exhibit high resilience against diverse DOM layouts, and produce explainable scores bounded to `[0.0, 1.0]`.

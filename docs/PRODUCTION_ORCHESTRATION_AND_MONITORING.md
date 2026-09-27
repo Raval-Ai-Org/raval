@@ -2,7 +2,7 @@
 
 ## 1. Module Purpose & Scope
 
-The **Production Orchestration and Monitoring** module (`backend/app/orchestration/`) is the centralized orchestrator for the Raval AI Search Intelligence platform. It provides deterministic lifecycle management, strict tenant and site isolation, idempotent execution plans, and immutable transition audit logging across all operational workloads.
+The **Production Orchestration and Monitoring** module (`backend/app/orchestration/`) is the centralized orchestrator for the Mellox AI Search Intelligence platform. It provides deterministic lifecycle management, strict tenant and site isolation, idempotent execution plans, and immutable transition audit logging across all operational workloads.
 
 ### Primary Responsibilities in Step 1
 - **Canonical Domain Models**: Persistent entities (`OrchestrationRun`, `OrchestrationStage`, `OrchestrationEvent`) capturing run metadata, stage execution dependencies, actor provenance, and audit logs.
@@ -560,7 +560,7 @@ All endpoints strictly enforce tenant boundary checking via `validate_tenant_sit
 ## 14. Product Backend Contract & Controlled End-to-End Orchestration (Step 7)
 
 ### 14.1 Architecture & Objectives
-Step 7 bridges the robust orchestration foundation built in Steps 1–6 to the existing Raval backend engines without rewriting or duplicating existing domain logic:
+Step 7 bridges the robust orchestration foundation built in Steps 1–6 to the existing Mellox backend engines without rewriting or duplicating existing domain logic:
 - **Reuse of Existing Engines**: Integrates directly with `crawler`, `page extraction`, `scoring_engine`, `freshness_service`, `opportunity_service`, `recommendation_service`, `fix_service`, `fix_safety_classifier`, `validation_service`, and `monitoring_service`.
 - **Zero Live LLM Mutation**: LLM outputs and unapproved proposals are strictly barred from directly modifying production websites.
 - **Strict Approval Gating**: All mutations pass through `OrchestrationSafetyGate` enforcing 3-tier classification (`AUTO_SAFE`, `ASSISTED`, `MANUAL_REVIEW`) and tenant automation levels (`FULL`, `SEMI_AUTOMATED`, `MANUAL_ONLY`).

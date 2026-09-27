@@ -89,18 +89,27 @@ function chooseFormat(
   objective: CreativeObjective,
   text: string,
   platform?: PlatformId | null,
+  variation = 0,
 ): CreativeFormat {
   if (includesAny(text, ["before", "after", "transformation"])) return "before-after";
   if (includesAny(text, ["versus", "compare", "difference"])) return "comparison";
   if (includesAny(text, ["quote", "testimonial", "customer said"])) return "quote-testimonial";
   if (includesAny(text, ["founder", "from the founder", "my story"])) return "founder-led";
   if (objective === "product-launch" || objective === "conversion") return "product-focused";
-  if (objective === "education") return "educational-visual";
-  if (objective === "trust") return "editorial";
+  if (objective === "education")
+    return (["educational-visual", "problem-solution", "minimal-typography"] as const)[
+      variation % 3
+    ];
+  if (objective === "trust")
+    return (["editorial", "product-focused", "storytelling"] as const)[variation % 3];
   if (objective === "engagement")
-    return platform === "twitter" || platform === "threads" ? "meme-style" : "storytelling";
+    return platform === "twitter" || platform === "threads"
+      ? (["meme-style", "storytelling"] as const)[variation % 2]
+      : (["storytelling", "human-lifestyle"] as const)[variation % 2];
   if (objective === "retargeting") return "problem-solution";
-  return objective === "awareness" ? "abstract-metaphorical" : "human-lifestyle";
+  return objective === "awareness"
+    ? (["abstract-metaphorical", "human-lifestyle", "editorial"] as const)[variation % 3]
+    : (["human-lifestyle", "storytelling", "editorial"] as const)[variation % 3];
 }
 
 function strategyForObjective(objective: CreativeObjective) {
@@ -176,7 +185,8 @@ export function deriveCreativeStrategy(args: {
   const text = body.toLowerCase();
   const objective = inferObjective(text, args.brief);
   const objectivePlan = strategyForObjective(objective);
-  const format = chooseFormat(objective, text, args.platform);
+  const variation = Math.abs(args.variation ?? 0);
+  const format = chooseFormat(objective, text, args.platform, variation);
   const hook =
     body
       .split(/\n+/)
@@ -185,7 +195,6 @@ export function deriveCreativeStrategy(args: {
       .slice(0, 180) || "the brand promise";
   const audience = args.brand?.audience?.trim() || args.brief.audience;
   const product = args.brand?.products?.trim() || "the offer";
-  const variation = args.variation ?? 0;
   const concepts = [
     `A ${format} built around ${product}, with one clear focal subject and a ${objectivePlan.emotion} tone.`,
     `A ${format} that turns the audience's tension into a visible scene, with ${objectivePlan.emotion} visual storytelling.`,

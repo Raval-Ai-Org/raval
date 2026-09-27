@@ -35,7 +35,7 @@ class PageFetcher:
                     url,
                     timeout=self.config.timeout_seconds,
                     headers={
-                        "User-Agent": "RavalGeoIntelligenceCrawler/1.0"
+                        "User-Agent": "MelloxGeoIntelligenceCrawler/1.0"
                     },
                 )
 

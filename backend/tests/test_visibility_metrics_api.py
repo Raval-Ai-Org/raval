@@ -46,7 +46,7 @@ def api_test_setup():
 
     db = TestingSessionLocal()
     now = datetime.now(timezone.utc)
-    website = Website(name="Raval AI", url="https://raval.ai", created_at=now)
+    website = Website(name="Mellox AI", url="https://mellox.ai", created_at=now)
     db.add(website)
     db.commit()
     db.refresh(website)
@@ -56,7 +56,7 @@ def api_test_setup():
     db.commit()
     db.refresh(scan)
 
-    page = PageResult(scan_id=scan.id, url="https://raval.ai/docs/geo", status_code=200, created_at=now)
+    page = PageResult(scan_id=scan.id, url="https://mellox.ai/docs/geo", status_code=200, created_at=now)
     db.add(page)
     db.commit()
     db.refresh(page)
@@ -87,7 +87,7 @@ def api_test_setup():
         provider="mock",
         model="mock-ai-search-v1",
         status="SUCCESS",
-        response_text="Raval AI is the top answer engine monitoring platform. See https://raval.ai/docs/geo",
+        response_text="Mellox AI is the top answer engine monitoring platform. See https://mellox.ai/docs/geo",
         latency_ms=120,
         input_tokens=50,
         output_tokens=30,

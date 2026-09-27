@@ -1,4 +1,4 @@
-# Historical architecture: Raval AI Search Intelligence
+# Historical architecture: Mellox AI Search Intelligence
 
 > This document describes an earlier architecture and is retained as a
 > historical design record. For the current Mellox AI implementation, use
@@ -9,7 +9,7 @@
 
 ## 1. Architecture Overview
 
-Raval AI Search Intelligence is designed as a modular intelligence platform for analyzing websites, search visibility, AI visibility, citations, competitors, opportunities, recommendations, fixes, and validation.
+Mellox AI Search Intelligence is designed as a modular intelligence platform for analyzing websites, search visibility, AI visibility, citations, competitors, opportunities, recommendations, fixes, and validation.
 
 The architecture separates crawling, analysis, intelligence, recommendation, execution, validation, and monitoring responsibilities.
 
@@ -1271,7 +1271,7 @@ The opportunity engine converts evidence and findings into prioritized opportuni
 > **Implementation Status (Task 6 Batch 1)**:
 > - **Task 6.1 (Opportunity Engine)**: Implemented (`backend/app/models.py:Opportunity`, `backend/app/opportunity_service.py`).
 > - **Task 6.2 (Opportunity Prioritization)**: Implemented (`backend/app/opportunity_prioritization.py`).
-> - Detailed specification available at [docs/OPPORTUNITY_ENGINE.md](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/OPPORTUNITY_ENGINE.md).
+> - Detailed specification available at [docs/OPPORTUNITY_ENGINE.md](file:///c:/Users/HP/Documents/mellox-geo-intelligence/docs/OPPORTUNITY_ENGINE.md).
 
 Opportunity Structure
 
@@ -1335,8 +1335,8 @@ The opportunity engine should not directly execute fixes.
 The fix engine generates structured recommendations or proposed changes based on validated opportunities.
 
 > **Implementation Status (Task 6 Batch 2)**:
-> - **Task 6.3 (Recommendation Engine)**: Implemented (`backend/app/models.py:Recommendation`, `backend/app/recommendation_service.py`). See [docs/RECOMMENDATION_ENGINE.md](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/RECOMMENDATION_ENGINE.md).
-> - **Task 6.4 (Fix / Action Planning Foundation)**: Implemented (`backend/app/models.py:FixPlan`, `backend/app/fix_service.py`). See [docs/FIX_ENGINE.md](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/FIX_ENGINE.md).
+> - **Task 6.3 (Recommendation Engine)**: Implemented (`backend/app/models.py:Recommendation`, `backend/app/recommendation_service.py`). See [docs/RECOMMENDATION_ENGINE.md](file:///c:/Users/HP/Documents/mellox-geo-intelligence/docs/RECOMMENDATION_ENGINE.md).
+> - **Task 6.4 (Fix / Action Planning Foundation)**: Implemented (`backend/app/models.py:FixPlan`, `backend/app/fix_service.py`). See [docs/FIX_ENGINE.md](file:///c:/Users/HP/Documents/mellox-geo-intelligence/docs/FIX_ENGINE.md).
 > - **Safety Boundary**: The planning foundation generates inspectable, reviewable diff proposals with an auditable review lifecycle (`draft` → `ready_for_review` → `approved` → `completed`). It does not perform automated website mutations, CMS calls, or code deployment.
 
 Potential Outputs
@@ -1398,7 +1398,7 @@ The validation engine determines whether a recommendation or fix produced the ex
 > - **Task 6.5 (Validation Engine Foundation)**: Implemented (`backend/app/models.py:ValidationResult`, `backend/app/validation_service.py`).
 > - **Task 6.6 (Validation Feedback Loop)**: Implemented (`apply_validation_feedback` updating FixPlan and Recommendation lifecycle statuses).
 > - **Task 6.7 (End-to-End Pipeline Orchestration)**: Implemented (`backend/app/pipeline_service.py:run_end_to_end_intelligence_pipeline`).
-> - See [docs/VALIDATION_ENGINE.md](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/VALIDATION_ENGINE.md) for full architecture and API documentation.
+> - See [docs/VALIDATION_ENGINE.md](file:///c:/Users/HP/Documents/mellox-geo-intelligence/docs/VALIDATION_ENGINE.md) for full architecture and API documentation.
 > - **Safety Boundary**: The engine performs internal deterministic evidence comparisons. It does not perform live website mutations or external calls.
 
 ### Validation Flow
@@ -1449,7 +1449,7 @@ Monitoring tracks both system health and intelligence changes over time.
 
 ### Implementation Status (Task 6.10)
 - **Status**: IMPLEMENTED
-- **Documentation**: [docs/MONITORING.md](file:///c:/Users/HP/Documents/raval-geo-intelligence/docs/MONITORING.md)
+- **Documentation**: [docs/MONITORING.md](file:///c:/Users/HP/Documents/mellox-geo-intelligence/docs/MONITORING.md)
 - **Model**: `MonitoringRecord` in `backend/app/models.py` (table `monitoring_records`)
 - **Service**: `backend/app/monitoring_service.py`
 - **Façade**: `analytics/__init__.py`
@@ -1519,7 +1519,7 @@ Data Retrieval / Action
       ↓
 Normalization
       ↓
-Raval Intelligence
+Mellox Intelligence
 
 ## 22. Database
 ### Technology

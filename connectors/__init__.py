@@ -1,5 +1,5 @@
 """
-Raval AI Website Connector & Safe Execution Package (Task 11).
+Mellox AI Website Connector & Safe Execution Package (Task 11).
 
 Provides provider-neutral connector abstractions, normalized data models, capabilities,
 error classifications, security boundaries, audit logging, rate limiting, and execution models.

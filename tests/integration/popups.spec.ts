@@ -142,7 +142,7 @@ async function seedSession(page: Page) {
       try {
         window.localStorage.setItem(storageKey, JSON.stringify(sess));
         window.localStorage.setItem("workspace:selected", wsId);
-        window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
+        window.localStorage.setItem(`mellox:first-prompt-fired:${wsId}`, "1");
         window.localStorage.setItem("profile:persona", "founder");
 
         // No window.WebSocket stub: replacing the global hangs supabase-js's

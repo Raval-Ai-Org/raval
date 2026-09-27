@@ -104,7 +104,7 @@ class TestGitHubAuthentication:
         ctx = github_connector.connect({"token": "ghp_validtesttoken12345678901234567890"})
         assert ctx.auth_state == AuthState.CONNECTED
         assert github_connector.auth_state == AuthState.CONNECTED
-        assert ctx.metadata["authenticated_user"] == "raval-bot"
+        assert ctx.metadata["authenticated_user"] == "mellox-bot"
         assert ctx.metadata["repo_full_name"] == "test-org/test-site"
 
         # Verify token is NOT stored in metadata
@@ -365,7 +365,7 @@ class TestGitHubApplyChange:
         assert result.resulting_version is not None
 
         execution_branch = result.metadata["execution_branch"]
-        assert execution_branch.startswith("raval-fix/meta-tag-improvement-fp42-")
+        assert execution_branch.startswith("mellox-fix/meta-tag-improvement-fp42-")
         assert execution_branch != "main"
 
         # Verify isolated branch exists in client

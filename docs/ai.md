@@ -1,53 +1,46 @@
 # AI and model reference
 
-## Gateways and routing
+This guide covers AI calls made by the Next.js application under `src/`. The
+repository also contains a separate Python FastAPI backend with its own provider
+adapters; see the [Python AI Visibility reference](AI_VISIBILITY.md). Do not
+assume the two runtimes share credentials or provider policy.
 
-General text calls use the OpenRouter gateway in `src/lib/ai-gateway.server.ts`.
-Anthropic direct calls use `src/lib/anthropic-gateway.server.ts`. The native
-routing plan in `src/server/ai/text-routes.server.ts` resolves `chat`,
-`extraction`, and `agent` candidates from `AI_TEXT_ROUTE_*` variables, with
-explicit provider/model fallbacks. `FEATURE_FLAG_UNIFIED_GATEWAY_ENABLED` can
-revert to direct single-provider behavior.
+## Provider and routing
 
-The implementation's default model choices are code-owned and may change;
-current examples include OpenRouter chat/extraction/fast models and Anthropic
-Claude models. Do not treat model names in old docs as a promise. The chat route
-accepts allow-listed ids, not arbitrary model names.
+Text, vision, tool-use, and image requests go through OpenRouter. The server-side
+text gateway is `src/lib/ai-gateway.server.ts`; image requests use
+`src/lib/openrouter-image.server.ts`. Claude model IDs such as
+`anthropic/claude-opus-5.5` identify models hosted through OpenRouter; Mellox AI
+does not call the Anthropic API directly or require `ANTHROPIC_API_KEY`.
 
-## Current AI operating model
+Call sites select a metering route, not a model. The route registry in
+`src/server/ai/task-models.ts` selects primary and fallback models, reasoning
+effort, token limits, and any task-specific escalation or degraded plan.
+`AI_MODEL_<ROUTE_KEY>` and `AI_EFFORT_<ROUTE_KEY>` can override a route without
+changing code. The authoritative decision and provider details are in
+[ADR-0026](adr/0026-openrouter-only-models.md).
 
-Across the project, AI usage is intentionally disciplined. The server owns the
-provider calls, budget controls, usage accounting, caching decisions, and error
-mapping. Browser requests can trigger AI work but they cannot bypass the
-configured gateway or the authorization layer. This is a deliberate product
-design choice: it keeps AI usage measurable, reviewable, and safe within a
-workspace-scoped product.
+Video remains behind the provider interface in `src/server/ugc/providers/` and
+may use KIE or OpenRouter according to `VIDEO_PROVIDER` and its fallback
+configuration. It is intentionally a separate path from text and image calls.
 
-## Prompt and context safety
+## Controls and context
 
-Prompt fragments live under `src/lib/ai/prompts`. Chat removes client-supplied
-system turns, sanitizes input, summarizes older history, and fences workspace
-context as untrusted data. Brand identity is loaded from the verified workspace
-at request time. Provider gateways centralize metering, cache behavior, and
-error handling.
+Provider calls, budgets, usage accounting, cache behavior, and error mapping are
+server-owned. Paid calls must use the gateway and applicable rate-limit path.
+Workspace-scoped requests must load brand context only after verifying the
+workspace identity and access.
 
-## Paid calls and controls
+Prompt fragments live under `src/lib/ai/prompts`. Chat removes
+client-supplied system turns, sanitizes input, summarizes older history, and
+wraps workspace context as untrusted data. GEO answer probes are feature-flagged;
+the GEO coding agent is repository-scoped and requires ownership, approval, and
+verification.
 
-`src/server/ai/metering.ts`, `budget.ts`, reservations, and plan helpers track
-estimated spend, calls, cached calls, image/video counts, and social posts.
-Rate limits are applied by the route kernel. Usage is exposed by `/api/usage`.
-A provider call must not bypass the gateway or budget path.
+## Related references
 
-## AI-related systems
-
-- Brand extraction and memory extraction
-- Marketing chat and generation
-- GEO answer probes, behind a feature flag
-- GEO coding agent, with repository ownership, read-before-plan, approval, and verification boundaries
-- KIE image/video generation
-- Studio and UGC model routing
-- Promptfoo evaluations under `evals/`
-
-TODO: publish a model-by-task matrix generated from the gateway constants and
-route configuration; this guide intentionally avoids inventing a stable model
-catalog.
+- Environment variables and provider configuration: [configuration](configuration.md)
+- Usage, budgets, and cost controls: [analytics and usage](analytics-and-usage.md)
+- Gateway implementation: `src/lib/ai-gateway.server.ts`
+- Task routing: `src/server/ai/task-models.ts`
+- Prompt evaluations: `evals/`

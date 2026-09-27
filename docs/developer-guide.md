@@ -40,7 +40,7 @@ which layer owns the feature before editing:
 - Database migrations and schema work: `supabase/migrations`
 - Python analysis and crawling systems: `backend`, `crawler`, and domain-engine
   packages
-- Separate social distribution runtime: `Social-Distribtion-Engine-RavalAI-SDE/`
+- Separate social distribution runtime: `Social-Distribtion-Engine-MelloxAI-SDE/`
 
 When a change crosses layers, keep the ownership boundaries explicit and do not
 mix browser logic with service credentials or privileged runtime behavior.

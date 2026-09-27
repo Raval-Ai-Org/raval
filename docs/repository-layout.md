@@ -14,7 +14,7 @@ location at the repository root does not by itself mean it is legacy.
 | Python crawler              | `crawler/`                                                                                             | Crawl configuration, fetching, discovery, robots, sitemap, and queue behavior             |
 | Python domain packages      | `analytics/`, `content-engine/`, `entity-engine/`, `fix-engine/`, `opportunity-engine/`, `validation/` | Compatibility facades and domain packages backed by the Python application                |
 | Python connector system     | `connectors/`                                                                                          | Connector contracts, execution, security, reliability, GitHub, and WordPress integrations |
-| Social Distribution Engine  | `Social-Distribtion-Engine-RavalAI-SDE/`                                                               | Separate FastAPI/Celery service for platform delivery; deployed and tested independently  |
+| Social Distribution Engine  | `Social-Distribtion-Engine-MelloxAI-SDE/`                                                               | Separate FastAPI/Celery service for platform delivery; deployed and tested independently  |
 
 ## Supporting areas
 

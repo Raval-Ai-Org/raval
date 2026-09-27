@@ -130,7 +130,7 @@ test.describe("Desktop workspace visual", () => {
           window.localStorage.setItem("chat:width", "360");
           window.localStorage.setItem("chat:collapsed", "0");
           window.localStorage.setItem("studio:open", "1");
-          window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
+          window.localStorage.setItem(`mellox:first-prompt-fired:${wsId}`, "1");
           window.localStorage.setItem("reach-theme", "light");
           // Silence realtime websockets — irrelevant for a static snapshot.
           // No window.WebSocket stub: replacing the global hangs supabase-js's

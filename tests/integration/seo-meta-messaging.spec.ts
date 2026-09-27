@@ -8,7 +8,7 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval.ai";
+const CANONICAL_HOST = "https://mellox.ai";
 // Legacy phrasing that must never come back on public routes.
 const FORBIDDEN = [
   /AI marketing OS/i,

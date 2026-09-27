@@ -11,7 +11,7 @@
  */
 import { test, expect } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval.ai";
+const CANONICAL_HOST = "https://mellox.ai";
 
 // Legacy phrasing / stale domains that must never come back.
 const FORBIDDEN: RegExp[] = [

@@ -25,7 +25,15 @@ export type BillingAccount = {
   comped_until: string | null;
   enforcement_override: "off" | "shadow" | "on" | null;
   pro_overage_mode: "credits" | "flash";
+  provider?: string;
+  provider_customer_id?: string | null;
+  provider_subscription_id?: string | null;
+  resume_plan_id?: string | null;
+  pause_started_at?: string | null;
+  last_paid_invoice_id?: string | null;
+  capacity_reconciled_at?: string | null;
   created_at: string;
+  updated_at?: string;
 };
 
 export type WorkspaceAccount = {

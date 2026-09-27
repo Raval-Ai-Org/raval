@@ -1,4 +1,4 @@
-// sdr.webhook.ts — the SDR → RavalAI webhook receiver (FR-021 / SC-009) and the
+// sdr.webhook.ts — the SDR → MelloxAI webhook receiver (FR-021 / SC-009) and the
 // item-status aggregation (FR-010/FR-011). Pure + dependency-injected so the
 // contract/unit tests run without Supabase. The route passes the raw body +
 // headers + a Supabase-like db.

@@ -1,8 +1,8 @@
-# Raval GEO Intelligence — Final Independent Verification Audit Report
+# Mellox GEO Intelligence — Final Independent Verification Audit Report
 
 **Audit Date**: August 27, 2026  
 **Auditor**: Antigravity Autonomous Code Intelligence  
-**Repository Root**: `C:\Users\HP\Documents\raval-geo-intelligence`  
+**Repository Root**: `C:\Users\HP\Documents\mellox-geo-intelligence`  
 **Git Branch**: `main`  
 **Current Commit**: `60620953e7c8fd86cc0f787513be999af199ad51`  
 **Python Runtime**: Python 3.14.7  
@@ -12,7 +12,7 @@
 ## 1. Repository Baseline
 
 ### Version Control & Workspace State
-- **Repository Path**: `C:\Users\HP\Documents\raval-geo-intelligence`
+- **Repository Path**: `C:\Users\HP\Documents\mellox-geo-intelligence`
 - **Active Git Branch**: `main` (tracking `personal/main`)
 - **Current Commit Hash**: `60620953e7c8fd86cc0f787513be999af199ad51` (`Fix indentation and Python project configuration`)
 - **Working Tree Status**:
@@ -28,7 +28,7 @@
   - `httpx`: `0.28.1`
   - `requests`: `2.34.2`
   - `uvicorn`: `0.52.4`
-- **Active Database**: SQLite file `raval.db` (configured via `backend/app/config.py`).
+- **Active Database**: SQLite file `mellox.db` (configured via `backend/app/config.py`).
 
 ### Implemented vs Empty Directory Layout
 - **Implemented Python Codebases**:
@@ -194,7 +194,7 @@
 
 ### Independent Test Run Details
 - **Command Executed**: `python -m pytest -v`
-- **Working Directory**: `C:\Users\HP\Documents\raval-geo-intelligence`
+- **Working Directory**: `C:\Users\HP\Documents\mellox-geo-intelligence`
 - **Execution Timestamp**: 2026-08-27 15:54:30 UTC
 - **Execution Time**: **47.37 seconds**
 

@@ -124,15 +124,15 @@ export function GenerationProgress({
       {/* ── The plan ── */}
       <div className="order-2 flex min-h-0 flex-col px-5 pb-5 pt-5 @3xl/composer:order-none @3xl/composer:overflow-y-auto @3xl/composer:px-8 @3xl/composer:pb-6 @3xl/composer:pt-8">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2.5 text-[1.375rem] font-semibold leading-tight tracking-tight text-foreground">
-            <span className="relative flex size-2">
+          <h2 className="flex min-w-0 items-center gap-2.5 text-[1.375rem] font-semibold leading-tight tracking-tight text-foreground">
+            <span className="relative flex size-2 shrink-0">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-50" />
               <span className="relative inline-flex size-2 rounded-full bg-primary" />
             </span>
             Creating your {format.noun}
           </h2>
           <span
-            className="font-mono text-xs tabular-nums text-muted-foreground"
+            className="shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground"
             aria-label={`Elapsed ${elapsed} seconds`}
           >
             {formatElapsed(elapsed)}

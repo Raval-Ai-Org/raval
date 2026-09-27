@@ -14,11 +14,17 @@ import { test, expect, type Page } from "@playwright/test";
  */
 
 const BREAKPOINTS = [
+  { name: "fold-cover", width: 280, height: 653 },
+  { name: "small-phone", width: 320, height: 568 },
   { name: "mobile", width: 390, height: 844 },
+  { name: "foldable-narrow", width: 540, height: 720 },
+  { name: "phone-landscape", width: 667, height: 375 },
   { name: "tablet-portrait", width: 768, height: 1024 },
   { name: "tablet-landscape", width: 820, height: 1180 },
+  { name: "compact-laptop", width: 1024, height: 768 },
   { name: "desktop", width: 1280, height: 900 },
   { name: "desktop-wide", width: 1440, height: 900 },
+  { name: "large-desktop", width: 1920, height: 1080 },
 ] as const;
 
 const ROUTES = ["/", "/login", "/signup"] as const;

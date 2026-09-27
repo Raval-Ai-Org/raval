@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# RavalAI — predev sanity check
+# MelloxAI — predev sanity check
 # ─────────────────────────────────────────────────────────────────────────────
 # Automatically runs before `npm run dev` (via the "predev" npm script).
 # Does NOT block the dev server — just prints a loud warning if something is
@@ -40,7 +40,7 @@ warn() { echo -e "${YELLOW}⚠ $*${RESET}"; WARNINGS=$((WARNINGS + 1)); }
 fail() { echo -e "${RED}✗ $*${RESET}"; ERRORS=$((ERRORS + 1)); }
 ok()   { echo -e "${GREEN}✓ $*${RESET}"; }
 
-echo -e "${CYAN}▶ Predev check (raval)${RESET}"
+echo -e "${CYAN}▶ Predev check (mellox)${RESET}"
 
 # ── 1. .env file ─────────────────────────────────────────────────────────────
 if [ ! -f .env ]; then

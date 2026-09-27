@@ -18,7 +18,7 @@ import { newNoteId, readNotes, writeNotes, type Note, type NoteColor } from "@/l
 
 /* -------------------- Storage -------------------- */
 
-const OPEN_PREFIX = "raval:notes:open:v1:";
+const OPEN_PREFIX = "mellox:notes:open:v1:";
 const openKey = (wsId: string) => `${OPEN_PREFIX}${wsId}`;
 
 const PALETTE = [

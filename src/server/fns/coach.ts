@@ -14,6 +14,7 @@ import {
   type CoachSynthesisInput,
 } from "@/server/research/coach-briefing.server";
 import { marketingCoachWorkflowEnabled } from "@/server/workflows/marketing-coach-flags.server";
+import { requireBillingFeature } from "@/server/billing/feature.server";
 
 export type {
   CoachIntent,
@@ -216,11 +217,12 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
         force: z.boolean().optional(),
         /** Ask for the deeper (high-effort) strategy briefing. */
         deepStrategy: z.boolean().optional(),
+        idempotencyKey: uuid.optional(),
       })
       .parse(data),
   )
   .handler(async ({ data, context }): Promise<CoachBriefing> => {
-    await requireWorkspaceRole(context, data.workspaceId, "viewer");
+    const role = await requireWorkspaceRole(context, data.workspaceId, "viewer");
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString();
 
@@ -306,6 +308,12 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
     const dayName = today.toLocaleDateString("en-US", { weekday: "long" });
     const deepStrategy = data.deepStrategy === true;
     const model = coachModel(deepStrategy);
+    await requireBillingFeature({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role,
+      feature: deepStrategy ? "pro_chat" : "market_brain",
+    });
 
     /* 2. Reuse today's briefing while nothing it was built from has changed */
     const briefingKey = `coach:briefing:${await digest(
@@ -322,43 +330,66 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
       if (cached) return cached;
     }
 
-    /* 3. Scrape the site and search the web (cached, tolerant) */
-    const { siteText, siteMeta, brandSeed, compResults, reviewResults, trendResults, trendAnswer } =
-      await loadResearch(data.workspaceId, siteUrl, workspaceName);
+    const { runMetered } = await import("@/server/billing/metered.server");
+    const metered = await runMetered(
+      {
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role,
+        action: deepStrategy ? "coach_deep" : "coach_briefing",
+        idempotencyKey: data.idempotencyKey ?? crypto.randomUUID(),
+        route: "coach.briefing",
+      },
+      async (charge) => {
+        /* 3. Scrape the site and search the web (cached, tolerant) */
+        const {
+          siteText,
+          siteMeta,
+          brandSeed,
+          compResults,
+          reviewResults,
+          trendResults,
+          trendAnswer,
+        } = await loadResearch(data.workspaceId, siteUrl, workspaceName);
 
-    /* 4-6. Build the prompt, call Claude, and normalize — extracted to
-     * src/server/research/coach-briefing.server.ts (ADR-0021) so it can
-     * optionally run through Mastra for retry/observability. Off by
-     * default: synthesizeCoachBriefing() is called directly, byte-for-byte
-     * the same code path as before this extraction. */
-    const synthesisInput: CoachSynthesisInput = {
-      today,
-      dayName,
-      siteUrl,
-      brandSeed,
-      model,
-      deepStrategy,
-      signals,
-      brandContext: data.brandContext,
-      siteText,
-      siteMeta,
-      compResults,
-      reviewResults,
-      trendResults,
-      trendAnswer,
-    };
-    const { briefing, hasContent } = marketingCoachWorkflowEnabled()
-      ? await (
-          await import("@/server/workflows/mastra.server")
-        ).runWorkflow<"marketingCoach", { briefing: CoachBriefing; hasContent: boolean }>(
-          "marketingCoach",
-          { ...synthesisInput, today: today.toISOString() },
-        )
-      : await synthesizeCoachBriefing(synthesisInput);
+        /* 4-6. Build the prompt, call Claude, and normalize — extracted to
+         * src/server/research/coach-briefing.server.ts (ADR-0021) so it can
+         * optionally run through Mastra for retry/observability. Off by
+         * default: synthesizeCoachBriefing() is called directly, byte-for-byte
+         * the same code path as before this extraction. */
+        const synthesisInput: CoachSynthesisInput = {
+          today,
+          dayName,
+          siteUrl,
+          brandSeed,
+          model,
+          deepStrategy,
+          signals,
+          brandContext: data.brandContext,
+          siteText,
+          siteMeta,
+          compResults,
+          reviewResults,
+          trendResults,
+          trendAnswer,
+        };
+        const { briefing, hasContent } = marketingCoachWorkflowEnabled()
+          ? await (
+              await import("@/server/workflows/mastra.server")
+            ).runWorkflow<"marketingCoach", { briefing: CoachBriefing; hasContent: boolean }>(
+              "marketingCoach",
+              { ...synthesisInput, today: today.toISOString() },
+            )
+          : await synthesizeCoachBriefing(synthesisInput);
 
-    // Only a real model briefing is reused; a fallback is regenerated next time.
-    if (hasContent) {
-      await cache.set(briefingKey, briefing, BRIEFING_TTL_SECONDS);
-    }
-    return briefing;
+        // Only a real model briefing is reused; a fallback is regenerated next time.
+        if (hasContent) {
+          await cache.set(briefingKey, briefing, BRIEFING_TTL_SECONDS);
+        } else {
+          charge.setCapturedAmount(0);
+        }
+        return briefing;
+      },
+    );
+    return metered.result;
   });

@@ -22,7 +22,7 @@
 
 1. **Supabase project mismatch**: Configuration points to new empty project `slcmqbbjzyztqyucauol` but has no schema/migrations
 2. **Google OAuth not configured**: Provider not enabled in Supabase project
-3. **Lovable URL hardcoded**: Production URLs point to `raval6.lovable.app` (likely Lovable-hosted deployment URL)
+3. **Lovable URL hardcoded**: Production URLs point to `mellox.ai` (likely Lovable-hosted deployment URL)
 
 ---
 
@@ -485,9 +485,9 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
   - Error message: "Google sign-in is not enabled correctly"
 - **To fix**: Upload Google OAuth app credentials to Supabase
 
-### 3. ⚠️ Production URL Hardcoded to `raval6.lovable.app`
+### 3. ⚠️ Production URL Hardcoded to `mellox.ai`
 
-- **Issue**: Multiple files hardcode `https://raval6.lovable.app` for:
+- **Issue**: Multiple files hardcode `https://mellox.ai` for:
   - SEO canonical URLs
   - OG meta tags
   - Social sharing metadata
@@ -498,7 +498,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
   - `scripts/validate-*.mjs`
   - Database migration with cron job
 - **Impact**:
-  - If deploying to different domain (e.g., `raval.ai`), all meta tags will be wrong
+  - If deploying to different domain (e.g., `mellox.ai`), all meta tags will be wrong
   - OAuth callbacks may still work (they use `window.location.origin` dynamically)
   - Social preview URLs will point to wrong domain
 - **To fix**: Make this configurable or update when deploying to production
@@ -539,7 +539,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 
 **Task P1.2**: Update production URL references (if changing domain)
 
-- [ ] Replace `raval6.lovable.app` with actual production domain
+- [ ] Replace `mellox.ai` with actual production domain
 - [ ] Files: `src/lib/seo.ts`, all route files, scripts, migrations
 - [ ] Consider making this an environment variable for flexibility
 
@@ -571,7 +571,7 @@ VITE_LOVABLE_CONNECTOR_LOGO_DEV_API_KEY=""   # Only used by WorkspaceLogo compon
 **Task P3.1**: Make production URLs environment-configurable
 
 - Add `VITE_PUBLIC_APP_URL` or similar
-- Replace hardcoded `raval6.lovable.app`
+- Replace hardcoded `mellox.ai`
 - Update scripts and migrations
 
 **Task P3.2**: Document auth setup for future maintainers

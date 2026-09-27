@@ -53,7 +53,7 @@ class ApplicabilityType(str, Enum):
 
 class UnifiedSignal(BaseModel):
     """
-    Canonical Normalized Signal Contract for Raval AI Search Intelligence (Task 8, Step 8.2).
+    Canonical Normalized Signal Contract for Mellox AI Search Intelligence (Task 8, Step 8.2).
 
     Every normalized signal supports:
     - rule_id: Stable identifier for the underlying rule/signal

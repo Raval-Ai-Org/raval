@@ -92,7 +92,7 @@ describe("GitHub App config", () => {
   it("returns only safe statuses for production-style configuration", () => {
     const diagnostic = getGitHubDiagnostic({
       ...BASE_ENV,
-      APP_URL: "https://raval-production-c901.up.railway.app",
+      APP_URL: "https://mellox-production-c901.up.railway.app",
       GITHUB_APP_PRIVATE_KEY: PEM.replace(/\n/g, "\\n"),
     });
     expect(diagnostic).toEqual({
@@ -369,7 +369,7 @@ describe("GitHub install return origin", () => {
   const env = {
     APP_URL: "https://mellox.ai",
     NEXT_PUBLIC_APP_URL: "https://mellox.ai/",
-    GITHUB_ALLOWED_RETURN_ORIGINS: " https://raval-production-c901.up.railway.app , not a url",
+    GITHUB_ALLOWED_RETURN_ORIGINS: " https://mellox-production-c901.up.railway.app , not a url",
   };
 
   it("accepts this deployment's public origins and the configured extras, normalized", () => {
@@ -377,10 +377,10 @@ describe("GitHub install return origin", () => {
       "https://mellox.ai",
     );
     expect(
-      allowedReturnOrigin("https://raval-production-c901.up.railway.app", env, {
+      allowedReturnOrigin("https://mellox-production-c901.up.railway.app", env, {
         allowLocal: false,
       }),
-    ).toBe("https://raval-production-c901.up.railway.app");
+    ).toBe("https://mellox-production-c901.up.railway.app");
   });
 
   it("refuses foreign, downgraded, credentialed and malformed origins", () => {

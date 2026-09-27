@@ -61,7 +61,7 @@ class ClosedLoopMeasurementReport(BaseModel):
     final_decision: RegressionDecision = Field(..., description="Actionable final decision (KEEP, ROLLBACK, REVIEW)")
     provenance_chain: list[dict[str, Any]] = Field(default_factory=list, description="Full lineage trace")
     disclaimer: str = Field(
-        default="Score improvement represents a change in Raval's deterministic measurement model "
+        default="Score improvement represents a change in Mellox's deterministic measurement model "
         "and is NOT proof of external search ranking, traffic, conversion, citation, or AI visibility improvement."
     )
 

@@ -133,7 +133,7 @@ class DetectionResult:
 def extract_domain_from_url(url: str) -> str:
     """
     Extracts canonical domain (lowercased, without www prefix or port).
-    e.g. 'https://www.Raval.AI:443/docs' -> 'raval.ai'
+    e.g. 'https://www.Mellox.AI:443/docs' -> 'mellox.ai'
     """
     if not url:
         return ""
@@ -291,7 +291,7 @@ def detect_mentions(
                 )
                 claimed_spans.append((s, e))
 
-    # 2. Domain Mention in Text (e.g. "raval.ai")
+    # 2. Domain Mention in Text (e.g. "mellox.ai")
     domain = target.domain.strip().lower() if target.domain else ""
     if domain and len(domain) >= 3:
         # Match domain appearing as a word/token

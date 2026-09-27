@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-The Page Extraction Engine is the core deterministic HTML analysis component of the Raval AI GEO/AEO/SEO Intelligence platform. It extracts structured, auditable, raw technical evidence from crawled web page content (`PageResult.content`) without re-fetching, external network requests, or speculative assumptions.
+The Page Extraction Engine is the core deterministic HTML analysis component of the Mellox AI GEO/AEO/SEO Intelligence platform. It extracts structured, auditable, raw technical evidence from crawled web page content (`PageResult.content`) without re-fetching, external network requests, or speculative assumptions.
 
 ---
 

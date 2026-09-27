@@ -89,7 +89,7 @@ def _utc_now() -> datetime:
 
 class ExecutionEngine:
     """
-    Centralized execution coordination engine for Raval AI remediation plans.
+    Centralized execution coordination engine for Mellox AI remediation plans.
     Hardened with multi-tenant authorization, audit logging, rate limiting, and concurrency locks.
     """
 

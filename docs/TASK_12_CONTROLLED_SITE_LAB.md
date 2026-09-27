@@ -4,7 +4,7 @@
 
 The **Controlled Site Lab** is an isolated, deterministic, reproducible experimental testing environment designed to support **Task 12: Evidence, Experimentation, Production-Validation and Closed-Loop Measurement**.
 
-In the Raval AI Search Intelligence lifecycle:
+In the Mellox AI Search Intelligence lifecycle:
 ```
 Site → Crawl/Render → Analyze → Score → Finding → Fix Plan → Safety → Apply → Validate → Rescan → Compare → Measure → Monitor
 ```
@@ -368,7 +368,7 @@ The `RegressionGuard` evaluates target resource health and adjacent safety signa
    - Reuses existing Task 8 scoring calculations.
    - Calculates exact integer/floating-point point differences across all 6 categories (`seo_technical`, `content_quality`, `aeo_readiness`, `geo_readiness`, `schema_structure`, `security_performance`) and overall score.
    - **Mandatory Score Disclaimer**:
-     > *"Score improvement represents a change in Raval's deterministic measurement model and is NOT proof of external search ranking, traffic, conversion, citation, or AI visibility improvement."*
+     > *"Score improvement represents a change in Mellox's deterministic measurement model and is NOT proof of external search ranking, traffic, conversion, citation, or AI visibility improvement."*
 
 2. **Finding Delta Engine (`FindingDeltaReport`)**:
    Tracks deterministic transitions for all findings:

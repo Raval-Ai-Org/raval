@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-Step 8.7 implements the **Score Explanation & Analytics Data Layer** for the Raval AI Search Intelligence backend.
+Step 8.7 implements the **Score Explanation & Analytics Data Layer** for the Mellox AI Search Intelligence backend.
 
 The layer provides:
 1. **Human-Readable Score Explanations**: Transparent, evidence-grounded narratives for overall scores, category breakdowns, point deductions, verified passing strengths, N/A rules, and UNKNOWN missing-data areas.

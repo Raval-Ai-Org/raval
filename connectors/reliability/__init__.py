@@ -1,5 +1,5 @@
 """
-Reliability Subsystem for Raval AI Connectors (Task 11 Step 6).
+Reliability Subsystem for Mellox AI Connectors (Task 11 Step 6).
 
 Provides:
 - Centralized deterministic retry policy with transient/permanent error classification

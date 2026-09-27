@@ -53,7 +53,7 @@ from .unified_signal import (
 
 
 class ScoringCategory(str, Enum):
-    """Canonical 5 scoring categories for Raval AI Search Intelligence."""
+    """Canonical 5 scoring categories for Mellox AI Search Intelligence."""
     TRUST_TRANSPARENCY = "trust_transparency"
     AUTHORITY_CITATIONS = "authority_citations"
     CONTENT_QUALITY = "content_quality"

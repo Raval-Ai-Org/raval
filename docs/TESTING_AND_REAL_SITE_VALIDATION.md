@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-Step 8.9 establishes the **Comprehensive Testing & Real-Site Validation Layer** for the Raval AI Search Intelligence backend.
+Step 8.9 establishes the **Comprehensive Testing & Real-Site Validation Layer** for the Mellox AI Search Intelligence backend.
 
 The testing architecture provides:
 1. **Pillar 1 — Scoring Boundary Tests**: Verifies strict [0.0, 100.0] bounding, boundary/threshold handling (0, 1, 99, 100), and 100% deterministic reproducibility across repeated evaluations and permutation order-invariance.
@@ -18,7 +18,7 @@ The testing architecture provides:
 
 ## 2. Real-Site Validation Tool
 
-The standalone tool [`backend/scripts/validate_real_site_scoring.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/scripts/validate_real_site_scoring.py) tests live URLs with offline deterministic fallback:
+The standalone tool [`backend/scripts/validate_real_site_scoring.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/scripts/validate_real_site_scoring.py) tests live URLs with offline deterministic fallback:
 
 ```bash
 # Run real-site validation runner
@@ -35,6 +35,6 @@ python backend/scripts/validate_real_site_scoring.py
 
 ## 3. Test Suite Summary
 
-- **Targeted Test File**: [`backend/tests/test_task8_9_testing_validation.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_task8_9_testing_validation.py) (34 tests, 100% passing).
+- **Targeted Test File**: [`backend/tests/test_task8_9_testing_validation.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_task8_9_testing_validation.py) (34 tests, 100% passing).
 - **Total Task 8 Tests**: 134 tests across Steps 8.2–8.9 (100% passing).
 - **Full Backend Suite**: 600 tests (0 failures, 0 regressions).

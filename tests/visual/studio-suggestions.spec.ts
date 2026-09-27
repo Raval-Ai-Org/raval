@@ -133,7 +133,7 @@ const EXTREME_SUGGESTIONS: readonly SeededSuggestion[] = [
   {
     id: "x-unbroken-token",
     label:
-      "Draft launch email for https://raval.ai/campaigns/2026-Q3-launch-superlongslug-nobreakpoints-anywhere",
+      "Draft launch email for https://mellox.ai/campaigns/2026-Q3-launch-superlongslug-nobreakpoints-anywhere",
     hint: "Uses supercalifragilisticexpialidocious-lookinglongtokenwithnowhitespaceatallseriously as the CTA",
     accent: "green",
     icon: "Calendar",
@@ -228,7 +228,7 @@ async function seedSession(page: import("@playwright/test").Page) {
         window.localStorage.setItem("chat:width", "360");
         window.localStorage.setItem("chat:collapsed", "0");
         window.localStorage.setItem("studio:open", "1");
-        window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
+        window.localStorage.setItem(`mellox:first-prompt-fired:${wsId}`, "1");
         window.localStorage.setItem("reach-theme", "light");
         // No window.WebSocket stub: replacing the global hangs supabase-js's
         // getSession(), so SessionGate never leaves "Loading your workspace…".

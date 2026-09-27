@@ -63,11 +63,12 @@ disk-footprint problem entirely for local development.
 
 - Local development disk usage is unaffected by Promptfoo entirely — it's
   never installed into this project's `node_modules`.
-- The eval CI job needs its own `ANTHROPIC_API_KEY_EVALS` secret (kept
-  separate from any production key so eval spend is trackable and revocable
-  independently).
+- The eval CI job uses a dedicated `OPENROUTER_API_KEY_EVALS` secret, mapped to
+  `OPENROUTER_API_KEY` for the custom providers. Keep it separate from the
+  production key so eval spend is trackable and revocable independently. This
+  reflects the OpenRouter-only provider decision in [ADR-0026](0026-openrouter-only-models.md).
 - **Not verified locally in this environment**: no local run of `npx
-  promptfoo eval` against these configs was completed — the same disk
+promptfoo eval` against these configs was completed — the same disk
   constraint that ruled out a committed dependency also means there isn't
   reliable headroom to fetch and run promptfoo's on-demand npx cache here
   either. The configs and providers are written to promptfoo's documented

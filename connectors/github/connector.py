@@ -84,7 +84,7 @@ def _utc_now() -> datetime:
 def _generate_branch_name(proposal: ChangeProposal, base_sha: str) -> str:
     """
     Generates a deterministic, isolated Git branch name for a fix proposal.
-    Format: raval-fix/{action_slug}-fp{fix_plan_id}-{hash_suffix}
+    Format: mellox-fix/{action_slug}-fp{fix_plan_id}-{hash_suffix}
     """
     action_slug = proposal.action_type.replace("_", "-").lower()[:30]
     fp_id = proposal.fix_plan_id or "adhoc"
@@ -92,7 +92,7 @@ def _generate_branch_name(proposal: ChangeProposal, base_sha: str) -> str:
     
     # Hash of target + base commit to guarantee determinism & idempotency
     hash_suffix = hashlib.sha1(f"{target_clean}:{base_sha}:{fp_id}".encode("utf-8")).hexdigest()[:8]
-    return f"raval-fix/{action_slug}-fp{fp_id}-{hash_suffix}"
+    return f"mellox-fix/{action_slug}-fp{fp_id}-{hash_suffix}"
 
 
 class GitHubConnector(BaseConnector):
@@ -112,7 +112,7 @@ class GitHubConnector(BaseConnector):
     ) -> None:
         # Resolve owner and repo from explicit parameters or site_context metadata
         ctx_meta = site_context.metadata if site_context else {}
-        target_owner = owner or ctx_meta.get("owner") or "raval-ai-org"
+        target_owner = owner or ctx_meta.get("owner") or "mellox-ai-org"
         target_repo = repo or ctx_meta.get("repo") or "website-repo"
         target_default_branch = default_branch or ctx_meta.get("default_branch", "main")
 
@@ -410,7 +410,7 @@ class GitHubConnector(BaseConnector):
         commit_message = (
             f"fix(seo): apply {proposal.action_type} on {target_path}\n\n"
             f"Task 9 FixPlan: #{proposal.fix_plan_id or 'N/A'}\n"
-            f"Automated remediation by Raval AI Safe Fix Engine."
+            f"Automated remediation by Mellox AI Safe Fix Engine."
         )
         commit_info = self.client.create_or_update_file(
             owner=self.repo_ref.owner,
@@ -427,13 +427,13 @@ class GitHubConnector(BaseConnector):
         if self.create_pr_on_apply:
             pr_title = f"fix(seo): {proposal.action_type} for {target_path}"
             pr_body = (
-                f"### Raval AI SEO/GEO Fix Proposal\n\n"
+                f"### Mellox AI SEO/GEO Fix Proposal\n\n"
                 f"- **Fix Plan ID**: #{proposal.fix_plan_id or 'N/A'}\n"
                 f"- **Recommendation ID**: #{proposal.recommendation_id or 'N/A'}\n"
                 f"- **Finding ID**: #{proposal.finding_id or 'N/A'}\n"
                 f"- **Action Type**: `{proposal.action_type}`\n"
                 f"- **Target File**: `{target_path}`\n\n"
-                f"Generated automatically by Raval AI Website Connector."
+                f"Generated automatically by Mellox AI Website Connector."
             )
             pr_info = self.client.create_pull_request(
                 owner=self.repo_ref.owner,

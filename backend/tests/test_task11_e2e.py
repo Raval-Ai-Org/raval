@@ -1,7 +1,7 @@
 """
 Task 11 — Step 7: True End-to-End Integration Tests.
 
-Verifies the complete Raval AI Website Connector & Safe Auto-Fix Execution Engine
+Verifies the complete Mellox AI Website Connector & Safe Auto-Fix Execution Engine
 across realistic multi-component workflows:
 
 Finding
@@ -130,11 +130,11 @@ class TestScenarioAGitHubSafeFix:
 
         # 1. Controlled Repository Fixture with valid title length
         initial_files = {
-            "index.html": "<!DOCTYPE html><html><head><title>Home Page - Raval AI Search Intelligence</title></head><body><h1>Welcome</h1></body></html>",
-            "about.html": "<!DOCTYPE html><html><head><title>About Us - Raval AI Search Intelligence</title></head><body><h1>About</h1></body></html>",
+            "index.html": "<!DOCTYPE html><html><head><title>Home Page - Mellox AI Search Intelligence</title></head><body><h1>Welcome</h1></body></html>",
+            "about.html": "<!DOCTYPE html><html><head><title>About Us - Mellox AI Search Intelligence</title></head><body><h1>About</h1></body></html>",
         }
         mock_client = MockGitHubClient(
-            owner="raval-org",
+            owner="mellox-org",
             repo="marketing-site",
             default_branch="main",
             initial_files=initial_files,
@@ -142,7 +142,7 @@ class TestScenarioAGitHubSafeFix:
 
         site_context = SiteContext(
             site_id=101,
-            site_url="https://github.com/raval-org/marketing-site",
+            site_url="https://github.com/mellox-org/marketing-site",
             workspace_id=ws_id,
             provider="github",
             environment="production",
@@ -150,12 +150,12 @@ class TestScenarioAGitHubSafeFix:
             capabilities=ConnectorCapabilities.full_mutation(),
             last_health_status=HealthStatus.HEALTHY,
             rate_limit_info=RateLimitInfo(limit=5000, remaining=4990, is_rate_limited=False),
-            metadata={"owner": "raval-org", "repo": "marketing-site", "default_branch": "main"},
+            metadata={"owner": "mellox-org", "repo": "marketing-site", "default_branch": "main"},
         )
         gh_connector = GitHubConnector(
             site_context=site_context,
             client=mock_client,
-            owner="raval-org",
+            owner="mellox-org",
             repo="marketing-site",
         )
         gh_connector.connect({"token": "ghp_mock_token_for_test"})
@@ -189,7 +189,7 @@ class TestScenarioAGitHubSafeFix:
             diff_payload={
                 "target": "index.html",
                 "before": initial_files["index.html"],
-                "after": "<!DOCTYPE html><html><head><title>Home Page - Raval AI Search Intelligence</title><meta name=\"description\" content=\"Raval AI Geo Search Intelligence Platform - Advanced Generative Engine Optimization Engine.\"></head><body><h1>Welcome</h1></body></html>",
+                "after": "<!DOCTYPE html><html><head><title>Home Page - Mellox AI Search Intelligence</title><meta name=\"description\" content=\"Mellox AI Geo Search Intelligence Platform - Advanced Generative Engine Optimization Engine.\"></head><body><h1>Welcome</h1></body></html>",
             },
         )
 
@@ -221,7 +221,7 @@ class TestScenarioAGitHubSafeFix:
             proposed_content=fix_plan.diff_payload["after"],
             original_content=initial_files["index.html"],
             change_summary="Add meta description tag for SEO snippet optimization",
-            parameters={"branch_prefix": "raval-fix/meta-desc"},
+            parameters={"branch_prefix": "mellox-fix/meta-desc"},
         )
         req = ExecutionRequest(
             request_id="exec-req-gh-001",

@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ghostBtn, primaryBtn } from "@/components/app/geo/geo-ui";
 import { Check, Compass, Globe, Plus, Search, Spinner, X } from "@/components/icons";
 import { CostChip } from "@/components/app/CostChip";
+import { FeatureGate } from "@/components/app/FeatureGate";
 import { Card, RelationshipChip, SiteMark, SourceChips } from "./competitors-ui";
 import type { CompetitorView } from "@/lib/competitors.functions";
 
@@ -58,20 +59,22 @@ export function DiscoverTab({
               {researchAvailable ? "Uses your Brand DNA" : "Web search is off"}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onDiscover}
-            disabled={discovering || !researchAvailable}
-            className={cn(primaryBtn, "h-9 shrink-0 px-4 text-[13px]")}
-          >
-            {discovering ? (
-              <Spinner className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Search className="h-3.5 w-3.5" />
-            )}
-            {discovering ? "Looking" : "Find"}
-            {!discovering && <CostChip action="competitor_discovery" />}
-          </button>
+          <FeatureGate feature="competitors">
+            <button
+              type="button"
+              onClick={onDiscover}
+              disabled={discovering || !researchAvailable}
+              className={cn(primaryBtn, "h-9 shrink-0 px-4 text-[13px]")}
+            >
+              {discovering ? (
+                <Spinner className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Search className="h-3.5 w-3.5" />
+              )}
+              {discovering ? "Looking" : "Find"}
+              {!discovering && <CostChip action="competitor_discovery" />}
+            </button>
+          </FeatureGate>
         </Card>
 
         <Card className="flex items-center">

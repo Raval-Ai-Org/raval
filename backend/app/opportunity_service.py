@@ -1,5 +1,5 @@
 """
-Raval GEO Intelligence — Opportunity Engine & Service (Task 6.1)
+Mellox GEO Intelligence — Opportunity Engine & Service (Task 6.1)
 
 Handles generation, persistence, deduplication, and lifecycle of Opportunities
 derived from Findings, Recommendations, and Page Intelligence signals.

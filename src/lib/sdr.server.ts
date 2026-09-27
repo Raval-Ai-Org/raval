@@ -4,7 +4,7 @@
 // by callers (read from workspace_sdr server-side); nothing here touches secrets
 // in the browser.
 //
-// Wire identifiers use `twitter` (matching the SDR contract + RavalAI PlatformId),
+// Wire identifiers use `twitter` (matching the SDR contract + MelloxAI PlatformId),
 // NOT `x` (the display label only). See specs/001-sdr-integration (F1).
 
 import "server-only";
@@ -113,7 +113,7 @@ export function validateContentForPlatform(
   return errors;
 }
 
-// ─── Error taxonomy (RavalAI server → Studio) ───────────────────────────────
+// ─── Error taxonomy (MelloxAI server → Studio) ───────────────────────────────
 export type SdrErrorCode =
   | "PLATFORM_VALIDATION"
   | "ACCOUNT_EXPIRED"

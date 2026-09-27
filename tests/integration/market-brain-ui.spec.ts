@@ -171,7 +171,7 @@ async function openMarketBrain(
       localStorage.setItem(storageKey, JSON.stringify(sess));
       localStorage.setItem("workspace:selected", wsId);
       localStorage.setItem("workspace:name", "Mellox");
-      localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
+      localStorage.setItem(`mellox:first-prompt-fired:${wsId}`, "1");
     },
     { storageKey: STORAGE_KEY, sess: session(), wsId: WS_ID },
   );

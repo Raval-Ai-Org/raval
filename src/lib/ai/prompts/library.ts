@@ -166,6 +166,7 @@ export function contentBatchPrompt(args: {
   agent: string;
   count: number;
   channels: string[];
+  kinds?: string[];
   brandContext?: string;
   websiteUrl?: string | null;
 }) {
@@ -174,7 +175,9 @@ export function contentBatchPrompt(args: {
       `You are ${AGENT_ROLE[args.agent] ?? AGENT_ROLE.spark} for Mellox AI.`,
       "Match the brand: voice, audience, products, do/don't. Never invent unrelated products.",
       `Generate ${args.count} pieces. Channels available: ${args.channels.join(", ")}.`,
-      "Tailor tone + length per channel. Hooks first. One clear CTA. Body ≤ 600 chars. ≤ 8 hashtags.",
+      args.kinds?.includes("blog")
+        ? "Tailor tone and length to each kind: social posts ≤ 600 characters; blog articles are substantive with useful sections and at least 250 words. Hooks first, one clear CTA, and ≤ 8 hashtags on social posts."
+        : "Tailor tone + length per channel. Hooks first. One clear CTA. Body ≤ 600 chars. ≤ 8 hashtags.",
       RULE_NATURAL_VOICE,
       FMT_JSON_STRICT,
       FMT_NO_FENCES,
@@ -195,11 +198,14 @@ export function regeneratePrompt(args: {
   title: string;
   body: string;
 }) {
+  const article = args.kind === "blog";
   return {
     system: system(
-      "You are an expert social copywriter.",
-      `Rewrite for ${args.channel ?? "social"}: sharper hook, clearer CTA, fresh angle.`,
-      RULE_POST_LIMITS,
+      article ? "You are a useful, precise blog editor." : "You are an expert social copywriter.",
+      article
+        ? "Rewrite the article with a fresh angle, a direct answer near the top, clear H2 sections and practical detail. Preserve the verified facts and links."
+        : `Rewrite for ${args.channel ?? "social"}: sharper hook, clearer CTA, fresh angle.`,
+      ...(article ? [] : [RULE_POST_LIMITS]),
       RULE_NATURAL_VOICE,
       FMT_JSON_STRICT,
       `Schema: ${SCHEMA_POST}`,

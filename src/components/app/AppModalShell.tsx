@@ -20,7 +20,7 @@ const SIZE_MAP: Record<Size, string> = {
 };
 
 const iconBtn =
-  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--ds-well-bg-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40";
+  "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--ds-well-bg-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40 lg:h-8 lg:w-8";
 
 function MaximizeIcon({ className }: { className?: string }) {
   return (

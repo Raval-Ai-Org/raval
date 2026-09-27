@@ -447,14 +447,14 @@ export function LinksPanel({ workspaceId }: { workspaceId: string | null }) {
       onChange={go}
       railTop={railTop}
     >
-      {/* Phones have no rail, so the primary action sits above the page. */}
+      {/* Compact layouts have no rail, so the primary action sits above the page. */}
       {!flow && !openOrderId && (
-        <div className="px-4 pt-3 md:hidden">
+        <div className="px-4 pt-3 lg:hidden">
           <button
             type="button"
             onClick={() => setFlow(true)}
             disabled={!data.canEdit}
-            className={cn(btnPrimary, "h-10 w-full py-0")}
+            className={cn(btnPrimary, "h-11 w-full py-0")}
           >
             <Plus className="h-4 w-4" aria-hidden />
             New order

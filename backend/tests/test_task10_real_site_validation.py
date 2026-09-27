@@ -1,7 +1,7 @@
 """
 Task 10 Step 8: Real-Site & Security Simulation Validation Suite.
 Validates:
-  1. Realistic multi-topic real-site simulation on https://raval.ai
+  1. Realistic multi-topic real-site simulation on https://mellox.ai
   2. SSRF Prevention: Citation URLs extracted from responses are treated purely as text evidence (zero outbound network fetch)
   3. Workspace / Website Isolation: Cross-website leakage blocked
   4. Credential Protection: Zero API keys or secrets in serialized outputs
@@ -47,14 +47,14 @@ def real_site_db():
 @pytest.fixture
 def real_site_setup(real_site_db):
     now = datetime.now(timezone.utc)
-    web1 = Website(name="Raval AI", url="https://raval.ai", created_at=now)
+    web1 = Website(name="Mellox AI", url="https://mellox.ai", created_at=now)
     web2 = Website(name="Competitor Brand", url="https://searchoptima.com", created_at=now)
     real_site_db.add_all([web1, web2])
     real_site_db.commit()
     real_site_db.refresh(web1)
     real_site_db.refresh(web2)
 
-    qs1 = QuerySet(website_id=web1.id, name="Raval Production Query Set", created_at=now)
+    qs1 = QuerySet(website_id=web1.id, name="Mellox Production Query Set", created_at=now)
     qs2 = QuerySet(website_id=web2.id, name="Competitor Query Set", created_at=now)
     real_site_db.add_all([qs1, qs2])
     real_site_db.commit()
@@ -107,15 +107,15 @@ def real_site_setup(real_site_db):
 
 def test_real_site_multi_topic_monitoring_run(real_site_db, real_site_setup):
     """
-    Validates a complete realistic monitoring run over multi-topic queries for Raval AI.
+    Validates a complete realistic monitoring run over multi-topic queries for Mellox AI.
     """
     qs1 = real_site_setup["qs1"]
     web1 = real_site_setup["web1"]
 
     mock_responses = [
-        "Raval AI leads in Generative Engine Optimization. Guide at https://raval.ai/docs/geo-guide.",
-        "Raval AI and SearchOptima are top platforms for LLM search answers. See https://raval.ai/overview.",
-        "To improve citation readiness, configure structured schema and authoritative claims as detailed on https://raval.ai/citations.",
+        "Mellox AI leads in Generative Engine Optimization. Guide at https://mellox.ai/docs/geo-guide.",
+        "Mellox AI and SearchOptima are top platforms for LLM search answers. See https://mellox.ai/overview.",
+        "To improve citation readiness, configure structured schema and authoritative claims as detailed on https://mellox.ai/citations.",
     ]
 
     run = MonitoringPipelineService.start_monitoring_run(
@@ -130,8 +130,8 @@ def test_real_site_multi_topic_monitoring_run(real_site_db, real_site_setup):
     assert run.total_queries == 3
     assert run.successful_responses == 3
     assert run.failed_responses == 0
-    assert run.mention_rate == 1.0  # 3/3 mentioned Raval AI
-    assert run.citation_rate == 1.0  # 3/3 cited https://raval.ai
+    assert run.mention_rate == 1.0  # 3/3 mentioned Mellox AI
+    assert run.citation_rate == 1.0  # 3/3 cited https://mellox.ai
 
     # Verify results packaging
     results = MonitoringPipelineService.get_monitoring_run_results(real_site_db, run.id)
@@ -151,7 +151,7 @@ def test_ssrf_protection_no_outbound_network_calls(real_site_db, real_site_setup
     # Injected hostile URL strings in mock response text
     hostile_response = (
         "According to http://169.254.169.254/latest/meta-data/ and https://malicious-ssrf-probe.com/exploit, "
-        "Raval AI provides GEO tools: https://raval.ai/docs."
+        "Mellox AI provides GEO tools: https://mellox.ai/docs."
     )
 
     run = MonitoringPipelineService.start_monitoring_run(
@@ -182,7 +182,7 @@ def test_workspace_and_site_isolation(real_site_db, real_site_setup):
         db=real_site_db,
         query_set_id=qs1.id,
         provider="mock",
-        mock_responses=["Raval AI response."],
+        mock_responses=["Mellox AI response."],
     )
 
     # List runs for Website 1
@@ -205,7 +205,7 @@ def test_credential_protection_in_serialized_metrics(real_site_db, real_site_set
         db=real_site_db,
         query_set_id=qs1.id,
         provider="mock",
-        mock_responses=["Raval AI answer."],
+        mock_responses=["Mellox AI answer."],
     )
 
     results = MonitoringPipelineService.get_monitoring_run_results(real_site_db, run.id)

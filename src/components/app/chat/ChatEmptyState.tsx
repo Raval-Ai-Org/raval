@@ -99,7 +99,10 @@ export function ChatStarters({
   reducedMotion: boolean;
 }) {
   return (
-    <div className="flex flex-wrap justify-center gap-2 px-2" aria-label="Ideas to start with">
+    <div
+      className="grid w-full max-w-[420px] grid-cols-2 gap-2 px-2 sm:flex sm:max-w-none sm:flex-wrap sm:justify-center"
+      aria-label="Ideas to start with"
+    >
       {STARTERS.map((s, i) => {
         const Icon = s.icon;
         return (
@@ -111,7 +114,7 @@ export function ChatStarters({
             transition={{ delay: 0.18 + i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             whileTap={{ scale: 0.96 }}
             onClick={() => onPick(s)}
-            className="mx-starter group"
+            className="mx-starter group min-w-0 justify-center last:col-span-2 sm:last:col-auto"
           >
             <Icon className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />
             {s.label}

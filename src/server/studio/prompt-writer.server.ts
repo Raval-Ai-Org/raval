@@ -60,6 +60,7 @@ export async function writeStudioPrompt(args: {
   template?: string;
   goal?: GoalId;
   controls?: Partial<StudioControls>;
+  styleId?: string | null;
   /** Titles and signal headlines the person was recently given. */
   avoid?: string[];
 }): Promise<WrittenPrompt> {
@@ -75,7 +76,9 @@ export async function writeStudioPrompt(args: {
       : "fresh";
 
   const ctx = await loadStudioContext(args.client as SupabaseClient, args.workspaceId, args.brand);
-  const signals = collectSignals(ctx, args.brand);
+  const signals = collectSignals(ctx, ctx.brand);
+  const { styleTextFor } = await import("@/server/brand-kit/resolve.server");
+  const styleText = await styleTextFor(args.workspaceId, args.styleId, args.type);
   const avoid = (args.avoid ?? []).slice(0, 30);
   const signal = pickSignal(signals, avoid);
   const sparks = pickSparks(args.type);
@@ -111,6 +114,12 @@ export async function writeStudioPrompt(args: {
         maxChars: 6000,
         route: "studio.prompt",
       }),
+    },
+    {
+      label: "Selected Brand Kit style",
+      body: styleText
+        ? wrapUntrusted("brand-kit-style", styleText, { maxChars: 3000, route: "studio.prompt" })
+        : "",
     },
     {
       label: "Business",

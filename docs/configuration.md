@@ -21,7 +21,10 @@ Production validation is implemented in `src/server/env.ts`.
 
 ## Providers and features
 
-- AI: `ANTHROPIC_API_KEY`, `AI_USER_DAILY_USD`, `AI_TEXT_ROUTE_*`, `HELICONE_*`.
+- AI: `OPENROUTER_API_KEY`, `OPENROUTER_WEBHOOK_SECRET`,
+  `AI_MODEL_<ROUTE_KEY>`, `AI_EFFORT_<ROUTE_KEY>`, and
+  `AI_USER_DAILY_USD`. Text, vision, tool-use, and image calls use OpenRouter;
+  there is no direct Anthropic API key.
 - Media/intelligence: `KIE_*`, `UGC_*`, `TAVILY_*`, `PEXELS_API_KEY`, `UNSPLASH_ACCESS_KEY`, `FIRECRAWL_*`.
 - GEO: `FEATURE_FLAG_GEO_*`, `GEO_*`.
 - Distribution: `DISTRIBUTION_PROVIDER`, `FEATURE_FLAG_SDR_ENABLED`, `SDR_*`, `FEATURE_FLAG_SOCIALAPI_ENABLED`, `SOCIALAPI_*`.

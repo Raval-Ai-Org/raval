@@ -10,9 +10,10 @@ import type { Entitlements } from "@/server/billing/entitlements.server";
 export type BillingView = Omit<Entitlements, "accountId" | "ownerUserId"> & {
   accountId: string | null;
   ownerUserId: string | null;
+  purchasesAvailable?: boolean;
 };
 
-export function useEntitlements() {
+export function useEntitlements(options: { enabled?: boolean } = {}) {
   const workspaceId = useOptionalWorkspaceId();
   const queryClient = useQueryClient();
   const key = useMemo(() => ["billing", "entitlements", workspaceId ?? "own"], [workspaceId]);
@@ -21,9 +22,17 @@ export function useEntitlements() {
     queryFn: async () => {
       const params = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
       const response = await authedFetch(`/api/billing/entitlements${params}`, { workspaceId });
-      if (!response.ok) throw new Error("Couldn't load your plan and balance.");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(
+          typeof payload?.error === "string"
+            ? payload.error
+            : "Couldn't load your plan and balance.",
+        );
+      }
       return response.json();
     },
+    enabled: options.enabled ?? true,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });

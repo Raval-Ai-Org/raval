@@ -1,5 +1,5 @@
 """
-WordPress Connector Subsystem for Raval AI (Task 11 Step 3).
+WordPress Connector Subsystem for Mellox AI (Task 11 Step 3).
 
 Exposes WordPressConnector, REST client protocols, mocks, and models.
 """

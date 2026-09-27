@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary & Objective
 
-Step 8.3 establishes the **Centralized Signal Aggregation and Deduplication Layer** for the Raval AI Search Intelligence backend.
+Step 8.3 establishes the **Centralized Signal Aggregation and Deduplication Layer** for the Mellox AI Search Intelligence backend.
 
 Following the introduction of the canonical `UnifiedSignal` contract in Step 8.2, Step 8.3 provides a unified engine (`SignalAggregator`) and canonical container (`AggregatedSignalCollection`) to:
 1. Aggregate heterogeneous normalized signals produced across all Task 5–7 intelligence modules.

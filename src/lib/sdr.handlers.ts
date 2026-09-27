@@ -39,7 +39,7 @@ function sdrErrorResponse(e: unknown) {
 }
 
 /** Normalize an SDR response into the consistent { status, body } shape. Non-2xx
- * maps into the RavalAI error envelope (plan taxonomy); 2xx passes the body. */
+ * maps into the MelloxAI error envelope (plan taxonomy); 2xx passes the body. */
 function normalizeSdrResponse(res: { status: number; data: any }) {
   if (res.status >= 200 && res.status < 300) return { status: res.status, body: res.data };
   const code = classifySdrStatus(res.status);

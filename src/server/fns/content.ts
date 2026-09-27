@@ -6,6 +6,9 @@ import { rateLimitFor } from "@/server/rate-limit";
 import { requireWorkspaceRole } from "@/server/workspace-access.server";
 import { AiOutputError, runJsonPrompt, runStructuredPrompt } from "@/lib/ai";
 import { contentBatchPrompt, nextPostPrompt, regeneratePrompt } from "@/lib/ai/prompts";
+import { isNearDuplicateCopy } from "@/lib/studio/novelty";
+import { validContentBatch } from "@/lib/content-batch-quality";
+import { loadStudioContext, invalidateStudioContext } from "@/server/studio/context.server";
 import { buildNextSteps } from "@/lib/ai/deterministic-suggestions";
 import {
   assertContentTransition,
@@ -338,6 +341,25 @@ export const regenerateContentItem = createServerFn({ method: "POST" })
       .single();
     if (readErr || !existing) throw new Error("Item not found");
 
+    await requireWorkspaceRole(context, existing.workspace_id, "editor");
+    const studioContext = await loadStudioContext(
+      context.supabase as never,
+      existing.workspace_id,
+      null,
+    );
+    const { styleTextFor } = await import("@/server/brand-kit/resolve.server");
+    const styleText = await styleTextFor(
+      existing.workspace_id,
+      null,
+      existing.kind === "blog"
+        ? "article"
+        : existing.kind === "script"
+          ? "script"
+          : existing.kind === "image"
+            ? "image"
+            : "social",
+    );
+
     const { system, user } = regeneratePrompt({
       channel: existing.channel,
       kind: existing.kind,
@@ -348,15 +370,31 @@ export const regenerateContentItem = createServerFn({ method: "POST" })
     // A failed regeneration throws (AiOutputError → 502). It used to return
     // the OLD text as if it had been regenerated, and the cache made pressing
     // "regenerate" return identical copy for 30 minutes.
-    const parsed = await runStructuredPrompt({
-      route: "content.regenerate",
-      system,
-      user,
-      schema: RegeneratedSchema,
-      maxTokens: 1200,
-      temperature: 0.7,
-      regenerate: true,
-    });
+    let parsed: z.infer<typeof RegeneratedSchema> | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const candidate = await runStructuredPrompt({
+        route: "content.regenerate",
+        system: `${system}\nKeep the user's original facts and offer. Give a useful, fresh angle for their audience; never invent proof or market claims.`,
+        user: `${user}\n\n## Brand and customer context\n${studioContext.brandText}\n\n## Brand Kit writing style\n${styleText || "Follow Brand DNA voice."}\n\n## Recent topics to avoid\n${studioContext.recent
+          .slice(0, 10)
+          .map((item) => `- ${item.title}: ${item.excerpt ?? ""}`)
+          .join(
+            "\n",
+          )}\n${attempt ? "\nThe last rewrite was too similar. Change the hook, structure, and practical takeaway while preserving verified facts." : ""}`,
+        schema: RegeneratedSchema,
+        maxTokens: existing.kind === "blog" ? 3500 : 1200,
+        temperature: 0.7,
+        regenerate: true,
+      });
+      if (!isNearDuplicateCopy(candidate.body, existing.body ?? "")) {
+        parsed = candidate;
+        break;
+      }
+    }
+    if (!parsed)
+      throw new AiOutputError(
+        "The rewrite repeated the existing draft. Try a more specific direction.",
+      );
 
     const { data: row, error } = await context.supabase
       .from("content_items")
@@ -369,6 +407,7 @@ export const regenerateContentItem = createServerFn({ method: "POST" })
       .select(CONTENT_COLS)
       .single();
     if (error || !row) throw new Error(error?.message ?? "Update failed");
+    invalidateStudioContext(existing.workspace_id);
     return row as ContentItem;
   });
 
@@ -381,6 +420,12 @@ const GenerateSchema = z.object({
   prompt: z.string().min(2).max(2000),
   channels: z.array(ChannelEnum).min(1).max(6).optional(),
   count: z.number().int().min(1).max(8).optional(),
+  /** Exact order for mixed-format batches such as the Command Center's weekly draft. */
+  formatPlan: z
+    .array(z.object({ channel: ChannelEnum, kind: KindEnum }))
+    .min(1)
+    .max(8)
+    .optional(),
   context: z.string().max(6000).optional(),
   websiteUrl: z.string().max(2048).optional().nullable(),
   /** Brand Kit Style: an id, "none", or absent for the workspace default. */
@@ -391,33 +436,61 @@ export const generateContentBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("generate")])
   .inputValidator((data) => GenerateSchema.parse(data))
   .handler(async ({ data, context }) => {
-    const channels = data.channels ?? ["instagram", "x", "linkedin"];
-    const count = data.count ?? channels.length;
+    const channels = data.formatPlan?.map((item) => item.channel) ??
+      data.channels ?? ["instagram", "x", "linkedin"];
+    const count = data.formatPlan?.length ?? data.count ?? channels.length;
+    if (data.formatPlan && data.count && data.formatPlan.length !== data.count)
+      throw new Error("The requested format plan and draft count do not match.");
 
     // Verified workspace; its stored Brand DNA is the brand context, so a
     // batch can never be written in another brand's voice.
     await requireWorkspaceRole(context, data.workspaceId, "editor");
-    const { readBrandDna } = await import("@/server/workspaces/brand-dna.server");
-    const { serializeBrandContext } = await import("@/lib/ai/brand-context");
-    const stored = await readBrandDna(context.supabase as never, data.workspaceId);
-    const storedBrand =
-      stored && Object.keys(stored.dna).length
-        ? serializeBrandContext(stored.dna as never, { maxCharsPerField: 320 }).slice(0, 5000)
-        : "";
+    const studioContext = await loadStudioContext(
+      context.supabase as never,
+      data.workspaceId,
+      null,
+    );
     const { system, userTail } = contentBatchPrompt({
       agent: data.agent,
       count,
       channels,
-      brandContext: storedBrand || data.context,
-      websiteUrl: data.websiteUrl,
+      kinds: data.formatPlan?.map((item) => item.kind),
+      brandContext: studioContext.brandText || data.context,
+      websiteUrl: studioContext.website || data.websiteUrl,
     });
     const { styleTextFor } = await import("@/server/brand-kit/resolve.server");
-    const styleText = await styleTextFor(data.workspaceId, data.styleId, "social");
+    const requestedKinds = new Set(data.formatPlan?.map((item) => item.kind) ?? ["post"]);
+    const formats = [
+      "social",
+      ...(requestedKinds.has("blog") ? ["article"] : []),
+      ...(requestedKinds.has("image") ? ["image"] : []),
+    ];
+    const styleBlocks = await Promise.all(
+      formats.map(async (format) => {
+        const block = await styleTextFor(data.workspaceId, data.styleId, format);
+        return block ? `### ${format}\n${block.replace(/^## /gm, "#### ")}` : "";
+      }),
+    );
+    const styleText = styleBlocks.filter(Boolean).join("\n\n");
+    const plan = data.formatPlan
+      ?.map((item, index) => `${index + 1}. ${item.kind} for ${item.channel}`)
+      .join("\n");
     const user = `${userTail}${
       styleText
         ? `\n\n## Style (follow exactly; it overrides generic platform guidance)\n${styleText.replace(/^## /gm, "### ")}`
         : ""
-    }\n\n## Brief\n${data.prompt}`;
+    }\n\n## Exact output plan\n${plan || `Create ${count} items for: ${channels.join(", ")}.`}\n\n## Audience and market needs\n${
+      [
+        ...studioContext.opportunities.slice(0, 3),
+        ...studioContext.risingQueries.slice(0, 4),
+        ...studioContext.competitorMoves.slice(0, 2),
+      ]
+        .map((item) => `- ${item}`)
+        .join("\n") || "Use the customer's needs in Brand DNA; do not invent a trend."
+    }\n\n## Recent work to avoid\n${studioContext.recent
+      .slice(0, 12)
+      .map((item) => `- ${item.title}: ${item.excerpt ?? ""}`)
+      .join("\n")}\n\n## Brief\n${data.prompt}`;
 
     type Item = {
       channel?: string;
@@ -426,25 +499,44 @@ export const generateContentBatch = createServerFn({ method: "POST" })
       body?: string;
       hashtags?: string[];
     };
-    // Budget scales with the number of pieces requested (one shared 1,200-token
-    // budget used to leave ~150 tokens per post). An unusable answer is
-    // repaired once and then surfaced as an error — the old code inserted
-    // templated "fallback" posts as if the model had written them.
-    const parsed = await runStructuredPrompt({
-      route: "content.generateBatch",
-      system,
-      user,
-      schema: BatchSchema,
-      maxTokens: Math.min(6000, 300 + count * 500),
-      temperature: 0.72,
-    });
-
-    const safeItems: Item[] = parsed.items
-      .filter((it) => typeof it.body === "string" && it.body.trim())
-      .slice(0, count);
-    if (safeItems.length === 0) {
-      throw new AiOutputError("The AI returned no usable drafts. Please try again.", "empty");
+    // Mixed batches reserve more output tokens for a substantive blog item.
+    // A thin, incomplete or repeated set gets one fresh attempt before failing.
+    let safeItems: Item[] = [];
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const parsed = await runStructuredPrompt({
+        route: "content.generateBatch",
+        system: `${system}\nThe user's brief and requested format take priority. Use market and competitor signals only when relevant, and never as unsupported claims. Each piece must answer a distinct audience need with a useful takeaway. Make topics and entities clear in natural language for people and answer engines. Do not invent results, customers, quotes, or statistics. For kind blog, write a short, substantive article with a direct answer near the top, descriptive H2 sections and practical detail (at least 250 words). For kind image, write a visual brief and caption; do not imply media has been rendered. Follow the exact output plan in order when present.`,
+        user: attempt
+          ? `${user}\n\nThe previous set was incomplete or repeated recent work. Return ${count} distinct, fully written pieces with different hooks, examples and takeaways.`
+          : user,
+        schema: BatchSchema,
+        maxTokens: Math.min(
+          6000,
+          300 + count * (data.formatPlan?.some((item) => item.kind === "blog") ? 700 : 500),
+        ),
+        temperature: 0.72,
+        regenerate: true,
+      });
+      const candidates: Item[] = parsed.items
+        .filter((item) => typeof item.body === "string" && item.body.trim())
+        .slice(0, count);
+      if (
+        validContentBatch({
+          drafts: candidates,
+          count,
+          channels,
+          plan: data.formatPlan,
+          recentBodies: studioContext.recent.map((item) => item.excerpt ?? "").filter(Boolean),
+        })
+      ) {
+        safeItems = candidates;
+        break;
+      }
     }
+    if (safeItems.length !== count)
+      throw new AiOutputError(
+        "The generated set was incomplete or too similar to existing posts. Try a more specific brief.",
+      );
 
     const rows = safeItems.map((it) => ({
       workspace_id: data.workspaceId,
@@ -466,6 +558,7 @@ export const generateContentBatch = createServerFn({ method: "POST" })
       .insert(rows)
       .select(CONTENT_COLS);
     if (error) throw new Error(error.message);
+    invalidateStudioContext(data.workspaceId);
 
     await context.supabase.from("agent_runs").insert({
       workspace_id: data.workspaceId,

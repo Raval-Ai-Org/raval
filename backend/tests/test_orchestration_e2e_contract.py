@@ -2,7 +2,7 @@
 Comprehensive End-to-End Orchestration & Product Backend Contract Tests (Step 7).
 
 Verifies the complete integration between Steps 1-6 foundation and the existing
-Raval backend engines across 17 canonical scenarios (A through Q):
+Mellox backend engines across 17 canonical scenarios (A through Q):
 
 - Scenario A: Successful complete run through all 7 stages (QUEUED -> SUCCEEDED).
 - Scenario B: Idempotent duplicate run request handling.

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# RavalAI — predev sanity check (Windows PowerShell)
+# MelloxAI — predev sanity check (Windows PowerShell)
 # ─────────────────────────────────────────────────────────────────────────────
 # Automatically runs before `npm run dev` (via the "predev" npm script).
 # Does NOT block the dev server - just prints a loud warning if something is
@@ -27,7 +27,7 @@ function Ok   { param($msg) Write-Host "[OK] $msg" -ForegroundColor Green }
 $Warnings = 0
 $Errors = 0
 
-Write-Host ">> Predev check (raval)" -ForegroundColor Cyan
+Write-Host ">> Predev check (mellox)" -ForegroundColor Cyan
 
 # ── 1. .env file ─────────────────────────────────────────────────────────────
 if (-not (Test-Path ".env")) {

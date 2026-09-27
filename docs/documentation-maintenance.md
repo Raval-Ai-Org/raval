@@ -17,8 +17,7 @@ planned behavior into a current feature.
 The repository is a living product with historical notes alongside current code.
 The docs must favor the current implementation and the active runtime model over
 older names, plans, or historical reports. This is especially important in a
-codebase that contains both current Mellox AI product logic and historical Raval
-AI artifacts.
+codebase that contains current Mellox AI product logic alongside historical artifacts.
 
 ## Required updates
 
@@ -31,7 +30,7 @@ source path and, where useful, a short contract example.
 
 - All links resolve and filenames work on Windows case-insensitively.
 - No secrets, token values, private keys, personal credentials, raw provider responses, or sensitive URLs.
-- Mellox AI is used for current product references; old Raval AI text is labeled historical.
+- Mellox AI is used for current product references; superseded terminology is labeled historical.
 - Current, external, and planned behavior are separated.
 - API, database, environment, security, and operational claims match code.
 - Mermaid diagrams remain simple and renderable.

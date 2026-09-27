@@ -3760,7 +3760,7 @@ button,
 label,
 td,
 th {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: normal;
 }
 /* Native controls */
@@ -3777,6 +3777,45 @@ table {
 pre {
   max-width: 100%;
   overflow-x: auto;
+}
+
+/* Narrow screens need labels to remain readable instead of being clipped by
+   single-line utility classes. Icon-only controls keep their fixed geometry;
+   text controls may grow to a second line when the available width is small. */
+@media (max-width: 767px) {
+  :where([class~="truncate"]) {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  :where([class~="whitespace-nowrap"]) {
+    white-space: normal;
+  }
+
+  :where(
+    button:not([aria-label]),
+    [role="button"]:not([aria-label]),
+    [role="tab"],
+    [role="menuitem"],
+    [role="option"]
+  ) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  :where(
+    button:not([aria-label]):not([class*="size-"]),
+    [role="button"]:not([aria-label]),
+    [role="tab"],
+    [role="menuitem"],
+    [role="option"]
+  ) {
+    height: auto;
+    min-height: 2.25rem;
+    line-height: 1.25;
+  }
 }
 
 @keyframes studio-shimmer {
@@ -4557,6 +4596,23 @@ pre {
       color 0.18s ease,
       transform 0.18s var(--mx-ease);
   }
+  @media (max-width: 767px) {
+    [data-mellox-app] .mx-icon-btn,
+    [data-mellox-app] .mx-model-btn,
+    [data-mellox-app] .mx-send,
+    [data-mellox-app] .mx-starter {
+      min-width: 2.75rem;
+      min-height: 2.75rem;
+    }
+    [data-mellox-app] .mx-composer__input {
+      font-size: 16px;
+      max-height: min(30dvh, 12rem);
+      overflow-y: auto;
+    }
+    [data-mellox-app] .mx-composer--hero .mx-composer__input {
+      min-height: 3.25rem;
+    }
+  }
   .mx-starter:hover {
     background: hsl(var(--card));
     border-color: hsl(var(--border-strong));
@@ -4683,7 +4739,9 @@ pre {
   .mx-model-btn {
     display: inline-flex;
     align-items: center;
+    flex-shrink: 0;
     gap: 0.25rem;
+    white-space: nowrap;
     height: 2rem;
     padding: 0 0.6rem;
     border-radius: 0.6rem;

@@ -22,7 +22,7 @@
 - **Required scope for org posts:** `r_organization_social` (request if needed)
 - **Rate limit:** 100 posts/day per member
 - **Callback URL(s) to register in LinkedIn Dev Portal:**
-  - `https://sdr.raval.ai/api/v1/oauth/linkedin/callback` (production)
+  - `https://sdr.mellox.ai/api/v1/oauth/linkedin/callback` (production)
   - `<development-sdr-base-url>/api/v1/oauth/linkedin/callback` (development)
   - `http://localhost:8000/api/v1/oauth/linkedin/callback` (local)
 
@@ -30,7 +30,7 @@
 
 - **App:** Mellox AI (Meta for Developers)
 - **App ID:** `1766289191040965`
-- **App Secret:** stored in `raval/.env` as `FACEBOOK_CLIENT_SECRET`
+- **App Secret:** stored in `mellox/.env` as `FACEBOOK_CLIENT_SECRET`
 - **App Review status:** Not yet submitted
 - **Test users:** Add Junaid + Zian as test users in **Roles → Test Users** so we can test before App Review
 - **Scopes to request when submitting App Review:**
@@ -41,11 +41,11 @@
   - `instagram_content_publish` — post to Instagram
   - `business_management` — access business portfolio
 - **Callback URL(s) to register in Meta Dev Portal** (one set, used for BOTH Facebook and Instagram):
-  - `https://sdr.raval.ai/api/v1/oauth/facebook/callback` (production)
+  - `https://sdr.mellox.ai/api/v1/oauth/facebook/callback` (production)
   - `<development-sdr-base-url>/api/v1/oauth/facebook/callback` (development)
   - `http://localhost:8000/api/v1/oauth/facebook/callback` (local)
 - **Instagram account requirement:** The Instagram account you want to post to must be a **Business** or **Creator** account, and must be **linked to a Facebook Page** in the Instagram app's settings.
-- **App Review timeline:** 5-7 business days after submission. Provide screencast videos showing RavalAI's flow for each scope.
+- **App Review timeline:** 5-7 business days after submission. Provide screencast videos showing MelloxAI's flow for each scope.
 
 ## X / Twitter — not started ⏳
 
@@ -71,23 +71,23 @@
 # 6. Click "Authorize"
 # 7. You'll land back in Mellox AI with the account marked "Connected"
 # 8. Verify the encrypted token in the SDR DB:
-#    ssh ubuntu@sdr.raval.ai
-#    sudo -u postgres psql raval_sde -c "SELECT id, platform, display_name FROM accounts;"
+#    ssh ubuntu@sdr.mellox.ai
+#    sudo -u postgres psql mellox_sde -c "SELECT id, platform, display_name FROM accounts;"
 ```
 
 ## Security Notes
 
-⚠️ **The LinkedIn Client Secret, Meta App Secret, and other credentials are now in your local `raval/.env` and (eventually) on the production server.** They are NOT in git. But they are still in this conversation's chat history. When production-ready, rotate them:
+⚠️ **The LinkedIn Client Secret, Meta App Secret, and other credentials are now in your local `mellox/.env` and (eventually) on the production server.** They are NOT in git. But they are still in this conversation's chat history. When production-ready, rotate them:
 
 - **LinkedIn:** https://www.linkedin.com/developers/apps → your app → **Auth** tab → regenerate Client Secret
 - **Meta:** https://developers.facebook.com/apps → Settings → Basic → "App Secret" → Show → regenerate (you'll need to enter your Facebook password to confirm)
 
-After rotation, update both `raval/.env` (your local) and the SDR's `.env` (on production) with the new values, then restart the services.
+After rotation, update both `mellox/.env` (your local) and the SDR's `.env` (on production) with the new values, then restart the services.
 
 ## Reference
 
 - Full launch plan: `docs/specs/001-sdr-integration/CLIENT-LAUNCH-PLAN.md`
-- LinkedIn adapter code: `Social-Distribtion-Engine-RavalAI-SDE/app/adapters/linkedin.py`
-- Facebook adapter code: `Social-Distribtion-Engine-RavalAI-SDE/app/adapters/meta.py`
-- Instagram adapter code: `Social-Distribtion-Engine-RavalAI-SDE/app/adapters/instagram.py`
-- Twitter adapter code: `Social-Distribtion-Engine-RavalAI-SDE/app/adapters/twitter.py`
+- LinkedIn adapter code: `Social-Distribtion-Engine-MelloxAI-SDE/app/adapters/linkedin.py`
+- Facebook adapter code: `Social-Distribtion-Engine-MelloxAI-SDE/app/adapters/meta.py`
+- Instagram adapter code: `Social-Distribtion-Engine-MelloxAI-SDE/app/adapters/instagram.py`
+- Twitter adapter code: `Social-Distribtion-Engine-MelloxAI-SDE/app/adapters/twitter.py`

@@ -21,6 +21,9 @@ const brandContextSchema = z.object({
   voice: z.string(),
   values: z.string(),
   products: z.string(),
+  customerNeeds: z.string(),
+  competitorContext: z.string(),
+  marketContext: z.string(),
 });
 
 const campaignBriefSchema = z.object({
@@ -56,6 +59,17 @@ const gatherBrandContextStep = createStep({
     const { loadResolvedStyle } = await import("@/server/brand-kit/resolve.server");
     const style = await loadResolvedStyle(inputData.workspaceId, null, { dna }).catch(() => null);
     const styleVoice = style?.resolved.styleId ? style.resolved.writing.voice : undefined;
+    const customer =
+      dna.customer && typeof dna.customer === "object"
+        ? (dna.customer as Record<string, unknown>)
+        : null;
+    const competitors = Array.isArray(dna.competitors) ? dna.competitors : [];
+    const { getLatestMarketBrain } = await import("@/lib/market-brain-latest.server");
+    const market = await getLatestMarketBrain(inputData.workspaceId).catch(() => null);
+    const completedAt = market?.result?.completedAt;
+    const freshMarket =
+      completedAt && Date.now() - new Date(completedAt).getTime() < 30 * 86_400_000;
+    const intelligence = freshMarket ? market?.intelligence : null;
     return {
       brand: {
         brandName: asText(dna.brandName),
@@ -65,6 +79,30 @@ const gatherBrandContextStep = createStep({
         voice: asText(styleVoice ?? dna.voice),
         values: asText(dna.values),
         products: asText(dna.products),
+        customerNeeds: customer
+          ? [
+              asText(customer.jobsToBeDone),
+              asText(customer.painPoints),
+              asText(customer.objections),
+            ]
+              .filter(Boolean)
+              .join(" | ")
+              .slice(0, 900)
+          : "",
+        competitorContext: competitors
+          .slice(0, 4)
+          .map((item) => [asText(item.name), asText(item.positioning)].filter(Boolean).join(": "))
+          .filter(Boolean)
+          .join(" | ")
+          .slice(0, 700),
+        marketContext: intelligence
+          ? [
+              ...(intelligence.opportunities ?? []).slice(0, 3).map((item) => item.title),
+              ...(intelligence.relatedQueries ?? []).slice(0, 4),
+            ]
+              .join(" | ")
+              .slice(0, 700)
+          : "",
       },
       goal: inputData.goal,
       channels: inputData.channels,

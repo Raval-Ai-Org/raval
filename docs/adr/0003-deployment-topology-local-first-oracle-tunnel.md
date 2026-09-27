@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-08
 - **Feature:** 001-sdr-integration
-- **Context:** The SDR is an always-on service (FastAPI + Celery worker/beat + Redis + Postgres). It cannot run serverless: Celery's worker and beat must run 24/7, which no managed free PaaS supports. Meta requires a verified business domain for FB/IG OAuth callbacks, and the SDR must be reachable from RavalAI's Cloudflare Workers to proxy publish/schedule and receive webhook delivery. The team is 2 people with a disk-tight local machine, so cost, portability, and minimal maintenance are the deciding constraints.
+- **Context:** The SDR is an always-on service (FastAPI + Celery worker/beat + Redis + Postgres). It cannot run serverless: Celery's worker and beat must run 24/7, which no managed free PaaS supports. Meta requires a verified business domain for FB/IG OAuth callbacks, and the SDR must be reachable from MelloxAI's Cloudflare Workers to proxy publish/schedule and receive webhook delivery. The team is 2 people with a disk-tight local machine, so cost, portability, and minimal maintenance are the deciding constraints.
 
 ## Decision
 
@@ -20,7 +20,7 @@ Run the SDR **locally for development**, and deploy it in production as Docker C
 
 - **Free-tier viable**: Oracle ARM meets the Celery 24/7 + Postgres + Redis requirements at zero recurring cost; backups live in OCI object storage.
 - **Portable**: identical compose file on Oracle and Netcup means a host change is `docker compose up -d` + restore dump, not a rebuild.
-- **Real-domain webhooks**: Cloudflare Tunnel gives a stable public URL that Meta accepts for FB/IG callbacks and that RavalAI can reach for webhook verification.
+- **Real-domain webhooks**: Cloudflare Tunnel gives a stable public URL that Meta accepts for FB/IG callbacks and that MelloxAI can reach for webhook verification.
 - **Observable**: `/healthz` covers DB + Redis + worker; UptimeRobot pings it; `delivery_logs` is the audit trail.
 
 ### Negative

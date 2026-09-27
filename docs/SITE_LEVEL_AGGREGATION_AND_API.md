@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-Step 8.8 establishes the **Site-Level Aggregation Engine** and **FastAPI REST Endpoints** for the Raval AI Search Intelligence backend.
+Step 8.8 establishes the **Site-Level Aggregation Engine** and **FastAPI REST Endpoints** for the Mellox AI Search Intelligence backend.
 
 The layer aggregates page-level scores, findings, and recommendations into comprehensive site-wide intelligence, identifies top score-impacting issues across the entire domain, and calculates historical progress deltas.
 

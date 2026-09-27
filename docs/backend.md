@@ -2,16 +2,18 @@
 
 ## Request handling
 
-Authenticated HTTP routes should use `defineRoute` from `src/server/route.ts`.
+In the Next.js application, authenticated HTTP routes should use `defineRoute`
+from `src/server/route.ts`.
 The kernel authenticates the Supabase bearer token, parses Zod body/query
 schemas, checks workspace membership and minimum role, applies rate limits,
 then calls the handler. Known errors become stable JSON status responses;
 unknown errors are logged server-side and returned as a generic 500 response.
 
-The backend is not just a transport layer. It is the enforcement layer for the
-product: it validates user identity, workspace membership, provider budgets,
-server-side secrets, external API calls, and database writes. The browser is the
-front-end orchestration surface, while the backend is the trust boundary.
+The Next.js server is not just a transport layer. It is the enforcement layer
+for the web application: it validates user identity, workspace membership,
+provider budgets, server-side secrets, external API calls, and database writes.
+The browser is the front-end orchestration surface, while server-side code is
+the trust boundary.
 
 Server functions are implemented under `src/server/fns`, registered centrally,
 and exposed to the browser through `src/lib/*.functions.ts` stubs over
@@ -20,7 +22,8 @@ imported as runtime code by client components.
 
 ## Trust boundaries
 
-The backend is the trust boundary in Mellox AI. That means the server decides:
+The Next.js server is the trust boundary for web application requests. It
+decides:
 
 - whether the caller is authenticated,
 - whether the caller belongs to the requested workspace,
@@ -84,3 +87,14 @@ Zod errors are 400, authentication failures are 401, permission failures are
 429, and SSRF-blocked URLs are 400. Provider retry behavior is local to its
 adapter; job retries must be idempotent and persist state. TODO: document
 provider-specific retry counts after verifying each adapter.
+
+## Separate Python backend
+
+The root `backend/` package is a separate Python/FastAPI runtime, not the
+Next.js server under `src/server` and not the `/api/rpc` server-function
+transport. It contains AI Visibility persistence and provider adapters for
+OpenAI, Perplexity, Gemini, Anthropic, and Copilot. See the
+[Python AI Visibility reference](AI_VISIBILITY.md) for that subsystem. Its
+credentials, deployment, and provider-policy ownership must be evaluated
+separately; the Next.js gateway rules in [the AI guide](ai.md) do not establish
+those boundaries by themselves.

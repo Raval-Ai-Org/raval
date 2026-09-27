@@ -9,7 +9,7 @@ playwright-report
 .env
 .env.*
 !.env.example
-Social-Distribtion-Engine-RavalAI-SDE
+Social-Distribtion-Engine-MelloxAI-SDE
 docs
 tests
 *.md

@@ -155,7 +155,7 @@ def fetch_url(url: str, timeout: int = 6) -> tuple[int, str, bool]:
     Returns: (status_code, html_content, is_live_fetch)
     """
     headers = {
-        "User-Agent": "RavalScoringIntelligenceBot/1.0 (+https://raval.ai; Quality Verification)",
+        "User-Agent": "MelloxScoringIntelligenceBot/1.0 (+https://mellox.ai; Quality Verification)",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Encoding": "gzip, deflate",
     }
@@ -305,7 +305,7 @@ def run_real_site_validation(
 def print_validation_report(report: dict):
     """Prints a clean CLI validation summary."""
     print("=" * 80)
-    print("RAVAL AI SEARCH INTELLIGENCE — REAL-SITE SCORING & PIPELINE VALIDATION (8.9)")
+    print("MELLOX AI SEARCH INTELLIGENCE — REAL-SITE SCORING & PIPELINE VALIDATION (8.9)")
     print("=" * 80)
     print(f"Timestamp: {report['timestamp']}")
     print(f"Pages Evaluated: {report['total_pages_evaluated']}")

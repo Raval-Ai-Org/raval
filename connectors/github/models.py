@@ -64,8 +64,8 @@ class GitHubCommitInfo(BaseModel):
     sha: str = Field(..., description="Git commit SHA")
     branch: str = Field(..., description="Branch where commit was created")
     message: str = Field(..., description="Commit message")
-    author_name: str = Field(default="Raval AI Auto-Fix Engine", description="Author name")
-    author_email: str = Field(default="bot@raval.ai", description="Author email")
+    author_name: str = Field(default="Mellox AI Auto-Fix Engine", description="Author name")
+    author_email: str = Field(default="bot@mellox.ai", description="Author email")
     committed_at: datetime = Field(default_factory=_utc_now, description="Commit timestamp (UTC)")
 
 

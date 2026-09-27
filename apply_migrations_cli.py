@@ -21,11 +21,11 @@ print(f"URL: {PROJECT_URL}")
 print()
 
 # Final-state migration set for a completely fresh Supabase project.
-# This is the minimal, ordered list that recreates the current Raval schema.
+# This is the minimal, ordered list that recreates the current Mellox schema.
 # The cron migration 20260709194553 (competitor-watch-scan pg_cron job) is
 # deliberately EXCLUDED: it embeds a stale deployment URL and incompatible auth contract
 # (apikey header) that no longer matches the app's hook (x-cron-secret), and
-# Raval has no production deployment URL yet. It will be applied separately
+# Mellox has no production deployment URL yet. It will be applied separately
 # after the app is deployed (see apply-migrations-cron-DEFERRED section below).
 FINAL_STATE_MIGRATIONS = [
     "20260707193303_93348393-698b-4f35-ae22-644af74d8942.sql",

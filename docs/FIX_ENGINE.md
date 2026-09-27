@@ -1,4 +1,4 @@
-# Raval GEO Intelligence — Fix / Action Planning Foundation (Task 6.4)
+# Mellox GEO Intelligence — Fix / Action Planning Foundation (Task 6.4)
 
 ## 1. Foundation Purpose & Safety Boundary
 The Fix / Action Planning Foundation converts recommendations into structured, inspectable, and reviewable fix plans.

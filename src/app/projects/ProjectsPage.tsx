@@ -72,6 +72,9 @@ import {
   UserPlus,
 } from "@/components/ui/gemini-icons";
 import { toast } from "sonner";
+import { BillingPanel } from "@/components/app/BillingPanel";
+import { emitAppEvent } from "@/lib/app-events";
+import { ServerFnError } from "@/lib/rpc-client";
 import { pageHead, webPageLd } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 import { usePersona, type PersonaCopy } from "@/hooks/use-persona";
@@ -113,6 +116,10 @@ function ProjectsPage() {
   const workspacesQuery = useWorkspaces({ enabled: sessionReady });
   const workspaces = useMemo(() => workspacesQuery.data ?? [], [workspacesQuery.data]);
   const workspaceListFailed = workspacesQuery.isError && !workspacesQuery.data;
+  const workspaceRouteMissing =
+    workspaceListFailed &&
+    workspacesQuery.error instanceof ServerFnError &&
+    workspacesQuery.error.status === 404;
   const loading = !sessionReady || workspacesQuery.isLoading;
   const [userEmail, setUserEmail] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
@@ -248,6 +255,7 @@ function ProjectsPage() {
       className="relative min-h-[100dvh] overflow-hidden bg-background text-foreground"
     >
       <AuroraBackdrop />
+      {sessionReady && <BillingPanel />}
 
       {/* Top bar */}
       <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-5">
@@ -300,7 +308,9 @@ function ProjectsPage() {
           className="mt-2 text-[14px] text-muted-foreground"
         >
           {workspaceListFailed
-            ? "Retry the request to see your workspace list."
+            ? workspaceRouteMissing
+              ? "The workspace service is unavailable in this app session."
+              : "Retry the request to see your workspace list."
             : workspaces.length === 0
               ? copy.firstSubhead
               : copy.returningSubhead}
@@ -315,14 +325,13 @@ function ProjectsPage() {
           {workspaceListFailed ? (
             <ErrorState
               title="Couldn't load your workspaces"
-              description="Your account may already have workspaces. Reload the list before creating another."
+              description={
+                workspaceRouteMissing
+                  ? "Refresh the page and retry. If this continues, contact support so your app server can be checked."
+                  : "Your account may already have workspaces. Retry before creating another."
+              }
               detail={workspacesQuery.error instanceof Error ? workspacesQuery.error.message : null}
               onRetry={() => void workspacesQuery.refetch()}
-              action={
-                <Button variant="outline" onClick={() => setDialogOpen(true)}>
-                  Create workspace
-                </Button>
-              }
             />
           ) : (
             <PasteLinkBar
@@ -596,6 +605,12 @@ function AccountMenu({
             onSelect={() => navigate({ to: WORKSPACES_HOME })}
           >
             <Settings className="h-4 w-4 text-muted-foreground" /> Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="gap-2.5 rounded-lg py-2 text-[13px]"
+            onSelect={() => emitAppEvent("open:usage")}
+          >
+            <Sparkles className="h-4 w-4 text-muted-foreground" /> Plan & billing
           </DropdownMenuItem>
           <DropdownMenuItem
             className="gap-2.5 rounded-lg py-2 text-[13px]"
@@ -933,8 +948,9 @@ function PasteLinkBar({
       const result = await create({ name: derivedName, websiteUrl: normalizedUrl });
       if (result.created) toast.success("Project created — let's set it up");
       onCreated(result);
-    } catch (error: any) {
-      toast.error(error?.message ?? "Couldn't create project");
+    } catch (error) {
+      if (error instanceof ServerFnError && error.status === 402) return;
+      toast.error(error instanceof Error ? error.message : "Couldn't create project");
     }
   };
 
@@ -1057,8 +1073,9 @@ function NewProjectDialog({
       onOpenChange(false);
       reset();
       onCreated(result);
-    } catch (error: any) {
-      toast.error(error?.message ?? `Couldn't create ${copy.noun}`);
+    } catch (error) {
+      if (error instanceof ServerFnError && error.status === 402) return;
+      toast.error(error instanceof Error ? error.message : `Couldn't create ${copy.noun}`);
     }
   };
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * RavalAI — first-time developer setup (cross-platform wrapper)
+ * MelloxAI — first-time developer setup (cross-platform wrapper)
  * -----------------------------------------------------------------------
  * Detects the OS and runs the right setup script:
  *   - Linux/macOS:  scripts/setup.sh

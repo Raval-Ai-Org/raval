@@ -1,5 +1,5 @@
 """
-Normalized Enums for Raval AI Website Connector Subsystem (Task 11 Step 1).
+Normalized Enums for Mellox AI Website Connector Subsystem (Task 11 Step 1).
 
 Defines provider-neutral enums for authentication states, connector capabilities,
 standardized error codes, health ratings, execution lifecycle statuses, and resource categories.

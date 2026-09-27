@@ -1,5 +1,5 @@
 """
-Raval GEO Intelligence — Opportunity Prioritization Engine (Task 6.2)
+Mellox GEO Intelligence — Opportunity Prioritization Engine (Task 6.2)
 
 Deterministic, bounded, and explainable prioritization of opportunities.
 Combines impact, confidence, and estimated effort into a composite score:

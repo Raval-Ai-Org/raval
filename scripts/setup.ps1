@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# RavalAI — first-time developer setup (Windows PowerShell)
+# MelloxAI — first-time developer setup (Windows PowerShell)
 # ─────────────────────────────────────────────────────────────────────────────
 # Run this once after `git pull` to make sure your local environment is ready.
 # Idempotent: safe to run multiple times. Skips steps that are already done.
@@ -93,7 +93,7 @@ if (-not (Test-Path "node_modules")) {
 Step "Step 4/4: Final report"
 Write-Host ""
 Write-Host "==================================================================="
-Write-Host "  RavalAI local setup status"
+Write-Host "  MelloxAI local setup status"
 Write-Host "==================================================================="
 Write-Host ""
 
@@ -128,7 +128,7 @@ if ($ExitCode -eq 0) {
   Write-Host "  -> Re-run this script  (.\scripts\setup.ps1)" -ForegroundColor Yellow
   Write-Host ""
   Write-Host "  How to get the real values safely:" -ForegroundColor Cyan
-  Write-Host "  1. Ask Junaid to share the 'RavalAI local dev .env' item in 1Password"
+  Write-Host "  1. Ask Junaid to share the 'MelloxAI local dev .env' item in 1Password"
   Write-Host "  2. Copy each line from 1Password into your .env"
   Write-Host "  3. See docs/TEAM-CREDENTIALS.md for details on each value"
   Write-Host ""

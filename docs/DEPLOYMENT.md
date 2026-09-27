@@ -17,13 +17,19 @@ Copy the names from [`.env.example`](../.env.example). Production refuses to
 boot when a required variable is missing or malformed (`src/instrumentation.ts`
 → `checkEnv` in `src/server/env.ts`); the log lists variable **names** only.
 
-Required: `APP_URL`, `NEXT_PUBLIC_APP_URL` (same value, also a **build** arg),
-`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+Required at production startup: `APP_URL`, `SUPABASE_URL`,
+`SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
-`OPENROUTER_API_KEY`, `CRON_SECRET` (32+ random chars).
+`OPENROUTER_API_KEY`, and `CRON_SECRET` (at least 16 characters).
 
-Recommended: `REDIS_URL`, `SENTRY_DSN`, `ALERT_WEBHOOK_URL`,
-`ANTHROPIC_API_KEY`, `KIE_API_KEY`.
+`NEXT_PUBLIC_APP_URL` is optional in the server schema. Set it to the same
+canonical origin as `APP_URL` and pass it as a Docker build argument when
+building the production image so generated public URLs use the deployed domain.
+
+Recommended: `REDIS_URL`, `SENTRY_DSN`, `ALERT_WEBHOOK_URL`, and `TAVILY_API_KEY`.
+Video provider credentials are configured separately when the selected provider
+requires them. Mellox AI uses OpenRouter for text, vision, tool-use, and image
+models; do not configure a direct Anthropic API key.
 
 When `FEATURE_FLAG_SDR_ENABLED` is on, `SDR_BASE_URL`, `SDR_ADMIN_TOKEN`,
 `SDR_SECRET_ENCRYPTION_KEY` and `SDR_WEBHOOK_BASE_URL` become required.

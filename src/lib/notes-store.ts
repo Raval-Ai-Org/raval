@@ -17,7 +17,7 @@ export interface Note {
   updatedAt: number;
 }
 
-const NOTES_PREFIX = "raval:notes:v1:";
+const NOTES_PREFIX = "mellox:notes:v1:";
 const notesKey = (wsId: string) => `${NOTES_PREFIX}${wsId}`;
 
 export const newNoteId = () =>

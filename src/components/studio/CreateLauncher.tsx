@@ -143,7 +143,7 @@ export function CreateLauncher() {
             type="button"
             onClick={back}
             aria-label="Back to all categories"
-            className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="inline-flex min-h-11 items-center gap-1 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground lg:min-h-8"
           >
             <ArrowLeft className="size-3.5" />
             Back
@@ -162,7 +162,7 @@ export function CreateLauncher() {
             animate="animate"
             exit="exit"
             transition={{ duration: duration.medium, ease: ease.emphasized }}
-            className="grid grid-cols-2 gap-3"
+            className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2"
           >
             {STUDIO_GROUPS.map((g, i) => {
               const Icon = GROUP_ICON[g.id];
@@ -176,20 +176,26 @@ export function CreateLauncher() {
                   {...item(i)}
                   whileTap={reduce ? undefined : { scale: 0.98 }}
                   onClick={() => enter(g.id)}
-                  className={cn(`studio-tone-${GROUP_TONE_TYPE[g.id]}`, CARD, "flex flex-col p-4")}
+                  className={cn(
+                    `studio-tone-${GROUP_TONE_TYPE[g.id]}`,
+                    CARD,
+                    "flex min-w-0 flex-row items-center gap-3 p-3 min-[360px]:flex-col min-[360px]:items-stretch min-[360px]:gap-0 min-[360px]:p-4",
+                  )}
                 >
                   {GLOW}
                   <span className="flex items-start justify-between">
                     <span className="studio-glyph grid size-12 place-items-center rounded-2xl transition-transform duration-[--motion-duration-slow] ease-[--motion-ease-spring] group-hover:-rotate-6 group-hover:scale-110">
                       <Icon className="size-[22px]" />
                     </span>
-                    <ArrowRight className="size-4 -translate-x-1 text-muted-foreground opacity-0 transition-[opacity,translate] duration-[--motion-duration-base] group-hover:translate-x-0 group-hover:opacity-100" />
+                    <ArrowRight className="hidden size-4 -translate-x-1 text-muted-foreground opacity-0 transition-[opacity,translate] duration-[--motion-duration-base] group-hover:translate-x-0 group-hover:opacity-100 min-[360px]:block" />
                   </span>
-                  <span className="mt-5 text-[15px] font-semibold tracking-tight text-foreground">
-                    {g.label}
-                  </span>
-                  <span className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-                    {summary}
+                  <span className="min-w-0 min-[360px]:mt-5">
+                    <span className="block text-[15px] font-semibold tracking-tight text-foreground">
+                      {g.label}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                      {summary}
+                    </span>
                   </span>
                 </motion.button>
               );

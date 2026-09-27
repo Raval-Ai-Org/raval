@@ -1,4 +1,4 @@
-# Specification Quality Checklist: RavalAI × SDR Integration
+# Specification Quality Checklist: MelloxAI × SDR Integration
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-08-08
@@ -32,5 +32,5 @@
 ## Notes
 
 - All items pass on first validation. No [NEEDS CLARIFICATION] markers were required — the finalized plan (proxy-through-server, per-workspace keys, phased rollout) resolved every scoping question up front, and technical architecture was deliberately deferred to `plan.md` per SDD discipline.
-- **Gap-closure pass (2026-08-08):** spec re-evaluated against the `raval/` and SDR codebases. Nine gaps found and closed: media transfer + URL durability at fire time (G1), callback authenticity verification + idempotent apply (G2), automatic workspace provisioning (G3), republish-after-failure idempotency (G4), Facebook platform-identity preservation (G5), single source of platform limits (G6), undeliverable variants (G7), timezone handling (G8), explicit approval gate (G9). Added FR-019..FR-028, 7 edge cases, 2 scenarios per affected story, SC-009/SC-010, and 2 assumptions. Re-validated: all items still PASS.
+- **Gap-closure pass (2026-08-08):** spec re-evaluated against the `mellox/` and SDR codebases. Nine gaps found and closed: media transfer + URL durability at fire time (G1), callback authenticity verification + idempotent apply (G2), automatic workspace provisioning (G3), republish-after-failure idempotency (G4), Facebook platform-identity preservation (G5), single source of platform limits (G6), undeliverable variants (G7), timezone handling (G8), explicit approval gate (G9). Added FR-019..FR-028, 7 edge cases, 2 scenarios per affected story, SC-009/SC-010, and 2 assumptions. Re-validated: all items still PASS.
 - Spec is ready for `/sp.plan` (architecture/ADR) then `/sp.tasks`.

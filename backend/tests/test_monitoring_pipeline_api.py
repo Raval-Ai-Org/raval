@@ -43,7 +43,7 @@ def api_test_setup():
 
     db = TestingSessionLocal()
     now = datetime.now(timezone.utc)
-    website = Website(name="Raval AI", url="https://raval.ai", created_at=now)
+    website = Website(name="Mellox AI", url="https://mellox.ai", created_at=now)
     db.add(website)
     db.commit()
     db.refresh(website)
@@ -53,7 +53,7 @@ def api_test_setup():
     db.commit()
     db.refresh(scan)
 
-    page = PageResult(scan_id=scan.id, url="https://raval.ai/docs/geo", status_code=200, created_at=now)
+    page = PageResult(scan_id=scan.id, url="https://mellox.ai/docs/geo", status_code=200, created_at=now)
     db.add(page)
     db.commit()
     db.refresh(page)
@@ -100,7 +100,7 @@ def test_start_monitoring_run_api(api_test_setup):
 
     payload = {
         "provider": "mock",
-        "mock_responses": ["Raval AI is the leader in answer engine monitoring."],
+        "mock_responses": ["Mellox AI is the leader in answer engine monitoring."],
     }
     resp = client.post(f"/api/v1/query-sets/{query_set_id}/monitor", json=payload)
     assert resp.status_code == 200
@@ -121,7 +121,7 @@ def test_get_monitoring_run_and_results_api(api_test_setup):
     # Start run
     payload = {
         "provider": "mock",
-        "mock_responses": ["Raval AI answers queries. Source: https://raval.ai/docs/geo"],
+        "mock_responses": ["Mellox AI answers queries. Source: https://mellox.ai/docs/geo"],
     }
     start_resp = client.post(f"/api/v1/query-sets/{query_set_id}/monitor", json=payload)
     assert start_resp.status_code == 200

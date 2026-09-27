@@ -1,6 +1,6 @@
 # Documentation audit record
 
-**Audit date:** 2026-09-24
+**Audit date:** 2026-09-28
 
 ## Scope
 
@@ -18,21 +18,33 @@ material that should not be treated as current behavior without revalidation.
 - Realigned the docs around current workspace-first, server-backed architecture,
   security boundaries, and product workflows.
 - Clarified the distinction between current implementation guidance and
-  historical Raval AI planning material.
+  historical planning material.
 - Updated the contributor-facing docs to emphasize the actual runtime layers:
   web app, server enforcement, provider gateways, Supabase schema, Python
   services, and the separate social distribution runtime.
 - Removed stale assumptions and improved the navigation of the main canonical
   guides.
-- Checked canonical relative links and confirmed the documentation set remains
-  free of secret-shaped values in the active pages.
+- Consolidated the root README as an entry point, removed its dated feature
+  snapshot and duplicated setup/provider walkthroughs, and fixed the SDR spec
+  links.
+- Aligned the AI, configuration, and deployment references with the OpenRouter
+  gateway decision and current environment schema.
+- Replaced legacy credential-sharing instructions with least-privilege setup
+  guidance and provider-owned rotation instructions.
+- Verified relative links across the README and canonical documentation set;
+  checked formatting for the files changed in this pass.
 - Verified the documentation patch passes a repo-level whitespace check.
 
 ## Residual risks and TODOs
 
-- Some historical deep-reference documents still contain legacy Raval AI
+- Some historical deep-reference documents still contain legacy
   naming and should be treated as historical unless revalidated against current
   runtime behavior.
+- Historical and planning documents were not all revalidated for source links;
+  they are retained for decision history and must not override canonical guides.
+- The Python `backend/` package contains provider adapters separate from the
+  Next.js AI gateway. Confirm runtime ownership and provider policy before
+  consolidating or removing that subsystem.
 - The repository does not prove a single production hosting topology, release
   policy, SLO set, retention schedule, privacy notice, pricing sheet, or final
   component catalog. These remain explicit TODOs in the relevant guides.

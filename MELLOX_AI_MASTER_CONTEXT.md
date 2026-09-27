@@ -19,7 +19,7 @@ Mellox AI is a workspace-scoped marketing operating system for brands and agenci
 
 The canonical implementation is a Next.js App Router application backed by Supabase/PostgreSQL and server-side AI + provider gateways. The system is designed so the browser is an orchestration surface, while the server owns validation, auth, budgets, provider access, and persistence.
 
-The repo also contains a lot of product/design/ADR history. Some historical material (RavalAI naming, old SDR assumptions, legacy document sets) is still present, but the active codebase uses the current Mellox AI + workspace conventions.
+The repo also contains product, design, and ADR history. Some historical material (old SDR assumptions and legacy document sets) is still present, but the active codebase uses the current Mellox AI and workspace conventions.
 
 ## 2) Architectural reality in one map
 
@@ -457,7 +457,7 @@ This matters because production failures are usually not “the request failed�
 1. The repository contains local `.env` files and secret-bearing values in active developer workspace state. These must never be committed or pasted into chat. This repo’s danger surface is not code logic alone; it includes secret leakage during local dev and deployment.
 2. Dual provider patterns exist (`SocialAPI`, `SDR`, multiple route families). This is a correct abstraction but means misconfiguration can silently route work to the wrong provider without the browser noticing.
 3. Several subsystems have very strong control logic but no easy manual “one-click” production diagnosis. This is the usual danger in complex AI + scheduling systems: the fix is often in runtime state rather than route code.
-4. Large API / migration drift is possible because the repo contains old documents and logs from historical RavalAI / SDR efforts. The active system should be validated against current code, not historical docs alone.
+4. Large API / migration drift is possible because the repo contains old documents and logs from historical MelloxAI / SDR efforts. The active system should be validated against current code, not historical docs alone.
 
 ## 16) Cost controls and variable spend
 
@@ -543,7 +543,7 @@ This repo contains multiple historical layers. The document uses the following c
 
 ### Legacy / historical
 
-- older RavalAI naming and docs
+- older product documents
 - older architecture references in specifications that do not match the current runtime exactly
 - a few legacy route/logic names carried for compatibility
 
@@ -559,7 +559,7 @@ The codebase should always win over historical docs when there is a mismatch.
 
 This repository contains important historical documents and live code that do not always align perfectly. Examples:
 
-- older product naming may say Raval AI while the app uses Mellox AI
+- older product documents may describe superseded workflows
 - distribution implementation may be documented as SDR while the current environment chooses SocialAPI or both depending on feature flags
 - route names and folder names may refer to legacy design choices even though the active runtime has moved on
 

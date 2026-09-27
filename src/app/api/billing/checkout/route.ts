@@ -1,49 +1,44 @@
-// POST /api/billing/checkout — opens a Stripe Checkout page for a credit pack.
-//
-// Only an owner or admin can spend the workspace's money. The request names a
-// pack by id; the price is looked up on the server, so nothing a browser sends
-// can change what is charged.
 import { z } from "zod";
-
 import { defineRoute } from "@/server/route";
+import { HttpError } from "@/server/http-error";
 
 export const dynamic = "force-dynamic";
 
 const Body = z.object({
-  workspaceId: z.string().uuid(),
-  packId: z.string().min(1).max(40),
+  kind: z.enum(["plan", "credit_pack", "video_pack"]),
+  key: z.string().min(1).max(50),
+  quantity: z.number().int().min(1).max(20),
+  interval: z.enum(["month", "year"]).optional(),
+  trial: z.boolean().optional(),
   returnPath: z
     .string()
     .max(300)
-    // Relative paths only: an absolute URL here would be an open redirect off
-    // the back of a payment.
     .regex(/^\/[A-Za-z0-9\-._~/]*$/, "returnPath must be a relative path")
     .optional(),
 });
 
 export const POST = defineRoute({
   name: "billing.checkout",
-  auth: "workspace",
+  auth: "user",
   body: Body,
-  workspaceId: ({ body }) => body.workspaceId,
-  minRole: "admin",
   rateLimit: "billing-checkout",
   handler: async ({ body, userId, supabase }) => {
-    const { createCheckoutSession, stripeConfigured } =
-      await import("@/server/billing/stripe.server");
-    if (!stripeConfigured()) {
-      return { ok: false as const, reason: "Buying credits isn't available right now." };
-    }
+    const { createAccountCheckout, stripeAccountConfigured } =
+      await import("@/server/billing/stripe-account.server");
+    if (!stripeAccountConfigured())
+      throw new HttpError(503, "Stripe billing is not configured yet.");
 
     const { data: auth } = await supabase.auth.getUser();
-    const session = await createCheckoutSession({
-      workspaceId: body.workspaceId,
+    const session = await createAccountCheckout({
       userId,
       email: auth.user?.email ?? null,
-      packId: body.packId,
-      returnPath: body.returnPath ?? "/projects",
+      kind: body.kind,
+      key: body.key,
+      quantity: body.quantity,
+      interval: body.interval,
+      trial: body.trial,
+      returnPath: body.returnPath,
     });
-
-    return { ok: true as const, url: session.url, valueUsd: session.valueUsd };
+    return { ok: true as const, url: session.url };
   },
 });

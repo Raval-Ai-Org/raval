@@ -20,6 +20,7 @@ const Body = z.object({
   template: z.string().max(40).optional(),
   goal: IntentSchema.shape.goal,
   controls: ControlsSchema.partial().optional(),
+  styleId: z.union([z.string().uuid(), z.literal("none")]).nullish(),
   avoid: z.array(z.string().max(160)).max(30).optional(),
 });
 
@@ -51,6 +52,7 @@ export const POST = defineRoute({
           template: body.template,
           goal: body.goal,
           controls: body.controls,
+          styleId: body.styleId,
           avoid: body.avoid,
         }),
     );

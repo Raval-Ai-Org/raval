@@ -1,9 +1,9 @@
-# ADR-0004: RavalAI × Social Distribution Engine — Full Integration Record (end-to-end)
+# ADR-0004: MelloxAI × Social Distribution Engine — Full Integration Record (end-to-end)
 
 - **Status:** In progress (integration built + live-verified; deployment pending)
 - **Date:** 2026-08-10
 - **Feature:** 001-sdr-integration
-- **Context:** This is the complete architectural + execution record for integrating the standalone **Social Distribution Engine (SDR)** (FastAPI + Celery + Postgres, publishes to LinkedIn/X/Facebook/Instagram) into **RavalAI** (TanStack Start + Supabase). It records every decision, every task completed and remaining, the live-verification evidence, and the current integration-hold state so the work can be resumed accurately from anywhere.
+- **Context:** This is the complete architectural + execution record for integrating the standalone **Social Distribution Engine (SDR)** (FastAPI + Celery + Postgres, publishes to LinkedIn/X/Facebook/Instagram) into **MelloxAI** (TanStack Start + Supabase). It records every decision, every task completed and remaining, the live-verification evidence, and the current integration-hold state so the work can be resumed accurately from anywhere.
 
 ---
 
@@ -20,7 +20,7 @@ SDR  POST /api/v1/publish · /schedule · /jobs/{id} · /accounts · /oauth/{p}/
    │  (Bearer: per-workspace key, never the global token)
 SDR adapters → LinkedIn / X / Facebook / Instagram
    │  webhook (HMAC-SHA256, X-Signature-256)
-RavalAI: /api/public/hooks/sdr → verify → upsert content_publications → aggregate content_items.status
+MelloxAI: /api/public/hooks/sdr → verify → upsert content_publications → aggregate content_items.status
    │  Supabase realtime / content:changed → Studio updates without refresh
 ```
 
@@ -31,7 +31,7 @@ RavalAI: /api/public/hooks/sdr → verify → upsert content_publications → ag
 | D1  | Proxy-through-server (browser never calls SDR directly; credentials server-only)                | ✅ ADR-0001             |
 | D2  | Per-workspace SDR credential (minted via admin token, AES-256-GCM encrypted in `workspace_sdr`) | ✅ implemented          |
 | D3  | HMAC-verified webhook receiver (timingSafeEqual, idempotent upsert, terminal-wins)              | ✅ implemented + tested |
-| D4  | Split scheduling (RavalAI = generation timing; SDR = distribution timing, absolute UTC)         | ✅ ADR-0002             |
+| D4  | Split scheduling (MelloxAI = generation timing; SDR = distribution timing, absolute UTC)         | ✅ ADR-0002             |
 | D5  | Additive data model (`workspace_sdr` + `content_publications` + `publishing` status)            | ✅ implemented          |
 | D6  | Media URL durability (durable public URLs at fire time)                                         | ✅ validated in handler |
 | D7  | Approval gate (publish/schedule only from approved; explicit click = consent)                   | ✅ implemented          |
@@ -41,7 +41,7 @@ RavalAI: /api/public/hooks/sdr → verify → upsert content_publications → ag
 
 - **Queue-first immediate publish (T067):** `publish()` enqueues targets to `process_target` and returns fast with `status: publishing` — no blocking platform calls in the HTTP handler. Live-verified.
 - **Human-readable error surfacing:** clients see plain-language messages ("The Social Distribution Engine is not responding…") with the technical detail as a secondary line; terminal success/failure toasts (green-tick "Successfully posted to LinkedIn" + live link).
-- **brand_id mapping:** RavalAI is one workspace per client brand → `brand_id = workspace_id` when minting the per-workspace SDR key (SDR requires both).
+- **brand_id mapping:** MelloxAI is one workspace per client brand → `brand_id = workspace_id` when minting the per-workspace SDR key (SDR requires both).
 - **OAuth (app-login) hold:** Zian's `ad052bc` switched app login from an external OAuth broker to native Supabase Google OAuth (PKCE). **Parked** — not a prerequisite for the SDR integration; password login (test credentials) is unaffected. Revisit after integration is live.
 
 ---
@@ -74,7 +74,7 @@ Migrations: `20260809000001_add_workspace_sdr.sql`, `20260809000002_add_content_
 | T068–T072 | SDR-side fixes: OAuth redirect_after, IG worker token + refresh, webhook retry loop, CORS lockdown, run-demo health check                                                                          |
 | T073–T074 | RLS security test, observability logging                                                                                                                                                           |
 | T075      | Performance indexes (hot-path audit + 2 new indexes)                                                                                                                                               |
-| T076      | Docs: `raval/README.md` (new) + `quickstart.md` (env keys, provisioning, webhook verification)                                                                                                     |
+| T076      | Docs: `mellox/README.md` (new) + `quickstart.md` (env keys, provisioning, webhook verification)                                                                                                     |
 | T077      | ADRs 0001–0003 (proxy-through-server, split scheduling, deployment topology)                                                                                                                       |
 
 ### ⚠️ In progress
@@ -95,7 +95,7 @@ Migrations: `20260809000001_add_workspace_sdr.sql`, `20260809000002_add_content_
 
 ### 🔒 On hold (integration hold — see ADR-0005/integration-hold)
 
-- Live Vercel deployment is missing (`raval-mu.vercel.app` → `DEPLOYMENT_NOT_FOUND`). Needs dashboard-side check (or ask Zian).
+- Live Vercel deployment is missing (`mellox-mu.vercel.app` → `DEPLOYMENT_NOT_FOUND`). Needs dashboard-side check (or ask Zian).
 - A historical change re-pointed Supabase to a new, empty project; its identifier
    and the older project identifier are intentionally omitted. Decision status
    must be verified from current deployment configuration.
@@ -104,7 +104,7 @@ Migrations: `20260809000001_add_workspace_sdr.sql`, `20260809000002_add_content_
 
 ## 4. Test / verification evidence
 
-- RavalAI: **vitest 115/115** (28 files) — unit/contract/integration.
+- MelloxAI: **vitest 115/115** (28 files) — unit/contract/integration.
 - SDR: **221/221** pytest.
 - Playwright e2e: **4/6** (US1 ×2, US5, US3); 2 generation-gated.
 - **Historical live check:** SDR `/healthz` and dry-run publishing were healthy in

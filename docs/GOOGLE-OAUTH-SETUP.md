@@ -22,7 +22,7 @@ In the Supabase Dashboard for the approved deployment project:
 1. Open **Authentication > Sign In / Providers > Google**.
 2. Enable Google.
 3. Paste the Google Client ID and Client Secret into the provider fields.
-4. Set **Authentication > URL Configuration > Site URL** to the public production domain users will open. Until a custom domain is attached, use `https://raval-production-c901.up.railway.app`.
+4. Set **Authentication > URL Configuration > Site URL** to the public production domain users will open. Until a custom domain is attached, use `https://mellox-production-c901.up.railway.app`.
 5. Add these **Additional Redirect URLs** (with the approved production origin):
    - `http://localhost:8080/auth/callback`
    - `<production-app-origin>/auth/callback`

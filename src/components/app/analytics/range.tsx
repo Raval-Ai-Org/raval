@@ -84,7 +84,7 @@ export function RangeBar({ className }: { className?: string }) {
       role="group"
       aria-label="Date range"
       className={cn(
-        "inline-flex items-center rounded-full border border-border bg-card/80 p-0.5 text-[11.5px]",
+        "inline-flex max-w-full items-center rounded-full border border-border bg-card/80 p-0.5 text-[11.5px] max-[359px]:grid max-[359px]:w-full max-[359px]:grid-cols-2 max-[359px]:rounded-2xl",
         className,
       )}
     >
@@ -98,7 +98,7 @@ export function RangeBar({ className }: { className?: string }) {
             title={PRESET_LABELS[p]}
             onClick={() => setRange({ preset: p })}
             className={cn(
-              "rounded-full px-2.5 py-1 font-medium tabular-nums transition",
+              "min-h-11 rounded-full px-2.5 py-1 font-medium tabular-nums transition max-[359px]:w-full lg:min-h-0",
               active
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
@@ -114,7 +114,7 @@ export function RangeBar({ className }: { className?: string }) {
             type="button"
             aria-pressed={isCustom}
             className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium transition",
+              "inline-flex min-h-11 items-center justify-center gap-1 rounded-full px-2.5 py-1 font-medium transition max-[359px]:w-full lg:min-h-0",
               isCustom
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
@@ -134,7 +134,7 @@ export function RangeBar({ className }: { className?: string }) {
                 value={from}
                 max={to}
                 onChange={(e) => setFrom(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-2 py-1"
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-base lg:text-xs"
               />
             </label>
             <label className="space-y-1">
@@ -145,7 +145,7 @@ export function RangeBar({ className }: { className?: string }) {
                 min={from}
                 max={today}
                 onChange={(e) => setTo(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-2 py-1"
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-base lg:text-xs"
               />
             </label>
           </div>

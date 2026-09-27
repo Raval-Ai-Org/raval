@@ -1,5 +1,5 @@
 """
-Security Subsystem for Raval AI Connectors (Task 11 Step 6).
+Security Subsystem for Mellox AI Connectors (Task 11 Step 6).
 
 Provides:
 - Authorization context and workspace/tenant isolation

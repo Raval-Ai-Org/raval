@@ -96,7 +96,7 @@ async function seed(page: import("@playwright/test").Page) {
       try {
         window.localStorage.setItem(storageKey, JSON.stringify(sess));
         window.localStorage.setItem("workspace:selected", wsId);
-        window.localStorage.setItem(`raval:first-prompt-fired:${wsId}`, "1");
+        window.localStorage.setItem(`mellox:first-prompt-fired:${wsId}`, "1");
         window.localStorage.removeItem("studio:suggest-dismissed");
         // No cached AI items — we rely on the deterministic suggestions the
         // hook always produces from Supabase counts (all 0 in this stub).

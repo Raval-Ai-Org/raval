@@ -144,22 +144,22 @@ def _create_sample_site_and_scan(db: Session, prefix: str = "QuerySite"):
 
 
 def test_normalize_query_text_exact_and_casing():
-    assert normalize_query_text("What is Raval AI?") == "what is raval ai"
-    assert normalize_query_text("what is raval ai?") == "what is raval ai"
-    assert normalize_query_text("  WHAT   IS   RAVAL   AI  ? ") == "what is raval ai"
+    assert normalize_query_text("What is Mellox AI?") == "what is mellox ai"
+    assert normalize_query_text("what is mellox ai?") == "what is mellox ai"
+    assert normalize_query_text("  WHAT   IS   MELLOX AI  ? ") == "what is mellox ai"
 
 
 def test_normalize_query_text_contractions_and_conversational():
-    assert normalize_query_text("What's Raval AI?") == "what is raval ai"
+    assert normalize_query_text("What's Mellox AI?") == "what is mellox ai"
     assert normalize_query_text("Can you please tell me about GEO optimization?") == "geo optimization"
     assert normalize_query_text("Could you explain how does GEO work?") == "how does geo work"
 
 
 def test_calculate_query_similarity():
-    sim_exact = calculate_query_similarity("What is Raval AI?", "what is raval ai")
+    sim_exact = calculate_query_similarity("What is Mellox AI?", "what is mellox ai")
     assert sim_exact == 1.0
 
-    sim_similar = calculate_query_similarity("What is Raval AI?", "What does Raval AI do?")
+    sim_similar = calculate_query_similarity("What is Mellox AI?", "What does Mellox AI do?")
     assert sim_similar > 0.4
 
     sim_diff = calculate_query_similarity("What is technical SEO?", "Pricing for CRM platforms")
@@ -225,10 +225,10 @@ def test_classify_question_intent_all_four_intents():
     # 2. Commercial
     assert classify_question_intent("What are the best GEO tools for enterprise?") == QueryIntent.COMMERCIAL
     assert classify_question_intent("Which platform should I choose for AI visibility?") == QueryIntent.COMMERCIAL
-    assert classify_question_intent("Raval AI pricing and subscription cost") == QueryIntent.COMMERCIAL
+    assert classify_question_intent("Mellox AI pricing and subscription cost") == QueryIntent.COMMERCIAL
 
     # 3. Comparison
-    assert classify_question_intent("Raval AI vs CompetitorX") == QueryIntent.COMPARISON
+    assert classify_question_intent("Mellox AI vs CompetitorX") == QueryIntent.COMPARISON
     assert classify_question_intent("What is the difference between GEO and traditional SEO?") == QueryIntent.COMPARISON
     assert classify_question_intent("Which is better for AI search: A or B?") == QueryIntent.COMPARISON
 
@@ -270,7 +270,7 @@ def test_topic_query_generator_bounded_variants():
 
 def test_entity_query_generator():
     cands = EntityQueryGenerator.generate(
-        entity_name="Raval Intelligence",
+        entity_name="Mellox Intelligence",
         entity_id=42,
         entity_type="organization",
         entity_confidence=0.9,
@@ -288,7 +288,7 @@ def test_entity_query_generator():
     for c in cands:
         assert c.generation_source == QueryGenerationSource.ENTITY_INTELLIGENCE
         assert c.entity_id == 42
-        assert c.entity_name == "Raval Intelligence"
+        assert c.entity_name == "Mellox Intelligence"
         assert c.page_id == 10
         assert 0.0 <= c.confidence <= 1.0
 

@@ -45,8 +45,8 @@ def db_session():
 @pytest.fixture
 def sample_website(db_session):
     website = Website(
-        name="Raval AI",
-        url="https://raval.ai",
+        name="Mellox AI",
+        url="https://mellox.ai",
         created_at=datetime.now(timezone.utc),
     )
     db_session.add(website)
@@ -66,8 +66,8 @@ def sample_website(db_session):
 
     page = PageResult(
         scan_id=scan.id,
-        url="https://raval.ai/docs/geo-guide",
-        final_url="https://raval.ai/docs/geo-guide",
+        url="https://mellox.ai/docs/geo-guide",
+        final_url="https://mellox.ai/docs/geo-guide",
         status_code=200,
         content="Guide content",
         created_at=datetime.now(timezone.utc),
@@ -77,7 +77,7 @@ def sample_website(db_session):
     # Add an entity
     entity = Entity(
         website_id=website.id,
-        name="Raval GEO Engine",
+        name="Mellox GEO Engine",
         entity_type="product",
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
@@ -103,7 +103,7 @@ def sample_website(db_session):
     q = Query(
         query_set_id=qs.id,
         website_id=website.id,
-        query_text="What is Raval AI GEO?",
+        query_text="What is Mellox AI GEO?",
         intent="INFORMATIONAL",
         generation_source="TOPIC_INTELLIGENCE",
         created_at=datetime.now(timezone.utc),
@@ -129,12 +129,12 @@ def test_build_target_identity(db_session, sample_website):
     target = MentionCitationService.build_target_identity(
         db=db_session,
         website_id=website.id,
-        custom_aliases=["Raval Platform"],
+        custom_aliases=["Mellox Platform"],
     )
-    assert target.brand_name == "Raval AI"
-    assert target.domain == "raval.ai"
-    assert "Raval Platform" in target.aliases
-    assert any(ent["name"] == "Raval GEO Engine" for ent in target.product_entities)
+    assert target.brand_name == "Mellox AI"
+    assert target.domain == "mellox.ai"
+    assert "Mellox Platform" in target.aliases
+    assert any(ent["name"] == "Mellox GEO Engine" for ent in target.product_entities)
 
 
 def test_process_and_persist_detection_single_response(db_session, sample_website):
@@ -151,8 +151,8 @@ def test_process_and_persist_detection_single_response(db_session, sample_websit
         model="mock-ai-search-v1",
         status="SUCCESS",
         response_text=(
-            "Raval AI provides cutting-edge optimization. The Raval GEO Engine tool "
-            "is documented at https://raval.ai/docs/geo-guide?utm_source=ai with extra links at "
+            "Mellox AI provides cutting-edge optimization. The Mellox GEO Engine tool "
+            "is documented at https://mellox.ai/docs/geo-guide?utm_source=ai with extra links at "
             "https://techradar.com/review."
         ),
         latency_ms=120,
@@ -171,7 +171,7 @@ def test_process_and_persist_detection_single_response(db_session, sample_websit
 
     assert res.target_mentioned is True
     assert res.target_cited is True
-    assert res.mentions_count >= 2  # "Raval AI" and "Raval GEO Engine"
+    assert res.mentions_count >= 2  # "Mellox AI" and "Mellox GEO Engine"
     assert res.citations_count == 2
     assert res.target_citations_count == 1
 
@@ -184,7 +184,7 @@ def test_process_and_persist_detection_single_response(db_session, sample_websit
 
     target_citation = next(c for c in db_citations if c.is_target_domain)
     assert target_citation.page_id == page.id  # Matched to known PageResult
-    assert target_citation.domain == "raval.ai"
+    assert target_citation.domain == "mellox.ai"
 
 
 def test_idempotent_re_detection(db_session, sample_website):
@@ -199,7 +199,7 @@ def test_idempotent_re_detection(db_session, sample_website):
         provider="mock",
         model="mock-v1",
         status="SUCCESS",
-        response_text="Raval AI overview at https://raval.ai/docs",
+        response_text="Mellox AI overview at https://mellox.ai/docs",
         latency_ms=100,
         request_timestamp=datetime.now(timezone.utc),
         response_timestamp=datetime.now(timezone.utc),
@@ -233,7 +233,7 @@ def test_batch_process_query_set_detections(db_session, sample_website):
         provider="mock",
         model="mock-v1",
         status="SUCCESS",
-        response_text="Raval AI is leading the field at https://raval.ai",
+        response_text="Mellox AI is leading the field at https://mellox.ai",
         latency_ms=80,
         request_timestamp=datetime.now(timezone.utc),
         response_timestamp=datetime.now(timezone.utc),
@@ -276,7 +276,7 @@ def test_list_mentions_and_citations_filtering(db_session, sample_website):
         provider="mock",
         model="mock-v1",
         status="SUCCESS",
-        response_text="Raval AI at https://raval.ai and competitor https://competitor.com",
+        response_text="Mellox AI at https://mellox.ai and competitor https://competitor.com",
         latency_ms=100,
         request_timestamp=datetime.now(timezone.utc),
         response_timestamp=datetime.now(timezone.utc),
@@ -294,7 +294,7 @@ def test_list_mentions_and_citations_filtering(db_session, sample_website):
         match_type="EXACT_BRAND",
     )
     assert len(exact_mentions) == 1
-    assert exact_mentions[0].matched_text == "Raval AI"
+    assert exact_mentions[0].matched_text == "Mellox AI"
 
     # Filter citations by target_only=True
     target_citations = MentionCitationService.list_citations(

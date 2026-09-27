@@ -254,7 +254,7 @@ export function getStyleSeed(
  *  Falls back to the deterministic seeded palette otherwise. */
 function paletteFromBrand(
   brand: BrandDnaLite | null,
-  fallback: VisualPalette,
+  _fallback: VisualPalette,
 ): VisualPalette | null {
   const raw = (brand?.colors ?? [])
     .map((c) => ({ name: c?.name, hex: normalizeHex(c?.hex) }))
@@ -301,7 +301,7 @@ function paletteFromBrand(
 
 function typographyFromBrand(
   brand: BrandDnaLite | null,
-  fallback: (typeof TYPOGRAPHIES)[number],
+  _fallback: (typeof TYPOGRAPHIES)[number],
 ): (typeof TYPOGRAPHIES)[number] | null {
   const fonts = (brand?.fonts ?? []).map((f) => (f || "").trim()).filter(Boolean);
   if (fonts.length === 0) return null;
@@ -439,6 +439,8 @@ export function buildImagePromptDetailed(args: {
   platform?: PlatformId | null;
   size: ImgSize;
   seedKey: string;
+  /** Changes the concept without changing the brand visual system for this asset. */
+  variationKey?: string;
   autoSize?: boolean;
   style?: ImageStyleInput | null;
 }): PromptInspection {
@@ -540,6 +542,7 @@ export function buildImagePromptDetailed(args: {
     brand,
     platform,
     size,
+    variation: fnv1a(args.variationKey ?? seedKey) % 3,
   });
 
   // Instagram-aware crop-safe zones. Instagram re-crops the same asset
@@ -632,8 +635,8 @@ export function buildImagePromptDetailed(args: {
       : `• Typography (seeded fallback — no brand fonts provided): ${vis.typography.promptDescription}`,
     `• Composition: ${vis.composition}`,
     `• Visual mood (derived from brand voice): ${moodLine}.`,
-    "• Feel: modern, editorial, confident, premium. Feed-native. Scroll-stopping.",
-    "• Rendering quality: MAXIMUM. Photographic clarity or crisp vector edges (no fuzzy JPEG artifacts, no blurred textures, no low-poly shading). Every element must look intentional and finished — magazine cover / Apple keynote grade.",
+    "• Feel: match the brand's stated style and the audience's context. Make the message immediately understandable at feed size.",
+    "• Rendering quality: clean edges, readable contrast, intentional lighting and composition. No fuzzy artifacts, distorted product details, or decorative clutter.",
     hasLogo
       ? `• LOGO OVERLAY: the real brand logo will be composited onto this image after generation in the ${corner} corner at ~12% width. LEAVE THAT CORNER CLEAN — no busy pattern, no text, no faces, no high-contrast detail in that ~18% square region. Do NOT draw any logo, wordmark, monogram, or letter mark yourself.`
       : `• No brand logo provided — do NOT invent a logo, wordmark, or monogram. Compose without any brand mark; keep the corner clean.`,

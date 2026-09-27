@@ -110,6 +110,25 @@ describe("post image consistency across aspect ratios", () => {
     expect(empty2.typography.fontFamily).toBe(empty.typography.fontFamily);
     expect(empty2.composition).toBe(empty.composition);
   });
+
+  it("varies concepts while keeping the same brand visual system", () => {
+    const variants = Array.from({ length: 12 }, (_, index) =>
+      buildImagePromptDetailed({
+        postBody: "A fresh reason for small teams to plan their content.",
+        brand,
+        workspaceName: "Mellox AI",
+        platform: "instagram",
+        size: "1024x1024",
+        seedKey: "same-post",
+        variationKey: `attempt-${index}`,
+      }),
+    );
+    expect(new Set(variants.map((item) => item.styleSeed)).size).toBe(1);
+    expect(new Set(variants.map((item) => item.visual.composition)).size).toBe(1);
+    expect(
+      new Set(variants.map((item) => item.prompt.match(/• Format: (.+)/)?.[1])).size,
+    ).toBeGreaterThan(1);
+  });
 });
 
 describe("supported image formats", () => {

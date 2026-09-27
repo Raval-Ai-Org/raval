@@ -1,4 +1,4 @@
-# Raval Scan & Run State Model
+# Mellox Scan & Run State Model
 
 ## Purpose
 

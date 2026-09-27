@@ -1,21 +1,37 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, lazy } from "react";
 import { useRouter } from "next/navigation";
+import { AppModalShell } from "@/components/app/AppModalShell";
+import { Users } from "@/components/icons";
+import { PageLoader } from "@/components/ui/page-loader";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
-import { emitAppEvent } from "@/lib/app-events";
 import { workspacePath } from "@/lib/workspace/paths";
 
-/** Old competitor links now open the section inside Brand DNA. */
+const CompetitorsPanel = lazy(() =>
+  import("@/components/app/competitors/CompetitorsPanel").then((m) => ({
+    default: m.CompetitorsPanel,
+  })),
+);
+
 export default function CompetitorsRoute() {
   const router = useRouter();
   const workspaceId = useOptionalWorkspaceId();
 
-  useEffect(() => {
-    if (!workspaceId) return;
-    router.replace(workspacePath(workspaceId));
-    window.requestAnimationFrame(() => emitAppEvent("open:brand-dna", { tab: "competitors" }));
-  }, [router, workspaceId]);
-
-  return null;
+  return (
+    <AppModalShell
+      open
+      onOpenChange={(next: boolean) => {
+        if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
+      }}
+      title="Competitors"
+      Icon={Users}
+      size="xl"
+      bodyClassName="overflow-hidden"
+    >
+      <Suspense fallback={<PageLoader />}>
+        <CompetitorsPanel workspaceId={workspaceId} />
+      </Suspense>
+    </AppModalShell>
+  );
 }

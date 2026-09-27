@@ -424,6 +424,12 @@ export function useCommandCenter() {
               prompt: `Draft this week's posts for ${c.name}: 1 Instagram post, 1 LinkedIn post, 1 image post with a one-line visual idea (kind:"image", channel:"instagram"), and 1 short blog article (kind:"blog", channel:"blog"). Specific to this brand, no placeholder copy.`,
               channels: ["instagram", "linkedin", "instagram", "blog"],
               count: 4,
+              formatPlan: [
+                { channel: "instagram", kind: "post" },
+                { channel: "linkedin", kind: "post" },
+                { channel: "instagram", kind: "image" },
+                { channel: "blog", kind: "blog" },
+              ],
               websiteUrl: c.websiteUrl ?? undefined,
             },
           });

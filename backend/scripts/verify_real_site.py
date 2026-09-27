@@ -18,7 +18,7 @@ from app.page_extractor import extract_html
 
 def fetch_single_page(url: str, timeout: int = 10) -> tuple[int, str]:
     headers = {
-        "User-Agent": "RavalIntelligenceBot/1.0 (Verification; +https://raval.ai)",
+        "User-Agent": "MelloxIntelligenceBot/1.0 (Verification; +https://mellox.ai)",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Encoding": "gzip, deflate",
     }

@@ -122,12 +122,12 @@ class TestGitHubClosedLoopE2E:
         ws_id = "ws_github_prod"
         site_id = "site_github_01"
         initial_files = {
-            "index.html": "<!DOCTYPE html><html><head><title>Home - Raval AI Search</title></head><body><h1>Home</h1></body></html>",
-            "about.html": "<!DOCTYPE html><html><head><title>About Us</title></head><body><h1>About Raval</h1></body></html>",
+            "index.html": "<!DOCTYPE html><html><head><title>Home - Mellox AI Search</title></head><body><h1>Home</h1></body></html>",
+            "about.html": "<!DOCTYPE html><html><head><title>About Us</title></head><body><h1>About Mellox</h1></body></html>",
             "services.html": "<!DOCTYPE html><html><head><title>Services</title><link rel=\"canonical\" href=\"https://example.com/services\"></head><body><h1>Services</h1></body></html>",
         }
         mock_client = MockGitHubClient(
-            owner="raval-ai-org",
+            owner="mellox-ai-org",
             repo="controlled-site",
             default_branch="main",
             initial_files=initial_files,
@@ -135,19 +135,19 @@ class TestGitHubClosedLoopE2E:
         site_context = SiteContext(
             workspace_id=ws_id,
             site_id=site_id,
-            site_url="https://github.com/raval-ai-org/controlled-site",
+            site_url="https://github.com/mellox-ai-org/controlled-site",
             provider="github",
             environment="production",
             auth_state=AuthState.CONNECTED,
             capabilities=ConnectorCapabilities.full_mutation(),
             last_health_status=HealthStatus.HEALTHY,
             rate_limit_info=RateLimitInfo(limit=5000, remaining=4995),
-            metadata={"owner": "raval-ai-org", "repo": "controlled-site", "default_branch": "main"},
+            metadata={"owner": "mellox-ai-org", "repo": "controlled-site", "default_branch": "main"},
         )
         connector = GitHubConnector(
             site_context=site_context,
             client=mock_client,
-            owner="raval-ai-org",
+            owner="mellox-ai-org",
             repo="controlled-site",
         )
         return {
@@ -172,10 +172,10 @@ class TestGitHubClosedLoopE2E:
 
         exec_id = f"exec_gh_{uuid.uuid4().hex[:8]}"
         resource_path = "about.html"
-        resource_url = f"https://github.com/raval-ai-org/controlled-site/blob/main/{resource_path}"
+        resource_url = f"https://github.com/mellox-ai-org/controlled-site/blob/main/{resource_path}"
 
         # 1. Baseline Capture (BEFORE state has no meta description)
-        initial_file = mock_client.get_file("raval-ai-org", "controlled-site", resource_path)
+        initial_file = mock_client.get_file("mellox-ai-org", "controlled-site", resource_path)
         initial_html = initial_file.content or ""
         extracted_before = extract_html(initial_html, resource_url)
 
@@ -197,8 +197,8 @@ class TestGitHubClosedLoopE2E:
         fix_plan_id = "FIX_GH_001"
         remediated_html = (
             "<!DOCTYPE html><html><head><title>About Us</title>"
-            "<meta name=\"description\" content=\"Learn about Raval AI Search Intelligence and our mission to power accurate AI discovery.\">"
-            "</head><body><h1>About Raval</h1></body></html>"
+            "<meta name=\"description\" content=\"Learn about Mellox AI Search Intelligence and our mission to power accurate AI discovery.\">"
+            "</head><body><h1>About Mellox</h1></body></html>"
         )
 
         proposal = ChangeProposal(
@@ -231,10 +231,10 @@ class TestGitHubClosedLoopE2E:
         assert change_res.status == ExecutionStatus.APPLIED
         created_branch = change_res.metadata.get("execution_branch")
         assert created_branch is not None
-        assert created_branch.startswith("raval-fix/")
+        assert created_branch.startswith("mellox-fix/")
 
         # 5. Independent Post-Apply Validation
-        updated_file = mock_client.get_file("raval-ai-org", "controlled-site", resource_path, ref=created_branch)
+        updated_file = mock_client.get_file("mellox-ai-org", "controlled-site", resource_path, ref=created_branch)
         extracted_after = extract_html(updated_file.content or "", resource_url)
 
         after_snapshot = meas_svc.create_after_snapshot(
@@ -248,7 +248,7 @@ class TestGitHubClosedLoopE2E:
             raw_html=updated_file.content or "",
         )
         assert after_snapshot.observation.meta_description is not None
-        assert "Raval AI Search Intelligence" in after_snapshot.observation.meta_description
+        assert "Mellox AI Search Intelligence" in after_snapshot.observation.meta_description
 
         verifier = FixEffectivenessVerifier()
         v_res = verifier.verify_fix(
@@ -390,7 +390,7 @@ class TestGitHubClosedLoopE2E:
 
         exec_id = f"exec_g2_{uuid.uuid4().hex[:8]}"
         resource_path = "about.html"
-        resource_url = f"https://github.com/raval-ai-org/controlled-site/blob/main/{resource_path}"
+        resource_url = f"https://github.com/mellox-ai-org/controlled-site/blob/main/{resource_path}"
 
         meas_svc = ClosedLoopMeasurementService()
         baseline_snapshot = meas_svc.create_baseline_snapshot(
@@ -453,7 +453,7 @@ class TestGitHubClosedLoopE2E:
         site_id = github_repo_setup["site_id"]
         exec_id = f"exec_g3_{uuid.uuid4().hex[:8]}"
         resource_path = "services.html"
-        resource_url = f"https://github.com/raval-ai-org/controlled-site/blob/main/{resource_path}"
+        resource_url = f"https://github.com/mellox-ai-org/controlled-site/blob/main/{resource_path}"
 
         meas_svc = ClosedLoopMeasurementService()
         # Baseline had title defect but was indexable with canonical

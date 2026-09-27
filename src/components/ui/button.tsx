@@ -26,7 +26,7 @@ import { Spinner } from "@/components/icons";
  */
 const buttonVariants = cva(
   [
-    "relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md",
+    "relative inline-flex items-center justify-center gap-2 rounded-md text-center",
     "font-medium tracking-tight cursor-pointer select-none",
     "transition-[background-color,border-color,color,box-shadow,transform]",
     "duration-[--motion-duration-base] ease-[--motion-ease-standard]",

@@ -26,7 +26,7 @@ async function call(path: string, data: unknown, signal?: AbortSignal): Promise<
   });
 
   const text = await response.text();
-  let payload: { result?: unknown; error?: unknown } | undefined;
+  let payload: { result?: unknown; error?: unknown; message?: unknown } | undefined;
   if (text) {
     try {
       payload = JSON.parse(text);
@@ -39,7 +39,9 @@ async function call(path: string, data: unknown, signal?: AbortSignal): Promise<
     const message =
       typeof payload?.error === "string"
         ? payload.error
-        : `Request failed with status ${response.status}`;
+        : typeof payload?.message === "string"
+          ? payload.message
+          : `Request failed with status ${response.status}`;
     throw new ServerFnError(response.status, message);
   }
 

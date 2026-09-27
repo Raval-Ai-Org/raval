@@ -5,7 +5,7 @@ import { safeNextPath } from "@/lib/redirects";
 
 export { safeNextPath } from "@/lib/redirects";
 
-const AUTH_NEXT_KEY = "raval:auth-next";
+const AUTH_NEXT_KEY = "mellox:auth-next";
 
 // Workspace / session-scoped localStorage keys cleared on sign-out so the
 // next user never inherits the previous account's context.
@@ -15,7 +15,7 @@ const WORKSPACE_STORAGE_KEYS = [
   "workspace:website",
   "workspace:last-opened",
   "pending:invite_token",
-  "raval:studioOpen",
+  "mellox:studioOpen",
   "app:navOpen",
   "chat:width",
   "chat:collapsed",
@@ -38,7 +38,7 @@ export const ACCOUNT_DATA_PREFIXES = [
   "market-brain:",
   "agent-",
   "ai-tokens:",
-  "raval:first-prompt-fired:",
+  "mellox:first-prompt-fired:",
   "onboarding:",
   "agency:",
   "chat:prefill:",

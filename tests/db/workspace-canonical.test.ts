@@ -160,13 +160,13 @@ describe("existing duplicates", () => {
       await fresh.exec(`drop index if exists public.workspaces_owner_domain_unique`);
       const ids: string[] = [];
       for (const [name, onboarded] of [
-        ["Raval 1", false],
-        ["Raval 2", true],
-        ["Raval 3", false],
+        ["Mellox 1", false],
+        ["Mellox 2", true],
+        ["Mellox 3", false],
       ] as const) {
         const { rows } = await fresh.query<{ id: string }>(
           `insert into public.workspaces (owner_id, name, website_url, onboarded_at)
-           values ($1, $2, 'https://raval.it.com', $3) returning id`,
+           values ($1, $2, 'https://mellox.ai', $3) returning id`,
           [BOB, name, onboarded ? new Date().toISOString() : null],
         );
         ids.push(rows[0].id);
@@ -186,7 +186,7 @@ describe("existing duplicates", () => {
       expect(rows.filter((r) => r.duplicate_of === ids[2])).toHaveLength(2);
       // New creates for that domain return the canonical copy.
       const { rows: again } = await fresh.query(
-        `select * from private.create_workspace_for_user($1, 'Raval', 'raval.it.com', null)`,
+        `select * from private.create_workspace_for_user($1, 'Mellox', 'mellox.ai', null)`,
         [BOB],
       );
       expect(again[0]).toEqual({ workspace_id: ids[2], created: false });

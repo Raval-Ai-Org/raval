@@ -12,7 +12,12 @@ import {
   type PlanId,
 } from "@/lib/billing/catalog";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { accountForUser, accountForWorkspace, type BillingAccount } from "./accounts.server";
+import {
+  accountForUser,
+  accountForWorkspace,
+  invalidateBillingAccount,
+  type BillingAccount,
+} from "./accounts.server";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 type Role = "owner" | "admin" | "editor" | "viewer";
@@ -31,6 +36,7 @@ export type Entitlements = {
   trial: { active: boolean; endsAt: string | null; used: boolean };
   period: { start: string | null; end: string | null; nextGrantAt: string | null };
   frozen: boolean;
+  addons: Array<{ key: string; quantity: number }>;
   features: Record<FeatureKey, { allowed: boolean; requiredPlan: PlanId }>;
   limits: (typeof PLANS)[PlanId]["limits"] & { brands: number; seats: number | null };
   usage: {
@@ -98,7 +104,13 @@ export function limitsFor(plan: PlanId, addons: Addon[], paused = false): Entitl
     const addon = ADDONS[item.catalog_key as keyof typeof ADDONS];
     if (!addon || addon.availability !== "launch" || !addon.plans.includes(plan as never)) continue;
     const quantity = Math.max(0, item.quantity);
-    for (const key of ["brands", "socialProfiles", "trackedPrompts", "seats"] as const) {
+    for (const key of [
+      "brands",
+      "socialProfiles",
+      "trackedPrompts",
+      "seats",
+      "marketBrainWeeklyBrands",
+    ] as const) {
       const amount = addon.adds[key];
       if (typeof amount === "number" && limits[key] !== null) {
         (limits as unknown as Record<string, number>)[key] += amount * quantity;
@@ -162,6 +174,9 @@ export function resolveEntitlements(args: {
       nextGrantAt: account.next_grant_at,
     },
     frozen: Boolean(args.frozen),
+    addons: (args.addons ?? [])
+      .filter((item) => item.catalog_key in ADDONS)
+      .map((item) => ({ key: item.catalog_key, quantity: item.quantity })),
     features,
     limits: limitsFor(entitledPlan, args.addons ?? [], paused),
     usage: args.usage ?? {
@@ -182,6 +197,7 @@ export async function getEntitlements(args: {
   userId: string;
   workspaceId?: string;
   role?: Role;
+  skipCapacityReconcile?: boolean;
 }): Promise<Entitlements> {
   const workspace = args.workspaceId ? await accountForWorkspace(args.workspaceId) : null;
   const account = workspace?.account ?? (await accountForUser(args.userId));
@@ -277,7 +293,7 @@ export async function getEntitlements(args: {
       meters[meter].nextExpiry = String(row.expires_at);
     }
   }
-  return resolveEntitlements({
+  const entitlements = resolveEntitlements({
     account,
     userId: args.userId,
     role: args.role ?? "owner",
@@ -295,4 +311,41 @@ export async function getEntitlements(args: {
     },
     meters,
   });
+  if (
+    entitlements.enforcement === "on" &&
+    !args.skipCapacityReconcile &&
+    (!account.capacity_reconciled_at ||
+      new Date(account.capacity_reconciled_at) < new Date(account.updated_at ?? account.created_at))
+  ) {
+    const { error: capacityError } = await admin.rpc("reconcile_billing_capacity", {
+      p_account: account.id,
+      p_brand_limit: entitlements.limits.brands,
+      p_seat_limit: entitlements.limits.seats,
+      p_preferred_workspace: null,
+    });
+    if (capacityError) throw new Error("Could not apply account capacity.");
+    const { error: stampError } = await admin
+      .from("billing_accounts")
+      .update({ capacity_reconciled_at: new Date().toISOString() })
+      .eq("id", account.id);
+    if (stampError) throw new Error("Could not record account capacity check.");
+    invalidateBillingAccount(account.id);
+    if (args.workspaceId) {
+      const [brand, member] = await Promise.all([
+        admin.from("workspaces").select("frozen_at").eq("id", args.workspaceId).single(),
+        admin
+          .from("workspace_members")
+          .select("role")
+          .eq("workspace_id", args.workspaceId)
+          .eq("user_id", args.userId)
+          .single(),
+      ]);
+      if (brand.error || member.error || !brand.data || !member.data) {
+        throw new Error("Could not refresh brand access after reconciliation.");
+      }
+      entitlements.frozen = Boolean(brand.data.frozen_at);
+      entitlements.role = member.data.role as Role;
+    }
+  }
+  return entitlements;
 }

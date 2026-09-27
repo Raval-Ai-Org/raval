@@ -1,7 +1,7 @@
-# Raval AI GEO / AEO / SEO Intelligence — Trust, Authority & Citation Intelligence Rules Specification
+# Mellox AI GEO / AEO / SEO Intelligence — Trust, Authority & Citation Intelligence Rules Specification
 
 > **Document Version**: 1.0.0  
-> **Repository**: `raval-geo-intelligence`  
+> **Repository**: `mellox-geo-intelligence`  
 > **Module Scope**: Day 8 / Task 7 — Authority, Citation & Trust Intelligence Foundation (Steps 1–14)  
 > **Status**: Verified & Feature-Complete (569 passing automated tests)
 
@@ -139,7 +139,7 @@ Task 7 strictly reuses existing extraction and content intelligence foundations 
 
 ## 4. Deterministic Rule Registry & Findings
 
-The system registers **13 canonical rule IDs** in `RULE_REGISTRY` ([`authority_citation_recommendations.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/app/authority_citation_recommendations.py#L38)):
+The system registers **13 canonical rule IDs** in `RULE_REGISTRY` ([`authority_citation_recommendations.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/app/authority_citation_recommendations.py#L38)):
 
 ```text
 RULE_REGISTRY
@@ -451,7 +451,7 @@ The module is verified by a dedicated 13-file test suite:
 ## 10. Step 13 Real-Site Validation & Tuning Results
 
 ### 10.1 Validated Real-Site Archetypes
-Validated via [`run_real_site_step13_validation.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/scripts/run_real_site_step13_validation.py) and permanently asserted via [`test_authority_citation_real_site.py`](file:///c:/Users/HP/Documents/raval-geo-intelligence/backend/tests/test_authority_citation_real_site.py):
+Validated via [`run_real_site_step13_validation.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/scripts/run_real_site_step13_validation.py) and permanently asserted via [`test_authority_citation_real_site.py`](file:///c:/Users/HP/Documents/mellox-geo-intelligence/backend/tests/test_authority_citation_real_site.py):
 
 | Archetype | Real Page URL | Observable Evidence | Pipeline Verification |
 |---|---|---|---|

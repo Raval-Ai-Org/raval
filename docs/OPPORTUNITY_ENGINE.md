@@ -1,4 +1,4 @@
-# Raval GEO Intelligence — Opportunity Engine & Prioritization (Task 6.1 & 6.2)
+# Mellox GEO Intelligence — Opportunity Engine & Prioritization (Task 6.1 & 6.2)
 
 ## 1. Engine Purpose
 The Opportunity Engine converts technical SEO, content intelligence, AEO, and GEO findings and recommendations into actionable, prioritized improvement opportunities. 

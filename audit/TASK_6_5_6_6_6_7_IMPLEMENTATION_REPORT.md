@@ -5,7 +5,7 @@
 - Task 6.5 — Validation Engine Foundation
 - Task 6.6 — Validation $\to$ Fix / Recommendation Feedback
 - Task 6.7 — End-to-End Intelligence Pipeline Integration
-**Repository Root**: `C:\Users\HP\Documents\raval-geo-intelligence`  
+**Repository Root**: `C:\Users\HP\Documents\mellox-geo-intelligence`  
 **Git Branch**: `main`  
 **Runtime**: Python 3.14.7  
 

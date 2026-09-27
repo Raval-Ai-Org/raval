@@ -28,7 +28,7 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 
-const CANONICAL_HOST = "https://raval.ai";
+const CANONICAL_HOST = "https://mellox.ai";
 
 /** Entry-point variants we walk for every indexable route. */
 type EntryVariant = {

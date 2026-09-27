@@ -25,19 +25,19 @@ production boundaries that matter to contributors:
 
 ## Start here
 
-| Need | Guide |
-| --- | --- |
-| Product and system orientation | [Overview](overview.md) |
-| Repository ownership and folder map | [Repository layout](repository-layout.md) |
-| Architecture and code map | [Architecture overview](architecture-overview.md) · [Codebase](codebase.md) |
-| Local development | [Developer guide](developer-guide.md) |
-| HTTP and RPC contracts | [API reference](api.md) |
-| Tables, relationships, and RLS | [Database reference](database.md) |
-| AI providers, routing, prompts, and budgets | [AI reference](ai.md) |
-| Configuration keys | [Configuration reference](configuration.md) |
-| Deployments and environments | [Deployment](deployment-guide.md) |
-| Security boundaries | [Security](security.md) |
-| Incidents and diagnosis | [Troubleshooting](troubleshooting.md) · [Operations](operations.md) |
+| Need                                        | Guide                                                                       |
+| ------------------------------------------- | --------------------------------------------------------------------------- |
+| Product and system orientation              | [Overview](overview.md)                                                     |
+| Repository ownership and folder map         | [Repository layout](repository-layout.md)                                   |
+| Architecture and code map                   | [Architecture overview](architecture-overview.md) · [Codebase](codebase.md) |
+| Local development                           | [Developer guide](developer-guide.md)                                       |
+| HTTP and RPC contracts                      | [API reference](api.md)                                                     |
+| Tables, relationships, and RLS              | [Database reference](database.md)                                           |
+| AI providers, routing, prompts, and budgets | [AI reference](ai.md)                                                       |
+| Configuration keys                          | [Configuration reference](configuration.md)                                 |
+| Deployments and environments                | [Deployment](deployment-guide.md)                                           |
+| Security boundaries                         | [Security](security.md)                                                     |
+| Incidents and diagnosis                     | [Troubleshooting](troubleshooting.md) · [Operations](operations.md)         |
 
 ## Product and feature guides
 
@@ -61,8 +61,7 @@ production boundaries that matter to contributors:
 
 The repository also contains feature-specific ADRs, specifications, validation
 rules, and operational records. The canonical guides link to those documents
-when they describe an implementation detail. Documents containing older Raval
-AI terminology or unimplemented proposals are historical unless a canonical
+when they describe an implementation detail. Documents containing superseded terminology or unimplemented proposals are historical unless a canonical
 page explicitly marks them current. Do not use a planning document to infer
 runtime behavior.
 
@@ -74,7 +73,9 @@ current guide and an old record disagree.
 - [Architecture decisions](adr/)
 - [Feature specifications](specs/)
 - [GEO intelligence](geo-intelligence.md)
+- [Python AI Visibility engine](AI_VISIBILITY.md)
 - [GitHub connector](github-connector.md)
+- [Optional self-hosted integrations](self-hosted-integrations.md)
 - [Deployment runbook](DEPLOYMENT.md)
 - [Operations runbook](OPERATIONS-RUNBOOK.md)
 - [Monitoring](MONITORING.md)

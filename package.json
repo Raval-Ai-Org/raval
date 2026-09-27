@@ -1,5 +1,5 @@
 {
-  "name": "raval_next_ts",
+  "name": "mellox-ai-codebase",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -19,6 +19,7 @@
     "db:verify": "node scripts/db-baseline.mjs --verify",
     "db:baseline": "node scripts/db-baseline.mjs --write",
     "db:types": "node scripts/db/gen-types.mjs && prettier --write src/integrations/supabase/types.ts",
+    "billing:stripe-sync": "node --experimental-strip-types scripts/billing/stripe-sync.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:visual": "playwright test",

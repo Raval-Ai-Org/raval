@@ -19,7 +19,7 @@ from .verifier import FixVerificationResult, VerificationOutcome
 logger = logging.getLogger(__name__)
 
 SCORE_DISCLAIMER: str = (
-    "Score improvement represents a change in Raval's deterministic measurement model "
+    "Score improvement represents a change in Mellox's deterministic measurement model "
     "and is NOT proof of external search ranking, traffic, conversion, citation, or AI visibility improvement."
 )
 
