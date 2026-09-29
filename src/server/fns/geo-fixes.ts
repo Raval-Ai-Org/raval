@@ -6,6 +6,9 @@ import { rateLimitFor } from "@/server/rate-limit";
 import { getWorkspaceRole } from "@/server/workspace-access.server";
 import { roleAtLeast } from "@/server/api-auth";
 import { ForbiddenError } from "@/server/http-error";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { runMetered } from "@/server/billing/metered.server";
+import { requireBillingFeature } from "@/server/billing/feature.server";
 
 // AI Visibility fix workflow (src/server/geo/fixes/service.server.ts). Reading
 // needs membership; proposing, approving, discarding and verifying need
@@ -22,6 +25,7 @@ async function fixContext(context: ServerFnContext, workspaceId: string) {
     supabase,
     userId,
     workspaceId,
+    role,
     canPropose: roleAtLeast(role, "editor"),
     canManage: roleAtLeast(role, "admin"),
   };
@@ -73,6 +77,7 @@ export const createFixProposal = createServerFn({ method: "POST" })
         sourceId: uuid,
         baseBranch: branch,
         replaceDraft: z.boolean().optional(),
+        idempotencyKey: uuid.optional(),
       })
       .parse(data),
   )
@@ -80,7 +85,24 @@ export const createFixProposal = createServerFn({ method: "POST" })
     const ctx = await fixContext(context, data.workspaceId);
     requireEditor(ctx);
     const svc = await import("@/server/geo/fixes/service.server");
-    return svc.createProposal(ctx, data);
+    // Charged only when a proposal is written; "needs a manual fix" and
+    // other refusals cost nothing.
+    const { result } = await runMetered(
+      {
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role: ctx.role,
+        action: "geo_fix",
+        idempotencyKey: data.idempotencyKey ?? crypto.randomUUID(),
+        route: "geo.fix.propose",
+      },
+      async (charge) => {
+        const out = await svc.createProposal(ctx, data);
+        if (!out.ok) charge.setCapturedAmount(0);
+        return out;
+      },
+    );
+    return result;
   });
 
 export const getFixProposal = createServerFn({ method: "POST" })
@@ -110,6 +132,34 @@ export const approveFixProposal = createServerFn({ method: "POST" })
     const ctx = await fixContext(context, data.workspaceId);
     requireEditor(ctx);
     const svc = await import("@/server/geo/fixes/service.server");
+    const { data: row } = await supabaseAdmin
+      .from("geo_fix_proposals")
+      .select("provider")
+      .eq("id", data.proposalId)
+      .eq("workspace_id", data.workspaceId)
+      .maybeSingle();
+    if (row && row.provider !== "github") {
+      // WordPress / Webflow: the one-click fix is charged when it is applied.
+      const { result } = await runMetered(
+        {
+          workspaceId: data.workspaceId,
+          userId: context.userId,
+          role: ctx.role,
+          action: "geo_cms_fix",
+          idempotencyKey: `proposal:${data.proposalId}`,
+          route: "geo.cms.fix",
+        },
+        () => svc.approveAndApply(ctx, data),
+      );
+      return result;
+    }
+    await requireBillingFeature({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role: ctx.role,
+      feature: "geo_apply_fixes",
+      spending: true,
+    });
     return svc.approveAndApply(ctx, data);
   });
 
@@ -149,6 +199,13 @@ export const startCmsFixAll = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = await fixContext(context, data.workspaceId);
     requireEditor(ctx);
+    await requireBillingFeature({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role: ctx.role,
+      feature: "geo_apply_fixes",
+      spending: true,
+    });
     const svc = await import("@/server/geo/fixes/cms-fix-all.server");
     return svc.startCmsFixAll(ctx, data.scanId);
   });
@@ -171,7 +228,28 @@ export const applyCmsFixAll = createServerFn({ method: "POST" })
     const ctx = await fixContext(context, data.workspaceId);
     requireEditor(ctx);
     const svc = await import("@/server/geo/fixes/cms-fix-all.server");
-    return svc.applyCmsFixAll(ctx, data);
+    // One hold for the batch; only changes that really applied are charged.
+    const { result } = await runMetered(
+      {
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role: ctx.role,
+        action: "geo_cms_fix",
+        quantity: data.items.length,
+        idempotencyKey: `cms-fix-all:${data.items
+          .map((item) => item.proposalId)
+          .sort()
+          .join(",")}`,
+        route: "geo.cms.fix",
+      },
+      async (charge) => {
+        const out = await svc.applyCmsFixAll(ctx, data);
+        const applied = out.results.filter((item) => item.ok).length;
+        charge.setCapturedAmount(Math.round((charge.amount / data.items.length) * applied));
+        return out;
+      },
+    );
+    return result;
   });
 
 export const discardFixProposal = createServerFn({ method: "POST" })
@@ -226,8 +304,38 @@ export const createFixBatch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = await fixContext(context, data.workspaceId);
     requireEditor(ctx);
+    await requireBillingFeature({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role: ctx.role,
+      feature: "geo_agent",
+      spending: true,
+    });
     const svc = await import("@/server/geo/fixes/batch.server");
-    return svc.createFixBatch(ctx, data);
+    // "Fix all" costs one GEO fix per finding it writes a fix for. Hold for the
+    // findings it will try; only the ones it actually fixed are charged.
+    const preflight = await svc.getFixAllPreflight(ctx, data.scanId);
+    const findings = Math.min(preflight.fixable.length, preflight.maxFindings);
+    if (findings < 1) return svc.createFixBatch(ctx, data);
+    const { beginAsyncCharge } = await import("@/server/billing/async-charges.server");
+    const charge = await beginAsyncCharge({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role: ctx.role,
+      kind: "fix_batch",
+      action: "geo_fix",
+      quantity: findings,
+      requestKey: `${data.scanId}:${Date.now()}`,
+      route: "geo.fix.batch",
+    });
+    try {
+      const batch = await svc.createFixBatch(ctx, data);
+      await charge.link("fix_batch", batch.id);
+      return batch;
+    } catch (error) {
+      await charge.release();
+      throw error;
+    }
   });
 
 export const getFixBatch = createServerFn({ method: "POST" })

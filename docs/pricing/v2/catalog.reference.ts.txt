@@ -68,13 +68,13 @@ export type PlanDef = {
     marketBrainWeeklyBrands: number;
     coachWeeklyBriefings: number;
     /**
-     * Social profiles the account may connect for publishing. SocialAPI.ai bills per
-     * connected profile per month (1 profile = 1 brand with any number of its networks),
-     * not per post, so this is the limit. Posts are unlimited under a fair-use rate limit.
+     * Social publishing runs on Post for Me ($10 for 1,000 posts, unlimited social
+     * accounts). Posts are UNLIMITED on every plan, Free included, and never use
+     * credits. This is only a fair-use cap against spam and bots (each network a post
+     * goes to counts as one post). At 80% warn; at the cap, queue new posts until the
+     * next month or until support lifts it. Never show it as a selling limit.
      */
-    socialProfiles: number;
-    /** Networks one profile may link (fair use; SocialAPI does not bill per network). */
-    networksPerProfile: number;
+    postsFairUse: number;
     maxConcurrentExperiments: number;
     maxConcurrentRenders: number;
   };
@@ -107,19 +107,19 @@ export const PLANS: Record<PlanId, PlanDef> = {
       competitorSweepsPerWeek: 0,
       marketBrainWeeklyBrands: 0,
       coachWeeklyBriefings: 0,
-      socialProfiles: 0,
-      networksPerProfile: 13,
+      postsFairUse: 100,
       maxConcurrentExperiments: 0,
       maxConcurrentRenders: 0,
     },
     rolloverMonthsAnnual: 0,
-    safety: { dailyUsd: 1, monthlyUsd: 2 },
+    safety: { dailyUsd: 1, monthlyUsd: 3 },
     support: "Community",
     highlights: [
       "1 brand, Brand DNA scan",
       "5 prompts tracked weekly on ChatGPT and Gemini",
       "1 site scan a month",
       "100 credits to try Studio",
+      "Unlimited social posts (fair use)",
     ],
   },
   starter: {
@@ -141,20 +141,19 @@ export const PLANS: Record<PlanId, PlanDef> = {
       competitorSweepsPerWeek: 1,
       marketBrainWeeklyBrands: 1,
       coachWeeklyBriefings: 1,
-      socialProfiles: 1,
-      networksPerProfile: 13,
+      postsFairUse: 500,
       maxConcurrentExperiments: 1,
       maxConcurrentRenders: 1,
     },
     rolloverMonthsAnnual: 1,
-    safety: { dailyUsd: 4, monthlyUsd: 27 },
+    safety: { dailyUsd: 4, monthlyUsd: 30 },
     support: "Email",
     highlights: [
       "2,000 credits a month",
       "4 UGC videos a month",
       "30 Mellox Pro messages",
       "25 prompts on 3 answer engines",
-      "Publish to 1 social profile (all 13 networks)",
+      "Unlimited social posts on all networks",
       "Weekly Market Brain and Monday Coach briefing",
     ],
   },
@@ -178,16 +177,15 @@ export const PLANS: Record<PlanId, PlanDef> = {
       competitorSweepsPerWeek: 2,
       marketBrainWeeklyBrands: 3,
       coachWeeklyBriefings: 1,
-      socialProfiles: 3,
-      networksPerProfile: 13,
+      postsFairUse: 1_500,
       maxConcurrentExperiments: 3,
       maxConcurrentRenders: 2,
     },
     rolloverMonthsAnnual: 1,
-    safety: { dailyUsd: 10, monthlyUsd: 80 },
+    safety: { dailyUsd: 12, monthlyUsd: 91 },
     support: "Email, 24 h",
     highlights: [
-      "3 brands, 5 seats, 3 social profiles",
+      "3 brands, 5 seats",
       "6,000 credits and 12 videos a month",
       "1080p, Premium and Long-take video",
       "One-click fixes on WordPress, Webflow and GitHub",
@@ -213,16 +211,15 @@ export const PLANS: Record<PlanId, PlanDef> = {
       competitorSweepsPerWeek: 2,
       marketBrainWeeklyBrands: 10,
       coachWeeklyBriefings: 3,
-      socialProfiles: 10,
-      networksPerProfile: 13,
+      postsFairUse: 5_000,
       maxConcurrentExperiments: 15,
       maxConcurrentRenders: 4,
     },
     rolloverMonthsAnnual: 1,
-    safety: { dailyUsd: 30, monthlyUsd: 234 },
+    safety: { dailyUsd: 34, monthlyUsd: 269 },
     support: "Priority + onboarding call",
     highlights: [
-      "10 brands and 10 social profiles, unlimited seats",
+      "10 brands, unlimited seats",
       "18,000 credits and 40 videos, pooled",
       "GEO Engineer agent and Fix-all pull requests",
       "Agency command center and white-label portal",
@@ -248,16 +245,15 @@ export const PLANS: Record<PlanId, PlanDef> = {
       competitorSweepsPerWeek: 2,
       marketBrainWeeklyBrands: 30,
       coachWeeklyBriefings: 10,
-      socialProfiles: 30,
-      networksPerProfile: 13,
+      postsFairUse: 15_000,
       maxConcurrentExperiments: 50,
       maxConcurrentRenders: 8,
     },
     rolloverMonthsAnnual: 1,
-    safety: { dailyUsd: 83, monthlyUsd: 662 },
+    safety: { dailyUsd: 96, monthlyUsd: 767 },
     support: "Dedicated manager",
     highlights: [
-      "30 brands and 30 social profiles, unlimited seats",
+      "30 brands, unlimited seats",
       "50,000 credits and 100 videos, pooled",
       "Dedicated manager and support SLA",
       "Everything in Agency",
@@ -439,8 +435,8 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     key: "publishing",
     module: "Distribution",
     label: "Publishing",
-    pitch: "Connect a social profile per brand and publish to all 13 networks, WordPress and Webflow. Unlimited posts.",
-    minPlan: "starter",
+    pitch: "Publish and schedule to every social network with unlimited posts, plus WordPress and Webflow. Publishing never uses credits.",
+    minPlan: "free",
   },
   backlinks: {
     key: "backlinks",
@@ -759,7 +755,6 @@ export type AddonDef = {
   /** What one unit adds. */
   adds: Partial<{
     brands: number;
-    socialProfiles: number;
     seats: number;
     trackedPrompts: number;
     dailyTrackedPrompts: number;
@@ -780,7 +775,7 @@ export const ADDONS: Record<AddonKey, AddonDef> = {
     label: "Extra brand",
     usdPerMonth: 39,
     plans: ["growth", "agency", "scale"],
-    adds: { brands: 1, socialProfiles: 1, trackedPrompts: 30, credits: 1_500, videoUnits: 300, marketBrainWeeklyBrands: 1 },
+    adds: { brands: 1, trackedPrompts: 30, credits: 1_500, videoUnits: 300, marketBrainWeeklyBrands: 1 },
     availability: "launch",
   },
   prompts_100: {

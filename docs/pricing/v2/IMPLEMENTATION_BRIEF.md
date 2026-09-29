@@ -1,4 +1,6 @@
-# Mellox Billing v2: build brief for Claude Code
+# Mellox Billing v2: build brief for the coding agent
+
+This brief works for any coding agent (Claude Code, OpenAI Codex or another). `CLAUDE.md` is this project's conventions file for **every** agent, not only Claude; read and follow it.
 
 You are implementing Mellox AI's complete pricing, credits and plans system and taking it to a launch-ready state. The pricing itself is already decided and costed (see `docs/pricing/v2/`). Your job is to build it end to end in this codebase: data model, metering, enforcement, upgrade UX, Paddle billing, lifecycle, admin, monitoring and tests.
 
@@ -9,12 +11,14 @@ The owner is Zain (founder). He has given you full permission to change the code
 ## 0. How to work
 
 1. Read, in this order: `CLAUDE.md`, this brief, `docs/pricing/v2/catalog.reference.ts.txt`, `docs/adr/0008-ai-metering-budgets-guardrails.md`, `docs/adr/0014-canonical-workspaces.md`, the header comments of `supabase/migrations/20260925090000_link_marketplace.sql` and `20260921090000_add_ai_usage_reservations.sql`, then `src/server/ai/task-models.ts`, `src/server/ai/budget.ts`, `src/server/plans.ts`, `src/server/links/credits.server.ts`, `src/server/billing/stripe.server.ts`, `src/server/route.ts`.
-2. Start in plan mode. Use subagents for parallel, read-only mapping. At minimum map: every reader of `workspaces.plan`, `getPlanLimits`, `normalizePlanId`, `checkBudget` / `enforceBudget`, `monthlyImages` / `monthlyVideos`, `maxConcurrentRenders`, `geoMaxPages`, `maxConcurrentExperiments`, `monthlyPosts` / `social_usage_events`, every SocialAPI profile connect path, every call to `apply_credit_entry`, every user-triggered route that spends AI, and every UI entry point for the features in the catalog.
+2. Plan before you write code (use your tool's plan or read-only mode if it has one; explore in parallel where your tool allows). At minimum map: every reader of `workspaces.plan`, `getPlanLimits`, `normalizePlanId`, `checkBudget` / `enforceBudget`, `monthlyImages` / `monthlyVideos`, `maxConcurrentRenders`, `geoMaxPages`, `maxConcurrentExperiments`, `monthlyPosts` / `social_usage_events`, every social publishing path (SocialAPI and its replacement Post for Me), every call to `apply_credit_entry`, every user-triggered route that spends AI, and every UI entry point for the features in the catalog.
 3. Write the plan to `docs/billing/PLAN.md` and a decision record `docs/adr/0027-account-billing-and-credits.md` (use the next free ADR number if 0027 is taken). The ADR records the decisions in section 3 plus anything you had to adapt.
-4. Execute the phases in section 17 in order. Each phase ends with `npm run typecheck && npm run lint && npm test && npm run build && npm run db:verify` green and its own commit. Do not stop between phases for approval.
-5. If this brief and the code disagree, the code's reality wins: adapt, keep the intent, and write down what you changed in the ADR.
-6. Keep every existing safety system (budget ceilings, reservations, rate limits, guardrails, idempotency). Re-scope them to the billing account; do not delete them.
-7. **Branch and deploy discipline.** Work on a branch `feat/billing-v2`. Pushes to `main` deploy automatically (see `amplify.yml`), so do not merge or push to `main` until phase 9 is green, and then **ASK ZAIN** before merging. Until then apply migrations only to a local or staging database, never production.
+4. Keep a running log in `docs/billing/PROGRESS.md`: current phase, what landed, what is next, open questions. Update it at the end of every phase and before any long pause, so a new session (yours or another agent's) can resume from it without redoing work.
+5. Execute the phases in section 17 in order. Each phase ends with `npm run typecheck && npm run lint && npm test && npm run build && npm run db:verify` green and its own commit. Do not stop between phases for approval.
+6. If this brief and the code disagree, the code's reality wins: adapt, keep the intent, and write down what you changed in the ADR.
+7. Keep every existing safety system (budget ceilings, reservations, rate limits, guardrails, idempotency). Re-scope them to the billing account; do not delete them.
+8. **Network and environment.** If your sandbox blocks network access (package installs, the Supabase database, Paddle sandbox), say which step is blocked and ask for the access instead of faking the result or skipping the check. Never mark a check green that did not run.
+9. **Branch and deploy discipline.** Work on a branch `feat/billing-v2`. Pushes to `main` deploy automatically (see `amplify.yml`), so do not merge or push to `main` until phase 9 is green, and then **ASK ZAIN** before merging. Until then apply migrations only to a local or staging database, never production.
 
 ### Non-negotiable rules
 
@@ -57,7 +61,7 @@ Quick reference (the catalog is authoritative):
 | Video Credits a month | 0 | 4 | 12 | 40 | 100 |
 | Pro messages / Flash fair use | 0 / 30 | 30 / 800 | 150 / 2,000 | 400 / 5,000 | 1,200 / 12,000 |
 | Tracked prompts (weekly) | 5 | 25 | 100 | 300 | 1,000 |
-| Social profiles to connect | 0 | 1 | 3 | 10 | 30 |
+| Social posts | Unlimited | Unlimited | Unlimited | Unlimited | Unlimited |
 | Safety ceiling daily / monthly | $1 / $2 | $4 / $27 | $10 / $80 | $30 / $234 | $83 / $662 |
 
 ---
@@ -95,7 +99,7 @@ Quick reference (the catalog is authoritative):
    - Default after deploy: `shadow`. Zain flips it to `on`.
 15. **Existing users (grandfathering). ASK ZAIN** before phase 1's backfill runs in production. Default if he does not answer: every existing account whose brands or seats exceed Free gets a 30-day comp on the smallest plan that fits them, with an email explaining the new plans; at the end of the comp their extra brands freeze (never delete) unless they subscribe.
 16. **Refunds never become free usage.** Balances may go negative only through a refund or chargeback clawback: the shortfall is recorded as `debt` on the meter, spending is blocked while there is debt, and the next grants pay it down first. Refunds for a subscription payment claw back what is left of that period's plan grants.
-17. **Social publishing is limited by connected social profiles, not posts.** SocialAPI.ai bills Mellox per connected **profile** per month (1 profile = 1 brand with any number of its networks) in fixed tiers ($29 for 10, $109 for 50, $349 for 200 profiles), and posts are unlimited. So each plan limits `socialProfiles` (0 / 1 / 3 / 10 / 30, +1 per `extra_brand` add-on), one profile per brand, up to 13 networks per profile. Remove `monthlyPosts` as a plan limit and quota everywhere (keep `social_usage_events` for analytics and a fair-use rate limit against abuse, for example 100 posts per profile per day). Count a profile as used while the brand has an active SocialAPI profile; disconnecting frees it. Add a SocialAPI capacity check: alert admins at 80% of the current SocialAPI tier's profiles so Zain upgrades the tier before connects fail. If Zain's SocialAPI invoice turns out to bill per platform account instead, only the workbook input and the catalog limit change; the code counts profiles and networks separately so either unit can be enforced.
+17. **Social publishing is unlimited on every plan and never uses credits.** Mellox now publishes through the Post for Me API (`postforme.dev`): $10 a month for 1,000 posts with unlimited social accounts, higher tiers priced by post volume (about $0.01 a post). So there is no social-profile or account limit and no post limit to sell: every plan, **Free included**, gets unlimited posts to all networks, and publishing, scheduling and retries never debit credits (generating the post's content with AI still costs credits as normal). Protect against spam with a hidden fair-use cap per account (catalog `postsFairUse`: 100 / 500 / 1,500 / 5,000 / 15,000 posts a month, each network counts), a per-account rate limit, and a verified email before the first publish. At 80% of the cap send a notice; at the cap queue new posts until the next month or until an admin lifts it. Replace the SocialAPI.ai integration with Post for Me behind the existing distribution-provider switch (`DISTRIBUTION_PROVIDER`), keeping SocialAPI code only as a legacy adapter until its accounts are migrated. The only file that reads `POSTFORME_API_KEY` or talks to Post for Me is its gateway. Add an admin alert when the month's total posts pass 80% of the Post for Me tier (`POSTFORME_TIER_POSTS`).
 18. **Video providers for now: KIE for some models only.** KIE runs Veo 3.1 Fast and Lite (`standard`, `draft`) and Grok Imagine (`variation`), where its prices are verified in `src/lib/ugc/models.ts` and 2.6x to 3.9x cheaper. OpenRouter runs `premium` (Hailuo 3), `cinematic` (Hailuo 3), `long` (Seedance 2.0 Fast, cheaper on OpenRouter) and the Studio 6s clip; KIE prices for Gemini Omni and MiniMax H3 are unverified, so KIE is not used for them. Every KIE option falls back to OpenRouter (Veo for standard and draft; `variation` falls back to Veo 3.1 Lite 6s, never Grok on OpenRouter, which costs about $0.90). The split lives in the catalog (`VIDEO_OPTIONS[].provider` / `fallback`) and an env override `VIDEO_PROVIDER_<KEY>=kie|openrouter` so a provider can be switched without a deploy. The plans are costed so they still clear 60%+ typical margin if everything moves to OpenRouter.
 
 ---
@@ -152,7 +156,7 @@ One or more idempotent migrations (next timestamps after `20261001090000`). RLS 
 
 **`billing_shadow_events`**: what shadow mode would have charged or blocked (`account_id`, `workspace_id`, `action`, `meter`, `amount`, `decision`, `reason`, `created_at`). Purged after 60 days.
 
-**`allowance_usage`**: counters for included (non-money) allowances per account and grant window: `scans_used`, `extra_pages_scanned`, and anything else counted per month. (Posts are no longer a plan limit; see the social profiles decision below.)
+**`allowance_usage`**: counters for included (non-money) allowances per account and grant window: `scans_used`, `extra_pages_scanned`, and anything else counted per month. (Posts are unlimited; only the fair-use counter in decision 17 applies.)
 
 **`upgrade_requests`**: `account_id`, `workspace_id`, `requested_by`, `feature`, `required_plan`, `message`, `status`, timestamps. **`referrals`**: `referrer_account_id`, `referred_account_id` unique, `status`, `rewarded_at`. **`account_notifications`** (if nothing suitable exists already): `account_id`, `user_id`, `kind`, `payload`, `read_at`.
 
@@ -245,7 +249,7 @@ Wire `runMetered` (or a limit check) into every surface below. Find the real han
 | UGC render (`/api/ugc/renders`) | `ugc` + `videoFeatureFor(key, resolution)` + `maxConcurrentRenders` | video meter, `videoUnitsFor(...)`, keyed `ugc_render:{id}`; release on failure through the existing webhook and sweeper paths |
 | Studio video (`/api/generate-video`) | `ugc` | `STUDIO_VIDEO_UNITS` |
 | Backlink orders | `backlinks` | existing hold/capture/refund through the wrapper; only `any` grants |
-| Connect a social profile (SocialAPI) | `publishing` + `socialProfiles` limit | none (limit modal offers upgrade or `extra_brand`) |
+| Social publish / schedule / retry (Post for Me) | none: every plan including Free | never debits credits; counts toward the hidden `postsFairUse` cap and the rate limit |
 | Social publish / schedule / retry | `publishing` | included, unlimited posts under a fair-use rate limit |
 | Client portal, approvals, command center (`/agency`), white-label | features | none |
 | Create workspace | `brands` limit | none (offer upgrade or the `extra_brand` add-on) |
@@ -360,7 +364,7 @@ Verify every API name against the current Paddle Billing docs (developer.paddle.
 3. **Market Brain:** weekly for up to `marketBrainWeeklyBrands` brands (+ `extra_brand` add-ons); daily only for brands with `daily_market_brain`. Change `market-brain-scheduler.server.ts` accordingly.
 4. **Monday Coach briefing:** weekly for `coachWeeklyBriefings` brands (owner chooses; default the most active), delivered in-app and by email if configured.
 5. **Competitors:** tracked count limit per plan (pooled), sweep frequency from `competitorSweepsPerWeek`.
-6. **Social profiles, experiments, renders:** social profiles are a limit (decision 17); experiments and renders keep their existing counters and concurrency limits, now read from entitlements (`maxConcurrentRenders()` in `src/server/ugc/models.server.ts` takes the plan value; `UGC_MAX_CONCURRENT_RENDERS` stays as an optional global cap).
+6. **Social posts, experiments, renders:** posts are unlimited with a fair-use cap (decision 17); experiments and renders keep their existing counters and concurrency limits, now read from entitlements (`maxConcurrentRenders()` in `src/server/ugc/models.server.ts` takes the plan value; `UGC_MAX_CONCURRENT_RENDERS` stays as an optional global cap).
 
 ---
 
@@ -383,7 +387,7 @@ Verify every API name against the current Paddle Billing docs (developer.paddle.
   - Account page: plan, status, Paddle ids, period, balances by meter and by grant, holds, ledger, brands, members, this month's provider cost vs revenue, events.
   - Actions (reason required): grant or adjust any meter, comp a plan until a date, end a trial, resync from Paddle, replay a failed webhook, set the enforcement override, unfreeze a brand.
   - Reports: margin by action (credits charged vs provider cost via `charge_id`), cost to serve by plan vs the workbook's typical figures, top-cost accounts, shadow-mode report (would-charge and would-block by action and plan), webhook failures.
-- **Margin monitor** (hourly rollup in the billing hook, table `billing_margin_daily`): alert to `ALERT_WEBHOOK_URL` when an action's 7-day margin drops below 65%, when an account's provider cost this month exceeds its monthly price, when the Terra fallback share passes 10%, when webhook processing errors appear, when connected social profiles pass 80% of `SOCIALAPI_TIER_PROFILES`, when KIE's fallback share to OpenRouter passes 15% in a day, or when the refund ceiling logic in `credits.server.ts` trips.
+- **Margin monitor** (hourly rollup in the billing hook, table `billing_margin_daily`): alert to `ALERT_WEBHOOK_URL` when an action's 7-day margin drops below 65%, when an account's provider cost this month exceeds its monthly price, when the Terra fallback share passes 10%, when webhook processing errors appear, when the month's posts pass 80% of `POSTFORME_TIER_POSTS`, when KIE's fallback share to OpenRouter passes 15% in a day, or when the refund ceiling logic in `credits.server.ts` trips.
 - **Notifications** (in-app always; email when `RESEND_API_KEY` is set; sender from `BILLING_EMAIL_FROM`): trial ending in 3 days, meter at 80% and 100%, payment failed, grace ending tomorrow, downgrade scheduled and applied, brand frozen, plan changed, upgrade request (to owner), referral reward, weekly Monday briefing. One email per kind per window; users can mute non-critical ones.
 
 ---
@@ -412,7 +416,7 @@ Verify every API name against the current Paddle Billing docs (developer.paddle.
 
 ## 16. Environment variables (names only; add to `.env.example`)
 
-`BILLING_PROVIDER=paddle`, `BILLING_ENFORCEMENT=shadow`, `PADDLE_ENV=sandbox`, `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`, `NEXT_PUBLIC_PADDLE_ENV=sandbox`, `RESEND_API_KEY`, `BILLING_EMAIL_FROM`, `MELLOX_ADMIN_USER_IDS`, `GEO_PROBE_WEB_SEARCH=on`, `VIDEO_PROVIDER_<KEY>=kie|openrouter` (optional per-option override of decision 18), `SOCIALAPI_TIER_PROFILES=10` (profiles in Zain's current SocialAPI tier, for the capacity alert), `BILLING_LIVE` (tests only). Keep `STRIPE_*` documented as legacy. Existing `PLAN_*` overrides become `BILLING_OVERRIDE_<PLAN>_<FIELD>` read only on the server (optional; keep the catalog authoritative).
+`BILLING_PROVIDER=paddle`, `BILLING_ENFORCEMENT=shadow`, `PADDLE_ENV=sandbox`, `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`, `NEXT_PUBLIC_PADDLE_ENV=sandbox`, `RESEND_API_KEY`, `BILLING_EMAIL_FROM`, `MELLOX_ADMIN_USER_IDS`, `GEO_PROBE_WEB_SEARCH=on`, `VIDEO_PROVIDER_<KEY>=kie|openrouter` (optional per-option override of decision 18), `POSTFORME_API_KEY`, `POSTFORME_TIER_POSTS=1000` (posts in Zain's current Post for Me plan, for the capacity alert), `DISTRIBUTION_PROVIDER=postforme`, `BILLING_LIVE` (tests only). Keep `STRIPE_*` documented as legacy. Existing `PLAN_*` overrides become `BILLING_OVERRIDE_<PLAN>_<FIELD>` read only on the server (optional; keep the catalog authoritative).
 
 ---
 
@@ -422,13 +426,13 @@ Each phase: green checks, a commit, and a short note in `docs/billing/PLAN.md` o
 
 1. **Foundation.** Move the catalog. Migrations for accounts, workspace link, grants, ledger, balances, holds, charges, events, price map, shadow events, counters. SQL functions and the `apply_credit_entry` wrapper. Backfill accounts and balances. `BILLING_ENFORCEMENT=off`. *Done when* every workspace has an account, the link order runner's tests pass through the wrapper, and database tests cover section 15.
 2. **Engine.** `accounts`, `entitlements`, `meters`, `runMetered`, errors and 402 mapping, limits, grants (signup, monthly, rollover, expiry, hold sweeper), billing cron hook, `ai_usage_events` columns, account-scoped budgets, shadow logging, `GET /api/billing/entitlements` and wallet. *Done when* unit and database tests pass and shadow mode logs a correct would-charge for a Studio job end to end.
-3. **Enforcement.** Wire every row of section 7 and section 10b, the coverage test, included-work limits, brand, seat and social-profile limits (and remove `monthlyPosts`), frozen brands, chat Pro and Flash allowances. *Done when* the coverage test passes and a manual pass over each surface in shadow and on modes behaves as specified.
+3. **Enforcement.** Wire every row of section 7 and section 10b, the coverage test, included-work limits, brand and seat limits, unlimited posts with the fair-use cap (and remove `monthlyPosts` as a limit), frozen brands, chat Pro and Flash allowances. *Done when* the coverage test passes and a manual pass over each surface in shadow and on modes behaves as specified.
 4. **Experience.** Provider, wallet pill, FeatureGate on every entry point, CostChips, upgrade, out-of-balance and limit modals, Plan & billing modal, 402 handling in `authedFetch` and server-function stubs, nudges, onboarding plan picker, frozen banner, landing page PLANS data and JSON-LD. *Done when* the e2e tests in section 15 pass (with Paddle stubbed).
 5. **Paddle.** Sync script, checkout, change plan with preview, packs, add-ons, portal, cancel, pause, resume, trial, founding discount, referral rewards, webhook, reconciliation. *Done when* the sandbox flow works end to end: buy Starter, upgrade to Growth with proration, buy a video pack, downgrade at period end (simulated), cancel, resume.
 6. **Lifecycle and notifications.** Past-due grace, downgrades with freezing choice, cancel to Free, refunds and chargebacks, comps, all notifications and emails. *Done when* each rule in section 10 has a test.
 7. **Included work and cost fixes.** Video provider split (decision 18) with fallbacks and plan-aware routing, tracked prompts feature, Market Brain weekly/daily, Monday briefing, competitor sweep cadence, section 12 fixes. *Done when* tracked prompts run on schedule within limits and the scheduler tests pass.
 8. **Admin and monitoring.** Admin console, margin rollups and alerts, shadow report, webhook replay. *Done when* an admin can find an account, grant credits with a reason, see margins by action, and replay a failed event.
-9. **Launch hardening.** Full suite, e2e, live sandbox run, concurrency test of holds, security review (RLS, IDOR, webhook, price tampering), performance check of entitlements (cache it; no N+1 on page load), update `CLAUDE.md` with a "Billing and credits" section in the same style as the others, write `docs/billing.md` (how it works) and a billing runbook in `docs/OPERATIONS-RUNBOOK.md` (webhook failure, refund, comp, stuck hold, enforcement rollback). Also add `/terms`, `/privacy` and `/refunds` pages if missing (Paddle's domain review requires them), clearly marked as drafts for legal review.
+9. **Launch hardening.** Full suite, e2e, live sandbox run, concurrency test of holds, security review (RLS, IDOR, webhook, price tampering), performance check of entitlements (cache it; no N+1 on page load), update `CLAUDE.md` with a "Billing and credits" section in the same style as the others (and add a two-line pointer to it in `AGENTS.md`, outside the auto-generated Next.js block), write `docs/billing.md` (how it works) and a billing runbook in `docs/OPERATIONS-RUNBOOK.md` (webhook failure, refund, comp, stuck hold, enforcement rollback). Also add `/terms`, `/privacy` and `/refunds` pages if missing (Paddle's domain review requires them), clearly marked as drafts for legal review.
 
 **Rollout order after merge** (write it in the runbook): deploy with `BILLING_ENFORCEMENT=shadow`; run 3 to 7 days and compare the shadow report with the workbook's typical usage; Paddle production approval; set enforcement `on` for Zain's own test account via the override; then `on` for everyone.
 
@@ -443,8 +447,8 @@ Each phase: green checks, a commit, and a short note in `docs/billing/PLAN.md` o
 5. Set `MELLOX_ADMIN_USER_IDS`.
 6. Rotate any API key that was ever pasted, shared or committed.
 7. Review the draft legal pages with a lawyer, and confirm with Paddle during onboarding that selling credits usable for backlink placements is within their acceptable-use policy (if not, sell backlink balance through a separate route or keep it off Paddle).
-8. Check the SocialAPI.ai invoice: the pricing page bills per connected profile (1 profile = 1 brand). If your account is billed per platform account, tell Claude Code to switch the limit unit (decision 17) and update the workbook input.
-9. Upgrade the SocialAPI tier before the capacity alert fires (10 → 50 → 200 profiles).
+8. Confirm with Post for Me how a post to several networks is counted and what the tiers above $10 / 1,000 posts cost; the workbook assumes one post per network at $0.01.
+9. Upgrade the Post for Me tier before the capacity alert fires.
 10. Decide which existing accounts to comp and approve the grandfathering rule (decision 15).
 11. Flip `BILLING_ENFORCEMENT` from `shadow` to `on` when the shadow report looks right.
 

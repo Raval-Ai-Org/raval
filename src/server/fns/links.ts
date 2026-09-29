@@ -435,7 +435,15 @@ export const confirmOrder = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    await requireEditor(context, data.workspaceId);
+    const role = await requireEditor(context, data.workspaceId);
+    const { requireBillingFeature } = await import("@/server/billing/feature.server");
+    await requireBillingFeature({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role,
+      feature: "backlinks",
+      spending: true,
+    });
     const { checkout } = await import("@/server/links/service.server");
     const result = await checkout({
       workspaceId: data.workspaceId,

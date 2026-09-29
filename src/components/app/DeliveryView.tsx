@@ -3,7 +3,7 @@
 // DeliveryView.tsx — the per-destination delivery view for a content item.
 // Renders each destination's state (published / publishing / pending / failed)
 // with the live link, the platform's failure reason, engagement once the
-// platform reports it, and a Retry for failed SocialAPI.ai deliveries. Data
+// platform reports it, and a Retry for failed deliveries. Data
 // comes from the webhook- and reconcile-fed content_publications mirror; the
 // view re-fetches on content:changed and polls gently while anything is in
 // flight. Empty state = the item was never distributed.

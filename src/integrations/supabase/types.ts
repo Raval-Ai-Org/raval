@@ -8,6 +8,47 @@ export type Database = {
   };
   public: {
     Tables: {
+      account_notifications: {
+        Row: {
+          account_id: string;
+          created_at: string;
+          id: string;
+          kind: string;
+          payload: Json;
+          read_at: string | null;
+          user_id: string;
+          window_key: string | null;
+        };
+        Insert: {
+          account_id: string;
+          created_at?: string;
+          id?: string;
+          kind: string;
+          payload?: Json;
+          read_at?: string | null;
+          user_id: string;
+          window_key?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          created_at?: string;
+          id?: string;
+          kind?: string;
+          payload?: Json;
+          read_at?: string | null;
+          user_id?: string;
+          window_key?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_notifications_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       agent_action_requests: {
         Row: {
           affected_records: Json;
@@ -412,7 +453,9 @@ export type Database = {
       };
       ai_usage_events: {
         Row: {
+          billing_account_id: string | null;
           cached: boolean;
+          charge_id: string | null;
           created_at: string;
           est_cost_usd: number;
           id: number;
@@ -433,7 +476,9 @@ export type Database = {
           workspace_id: string | null;
         };
         Insert: {
+          billing_account_id?: string | null;
           cached?: boolean;
+          charge_id?: string | null;
           created_at?: string;
           est_cost_usd?: number;
           id?: number;
@@ -454,7 +499,9 @@ export type Database = {
           workspace_id?: string | null;
         };
         Update: {
+          billing_account_id?: string | null;
           cached?: boolean;
+          charge_id?: string | null;
           created_at?: string;
           est_cost_usd?: number;
           id?: number;
@@ -475,6 +522,13 @@ export type Database = {
           workspace_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "ai_usage_events_billing_account_id_fkey";
+            columns: ["billing_account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "ai_usage_events_workspace_id_fkey";
             columns: ["workspace_id"];
@@ -554,6 +608,35 @@ export type Database = {
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      allowance_usage: {
+        Row: {
+          account_id: string;
+          extra_pages_scanned: number;
+          scans_used: number;
+          window_start: string;
+        };
+        Insert: {
+          account_id: string;
+          extra_pages_scanned?: number;
+          scans_used?: number;
+          window_start: string;
+        };
+        Update: {
+          account_id?: string;
+          extra_pages_scanned?: number;
+          scans_used?: number;
+          window_start?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "allowance_usage_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
             referencedColumns: ["id"];
           },
         ];
@@ -1596,6 +1679,280 @@ export type Database = {
           },
         ];
       };
+      billing_accounts: {
+        Row: {
+          billing_interval: string | null;
+          cancel_at: string | null;
+          capacity_reconciled_at: string | null;
+          comped_plan_id: string | null;
+          comped_until: string | null;
+          created_at: string;
+          current_period_end: string | null;
+          current_period_start: string | null;
+          downgrade_at: string | null;
+          downgrade_to: string | null;
+          enforcement_override: string | null;
+          entitled_plan_id: string | null;
+          founding: boolean;
+          grace_until: string | null;
+          grant_anchor: string | null;
+          id: string;
+          last_paid_invoice_id: string | null;
+          next_grant_at: string | null;
+          owner_user_id: string;
+          pause_started_at: string | null;
+          plan_id: string;
+          pro_overage_mode: string;
+          provider: string;
+          provider_customer_id: string | null;
+          provider_subscription_id: string | null;
+          referral_code: string | null;
+          referred_by_account_id: string | null;
+          resume_plan_id: string | null;
+          status: string;
+          trial_ends_at: string | null;
+          trial_used: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          billing_interval?: string | null;
+          cancel_at?: string | null;
+          capacity_reconciled_at?: string | null;
+          comped_plan_id?: string | null;
+          comped_until?: string | null;
+          created_at?: string;
+          current_period_end?: string | null;
+          current_period_start?: string | null;
+          downgrade_at?: string | null;
+          downgrade_to?: string | null;
+          enforcement_override?: string | null;
+          entitled_plan_id?: string | null;
+          founding?: boolean;
+          grace_until?: string | null;
+          grant_anchor?: string | null;
+          id?: string;
+          last_paid_invoice_id?: string | null;
+          next_grant_at?: string | null;
+          owner_user_id: string;
+          pause_started_at?: string | null;
+          plan_id?: string;
+          pro_overage_mode?: string;
+          provider?: string;
+          provider_customer_id?: string | null;
+          provider_subscription_id?: string | null;
+          referral_code?: string | null;
+          referred_by_account_id?: string | null;
+          resume_plan_id?: string | null;
+          status?: string;
+          trial_ends_at?: string | null;
+          trial_used?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          billing_interval?: string | null;
+          cancel_at?: string | null;
+          capacity_reconciled_at?: string | null;
+          comped_plan_id?: string | null;
+          comped_until?: string | null;
+          created_at?: string;
+          current_period_end?: string | null;
+          current_period_start?: string | null;
+          downgrade_at?: string | null;
+          downgrade_to?: string | null;
+          enforcement_override?: string | null;
+          entitled_plan_id?: string | null;
+          founding?: boolean;
+          grace_until?: string | null;
+          grant_anchor?: string | null;
+          id?: string;
+          last_paid_invoice_id?: string | null;
+          next_grant_at?: string | null;
+          owner_user_id?: string;
+          pause_started_at?: string | null;
+          plan_id?: string;
+          pro_overage_mode?: string;
+          provider?: string;
+          provider_customer_id?: string | null;
+          provider_subscription_id?: string | null;
+          referral_code?: string | null;
+          referred_by_account_id?: string | null;
+          resume_plan_id?: string | null;
+          status?: string;
+          trial_ends_at?: string | null;
+          trial_used?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_accounts_referred_by_account_id_fkey";
+            columns: ["referred_by_account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_admin_adjustments: {
+        Row: {
+          account_id: string;
+          actor_user_id: string;
+          amount: number;
+          created_at: string;
+          grant_id: string | null;
+          id: string;
+          meter: string;
+          operation: string;
+          reason: string;
+        };
+        Insert: {
+          account_id: string;
+          actor_user_id: string;
+          amount: number;
+          created_at?: string;
+          grant_id?: string | null;
+          id: string;
+          meter: string;
+          operation: string;
+          reason: string;
+        };
+        Update: {
+          account_id?: string;
+          actor_user_id?: string;
+          amount?: number;
+          created_at?: string;
+          grant_id?: string | null;
+          id?: string;
+          meter?: string;
+          operation?: string;
+          reason?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_admin_adjustments_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_admin_adjustments_grant_id_fkey";
+            columns: ["grant_id"];
+            isOneToOne: false;
+            referencedRelation: "meter_grants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_async_links: {
+        Row: {
+          account_id: string;
+          action: string;
+          amount: number;
+          captured: number | null;
+          charge_id: string | null;
+          charge_key: string;
+          created_at: string;
+          hold_id: string | null;
+          kind: string;
+          mode: string;
+          ref_id: string;
+          settled_at: string | null;
+          shadow_decision: string | null;
+          workspace_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          action: string;
+          amount: number;
+          captured?: number | null;
+          charge_id?: string | null;
+          charge_key: string;
+          created_at?: string;
+          hold_id?: string | null;
+          kind: string;
+          mode: string;
+          ref_id: string;
+          settled_at?: string | null;
+          shadow_decision?: string | null;
+          workspace_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          action?: string;
+          amount?: number;
+          captured?: number | null;
+          charge_id?: string | null;
+          charge_key?: string;
+          created_at?: string;
+          hold_id?: string | null;
+          kind?: string;
+          mode?: string;
+          ref_id?: string;
+          settled_at?: string | null;
+          shadow_decision?: string | null;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_async_links_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_async_links_hold_id_fkey";
+            columns: ["hold_id"];
+            isOneToOne: true;
+            referencedRelation: "meter_holds";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_charges: {
+        Row: {
+          account_id: string;
+          action: string;
+          amount: number;
+          created_at: string;
+          id: string;
+          meter: string;
+          route: string | null;
+          user_id: string | null;
+          workspace_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          action: string;
+          amount: number;
+          created_at?: string;
+          id?: string;
+          meter: string;
+          route?: string | null;
+          user_id?: string | null;
+          workspace_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          action?: string;
+          amount?: number;
+          created_at?: string;
+          id?: string;
+          meter?: string;
+          route?: string | null;
+          user_id?: string | null;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_charges_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       billing_customers: {
         Row: {
           created_at: string;
@@ -1617,6 +1974,641 @@ export type Database = {
             foreignKeyName: "billing_customers_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_enforcement_actions: {
+        Row: {
+          account_id: string;
+          actor_user_id: string;
+          created_at: string;
+          id: string;
+          next_mode: string | null;
+          previous_mode: string | null;
+          reason: string;
+        };
+        Insert: {
+          account_id: string;
+          actor_user_id: string;
+          created_at?: string;
+          id: string;
+          next_mode?: string | null;
+          previous_mode?: string | null;
+          reason: string;
+        };
+        Update: {
+          account_id?: string;
+          actor_user_id?: string;
+          created_at?: string;
+          id?: string;
+          next_mode?: string | null;
+          previous_mode?: string | null;
+          reason?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_enforcement_actions_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_events: {
+        Row: {
+          account_id: string | null;
+          error: string | null;
+          id: string;
+          occurred_at: string | null;
+          payload: Json;
+          processed_at: string | null;
+          received_at: string;
+          type: string;
+        };
+        Insert: {
+          account_id?: string | null;
+          error?: string | null;
+          id: string;
+          occurred_at?: string | null;
+          payload: Json;
+          processed_at?: string | null;
+          received_at?: string;
+          type: string;
+        };
+        Update: {
+          account_id?: string | null;
+          error?: string | null;
+          id?: string;
+          occurred_at?: string | null;
+          payload?: Json;
+          processed_at?: string | null;
+          received_at?: string;
+          type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_events_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_manual_activations: {
+        Row: {
+          account_id: string;
+          active_until: string | null;
+          actor_user_id: string;
+          billing_interval: string | null;
+          catalog_key: string;
+          created_at: string;
+          id: string;
+          kind: string;
+          months: number | null;
+          reason: string;
+          reference: string | null;
+          request_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          active_until?: string | null;
+          actor_user_id: string;
+          billing_interval?: string | null;
+          catalog_key: string;
+          created_at?: string;
+          id: string;
+          kind: string;
+          months?: number | null;
+          reason: string;
+          reference?: string | null;
+          request_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          active_until?: string | null;
+          actor_user_id?: string;
+          billing_interval?: string | null;
+          catalog_key?: string;
+          created_at?: string;
+          id?: string;
+          kind?: string;
+          months?: number | null;
+          reason?: string;
+          reference?: string | null;
+          request_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_manual_activations_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_manual_activations_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_purchase_requests";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_payment_records: {
+        Row: {
+          account_id: string;
+          amount_cents: number;
+          catalog_key: string;
+          checkout_intent_id: string | null;
+          created_at: string;
+          grant_ids: Json;
+          kind: string;
+          provider_invoice_id: string | null;
+          provider_payment_id: string;
+          refunded_cents: number;
+        };
+        Insert: {
+          account_id: string;
+          amount_cents: number;
+          catalog_key: string;
+          checkout_intent_id?: string | null;
+          created_at?: string;
+          grant_ids?: Json;
+          kind: string;
+          provider_invoice_id?: string | null;
+          provider_payment_id: string;
+          refunded_cents?: number;
+        };
+        Update: {
+          account_id?: string;
+          amount_cents?: number;
+          catalog_key?: string;
+          checkout_intent_id?: string | null;
+          created_at?: string;
+          grant_ids?: Json;
+          kind?: string;
+          provider_invoice_id?: string | null;
+          provider_payment_id?: string;
+          refunded_cents?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_payment_records_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_payment_records_checkout_intent_id_fkey";
+            columns: ["checkout_intent_id"];
+            isOneToOne: false;
+            referencedRelation: "checkout_intents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_price_map: {
+        Row: {
+          active: boolean;
+          amount_cents: number;
+          catalog_key: string;
+          environment: string;
+          interval: string;
+          provider_price_id: string;
+          provider_product_id: string;
+        };
+        Insert: {
+          active?: boolean;
+          amount_cents: number;
+          catalog_key: string;
+          environment: string;
+          interval: string;
+          provider_price_id: string;
+          provider_product_id: string;
+        };
+        Update: {
+          active?: boolean;
+          amount_cents?: number;
+          catalog_key?: string;
+          environment?: string;
+          interval?: string;
+          provider_price_id?: string;
+          provider_product_id?: string;
+        };
+        Relationships: [];
+      };
+      billing_provider_health: {
+        Row: {
+          credential_fingerprint: string | null;
+          environment: string;
+          last_event_id: string | null;
+          updated_at: string;
+          webhook_verified_at: string | null;
+        };
+        Insert: {
+          credential_fingerprint?: string | null;
+          environment: string;
+          last_event_id?: string | null;
+          updated_at?: string;
+          webhook_verified_at?: string | null;
+        };
+        Update: {
+          credential_fingerprint?: string | null;
+          environment?: string;
+          last_event_id?: string | null;
+          updated_at?: string;
+          webhook_verified_at?: string | null;
+        };
+        Relationships: [];
+      };
+      billing_purchase_requests: {
+        Row: {
+          account_id: string;
+          admin_note: string | null;
+          billing_interval: string | null;
+          catalog_key: string;
+          contact: string | null;
+          created_at: string;
+          handled_at: string | null;
+          handled_by: string | null;
+          id: string;
+          kind: string;
+          note: string | null;
+          quantity: number;
+          requested_by: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          account_id: string;
+          admin_note?: string | null;
+          billing_interval?: string | null;
+          catalog_key: string;
+          contact?: string | null;
+          created_at?: string;
+          handled_at?: string | null;
+          handled_by?: string | null;
+          id?: string;
+          kind: string;
+          note?: string | null;
+          quantity?: number;
+          requested_by: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          account_id?: string;
+          admin_note?: string | null;
+          billing_interval?: string | null;
+          catalog_key?: string;
+          contact?: string | null;
+          created_at?: string;
+          handled_at?: string | null;
+          handled_by?: string | null;
+          id?: string;
+          kind?: string;
+          note?: string | null;
+          quantity?: number;
+          requested_by?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_purchase_requests_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_shadow_events: {
+        Row: {
+          account_id: string;
+          action: string;
+          amount: number | null;
+          created_at: string;
+          decision: string;
+          id: number;
+          idempotency_key: string | null;
+          meter: string | null;
+          reason: string | null;
+          workspace_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          action: string;
+          amount?: number | null;
+          created_at?: string;
+          decision: string;
+          id?: number;
+          idempotency_key?: string | null;
+          meter?: string | null;
+          reason?: string | null;
+          workspace_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          action?: string;
+          amount?: number | null;
+          created_at?: string;
+          decision?: string;
+          id?: number;
+          idempotency_key?: string | null;
+          meter?: string | null;
+          reason?: string | null;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_shadow_events_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_social_profile_slots: {
+        Row: {
+          account_id: string;
+          expires_at: string | null;
+          state: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          account_id: string;
+          expires_at?: string | null;
+          state: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string;
+          expires_at?: string | null;
+          state?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_social_profile_slots_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_social_profile_slots_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_studio_jobs: {
+        Row: {
+          account_id: string;
+          action: string;
+          amount: number;
+          charge_id: string | null;
+          charge_key: string;
+          created_at: string;
+          hold_id: string | null;
+          job_id: string;
+          meter: string;
+          mode: string;
+          route: string;
+          settled_at: string | null;
+          shadow_decision: string;
+          workspace_id: string;
+        };
+        Insert: {
+          account_id: string;
+          action: string;
+          amount: number;
+          charge_id?: string | null;
+          charge_key: string;
+          created_at?: string;
+          hold_id?: string | null;
+          job_id: string;
+          meter: string;
+          mode: string;
+          route: string;
+          settled_at?: string | null;
+          shadow_decision: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string;
+          action?: string;
+          amount?: number;
+          charge_id?: string | null;
+          charge_key?: string;
+          created_at?: string;
+          hold_id?: string | null;
+          job_id?: string;
+          meter?: string;
+          mode?: string;
+          route?: string;
+          settled_at?: string | null;
+          shadow_decision?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_studio_jobs_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_studio_jobs_hold_id_fkey";
+            columns: ["hold_id"];
+            isOneToOne: true;
+            referencedRelation: "meter_holds";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_studio_jobs_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: true;
+            referencedRelation: "studio_jobs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_studio_jobs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_subscription_items: {
+        Row: {
+          account_id: string;
+          catalog_key: string;
+          created_at: string;
+          id: string;
+          provider_item_id: string | null;
+          provider_price_id: string | null;
+          quantity: number;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          account_id: string;
+          catalog_key: string;
+          created_at?: string;
+          id?: string;
+          provider_item_id?: string | null;
+          provider_price_id?: string | null;
+          quantity?: number;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          account_id?: string;
+          catalog_key?: string;
+          created_at?: string;
+          id?: string;
+          provider_item_id?: string | null;
+          provider_price_id?: string | null;
+          quantity?: number;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_subscription_items_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_suspended_members: {
+        Row: {
+          account_id: string;
+          original_created_at: string;
+          original_role: Database["public"]["Enums"]["app_role"];
+          suspended_at: string;
+          user_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          account_id: string;
+          original_created_at: string;
+          original_role: Database["public"]["Enums"]["app_role"];
+          suspended_at?: string;
+          user_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string;
+          original_created_at?: string;
+          original_role?: Database["public"]["Enums"]["app_role"];
+          suspended_at?: string;
+          user_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_suspended_members_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_suspended_members_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_ugc_renders: {
+        Row: {
+          account_id: string;
+          action: string;
+          charge_id: string | null;
+          charge_key: string;
+          created_at: string;
+          hold_id: string | null;
+          mode: string;
+          render_id: string;
+          settled_at: string | null;
+          shadow_decision: string;
+          units: number;
+          workspace_id: string;
+        };
+        Insert: {
+          account_id: string;
+          action: string;
+          charge_id?: string | null;
+          charge_key: string;
+          created_at?: string;
+          hold_id?: string | null;
+          mode: string;
+          render_id: string;
+          settled_at?: string | null;
+          shadow_decision: string;
+          units: number;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string;
+          action?: string;
+          charge_id?: string | null;
+          charge_key?: string;
+          created_at?: string;
+          hold_id?: string | null;
+          mode?: string;
+          render_id?: string;
+          settled_at?: string | null;
+          shadow_decision?: string;
+          units?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_ugc_renders_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_ugc_renders_hold_id_fkey";
+            columns: ["hold_id"];
+            isOneToOne: true;
+            referencedRelation: "meter_holds";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_ugc_renders_render_id_fkey";
+            columns: ["render_id"];
+            isOneToOne: true;
+            referencedRelation: "ugc_renders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_ugc_renders_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
             referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
@@ -1705,6 +2697,35 @@ export type Database = {
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      brand_scan_allowances: {
+        Row: {
+          account_id: string;
+          kind: string;
+          normalized_domain: string;
+          used_at: string;
+        };
+        Insert: {
+          account_id: string;
+          kind: string;
+          normalized_domain: string;
+          used_at?: string;
+        };
+        Update: {
+          account_id?: string;
+          kind?: string;
+          normalized_domain?: string;
+          used_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "brand_scan_allowances_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
             referencedColumns: ["id"];
           },
         ];
@@ -1824,6 +2845,59 @@ export type Database = {
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      checkout_intents: {
+        Row: {
+          account_id: string;
+          catalog_key: string;
+          consumed_at: string | null;
+          created_at: string;
+          created_by: string;
+          expires_at: string;
+          id: string;
+          interval: string | null;
+          kind: string;
+          provider_price_id: string | null;
+          provider_session_id: string | null;
+          quantity: number;
+        };
+        Insert: {
+          account_id: string;
+          catalog_key: string;
+          consumed_at?: string | null;
+          created_at?: string;
+          created_by: string;
+          expires_at: string;
+          id?: string;
+          interval?: string | null;
+          kind: string;
+          provider_price_id?: string | null;
+          provider_session_id?: string | null;
+          quantity?: number;
+        };
+        Update: {
+          account_id?: string;
+          catalog_key?: string;
+          consumed_at?: string | null;
+          created_at?: string;
+          created_by?: string;
+          expires_at?: string;
+          id?: string;
+          interval?: string | null;
+          kind?: string;
+          provider_price_id?: string | null;
+          provider_session_id?: string | null;
+          quantity?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "checkout_intents_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
             referencedColumns: ["id"];
           },
         ];
@@ -4085,6 +5159,72 @@ export type Database = {
           },
         ];
       };
+      geo_prompt_checks: {
+        Row: {
+          answer_excerpt: string | null;
+          checked_at: string;
+          cited: boolean;
+          cited_urls: Json;
+          competitors_mentioned: Json;
+          engine: string;
+          error: string | null;
+          id: number;
+          mentioned: boolean;
+          model: string;
+          position: number | null;
+          prompt_id: string;
+          web_search: boolean;
+          workspace_id: string;
+        };
+        Insert: {
+          answer_excerpt?: string | null;
+          checked_at?: string;
+          cited?: boolean;
+          cited_urls?: Json;
+          competitors_mentioned?: Json;
+          engine: string;
+          error?: string | null;
+          id?: number;
+          mentioned?: boolean;
+          model: string;
+          position?: number | null;
+          prompt_id: string;
+          web_search?: boolean;
+          workspace_id: string;
+        };
+        Update: {
+          answer_excerpt?: string | null;
+          checked_at?: string;
+          cited?: boolean;
+          cited_urls?: Json;
+          competitors_mentioned?: Json;
+          engine?: string;
+          error?: string | null;
+          id?: number;
+          mentioned?: boolean;
+          model?: string;
+          position?: number | null;
+          prompt_id?: string;
+          web_search?: boolean;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "geo_prompt_checks_prompt_id_fkey";
+            columns: ["prompt_id"];
+            isOneToOne: false;
+            referencedRelation: "geo_tracked_prompts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "geo_prompt_checks_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       geo_scan_pages: {
         Row: {
           analysis: Json | null;
@@ -4274,6 +5414,50 @@ export type Database = {
           },
           {
             foreignKeyName: "geo_scans_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      geo_tracked_prompts: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          last_checked_at: string | null;
+          lease_until: string | null;
+          next_check_at: string;
+          paused_at: string | null;
+          text: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_checked_at?: string | null;
+          lease_until?: string | null;
+          next_check_at?: string;
+          paused_at?: string | null;
+          text: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_checked_at?: string | null;
+          lease_until?: string | null;
+          next_check_at?: string;
+          paused_at?: string | null;
+          text?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "geo_tracked_prompts_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -4977,6 +6161,233 @@ export type Database = {
           },
         ];
       };
+      meter_balances: {
+        Row: {
+          account_id: string;
+          available: number;
+          available_any: number;
+          debt: number;
+          held: number;
+          meter: string;
+          updated_at: string;
+        };
+        Insert: {
+          account_id: string;
+          available?: number;
+          available_any?: number;
+          debt?: number;
+          held?: number;
+          meter: string;
+          updated_at?: string;
+        };
+        Update: {
+          account_id?: string;
+          available?: number;
+          available_any?: number;
+          debt?: number;
+          held?: number;
+          meter?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "meter_balances_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      meter_grants: {
+        Row: {
+          account_id: string;
+          amount: number;
+          clawed_back: number;
+          created_at: string;
+          expires_at: string | null;
+          id: string;
+          idempotency_key: string;
+          meter: string;
+          period_start: string | null;
+          provider_ref: string | null;
+          remaining: number;
+          restriction: string;
+          source: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          amount: number;
+          clawed_back?: number;
+          created_at?: string;
+          expires_at?: string | null;
+          id?: string;
+          idempotency_key: string;
+          meter: string;
+          period_start?: string | null;
+          provider_ref?: string | null;
+          remaining: number;
+          restriction: string;
+          source: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          amount?: number;
+          clawed_back?: number;
+          created_at?: string;
+          expires_at?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          meter?: string;
+          period_start?: string | null;
+          provider_ref?: string | null;
+          remaining?: number;
+          restriction?: string;
+          source?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "meter_grants_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      meter_holds: {
+        Row: {
+          account_id: string;
+          action: string;
+          allocations: Json;
+          amount: number;
+          captured_amount: number;
+          created_at: string;
+          expires_at: string;
+          finalized_at: string | null;
+          id: string;
+          idempotency_key: string;
+          meter: string;
+          state: string;
+          user_id: string | null;
+          workspace_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          action: string;
+          allocations?: Json;
+          amount: number;
+          captured_amount?: number;
+          created_at?: string;
+          expires_at: string;
+          finalized_at?: string | null;
+          id?: string;
+          idempotency_key: string;
+          meter: string;
+          state?: string;
+          user_id?: string | null;
+          workspace_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          action?: string;
+          allocations?: Json;
+          amount?: number;
+          captured_amount?: number;
+          created_at?: string;
+          expires_at?: string;
+          finalized_at?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          meter?: string;
+          state?: string;
+          user_id?: string | null;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "meter_holds_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      meter_ledger: {
+        Row: {
+          account_id: string;
+          action: string | null;
+          actor: string | null;
+          available_after: number;
+          charge_id: string | null;
+          created_at: string;
+          delta_available: number;
+          delta_held: number;
+          grant_id: string | null;
+          held_after: number;
+          hold_id: string | null;
+          id: number;
+          idempotency_key: string;
+          kind: string;
+          meter: string;
+          reason: string | null;
+          user_id: string | null;
+          workspace_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          action?: string | null;
+          actor?: string | null;
+          available_after: number;
+          charge_id?: string | null;
+          created_at?: string;
+          delta_available: number;
+          delta_held: number;
+          grant_id?: string | null;
+          held_after: number;
+          hold_id?: string | null;
+          id?: number;
+          idempotency_key: string;
+          kind: string;
+          meter: string;
+          reason?: string | null;
+          user_id?: string | null;
+          workspace_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          action?: string | null;
+          actor?: string | null;
+          available_after?: number;
+          charge_id?: string | null;
+          created_at?: string;
+          delta_available?: number;
+          delta_held?: number;
+          grant_id?: string | null;
+          held_after?: number;
+          hold_id?: string | null;
+          id?: number;
+          idempotency_key?: string;
+          kind?: string;
+          meter?: string;
+          reason?: string | null;
+          user_id?: string | null;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "meter_ledger_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           avatar_url: string | null;
@@ -5056,6 +6467,48 @@ export type Database = {
             columns: ["order_id"];
             isOneToOne: false;
             referencedRelation: "link_orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      referrals: {
+        Row: {
+          created_at: string;
+          id: string;
+          referred_account_id: string;
+          referrer_account_id: string;
+          rewarded_at: string | null;
+          status: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          referred_account_id: string;
+          referrer_account_id: string;
+          rewarded_at?: string | null;
+          status?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          referred_account_id?: string;
+          referrer_account_id?: string;
+          rewarded_at?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "referrals_referred_account_id_fkey";
+            columns: ["referred_account_id"];
+            isOneToOne: true;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "referrals_referrer_account_id_fkey";
+            columns: ["referrer_account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
             referencedColumns: ["id"];
           },
         ];
@@ -5879,12 +7332,12 @@ export type Database = {
       };
       ugc_renders: {
         Row: {
-          billing_ready: boolean;
           actual_cost_usd: number | null;
           aspect_ratio: string;
           asset_id: string | null;
           attempts: number;
           audio: boolean;
+          billing_ready: boolean;
           completed_at: string | null;
           created_at: string;
           created_by: string | null;
@@ -5920,12 +7373,12 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
-          billing_ready?: boolean;
           actual_cost_usd?: number | null;
           aspect_ratio: string;
           asset_id?: string | null;
           attempts?: number;
           audio?: boolean;
+          billing_ready?: boolean;
           completed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -5961,12 +7414,12 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
-          billing_ready?: boolean;
           actual_cost_usd?: number | null;
           aspect_ratio?: string;
           asset_id?: string | null;
           attempts?: number;
           audio?: boolean;
+          billing_ready?: boolean;
           completed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -6028,6 +7481,53 @@ export type Database = {
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      upgrade_requests: {
+        Row: {
+          account_id: string;
+          created_at: string;
+          feature: string;
+          id: string;
+          message: string | null;
+          requested_by: string;
+          required_plan: string | null;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          account_id: string;
+          created_at?: string;
+          feature: string;
+          id?: string;
+          message?: string | null;
+          requested_by: string;
+          required_plan?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string;
+          created_at?: string;
+          feature?: string;
+          id?: string;
+          message?: string | null;
+          requested_by?: string;
+          required_plan?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "upgrade_requests_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
             referencedColumns: ["id"];
           },
         ];
@@ -6674,20 +8174,6 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "workspace_credit_ledger_line_id_fkey";
-            columns: ["line_id"];
-            isOneToOne: false;
-            referencedRelation: "link_order_lines";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "workspace_credit_ledger_order_id_fkey";
-            columns: ["order_id"];
-            isOneToOne: false;
-            referencedRelation: "link_orders";
-            referencedColumns: ["id"];
-          },
-          {
             foreignKeyName: "workspace_credit_ledger_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
@@ -7054,9 +8540,11 @@ export type Database = {
           duplicate_of: string | null;
           first_prompt: string | null;
           frozen_at: string | null;
+          frozen_reason: string | null;
           goals: string | null;
           id: string;
           industry: string | null;
+          monthly_credit_cap: number | null;
           name: string;
           onboarded_at: string | null;
           owner_id: string;
@@ -7065,7 +8553,7 @@ export type Database = {
         };
         Insert: {
           audience?: string | null;
-          billing_account_id?: string;
+          billing_account_id: string;
           brand_voice?: Json;
           client_status?: Database["public"]["Enums"]["client_status"];
           connected_provider?: string | null;
@@ -7074,9 +8562,11 @@ export type Database = {
           duplicate_of?: string | null;
           first_prompt?: string | null;
           frozen_at?: string | null;
+          frozen_reason?: string | null;
           goals?: string | null;
           id?: string;
           industry?: string | null;
+          monthly_credit_cap?: number | null;
           name?: string;
           onboarded_at?: string | null;
           owner_id: string;
@@ -7094,9 +8584,11 @@ export type Database = {
           duplicate_of?: string | null;
           first_prompt?: string | null;
           frozen_at?: string | null;
+          frozen_reason?: string | null;
           goals?: string | null;
           id?: string;
           industry?: string | null;
+          monthly_credit_cap?: number | null;
           name?: string;
           onboarded_at?: string | null;
           owner_id?: string;
@@ -7104,6 +8596,13 @@ export type Database = {
           website_url?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "workspaces_billing_account_id_fkey";
+            columns: ["billing_account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "workspaces_duplicate_of_fkey";
             columns: ["duplicate_of"];
@@ -7118,7 +8617,21 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      accept_billed_workspace_invite: {
+        Args: { p_token: string; p_user: string; p_email: string; p_seat_limit?: number };
+        Returns: string;
+      };
       accept_workspace_invite: { Args: { _token: string }; Returns: string };
+      account_wallet: {
+        Args: { p_account: string };
+        Returns: {
+          meter: string;
+          available: number;
+          held: number;
+          available_any: number;
+          debt: number;
+        }[];
+      };
       acquire_provider_lock: {
         Args: {
           p_provider: string;
@@ -7128,6 +8641,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      activate_billing_social_profile_slot: { Args: { p_workspace: string }; Returns: undefined };
       ai_usage_summary: {
         Args: { p_scope_key: string };
         Returns: {
@@ -7171,10 +8685,22 @@ export type Database = {
         }[];
       };
       apply_credit_entry: { Args: { p: Json }; Returns: Json };
+      backlink_spent_credits: { Args: { p_workspace: string }; Returns: number };
+      billing_margin_report: { Args: never; Returns: Json };
+      billing_rollout_report: { Args: never; Returns: Json };
       call_app_hook: { Args: { p_path: string }; Returns: number };
       capture_ai_usage_reservation: {
         Args: { p_id: string; p_actual_cost_usd?: number; p_latency_ms?: number };
         Returns: boolean;
+      };
+      change_billed_workspace_member_role: {
+        Args: {
+          p_workspace: string;
+          p_user: string;
+          p_role: Database["public"]["Enums"]["app_role"];
+          p_seat_limit?: number;
+        };
+        Returns: undefined;
       };
       claim_analytics_sync_runs: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
@@ -7222,6 +8748,10 @@ export type Database = {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["site_publications"]["Row"][];
       };
+      claim_tracked_prompts: {
+        Args: { p_limit: number; p_lease_seconds: number };
+        Returns: Database["public"]["Tables"]["geo_tracked_prompts"]["Row"][];
+      };
       claim_ugc_renders: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["ugc_renders"]["Row"][];
@@ -7229,6 +8759,16 @@ export type Database = {
       consume_rate_limit: {
         Args: { p_bucket_key: string; p_window_seconds: number; p_limit: number; p_cost?: number };
         Returns: { allowed: boolean; current_count: number; reset_at: string }[];
+      };
+      create_billed_workspace_for_user: {
+        Args: {
+          p_user_id: string;
+          p_name: string;
+          p_website_url: string;
+          p_idempotency_key: string;
+          p_brand_limit: number;
+        };
+        Returns: { workspace_id: string; created: boolean }[];
       };
       create_workspace_for_user: {
         Args: {
@@ -7239,6 +8779,7 @@ export type Database = {
         };
         Returns: { workspace_id: string; created: boolean }[];
       };
+      ensure_billing_account: { Args: { p_user: string }; Returns: string };
       experiment_overview: {
         Args: never;
         Returns: {
@@ -7254,6 +8795,14 @@ export type Database = {
         Args: { _workspace_id: string; _action: string; _entity?: string; _payload?: Json };
         Returns: string;
       };
+      meter_capture: { Args: { p: Json }; Returns: Json };
+      meter_clawback: { Args: { p: Json }; Returns: Json };
+      meter_expire_due: { Args: never; Returns: number };
+      meter_grant: { Args: { p: Json }; Returns: Json };
+      meter_hold: { Args: { p: Json }; Returns: Json };
+      meter_release: { Args: { p: Json }; Returns: Json };
+      meter_release_expired_holds: { Args: never; Returns: number };
+      meter_rollover: { Args: { p: Json }; Returns: Json };
       my_workspace_role: { Args: { _workspace_id: string }; Returns: string };
       prune_geo_agent_runs: { Args: never; Returns: Json };
       prune_operational_logs: { Args: never; Returns: Json };
@@ -7261,8 +8810,21 @@ export type Database = {
         Args: { p_provider: string; p_reason: string };
         Returns: boolean;
       };
+      reconcile_billing_capacity: {
+        Args: {
+          p_account: string;
+          p_brand_limit: number;
+          p_seat_limit: number;
+          p_preferred_workspace?: string;
+        };
+        Returns: Json;
+      };
       record_ai_usage: { Args: { p_event: Json }; Returns: number };
       release_ai_usage_reservation: { Args: { p_id: string; p_reason?: string }; Returns: boolean };
+      release_billing_social_profile_slot_if_empty: {
+        Args: { p_workspace: string };
+        Returns: boolean;
+      };
       release_expired_ai_usage_reservations: { Args: never; Returns: number };
       release_provider_lock: { Args: { p_provider: string; p_token: string }; Returns: boolean };
       renew_provider_lock: {
@@ -7270,6 +8832,20 @@ export type Database = {
         Returns: boolean;
       };
       reserve_ai_usage: { Args: { p_request: Json }; Returns: Json };
+      reserve_billing_social_profile_slot: {
+        Args: { p_workspace: string; p_limit: number };
+        Returns: undefined;
+      };
+      set_billing_enforcement_override: {
+        Args: {
+          p_action: string;
+          p_account: string;
+          p_actor: string;
+          p_mode: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
       set_default_brand_style: {
         Args: { p_workspace_id: string; p_style_id: string };
         Returns: undefined;

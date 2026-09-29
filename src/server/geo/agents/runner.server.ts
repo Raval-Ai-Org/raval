@@ -196,6 +196,12 @@ export async function transition(
     .select(RUN_COLS)
     .maybeSingle();
   if (error) throw new Error(error.message);
+  // A reviewed fix or a final status settles the run's credit hold (if any).
+  if (data && (terminal || to === "awaiting_patch_approval")) {
+    void import("@/server/billing/async-charges.server").then((billing) =>
+      billing.settleAsyncChargeSoon("geo_agent_run", run.id),
+    );
+  }
   return (data as unknown as AgentRunRow) ?? null;
 }
 

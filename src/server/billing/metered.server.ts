@@ -145,6 +145,7 @@ export async function beginDeferredMetered(args: {
           route: args.route,
           chargeId: chargeId ?? undefined,
         });
+        lowBalanceSoon(entitlements.accountId);
       } else if (mode === "shadow" && would.code === "would_charge") {
         await logShadow({ ...shadowArgs, amount, code: "would_charge", reason: null });
       }
@@ -384,5 +385,13 @@ export async function runMetered<T>(
     route: args.route,
     chargeId: chargeId ?? undefined,
   });
+  lowBalanceSoon(entitlements.accountId);
   return { result, balance: Number(captured.available ?? 0), chargeId };
+}
+
+/** Tell the owner once when a balance runs low (never blocks the response). */
+function lowBalanceSoon(accountId: string): void {
+  void import("./notify.server")
+    .then(({ checkLowBalance }) => checkLowBalance(accountId))
+    .catch((cause) => console.error("[billing] low balance check failed", cause));
 }

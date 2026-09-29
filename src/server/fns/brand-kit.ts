@@ -231,9 +231,39 @@ export const addWritingSample = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    // The brand's first voice analysis is free; each later writing sample is a
+    // re-analysis (charged only when the analysis succeeds).
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { count } = await supabaseAdmin
+      .from("brand_kit_assets")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", data.workspaceId)
+      .eq("kind", "writing_sample")
+      .eq("analysis_status", "done");
+    const { beginAsyncCharge } = await import("@/server/billing/async-charges.server");
+    const requestKey = crypto.randomUUID();
+    const charge =
+      (count ?? 0) > 0
+        ? await beginAsyncCharge({
+            workspaceId: data.workspaceId,
+            userId: context.userId,
+            role,
+            kind: "brand_voice",
+            action: "brand_voice_rerun",
+            requestKey,
+            route: "brand-kit/analyze-writing",
+          })
+        : null;
     const { addWritingSample: add } = await import("@/server/brand-kit/assets.server");
-    const result = await add({ ...data, userId: context.userId });
+    let result: Awaited<ReturnType<typeof add>>;
+    try {
+      result = await add({ ...data, userId: context.userId });
+      await charge?.link("brand_voice", result.assetId);
+    } catch (error) {
+      await charge?.release();
+      throw error;
+    }
     const { kickAnalysis } = await import("@/server/brand-kit/analyze.server");
     kickAnalysis(data.workspaceId, [result.assetId]);
     return result;

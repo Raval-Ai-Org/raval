@@ -298,7 +298,13 @@ export type StartResult =
 
 export async function startAgentRun(
   ctx: FixContext,
-  args: { findingId: string; sourceId?: string | null; baseBranch?: string | null },
+  args: {
+    findingId: string;
+    sourceId?: string | null;
+    baseBranch?: string | null;
+    /** Takes the credit hold for a repository run (the GEO Engineer), just before it starts. */
+    billing?: () => Promise<import("@/server/billing/async-charges.server").AsyncCharge>;
+  },
 ): Promise<StartResult> {
   if (!ctx.canPropose) throw new FixWorkflowError("Only editors can run the GEO agent.", 403);
   if (!geoAgentEnabled())
@@ -469,6 +475,8 @@ export async function startAgentRun(
     };
   }
 
+  // Everything that can refuse has run; take the hold before any paid work.
+  const charge = args.billing ? await args.billing() : null;
   const { data: row, error: insertError } = await supabaseAdmin
     .from("geo_agent_runs")
     .insert({
@@ -492,6 +500,7 @@ export async function startAgentRun(
     .select(RUN_COLS)
     .single();
   if (insertError || !row) {
+    await charge?.release();
     if (insertError?.code === "23505") {
       const { data: again } = await supabaseAdmin
         .from("geo_agent_runs")
@@ -506,6 +515,7 @@ export async function startAgentRun(
     throw new Error(insertError?.message ?? "Couldn't start the agent");
   }
   const run = row as unknown as AgentRunRow;
+  await charge?.link("geo_agent_run", run.id);
   await logAgentEvent(run, {
     stage: null,
     kind: "stage_started",

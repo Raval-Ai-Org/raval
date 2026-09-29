@@ -1,12 +1,32 @@
 "use client";
 
-import type { ReactNode, MouseEvent, KeyboardEvent } from "react";
-import { LockKeyhole } from "lucide-react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { Lock } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
 import { FEATURES, PLANS, type FeatureKey } from "@/lib/billing/catalog";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
+import { cn } from "@/lib/utils";
 
-/** Keep a feature entry visible and route locked clicks to the billing modal. */
+/** True when the current plan locks this feature (false while loading). */
+export function useFeatureLocked(feature: FeatureKey): boolean {
+  const { data } = useEntitlements();
+  const grant = data?.features[feature];
+  return Boolean(grant && !grant.allowed);
+}
+
+/** Open the upgrade screen for a feature. Call it from a click handler only. */
+export function openFeatureUpgrade(feature: FeatureKey) {
+  emitAppEvent("open:upgrade", {
+    code: "upgrade_required",
+    feature,
+    requiredPlan: FEATURES[feature].minPlan,
+  });
+}
+
+/**
+ * Keep a feature entry visible on every plan. When the plan locks it, show a
+ * small lock and send the click to the upgrade screen instead of the action.
+ */
 export function FeatureGate({
   feature,
   children,
@@ -19,38 +39,34 @@ export function FeatureGate({
   const { data } = useEntitlements();
   const grant = data?.features[feature];
   const locked = Boolean(grant && !grant.allowed);
-  const openUpgrade = () =>
-    emitAppEvent("billing:blocked", {
-      code: "upgrade_required",
-      feature,
-      requiredPlan: grant?.requiredPlan ?? FEATURES[feature].minPlan,
-    });
+  const plan = PLANS[grant?.requiredPlan ?? FEATURES[feature].minPlan];
   const intercept = (event: MouseEvent<HTMLSpanElement>) => {
     if (!locked) return;
     event.preventDefault();
     event.stopPropagation();
-    openUpgrade();
+    openFeatureUpgrade(feature);
   };
   const interceptKey = (event: KeyboardEvent<HTMLSpanElement>) => {
     if (!locked || (event.key !== "Enter" && event.key !== " ")) return;
     event.preventDefault();
     event.stopPropagation();
-    openUpgrade();
+    openFeatureUpgrade(feature);
   };
   return (
     <span
-      className={`relative inline-flex ${className ?? ""}`}
+      className={cn("relative inline-flex", className)}
       onClickCapture={intercept}
       onKeyDownCapture={interceptKey}
-      title={locked ? `${PLANS[grant!.requiredPlan].label} plan` : undefined}
+      title={locked ? `${FEATURES[feature].label} · ${plan.label} plan` : undefined}
     >
       {children}
       {locked && (
         <span
-          className="pointer-events-none absolute -right-1 -top-1 rounded-full bg-background p-0.5 text-muted-foreground"
-          aria-label={`Requires ${PLANS[grant!.requiredPlan].label}`}
+          className="pointer-events-none absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-foreground text-background shadow-sm"
+          role="img"
+          aria-label={`Needs the ${plan.label} plan`}
         >
-          <LockKeyhole className="h-3 w-3" aria-hidden />
+          <Lock className="h-2.5 w-2.5" strokeWidth={2.6} aria-hidden />
         </span>
       )}
     </span>

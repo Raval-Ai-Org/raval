@@ -26,8 +26,8 @@ export type AppEventMap = {
   "workspace:changed": { id: string | null } | undefined;
   /** Open the Operations inbox (agent findings, runs, approvals). */
   "open:operations": { tab?: "findings" | "approvals" | "runs" } | undefined;
-  /** Open the Plan & usage panel (real metered AI usage vs plan limits). */
-  "open:usage": undefined;
+  /** Open Plan & billing, optionally on a tab. */
+  "open:usage": { tab?: "overview" | "plans" | "topup" | "prices" | "history" } | undefined;
   "billing:changed": { balance?: number } | undefined;
   "billing:blocked": {
     code: string;
@@ -120,8 +120,24 @@ export type AppEventMap = {
   "open:share": undefined;
   "open:studio": undefined;
   "open:tasks": undefined;
-  /** No billing surface listens yet — see docs/adr/0006. */
-  "open:upgrade": undefined;
+  /**
+   * Open the upgrade screen. With a block it explains that block (locked
+   * feature, empty balance, limit); without one it offers the next plan.
+   * Only ever emitted from a person's click.
+   */
+  "open:upgrade":
+    | {
+        code: string;
+        feature?: string;
+        requiredPlan?: string;
+        meter?: string;
+        needed?: number;
+        available?: number;
+        limit?: string;
+        used?: number;
+        max?: number;
+      }
+    | undefined;
   "toggle:ai-visibility": undefined;
   "toggle:studio": undefined;
 };

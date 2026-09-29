@@ -36,6 +36,8 @@ export type Entitlements = {
   status: string;
   enforcement: "off" | "shadow" | "on";
   trial: { active: boolean; endsAt: string | null; used: boolean };
+  /** A plan activated by Mellox (paid offline, or a comp) and when it ends. */
+  manual: { plan: PlanId; until: string } | null;
   period: { start: string | null; end: string | null; nextGrantAt: string | null };
   frozen: boolean;
   addons: Array<{ key: string; quantity: number }>;
@@ -44,7 +46,8 @@ export type Entitlements = {
   usage: {
     brands: number;
     seats: number;
-    socialProfiles: number;
+    /** Posts sent this calendar month (UTC), each network counts. Fair use only. */
+    postsThisMonth: number;
     trackedPrompts: number;
     scansUsed: number;
     competitors: number;
@@ -99,20 +102,13 @@ export function limitsFor(plan: PlanId, addons: Addon[], paused = false): Entitl
     limits.maxConcurrentExperiments = 0;
     limits.maxConcurrentRenders = 0;
     limits.scansPerMonth = 0;
-    limits.socialProfiles = 0;
     return limits;
   }
   for (const item of addons) {
     const addon = ADDONS[item.catalog_key as keyof typeof ADDONS];
     if (!addon || addon.availability !== "launch" || !addon.plans.includes(plan as never)) continue;
     const quantity = Math.max(0, item.quantity);
-    for (const key of [
-      "brands",
-      "socialProfiles",
-      "trackedPrompts",
-      "seats",
-      "marketBrainWeeklyBrands",
-    ] as const) {
+    for (const key of ["brands", "trackedPrompts", "seats", "marketBrainWeeklyBrands"] as const) {
       const amount = addon.adds[key];
       if (typeof amount === "number" && limits[key] !== null) {
         (limits as unknown as Record<string, number>)[key] += amount * quantity;
@@ -170,6 +166,10 @@ export function resolveEntitlements(args: {
       endsAt: account.trial_ends_at,
       used: account.trial_used,
     },
+    manual:
+      account.comped_plan_id && account.comped_until && new Date(account.comped_until) > now
+        ? { plan: validPlan(account.comped_plan_id), until: account.comped_until }
+        : null,
     period: {
       start: account.current_period_start,
       end: account.current_period_end,
@@ -184,7 +184,7 @@ export function resolveEntitlements(args: {
     usage: args.usage ?? {
       brands: 0,
       seats: 0,
-      socialProfiles: 0,
+      postsThisMonth: 0,
       trackedPrompts: 0,
       scansUsed: 0,
       competitors: 0,
@@ -272,12 +272,18 @@ export async function getEntitlements(args: {
   const monthStart = new Date();
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);
-  const [scans, competitors, experiments, renders, profiles] = await Promise.all([
-    admin
-      .from("allowance_usage")
-      .select("scans_used")
-      .eq("account_id", account.id)
-      .gte("window_start", monthStart.toISOString()),
+  const [scans, competitors, experiments, renders, posts, prompts] = await Promise.all([
+    // Site scans this month: full crawls a person started. Re-checks after a
+    // fix ("rescan") are always free and never count.
+    workspaceIds.length
+      ? admin
+          .from("geo_scans")
+          .select("id", { count: "exact", head: true })
+          .in("workspace_id", workspaceIds)
+          .eq("mode", "full")
+          .neq("trigger", "rescan")
+          .gte("created_at", monthStart.toISOString())
+      : Promise.resolve({ count: 0, error: null }),
     workspaceIds.length
       ? admin
           .from("workspace_competitors")
@@ -301,14 +307,20 @@ export async function getEntitlements(args: {
       : Promise.resolve({ count: 0, error: null }),
     workspaceIds.length
       ? admin
-          .from("social_accounts")
-          .select("workspace_id")
+          .from("social_usage_events")
+          .select("targets")
           .in("workspace_id", workspaceIds)
-          .eq("provider", "socialapi")
-          .in("status", ["active", "reconnect_required"])
+          .gte("created_at", monthStart.toISOString())
       : Promise.resolve({ data: [], error: null }),
+    workspaceIds.length
+      ? admin
+          .from("geo_tracked_prompts")
+          .select("id", { count: "exact", head: true })
+          .in("workspace_id", workspaceIds)
+          .is("paused_at", null)
+      : Promise.resolve({ count: 0, error: null }),
   ]);
-  if (scans.error || competitors.error || experiments.error || renders.error || profiles.error) {
+  if (scans.error || competitors.error || experiments.error || renders.error || posts.error) {
     throw new Error("Could not load billing usage limits.");
   }
   const meters = emptyMeters();
@@ -339,9 +351,13 @@ export async function getEntitlements(args: {
     usage: {
       brands: workspaceIds.length,
       seats: seats.size,
-      socialProfiles: new Set((profiles.data ?? []).map((row) => String(row.workspace_id))).size,
-      trackedPrompts: 0,
-      scansUsed: (scans.data ?? []).reduce((sum, row) => sum + Number(row.scans_used ?? 0), 0),
+      postsThisMonth: (posts.data ?? []).reduce(
+        (sum, row) => sum + Math.max(1, Number(row.targets ?? 1)),
+        0,
+      ),
+      // An older database without the table counts as none rather than failing.
+      trackedPrompts: prompts.error ? 0 : (prompts.count ?? 0),
+      scansUsed: scans.count ?? 0,
       competitors: competitors.count ?? 0,
       openExperiments: experiments.count ?? 0,
       rendersRunning: renders.count ?? 0,

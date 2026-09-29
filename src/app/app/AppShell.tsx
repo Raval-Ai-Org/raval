@@ -466,30 +466,37 @@ function AppShell() {
               setNavOpen(false);
             },
           })}
-          {sidebarAction({
-            icon: Link2,
-            label: "Backlinks",
-            hint: "SEO",
-            accent: "hsl(var(--brand-green))",
-            onClick: () => navigate({ to: workspacePath(workspaceId, "backlinks") }),
-          })}
-          {sidebarAction({
-            icon: Users,
-            label: "Competitors",
-            accent: "hsl(var(--brand-green))",
-            onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
-          })}
-          {proofEngine?.enabled &&
-            sidebarAction({
-              icon: Trophy,
-              label: "Experiments",
-              hint: "Prove what works",
+          <FeatureGate feature="backlinks" className="w-full">
+            {sidebarAction({
+              icon: Link2,
+              label: "Backlinks",
+              hint: "SEO",
               accent: "hsl(var(--brand-green))",
-              onClick: () => {
-                navigate({ to: workspacePath(workspaceId, "experiments") });
-                setNavOpen(false);
-              },
+              onClick: () => navigate({ to: workspacePath(workspaceId, "backlinks") }),
             })}
+          </FeatureGate>
+          <FeatureGate feature="competitors" className="w-full">
+            {sidebarAction({
+              icon: Users,
+              label: "Competitors",
+              accent: "hsl(var(--brand-green))",
+              onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
+            })}
+          </FeatureGate>
+          {proofEngine?.enabled && (
+            <FeatureGate feature="experiments" className="w-full">
+              {sidebarAction({
+                icon: Trophy,
+                label: "Experiments",
+                hint: "Prove what works",
+                accent: "hsl(var(--brand-green))",
+                onClick: () => {
+                  navigate({ to: workspacePath(workspaceId, "experiments") });
+                  setNavOpen(false);
+                },
+              })}
+            </FeatureGate>
+          )}
           {sidebarAction({
             icon: Brain,
             label: "Brand DNA",
@@ -543,7 +550,6 @@ function AppShell() {
               brandKeywords={brandDna.keywords}
             />
           </Suspense>
-          <BillingPanel />
           <WalletPill />
         </div>
 
@@ -817,7 +823,6 @@ function AppShell() {
                     brandKeywords={brandDna.keywords}
                   />
                 </Suspense>
-                <BillingPanel />
                 <WalletPill />
               </div>
               <button
@@ -916,6 +921,7 @@ function AppShell() {
                 <UgcStudioDialog workspaceId={workspaceId} />
                 <CreateLauncher />
               </Suspense>
+              <BillingPanel />
             </div>
           </motion.div>
         </header>

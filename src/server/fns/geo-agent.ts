@@ -6,6 +6,7 @@ import { rateLimitFor } from "@/server/rate-limit";
 import { getWorkspaceRole } from "@/server/workspace-access.server";
 import { roleAtLeast } from "@/server/api-auth";
 import { ForbiddenError } from "@/server/http-error";
+import { requireBillingFeature } from "@/server/billing/feature.server";
 
 // Mellox GEO Engineer (src/server/geo/agents/service.server.ts). Reading needs
 // membership; starting, approving, revising, inputs, cancel and retry need
@@ -20,6 +21,7 @@ async function agentContext(context: ServerFnContext, workspaceId: string) {
     supabase: context.supabase,
     userId: context.userId,
     workspaceId,
+    role,
     canPropose: roleAtLeast(role, "editor"),
     canManage: roleAtLeast(role, "admin"),
   };
@@ -44,8 +46,32 @@ export const startAgentRun = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = await agentContext(context, data.workspaceId);
     requireEditor(ctx);
+    // Every agent run needs one-click fixes (Growth). A repository run is the
+    // GEO Engineer (Agency, 800 credits): its hold is taken right before the
+    // run starts and settled when the run has a reviewed fix (or fails).
+    // WordPress / Webflow runs are charged when their change is applied.
+    await requireBillingFeature({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role: ctx.role,
+      feature: "geo_apply_fixes",
+      spending: true,
+    });
     const svc = await import("@/server/geo/agents/service.server");
-    return svc.startAgentRun(ctx, data);
+    const { beginAsyncCharge } = await import("@/server/billing/async-charges.server");
+    return svc.startAgentRun(ctx, {
+      ...data,
+      billing: () =>
+        beginAsyncCharge({
+          workspaceId: data.workspaceId,
+          userId: context.userId,
+          role: ctx.role,
+          kind: "geo_agent_run",
+          action: "geo_agent_run",
+          requestKey: `${data.findingId}:${Date.now()}`,
+          route: "geo.agent.investigate",
+        }),
+    });
   });
 
 export const getAgentRun = createServerFn({ method: "POST" })

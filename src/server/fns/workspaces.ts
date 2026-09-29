@@ -199,6 +199,21 @@ export const ensureAuthWorkspace = createServerFn({ method: "POST" })
         { onConflict: "id" },
       );
 
+    // A friend's invite link (/r/<code>) left a cookie: record who invited
+    // this person, once. Rewards are paid later by the billing cron.
+    try {
+      const { cookies } = await import("next/headers");
+      const jar = await cookies();
+      const code = jar.get("mellox_ref")?.value;
+      if (code) {
+        const { attributeReferral } = await import("@/server/billing/referrals.server");
+        await attributeReferral(context.userId, code);
+        jar.delete("mellox_ref");
+      }
+    } catch (cause) {
+      console.error("[billing] referral attribution failed", cause);
+    }
+
     // Never auto-create or pick a workspace: sign-in lands on /projects and
     // the user chooses one explicitly.
     return null;

@@ -92,7 +92,7 @@ describe("billing entitlements", () => {
       { catalog_key: "white_label_domain", quantity: 100 },
     ]);
     expect(limits.brands).toBe(PLANS.growth.brands + 2);
-    expect(limits.socialProfiles).toBe(PLANS.growth.limits.socialProfiles + 2);
+    expect(limits.trackedPrompts).toBe(PLANS.growth.limits.trackedPrompts + 60);
     expect(limits.seats).toBe((PLANS.growth.seats ?? 0) + 1);
   });
 

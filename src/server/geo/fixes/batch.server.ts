@@ -118,6 +118,12 @@ async function patchBatch(id: string, patch: Record<string, unknown>): Promise<B
     .select(BATCH_COLS)
     .single();
   if (error || !data) throw new Error(error?.message ?? "Couldn't update the fix batch");
+  // Generation finished (a draft to review) or failed: settle its credit hold.
+  if (patch.status === "draft" || patch.status === "failed") {
+    void import("@/server/billing/async-charges.server").then((billing) =>
+      billing.settleAsyncChargeSoon("fix_batch", id),
+    );
+  }
   return data as unknown as BatchRow;
 }
 

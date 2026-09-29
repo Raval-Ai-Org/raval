@@ -13,7 +13,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sun, Moon, Settings, ChevronDown } from "@/components/brand/icons";
-import { LogOut, HelpCircle, Sparkles } from "@/components/ui/gemini-icons";
+import { LogOut, HelpCircle } from "@/components/ui/gemini-icons";
+import { Shield, Wallet } from "@/components/icons";
+import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/hooks/use-theme";
 import { signOutAndRedirect } from "@/lib/auth";
@@ -163,9 +165,10 @@ export function AccountMenu({
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
-          <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" />
+          <Wallet className="h-4 w-4 text-primary" />
           Plan & billing
         </DropdownMenuItem>
+        <AdminMenuItem />
         <DropdownMenuItem
           onSelect={() => {
             window.open("mailto:support@mellox.ai", "_blank", "noopener,noreferrer");
@@ -267,8 +270,9 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           onSelect={() => emitAppEvent("open:usage")}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
-          <Sparkles className="h-4 w-4 text-[hsl(var(--brand-blue))]" /> Plan & billing
+          <Wallet className="h-4 w-4 text-primary" /> Plan & billing
         </DropdownMenuItem>
+        <AdminMenuItem />
         <DropdownMenuItem
           onSelect={() => window.open("mailto:support@mellox.ai", "_blank", "noopener,noreferrer")}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
@@ -287,5 +291,19 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** Only Mellox billing admins see this; the server decides who they are. */
+function AdminMenuItem() {
+  const { data } = useEntitlements();
+  if (!data?.isBillingAdmin) return null;
+  return (
+    <DropdownMenuItem
+      onSelect={() => window.location.assign("/admin")}
+      className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
+    >
+      <Shield className="h-4 w-4 text-muted-foreground" /> Admin console
+    </DropdownMenuItem>
   );
 }

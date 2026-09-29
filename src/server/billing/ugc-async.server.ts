@@ -74,6 +74,7 @@ export async function settleUgcBilling(row: RenderRow): Promise<void> {
       route: "ugc/renders:create",
       chargeId: link.charge_id ?? undefined,
     });
+    void import("./notify.server").then((m) => m.checkLowBalanceSoon(link.account_id));
   } else if (!succeeded && link.hold_id) {
     await releaseMeter({
       accountId: link.account_id,

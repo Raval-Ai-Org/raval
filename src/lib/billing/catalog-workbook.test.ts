@@ -4,8 +4,8 @@ import xlsx from "xlsx";
 import { describe, expect, it } from "vitest";
 import { ADDONS, CREDIT_PACKS, PLANS, VIDEO_PACKS } from "./catalog";
 
-// The attached v2.3 workbook changes only Add-ons & Packs!C5 copy from the
-// checked-in source workbook. All numeric assertions therefore cover v2.3.
+// Rows follow the 29 September workbook (Post for Me: unlimited posts on every
+// plan with a hidden fair-use cap).
 const workbook = xlsx.read(
   readFileSync(resolve(process.cwd(), "docs/pricing/v2/Mellox_AI_Pricing_Model_v2.xlsx")),
   { type: "buffer" },
@@ -15,9 +15,10 @@ const rows = (sheet: string) =>
 const numberAt = (sheet: string, row: number, column: number) =>
   Number(rows(sheet)[row - 1]?.[column - 1]);
 
-describe("billing catalog against the v2.3 workbook", () => {
+describe("billing catalog against the v2 workbook", () => {
   it("matches paid plan prices, grants and capacity", () => {
     for (const [column, id] of [
+      [3, "free"],
       [4, "starter"],
       [5, "growth"],
       [6, "agency"],
@@ -26,6 +27,9 @@ describe("billing catalog against the v2.3 workbook", () => {
       const plan = PLANS[id];
       expect(plan.priceMonthlyUsd).toBe(numberAt("Plans", 6, column));
       expect(plan.priceAnnualUsd).toBe(plan.priceMonthlyUsd * 10);
+      expect(plan.limits.trackedPrompts).toBe(numberAt("Plans", 15, column));
+      // Free's 100 credits are a one-time signup grant (modelled as 50/month).
+      if (id === "free") continue;
       expect(plan.brands).toBe(numberAt("Plans", 8, column));
       expect(plan.seats ?? 9999).toBe(numberAt("Plans", 9, column));
       expect(plan.allowances.credits).toBe(numberAt("Plans", 10, column));
@@ -33,8 +37,9 @@ describe("billing catalog against the v2.3 workbook", () => {
       expect(plan.allowances.proMessages).toBe(numberAt("Plans", 12, column));
       expect(plan.allowances.flashMessages).toBe(numberAt("Plans", 13, column));
       expect(plan.limits.trackedPrompts).toBe(numberAt("Plans", 15, column));
-      expect(plan.limits.socialProfiles).toBe(numberAt("Plans", 28, column));
-      expect(plan.limits.maxConcurrentRenders).toBe(numberAt("Plans", 30, column));
+      expect(plan.limits.postsFairUse).toBe(numberAt("Plans", 29, column));
+      expect(plan.limits.maxConcurrentExperiments).toBe(numberAt("Plans", 30, column));
+      expect(plan.limits.maxConcurrentRenders).toBe(numberAt("Plans", 31, column));
     }
   });
 
@@ -63,7 +68,6 @@ describe("billing catalog against the v2.3 workbook", () => {
     ] as const) {
       expect(ADDONS[key].usdPerMonth).toBe(numberAt("Add-ons & Packs", row, 2));
     }
-    expect(ADDONS.extra_brand.adds.socialProfiles).toBe(1);
     expect(ADDONS.extra_brand.adds.marketBrainWeeklyBrands).toBe(1);
   });
 });

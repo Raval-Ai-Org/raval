@@ -23,16 +23,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { DeliveryView } from "@/components/app/DeliveryView";
 import { DownloadAssetButton } from "@/components/app/DownloadAssetButton";
-import { StudioDestinationPicker } from "@/components/app/StudioDestinationPicker";
+import { StudioPublishFlow } from "./StudioPublishFlow";
 import { supabase } from "@/integrations/supabase/client";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { updateContentItem } from "@/lib/content.functions";
 import { publishContentItems, scheduleContentItems } from "@/lib/sdr.functions";
-import type { PublishSelection } from "@/lib/sdr.handlers";
 import { canDistribute, useSdrStatus } from "@/hooks/use-sdr-status";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
+import { isDistributionPlatform, type DistributionPlatformId } from "@/lib/distribution-platforms";
 import { RATIOS } from "@/lib/studio/aspect";
 import { readBrandPayload } from "@/lib/studio/client";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
@@ -49,6 +49,7 @@ import {
   generate,
   openComposer,
   patchJobOutput,
+  updateSession,
   type StudioSession,
 } from "@/lib/studio/session-store";
 import { AdPreview } from "./previews/AdPreview";
@@ -225,8 +226,9 @@ export function ReviewPanel({
   const [scope, setScope] = useState<"one" | "all">("all");
   const [custom, setCustom] = useState("");
   const [scheduleAt, setScheduleAt] = useState(defaultScheduleTime);
-  const [selection, setSelection] = useState<PublishSelection>({ type: "all" });
-  const [tiktokPrivacy, setTiktokPrivacy] = useState<string | null>(null);
+  const [publishMode, setPublishMode] = useState<"publish" | "schedule" | null>(null);
+  const [expandChoices, setExpandChoices] = useState<PlatformId[]>([]);
+  const [showExpand, setShowExpand] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [justApproved, setJustApproved] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -291,14 +293,27 @@ export function ReviewPanel({
   const locked = rows.some((r) =>
     ["scheduled", "publishing", "published", "partial_failed"].includes(r.status),
   );
+  const hasDelivery = rows.some((r) =>
+    ["scheduled", "publishing", "published", "partial_failed", "failed"].includes(r.status),
+  );
   const approvable = rows.some((r) => r.status === "pending" || r.status === "draft");
   const deliverablePlatforms: readonly string[] = sdr?.platforms?.length
     ? sdr.platforms
     : FALLBACK_DELIVERABLE;
   const deliverable = rows.filter((r) => deliverablePlatforms.includes(String(r.meta?.platform)));
-  const sendsTiktok = deliverable.some((r) => r.meta?.platform === "tiktok");
+  const readyToSend = deliverable.filter((row) =>
+    ["draft", "pending", "approved"].includes(row.status),
+  );
   const shippableType = SHIPPABLE_TYPES.includes(session.type);
-  const canShip = distributionReady && deliverable.length > 0 && shippableType;
+  const canShip = distributionReady && readyToSend.length > 0 && shippableType;
+  const publishDestinations = readyToSend
+    .filter((row): row is ReviewRow & { meta: { platform: DistributionPlatformId } } =>
+      isDistributionPlatform(row.meta?.platform),
+    )
+    .map((row) => ({ id: row.id, platform: row.meta.platform }));
+  const morePlatforms = ["social", "image", "video", "carousel"].includes(session.type)
+    ? format.platforms.filter((platform) => !platforms.includes(platform))
+    : [];
   const multi = platforms.length > 1;
   const refineTarget = multi && scope === "one" && current ? current : "all";
 
@@ -367,14 +382,18 @@ export function ReviewPanel({
     }
   };
 
-  const approve = async () => {
+  const approve = async (selectedIds?: string[]) => {
     if (dirty && !(await save())) return false;
     setBusy("approve");
     try {
       if (!fixtureRows) {
         await Promise.all(
           rows
-            .filter((r) => r.status === "pending" || r.status === "draft")
+            .filter(
+              (r) =>
+                (r.status === "pending" || r.status === "draft") &&
+                (!selectedIds || selectedIds.includes(r.id)),
+            )
             .map((r) => updateContentItem({ data: { id: r.id, patch: { status: "approved" } } })),
         );
       } else {
@@ -392,15 +411,18 @@ export function ReviewPanel({
     }
   };
 
-  const distribute = async (kind: "schedule" | "publish") => {
-    if (approvable && !(await approve())) return;
+  const distribute = async (
+    kind: "schedule" | "publish",
+    ids: string[],
+    tiktokPrivacy: string | null,
+  ) => {
+    if (approvable && !(await approve(ids))) throw new Error("The draft could not be approved.");
     setBusy(kind);
     try {
-      const ids = deliverable.map((r) => r.id);
-      const options = { tiktokPrivacyLevel: sendsTiktok ? tiktokPrivacy : null };
+      const options = { tiktokPrivacyLevel: tiktokPrivacy };
       const res =
         kind === "publish"
-          ? await publishContentItems(session.workspaceId, ids, selection, options)
+          ? await publishContentItems(session.workspaceId, ids, { type: "all" }, options)
           : await scheduleContentItems(
               session.workspaceId,
               ids.map((id, i) => ({
@@ -409,37 +431,41 @@ export function ReviewPanel({
                   new Date(scheduleAt).getTime() + i * 10 * 60_000,
                 ).toISOString(),
               })),
-              selection,
+              { type: "all" },
               options,
             );
-      const sent = res.results.filter((r) => r.status === "publishing" || r.status === "already");
-      // `failed` = accepted by the provider but rejected by every destination.
-      const skipped = res.results.filter((r) => r.status === "skipped" || r.status === "failed");
-      if (sent.length) {
-        toast.success(
-          kind === "publish"
-            ? `Publishing to ${sent.length} destination${sent.length === 1 ? "" : "s"}`
-            : `Scheduled for ${new Date(scheduleAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`,
-          {
-            description: skipped.length
-              ? `${skipped.length} skipped — ${skipped[0].reason ?? "no connected account"}`
-              : undefined,
-          },
-        );
-      } else {
-        toast.error(kind === "publish" ? "Nothing was published" : "Nothing was scheduled", {
-          description: skipped[0]?.reason ?? "Connect an account for these platforms.",
-        });
-      }
       emitAppEvent("content:changed");
       await loadRows();
-    } catch (e) {
-      toast.error(kind === "publish" ? "Couldn't publish" : "Couldn't schedule", {
-        description: e instanceof Error ? e.message : undefined,
-      });
+      return res;
     } finally {
       setBusy(null);
     }
+  };
+
+  const expandPlatforms = (extra?: PlatformId[]) => {
+    const choices = extra ?? expandChoices;
+    if (!choices.length || revising || locked) return false;
+    if (dirty) {
+      toast("Save your edits before adding platforms.");
+      return false;
+    }
+    updateSession(session.id, {
+      controls: {
+        ...session.controls,
+        platforms: [...new Set([...session.controls.platforms, ...choices])],
+      },
+    });
+    setShowExpand(false);
+    setExpandChoices([]);
+    void generate(session.id, {
+      kind: "refine",
+      refine: {
+        target: "platforms",
+        instruction:
+          "Create native captions for the newly selected platforms using this same post, angle, facts, and visual. Keep the existing platform versions unchanged.",
+      },
+    });
+    return true;
   };
 
   const discard = async () => {
@@ -853,38 +879,43 @@ export function ReviewPanel({
             Discard
           </Button>
           <Button
-            className="studio-cta flex-1"
+            variant="outline"
             size="lg"
             onClick={() => void approve()}
-            loading={busy === "approve"}
             disabled={revising || busy !== null || editing}
-            title={failing ? "Some checks need attention — you can still approve" : undefined}
           >
-            <Check />
-            {multi ? `Approve all ${platforms.length}` : "Approve"}
+            <Check /> Approve for later
           </Button>
+          {canShip ? (
+            <Button
+              className="studio-cta flex-1"
+              size="lg"
+              onClick={() => setPublishMode("publish")}
+              disabled={revising || busy !== null || editing}
+            >
+              <Send /> Review & publish
+            </Button>
+          ) : null}
         </motion.div>
       ) : canShip ? (
         <motion.div key="ship" {...fadeSwap} className="grid w-full grid-cols-[auto_1fr] gap-2">
           <Button
             variant="outline"
             size="lg"
-            onClick={() => void distribute("publish")}
-            loading={busy === "publish"}
+            onClick={() => setPublishMode("schedule")}
             disabled={busy !== null || revising}
           >
-            <Send />
-            Publish now
+            <CalendarClock />
+            Schedule
           </Button>
           <Button
             size="lg"
             className="studio-cta"
-            onClick={() => void distribute("schedule")}
-            loading={busy === "schedule"}
-            disabled={busy !== null || !scheduleAt || revising}
+            onClick={() => setPublishMode("publish")}
+            disabled={busy !== null || revising}
           >
-            <CalendarClock />
-            Schedule
+            <Send />
+            Publish all
           </Button>
         </motion.div>
       ) : (
@@ -1309,54 +1340,38 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          {locked && session.type !== "article" ? (
+          {hasDelivery && session.type !== "article" ? (
             <InspectorSection title="Delivery">
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {groupStatus === "published"
                   ? "Published. Delivery details for each account are below."
                   : "Sent to your connected accounts. You'll see each delivery here."}
               </p>
-              {rows[0] && !fixtureRows ? (
-                <div className="mt-3">
-                  <DeliveryView workspaceId={session.workspaceId} contentItemId={rows[0].id} />
-                </div>
-              ) : null}
+              {!fixtureRows
+                ? rows
+                    .filter((row) =>
+                      ["scheduled", "publishing", "published", "partial_failed", "failed"].includes(
+                        row.status,
+                      ),
+                    )
+                    .map((row) => (
+                      <div key={row.id} className="mt-3">
+                        <p className="mb-2 text-xs font-semibold">
+                          {isDistributionPlatform(row.meta?.platform)
+                            ? PLATFORMS[row.meta.platform].label
+                            : "Post"}
+                        </p>
+                        <DeliveryView workspaceId={session.workspaceId} contentItemId={row.id} />
+                      </div>
+                    ))
+                : null}
             </InspectorSection>
-          ) : !approvable && canShip ? (
-            <InspectorSection title="Schedule">
-              <label htmlFor="studio-schedule-at" className="sr-only">
-                Schedule for
-              </label>
-              <input
-                id="studio-schedule-at"
-                type="datetime-local"
-                value={scheduleAt}
-                onChange={(e) => setScheduleAt(e.target.value)}
-                className="h-10 w-full rounded-xl bg-surface-2 px-3 text-sm text-foreground outline-none ring-1 ring-border transition-shadow focus-visible:ring-2 focus-visible:ring-primary"
-              />
-              {deliverable.length > 1 ? (
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  Platforms go out 10 minutes apart.
-                </p>
-              ) : null}
-              <details className="group mt-3 rounded-xl bg-surface-2/60">
-                <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl px-3 py-2.5 text-xs font-medium text-foreground">
-                  Destinations
-                  <span className="text-muted-foreground group-open:hidden">
-                    {selection.type === "all" ? "All connected accounts" : "Custom"}
-                  </span>
-                </summary>
-                <div className="px-3 pb-3">
-                  <StudioDestinationPicker
-                    workspaceId={session.workspaceId}
-                    value={selection}
-                    onChange={setSelection}
-                    tiktok={
-                      sendsTiktok ? { value: tiktokPrivacy, onChange: setTiktokPrivacy } : undefined
-                    }
-                  />
-                </div>
-              </details>
+          ) : canShip ? (
+            <InspectorSection title="Publishing">
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Publish all generated versions to your connected accounts, or choose versions and
+                connect accounts in the publishing window.
+              </p>
               {rows.length > deliverable.length ? (
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                   {rows.length - deliverable.length} version
@@ -1371,6 +1386,55 @@ export function ReviewPanel({
               <p className="text-sm leading-relaxed text-muted-foreground">
                 Direct publishing isn't enabled for this workspace. Copy or download it to post.
               </p>
+            </InspectorSection>
+          ) : null}
+
+          {morePlatforms.length > 0 && !locked ? (
+            <InspectorSection title="More platforms">
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Adapt this post for more channels while keeping the existing versions.
+              </p>
+              {showExpand ? (
+                <div className="mt-3 space-y-2">
+                  {morePlatforms.map((platform) => (
+                    <label
+                      key={platform}
+                      className="flex cursor-pointer items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-primary"
+                        checked={expandChoices.includes(platform)}
+                        onChange={() =>
+                          setExpandChoices((current) =>
+                            current.includes(platform)
+                              ? current.filter((item) => item !== platform)
+                              : [...current, platform],
+                          )
+                        }
+                      />
+                      {PLATFORMS[platform].label}
+                    </label>
+                  ))}
+                  <Button
+                    size="sm"
+                    onClick={() => expandPlatforms()}
+                    disabled={!expandChoices.length || revising}
+                  >
+                    Generate {expandChoices.length || ""} version
+                    {expandChoices.length === 1 ? "" : "s"}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setShowExpand(true)}
+                >
+                  Add platform versions
+                </Button>
+              )}
             </InspectorSection>
           ) : null}
 
@@ -1505,6 +1569,22 @@ export function ReviewPanel({
           {actions}
         </div>
       ) : null}
+
+      <StudioPublishFlow
+        open={publishMode !== null}
+        mode={publishMode ?? "publish"}
+        workspaceId={session.workspaceId}
+        destinations={publishDestinations}
+        needsApproval={approvable}
+        scheduleAt={scheduleAt}
+        onScheduleAtChange={setScheduleAt}
+        onClose={() => setPublishMode(null)}
+        onSubmit={(ids, privacy) => distribute(publishMode ?? "publish", ids, privacy)}
+        morePlatforms={morePlatforms}
+        onAddPlatforms={(platforms) => {
+          if (expandPlatforms(platforms)) setPublishMode(null);
+        }}
+      />
 
       <MediaLightbox
         open={expanded}

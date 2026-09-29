@@ -28,6 +28,7 @@ export default function robots(): MetadataRoute.Robots {
         "/reset-password",
         "/share/",
         "/api/",
+        "/admin",
       ],
     },
     sitemap: `${ORIGIN}/sitemap.xml`,

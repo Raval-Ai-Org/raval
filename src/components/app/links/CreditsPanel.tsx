@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 import { ArrowUpRight, Spinner } from "@/components/icons";
 import { authedFetch } from "@/lib/authed-fetch";
+import { emitAppEvent } from "@/lib/app-events";
 import { cn } from "@/lib/utils";
 import { relativeTime } from "@/components/app/geo/geo-ui";
 import { btnPrimary, ListSkeleton, Meta, Money, Rise, Section } from "./links-ui";
@@ -113,11 +114,22 @@ export function CreditsPanel({
         }
       >
         {!canBuy && (
-          <p className="rounded-2xl border border-border bg-secondary/50 p-4 text-[13.5px] leading-relaxed text-muted-foreground">
-            {canEdit
-              ? "Only the billing account owner can buy packs after Stripe setup is complete."
-              : "Ask the billing account owner to add balance."}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-secondary/50 p-4 text-[13.5px] leading-relaxed text-muted-foreground">
+            <span>
+              {canEdit
+                ? "Card payment is coming soon. The plan owner can request a pack in Plan & billing."
+                : "Ask the plan owner to add balance."}
+            </span>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => emitAppEvent("open:usage", { tab: "topup" })}
+                className="rounded-full border border-border bg-background px-3.5 py-1.5 text-[13px] font-medium text-foreground hover:bg-secondary"
+              >
+                Top up options
+              </button>
+            )}
+          </div>
         )}
 
         <div className="grid gap-3 sm:grid-cols-3">

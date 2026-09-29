@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { studioChargeFor } from "@/lib/studio/billing";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { CreateJobSchema } from "@/lib/studio/jobs";
@@ -50,26 +51,12 @@ export const POST = defineRoute({
         media === "video" ||
         media === "image" ||
         (media === "optional-image" && body.controls.includeImage);
-      const action: MeteredAction =
-        body.type === "video"
-          ? "studio_video"
-          : body.type === "image"
-            ? "image_post"
-            : body.type === "carousel"
-              ? "carousel"
-              : body.type === "ad"
-                ? "ad_set"
-                : body.type === "script"
-                  ? "script"
-                  : body.type === "article"
-                    ? body.controls.length === "long"
-                      ? "article_long"
-                      : "article_standard"
-                    : body.controls.includeImage
-                      ? "image_post"
-                      : body.regenerate || body.parentJobId
-                        ? "post_regenerate"
-                        : "post_set";
+      const action: MeteredAction = studioChargeFor({
+        type: body.type,
+        includeImage: body.controls.includeImage,
+        length: body.controls.length,
+        regenerate: Boolean(body.regenerate || body.parentJobId),
+      });
       const billingRoute = {
         social: "studio.social",
         image: "studio.captions",

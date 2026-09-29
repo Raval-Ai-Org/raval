@@ -61,6 +61,8 @@ export type RateLimitTier =
   | "links-checkout"
   | "billing-checkout"
   | "billing-read"
+  | "billing-request"
+  | "billing-admin"
   | "experiment-propose"
   | "experiment-action"
   | "brand-kit-upload"
@@ -153,6 +155,10 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // Opening a Stripe checkout session.
   "billing-checkout": { limit: 10, windowSeconds: 3600, label: "credit purchase" },
   "billing-read": { limit: 120, windowSeconds: 60, label: "billing" },
+  // "Upgrade now" / "Ask the owner" requests: people, not scripts, send these.
+  "billing-request": { limit: 20, windowSeconds: 3600, label: "upgrade request" },
+  // The admin console (a short, audited list of Mellox staff).
+  "billing-admin": { limit: 240, windowSeconds: 60, label: "billing admin" },
   // Proof Engine: change proposals and per-page copy — paid model calls.
   "experiment-propose": { limit: 10, windowSeconds: 3600, label: "experiment proposal" },
   // Creating, assigning, cancelling experiments (database work, some reads of

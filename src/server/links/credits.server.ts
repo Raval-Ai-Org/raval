@@ -56,6 +56,34 @@ export function maxOrderUsd(): number {
 }
 
 export async function getBalance(workspaceId: string): Promise<CreditBalance> {
+  // Since billing v2 the spendable balance is the owner's account wallet (the
+  // part bought with money, which is all backlinks may use). The per-brand
+  // table below is history from before the account migration.
+  const { billingSchemaReady } = await import("@/server/billing/schema.server");
+  if (await billingSchemaReady()) {
+    const { data: space } = await supabaseAdmin
+      .from("workspaces")
+      .select("billing_account_id" as never)
+      .eq("id", workspaceId)
+      .maybeSingle();
+    const accountId = (space as { billing_account_id?: string } | null)?.billing_account_id;
+    if (accountId) {
+      const { data: wallet, error: walletError } = await supabaseAdmin
+        .from("meter_balances" as never)
+        .select("available_any,held" as never)
+        .eq("account_id" as never, accountId)
+        .eq("meter" as never, "credits")
+        .maybeSingle();
+      if (walletError) throw new HttpError(500, "We couldn't read your credit balance.");
+      const row = wallet as { available_any?: number; held?: number } | null;
+      return {
+        available: Number(row?.available_any ?? 0),
+        held: Number(row?.held ?? 0),
+        lifetimeToppedUp: 0,
+        lifetimeSpent: 0,
+      };
+    }
+  }
   const { data, error } = await supabaseAdmin
     .from("workspace_credit_balances")
     .select("available, held, lifetime_topped_up, lifetime_spent")

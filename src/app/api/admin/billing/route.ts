@@ -3,15 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { defineRoute } from "@/server/route";
 import { HttpError } from "@/server/http-error";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { requireBillingAdmin } from "@/server/billing/admin.server";
 import { clawbackMeter, grantMeter } from "@/server/billing/meters.server";
 
 export const dynamic = "force-dynamic";
 const admin = supabaseAdmin as unknown as SupabaseClient;
-
-function requireBillingAdmin(userId: string): void {
-  const allowed = (process.env.BILLING_ADMIN_USER_IDS ?? "").split(",").map((id) => id.trim());
-  if (!allowed.includes(userId)) throw new HttpError(403, "Billing administrator access required.");
-}
 
 const Common = {
   id: z.string().uuid(),
@@ -31,7 +27,7 @@ const Adjustment = z.discriminatedUnion("operation", [
 export const GET = defineRoute({
   name: "billing.admin.report",
   auth: "user",
-  rateLimit: "billing-read",
+  rateLimit: "billing-admin",
   handler: async ({ userId }) => {
     requireBillingAdmin(userId);
     const [report, margin, failed, health, pendingCapacity] = await Promise.all([
@@ -66,7 +62,7 @@ export const POST = defineRoute({
   name: "billing.admin.adjust",
   auth: "user",
   body: Adjustment,
-  rateLimit: "billing-checkout",
+  rateLimit: "billing-admin",
   handler: async ({ userId, body }) => {
     requireBillingAdmin(userId);
     const { data: account, error: accountError } = await admin

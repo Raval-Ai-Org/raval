@@ -27,6 +27,9 @@ import { duration, ease, spring } from "@/lib/motion";
 import { isActiveJob } from "@/lib/studio/jobs";
 import { readBrandPayload } from "@/lib/studio/client";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
+import { studioChargeFor } from "@/lib/studio/billing";
+import { CostChip } from "@/components/app/CostChip";
+import { STUDIO_VIDEO_UNITS } from "@/lib/billing/catalog";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import { GOALS } from "@/lib/studio/jobs";
 import { PLATFORMS } from "@/lib/social-platforms";
@@ -830,16 +833,32 @@ export function IntentStep({
             Back
           </Button>
         ) : null}
+        <StudioPrice session={session} />
         <Button
           onClick={submit}
           disabled={!ready || busy || writer.busy}
           size="lg"
-          className="studio-cta ml-auto"
+          className="studio-cta"
         >
           {busy ? <Spinner className="animate-spin" aria-hidden /> : <Wand2 />}
           {busy ? "Starting…" : session.lastGood ? "Generate again" : "Generate"}
         </Button>
       </footer>
     </div>
+  );
+}
+
+/** The price of the next Generate, from the same rule the server charges by. */
+function StudioPrice({ session }: { session: StudioSession }) {
+  const charge = studioChargeFor({
+    type: session.type,
+    includeImage: session.controls.includeImage,
+    length: session.controls.length,
+    regenerate: Boolean(session.lastGood),
+  });
+  return charge === "studio_video" ? (
+    <CostChip videoUnits={STUDIO_VIDEO_UNITS} className="ml-auto shrink-0" />
+  ) : (
+    <CostChip action={charge} className="ml-auto shrink-0" />
   );
 }

@@ -44,9 +44,7 @@ export const POST = defineRoute({
     if (provider === "postforme") {
       const entitlements = await assertSocialProfileConnection({ workspaceId, userId, role });
       await reserveSocialProfileSlot(entitlements, workspaceId);
-      return withPostForMe(workspaceId, (deps) =>
-        startPostForMeConnect({ platform }, deps),
-      );
+      return withPostForMe(workspaceId, (deps) => startPostForMeConnect({ platform }, deps));
     }
     if (provider === "socialapi") {
       const entitlements = await assertSocialProfileConnection({ workspaceId, userId, role });

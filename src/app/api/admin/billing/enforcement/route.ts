@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { defineRoute } from "@/server/route";
 import { HttpError } from "@/server/http-error";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { requireBillingAdmin } from "@/server/billing/admin.server";
 import { reconcileBillingCapacity } from "@/server/billing/capacity.server";
 import { invalidateBillingAccount } from "@/server/billing/accounts.server";
 
@@ -19,11 +20,9 @@ export const POST = defineRoute({
   name: "billing.admin.enforcement",
   auth: "user",
   body: Body,
-  rateLimit: "billing-checkout",
+  rateLimit: "billing-admin",
   handler: async ({ userId, body }) => {
-    const allowed = (process.env.BILLING_ADMIN_USER_IDS ?? "").split(",").map((id) => id.trim());
-    if (!allowed.includes(userId))
-      throw new HttpError(403, "Billing administrator access required.");
+    requireBillingAdmin(userId);
     const { data, error } = await admin.rpc("set_billing_enforcement_override", {
       p_action: body.id,
       p_account: body.accountId,

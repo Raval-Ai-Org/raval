@@ -33,7 +33,13 @@ export const POST = defineRoute({
   workspaceId: ({ body }) => body.workspaceId,
   // A quick check fetches a handful of URLs; a site scan fetches hundreds.
   rateLimit: ({ body }) => ({ tier: body.mode === "quick" ? "audit" : "geo-scan" }),
-  handler: async ({ body, workspaceId, userId, supabase }) => {
+  handler: async ({ body, workspaceId, userId, role, supabase }) => {
+    // Full site scans count toward the plan's monthly scans; quick checks and
+    // re-checks after a fix are always free.
+    if (body.mode === "full" && body.trigger !== "rescan") {
+      const { requireWithinLimit } = await import("@/server/billing/guards.server");
+      await requireWithinLimit({ workspaceId, userId, role, limit: "scans" });
+    }
     let scanId: string;
     let mode: "quick" | "full" | "targeted";
     try {

@@ -123,6 +123,9 @@ async function advanceCompetitor(row: CompetitorRow): Promise<"done" | "lost_lea
         });
         if (!ok) return "lost_lease";
         profiled = true;
+        void import("@/server/billing/async-charges.server").then((billing) =>
+          billing.settleCompetitorProfileSoon(row.id),
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : "Could not research this website";
         // A failed profile is recorded on the row, not thrown away: the UI
@@ -131,6 +134,9 @@ async function advanceCompetitor(row: CompetitorRow): Promise<"done" | "lost_lea
           profile_status: "failed",
           profile_error: message.slice(0, 2000),
         });
+        void import("@/server/billing/async-charges.server").then((billing) =>
+          billing.settleCompetitorProfileSoon(row.id),
+        );
       }
     }
 

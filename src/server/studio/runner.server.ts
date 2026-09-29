@@ -24,7 +24,8 @@ import {
 import type { UgcAspectRatio, UgcResolution } from "@/lib/ugc/models";
 import { activeModel } from "@/server/ugc/models.server";
 import { routedVideoProvider } from "@/server/ugc/providers/routed.server";
-import { persistAsset, signAssetPath } from "@/server/assets/persist.server";
+import { linkAssetToContent, persistAsset, signAssetPath } from "@/server/assets/persist.server";
+import { mergeAddedPlatforms } from "@/lib/studio/add-platforms";
 import {
   buildImagePromptDetailed,
   type BrandDnaLite,
@@ -346,6 +347,7 @@ async function writeDrafts(
   job: JobRow,
   rows: DraftRow[],
   extraMeta: Record<string, unknown>,
+  preserveExisting = false,
 ): Promise<string[]> {
   const format = STUDIO_FORMATS[job.type];
   const common = {
@@ -398,6 +400,10 @@ async function writeDrafts(
     const meta = { ...common, ...row.meta };
     if (current) {
       byPlatform.delete(key);
+      if (preserveExisting) {
+        ids.push(current.id);
+        continue;
+      }
       const prevMeta = (current.meta as Record<string, unknown> | null) ?? {};
       const versions = Array.isArray(prevMeta.versions) ? (prevMeta.versions as unknown[]) : [];
       const nextVersions = [
@@ -906,6 +912,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   );
 
   const mediaOnly = !!input.refine && input.refine.target === "media" && !!parent;
+  const addPlatforms = !!input.refine && input.refine.target === "platforms" && !!parent;
   const previousAngle = parent?.output?.angle ?? null;
   const angle: Angle = pickAngle(
     input.idempotencyKey,
@@ -1008,6 +1015,9 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       }),
     };
   }
+  if (addPlatforms && parent?.output) {
+    output = mergeAddedPlatforms(parent.output, output, platforms);
+  }
   const title = (output.title || input.intent.brief).slice(0, 120);
 
   // Drafts before rendering so the asset can link to them.
@@ -1015,22 +1025,40 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   if (!mediaOnly) {
     if (polishStage === "polish") await setStage(client, job.id, "polish");
     const rows = draftRows(type, output, platforms);
-    const ids = await writeDrafts(client, job, rows, {
-      angle: angle.id,
-      intent_goal: input.intent.goal ?? null,
-      idea_id: input.intent.ideaId ?? null,
-      template: input.intent.template ?? null,
-      // The job's headline, so every surface titles the piece consistently.
-      job_title: title,
-      brand_version: brandVersion(input.brand),
-      ...(needsMedia(type, input) ? { aspect_ratio: mediaRatio(type, input, platforms) } : {}),
-    });
+    const ids = await writeDrafts(
+      client,
+      job,
+      rows,
+      {
+        angle: angle.id,
+        intent_goal: input.intent.goal ?? null,
+        idea_id: input.intent.ideaId ?? null,
+        template: input.intent.template ?? null,
+        // The job's headline, so every surface titles the piece consistently.
+        job_title: title,
+        brand_version: brandVersion(input.brand),
+        ...(needsMedia(type, input) ? { aspect_ratio: mediaRatio(type, input, platforms) } : {}),
+      },
+      addPlatforms,
+    );
     job.content_item_ids = ids;
+    if (addPlatforms) {
+      const asset = parent?.output?.media?.find(
+        (item) => item.status === "ready" && item.assetId && item.storagePath,
+      );
+      if (asset?.assetId && asset.storagePath) {
+        await linkAssetToContent(job.workspace_id, ids, {
+          id: asset.assetId,
+          path: asset.storagePath,
+          assetType: asset.kind,
+        });
+      }
+    }
     await patchJob(client, job.id, { content_item_ids: ids, output, title });
     invalidateStudioContext(job.workspace_id);
   }
 
-  if (needsMedia(type, input)) {
+  if (needsMedia(type, input) && !addPlatforms) {
     await setStage(client, job.id, "render");
     let referenceUrl: string | null = null;
     const currentMedia = parent?.output?.media?.find((m) => m.status === "ready");

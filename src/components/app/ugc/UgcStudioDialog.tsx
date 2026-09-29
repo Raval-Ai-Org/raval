@@ -1,6 +1,7 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { openFeatureUpgrade, useFeatureLocked } from "@/components/app/FeatureGate";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Video } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,9 +19,17 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
   const [open, setOpen] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [session, setSession] = useState(0);
+  // On a plan without video, opening the studio shows the upgrade screen instead.
+  const locked = useFeatureLocked("ugc");
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
 
   useEffect(() => {
     const onOpen = (event: AppEvent<"open:ugc-studio">) => {
+      if (lockedRef.current) {
+        openFeatureUpgrade("ugc");
+        return;
+      }
       setProjectId(event.detail?.projectId ?? null);
       setSession((n) => n + 1);
       setOpen(true);

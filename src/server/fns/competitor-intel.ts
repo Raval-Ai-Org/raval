@@ -20,7 +20,7 @@ export const startCompetitorIntel = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
     const clean = data.competitorUrl.trim().replace(/\/+$/, "");
     const url = /^https?:\/\//i.test(clean) ? clean : `https://${clean}`;
     try {
@@ -29,11 +29,29 @@ export const startCompetitorIntel = createServerFn({ method: "POST" })
       throw new Error(e instanceof Error ? e.message : "Invalid URL");
     }
     const { startCompetitorIntelRun } = await import("@/server/research/competitor-intel.server");
-    return startCompetitorIntelRun({
+    // Charged only when the report is written; a failed run is released.
+    const { beginAsyncCharge } = await import("@/server/billing/async-charges.server");
+    const charge = await beginAsyncCharge({
       workspaceId: data.workspaceId,
-      competitorUrl: url,
       userId: context.userId,
+      role,
+      kind: "competitor_intel",
+      action: "competitor_intel",
+      requestKey: crypto.randomUUID(),
+      route: "competitor-intel",
     });
+    try {
+      const run = await startCompetitorIntelRun({
+        workspaceId: data.workspaceId,
+        competitorUrl: url,
+        userId: context.userId,
+      });
+      await charge.link("competitor_intel", run.id);
+      return run;
+    } catch (error) {
+      await charge.release();
+      throw error;
+    }
   });
 
 export const getCompetitorIntelRun = createServerFn({ method: "POST" })

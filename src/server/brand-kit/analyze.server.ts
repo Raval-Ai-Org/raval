@@ -441,6 +441,7 @@ export async function analyzeAsset(
       .eq("workspace_id", workspaceId)
       .eq("id", assetId);
     invalidateResolvedStyles(workspaceId);
+    settleVoiceCharge(assetId);
     return "done";
   } catch (error) {
     const message =
@@ -454,8 +455,16 @@ export async function analyzeAsset(
       .update({ analysis_status: "failed", analysis_error: message })
       .eq("workspace_id", workspaceId)
       .eq("id", assetId);
+    settleVoiceCharge(assetId);
     return "failed";
   }
+}
+
+/** A paid voice re-analysis settles when its analysis ends (no-op otherwise). */
+function settleVoiceCharge(assetId: string): void {
+  void import("@/server/billing/async-charges.server").then((billing) =>
+    billing.settleAsyncChargeSoon("brand_voice", assetId),
+  );
 }
 
 /** Analyse after the response is sent, so uploads return at once. */

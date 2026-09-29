@@ -31,9 +31,32 @@ export const GET = defineRoute({
       throw new HttpError(503, "Plan & billing is being set up. Upgrades are unavailable for now.");
     }
     const { stripeAccountReady } = await import("@/server/billing/stripe-account.server");
+    const { isBillingAdmin } = await import("@/server/billing/admin.server");
+    // Card checkout when Stripe is connected; otherwise "Upgrade now" sends a
+    // request that Mellox activates from the admin console.
     const purchasesAvailable = entitlements.isOwner && (await stripeAccountReady());
+    const extras = {
+      purchasesAvailable,
+      checkoutMode: purchasesAvailable ? ("card" as const) : ("request" as const),
+      isBillingAdmin: isBillingAdmin(userId),
+    };
+    if (entitlements.isOwner) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: row } = await supabaseAdmin
+        .from("billing_accounts")
+        .select("referral_code")
+        .eq("id", entitlements.accountId)
+        .maybeSingle();
+      return { ...entitlements, ...extras, referralCode: row?.referral_code ?? null };
+    }
     return entitlements.isOwner
-      ? { ...entitlements, purchasesAvailable }
-      : { ...entitlements, accountId: null, ownerUserId: null, purchasesAvailable: false };
+      ? { ...entitlements, ...extras }
+      : {
+          ...entitlements,
+          accountId: null,
+          ownerUserId: null,
+          ...extras,
+          purchasesAvailable: false,
+        };
   },
 });

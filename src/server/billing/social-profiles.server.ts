@@ -8,7 +8,11 @@ import { BrandFrozenError, LimitReachedError, UpgradeRequiredError } from "./err
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 
-/** Publish and schedule are included in a paid plan, with no post allowance. */
+/**
+ * Publishing, scheduling and retries are included on every plan, Free too, and
+ * never use credits (Post for Me bills Mellox about $0.01 a post). The only
+ * limit is a hidden monthly fair-use cap per billing account against spam.
+ */
 export async function assertPublishingAction(args: {
   workspaceId: string;
   userId: string;
@@ -19,14 +23,29 @@ export async function assertPublishingAction(args: {
   if (entitlements.enforcement === "off") return;
   const blockedFrozen = entitlements.frozen;
   const blockedFeature = !entitlements.features.publishing.allowed;
+  const blockedFairUse = entitlements.usage.postsThisMonth >= entitlements.limits.postsFairUse;
+  const blockedEmail =
+    !blockedFrozen && !blockedFeature && !blockedFairUse && !(await emailVerified(args.userId));
   if (entitlements.enforcement === "shadow") {
-    if (blockedFrozen || blockedFeature) {
+    if (blockedFrozen || blockedFeature || blockedFairUse || blockedEmail) {
       const { error } = await admin.from("billing_shadow_events").insert({
         account_id: entitlements.accountId,
         workspace_id: args.workspaceId,
         action: args.action,
-        decision: blockedFrozen ? "brand_frozen" : "upgrade_required",
-        reason: blockedFrozen ? "Brand is frozen" : "Publishing locked",
+        decision: blockedFrozen
+          ? "brand_frozen"
+          : blockedFeature
+            ? "upgrade_required"
+            : blockedFairUse
+              ? "limit_reached"
+              : "email_unverified",
+        reason: blockedFrozen
+          ? "Brand is frozen"
+          : blockedFeature
+            ? "Publishing locked"
+            : blockedFairUse
+              ? "Monthly post fair-use cap"
+              : "Email not verified",
       });
       if (error) console.error("[billing] publishing shadow event failed", error.code);
     }
@@ -40,9 +59,30 @@ export async function assertPublishingAction(args: {
       currentPlan: entitlements.entitledPlan,
     });
   }
+  if (blockedFairUse) {
+    throw new LimitReachedError({
+      limit: "posts",
+      used: entitlements.usage.postsThisMonth,
+      max: entitlements.limits.postsFairUse,
+    });
+  }
+  if (blockedEmail) {
+    throw new HttpError(403, "Please verify your email address before publishing.");
+  }
 }
 
-/** Only call after the route kernel has verified workspace membership. */
+async function emailVerified(userId: string): Promise<boolean> {
+  const { data, error } = await admin.auth.admin.getUserById(userId);
+  // Fail open on a lookup error: the fair-use cap and rate limit still apply.
+  if (error || !data?.user) return true;
+  return Boolean(data.user.email_confirmed_at ?? data.user.confirmed_at);
+}
+
+/**
+ * Connecting social accounts is unlimited on every plan (Post for Me charges per
+ * post, not per account). Only a frozen brand or a paused plan blocks it.
+ * Only call after the route kernel has verified workspace membership.
+ */
 export async function assertSocialProfileConnection(args: {
   workspaceId: string;
   userId: string;
@@ -50,41 +90,18 @@ export async function assertSocialProfileConnection(args: {
 }): Promise<Entitlements> {
   const entitlements = await getEntitlements(args);
   if (entitlements.enforcement === "off") return entitlements;
-
-  // A brand with a profile may connect more networks without consuming another
-  // allowance. Reconnects retain their provider profile until disconnected.
-  const { data, error } = await admin
-    .from("social_accounts")
-    .select("id")
-    .eq("workspace_id", args.workspaceId)
-    .eq("provider", "postforme")
-    .in("status", ["active", "reconnect_required"])
-    .limit(1);
-  if (error) throw new HttpError(503, "Could not check connected social profiles.");
-  const alreadyConnected = Boolean(data?.length);
   const blockedFeature = !entitlements.features.publishing.allowed;
-  const blockedLimit =
-    !alreadyConnected && entitlements.usage.socialProfiles >= entitlements.limits.socialProfiles;
   const blockedFrozen = entitlements.frozen;
-
   if (entitlements.enforcement === "shadow") {
-    if (blockedFeature || blockedLimit || blockedFrozen) {
+    if (blockedFeature || blockedFrozen) {
       const { error: logError } = await admin.from("billing_shadow_events").insert({
         account_id: entitlements.accountId,
         workspace_id: args.workspaceId,
         action: "social_profile_connect",
         meter: null,
         amount: 0,
-        decision: blockedFrozen
-          ? "brand_frozen"
-          : blockedFeature
-            ? "upgrade_required"
-            : "limit_reached",
-        reason: blockedFrozen
-          ? "Brand is frozen"
-          : blockedFeature
-            ? "Publishing locked"
-            : "Social profile limit",
+        decision: blockedFrozen ? "brand_frozen" : "upgrade_required",
+        reason: blockedFrozen ? "Brand is frozen" : "Publishing locked",
       });
       if (logError) console.error("[billing] social profile shadow event failed", logError.code);
     }
@@ -98,39 +115,23 @@ export async function assertSocialProfileConnection(args: {
       currentPlan: entitlements.entitledPlan,
     });
   }
-  // The account-locked slot reservation at OAuth start is authoritative.
   return entitlements;
 }
 
+/**
+ * Social accounts are unlimited under Post for Me, so there is no slot to
+ * reserve. Kept so the connect routes keep one call site if a per-account
+ * limit ever returns.
+ */
 export async function reserveSocialProfileSlot(
-  entitlements: Entitlements,
-  workspaceId: string,
-): Promise<void> {
-  if (entitlements.enforcement !== "on") return;
-  const { error } = await admin.rpc("reserve_billing_social_profile_slot", {
-    p_workspace: workspaceId,
-    p_limit: entitlements.limits.socialProfiles,
-  });
-  if (error?.message.includes("billing_social_profile_limit")) {
-    throw new LimitReachedError({
-      limit: "socialProfiles",
-      used: entitlements.usage.socialProfiles,
-      max: entitlements.limits.socialProfiles,
-    });
-  }
-  if (error) throw new HttpError(503, "Could not reserve a social profile.");
-}
+  _entitlements: Entitlements,
+  _workspaceId: string,
+): Promise<void> {}
 
 export async function activateSocialProfileSlot(
-  entitlements: Entitlements,
-  workspaceId: string,
-): Promise<void> {
-  if (entitlements.enforcement !== "on") return;
-  const { error } = await admin.rpc("activate_billing_social_profile_slot", {
-    p_workspace: workspaceId,
-  });
-  if (error) throw new HttpError(503, "Could not complete social profile billing.");
-}
+  _entitlements: Entitlements,
+  _workspaceId: string,
+): Promise<void> {}
 
 export async function releaseSocialProfileSlotIfEmpty(workspaceId: string): Promise<void> {
   const { error } = await admin.rpc("release_billing_social_profile_slot_if_empty", {

@@ -382,6 +382,33 @@ never sees one.
   nothing; the one test that really buys a placement is gated behind
   `LINKS_LIVE_BUY=yes`.
 
+## Billing and credits
+
+Status and next steps: [docs/billing/PROGRESS.md](docs/billing/PROGRESS.md); decision
+record ADR-0027.
+
+- **Catalog** `src/lib/billing/catalog.ts` is the only source of prices, plans, limits
+  and feature gates (browser-safe). Never put a price anywhere else.
+- **One wallet per owner** (`billing_accounts`), shared across their brands; meters
+  `credits`, `video` (100 units = 1 video), `pro_messages`, `flash_messages`.
+- **Paid user actions go through `runMetered` / `beginDeferredMetered`**
+  (`src/server/billing/metered.server.ts`): hold → run → capture, release on failure.
+  Included work uses `requireBillingFeature` / `requireWithinLimit`. Background jobs
+  use `beginAsyncCharge` → `link(kind, rowId)` (`async-charges.server.ts`) and settle
+  from the job's own status; add new kinds to `billing_async_links` and `outcomeFor`.
+- Notices go through `notify()` (`src/server/billing/notify.server.ts`, deduped per
+  window); email only via `src/server/notify/email.server.ts` (Resend).
+- Tracked prompts: `src/server/geo/tracked-prompts.server.ts`, run from the existing
+  geo-scans cron; weekly checks included, "Check now" charged.
+- `BILLING_ENFORCEMENT` off / shadow / on (+ per-account override). Errors are 402
+  with a `code`; the client shows a toast with a button, never an automatic pop-up.
+- **Social publishing never costs credits** on any plan (Post for Me); only a hidden
+  monthly fair-use cap (`postsFairUse`).
+- **Payments:** Stripe later. Until then "Upgrade now" creates a
+  `billing_purchase_requests` row and an admin activates it at `/admin`
+  (`src/server/billing/manual.server.ts`, keyed by operation id, append-only audit).
+  Admins: `BILLING_ADMIN_USER_IDS`.
+
 ## Website source connectors (GitHub)
 
 Full reference: [docs/github-connector.md](docs/github-connector.md), decision

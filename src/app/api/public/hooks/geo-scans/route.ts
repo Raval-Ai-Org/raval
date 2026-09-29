@@ -26,7 +26,12 @@ export const POST = defineCronRoute({
     const pullRequests = await syncStaleOpenProposals(5).catch((e) => ({
       error: e instanceof Error ? e.message : String(e),
     }));
-    return { ...scans, verifications, pullRequests };
+    // Weekly tracked-prompt checks: a couple per tick, inside what is left.
+    const { runDueTrackedPrompts } = await import("@/server/geo/tracked-prompts.server");
+    const trackedPrompts = await runDueTrackedPrompts({ budgetMs: 10_000, max: 2 }).catch((e) => ({
+      error: e instanceof Error ? e.message : String(e),
+    }));
+    return { ...scans, verifications, pullRequests, trackedPrompts };
   },
 });
 

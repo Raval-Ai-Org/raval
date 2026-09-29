@@ -60,6 +60,8 @@ export async function ensureInitialFreeGrant(account: BillingAccount): Promise<v
   if (
     account.status !== "free" ||
     account.plan_id !== "free" ||
+    // A manual (comped) plan gets its grants from the billing cron.
+    entitledPlanFor(account) !== "free" ||
     !account.next_grant_at ||
     new Date(account.next_grant_at) > new Date()
   ) {

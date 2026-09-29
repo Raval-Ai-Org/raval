@@ -261,6 +261,10 @@ export async function persistCompetitorIntelOutcome(
     .update({ ...patch, completed_at: new Date().toISOString() })
     .eq("id", runId);
   if (error) console.error("[competitor-intel] failed to persist run outcome", error.message);
+  else {
+    const billing = await import("@/server/billing/async-charges.server");
+    billing.settleAsyncChargeSoon("competitor_intel", runId);
+  }
 }
 
 /**

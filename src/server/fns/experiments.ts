@@ -25,6 +25,27 @@ async function ctx(
 }
 const svc = () => import("@/server/experiments/service.server");
 
+/** Editor role plus the plan's Proof Engine feature (and, when creating, its limit). */
+async function billedRole(
+  context: { userId: string } & Parameters<
+    typeof import("@/server/workspace-access.server").requireWorkspaceRole
+  >[0],
+  workspaceId: string,
+  creating: boolean,
+) {
+  const { requireWorkspaceRole } = await import("@/server/workspace-access.server");
+  const role = await requireWorkspaceRole(context, workspaceId, "editor");
+  const guard = { workspaceId, userId: context.userId, role };
+  if (creating) {
+    const { requireWithinLimit } = await import("@/server/billing/guards.server");
+    await requireWithinLimit({ ...guard, limit: "experiments", feature: "experiments" });
+  } else {
+    const { requireBillingFeature } = await import("@/server/billing/feature.server");
+    await requireBillingFeature({ ...guard, feature: "experiments", spending: true });
+  }
+  return role;
+}
+
 /** Whether the Proof Engine is on for this workspace (for showing its entry). Never 404s. */
 export const getProofEngineStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -116,13 +137,14 @@ export const discardDelivery = createServerFn({ method: "POST" })
 export const suggestHypotheses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("experiment-propose")])
   .inputValidator((data) => z.object({ ...ws, groupId: uuid, metric }).parse(data))
-  .handler(async ({ data, context }) =>
-    (await svc()).suggestHypotheses(
+  .handler(async ({ data, context }) => {
+    await billedRole(context, data.workspaceId, false);
+    return (await svc()).suggestHypotheses(
       await ctx(context, data.workspaceId, "editor"),
       data.groupId,
       data.metric as never,
-    ),
-  );
+    );
+  });
 
 export const createExperiment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("experiment-propose")])
@@ -135,18 +157,33 @@ export const createExperiment = createServerFn({ method: "POST" })
         changeType,
         name: z.string().trim().min(3).max(160),
         hypothesis: z.string().trim().min(10).max(2000),
+        idempotencyKey: uuid.optional(),
       })
       .parse(data),
   )
-  .handler(async ({ data, context }) =>
-    (await svc()).createExperiment(await ctx(context, data.workspaceId, "editor"), {
-      groupId: data.groupId,
-      metric: data.metric as never,
-      changeType: data.changeType as never,
-      name: data.name,
-      hypothesis: data.hypothesis,
-    }),
-  );
+  .handler(async ({ data, context }) => {
+    const role = await billedRole(context, data.workspaceId, true);
+    const { runMetered } = await import("@/server/billing/metered.server");
+    const { result } = await runMetered(
+      {
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role,
+        action: "experiment",
+        idempotencyKey: data.idempotencyKey ?? crypto.randomUUID(),
+        route: "experiments.values",
+      },
+      async () =>
+        (await svc()).createExperiment(await ctx(context, data.workspaceId, "editor"), {
+          groupId: data.groupId,
+          metric: data.metric as never,
+          changeType: data.changeType as never,
+          name: data.name,
+          hypothesis: data.hypothesis,
+        }),
+    );
+    return result;
+  });
 
 export const retryPrepare = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("experiment-propose")])

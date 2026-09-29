@@ -20,6 +20,7 @@ import {
   History,
   LayoutDashboard,
   ListTree,
+  MessageSquare,
   Wand,
 } from "@/components/icons";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -35,6 +36,7 @@ import { HistoryTab } from "./geo/HistoryTab";
 import { MonitoringTab } from "./geo/MonitoringTab";
 import { buildReport, OverviewTab } from "./geo/OverviewTab";
 import { PagesTab } from "./geo/PagesTab";
+import { PromptsTab } from "./geo/PromptsTab";
 import { ScanBar, ScanIntro, ScanProgress } from "./geo/ScanControls";
 import {
   copyText,
@@ -47,7 +49,7 @@ import {
 } from "./geo/geo-ui";
 import { useGeoScans } from "./geo/use-geo-scans";
 
-type TabId = "overview" | "findings" | "pages" | "history" | "monitoring";
+type TabId = "overview" | "findings" | "pages" | "prompts" | "history" | "monitoring";
 
 type AutoRunProps = {
   /** Non-zero while chat or a suggestion has asked for a scan ("scan my site"). */
@@ -287,6 +289,7 @@ function Panel({
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "findings", label: "Issues", icon: ListTree, count: report?.counts.findings },
     { id: "pages", label: "Pages", icon: FileText, count: report?.counts.pagesCrawled },
+    { id: "prompts", label: "Prompts", icon: MessageSquare },
     { id: "history", label: "History", icon: History },
     { id: "monitoring", label: "Monitoring", icon: CalendarClock },
   ];
@@ -346,6 +349,7 @@ function Panel({
     overview: "Overview",
     findings: "Issues",
     pages: "Pages",
+    prompts: "Tracked prompts",
     history: "History",
     monitoring: "Monitoring",
   };
@@ -443,6 +447,7 @@ function Panel({
               />
             )}
             {tab === "pages" && <PagesTab workspaceId={workspaceId} scan={current} />}
+            {tab === "prompts" && <PromptsTab workspaceId={workspaceId} />}
             {tab === "history" && (
               <HistoryTab
                 workspaceId={workspaceId}

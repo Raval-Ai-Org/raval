@@ -11,6 +11,11 @@ export type BillingView = Omit<Entitlements, "accountId" | "ownerUserId"> & {
   accountId: string | null;
   ownerUserId: string | null;
   purchasesAvailable?: boolean;
+  /** "card" opens Stripe checkout; "request" sends an Upgrade now request to Mellox. */
+  checkoutMode?: "card" | "request";
+  isBillingAdmin?: boolean;
+  /** Owner only: the code behind their /r/<code> invite link. */
+  referralCode?: string | null;
 };
 
 export function useEntitlements(options: { enabled?: boolean } = {}) {

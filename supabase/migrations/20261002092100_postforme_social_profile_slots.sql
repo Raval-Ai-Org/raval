@@ -1,8 +1,7 @@
--- Post for Me is the active social distribution provider. Keep historical
--- SocialAPI account records for audit, but do not count them as connections.
-UPDATE public.social_accounts
-SET status = 'disconnected', disconnected_at = COALESCE(disconnected_at, now()), updated_at = now()
-WHERE provider = 'socialapi' AND status <> 'disconnected';
+-- Post for Me is the active social distribution provider. Social accounts are
+-- unlimited on every plan, so profile slots no longer limit anything. Existing
+-- SocialAPI connections are left untouched: SocialAPI stays as a legacy adapter
+-- until each brand reconnects through Post for Me.
 
 UPDATE public.billing_social_profile_slots slot
 SET state = 'released', expires_at = NULL, updated_at = now()

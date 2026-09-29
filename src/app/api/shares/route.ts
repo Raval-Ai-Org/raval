@@ -358,6 +358,14 @@ export const POST = defineRoute({
       { minRole: "editor" },
     );
     if (!access.ok) return access.response;
+    const { requireBillingFeature } = await import("@/server/billing/feature.server");
+    await requireBillingFeature({
+      workspaceId: body.workspaceId,
+      userId,
+      role: access.role,
+      feature: "client_portal",
+      spending: true,
+    });
 
     // Output guardrails before anything reaches a client portal (proposal D):
     // shared content is checked for personal data, unsubstantiated/medical/

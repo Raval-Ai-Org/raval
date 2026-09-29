@@ -27,7 +27,7 @@ describe("billing catalog invariants", () => {
       (p: (typeof ordered)[number]) => p.brands,
       (p: (typeof ordered)[number]) => p.allowances.credits,
       (p: (typeof ordered)[number]) => p.allowances.videoUnits,
-      (p: (typeof ordered)[number]) => p.limits.socialProfiles,
+      (p: (typeof ordered)[number]) => p.limits.postsFairUse,
       (p: (typeof ordered)[number]) => p.limits.trackedPrompts,
     ];
     for (const value of values) {

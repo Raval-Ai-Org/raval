@@ -14,6 +14,22 @@ import { assertPublicUrl } from "@/server/safe-fetch";
 import type { CompetitorOverview, CompetitorView } from "@/lib/competitors/contracts";
 import { runMetered } from "@/server/billing/metered.server";
 import { requireBillingFeature } from "@/server/billing/feature.server";
+import { requireWithinLimit } from "@/server/billing/guards.server";
+import { chargeCompetitorProfile } from "@/server/billing/async-charges.server";
+
+/** Profile status per competitor, so only real research is charged. */
+async function profileStatuses(
+  context: { supabase: import("@supabase/supabase-js").SupabaseClient },
+  workspaceId: string,
+  ids: string[],
+): Promise<Map<string, string | null>> {
+  const { data } = await (context.supabase as import("@supabase/supabase-js").SupabaseClient)
+    .from("workspace_competitors")
+    .select("id,profile_status")
+    .eq("workspace_id", workspaceId)
+    .in("id", ids);
+  return new Map((data ?? []).map((row) => [String(row.id), row.profile_status as string | null]));
+}
 
 export type {
   CompetitorOverview,
@@ -133,7 +149,14 @@ export const addCompetitor = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }): Promise<CompetitorView> => {
-    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    await requireWithinLimit({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role,
+      limit: "competitors",
+      feature: "competitors",
+    });
     const clean = data.url.trim().replace(/\/+$/, "");
     const url = /^https?:\/\//i.test(clean) ? clean : `https://${clean}`;
     let safeUrl: URL;
@@ -156,6 +179,13 @@ export const addCompetitor = createServerFn({ method: "POST" })
       status: "tracked",
     });
     if (!competitor) throw new Error("That website address can't be used");
+    await chargeCompetitorProfile({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role,
+      competitorId: competitor.id,
+      profileStatus: competitor.profileStatus,
+    });
     // Research starts after the response is sent, so the card appears at once
     // and fills in rather than making the user wait on a crawl.
     kickCompetitor(competitor.id);
@@ -175,7 +205,16 @@ export const setCompetitorStatus = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
-    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    if (data.status === "tracked") {
+      await requireWithinLimit({
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role,
+        limit: "competitors",
+        feature: "competitors",
+      });
+    }
     const { setStatus } = await import("@/server/competitors/store.server");
     await setStatus({
       workspaceId: data.workspaceId,
@@ -183,6 +222,16 @@ export const setCompetitorStatus = createServerFn({ method: "POST" })
       status: data.status,
     });
     if (data.status === "tracked") {
+      const statuses = await profileStatuses(context as never, data.workspaceId, [
+        data.competitorId,
+      ]);
+      await chargeCompetitorProfile({
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role,
+        competitorId: data.competitorId,
+        profileStatus: statuses.get(data.competitorId),
+      });
       const { kickCompetitor } = await import("@/server/competitors/service.server");
       kickCompetitor(data.competitorId);
     }
@@ -196,11 +245,27 @@ export const trackCompetitors = createServerFn({ method: "POST" })
     z.object({ workspaceId: uuid, competitorIds: z.array(uuid).min(1).max(20) }).parse(data),
   )
   .handler(async ({ data, context }): Promise<{ tracked: number }> => {
-    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    await requireWithinLimit({
+      workspaceId: data.workspaceId,
+      userId: context.userId,
+      role,
+      limit: "competitors",
+      delta: data.competitorIds.length,
+      feature: "competitors",
+    });
     const { setStatus } = await import("@/server/competitors/store.server");
     const { kickCompetitor } = await import("@/server/competitors/service.server");
+    const statuses = await profileStatuses(context as never, data.workspaceId, data.competitorIds);
     let tracked = 0;
     for (const competitorId of data.competitorIds) {
+      await chargeCompetitorProfile({
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role,
+        competitorId,
+        profileStatus: statuses.get(competitorId),
+      });
       await setStatus({ workspaceId: data.workspaceId, competitorId, status: "tracked" });
       tracked += 1;
     }
@@ -217,9 +282,20 @@ export const refreshCompetitor = createServerFn({ method: "POST" })
     z.object({ workspaceId: uuid, competitorId: uuid, full: z.boolean().optional() }).parse(data),
   )
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
-    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
     const { requestRefresh } = await import("@/server/competitors/store.server");
     const { kickCompetitor } = await import("@/server/competitors/service.server");
+    // A full refresh researches the profile again (a quick one only sweeps
+    // for updates, which is included).
+    if (data.full) {
+      await chargeCompetitorProfile({
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role,
+        competitorId: data.competitorId,
+        profileStatus: "pending",
+      });
+    }
     await requestRefresh({
       workspaceId: data.workspaceId,
       competitorId: data.competitorId,

@@ -21,6 +21,7 @@ import * as insights from "./insights";
 import * as links from "./links";
 import * as schedules from "./schedules";
 import * as sitePublishing from "./site-publishing";
+import * as trackedPrompts from "./tracked-prompts";
 import * as workspaces from "./workspaces";
 import * as webflow from "./webflow";
 import * as wordpress from "./wordpress";
@@ -48,6 +49,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   links,
   schedules,
   "site-publishing": sitePublishing,
+  "tracked-prompts": trackedPrompts,
   workspaces,
   webflow,
   wordpress,
