@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
 import type { RenderStatus } from "@/lib/ugc/schemas";
 import { ASSET_BUCKET, persistAsset } from "@/server/assets/persist.server";
+import { ugcBillingColumnReady } from "@/server/billing/schema.server";
 import type {
   NewRenderRow,
   PersistVideoResult,
@@ -18,12 +19,13 @@ import type {
 } from "./store";
 
 export const RENDER_COLS =
-  "id, workspace_id, project_id, created_by, idempotency_key, status, billing_ready, model_key, provider, provider_model, provider_variant, generation_type, duration_sec, aspect_ratio, resolution, audio, reference_asset_ids, script, settings, prompt, provider_task_id, provider_state, provider_meta, error_code, error_message, reservation_id, est_cost_usd, actual_cost_usd, asset_id, attempts, max_attempts, submit_attempts, next_attempt_at, lease_until, locked_by, submitted_at, completed_at, created_at, updated_at";
+  "id, workspace_id, project_id, created_by, idempotency_key, status, model_key, provider, provider_model, provider_variant, generation_type, duration_sec, aspect_ratio, resolution, audio, reference_asset_ids, script, settings, prompt, provider_task_id, provider_state, provider_meta, error_code, error_message, reservation_id, est_cost_usd, actual_cost_usd, asset_id, attempts, max_attempts, submit_attempts, next_attempt_at, lease_until, locked_by, submitted_at, completed_at, created_at, updated_at";
 
 function toRow(data: unknown): RenderRow {
   const r = data as RenderRow;
   return {
     ...r,
+    billing_ready: r.billing_ready ?? true,
     est_cost_usd: Number(r.est_cost_usd ?? 0),
     actual_cost_usd: r.actual_cost_usd == null ? null : Number(r.actual_cost_usd),
     provider_meta: (r.provider_meta ?? {}) as Record<string, unknown>,
@@ -77,9 +79,16 @@ export const supabaseUgcStore: UgcRenderStore = {
   },
 
   async insertRender(row: NewRenderRow) {
+    const { billing_ready, ...fields } = row;
+    const billingReady = await ugcBillingColumnReady();
     const { data, error } = await supabaseAdmin
       .from("ugc_renders")
-      .insert({ ...row, script: row.script as Json, settings: row.settings as Json })
+      .insert({
+        ...fields,
+        ...(billingReady ? { billing_ready } : {}),
+        script: row.script as Json,
+        settings: row.settings as Json,
+      })
       .select(RENDER_COLS)
       .single();
     if (!error && data) return { row: toRow(data), created: true };
@@ -94,9 +103,11 @@ export const supabaseUgcStore: UgcRenderStore = {
   },
 
   async transition(id, from: readonly RenderStatus[], patch: RenderPatch) {
+    const { billing_ready: _billing_ready, ...fields } = patch;
+    const billingReady = await ugcBillingColumnReady();
     const { data, error } = await supabaseAdmin
       .from("ugc_renders")
-      .update(patch as never)
+      .update((billingReady ? patch : fields) as never)
       .eq("id", id)
       .in("status", [...from])
       .select(RENDER_COLS)

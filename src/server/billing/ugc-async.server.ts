@@ -45,6 +45,7 @@ export async function settleUgcBilling(row: RenderRow): Promise<void> {
     .select("*")
     .eq("render_id", row.id)
     .maybeSingle();
+  if (error?.code === "PGRST205" && process.env.BILLING_ENFORCEMENT !== "on") return;
   if (error) throw new HttpError(503, "Could not load video billing.");
   const link = data as UgcLink | null;
   if (!link || link.settled_at) return;

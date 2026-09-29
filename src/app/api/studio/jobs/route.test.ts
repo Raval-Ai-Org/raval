@@ -96,6 +96,37 @@ describe("Studio billing shadow path", () => {
 });
 
 describe("Studio async billing", () => {
+  it("starts a legacy render without a billing link when account billing is off", async () => {
+    mocked.createJob.mockImplementation(async ({ onCreated }) => {
+      await onCreated({ id: "job-1", status: "running" });
+      return { id: "job-1", status: "running" };
+    });
+    mocked.getEntitlements.mockResolvedValue({
+      accountId: "account-1",
+      enforcement: "off",
+      role: "editor",
+      frozen: false,
+      entitledPlan: "free",
+      features: { studio: { allowed: true, requiredPlan: "free" } },
+      meters: { credits: { available: 100 } },
+    });
+    const response = await POST(
+      new Request("http://localhost/api/studio/jobs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: "00000000-0000-4000-8000-000000000002",
+          type: "image",
+          idempotencyKey: "image-legacy-001",
+          intent: { brief: "A campaign visual" },
+          controls: {},
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(mocked.saveLink).not.toHaveBeenCalled();
+  });
+
   it("keeps a render hold linked to the job instead of capturing on submission", async () => {
     mocked.createJob.mockImplementation(async ({ onCreated }) => {
       await onCreated({ id: "job-1", status: "running" });

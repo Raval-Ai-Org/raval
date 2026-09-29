@@ -11,6 +11,7 @@ import { beginDeferredMetered } from "@/server/billing/metered.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getEntitlements } from "@/server/billing/entitlements.server";
+import { billingSchemaReady } from "@/server/billing/schema.server";
 import { creditsFor } from "@/lib/billing/catalog";
 import { BrandFrozenError, SpendNotAllowedError } from "@/server/billing/errors";
 
@@ -49,14 +50,14 @@ export const POST = defineRoute({
     const domain = normalizeDomain(safeUrl.hostname);
     if (!domain) return jsonError(400, "Invalid website domain");
     const marker = new Date().toISOString();
-    const { error: allowanceError } = await supabaseAdmin
-      .from("brand_scan_allowances" as never)
-      .insert({
-        account_id: entitlements.accountId,
-        normalized_domain: domain,
-        kind: "brand_dna",
-        used_at: marker,
-      } as never);
+    const { error: allowanceError } = !(await billingSchemaReady())
+      ? { error: null }
+      : await supabaseAdmin.from("brand_scan_allowances" as never).insert({
+          account_id: entitlements.accountId,
+          normalized_domain: domain,
+          kind: "brand_dna",
+          used_at: marker,
+        } as never);
     if (allowanceError && allowanceError.code !== "23505") {
       throw new Error("Could not check the free Brand DNA scan.");
     }

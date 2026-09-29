@@ -18,6 +18,8 @@ import {
   invalidateBillingAccount,
   type BillingAccount,
 } from "./accounts.server";
+import { billingSchemaReady } from "./schema.server";
+import { HttpError } from "@/server/http-error";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 type Role = "owner" | "admin" | "editor" | "viewer";
@@ -199,6 +201,41 @@ export async function getEntitlements(args: {
   role?: Role;
   skipCapacityReconcile?: boolean;
 }): Promise<Entitlements> {
+  if (!(await billingSchemaReady())) {
+    if (process.env.BILLING_ENFORCEMENT === "on") {
+      throw new HttpError(503, "Plan & billing is being set up. Please try again later.");
+    }
+    // Billing has not been migrated yet. Preserve the existing workspace
+    // features while account metering is disabled for this deployment.
+    const now = new Date().toISOString();
+    const legacy = resolveEntitlements({
+      account: {
+        id: args.userId,
+        owner_user_id: args.userId,
+        plan_id: "free",
+        entitled_plan_id: "free",
+        billing_interval: null,
+        status: "active",
+        trial_ends_at: null,
+        trial_used: false,
+        current_period_start: null,
+        current_period_end: null,
+        grant_anchor: null,
+        next_grant_at: null,
+        grace_until: null,
+        comped_plan_id: null,
+        comped_until: null,
+        enforcement_override: "off",
+        pro_overage_mode: "credits",
+        created_at: now,
+      },
+      userId: args.userId,
+      role: args.role ?? "owner",
+    });
+    for (const grant of Object.values(legacy.features)) grant.allowed = true;
+    for (const meter of Object.values(legacy.meters)) meter.available = Number.MAX_SAFE_INTEGER;
+    return legacy;
+  }
   const workspace = args.workspaceId ? await accountForWorkspace(args.workspaceId) : null;
   const account = workspace?.account ?? (await accountForUser(args.userId));
   const [items, spaces, wallet, expiring] = await Promise.all([

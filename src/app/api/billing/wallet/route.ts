@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { HttpError } from "@/server/http-error";
 import { getEntitlements } from "@/server/billing/entitlements.server";
+import { billingSchemaReady } from "@/server/billing/schema.server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,9 @@ export const GET = defineRoute({
   query: z.object({ workspaceId: z.string().uuid().optional() }),
   rateLimit: "billing-read",
   handler: async ({ query, userId, supabase }) => {
+    if (!(await billingSchemaReady())) {
+      throw new HttpError(503, "Plan & billing is being set up. Balances are unavailable for now.");
+    }
     let role: "owner" | "admin" | "editor" | "viewer" = "owner";
     if (query.workspaceId) {
       const { data, error } = await supabase

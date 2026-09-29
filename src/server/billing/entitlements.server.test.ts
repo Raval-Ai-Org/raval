@@ -1,8 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PLAN_ORDER, PLANS } from "@/lib/billing/catalog";
 import type { BillingAccount } from "./accounts.server";
-import { entitledPlanFor, limitsFor, resolveEntitlements } from "./entitlements.server";
+import {
+  entitledPlanFor,
+  getEntitlements,
+  limitsFor,
+  resolveEntitlements,
+} from "./entitlements.server";
 import { nextMonthlyWindow } from "./grants.server";
+
+vi.mock("./schema.server", () => ({ billingSchemaReady: async () => false }));
 
 function account(patch: Partial<BillingAccount> = {}): BillingAccount {
   return {
@@ -31,6 +38,19 @@ function account(patch: Partial<BillingAccount> = {}): BillingAccount {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("billing entitlements", () => {
+  it("keeps legacy features usable when the billing schema has not been deployed", async () => {
+    const ent = await getEntitlements({ userId: "owner-1", role: "editor" });
+    expect(ent.enforcement).toBe("off");
+    expect(ent.role).toBe("editor");
+    expect(Object.values(ent.features).every((grant) => grant.allowed)).toBe(true);
+    expect(ent.meters.credits.available).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it("fails closed when enforcement is on but the billing schema is missing", async () => {
+    vi.stubEnv("BILLING_ENFORCEMENT", "on");
+    await expect(getEntitlements({ userId: "owner-1" })).rejects.toMatchObject({ status: 503 });
+  });
+
   it.each(PLAN_ORDER)("resolves the %s plan's features and base limits", (plan) => {
     const ent = resolveEntitlements({
       account: account({ plan_id: plan }),

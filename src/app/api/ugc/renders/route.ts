@@ -11,6 +11,7 @@ import {
   startRender,
 } from "@/server/ugc/service.server";
 import { getEntitlements } from "@/server/billing/entitlements.server";
+import { ugcBillingColumnReady } from "@/server/billing/schema.server";
 import { assertWithinLimit } from "@/server/billing/limits.server";
 import { BrandFrozenError, UpgradeRequiredError } from "@/server/billing/errors";
 import { beginDeferredMetered } from "@/server/billing/metered.server";
@@ -38,6 +39,8 @@ export const POST = defineRoute({
     assertUgcEnabled(workspaceId);
     const entitlements = await getEntitlements({ workspaceId, userId, role });
     if (entitlements.enforcement === "on") {
+      if (!(await ugcBillingColumnReady()))
+        throw new HttpError(503, "Video billing is being set up. Please try again later.");
       if (entitlements.frozen) throw new BrandFrozenError();
       if (!entitlements.features.ugc.allowed) {
         throw new UpgradeRequiredError({
@@ -96,18 +99,19 @@ export const POST = defineRoute({
       throw error;
     }
     try {
-      await saveUgcBillingLink({
-        render_id: render.id,
-        account_id: charge.accountId,
-        workspace_id: workspaceId,
-        hold_id: charge.holdId,
-        charge_id: charge.chargeId,
-        charge_key: `${userId}:video_${model}:${body.idempotencyKey}`,
-        action: `video_${model}`,
-        units,
-        mode: charge.mode,
-        shadow_decision: charge.shadowDecision,
-      });
+      if (charge.mode !== "off")
+        await saveUgcBillingLink({
+          render_id: render.id,
+          account_id: charge.accountId,
+          workspace_id: workspaceId,
+          hold_id: charge.holdId,
+          charge_id: charge.chargeId,
+          charge_key: `${userId}:video_${model}:${body.idempotencyKey}`,
+          action: `video_${model}`,
+          units,
+          mode: charge.mode,
+          shadow_decision: charge.shadowDecision,
+        });
       await activateUgcRender(render.id);
     } catch (error) {
       await cancelRender(supabase, workspaceId, render.id).catch(() => {});

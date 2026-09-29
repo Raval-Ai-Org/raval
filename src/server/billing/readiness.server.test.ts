@@ -26,6 +26,7 @@ describe("workspace billing rollout", () => {
     limit.mockResolvedValue({ error: { code: "PGRST205" } });
 
     await expect(optionalWorkspaceEntitlements({ userId: "user" })).resolves.toBeNull();
+    expect(limit).toHaveBeenCalledWith(1);
     expect(getEntitlements).not.toHaveBeenCalled();
   });
 

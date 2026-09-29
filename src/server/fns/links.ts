@@ -98,20 +98,30 @@ export const getOverview = createServerFn({ method: "GET" })
     const { CREDIT_PACKS } = await import("@/lib/billing/catalog");
     const { stripeAccountReady } = await import("@/server/billing/stripe-account.server");
     const { accountForWorkspace } = await import("@/server/billing/accounts.server");
+    const { billingSchemaReady } = await import("@/server/billing/schema.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const account = (await accountForWorkspace(data.workspaceId)).account;
+    const legacyBilling = !(await billingSchemaReady());
+    const account = legacyBilling ? null : (await accountForWorkspace(data.workspaceId)).account;
 
     const [balance, spent, orders, lines, catalog, siteHost] = await Promise.all([
-      supabaseAdmin
-        .from("meter_balances" as never)
-        .select("available_any,held" as never)
-        .eq("account_id" as never, account.id)
-        .eq("meter" as never, "credits")
-        .maybeSingle(),
-      supabaseAdmin.rpc(
-        "backlink_spent_credits" as never,
-        { p_workspace: data.workspaceId } as never,
-      ),
+      legacyBilling
+        ? db
+            .from("workspace_credit_balances")
+            .select("available,held,lifetime_spent")
+            .eq("workspace_id", data.workspaceId)
+            .maybeSingle()
+        : supabaseAdmin
+            .from("meter_balances" as never)
+            .select("available_any,held" as never)
+            .eq("account_id" as never, account!.id)
+            .eq("meter" as never, "credits")
+            .maybeSingle(),
+      legacyBilling
+        ? Promise.resolve({ data: null, error: null })
+        : supabaseAdmin.rpc(
+            "backlink_spent_credits" as never,
+            { p_workspace: data.workspaceId } as never,
+          ),
       db
         .from("link_orders")
         .select(ORDER_COLS)
@@ -129,6 +139,14 @@ export const getOverview = createServerFn({ method: "GET" })
       workspaceSite(data.workspaceId),
     ]);
     if (balance.error || spent.error) throw new Error("Could not load backlink balance.");
+    const balanceRow = balance.data as Record<string, unknown> | null;
+    const availableCredits = Number(
+      balanceRow?.[legacyBilling ? "available" : "available_any"] ?? 0,
+    );
+    const heldCredits = Number(balanceRow?.held ?? 0);
+    const spentCredits = Number(
+      legacyBilling ? (balanceRow?.lifetime_spent ?? 0) : (spent.data ?? 0),
+    );
 
     const orderRows = orders.data ?? [];
     const lineRows = lines.data ?? [];
@@ -165,21 +183,17 @@ export const getOverview = createServerFn({ method: "GET" })
       })),
       // Whether a card payment can actually complete, so the UI can say so up
       // front rather than at the moment someone clicks Buy.
-      billingEnabled: role === "owner" && (await stripeAccountReady()),
+      billingEnabled: !legacyBilling && role === "owner" && (await stripeAccountReady()),
       catalogSize: catalog.count ?? 0,
       siteHost,
       // Balance is shown to people as money. Credits stay the ledger unit
       // underneath, converted here at the one rate the server owns.
       balance: {
-        availableUsd: creditsToUsd(
-          Number((balance.data as { available_any?: number } | null)?.available_any ?? 0),
-        ),
-        heldUsd: creditsToUsd(Number((balance.data as { held?: number } | null)?.held ?? 0)),
-        spentUsd: creditsToUsd(Number(spent.data ?? 0)),
-        availableCredits: Number(
-          (balance.data as { available_any?: number } | null)?.available_any ?? 0,
-        ),
-        heldCredits: Number((balance.data as { held?: number } | null)?.held ?? 0),
+        availableUsd: creditsToUsd(availableCredits),
+        heldUsd: creditsToUsd(heldCredits),
+        spentUsd: creditsToUsd(spentCredits),
+        availableCredits,
+        heldCredits,
       },
       stats: {
         live: live.length,
@@ -475,13 +489,16 @@ export const getCreditHistory = createServerFn({ method: "GET" })
       .limit(60);
     if (legacyError) throw new Error("Could not load historical backlink credits.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: current, error: currentError } = await supabaseAdmin
-      .from("meter_ledger" as never)
-      .select("id,kind,delta_available,available_after,reason,created_at" as never)
-      .eq("workspace_id" as never, data.workspaceId)
-      .eq("meter" as never, "credits")
-      .order("created_at" as never, { ascending: false })
-      .limit(60);
+    const { billingSchemaReady } = await import("@/server/billing/schema.server");
+    const { data: current, error: currentError } = (await billingSchemaReady())
+      ? await supabaseAdmin
+          .from("meter_ledger" as never)
+          .select("id,kind,delta_available,available_after,reason,created_at" as never)
+          .eq("workspace_id" as never, data.workspaceId)
+          .eq("meter" as never, "credits")
+          .order("created_at" as never, { ascending: false })
+          .limit(60)
+      : { data: [], error: null };
     if (currentError) throw new Error("Could not load account backlink credits.");
 
     return [

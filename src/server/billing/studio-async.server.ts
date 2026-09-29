@@ -44,6 +44,7 @@ export async function studioBillingLink(jobId: string): Promise<StudioBillingLin
     .select("*")
     .eq("job_id", jobId)
     .maybeSingle();
+  if (error?.code === "PGRST205" && process.env.BILLING_ENFORCEMENT !== "on") return null;
   if (error) throw new HttpError(503, "Could not load render billing.");
   return (data as StudioBillingLink | null) ?? null;
 }

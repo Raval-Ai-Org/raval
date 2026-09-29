@@ -699,6 +699,13 @@ export async function startRender(
 
 /** Make a queued render claimable only after its billing link has been saved. */
 export async function activateUgcRender(id: string): Promise<void> {
+  const { ugcBillingColumnReady } = await import("@/server/billing/schema.server");
+  if (!(await ugcBillingColumnReady())) {
+    const legacy = await supabaseUgcStore.getRender(id);
+    if (!legacy || legacy.status !== "queued")
+      throw new HttpError(503, "Could not activate video render.");
+    return;
+  }
   const row = await supabaseUgcStore.transition(id, ["queued"], { billing_ready: true });
   if (!row) throw new HttpError(503, "Could not activate video render.");
 }

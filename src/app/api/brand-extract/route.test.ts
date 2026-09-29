@@ -30,6 +30,7 @@ vi.mock("@/server/billing/entitlements.server", () => ({
     frozen: false,
   }),
 }));
+vi.mock("@/server/billing/schema.server", () => ({ billingSchemaReady: async () => true }));
 vi.mock("@/server/billing/metered.server", () => ({
   beginDeferredMetered: mocked.begin,
 }));

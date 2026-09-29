@@ -105,20 +105,22 @@ export const POST = defineRoute({
                 userId,
                 input: body,
                 onCreated: async (created) =>
-                  saveStudioBillingLink({
-                    job_id: created.id,
-                    account_id: charge.accountId,
-                    workspace_id: workspaceId,
-                    hold_id: charge.holdId,
-                    charge_id: charge.chargeId,
-                    charge_key: `${userId}:${action}:${body.idempotencyKey}`,
-                    action: action as string,
-                    meter: video ? "video" : "credits",
-                    amount,
-                    route: billingRoute,
-                    mode: charge.mode,
-                    shadow_decision: charge.shadowDecision,
-                  }),
+                  charge.mode === "off"
+                    ? undefined
+                    : saveStudioBillingLink({
+                        job_id: created.id,
+                        account_id: charge.accountId,
+                        workspace_id: workspaceId,
+                        hold_id: charge.holdId,
+                        charge_id: charge.chargeId,
+                        charge_key: `${userId}:${action}:${body.idempotencyKey}`,
+                        action: action as string,
+                        meter: video ? "video" : "credits",
+                        amount,
+                        route: billingRoute,
+                        mode: charge.mode,
+                        shadow_decision: charge.shadowDecision,
+                      }),
               }),
           );
         } catch (error) {
