@@ -9,6 +9,8 @@ import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import { oauthStartHandler } from "@/lib/sdr.handlers";
 import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { startConnectHandler } from "@/lib/socialapi/handlers";
+import { startConnectHandler as startPostForMeConnect } from "@/lib/postforme/handlers";
+import { withPostForMe } from "@/lib/postforme/route.server";
 import {
   activateSocialProfileSlot,
   assertSocialProfileConnection,
@@ -39,6 +41,13 @@ export const POST = defineRoute({
     const platform = typeof body.platform === "string" ? body.platform : "";
     const provider = getDistributionProviderForWorkspace(workspaceId);
     if (!provider) return distributionDisabledResponse();
+    if (provider === "postforme") {
+      const entitlements = await assertSocialProfileConnection({ workspaceId, userId, role });
+      await reserveSocialProfileSlot(entitlements, workspaceId);
+      return withPostForMe(workspaceId, (deps) =>
+        startPostForMeConnect({ platform }, deps),
+      );
+    }
     if (provider === "socialapi") {
       const entitlements = await assertSocialProfileConnection({ workspaceId, userId, role });
       await reserveSocialProfileSlot(entitlements, workspaceId);

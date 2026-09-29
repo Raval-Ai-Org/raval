@@ -341,7 +341,7 @@ const SUMMARY = {
 };
 
 const SOCIAL = {
-  provider: "socialapi",
+  provider: "postforme",
   rangeDays: 28,
   totals: {
     deliveries: 24,

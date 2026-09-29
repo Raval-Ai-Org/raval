@@ -26,7 +26,7 @@ afterAll(async () => {
   await db?.close();
 });
 
-describe("SocialAPI profile slots", () => {
+describe("Post for Me profile slots", () => {
   it("serializes brand reservations and frees capacity only after disconnect", async () => {
     await db.query("select public.reserve_billing_social_profile_slot($1,1)", [first]);
     await db.query("select public.reserve_billing_social_profile_slot($1,1)", [first]);
@@ -35,8 +35,8 @@ describe("SocialAPI profile slots", () => {
     ).rejects.toThrow("billing_social_profile_limit");
     await db.query("select public.activate_billing_social_profile_slot($1)", [first]);
     await db.query(
-      `insert into public.social_accounts(workspace_id,provider_account_id,platform,status)
-       values($1,'account-1','instagram','active')`,
+      `insert into public.social_accounts(workspace_id,provider,provider_account_id,platform,status)
+       values($1,'postforme','account-1','instagram','active')`,
       [first],
     );
     const live = await db.query<{ release_billing_social_profile_slot_if_empty: boolean }>(

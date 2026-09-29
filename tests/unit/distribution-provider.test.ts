@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   getDistributionProvider,
   getDistributionProviderForWorkspace,
+  isPostForMeConfigured,
   isSocialApiConfigured,
 } from "@/lib/feature-flags";
 import { checkEnv } from "@/server/env";
@@ -11,6 +12,7 @@ import { resolveConnectRedirect } from "@/lib/socialapi/route.server";
 const KEYS = [
   "DISTRIBUTION_PROVIDER",
   "SOCIALAPI_API_KEY",
+  "POST_FOR_ME_API_KEY",
   "FEATURE_FLAG_SOCIALAPI_ENABLED",
   "FEATURE_FLAG_SOCIALAPI_ENABLED_WS_ws-off",
   "FEATURE_FLAG_SDR_ENABLED",
@@ -34,11 +36,13 @@ describe("distribution provider", () => {
     expect(getDistributionProvider()).toBeNull();
   });
 
-  it("defaults to SocialAPI.ai when its key is present, even if the SDR flag is on", () => {
+  it("defaults to Post for Me when its key is present, even if the SDR flag is on", () => {
+    process.env.POST_FOR_ME_API_KEY = "pfm_test_abc";
     process.env.SOCIALAPI_API_KEY = "sapi_key_abc";
     process.env.FEATURE_FLAG_SDR_ENABLED = "true";
+    expect(isPostForMeConfigured()).toBe(true);
     expect(isSocialApiConfigured()).toBe(true);
-    expect(getDistributionProvider()).toBe("socialapi");
+    expect(getDistributionProvider()).toBe("postforme");
   });
 
   it("honours an explicit provider, and an explicit provider must be configured", () => {
@@ -47,34 +51,30 @@ describe("distribution provider", () => {
     process.env.DISTRIBUTION_PROVIDER = "sdr";
     expect(getDistributionProvider()).toBe("sdr");
     process.env.DISTRIBUTION_PROVIDER = "socialapi";
-    delete process.env.SOCIALAPI_API_KEY;
     expect(getDistributionProvider()).toBeNull();
     process.env.DISTRIBUTION_PROVIDER = "none";
     process.env.SOCIALAPI_API_KEY = "sapi_key_abc";
     expect(getDistributionProvider()).toBeNull();
   });
 
-  it("has global and per-workspace kill switches", () => {
-    process.env.SOCIALAPI_API_KEY = "sapi_key_abc";
-    process.env["FEATURE_FLAG_SOCIALAPI_ENABLED_WS_ws-off"] = "false";
-    expect(getDistributionProviderForWorkspace("ws-on")).toBe("socialapi");
-    expect(getDistributionProviderForWorkspace("ws-off")).toBeNull();
-    process.env.FEATURE_FLAG_SOCIALAPI_ENABLED = "false";
-    expect(getDistributionProviderForWorkspace("ws-on")).toBeNull();
+  it("uses Post for Me for each workspace", () => {
+    process.env.POST_FOR_ME_API_KEY = "pfm_test_abc";
+    expect(getDistributionProviderForWorkspace("ws-on")).toBe("postforme");
+    expect(getDistributionProviderForWorkspace("ws-off")).toBe("postforme");
   });
 });
 
-describe("checkEnv (SocialAPI.ai)", () => {
-  it("requires the key when SocialAPI is the explicit provider", () => {
+describe("checkEnv (distribution)", () => {
+  it("rejects the retired SocialAPI provider", () => {
     const report = checkEnv({ NODE_ENV: "development", DISTRIBUTION_PROVIDER: "socialapi" });
-    expect(report.errors).toContain(
-      "SOCIALAPI_API_KEY is required when DISTRIBUTION_PROVIDER is socialapi",
-    );
+    expect(report.errors).toContain("SocialAPI is retired; set DISTRIBUTION_PROVIDER=postforme");
   });
 
-  it("warns (not fails) when the webhook secret is missing", () => {
-    const report = checkEnv({ NODE_ENV: "development", SOCIALAPI_API_KEY: "sapi_key_abc" });
-    expect(report.warnings.some((w) => w.startsWith("SOCIALAPI_WEBHOOK_SECRET"))).toBe(true);
+  it("requires the Post for Me key when selected", () => {
+    const report = checkEnv({ NODE_ENV: "development", DISTRIBUTION_PROVIDER: "postforme" });
+    expect(report.errors).toContain(
+      "POST_FOR_ME_API_KEY is required when DISTRIBUTION_PROVIDER is postforme",
+    );
   });
 
   it("fails when a provider secret is exposed as NEXT_PUBLIC_*, without echoing the value", () => {

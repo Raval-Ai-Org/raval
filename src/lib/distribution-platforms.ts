@@ -6,7 +6,7 @@
 // Wire ids match Mellox's PlatformId (`twitter`, not `x`) and SocialAPI's
 // platform slugs, which are identical for every platform listed here.
 
-export type DistributionProvider = "socialapi" | "sdr";
+export type DistributionProvider = "postforme" | "socialapi" | "sdr";
 
 export type DistributionPlatformId =
   "linkedin" | "twitter" | "instagram" | "facebook" | "threads" | "tiktok" | "youtube";
@@ -37,8 +37,7 @@ export const DISTRIBUTION_PLATFORMS: Record<DistributionPlatformId, Distribution
     label: "X",
     logo: "x",
     description: "Short-form updates and launches",
-    connectNote:
-      "X requires your own X developer app credentials to be configured with the publishing provider before connecting. X posts are text-only.",
+    connectNote: "Connect your X account to publish posts.",
   },
   instagram: {
     id: "instagram",
@@ -55,7 +54,7 @@ export const DISTRIBUTION_PLATFORMS: Record<DistributionPlatformId, Distribution
     logo: "facebook",
     tint: "#1877F2",
     description: "Pages, communities, and announcements",
-    connectNote: "After authorizing, you'll choose which Facebook Pages to connect.",
+    connectNote: "Select the Facebook Pages you manage during authorization.",
   },
   threads: {
     id: "threads",
@@ -84,6 +83,7 @@ export const DISTRIBUTION_PLATFORMS: Record<DistributionPlatformId, Distribution
 
 /** Publishing platforms per provider, in display order. */
 export const PROVIDER_PLATFORMS: Record<DistributionProvider, DistributionPlatformId[]> = {
+  postforme: ["linkedin", "twitter", "instagram", "facebook", "threads", "tiktok", "youtube"],
   socialapi: ["linkedin", "twitter", "instagram", "facebook", "threads", "tiktok", "youtube"],
   sdr: ["twitter", "linkedin", "facebook", "instagram"],
 };

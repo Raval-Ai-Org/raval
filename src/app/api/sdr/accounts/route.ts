@@ -9,6 +9,8 @@ import { listAccountsHandler } from "@/lib/sdr.handlers";
 import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { listAccountsHandler as listSocialAccounts } from "@/lib/socialapi/handlers";
 import { withSocialApi } from "@/lib/socialapi/route.server";
+import { listAccountsHandler as listPostForMeAccounts } from "@/lib/postforme/handlers";
+import { withPostForMe } from "@/lib/postforme/route.server";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,9 @@ export const GET = defineRoute({
     const provider = getDistributionProviderForWorkspace(workspaceId);
     // Distribution off → no provider to ask; an empty list is the truth.
     if (!provider) return Response.json([]);
+    if (provider === "postforme") {
+      return withPostForMe(workspaceId, (deps) => listPostForMeAccounts(workspaceId, deps));
+    }
     if (provider === "socialapi") {
       return withSocialApi(workspaceId, (deps) => listSocialAccounts(workspaceId, deps));
     }

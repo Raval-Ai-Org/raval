@@ -47,8 +47,10 @@ const Schema = z.object({
   SDR_SECRET_ENCRYPTION_KEY: z.string().optional(),
   SDR_WEBHOOK_BASE_URL: optionalUrl,
   SDR_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(60).optional(),
-  // Distribution provider — socialapi | sdr | none. Default: SocialAPI.ai when its key is set.
-  DISTRIBUTION_PROVIDER: z.enum(["socialapi", "sdr", "none", "off", ""]).optional(),
+  // Distribution provider — Post for Me | SDR | none.
+  DISTRIBUTION_PROVIDER: z.enum(["postforme", "socialapi", "sdr", "none", "off", ""]).optional(),
+  POST_FOR_ME_API_KEY: z.string().startsWith("pfm_").optional().or(z.literal("")),
+  POST_FOR_ME_WEBHOOK_SECRET: z.string().optional(),
   // SocialAPI.ai — server-only. Never expose as NEXT_PUBLIC_*.
   SOCIALAPI_API_KEY: z.string().startsWith("sapi_key_").optional().or(z.literal("")),
   SOCIALAPI_BASE_URL: optionalUrl,
@@ -205,18 +207,16 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
       "OPENROUTER_WEBHOOK_SECRET is not set (OpenRouter video jobs are advanced by polling only)",
     );
   }
-  if ((env.DISTRIBUTION_PROVIDER ?? "").toLowerCase() === "socialapi" && !env.SOCIALAPI_API_KEY) {
-    errors.push("SOCIALAPI_API_KEY is required when DISTRIBUTION_PROVIDER is socialapi");
+  if ((env.DISTRIBUTION_PROVIDER ?? "").toLowerCase() === "socialapi") {
+    errors.push("SocialAPI is retired; set DISTRIBUTION_PROVIDER=postforme");
   }
-  if (env.SOCIALAPI_API_KEY && !env.SOCIALAPI_WEBHOOK_SECRET) {
-    warnings.push(
-      "SOCIALAPI_WEBHOOK_SECRET is not set (delivery status relies on the 5-minute reconcile sweep)",
-    );
+  if ((env.DISTRIBUTION_PROVIDER ?? "").toLowerCase() === "postforme" && !env.POST_FOR_ME_API_KEY) {
+    errors.push("POST_FOR_ME_API_KEY is required when DISTRIBUTION_PROVIDER is postforme");
   }
   // A provider secret in a NEXT_PUBLIC_* variable is inlined into the browser bundle.
   for (const name of Object.keys(env)) {
     if (
-      /^NEXT_PUBLIC_.*(SOCIALAPI|SDR_ADMIN|SERVICE_ROLE|GITHUB_APP_PRIVATE|GITHUB_WEBHOOK|GITHUB_CLIENT_SECRET|GOOGLE_ANALYTICS_CLIENT_SECRET|GOOGLE_TOKEN_ENCRYPTION|GOOGLE_CLIENT_SECRET|RIXOT_API|STRIPE_SECRET|STRIPE_WEBHOOK|TAVILY_API)/i.test(
+      /^NEXT_PUBLIC_.*(POST_FOR_ME|SOCIALAPI|SDR_ADMIN|SERVICE_ROLE|GITHUB_APP_PRIVATE|GITHUB_WEBHOOK|GITHUB_CLIENT_SECRET|GOOGLE_ANALYTICS_CLIENT_SECRET|GOOGLE_TOKEN_ENCRYPTION|GOOGLE_CLIENT_SECRET|RIXOT_API|STRIPE_SECRET|STRIPE_WEBHOOK|TAVILY_API)/i.test(
         name,
       ) &&
       env[name]

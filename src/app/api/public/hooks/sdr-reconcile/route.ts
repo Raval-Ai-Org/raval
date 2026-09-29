@@ -9,9 +9,10 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { reconcileStalePublications } from "@/lib/sdr.reconcile";
 import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
 import { defineCronRoute } from "@/server/cron";
-import { isSocialApiConfigured } from "@/lib/feature-flags";
-import { reconcileSocialApi } from "@/lib/socialapi/reconcile";
-import { getSocialApiClient, socialDb } from "@/lib/socialapi/workspace.server";
+import { isPostForMeConfigured } from "@/lib/feature-flags";
+import { postForMeDb } from "@/lib/postforme/workspace.server";
+import { reconcilePostForMe } from "@/lib/postforme/reconcile";
+import { createPostForMeAdapter } from "@/lib/postforme/client.server";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +35,14 @@ export const POST = defineCronRoute({
       }
     }
 
-    if (isSocialApiConfigured()) {
+    if (isPostForMeConfigured()) {
       try {
-        result.socialapi = await reconcileSocialApi({ api: getSocialApiClient(), db: socialDb });
+        result.postforme = await reconcilePostForMe({
+          api: createPostForMeAdapter("__reconcile__"),
+          db: postForMeDb,
+        });
       } catch (e) {
-        failures.push(`socialapi: ${e instanceof Error ? e.message : String(e)}`);
+        failures.push(`postforme: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 

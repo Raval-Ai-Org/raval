@@ -174,7 +174,9 @@ export function DeliveryView({
 
   if (rows.length === 0) return null;
 
-  const canRetry = rows.some((r) => r.status === "failed" && r.provider === "socialapi");
+  const canRetry = rows.some(
+    (r) => r.status === "failed" && (r.provider === "postforme" || r.provider === "socialapi"),
+  );
 
   return (
     <div className="flex flex-col gap-2">

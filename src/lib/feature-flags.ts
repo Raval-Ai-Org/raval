@@ -8,41 +8,40 @@ const ENV_FEATURE_SDR = "FEATURE_FLAG_SDR_ENABLED";
 const isTruthy = (v: string) => v === "true" || v === "1" || v === "yes";
 const isFalsy = (v: string) => v === "false" || v === "0" || v === "no";
 
-/** SocialAPI.ai has a server-side key and is not switched off globally. */
+/** Legacy configuration reader; SocialAPI is retired as a distribution provider. */
 export function isSocialApiConfigured(): boolean {
   if (!process.env.SOCIALAPI_API_KEY) return false;
   return !isFalsy((process.env.FEATURE_FLAG_SOCIALAPI_ENABLED ?? "").trim().toLowerCase());
 }
 
+export function isPostForMeConfigured(): boolean {
+  return Boolean(process.env.POST_FOR_ME_API_KEY?.trim());
+}
+
 /**
  * The deployment's distribution provider. An explicit DISTRIBUTION_PROVIDER
- * wins (and must be configured to count); otherwise SocialAPI.ai when its key
+ * wins (and must be configured to count); otherwise Post for Me when its key
  * is present, else the self-hosted SDR when its flag is on. `null` = off.
  */
 export function getDistributionProvider(): DistributionProvider | null {
   const explicit = (process.env.DISTRIBUTION_PROVIDER ?? "").trim().toLowerCase();
-  if (explicit === "socialapi") return isSocialApiConfigured() ? "socialapi" : null;
+  if (explicit === "postforme") return isPostForMeConfigured() ? "postforme" : null;
+  if (explicit === "socialapi") return null;
   if (explicit === "sdr") return isSdrEnabled() ? "sdr" : null;
   if (explicit === "none" || explicit === "off") return null;
-  if (isSocialApiConfigured()) return "socialapi";
+  if (isPostForMeConfigured()) return "postforme";
   return isSdrEnabled() ? "sdr" : null;
 }
 
 /**
- * The provider for one workspace. FEATURE_FLAG_SOCIALAPI_ENABLED_WS_<id>=false
- * switches a single tenant off without a deploy; the SDR keeps its existing
- * per-workspace opt-in (FEATURE_FLAG_SDR_ENABLED_WS_<id>).
+ * The provider for one workspace. The SDR keeps its existing per-workspace
+ * opt-in (FEATURE_FLAG_SDR_ENABLED_WS_<id>).
  */
 export function getDistributionProviderForWorkspace(
   workspaceId: string,
 ): DistributionProvider | null {
   const provider = getDistributionProvider();
-  if (provider === "socialapi") {
-    const perWs = (process.env[`FEATURE_FLAG_SOCIALAPI_ENABLED_WS_${workspaceId}`] ?? "")
-      .trim()
-      .toLowerCase();
-    return perWs && isFalsy(perWs) ? null : "socialapi";
-  }
+  if (provider === "postforme") return "postforme";
   const explicit = (process.env.DISTRIBUTION_PROVIDER ?? "").trim().toLowerCase();
   if (explicit === "socialapi" || explicit === "none" || explicit === "off") return null;
   return isSdrEnabledForWorkspace(workspaceId) ? "sdr" : null;

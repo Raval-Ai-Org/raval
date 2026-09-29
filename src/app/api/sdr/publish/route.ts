@@ -16,6 +16,8 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { publishHandler } from "@/lib/socialapi/handlers";
 import { withSocialApi } from "@/lib/socialapi/route.server";
+import { publishHandler as publishPostForMe } from "@/lib/postforme/handlers";
+import { withPostForMe } from "@/lib/postforme/route.server";
 import { assertPublishingAction } from "@/server/billing/social-profiles.server";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +56,16 @@ export const POST = defineRoute({
     if (!provider) {
       const out = await handleSdrDisabled({ workspaceId, contentItemIds, kind: "publish" });
       return Response.json(out.body, { status: out.status });
+    }
+
+    if (provider === "postforme") {
+      const { tiktokPrivacyLevel } = readDistributionOptions(body.options);
+      return withPostForMe(workspaceId, (deps) =>
+        publishPostForMe(
+          { workspaceId, userId, contentItemIds, selection, tiktokPrivacyLevel },
+          deps,
+        ),
+      );
     }
 
     if (provider === "socialapi") {

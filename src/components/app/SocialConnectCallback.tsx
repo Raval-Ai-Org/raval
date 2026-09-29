@@ -1,8 +1,8 @@
 "use client";
 
 // SocialConnectCallback — the page a social platform's consent flow returns to
-// (via SocialAPI.ai). It finishes the connection server-side (one-time state,
-// tenant check), lets the user pick Facebook Pages when the platform asks, then
+// (via Post for Me or the legacy SocialAPI.ai callback). It finishes the connection
+// server-side, lets the user pick Facebook Pages when the legacy flow asks, then
 // tells every open Mellox tab over a BroadcastChannel and closes the popup.
 import { isWorkspaceId, workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { useEffect, useRef, useState } from "react";
@@ -16,6 +16,7 @@ import { DISTRIBUTION_PLATFORMS, isDistributionPlatform } from "@/lib/distributi
 import {
   broadcastSocialConnect,
   completeSocialConnect,
+  completePostForMeConnect,
   readPendingConnect,
   selectSocialPending,
 } from "@/lib/sdr.functions";
@@ -68,6 +69,52 @@ export function SocialConnectCallback() {
     const state = params.get("state") ?? "";
     const status = params.get("status") ?? "";
     const workspaceId = resolveWorkspaceId();
+    if (params.has("isSuccess")) {
+      if (!workspaceId) {
+        setView({ kind: "error", message: "Open Mellox and start the connection again." });
+        return;
+      }
+      if (params.get("isSuccess") !== "true") {
+        const message = params.get("error") || "The platform did not complete the connection.";
+        broadcastSocialConnect({ type: "error", platform: platform ?? undefined });
+        setView({ kind: "error", message });
+        return;
+      }
+      const pending = readPendingConnect();
+      const connectedPlatform = pending?.platform ?? platform;
+      const accountIds = params
+        .getAll("accountIds")
+        .flatMap((value) => value.split(","))
+        .map((value) => value.trim())
+        .filter(Boolean);
+      if (!connectedPlatform || !accountIds.length) {
+        setView({ kind: "error", message: "The connection result was incomplete. Try again." });
+        return;
+      }
+      void (async () => {
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try {
+            await completePostForMeConnect(workspaceId, connectedPlatform, accountIds);
+            finish(connectedPlatform);
+            setView({ kind: "connected" });
+            return;
+          } catch (error) {
+            if (attempt === 3) throw error;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        setView({
+          kind: "error",
+          message: "The account has not appeared yet. Refresh Connections in Mellox shortly.",
+        });
+      })().catch((e: unknown) =>
+        setView({
+          kind: "error",
+          message: e instanceof Error ? e.message : "Could not refresh connected accounts.",
+        }),
+      );
+      return;
+    }
     if (!state || !status) {
       setView({ kind: "error", message: "This page was opened without a connection result." });
       return;

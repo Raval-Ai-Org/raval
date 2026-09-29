@@ -140,6 +140,14 @@ export function getConnections(workspaceId: string): Promise<ConnectedAccount[]>
   return getJson(`/api/sdr/accounts?workspaceId=${q(workspaceId)}`);
 }
 
+export function completePostForMeConnect(
+  workspaceId: string,
+  platform: string,
+  accountIds: string[],
+): Promise<{ connected: boolean }> {
+  return postJson("/api/social/connect/postforme/complete", { workspaceId, platform, accountIds });
+}
+
 export async function disconnectAccount(workspaceId: string, accountId: string): Promise<void> {
   await postJson("/api/sdr/disconnect", { workspaceId, accountId });
 }

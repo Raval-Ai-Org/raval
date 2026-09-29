@@ -223,6 +223,7 @@ export type DeleteDeps = {
   listObjects: (workspaceId: string) => Promise<string[]>;
   removeObjects: (paths: string[]) => Promise<void>;
   releaseSocialBrand: (brandId: string) => Promise<void>;
+  disconnectPostForMeAccounts?: (workspaceId: string) => Promise<void>;
 };
 
 const defaultDeleteDeps: DeleteDeps = {
@@ -233,14 +234,25 @@ const defaultDeleteDeps: DeleteDeps = {
       if (error) console.error("[workspaces] storage cleanup failed", error.message);
     }
   },
-  releaseSocialBrand: async (brandId) => {
-    const { getSocialApiClient } = await import("@/lib/socialapi/workspace.server");
-    const res = await getSocialApiClient()({
-      method: "DELETE",
-      path: `/brands/${encodeURIComponent(brandId)}`,
+  // Historical SocialAPI brands are no longer contacted during deletion.
+  releaseSocialBrand: async () => undefined,
+  disconnectPostForMeAccounts: async (workspaceId) => {
+    if (!process.env.POST_FOR_ME_API_KEY) return;
+    const { createPostForMeAdapter } = await import("@/lib/postforme/client.server");
+    const call = createPostForMeAdapter(workspaceId);
+    const listed = await call<{ data: Array<{ id: string; status: string }> }>({
+      path: "/accounts",
     });
-    if (res.status >= 300 && res.status !== 404) {
-      console.warn("[workspaces] provider brand not released", brandId, res.status);
+    if (listed.status !== 200) throw new Error("Could not list connected social accounts");
+    for (const account of listed.data.data) {
+      if (account.status !== "active") continue;
+      const removed = await call({
+        method: "DELETE",
+        path: `/accounts/${encodeURIComponent(account.id)}`,
+      });
+      if (removed.status !== 204 && removed.status !== 200 && removed.status !== 404) {
+        throw new Error("Could not disconnect a social account");
+      }
     }
   },
 };
@@ -284,6 +296,14 @@ export async function deleteWorkspace(
     .maybeSingle();
 
   const objects = await deps.listObjects(args.workspaceId).catch(() => [] as string[]);
+
+  if (deps.disconnectPostForMeAccounts) {
+    try {
+      await deps.disconnectPostForMeAccounts(args.workspaceId);
+    } catch {
+      throw new HttpError(503, "Could not disconnect this workspace's social accounts. Try again.");
+    }
+  }
 
   const { error: deleteError, data: deleted } = await db
     .from("workspaces")

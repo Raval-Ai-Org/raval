@@ -162,7 +162,7 @@ export function SocialPerformance({
           : "Engagement is read from the platforms after posts go live"
       }
       action={
-        data.provider === "socialapi" ? (
+        data.provider === "postforme" || data.provider === "socialapi" ? (
           <Button
             size="sm"
             variant="outline"

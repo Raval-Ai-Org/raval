@@ -34,6 +34,21 @@ models; do not configure a direct Anthropic API key.
 When `FEATURE_FLAG_SDR_ENABLED` is on, `SDR_BASE_URL`, `SDR_ADMIN_TOKEN`,
 `SDR_SECRET_ENCRYPTION_KEY` and `SDR_WEBHOOK_BASE_URL` become required.
 
+For managed social publishing, set `DISTRIBUTION_PROVIDER=postforme`,
+`POST_FOR_ME_API_KEY`, and `POST_FOR_ME_WEBHOOK_SECRET` as server-only service
+variables. Use an API key and webhook secret from the **same Quickstart project**
+where the platforms are enabled; a key from a separate White Label project
+cannot use that Quickstart project's platform credentials. In the Post for Me
+dashboard, enable LinkedIn, X, Instagram,
+Facebook, Threads, TikTok, and YouTube under Project Setup. Set the **Project
+Redirect URL** to `https://mellox.ai/app/social/connected` (or the matching
+`APP_URL` origin in a non-production environment). The Post for Me webhook URL
+is `https://mellox.ai/api/public/hooks/postforme`; subscribe it to
+`social.post.updated`, `social.post.result.created`, `social.account.created`,
+and `social.account.updated`. Use its webhook secret in
+`POST_FOR_ME_WEBHOOK_SECRET`. Apply the Post for Me billing migration before
+switching production traffic to this provider.
+
 For the VPS stack also set `APP_DOMAIN`, `ACME_EMAIL` and `REDIS_PASSWORD`.
 
 ## 2. Database

@@ -57,7 +57,7 @@ export async function assertSocialProfileConnection(args: {
     .from("social_accounts")
     .select("id")
     .eq("workspace_id", args.workspaceId)
-    .eq("provider", "socialapi")
+    .eq("provider", "postforme")
     .in("status", ["active", "reconnect_required"])
     .limit(1);
   if (error) throw new HttpError(503, "Could not check connected social profiles.");

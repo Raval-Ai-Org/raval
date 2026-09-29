@@ -5,6 +5,9 @@ import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { creatorInfoHandler } from "@/lib/socialapi/handlers";
 import { withSocialApi } from "@/lib/socialapi/route.server";
+import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
+import { creatorInfoHandler as postForMeCreatorInfo } from "@/lib/postforme/handlers";
+import { withPostForMe } from "@/lib/postforme/route.server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,5 +18,11 @@ export const GET = defineRoute({
   workspaceId: ({ query }) => query.workspaceId,
   minRole: "editor",
   handler: ({ query, workspaceId }) =>
-    withSocialApi(workspaceId, (deps) => creatorInfoHandler({ accountId: query.accountId }, deps)),
+    getDistributionProviderForWorkspace(workspaceId) === "postforme"
+      ? withPostForMe(workspaceId, (deps) =>
+          postForMeCreatorInfo({ accountId: query.accountId }, deps),
+        )
+      : withSocialApi(workspaceId, (deps) =>
+          creatorInfoHandler({ accountId: query.accountId }, deps),
+        ),
 });

@@ -14,6 +14,8 @@ import {
   handlerResponse,
   withSocialApi,
 } from "@/lib/socialapi/route.server";
+import { disconnectHandler as disconnectPostForMeAccount } from "@/lib/postforme/handlers";
+import { withPostForMe } from "@/lib/postforme/route.server";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,13 @@ export const POST = defineRoute({
   handler: async ({ body, workspaceId }) => {
     const accountId = typeof body.accountId === "string" ? body.accountId : "";
     const provider = getDistributionProviderForWorkspace(workspaceId);
+    if (provider === "postforme") {
+      const response = await withPostForMe(workspaceId, (deps) =>
+        disconnectPostForMeAccount({ workspaceId, accountId }, deps),
+      );
+      if (response.ok) await releaseSocialProfileSlotIfEmpty(workspaceId);
+      return response;
+    }
     if (provider === "socialapi") {
       const response = await withSocialApi(workspaceId, (deps) =>
         disconnectSocialAccount({ workspaceId, accountId }, deps),

@@ -16,6 +16,8 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { scheduleHandler } from "@/lib/socialapi/handlers";
 import { withSocialApi } from "@/lib/socialapi/route.server";
+import { scheduleHandler as schedulePostForMe } from "@/lib/postforme/handlers";
+import { withPostForMe } from "@/lib/postforme/route.server";
 import { readDistributionOptions } from "@/app/api/sdr/publish/route";
 import { assertPublishingAction } from "@/server/billing/social-profiles.server";
 
@@ -59,6 +61,13 @@ export const POST = defineRoute({
         kind: "schedule",
       });
       return Response.json(out.body, { status: out.status });
+    }
+
+    if (provider === "postforme") {
+      const { tiktokPrivacyLevel } = readDistributionOptions(body.options);
+      return withPostForMe(workspaceId, (deps) =>
+        schedulePostForMe({ workspaceId, userId, items, selection, tiktokPrivacyLevel }, deps),
+      );
     }
 
     if (provider === "socialapi") {

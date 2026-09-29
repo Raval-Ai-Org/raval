@@ -9,6 +9,8 @@ import { cancelScheduledHandler } from "@/lib/sdr.handlers";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { cancelHandler } from "@/lib/socialapi/handlers";
 import { handlerResponse, withSocialApi } from "@/lib/socialapi/route.server";
+import { cancelHandler as cancelPostForMe } from "@/lib/postforme/handlers";
+import { withPostForMe } from "@/lib/postforme/route.server";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,11 @@ export const POST = defineRoute({
       .eq("workspace_id", workspaceId)
       .maybeSingle();
     const meta = (item?.meta ?? {}) as Record<string, unknown>;
+    if (typeof meta.postforme_post_id === "string") {
+      return withPostForMe(workspaceId, (deps) =>
+        cancelPostForMe({ workspaceId, contentItemId: body.contentItemId }, deps),
+      );
+    }
     if (typeof meta.socialapi_post_id === "string") {
       return withSocialApi(workspaceId, (deps) =>
         cancelHandler({ workspaceId, contentItemId: body.contentItemId }, deps),
