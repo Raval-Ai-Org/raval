@@ -10,7 +10,6 @@ import {
   ImagePlus,
   Sparkles,
   Video,
-  Wallet,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,7 +20,6 @@ import {
   ChoiceTile,
   CreatorSilhouette,
   Disclosure,
-  formatUsd,
   motionPreset,
   Panel,
   PhoneFrame,
@@ -83,11 +81,6 @@ export function coerceSettings(
   };
 }
 
-export function estimateUsd(model: ModelView, resolution: string, durationSec: number): number {
-  const unit = model.pricing.usd[resolution] ?? 0;
-  return model.pricing.unit === "video" ? unit : unit * durationSec;
-}
-
 export function GenerateStep({
   models,
   allowance,
@@ -137,18 +130,14 @@ export function GenerateStep({
 
   const refs = usableRefs(model, settings.referenceIds);
   const durations = allowedDurations(model, refs.length);
-  const usd = estimateUsd(model, settings.resolution, settings.durationSec);
   const used = allowance ? allowance.videos.used + allowance.videos.held : 0;
   const remaining = allowance ? Math.max(0, allowance.videos.limit - used) : null;
-  const spendLeft = allowance ? allowance.spend.monthlyLimitUsd - allowance.spend.monthUsd : null;
   const blockReason =
     remaining !== null && remaining < model.videoUnits
       ? "Your monthly videos are used up."
-      : spendLeft !== null && spendLeft < usd
-        ? "This would go over your monthly limit."
-        : allowance && allowance.activeRenders >= allowance.maxConcurrent
-          ? "Wait for a video in progress to finish."
-          : null;
+      : allowance && allowance.activeRenders >= allowance.maxConcurrent
+        ? "Wait for a video in progress to finish."
+        : null;
   const mainRef = references.find((r) => refs.includes(r.assetId));
 
   const toggleRef = (id: string) => {
@@ -201,9 +190,8 @@ export function GenerateStep({
             </PhoneFrame>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="grid grid-cols-2 gap-2 text-center">
             <Stat icon={Clock} value={`${settings.durationSec}s`} label="Length" />
-            <Stat icon={Wallet} value={formatUsd(usd)} label="Est. cost" />
             <Stat icon={Video} value={remaining === null ? "—" : String(remaining)} label="Left" />
           </div>
           {allowance ? (
@@ -265,7 +253,7 @@ export function GenerateStep({
                 label="Quality"
                 options={model.resolutions.map((r) => ({
                   id: r,
-                  label: `${r} · ${formatUsd(estimateUsd(model, r, settings.durationSec))}`,
+                  label: r,
                 }))}
                 value={settings.resolution}
                 onChange={(v) => onChange({ ...settings, resolution: v })}

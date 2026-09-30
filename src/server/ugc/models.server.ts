@@ -141,11 +141,6 @@ export function estimateRender(
 }
 
 export function toModelView(model: UgcModel): ModelView {
-  const pricing = effectivePricing(model);
-  const usd: Record<string, number> = {};
-  for (const [res, amount] of Object.entries(pricing.amounts)) {
-    usd[res] = Math.round(toUsd(pricing, amount ?? 0) * 10_000) / 10_000;
-  }
   return {
     key: String(model.key),
     displayName: model.displayName,
@@ -158,7 +153,6 @@ export function toModelView(model: UgcModel): ModelView {
     defaultResolution: model.defaultResolution,
     nativeAudio: model.nativeAudio,
     images: model.images ? { mode: model.images.mode, max: model.images.max } : null,
-    pricing: { unit: pricing.unit, usd },
     videoUnits: videoUnits(model),
   };
 }

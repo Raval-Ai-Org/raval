@@ -1,5 +1,8 @@
 "use client";
 
+import { openFeatureUpgrade } from "@/components/app/FeatureGate";
+import { PlanLock } from "@/components/app/billing/billing-ui";
+import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -85,6 +88,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
   }, [value, hero]);
 
   const model = CHAT_MODELS.find((m) => m.id === modelId) ?? CHAT_MODELS[0];
+  const billing = useEntitlements();
+  const proGrant = billing.data?.features.pro_chat ?? null;
+  const proLeft = billing.data ? billing.data.meters.pro_messages.available : null;
   const canSend = !busy && (value.trim().length > 0 || attachments.length > 0);
 
   const setDragging = (on: boolean) => shellRef.current?.toggleAttribute("data-dragging", on);
@@ -212,19 +218,30 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-56 p-1.5">
-              {CHAT_MODELS.map((m) => (
-                <DropdownMenuItem
-                  key={m.id}
-                  onSelect={() => onModelChange(m.id)}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-medium">{m.label}</div>
-                    <div className="text-[11.5px] text-muted-foreground">{m.hint}</div>
-                  </div>
-                  {m.id === model.id ? <Check className="size-4 text-primary" /> : null}
-                </DropdownMenuItem>
-              ))}
+              {CHAT_MODELS.map((m) => {
+                // Pro is a paid plan feature with a monthly message allowance.
+                const pro = m.id === "mellox-pro";
+                const lock = pro && proGrant && !proGrant.allowed ? proGrant.requiredPlan : null;
+                return (
+                  <DropdownMenuItem
+                    key={m.id}
+                    onSelect={() => (lock ? openFeatureUpgrade("pro_chat") : onModelChange(m.id))}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] font-medium">{m.label}</div>
+                      <div className="text-[11.5px] text-muted-foreground">
+                        {pro && !lock && proLeft !== null ? `${m.hint} · ${proLeft} left` : m.hint}
+                      </div>
+                    </div>
+                    {lock ? (
+                      <PlanLock plan={lock} />
+                    ) : m.id === model.id ? (
+                      <Check className="size-4 text-primary" />
+                    ) : null}
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
 

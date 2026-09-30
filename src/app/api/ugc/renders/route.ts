@@ -51,7 +51,7 @@ export const POST = defineRoute({
       }
       assertWithinLimit(entitlements, "renders");
     }
-    const { render, created } = await startRender(
+    const { render, created, providerCostUsd } = await startRender(
       supabase,
       {
         workspaceId,
@@ -77,7 +77,7 @@ export const POST = defineRoute({
       ugcKey: model,
       seconds: render.durationSec,
       resolution,
-      providerCostUsd: render.estCostUsd,
+      providerCostUsd,
     });
     const feature = videoFeatureFor(model, resolution);
     let charge;

@@ -40,15 +40,6 @@ export const GET = defineRoute({
       checkoutMode: purchasesAvailable ? ("card" as const) : ("request" as const),
       isBillingAdmin: isBillingAdmin(userId),
     };
-    if (entitlements.isOwner) {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { data: row } = await supabaseAdmin
-        .from("billing_accounts")
-        .select("referral_code")
-        .eq("id", entitlements.accountId)
-        .maybeSingle();
-      return { ...entitlements, ...extras, referralCode: row?.referral_code ?? null };
-    }
     return entitlements.isOwner
       ? { ...entitlements, ...extras }
       : {

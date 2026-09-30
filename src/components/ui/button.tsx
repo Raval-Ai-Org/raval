@@ -43,12 +43,12 @@ const buttonVariants = cva(
       variant: {
         default: [
           "bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)]",
-          "hover:bg-[color-mix(in_oklab,hsl(var(--primary))_88%,hsl(var(--foreground)))]",
+          "hover:bg-[color-mix(in_oklab,hsl(var(--primary))_88%,hsl(var(--foreground)))] hover:text-primary-foreground",
           "hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)] active:shadow-none",
         ].join(" "),
         destructive: [
           "bg-destructive text-destructive-foreground shadow-1",
-          "hover:bg-[color-mix(in_oklab,hsl(var(--destructive))_88%,hsl(var(--foreground)))]",
+          "hover:bg-[color-mix(in_oklab,hsl(var(--destructive))_88%,hsl(var(--foreground)))] hover:text-destructive-foreground",
           "hover:shadow-2 active:shadow-none",
           "focus-visible:ring-destructive/55",
         ].join(" "),

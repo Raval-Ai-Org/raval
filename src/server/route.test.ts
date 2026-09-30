@@ -215,3 +215,23 @@ describe("defineRoute role gate and workspace attribution", () => {
     expect(seen).toHaveBeenLastCalledWith(undefined);
   });
 });
+
+describe("billing balance signal", () => {
+  it("tells the browser when a request moved the wallet balance", async () => {
+    const { setRequestScope } = await import("./request-context");
+    const charged = defineRoute({
+      name: "charged",
+      auth: "user",
+      handler: async () => {
+        setRequestScope({ billingChanged: true });
+        return { ok: true };
+      },
+    });
+    const plain = defineRoute({ name: "plain", auth: "user", handler: async () => ({ ok: true }) });
+    const withSignal = await charged(post({}));
+    expect(withSignal.headers.get("X-Billing-Changed")).toBe("1");
+    expect(withSignal.headers.get("Cache-Control")).toBe("no-store");
+    const without = await plain(post({}));
+    expect(without.headers.get("X-Billing-Changed")).toBeNull();
+  });
+});

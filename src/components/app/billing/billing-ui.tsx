@@ -1,16 +1,16 @@
 "use client";
 
-// Small building blocks shared by the billing screens: the monthly/annual
-// switch, a usage bar, plan cards and pack cards. Tokens and pills follow
-// docs/design-system.md.
+// Small building blocks shared by the billing screens. Tokens and pills follow
+// docs/design-system.md: one lime primary action, quiet outlined pills, soft tiles.
 
 import type { ReactNode } from "react";
-import { Check, Lock, Sparkles } from "@/components/icons";
+import { Check, Lock } from "@/components/icons";
 import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { PLANS, type BillingInterval, type PlanId } from "@/lib/billing/catalog";
-import { formatNumber, formatUsd, planPrice } from "@/lib/billing/present";
+import { formatUsd, planPrice } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
 
+/** Monthly / Yearly switch. */
 export function IntervalToggle({
   value,
   onChange,
@@ -32,7 +32,7 @@ export function IntervalToggle({
           aria-checked={value === option}
           onClick={() => onChange(option)}
           className={cn(
-            "inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 font-medium transition-colors",
+            "inline-flex h-8 items-center gap-1.5 rounded-full px-4 font-medium transition-colors",
             value === option
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",
@@ -41,7 +41,7 @@ export function IntervalToggle({
           {option === "month" ? "Monthly" : "Yearly"}
           {option === "year" && (
             <span className="rounded-full bg-primary/15 px-1.5 text-[11px] font-semibold text-primary">
-              2 months free
+              −17%
             </span>
           )}
         </button>
@@ -50,30 +50,28 @@ export function IntervalToggle({
   );
 }
 
-/** Remaining balance of one allowance. `total` is this month's allowance (0 = none). */
+/** How much of an allowance is left. `total` 0 = nothing included. */
 export function UsageBar({
   label,
   left,
   total,
-  leftText,
-  hint,
+  note,
 }: {
   label: string;
   left: number;
   total: number;
-  leftText: string;
-  hint?: ReactNode;
+  note?: ReactNode;
 }) {
   const ratio = total > 0 ? Math.max(0, Math.min(1, left / total)) : left > 0 ? 1 : 0;
   const tone = left <= 0 ? "bg-destructive" : ratio <= 0.2 ? "bg-warning" : "bg-primary";
   return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[13px] font-medium text-muted-foreground">{label}</span>
-        <span className="text-[15px] font-semibold tabular-nums">{leftText}</span>
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-3 text-[13px]">
+        <span className="font-medium">{label}</span>
+        <span className="tabular-nums text-muted-foreground">{note}</span>
       </div>
       <div
-        className="h-1.5 overflow-hidden rounded-full bg-[var(--ds-well-bg)]"
+        className="h-2 overflow-hidden rounded-full bg-[var(--ds-well-bg)]"
         role="meter"
         aria-label={`${label} left`}
         aria-valuemin={0}
@@ -85,105 +83,70 @@ export function UsageBar({
           style={{ width: `${Math.round(ratio * 100)}%` }}
         />
       </div>
-      {hint && <p className="text-[12px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
 
+/** One plan in the plans picker. */
 export function PlanCard({
   plan,
   interval,
   current,
-  highlighted,
+  recommended,
+  dimmed,
   action,
-  compact,
+  className,
 }: {
+  className?: string;
   plan: PlanId;
   interval: BillingInterval;
   current?: boolean;
-  highlighted?: boolean;
+  recommended?: boolean;
+  dimmed?: boolean;
   action?: ReactNode;
-  compact?: boolean;
 }) {
   const def = PLANS[plan];
   const price = planPrice(plan, interval);
+  const badge = current ? "Current plan" : recommended ? "Recommended" : def.badge;
   return (
     <article
       className={cn(
-        "ds-tile relative flex flex-col p-5",
-        highlighted && "ring-2 ring-primary/60",
-        current && !highlighted && "ring-1 ring-foreground/15",
+        "ds-tile relative flex flex-col p-5 transition-opacity",
+        recommended && "ring-2 ring-primary",
+        dimmed && "opacity-55",
+        className,
       )}
     >
-      {(def.badge || current) && (
+      {badge && (
         <span
           className={cn(
-            "absolute -top-2.5 left-5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+            "absolute -top-2.5 left-4 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
             current ? "bg-foreground text-background" : "bg-primary text-primary-foreground",
           )}
         >
-          {current ? "Your plan" : def.badge}
+          {badge}
         </span>
       )}
       <h4 className="text-[15px] font-semibold">{def.label}</h4>
       <p className="mt-2 flex items-baseline gap-1">
-        <span className="text-[28px] font-semibold tracking-tight tabular-nums">
+        <span className="text-[30px] font-semibold tracking-tight tabular-nums">
           {formatUsd(Math.round(price.perMonth))}
         </span>
-        <span className="text-[13px] text-muted-foreground">
-          {plan === "free" ? "" : "/ month"}
-        </span>
+        <span className="text-[13px] text-muted-foreground">/ month</span>
       </p>
-      <p className="min-h-[18px] text-[12px] text-muted-foreground">
-        {plan === "free"
-          ? "Free forever"
-          : interval === "year"
-            ? `${formatUsd(price.billed)} a year · save ${formatUsd(price.savings)}`
-            : "Billed monthly"}
+      <p className="h-4 text-[12px] text-muted-foreground">
+        {interval === "year" ? `${formatUsd(price.billed)} billed yearly` : "Billed monthly"}
       </p>
-      {!compact && <p className="mt-3 text-[13px] text-foreground/80">{def.tagline}</p>}
-      <ul className="mt-4 flex-1 space-y-2 text-[13px]">
-        {def.highlights.slice(0, compact ? 4 : 6).map((line) => (
+      <div className="mt-4">{action}</div>
+      <ul className="mt-5 space-y-2 text-[13px]">
+        {def.highlights.slice(0, 5).map((line) => (
           <li key={line} className="flex gap-2">
-            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2.4} />
-            <span>{line}</span>
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2.6} />
+            <span className="text-foreground/85">{line}</span>
           </li>
         ))}
       </ul>
-      {action && <div className="mt-5">{action}</div>}
     </article>
-  );
-}
-
-export function PackCard({
-  title,
-  subtitle,
-  price,
-  bonus,
-  action,
-}: {
-  title: string;
-  subtitle: string;
-  price: number;
-  bonus?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="ds-tile flex flex-col gap-3 p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[15px] font-semibold tabular-nums">{title}</p>
-          <p className="text-[12px] text-muted-foreground">{subtitle}</p>
-        </div>
-        <p className="text-[15px] font-semibold tabular-nums">{formatUsd(price)}</p>
-      </div>
-      {bonus && (
-        <span className="inline-flex w-fit items-center gap-1 rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-semibold text-primary">
-          <Sparkles className="h-3 w-3" /> {bonus}
-        </span>
-      )}
-      {action}
-    </div>
   );
 }
 
@@ -219,21 +182,32 @@ export function GhostButton({
   );
 }
 
-export function LockHint({ plan }: { plan: PlanId }) {
+/** "🔒 Growth" — the plan a locked feature needs. */
+export function PlanLock({ plan, className }: { plan: PlanId; className?: string }) {
   return (
-    <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
-      <Lock className="h-3 w-3" /> {PLANS[plan].label}
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-semibold text-primary",
+        className,
+      )}
+    >
+      <Lock className="h-3 w-3" strokeWidth={2.4} aria-hidden />
+      {PLANS[plan].label}
     </span>
   );
 }
 
-export function SentNote({ children }: { children: ReactNode }) {
+/** A quiet success message. */
+export function DoneNote({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="flex items-start gap-2 rounded-[var(--ds-radius-well)] bg-primary/10 p-3 text-[13px]">
-      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" strokeWidth={2.4} />
-      <div>{children}</div>
+    <div className="flex items-start gap-3 rounded-[var(--ds-radius-tile)] bg-primary/10 p-4 text-[13.5px]">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+        <Check className="h-4 w-4" strokeWidth={2.6} />
+      </span>
+      <div>
+        <p className="font-semibold">{title}</p>
+        {children && <div className="mt-0.5 text-muted-foreground">{children}</div>}
+      </div>
     </div>
   );
 }
-
-export { formatNumber };

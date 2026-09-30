@@ -82,7 +82,7 @@ export function TemplateThumb({
           {[0, 1, 2, 3].map((i) => (
             <motion.span
               key={i}
-              className="relative grid size-5 place-items-center overflow-hidden rounded-full bg-surface-3 text-[8px] font-bold text-[hsl(var(--tone))] ring-[1.5px] ring-[hsl(var(--tone)/0.55)]"
+              className="relative grid size-5 place-items-center overflow-hidden rounded-full bg-surface-3 text-[8px] font-bold text-[var(--tone-ink)] ring-[1.5px] ring-[hsl(var(--tone)/0.55)]"
               variants={v(
                 { scale: 1 },
                 { scale: [1, 1.3, 1], transition: { delay: i * 0.3, duration: 0.45 } },
@@ -119,7 +119,7 @@ export function TemplateThumb({
               { scale: [1, 1.07, 1], transition: { delay: 0.3, duration: 0.8 } },
             )}
           >
-            <span className="absolute left-1.5 top-1.5 text-[7px] font-bold uppercase tracking-wide text-[hsl(var(--tone))]">
+            <span className="absolute left-1.5 top-1.5 text-[7px] font-bold uppercase tracking-wide text-[var(--tone-ink)]">
               After
             </span>
             <motion.span
@@ -137,7 +137,7 @@ export function TemplateThumb({
       body = (
         <div className="absolute inset-0 flex flex-col justify-center gap-[7%] px-[15%]">
           <motion.span
-            className="origin-bottom-left font-serif text-[34px] leading-[0.55] text-[hsl(var(--tone))]"
+            className="origin-bottom-left font-serif text-[34px] leading-[0.55] text-[var(--tone-ink)]"
             variants={v(
               { scale: 1, rotate: 0 },
               {
@@ -219,7 +219,7 @@ export function TemplateThumb({
       body = (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-[9%]">
           <motion.span
-            className="rounded-xl rounded-bl-sm bg-[hsl(var(--tone)/0.3)] px-3 py-0.5 text-[12px] font-bold text-[hsl(var(--tone))]"
+            className="rounded-xl rounded-bl-sm bg-[hsl(var(--tone)/0.14)] px-3 py-0.5 text-[12px] font-bold text-[var(--tone-ink)]"
             variants={v(
               { scale: 1 },
               { scale: [0.6, 1.15, 1], transition: { duration: 0.5, ease: ease.emphasized } },
@@ -271,7 +271,7 @@ export function TemplateThumb({
               {i === 0 ? (
                 <X className="size-2.5 text-muted-foreground" strokeWidth={3} />
               ) : (
-                <Check className="size-2.5 text-[hsl(var(--tone))]" strokeWidth={3} />
+                <Check className="size-2.5 text-[var(--tone-ink)]" strokeWidth={3} />
               )}
               <span className="h-1.5 flex-1 rounded-full bg-foreground/15" />
             </motion.div>
@@ -314,7 +314,7 @@ export function TemplateThumb({
         <div className="absolute inset-0 flex items-center justify-center gap-1.5">
           {["0", "3", ":", "5", "9"].map((d, i) =>
             d === ":" ? (
-              <span key={i} className="text-[15px] font-bold text-[hsl(var(--tone))]">
+              <span key={i} className="text-[15px] font-bold text-[var(--tone-ink)]">
                 :
               </span>
             ) : (
@@ -347,7 +347,7 @@ export function TemplateThumb({
                 { scale: [1, 1.18, 1], transition: { duration: 0.6, ease: ease.emphasized } },
               )}
             >
-              <span className="ml-0.5 size-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-white" />
+              <span className="ml-0.5 size-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-[hsl(var(--tone-foreground))]" />
             </motion.span>
           </div>
           <span className="absolute inset-x-[8%] bottom-[12%] h-1 rounded-full bg-foreground/15">
@@ -423,7 +423,7 @@ export function BeatPills({ beats, className }: { beats: string[]; className?: s
               →
             </span>
           ) : null}
-          <span className="rounded-full bg-[hsl(var(--tone)/0.12)] px-2 py-1 text-[11px] font-medium leading-none text-[hsl(var(--tone))] ring-1 ring-[hsl(var(--tone)/0.25)]">
+          <span className="rounded-full bg-[hsl(var(--tone)/0.12)] px-2 py-1 text-[11px] font-medium leading-none text-[var(--tone-ink)] ring-1 ring-[hsl(var(--tone)/0.25)]">
             {b}
           </span>
         </motion.li>
@@ -490,7 +490,7 @@ export function TemplateCard({
       </span>
       {footer}
       {selected ? (
-        <span className="absolute right-3.5 top-3.5 grid size-5 place-items-center rounded-full bg-[hsl(var(--tone))] text-surface-3 shadow-2">
+        <span className="absolute right-3.5 top-3.5 grid size-5 place-items-center rounded-full bg-[hsl(var(--tone))] text-[hsl(var(--tone-foreground))] shadow-2">
           <DrawCheck className="size-3" strokeWidth={3.5} />
         </span>
       ) : null}

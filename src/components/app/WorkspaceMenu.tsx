@@ -7,17 +7,10 @@ import { useNavigate } from "@/lib/navigation";
 import { emitAppEvent } from "@/lib/app-events";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ErrorState } from "@/components/ui/empty-state";
-import {
-  ArrowLeft,
-  Check,
-  Gift,
-  Plus,
-  Search,
-  Sparkles,
-  LayoutGrid,
-  LogOut,
-} from "@/components/brand/icons";
-import { useTokenUsage } from "@/hooks/use-agent-toggles";
+import { ArrowLeft, Check, Gift, Plus, Search, LayoutGrid, LogOut } from "@/components/brand/icons";
+import { useEntitlements } from "@/lib/billing/use-entitlements";
+import { PLANS, SIGNUP_GRANT } from "@/lib/billing/catalog";
+import { asPlan, formatNumber, nextPlan } from "@/lib/billing/present";
 import { useWorkspaces, workspaceLabel, type WorkspaceSummary } from "@/hooks/use-workspaces";
 import { workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { signOutAndRedirect } from "@/lib/auth";
@@ -41,7 +34,7 @@ function initials(name: string) {
 
 export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
   const navigate = useNavigate();
-  const { remaining, total, pct } = useTokenUsage();
+  const billing = useEntitlements();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -69,12 +62,13 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
     navigate({ to: workspacePath(w.id) });
   };
 
-  const remainingDisplay =
-    remaining >= 1000
-      ? `${(remaining / 1000).toFixed(remaining >= 10_000 ? 0 : 1)}k`
-      : `${remaining}`;
-  const remainingPct = Math.max(2, 100 - pct);
-  const low = remainingPct < 20;
+  // The real account balance (shared by all the owner's brands).
+  const plan = asPlan(billing.data?.entitledPlan);
+  const credits = billing.data?.meters.credits.available ?? 0;
+  const allowance = plan === "free" ? SIGNUP_GRANT.credits : PLANS[plan].allowances.credits;
+  const leftPct = allowance > 0 ? Math.max(0, Math.min(100, (credits / allowance) * 100)) : 0;
+  const low = leftPct <= 20;
+  const canUpgrade = Boolean(billing.data?.isOwner && nextPlan(plan));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -97,54 +91,58 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
           <span>Back to workspaces</span>
         </button>
 
-        {/* Credits card */}
-        <div className="relative overflow-hidden p-3">
-          <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-[hsl(var(--brand-green))]/18 blur-2xl" />
-          <div className="pointer-events-none absolute -left-8 -bottom-8 h-20 w-20 rounded-full bg-[hsl(var(--brand-blue))]/18 blur-2xl" />
-
-          <div className="relative flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              <Sparkles className="h-3 w-3 text-[hsl(var(--brand-green))]" />
-              Credits
+        {/* Plan and credits (real account balance) */}
+        {billing.data && (
+          <div className="space-y-2 p-3">
+            <div className="flex items-center justify-between gap-2 text-[12px]">
+              <span className="font-semibold text-foreground">{PLANS[plan].label} plan</span>
+              <span className="tabular-nums text-muted-foreground">
+                <span className={cn("font-semibold", low ? "text-warning" : "text-foreground")}>
+                  {formatNumber(credits)}
+                </span>{" "}
+                credits left
+              </span>
             </div>
-            <span className="text-[12px] font-semibold tabular-nums text-foreground">
-              {remainingDisplay}
-              <span className="ml-1 font-normal text-muted-foreground">left</span>
-            </span>
-          </div>
-
-          <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-secondary/80">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${remainingPct}%` }}
-              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className={cn(
-                "h-full rounded-full",
-                low
-                  ? "bg-gradient-to-r from-amber-500 to-rose-500"
-                  : "bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))]",
+            <div className="h-1.5 overflow-hidden rounded-full bg-[var(--ds-well-bg)]">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.max(credits > 0 ? 3 : 0, leftPct)}%` }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                className={cn("h-full rounded-full", low ? "bg-warning" : "bg-primary")}
+              />
+            </div>
+            <div className="flex gap-1.5 pt-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  emitAppEvent("open:usage");
+                }}
+                className="flex-1 rounded-full border border-border/70 px-2 py-1.5 text-[11.5px] font-medium text-foreground/85 transition-colors hover:bg-secondary"
+              >
+                Plan & billing
+              </button>
+              {billing.data.isOwner && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    emitAppEvent(
+                      "open:upgrade",
+                      canUpgrade && !low
+                        ? undefined
+                        : { code: "insufficient_balance", meter: "credits" },
+                    );
+                  }}
+                  className="flex flex-1 items-center justify-center gap-1 rounded-full bg-primary px-2 py-1.5 text-[11.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  <Gift className="h-3.5 w-3.5" strokeWidth={2.2} />
+                  {canUpgrade && !low ? "Upgrade" : "Get credits"}
+                </button>
               )}
-            />
+            </div>
           </div>
-
-          <div className="relative mt-1.5 flex items-center justify-between text-[10.5px] tabular-nums text-muted-foreground">
-            <span className={cn(low && "font-medium text-amber-500")}>
-              {Math.round(remainingPct)}% remaining
-            </span>
-            <span>{total >= 1000 ? `${(total / 1000).toFixed(0)}k` : total} / mo</span>
-          </div>
-
-          <button
-            onClick={() => {
-              setOpen(false);
-              emitAppEvent("open:publish");
-            }}
-            className="relative mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] px-2 py-1.5 text-[11.5px] font-semibold text-background shadow-[inset_0_1px_0_hsl(0_0%_100%/0.3),0_3px_10px_-3px_hsl(var(--brand-green)/0.5)] transition-transform active:scale-[0.98]"
-          >
-            <Gift className="h-3.5 w-3.5" strokeWidth={2.2} />
-            Get more credits
-          </button>
-        </div>
+        )}
 
         <div className="h-px bg-border/60" />
 

@@ -614,11 +614,6 @@ export function RenderStatusChip({
   );
 }
 
-export function formatUsd(value: number): string {
-  if (value > 0 && value < 0.01) return "<$0.01";
-  return `$${value.toFixed(value < 10 ? 2 : 0)}`;
-}
-
 /** A sticky footer action bar inside a step (stays reachable on phones). */
 export function StepActions({
   children,

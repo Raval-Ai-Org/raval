@@ -242,7 +242,7 @@ export function IdeasPanel({
                         className={cn(
                           "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1",
                           SOURCE_TONE[idea.source]
-                            ? `studio-tone-${SOURCE_TONE[idea.source]} bg-[hsl(var(--tone)/0.12)] text-[hsl(var(--tone))] ring-[hsl(var(--tone)/0.28)]`
+                            ? `studio-tone-${SOURCE_TONE[idea.source]} bg-[hsl(var(--tone)/0.12)] text-[var(--tone-ink)] ring-[hsl(var(--tone)/0.28)]`
                             : "bg-surface-2 text-muted-foreground ring-border",
                         )}
                       >

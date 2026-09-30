@@ -29,6 +29,7 @@ import { readBrandPayload } from "@/lib/studio/client";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { studioChargeFor } from "@/lib/studio/billing";
 import { CostChip } from "@/components/app/CostChip";
+import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
 import { STUDIO_VIDEO_UNITS } from "@/lib/billing/catalog";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import { GOALS } from "@/lib/studio/jobs";
@@ -653,7 +654,7 @@ export function IntentStep({
                   <div
                     className={`studio-tone-${session.type} flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground`}
                   >
-                    <LayoutTemplate className="size-3.5 text-[hsl(var(--tone))]" />
+                    <LayoutTemplate className="size-3.5 text-[var(--tone-ink)]" />
                     <span className="min-w-0 flex-1 truncate font-medium text-foreground">
                       {template.label}
                     </span>
@@ -740,7 +741,7 @@ export function IntentStep({
                   ) : null}
                   {blanks ? (
                     <span
-                      className={`studio-tone-${session.type} ml-auto font-medium tabular-nums text-[hsl(var(--tone))]`}
+                      className={`studio-tone-${session.type} ml-auto font-medium tabular-nums text-[var(--tone-ink)]`}
                     >
                       {blanks} to fill in
                     </span>
@@ -748,7 +749,9 @@ export function IntentStep({
                 </div>
               </div>
               <WrittenNote writer={writer} />
-              {session.error ? (
+              {session.billing ? (
+                <UpgradePrompt block={session.billing} className="mt-3" />
+              ) : session.error ? (
                 <p id="studio-brief-error" role="alert" className="mt-2 text-sm text-danger">
                   {session.error}
                 </p>

@@ -62,7 +62,7 @@ export function FeatureGate({
       {children}
       {locked && (
         <span
-          className="pointer-events-none absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-foreground text-background shadow-sm"
+          className="pointer-events-none absolute -right-1.5 -top-1.5 grid h-[18px] w-[18px] place-items-center rounded-full bg-primary text-primary-foreground ring-2 ring-background"
           role="img"
           aria-label={`Needs the ${plan.label} plan`}
         >

@@ -330,14 +330,14 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     key: "premium_articles",
     module: "Studio",
     label: "Premium articles",
-    pitch: "Long-form, GEO-grounded articles written by Claude Opus 5.5, ready to publish.",
+    pitch: "Long, well-researched articles that AI search can quote, ready to publish.",
     minPlan: "starter",
   },
   pro_chat: {
     key: "pro_chat",
     module: "Assistant",
     label: "Mellox Pro chat",
-    pitch: "Strategy and analysis from Claude Opus 5.5, with your brand and data in context.",
+    pitch: "Our smartest chat for strategy and deep analysis, using your brand and data.",
     minPlan: "starter",
   },
   ugc: {

@@ -215,7 +215,7 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
         if (requestId !== requestRef.current) return;
         setBriefing(b);
         setError(null);
-        writeCache(workspaceId, b);
+        if (!b.limited) writeCache(workspaceId, b);
       } catch (e) {
         if (requestId !== requestRef.current) return;
         // A background update that fails keeps showing the saved briefing quietly.
@@ -345,6 +345,12 @@ export function MarketingCoachPanel({ workspaceId, brandContext, brandKeywords, 
               </div>
             </div>
           </div>
+        </div>
+      )}
+      {briefing?.limited && !loading && (
+        <div className="mb-3 rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+          The AI provider couldn't generate a full briefing. This workspace snapshot is free and
+          won't be saved as your latest briefing. Try refreshing again later.
         </div>
       )}
       {briefing && (

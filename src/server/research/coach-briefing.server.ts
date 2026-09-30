@@ -11,7 +11,7 @@ import "server-only";
 import { coachSystem } from "@/lib/ai/prompts";
 import { assemble } from "@/lib/ai/prompts/assemble";
 import { COACH_OUTPUT_SCHEMA } from "@/lib/ai/output-schemas";
-import { llmJson } from "@/lib/ai-gateway.server";
+import { AiGatewayError, llmJson } from "@/lib/ai-gateway.server";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 
 export type CoachIntent =
@@ -65,6 +65,8 @@ export interface CoachBriefing {
     website?: string;
   };
   generatedAt: string;
+  /** A data-only snapshot when the AI provider cannot generate a briefing. */
+  limited?: boolean;
 }
 
 export type CoachSearchResult = { title: string; url: string; snippet: string };
@@ -192,17 +194,31 @@ export async function synthesizeCoachBriefing(
   // Structured output: valid JSON by construction, so no repair call. Thinking
   // shares max_tokens on Claude 5 models — the old 1,800 ceiling truncated the
   // briefing (and its 3,600 repair) and users got the template fallback.
-  const parsed = await llmJson<Partial<CoachBriefing>>({
-    route: "coach.briefing",
-    system,
-    user,
-    fallback: {},
-    escalate: input.deepStrategy === true,
-    maxTokens: 6000,
-    outputSchema: COACH_OUTPUT_SCHEMA,
-    timeoutMs: 90_000,
-    retries: 1,
-  });
+  let parsed: Partial<CoachBriefing>;
+  try {
+    parsed = await llmJson<Partial<CoachBriefing>>({
+      route: "coach.briefing",
+      system,
+      user,
+      fallback: {},
+      escalate: input.deepStrategy === true,
+      maxTokens: 6000,
+      outputSchema: COACH_OUTPUT_SCHEMA,
+      timeoutMs: 90_000,
+      retries: 1,
+    });
+  } catch (error) {
+    if (
+      !(error instanceof AiGatewayError) ||
+      (error.code !== "refusal" && error.code !== "provider_forbidden")
+    )
+      throw error;
+    console.warn("Coach briefing provider blocked generation; showing workspace snapshot", {
+      code: error.code,
+    });
+    parsed = {};
+  }
+  const hasContent = Object.keys(parsed).length > 0;
 
   const focusFallback: CoachBriefing["focus"] = !siteUrl
     ? {
@@ -235,29 +251,53 @@ export async function synthesizeCoachBriefing(
         };
 
   const focusAction = cleanAction(parsed.focus?.action);
+  const snapshotWins: CoachInsight[] = [];
+  if (!hasContent && signals.publishedLast7d > 0) {
+    snapshotWins.push({
+      title: `${signals.publishedLast7d} item${signals.publishedLast7d === 1 ? "" : "s"} published this week`,
+      detail: "Based on your workspace activity in the last seven days.",
+      tone: "positive",
+    });
+  }
+  if (!hasContent && signals.scheduledNext7d > 0) {
+    snapshotWins.push({
+      title: `${signals.scheduledNext7d} item${signals.scheduledNext7d === 1 ? "" : "s"} scheduled next week`,
+      detail: "Based on your workspace schedule for the next seven days.",
+      tone: "neutral",
+    });
+  }
   const briefing: CoachBriefing = {
     greeting:
       parsed.greeting?.trim() ||
       `Good ${today.getHours() < 12 ? "morning" : today.getHours() < 18 ? "afternoon" : "evening"}${brandSeed ? `, ${brandSeed}` : ""} — here's your ${dayName} brief`,
-    headline: parsed.headline?.trim() || "Let's build momentum today.",
+    headline:
+      parsed.headline?.trim() ||
+      (hasContent ? "Let's build momentum today." : "Your latest workspace snapshot"),
     focus:
       parsed.focus?.title?.trim() && focusAction
         ? { title: parsed.focus.title, why: parsed.focus.why ?? "", action: focusAction }
         : focusFallback,
-    wins: cleanItems(parsed.wins),
+    wins: hasContent ? cleanItems(parsed.wins) : snapshotWins,
     risks: cleanItems(parsed.risks),
     competitors: cleanItems(parsed.competitors),
     market: cleanItems(parsed.market),
     plays: cleanItems(parsed.plays),
-    weekPlan: (parsed.weekPlan ?? []).filter((s) => s?.trim()).slice(0, 5),
-    sources: cited.slice(0, 10),
+    weekPlan: hasContent
+      ? (parsed.weekPlan ?? []).filter((s) => s?.trim()).slice(0, 5)
+      : signals.pendingDrafts > 0
+        ? [
+            `Review ${signals.pendingDrafts} pending draft${signals.pendingDrafts === 1 ? "" : "s"}.`,
+          ]
+        : [],
+    sources: hasContent ? cited.slice(0, 10) : [],
     brandSnapshot: {
       name: brandSeed || signals.workspaceName || undefined,
       oneLiner: siteMeta["og:description"] || siteMeta["description"] || undefined,
       website: siteUrl ?? undefined,
     },
     generatedAt: new Date().toISOString(),
+    limited: !hasContent,
   };
 
-  return { briefing, hasContent: Object.keys(parsed).length > 0 };
+  return { briefing, hasContent };
 }

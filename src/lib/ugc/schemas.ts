@@ -185,8 +185,6 @@ export type RenderView = {
   aspectRatio: string;
   resolution: string;
   hook: string;
-  estCostUsd: number;
-  actualCostUsd: number | null;
   errorMessage: string | null;
   /** True once a failed/cancelled render's allowance hold was returned. */
   allowanceReturned: boolean;
@@ -235,15 +233,12 @@ export type ModelView = {
   defaultResolution: string;
   nativeAudio: boolean;
   images: { mode: "references" | "first_frame"; max: number } | null;
-  /** Estimated USD per resolution (per video) or per second. */
-  pricing: { unit: "video" | "second"; usd: Record<string, number> };
   videoUnits: number;
 };
 
 export type AllowanceView = {
   plan: string;
   videos: { used: number; held: number; limit: number };
-  spend: { monthUsd: number; monthlyLimitUsd: number; todayUsd: number; dailyLimitUsd: number };
   activeRenders: number;
   maxConcurrent: number;
 };

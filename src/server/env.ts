@@ -207,6 +207,18 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
       "OPENROUTER_WEBHOOK_SECRET is not set (OpenRouter video jobs are advanced by polling only)",
     );
   }
+  // Billing: with the switch off nothing is charged and no plan limit applies.
+  const enforcement = (env.BILLING_ENFORCEMENT ?? "").toLowerCase();
+  if (enforcement !== "on") {
+    warnings.push(
+      enforcement === "shadow"
+        ? "BILLING_ENFORCEMENT=shadow (credits and plan limits are only logged, never applied)"
+        : "BILLING_ENFORCEMENT is not on (credits are not charged and plan limits are not enforced)",
+    );
+  }
+  if (enforcement === "on" && !env.BILLING_ADMIN_USER_IDS && !env.MELLOX_ADMIN_USER_IDS) {
+    warnings.push("BILLING_ADMIN_USER_IDS is not set (nobody can open /admin to activate plans)");
+  }
   if ((env.DISTRIBUTION_PROVIDER ?? "").toLowerCase() === "socialapi") {
     errors.push("SocialAPI is retired; set DISTRIBUTION_PROVIDER=postforme");
   }

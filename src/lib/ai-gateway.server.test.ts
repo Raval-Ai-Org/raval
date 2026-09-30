@@ -240,6 +240,12 @@ describe("mapOpenRouterError", () => {
       ).code,
     ).toBe("no_endpoints");
     expect(mapOpenRouterError(503, "upstream down").code).toBe("provider_error");
+    expect(mapOpenRouterError(403, '{"error":{"message":"Guardrail blocked request"}}').code).toBe(
+      "provider_forbidden",
+    );
+    expect(mapOpenRouterError(403, '{"error":{"metadata":{"error_type":"refusal"}}}').code).toBe(
+      "refusal",
+    );
     expect(
       mapOpenRouterError(
         400,

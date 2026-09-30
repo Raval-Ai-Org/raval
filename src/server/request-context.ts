@@ -26,6 +26,8 @@ export type RequestScope = {
   requestId?: string;
   /** Soft-limit notice set by the budget module; the /api kernel returns it as X-Usage-Warning. */
   usageWarning?: string;
+  /** A wallet balance moved in this request; responses carry X-Billing-Changed. */
+  billingChanged?: boolean;
 };
 
 const storage = new AsyncLocalStorage<RequestScope>();

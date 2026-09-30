@@ -154,11 +154,13 @@ function toResponse(result: unknown): Response {
     result instanceof Response
       ? result
       : Response.json(result ?? null, { headers: { "Cache-Control": "no-store" } });
-  // A soft plan limit was crossed during this request (src/server/ai/budget.ts).
-  const warning = getRequestScope().usageWarning;
-  if (!warning) return response;
+  // A soft plan limit was crossed during this request (src/server/ai/budget.ts),
+  // or the wallet balance moved (hold, charge or refund): tell the browser.
+  const { usageWarning: warning, billingChanged } = getRequestScope();
+  if (!warning && !billingChanged) return response;
   const headers = new Headers(response.headers);
-  headers.set("X-Usage-Warning", warning);
+  if (warning) headers.set("X-Usage-Warning", warning);
+  if (billingChanged) headers.set("X-Billing-Changed", "1");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

@@ -24,10 +24,15 @@ export function getActiveWorkspaceId(): string | null {
 export type AuthedFetchInit = RequestInit & {
   /** The workspace this request acts for; defaults to the current page's. */
   workspaceId?: string | null;
+  /**
+   * The caller shows its own upgrade option for a 402 (the chat does, inline),
+   * so the global "Upgrade / Get credits" toast is skipped.
+   */
+  billingInline?: boolean;
 };
 
 export async function authedFetch(input: RequestInfo | URL, init: AuthedFetchInit = {}) {
-  const { workspaceId: explicit, ...rest } = init;
+  const { workspaceId: explicit, billingInline, ...rest } = init;
   // Captured before the first await so a navigation during token refresh
   // cannot change which workspace this request is attributed to.
   const workspaceId = explicit !== undefined ? explicit : getActiveWorkspaceId();
@@ -41,15 +46,18 @@ export async function authedFetch(input: RequestInfo | URL, init: AuthedFetchIni
     headers.set("x-workspace-id", workspaceId);
   }
   const response = await fetch(input, { ...rest, headers });
+  // Credits were set aside, charged or returned: refresh the balance now.
   const balance = response.headers.get("X-Billing-Balance");
   if (balance !== null) emitAppEvent("billing:changed", { balance: Number(balance) });
+  else if (response.headers.get("X-Billing-Changed")) emitAppEvent("billing:changed");
   if (response.status === 402) {
     const payload = await response
       .clone()
       .json()
       .catch(() => null);
     if (payload && typeof payload.code === "string") {
-      emitAppEvent("billing:blocked", payload);
+      if (billingInline) emitAppEvent("billing:changed");
+      else emitAppEvent("billing:blocked", payload);
     }
   }
   return response;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { probeImage, referenceImageProblem } from "@/lib/ugc/image-probe";
 import { evidenceOnPage, parseProductPage } from "@/lib/ugc/product-page";
+import { UGC_MODELS } from "@/lib/ugc/models";
+import { toModelView } from "./models.server";
 import { brandSnapshot } from "./service.server";
 import { callbackTaskId, signKieCallback, verifyKieCallback } from "./webhook.server";
 
@@ -155,6 +157,14 @@ describe("brand snapshot", () => {
         audienceTags: ["a", 1],
       }),
     ).toEqual({ brandName: "Lumen", voice: "Warm", audienceTags: ["a"] });
+  });
+});
+
+describe("browser video catalog", () => {
+  it("does not expose provider pricing", () => {
+    const model = toModelView(UGC_MODELS.standard);
+    expect(model).not.toHaveProperty("pricing");
+    expect(model.videoUnits).toBeGreaterThan(0);
   });
 });
 

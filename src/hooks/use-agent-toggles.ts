@@ -5,8 +5,6 @@ import { agentList } from "@/lib/agents";
 import { emit } from "@/lib/activity-bus";
 
 const STORAGE_KEY = "agent-toggles:v1";
-const TOKENS_KEY = "ai-tokens:v1";
-const MONTHLY_BUDGET = 1_000_000;
 
 type Toggles = Record<string, boolean>;
 
@@ -80,59 +78,6 @@ export function useAgentToggles() {
   const activeCount = Object.values(toggles).filter((v) => v !== false).length;
 
   return { toggles, set, setAll, isOn, activeCount, total: agentList.length };
-}
-
-// ----- Token usage tracker (local proxy) ----------------------------
-
-interface Usage {
-  used: number;
-  updated: number;
-}
-
-function readUsage(): Usage {
-  try {
-    const raw = localStorage.getItem(TOKENS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return { used: 0, updated: Date.now() };
-}
-
-const usageSubs = new Set<(u: Usage) => void>();
-let usageMemo: Usage | null = null;
-
-function getUsage() {
-  if (usageMemo) return usageMemo;
-  usageMemo = readUsage();
-  return usageMemo;
-}
-
-export function recordTokens(count: number) {
-  const next: Usage = {
-    used: getUsage().used + Math.max(0, Math.floor(count)),
-    updated: Date.now(),
-  };
-  usageMemo = next;
-  try {
-    localStorage.setItem(TOKENS_KEY, JSON.stringify(next));
-  } catch {}
-  usageSubs.forEach((cb) => cb(next));
-}
-
-export function useTokenUsage() {
-  // Start with zero usage so SSR and first client render match.
-  // Hydrate the real usage from localStorage AFTER mount to avoid hydration mismatch.
-  const [u, setU] = useState<Usage>({ used: 0, updated: 0 });
-  useEffect(() => {
-    setU(getUsage());
-    const cb = (v: Usage) => setU(v);
-    usageSubs.add(cb);
-    return () => {
-      usageSubs.delete(cb);
-    };
-  }, []);
-  const remaining = Math.max(0, MONTHLY_BUDGET - u.used);
-  const pct = Math.min(100, (u.used / MONTHLY_BUDGET) * 100);
-  return { used: u.used, remaining, total: MONTHLY_BUDGET, pct };
 }
 
 // ----- Prompt → agent router ----------------------------------------

@@ -25,7 +25,6 @@ import { ACTIVE_RENDER_STATUSES, type RenderView, type Script } from "@/lib/ugc/
 import { cn } from "@/lib/utils";
 import {
   CreatorSilhouette,
-  formatUsd,
   motionPreset,
   Panel,
   PhoneFrame,
@@ -224,14 +223,7 @@ export function RenderPanel({
           <div className="flex items-center justify-between gap-2">
             <RenderStatusChip status={render.status} />
             <span className="flex flex-wrap justify-end gap-1 text-[11px] tabular-nums text-muted-foreground">
-              {[
-                `${render.durationSec}s`,
-                render.aspectRatio,
-                render.resolution,
-                render.status === "succeeded" && render.actualCostUsd != null
-                  ? formatUsd(render.actualCostUsd)
-                  : null,
-              ]
+              {[`${render.durationSec}s`, render.aspectRatio, render.resolution]
                 .filter(Boolean)
                 .map((t) => (
                   <span key={t} className="rounded-full bg-[var(--ds-well-bg)] px-2 py-0.5">

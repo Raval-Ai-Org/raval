@@ -2,7 +2,7 @@
 
 // Browser client for the Studio API. Every call goes through authedFetch so
 // the session token and workspace attribution travel with it.
-import { authedFetch } from "@/lib/authed-fetch";
+import { authedFetch, type AuthedFetchInit } from "@/lib/authed-fetch";
 import type { StudioType } from "./formats";
 import type { StudioIdea } from "./ideas";
 import type { CreateJobInput, GoalId, StudioControls, StudioJob } from "./jobs";
@@ -11,13 +11,15 @@ export class StudioApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** The server's JSON body (a 402 carries the plan / balance details). */
+    readonly payload?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "StudioApiError";
   }
 }
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+async function call<T>(path: string, init?: AuthedFetchInit): Promise<T> {
   let response: Response;
   try {
     response = await authedFetch(path, {
@@ -32,7 +34,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) {
-    const raw = json.error;
+    const raw = json.error ?? json.message;
     const message =
       typeof raw === "string"
         ? raw
@@ -43,7 +45,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
           : response.status === 429
             ? "You've hit the generation limit for now. Try again in a little while."
             : `Request failed (${response.status})`;
-    throw new StudioApiError(response.status, message);
+    throw new StudioApiError(response.status, message, json);
   }
   return json as T;
 }
@@ -53,6 +55,8 @@ export const studioApi = {
     return call<{ job: StudioJob }>("/api/studio/jobs", {
       method: "POST",
       body: JSON.stringify(input),
+      // The composer shows the upgrade option itself (no second toast).
+      billingInline: true,
     }).then((r) => r.job);
   },
   getJob(workspaceId: string, id: string) {

@@ -13,7 +13,7 @@ export const dsFocus =
 export const dsPrimaryBtn = cn(
   "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-primary font-semibold text-primary-foreground",
   "shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)] transition-all duration-200",
-  "hover:-translate-y-px hover:bg-primary/90 hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)]",
+  "hover:-translate-y-px hover:bg-primary/90 hover:text-primary-foreground hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)]",
   "active:translate-y-0 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
   dsFocus,
 );

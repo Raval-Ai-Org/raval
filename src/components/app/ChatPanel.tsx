@@ -9,6 +9,8 @@
 //     once and show a live progress card here.
 //   - Anything else the reply offers to open is a button under that reply.
 //   - Changes to data (memory, drafts, audits) wait for approval.
+import { useEntitlements } from "@/lib/billing/use-entitlements";
+import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
@@ -26,7 +28,6 @@ import {
   MAX_TOTAL_BYTES,
   type Attachment,
 } from "@/lib/file-extract";
-import { recordTokens } from "@/hooks/use-agent-toggles";
 import { NextStepSuggestions } from "@/components/app/NextStepSuggestions";
 import { ClarifyCard, type ClarifyPayload } from "@/components/app/ClarifyCard";
 import { useBrandDna } from "@/hooks/use-brand-dna";
@@ -60,7 +61,7 @@ import { StudioTaskCard, type StudioTaskPayload } from "./chat/StudioTaskCard";
 import { StylePicker, useRememberedStyle } from "./brand-kit/StylePicker";
 import { ThinkingIndicator } from "./chat/ThinkingIndicator";
 
-type MsgKind = "text" | "clarify" | "actions" | "notice" | "error" | "studio";
+type MsgKind = "text" | "clarify" | "actions" | "notice" | "error" | "studio" | "upgrade";
 
 type Msg = {
   id: string;
@@ -153,7 +154,12 @@ export function ChatPanel({
   // Leaving this workspace (the panel is keyed by it) cancels its in-flight reply.
   useEffect(() => () => abortRef.current?.abort(), []);
   const [clarifying, setClarifying] = useState(false);
-  const [modelId, setModelId] = useState(CHAT_MODELS[0].id);
+  const [chosenModel, setModelId] = useState(CHAT_MODELS[0].id);
+  // A plan without Pro chat always answers with Flash (a saved choice from an
+  // earlier plan never turns into a refused message).
+  const billing = useEntitlements();
+  const proLocked = billing.data ? !billing.data.features.pro_chat.allowed : false;
+  const modelId = proLocked && chosenModel === "mellox-pro" ? CHAT_MODELS[0].id : chosenModel;
   const [siteUrl, setSiteUrl] = useState<string | null>(null);
   const [wsStats, setWsStats] = useState<{
     pending: number;
@@ -876,7 +882,7 @@ export function ChatPanel({
     const history = failedTurn;
     if (!history || streaming) return;
     setFailedTurn(null);
-    setMessages((m) => m.filter((x) => x.kind !== "error"));
+    setMessages((m) => m.filter((x) => x.kind !== "error" && x.kind !== "upgrade"));
     await runChatStream(history);
   };
 
@@ -942,8 +948,6 @@ export function ChatPanel({
     setInput("");
     setAttachments([]);
     requestAnimationFrame(() => scrollToLatest());
-
-    recordTokens(Math.ceil(wireContent.length / 4));
 
     await supabase.from("chat_messages").insert({
       id: userMsg.id,
@@ -1102,10 +1106,33 @@ export function ChatPanel({
         }),
         signal: controller.signal,
         workspaceId: streamWorkspaceId,
+        // An empty balance or locked model shows an upgrade card in the chat.
+        billingInline: true,
       });
 
       const billingNotice = res.headers.get("X-Mellox-Notice");
       if (billingNotice) toast.message(billingNotice);
+
+      if (res.status === 402) {
+        const block = await res.json().catch(() => null);
+        setFailedTurn(history);
+        setMessages((m) => [
+          ...m,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            kind: "upgrade",
+            content: "",
+            payload:
+              block && typeof block.code === "string" ? block : { code: "insufficient_balance" },
+            live: true,
+          },
+        ]);
+        setStreaming(false);
+        emitAppEvent("chat:idle");
+        stopPreviewPlan();
+        return;
+      }
 
       if (!res.ok || !res.body) {
         const errorPayload = await res.json().catch(() => null);
@@ -1181,7 +1208,8 @@ export function ChatPanel({
       if (truncated) {
         acc += "\n\n_(This reply hit the length limit. Say “continue” to get the rest.)_";
       }
-      recordTokens(Math.ceil(acc.length / 4));
+      // The message is charged when the reply finishes: refresh the balance.
+      emitAppEvent("billing:changed");
 
       // Action tags become buttons and approval cards under the reply.
       // Nothing is opened or run here.
@@ -1441,6 +1469,19 @@ export function ChatPanel({
                   );
                 }
                 if (m.kind === "notice") return <NoticeMessage key={m.id} content={m.content} />;
+                if (m.kind === "upgrade") {
+                  return (
+                    <UpgradePrompt
+                      key={m.id}
+                      block={m.payload}
+                      onRetry={
+                        i === messages.length - 1 && failedTurn
+                          ? () => void retryFailedTurn()
+                          : undefined
+                      }
+                    />
+                  );
+                }
                 if (m.kind === "error") {
                   return (
                     <ErrorMessage

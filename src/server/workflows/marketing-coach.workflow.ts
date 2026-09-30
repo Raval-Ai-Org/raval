@@ -47,6 +47,7 @@ const coachBriefingSchema = z.object({
     })
     .optional(),
   generatedAt: z.string(),
+  limited: z.boolean().optional(),
 });
 
 const searchResultSchema = z.object({ title: z.string(), url: z.string(), snippet: z.string() });

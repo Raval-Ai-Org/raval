@@ -5,12 +5,22 @@ import { defineRoute } from "@/server/route";
 
 export const dynamic = "force-dynamic";
 
+/** Control characters and line/paragraph separators, removed from customer text. */
+const CONTROL_CHARS = /[\p{Cc}\p{Zl}\p{Zp}]/gu;
+
+/** Free text from a customer: no control characters (they reach admin emails). */
+const plainText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .transform((value) => value.replace(CONTROL_CHARS, " ").trim());
+
 const Body = z.object({
   kind: z.enum(["plan", "credit_pack", "video_pack"]),
-  key: z.string().min(1).max(50),
+  key: z.string().regex(/^[a-z0-9_]{1,50}$/),
   interval: z.enum(["month", "year"]).optional(),
-  contact: z.string().trim().max(120).optional(),
-  note: z.string().trim().max(500).optional(),
+  contact: plainText(120).optional(),
+  note: plainText(500).optional(),
 });
 
 export const GET = defineRoute({

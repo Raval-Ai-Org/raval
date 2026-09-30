@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Meter } from "@/lib/billing/catalog";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { HttpError } from "@/server/http-error";
+import { setRequestScope } from "@/server/request-context";
 import { InsufficientBalanceError } from "./errors";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
@@ -42,6 +43,9 @@ async function meterRpc(
   if (!result.ok && result.code !== "insufficient_balance") {
     throw new HttpError(409, result.reason ?? "Billing balance could not be updated.");
   }
+  // Tell the browser to refresh its balance with this response.
+  // A replayed entry changed nothing, so it never triggers a refresh.
+  if (result.ok && !result.replayed) setRequestScope({ billingChanged: true });
   return result;
 }
 

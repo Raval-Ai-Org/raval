@@ -353,8 +353,15 @@ export function mapOpenRouterError(status: number, raw: string): AiGatewayError 
       "context_exceeded",
     );
   }
-  if (status === 403 || errorType === "refusal" || errorType === "content_policy_violation") {
+  if (errorType === "refusal" || errorType === "content_policy_violation") {
     return new AiGatewayError(422, "The AI model declined this request.", "refusal");
+  }
+  if (status === 403) {
+    return new AiGatewayError(
+      403,
+      "The AI provider blocked this request. Please try again or contact support.",
+      "provider_forbidden",
+    );
   }
   if (status >= 500)
     return new AiGatewayError(502, detail || "AI provider error", "provider_error");

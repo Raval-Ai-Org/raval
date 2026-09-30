@@ -123,7 +123,9 @@ export function CreditsPanel({
             {canEdit && (
               <button
                 type="button"
-                onClick={() => emitAppEvent("open:usage", { tab: "topup" })}
+                onClick={() =>
+                  emitAppEvent("open:upgrade", { code: "insufficient_balance", meter: "credits" })
+                }
                 className="rounded-full border border-border bg-background px-3.5 py-1.5 text-[13px] font-medium text-foreground hover:bg-secondary"
               >
                 Top up options

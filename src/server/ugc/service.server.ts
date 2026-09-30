@@ -367,8 +367,6 @@ function presentRender(
     aspectRatio: row.aspect_ratio,
     resolution: row.resolution,
     hook: script.hook ?? "",
-    estCostUsd: row.est_cost_usd,
-    actualCostUsd: row.actual_cost_usd,
     errorMessage: row.status === "failed" || row.status === "cancelled" ? row.error_message : null,
     allowanceReturned: Boolean(row.reservation_id && releasedHolds.has(row.reservation_id)),
     assetId: row.asset_id,
@@ -554,14 +552,18 @@ export async function startRender(
     referenceAssetIds: string[];
   },
   options: { deferKick?: boolean } = {},
-): Promise<{ render: RenderView; created: boolean }> {
+): Promise<{ render: RenderView; created: boolean; providerCostUsd: number }> {
   const existing = await supabaseUgcStore.findByIdempotencyKey(
     input.workspaceId,
     input.idempotencyKey,
   );
   if (existing) {
     if (existing.project_id !== input.projectId) throw new HttpError(409, "Duplicate request key");
-    return { render: (await presentRenders(input.workspaceId, [existing]))[0], created: false };
+    return {
+      render: (await presentRenders(input.workspaceId, [existing]))[0],
+      created: false,
+      providerCostUsd: existing.est_cost_usd,
+    };
   }
 
   const ctx = await projectContext(db, input.workspaceId, input.projectId);
@@ -694,6 +696,7 @@ export async function startRender(
   return {
     render: (await presentRenders(input.workspaceId, [inserted.row]))[0],
     created: inserted.created,
+    providerCostUsd: inserted.row.est_cost_usd,
   };
 }
 
@@ -847,7 +850,7 @@ export async function getAllowance(workspaceId: string): Promise<AllowanceView> 
       .in("status", [...ACTIVE_RENDER_STATUSES]),
   ]);
   const s = (Array.isArray(summary.data) ? summary.data[0] : summary.data) as
-    { month_videos?: number; month_cost_usd?: number; today_cost_usd?: number } | undefined;
+    { month_videos?: number } | undefined;
   const held = (holds.data ?? [])
     .filter((h) => h.kind === "video")
     .reduce((n, h) => n + Number(h.units ?? 0), 0);
@@ -856,12 +859,6 @@ export async function getAllowance(workspaceId: string): Promise<AllowanceView> 
     plan: limits.id,
     // ai_usage_summary already includes live holds; report them separately.
     videos: { used: Math.max(0, monthVideos - held), held, limit: limits.monthlyVideos },
-    spend: {
-      monthUsd: Number(s?.month_cost_usd ?? 0),
-      monthlyLimitUsd: limits.monthlyUsd,
-      todayUsd: Number(s?.today_cost_usd ?? 0),
-      dailyLimitUsd: limits.dailyUsd,
-    },
     activeRenders: active.count ?? 0,
     maxConcurrent: maxConcurrentRenders(),
   };

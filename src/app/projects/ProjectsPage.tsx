@@ -72,7 +72,8 @@ import {
   UserPlus,
 } from "@/components/ui/gemini-icons";
 import { toast } from "sonner";
-import { BillingPanel } from "@/components/app/BillingPanel";
+import { BillingPanel, WalletPill } from "@/components/app/BillingPanel";
+import { FeatureGate, openFeatureUpgrade, useFeatureLocked } from "@/components/app/FeatureGate";
 import { emitAppEvent } from "@/lib/app-events";
 import { ServerFnError } from "@/lib/rpc-client";
 import { pageHead, webPageLd } from "@/lib/seo";
@@ -267,6 +268,7 @@ function ProjectsPage() {
           <Logo height={30} />
         </Link>
         <div className="flex items-center gap-2 sm:gap-3">
+          {sessionReady && <WalletPill />}
           <AgencyHqPill
             waiting={workspaces.reduce(
               (n, w) => n + w.pendingApprovals + w.draftCount + w.failedCount,
@@ -476,11 +478,20 @@ function ProjectsPage() {
  * every client so the reason to open it is visible before clicking.
  */
 function AgencyHqPill({ waiting }: { waiting: number }) {
+  // Command Center is an Agency plan feature: keep it visible, locked below it.
+  return (
+    <FeatureGate feature="command_center">
+      <AgencyHqLink waiting={waiting} />
+    </FeatureGate>
+  );
+}
+
+function AgencyHqLink({ waiting }: { waiting: number }) {
   return (
     <Link
       to="/agency"
       aria-label={`Open Command Center${waiting ? ` — ${waiting} waiting across your clients` : ""}`}
-      className="group relative inline-flex h-10 items-center gap-2 rounded-full bg-foreground pl-1.5 pr-2 text-[13px] font-semibold text-background shadow-[0_8px_24px_-12px_hsl(var(--foreground)/0.55)] transition-all duration-300 hover:-translate-y-px hover:shadow-[0_14px_34px_-14px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:pr-3"
+      className="group relative inline-flex h-10 items-center gap-2 rounded-full bg-foreground pl-1.5 pr-2 text-[13px] font-semibold text-background shadow-[0_8px_24px_-12px_hsl(var(--foreground)/0.55)] transition-all duration-300 hover:-translate-y-px hover:text-background hover:shadow-[0_14px_34px_-14px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:pr-3"
     >
       {/* Lime halo that wakes on hover */}
       <span
@@ -558,6 +569,7 @@ function AccountMenu({
   onSignOut: () => void;
 }) {
   const navigate = useNavigate();
+  const commandCenterLocked = useFeatureLocked("command_center");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -590,7 +602,11 @@ function AccountMenu({
         <div className="p-1.5">
           <DropdownMenuItem
             className="gap-2.5 rounded-lg py-2 text-[13px]"
-            onSelect={() => navigate({ to: "/agency" })}
+            onSelect={() =>
+              commandCenterLocked
+                ? openFeatureUpgrade("command_center")
+                : navigate({ to: "/agency" })
+            }
           >
             <LayoutDashboard className="h-4 w-4 text-muted-foreground" /> Command Center
           </DropdownMenuItem>

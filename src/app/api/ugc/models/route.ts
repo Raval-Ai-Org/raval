@@ -1,6 +1,6 @@
 // GET /api/ugc/models?workspaceId= — the video models this deployment offers
 // (only capabilities each model really supports) plus the workspace's video
-// allowance, so the studio can show a cost estimate before anyone generates.
+// allowance, so the studio can show the video balance before generation.
 import { WorkspaceQuery } from "@/lib/ugc/schemas";
 import { defineRoute } from "@/server/route";
 import { toModelView } from "@/server/ugc/models.server";

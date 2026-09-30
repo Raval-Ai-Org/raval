@@ -108,7 +108,10 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
 import { BillingPanel, WalletPill } from "@/components/app/BillingPanel";
-import { FeatureGate } from "@/components/app/FeatureGate";
+import { openFeatureUpgrade } from "@/components/app/FeatureGate";
+import { PlanLock } from "@/components/app/billing/billing-ui";
+import { PLANS, type FeatureKey } from "@/lib/billing/catalog";
+import { useEntitlements } from "@/lib/billing/use-entitlements";
 
 function AppShell() {
   // The workspace comes from the route and is verified by WorkspaceProvider
@@ -117,6 +120,8 @@ function AppShell() {
   const workspace = useWorkspace();
   const { patch: patchWorkspace } = useWorkspaceActions();
   const workspaceId = workspace.id;
+  // Plan features for the lock labels on paid sidebar items.
+  const billing = useEntitlements();
   const proofEngineStatus = useServerFn(getProofEngineStatus);
   const { data: proofEngine } = useQuery({
     queryKey: ["proof-engine-status", workspaceId],
@@ -329,15 +334,23 @@ function AppShell() {
     hint?: string;
     onClick: () => void;
     accent?: string;
+    /** Paid feature: when the plan locks it, show the plan and open the upgrade screen. */
+    feature?: FeatureKey;
   }) => {
     const Icon = opts.icon;
+    const lock =
+      opts.feature && billing.data && !billing.data.features[opts.feature].allowed
+        ? billing.data.features[opts.feature].requiredPlan
+        : null;
     return (
       <button
         key={opts.label}
         onClick={() => {
-          opts.onClick();
+          if (lock && opts.feature) openFeatureUpgrade(opts.feature);
+          else opts.onClick();
           setNavOpen(false);
         }}
+        aria-label={lock ? `${opts.label} (needs the ${PLANS[lock].label} plan)` : undefined}
         className="group relative flex w-full items-center gap-3 rounded-full px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-[var(--ds-well-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         <span
@@ -347,10 +360,14 @@ function AppShell() {
           <Icon className="h-4 w-4" strokeWidth={1.9} aria-hidden />
         </span>
         <span className="min-w-0 flex-1 break-words leading-snug">{opts.label}</span>
-        {opts.hint && (
-          <span className="rounded-md bg-secondary/60 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground/80">
-            {opts.hint}
-          </span>
+        {lock ? (
+          <PlanLock plan={lock} />
+        ) : (
+          opts.hint && (
+            <span className="rounded-md bg-secondary/60 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground/80">
+              {opts.hint}
+            </span>
+          )
         )}
       </button>
     );
@@ -466,37 +483,33 @@ function AppShell() {
               setNavOpen(false);
             },
           })}
-          <FeatureGate feature="backlinks" className="w-full">
-            {sidebarAction({
-              icon: Link2,
-              label: "Backlinks",
-              hint: "SEO",
+          {sidebarAction({
+            icon: Link2,
+            label: "Backlinks",
+            hint: "SEO",
+            accent: "hsl(var(--brand-green))",
+            feature: "backlinks",
+            onClick: () => navigate({ to: workspacePath(workspaceId, "backlinks") }),
+          })}
+          {sidebarAction({
+            icon: Users,
+            label: "Competitors",
+            accent: "hsl(var(--brand-green))",
+            feature: "competitors",
+            onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
+          })}
+          {proofEngine?.enabled &&
+            sidebarAction({
+              icon: Trophy,
+              label: "Experiments",
+              hint: "Prove what works",
               accent: "hsl(var(--brand-green))",
-              onClick: () => navigate({ to: workspacePath(workspaceId, "backlinks") }),
+              feature: "experiments",
+              onClick: () => {
+                navigate({ to: workspacePath(workspaceId, "experiments") });
+                setNavOpen(false);
+              },
             })}
-          </FeatureGate>
-          <FeatureGate feature="competitors" className="w-full">
-            {sidebarAction({
-              icon: Users,
-              label: "Competitors",
-              accent: "hsl(var(--brand-green))",
-              onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
-            })}
-          </FeatureGate>
-          {proofEngine?.enabled && (
-            <FeatureGate feature="experiments" className="w-full">
-              {sidebarAction({
-                icon: Trophy,
-                label: "Experiments",
-                hint: "Prove what works",
-                accent: "hsl(var(--brand-green))",
-                onClick: () => {
-                  navigate({ to: workspacePath(workspaceId, "experiments") });
-                  setNavOpen(false);
-                },
-              })}
-            </FeatureGate>
-          )}
           {sidebarAction({
             icon: Brain,
             label: "Brand DNA",
@@ -513,26 +526,24 @@ function AppShell() {
               setNavOpen(false);
             },
           })}
-          <FeatureGate feature="publishing" className="w-full">
-            {sidebarAction({
-              icon: CalendarIcon,
-              label: "Schedule",
-              onClick: () => emitAppEvent("open:schedule"),
-            })}
-          </FeatureGate>
+          {sidebarAction({
+            icon: CalendarIcon,
+            label: "Schedule",
+            feature: "publishing",
+            onClick: () => emitAppEvent("open:schedule"),
+          })}
         </SidebarSection>
 
         <div className="h-px bg-border/50" />
 
         {/* Collaborate */}
         <SidebarSection label="Collaborate">
-          <FeatureGate feature="client_portal" className="w-full">
-            {sidebarAction({
-              icon: Rocket,
-              label: "Client Portal",
-              onClick: () => emitAppEvent("open:client-portal"),
-            })}
-          </FeatureGate>
+          {sidebarAction({
+            icon: Rocket,
+            label: "Client Portal",
+            feature: "client_portal",
+            onClick: () => emitAppEvent("open:client-portal"),
+          })}
           {sidebarAction({
             icon: Share2,
             label: "Share",

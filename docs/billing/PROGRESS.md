@@ -28,16 +28,36 @@ Last update: 30 September 2026. Source of truth for prices: `src/lib/billing/cat
   Free limits got a free month (4 Growth, 2 Scale) until 29 October, with a notice.
 - **Notices and email** (`notify.server.ts`, `src/server/notify/email.server.ts`):
   80% / 100% balance, teammate upgrade requests, purchase requests to admins, plan
-  activated, free month ending in 3 days, referral rewards. In-app list in Plan &
-  billing, unread dot on the balance pill. Email via Resend when `RESEND_API_KEY` and
-  `BILLING_EMAIL_FROM` are set.
+  activated, free month ending in 3 days, referral rewards. Sent by email via Resend
+  when `RESEND_API_KEY` and `BILLING_EMAIL_FROM` are set (stored in
+  `account_notifications`; no in-app list, to keep the app simple).
 - **Referrals:** `/r/<code>` link, attribution at sign-in, both sides rewarded 14 days
   after the friend's first payment (1,000 credits + 2 videos, max 20 a year).
 - **Tracked prompts:** AI Visibility → Prompts. Weekly checks on the plan's engines
   from the geo-scans cron, pooled limit, suggestions from Brand DNA, "Check now"
   (8 credits), per-engine mention and position, 6-week trend.
-- UI: balance pill, Plan & billing (overview, plans, top up, prices, history),
-  upgrade screen, admin console, lock badges, price chips.
+- UI (simplified 30 September, standard SaaS pattern):
+  - Top bar: credits left, plus an **Upgrade** button for Free owners.
+  - **Upgrade screen** (one for everything): Plans | Credit packs, Monthly/Yearly,
+    4 plan cards with the right one marked Recommended, confirm step while card
+    payment is not connected. Locked features open it with "Unlock <feature>".
+  - **Locks**: paid sidebar items show "🔒 Growth" (the plan that unlocks them);
+    other locked buttons get a small lime lock badge (`FeatureGate`).
+  - **Plan & billing**: one short page — your plan + Upgrade, what's left this
+    month, Buy credits, recent activity. Removed: extra tabs, notices list,
+    referral tile, price list page.
+
+- **Real-time balance:** every hold, charge or refund marks the request, and both API
+  transports answer with `X-Billing-Changed: 1`; the browser refreshes the balance
+  at once (debounced). Chat refreshes when a reply finishes; a light 60-second check
+  catches background jobs.
+- **No billing errors:** a 402 is never shown as an error. Chat and the Studio composer
+  show an inline upgrade card (`billing/UpgradePrompt.tsx`); everywhere else one
+  friendly toast with an Upgrade / Get credits button. Billing messages are filtered
+  out of error toasts (`isBillingMessage`).
+- **Security:** RPC and API results are `no-store`; customer free text (contact, note,
+  teammate message) is stripped of control characters; catalog keys are validated by
+  pattern; a startup warning when `BILLING_ENFORCEMENT` is not `on` or no admin is set.
 
 ## Remaining
 

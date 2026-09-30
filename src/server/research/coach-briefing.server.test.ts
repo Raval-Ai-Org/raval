@@ -105,4 +105,45 @@ describe("synthesizeCoachBriefing", () => {
 
     expect(briefing.focus.title).toBe("Add your website so I can research your brand");
   });
+
+  it("returns a limited workspace snapshot when the provider refuses", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: { message: "Request declined", metadata: { error_type: "refusal" } },
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+
+    const { briefing, hasContent } = await synthesizeCoachBriefing(baseInput);
+
+    expect(hasContent).toBe(false);
+    expect(briefing.limited).toBe(true);
+    expect(briefing.headline).toBe("Your latest workspace snapshot");
+    expect(briefing.wins.map((item) => item.title)).toContain("2 items published this week");
+    expect(briefing.weekPlan).toEqual(["Review 3 pending drafts."]);
+  });
+
+  it("returns a limited snapshot for a provider 403 without a refusal code", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: "Guardrail blocked request" } }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    const result = await synthesizeCoachBriefing(baseInput);
+
+    expect(result.hasContent).toBe(false);
+    expect(result.briefing.limited).toBe(true);
+  });
 });

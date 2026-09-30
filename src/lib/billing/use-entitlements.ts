@@ -14,8 +14,6 @@ export type BillingView = Omit<Entitlements, "accountId" | "ownerUserId"> & {
   /** "card" opens Stripe checkout; "request" sends an Upgrade now request to Mellox. */
   checkoutMode?: "card" | "request";
   isBillingAdmin?: boolean;
-  /** Owner only: the code behind their /r/<code> invite link. */
-  referralCode?: string | null;
 };
 
 export function useEntitlements(options: { enabled?: boolean } = {}) {
@@ -40,6 +38,10 @@ export function useEntitlements(options: { enabled?: boolean } = {}) {
     enabled: options.enabled ?? true,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
+    // Background jobs (videos, reports, agent runs) settle after the request
+    // that started them: a light check keeps the balance current meanwhile.
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
   useEffect(
     () =>
@@ -55,9 +57,23 @@ export function useEntitlements(options: { enabled?: boolean } = {}) {
               : old,
           );
         }
-        void queryClient.invalidateQueries({ queryKey: key });
+        scheduleBillingRefresh(queryClient);
       }),
     [queryClient, key],
   );
   return query;
+}
+
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Refresh the balance, plan and history once after a burst of changes (every
+ * mounted balance listens, and one action can move credits more than once).
+ */
+function scheduleBillingRefresh(queryClient: ReturnType<typeof useQueryClient>) {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    void queryClient.invalidateQueries({ queryKey: ["billing"] });
+  }, 350);
 }

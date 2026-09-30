@@ -7,30 +7,55 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
-import { blockHeadline } from "@/lib/billing/present";
+import { isBillingMessage } from "@/lib/billing/present";
 import { BillingCenter } from "./billing/BillingCenter";
 import { UpgradeDialog } from "./billing/UpgradeDialog";
+import { upgradeCopy } from "./billing/UpgradePrompt";
 
 export { WalletPill } from "./billing/WalletPill";
 
+let errorToastsFiltered = false;
+
+/**
+ * A plan or balance limit is never shown as a red error. Components that
+ * report failures with toast.error(message) pass the server's message through;
+ * those billing messages are dropped here, because the friendly
+ * "Upgrade / Get credits" toast below already covers them.
+ */
+function filterBillingErrorToasts() {
+  if (errorToastsFiltered) return;
+  errorToastsFiltered = true;
+  const original = toast.error.bind(toast);
+  const filtered: typeof toast.error = (message, data) => {
+    if (isBillingMessage(message) || isBillingMessage(data?.description)) return "";
+    return original(message, data);
+  };
+  toast.error = filtered;
+}
+
 function BlockedToasts() {
-  useEffect(
-    () =>
-      onAppEvent("billing:blocked", (event) => {
-        const block = event.detail;
-        if (!block) return;
-        emitAppEvent("billing:changed");
-        toast(blockHeadline(block), {
-          id: `billing-${block.code}-${block.feature ?? block.meter ?? block.limit ?? ""}`,
-          action: {
-            label: block.code === "insufficient_balance" ? "Get more" : "See options",
-            onClick: () => emitAppEvent("open:upgrade", block),
-          },
-          duration: 8000,
-        });
-      }),
-    [],
-  );
+  useEffect(() => {
+    filterBillingErrorToasts();
+    return onAppEvent("billing:blocked", (event) => {
+      const block = event.detail;
+      if (!block) return;
+      emitAppEvent("billing:changed");
+      const copy = upgradeCopy(block);
+      toast(copy.title, {
+        id: `billing-${block.code}-${block.feature ?? block.meter ?? block.limit ?? ""}`,
+        description: copy.text || undefined,
+        ...(copy.action
+          ? {
+              action: {
+                label: copy.action,
+                onClick: () => emitAppEvent("open:upgrade", block),
+              },
+            }
+          : {}),
+        duration: 10_000,
+      });
+    });
+  }, []);
   return null;
 }
 
@@ -42,10 +67,13 @@ function BillingDeepLink() {
     if (!tab) return;
     url.searchParams.delete("billing");
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    const tabs = ["overview", "plans", "topup", "prices", "history"] as const;
-    const match = tabs.find((item) => item === tab);
-    // A short delay lets the billing window mount its listener first.
-    window.setTimeout(() => emitAppEvent("open:usage", { tab: match ?? "overview" }), 300);
+    // A short delay lets the billing windows mount their listeners first.
+    window.setTimeout(() => {
+      if (tab === "plans") emitAppEvent("open:upgrade", undefined);
+      else if (tab === "topup")
+        emitAppEvent("open:upgrade", { code: "insufficient_balance", meter: "credits" });
+      else emitAppEvent("open:usage");
+    }, 300);
   }, []);
   return null;
 }

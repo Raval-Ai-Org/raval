@@ -60,7 +60,7 @@ function Beat({ label, className }: { label?: string; className?: string }) {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ type: "spring", stiffness: 420, damping: 26 }}
       className={cn(
-        "inline-flex shrink-0 items-center rounded-full bg-[hsl(var(--tone)/0.14)] px-1.5 py-px text-[9px] font-semibold uppercase leading-4 tracking-wide text-[hsl(var(--tone))] ring-1 ring-[hsl(var(--tone)/0.28)]",
+        "inline-flex shrink-0 items-center rounded-full bg-[hsl(var(--tone)/0.14)] px-1.5 py-px text-[9px] font-semibold uppercase leading-4 tracking-wide text-[var(--tone-ink)] ring-1 ring-[hsl(var(--tone)/0.28)]",
         className,
       )}
     >

@@ -53,6 +53,8 @@ export type StudioSession = {
   pendingKey: string | null;
   pendingKind: "generate" | "regenerate" | "refine" | null;
   error: string | null;
+  /** The plan or balance stopped the last Generate: show an upgrade option, not an error. */
+  billing?: { code: string; feature?: string; requiredPlan?: string; meter?: string } | null;
   window: ComposerWindow;
   /** Where the work started. Chat-started work shows in the chat and rail, not the dock. */
   origin?: "chat" | "studio";
@@ -680,6 +682,7 @@ export async function generate(
     pendingKind: kind,
     step: kind === "generate" ? "generating" : s.step === "intent" ? "generating" : s.step,
     error: null,
+    billing: null,
   });
   await submit(id, key, kind, parent?.id, opts.refine);
 }
@@ -718,11 +721,16 @@ async function submit(
     const message = error instanceof Error ? error.message : "Generation failed";
     const current = getSession(id);
     if (!current || current.pendingKey !== key) return;
+    const billing =
+      error instanceof StudioApiError && error.status === 402 && error.payload?.code
+        ? (error.payload as NonNullable<StudioSession["billing"]>)
+        : null;
     patchSession(id, {
       pendingKey: null,
       pendingKind: null,
       step: current.lastGood ? "review" : "intent",
-      error: message,
+      error: billing ? null : message,
+      billing,
     });
     if (error instanceof StudioApiError && error.status === 409) void refreshSessionJob(id);
   } finally {

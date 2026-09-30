@@ -4,6 +4,9 @@
 // Picture, Text, Ads), then the format inside it. Standard formats open the
 // Studio composer on the description step; the creator video ad opens its own
 // studio.
+import { openFeatureUpgrade } from "@/components/app/FeatureGate";
+import { PlanLock } from "@/components/app/billing/billing-ui";
+import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { AppModalShell } from "@/components/app/AppModalShell";
@@ -102,7 +105,21 @@ export function CreateLauncher() {
     setGroupId(null);
   };
 
+  // Video (Studio clip and creator video ads) needs a plan with videos.
+  const billing = useEntitlements();
+  const videoLock =
+    billing.data && !billing.data.features.ugc.allowed
+      ? billing.data.features.ugc.requiredPlan
+      : null;
+  const lockFor = (option: Option) =>
+    option.kind === "ugc" || option.type === "video" ? videoLock : null;
+
   const pick = (option: Option) => {
+    if (lockFor(option)) {
+      setOpen(false);
+      openFeatureUpgrade("ugc");
+      return;
+    }
     if (option.kind === "ugc") {
       setOpen(false);
       emitAppEvent("open:ugc-studio");
@@ -232,10 +249,10 @@ export function CreateLauncher() {
                     <TypeGlyph type={o.type} className="size-11 rounded-xl [&_svg]:size-5" />
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-foreground">
                       {o.label}
                       {o.kind === "ugc" ? (
-                        <span className="rounded-full bg-[hsl(var(--tone)/0.14)] px-1.5 py-px text-[10px] font-semibold text-[hsl(var(--tone))] ring-1 ring-[hsl(var(--tone)/0.3)]">
+                        <span className="rounded-full bg-[hsl(var(--tone)/0.14)] px-1.5 py-px text-[10px] font-semibold text-[var(--tone-ink)] ring-1 ring-[hsl(var(--tone)/0.3)]">
                           {o.badge}
                         </span>
                       ) : null}
@@ -244,9 +261,13 @@ export function CreateLauncher() {
                       {o.tagline}
                     </span>
                   </span>
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-muted-foreground transition-colors duration-[--motion-duration-base] group-hover:bg-[hsl(var(--tone))] group-hover:text-white">
-                    <ArrowRight className="size-4 transition-transform duration-[--motion-duration-base] group-hover:translate-x-0.5" />
-                  </span>
+                  {lockFor(o) ? (
+                    <PlanLock plan={lockFor(o)!} />
+                  ) : (
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-muted-foreground transition-colors duration-[--motion-duration-base] group-hover:bg-[hsl(var(--tone))] group-hover:text-[hsl(var(--tone-foreground))] group-focus-visible:bg-[hsl(var(--tone))] group-focus-visible:text-[hsl(var(--tone-foreground))]">
+                      <ArrowRight className="size-4 transition-transform duration-[--motion-duration-base] group-hover:translate-x-0.5" />
+                    </span>
+                  )}
                 </button>
               </motion.li>
             ))}

@@ -202,7 +202,7 @@ export function GenerationProgress({
                     "relative grid size-[27px] shrink-0 place-items-center rounded-full transition-colors duration-[--motion-duration-slow]",
                     state === "done" && "bg-primary text-primary-foreground",
                     state === "current" &&
-                      "studio-ring bg-[hsl(var(--tone)/0.14)] text-[hsl(var(--tone))] ring-1 ring-[hsl(var(--tone)/0.3)]",
+                      "studio-ring bg-[hsl(var(--tone)/0.14)] text-[var(--tone-ink)] ring-1 ring-[hsl(var(--tone)/0.3)]",
                     state === "todo" && "bg-surface-3 text-muted-foreground/50 ring-1 ring-border",
                   )}
                 >
@@ -322,7 +322,7 @@ export function GenerationProgress({
             transition={{ duration: duration.medium, ease: ease.emphasized }}
             className="absolute bottom-3 left-1/2 hidden -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-3/85 px-3 py-1 text-[11px] text-muted-foreground shadow-1 ring-1 ring-border/60 backdrop-blur @3xl/composer:inline-flex"
           >
-            <CaptionIcon className="size-3 text-[hsl(var(--tone))]" />
+            <CaptionIcon className="size-3 text-[var(--tone-ink)]" />
             <span className="font-medium text-foreground">
               {stage
                 ? stage.id === "render" && session.type === "video"

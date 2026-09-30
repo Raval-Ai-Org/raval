@@ -1,13 +1,14 @@
 import { resolveServerFn } from "@/server/fns";
-import { runWithRequest, setRequestScope } from "@/server/request-context";
+import { getRequestScope, runWithRequest, setRequestScope } from "@/server/request-context";
 import { knownErrorResponse } from "@/server/route";
 
 export const dynamic = "force-dynamic";
 
-function json(status: number, body: unknown) {
+function json(status: number, body: unknown, extra?: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    // Results are per user and often carry balances: never cache them.
+    headers: { "content-type": "application/json", "cache-control": "no-store", ...extra },
   });
 }
 
@@ -39,11 +40,17 @@ export async function POST(request: Request, ctx: { params: Promise<{ fn: string
   }
 
   try {
-    const result = await runWithRequest(request, () => {
+    const { result, billingChanged } = await runWithRequest(request, async () => {
       setRequestScope({ route: `${moduleName}/${fnName}` });
-      return serverFn.invoke(data, request.signal);
+      const value = await serverFn.invoke(data, request.signal);
+      return { result: value, billingChanged: getRequestScope().billingChanged === true };
     });
-    return json(200, { result: result ?? null });
+    // The wallet moved (a charge or a refund): the browser refreshes its balance.
+    return json(
+      200,
+      { result: result ?? null },
+      billingChanged ? { "x-billing-changed": "1" } : undefined,
+    );
   } catch (error) {
     // Auth failures → 401 (the client prompts a re-login), ZodError → 400,
     // provider errors → their own status. Same mapping as the /api kernel.

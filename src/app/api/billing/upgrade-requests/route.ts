@@ -9,13 +9,26 @@ import { HttpError } from "@/server/http-error";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export const dynamic = "force-dynamic";
+
+/** Control characters and line/paragraph separators, removed from customer text. */
+const CONTROL_CHARS = /[\p{Cc}\p{Zl}\p{Zp}]/gu;
 const admin = supabaseAdmin as unknown as SupabaseClient;
 
 const Body = z.object({
   workspaceId: z.string().uuid(),
-  feature: z.string().max(60).optional(),
-  requiredPlan: z.string().max(20).optional(),
-  message: z.string().trim().max(300).optional(),
+  feature: z
+    .string()
+    .regex(/^[a-z0-9_]{1,60}$/)
+    .optional(),
+  requiredPlan: z
+    .string()
+    .regex(/^[a-z]{1,20}$/)
+    .optional(),
+  message: z
+    .string()
+    .max(300)
+    .transform((value) => value.replace(CONTROL_CHARS, " ").trim())
+    .optional(),
 });
 
 export const POST = defineRoute({

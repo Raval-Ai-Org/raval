@@ -781,8 +781,11 @@ body {
   background-color: hsl(var(--muted) / 0.5);
 }
 
-/* Hover affordance for text links (excluding elements that opt out) */
-:where(a[href]):not([class*="no-underline"]):not([data-slot]):hover {
+/* Plain text links can adopt body ink on hover. Button-styled links own their
+   foreground pair; overriding it makes inverted pills unreadable. */
+:where(a[href]):not([class*="bg-"]):not([class*="btn-"]):not([class*="no-underline"]):not(
+    [data-slot]
+  ):hover {
   color: hsl(var(--foreground));
 }
 
@@ -4067,6 +4070,9 @@ pre {
   --tone-script: 170 72% 32%;
   --tone-article: 199 80% 40%;
   --tone-ugc: 316 78% 46%;
+  /* Ink for a solid format-tone fill. Several light tones (orange, teal and
+     green) are too bright for white icons; the dark palette is brighter still. */
+  --tone-foreground: 0 0% 0%;
 }
 .dark {
   --tone-social: 70 75% 64%;
@@ -4101,6 +4107,39 @@ pre {
 }
 .studio-tone-ugc {
   --tone: var(--tone-ugc);
+}
+.studio-tone-video,
+.studio-tone-ugc {
+  --tone-foreground: 0 0% 100%;
+}
+.dark .studio-tone-video,
+.dark .studio-tone-ugc {
+  --tone-foreground: 0 0% 0%;
+}
+:where(
+  .studio-tone-social,
+  .studio-tone-carousel,
+  .studio-tone-image,
+  .studio-tone-ad,
+  .studio-tone-video,
+  .studio-tone-script,
+  .studio-tone-article,
+  .studio-tone-ugc
+) {
+  --tone-ink: color-mix(in oklab, hsl(var(--tone)) 76%, black);
+}
+.dark
+  :where(
+    .studio-tone-social,
+    .studio-tone-carousel,
+    .studio-tone-image,
+    .studio-tone-ad,
+    .studio-tone-video,
+    .studio-tone-script,
+    .studio-tone-article,
+    .studio-tone-ugc
+  ) {
+  --tone-ink: hsl(var(--tone));
 }
 
 @layer components {

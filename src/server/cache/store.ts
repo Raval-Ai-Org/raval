@@ -10,7 +10,7 @@
 // JSON-serialised; keys are namespaced `mellox:<namespace>:<key>`.
 //
 // Hit/miss counters are kept per namespace per UTC day (in Redis when
-// available), so /api/usage can report the cache hit rate as a real figure.
+// available), so the cache hit rate can be reported as a real figure.
 import "server-only";
 
 export type CacheBackend = "redis" | "memory";

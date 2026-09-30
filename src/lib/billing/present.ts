@@ -18,6 +18,26 @@ import {
   type PlanId,
 } from "./catalog";
 
+/**
+ * The plain words the server sends with a 402. The browser shows an Upgrade /
+ * Get credits option instead of these as errors, and filters them out of
+ * error toasts so people never see a red error for a plan or balance limit.
+ */
+export const BILLING_MESSAGES = {
+  upgrade_required: "This needs a bigger plan.",
+  insufficient_balance: "You're out of credits for this.",
+  limit_reached: "You've reached your plan limit.",
+  spend_not_allowed: "You have view-only access here.",
+  brand_frozen: "This brand is paused on your plan.",
+} as const;
+
+export function isBillingMessage(message: unknown): boolean {
+  return (
+    typeof message === "string" &&
+    (Object.values(BILLING_MESSAGES) as string[]).some((text) => message.includes(text))
+  );
+}
+
 export type BillingBlock = {
   code: string;
   feature?: string;

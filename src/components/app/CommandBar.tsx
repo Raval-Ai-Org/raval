@@ -83,7 +83,7 @@ const WORKSPACE_ACTIONS = [
   { id: "brand-dna", label: "Open Brand DNA memory", icon: Brain, event: "open:brand-dna" },
   { id: "brand-kit", label: "Open Brand Kit and styles", icon: Palette, event: "open:brand-kit" },
   { id: "tasks", label: "Open Tasks & alerts", icon: CheckSquare, event: "open:tasks" },
-  { id: "usage", label: "Open Plan & usage", icon: CheckSquare, event: "open:usage" },
+  { id: "usage", label: "Plan & billing", icon: CheckSquare, event: "open:usage" },
 ] as const;
 
 export function CommandBar() {

@@ -87,7 +87,7 @@ export function Section({
   return (
     <section id={id} className={cn("space-y-4", className)}>
       {(title || action) && (
-        <header className="flex items-end justify-between gap-4">
+        <header className="flex flex-wrap items-start justify-between gap-3 sm:items-end sm:gap-4">
           <div className="min-w-0">
             {title && (
               <h2 className="text-[17px] font-semibold tracking-tight text-foreground">{title}</h2>
