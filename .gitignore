@@ -13,9 +13,11 @@ node_modules
 .next-proof
 .next-build
 .next-proofbuild
+.next-route-check
 out
 dist
 *.local
+*.tsbuildinfo
 next-env.d.ts
 
 
