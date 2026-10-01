@@ -19,6 +19,7 @@ import {
   type BillingAccount,
 } from "./accounts.server";
 import { billingSchemaReady } from "./schema.server";
+import { globalBillingMode } from "./mode.server";
 import { HttpError } from "@/server/http-error";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
@@ -65,12 +66,7 @@ export function validPlan(value: string | null | undefined): PlanId {
 }
 
 export function enforcementFor(account: BillingAccount): "off" | "shadow" | "on" {
-  return (
-    account.enforcement_override ??
-    (process.env.BILLING_ENFORCEMENT === "on" || process.env.BILLING_ENFORCEMENT === "shadow"
-      ? process.env.BILLING_ENFORCEMENT
-      : "off")
-  );
+  return account.enforcement_override ?? globalBillingMode();
 }
 
 export function entitledPlanFor(account: BillingAccount, now = new Date()): PlanId {
@@ -202,7 +198,7 @@ export async function getEntitlements(args: {
   skipCapacityReconcile?: boolean;
 }): Promise<Entitlements> {
   if (!(await billingSchemaReady())) {
-    if (process.env.BILLING_ENFORCEMENT === "on") {
+    if (globalBillingMode() === "on") {
       throw new HttpError(503, "Plan & billing is being set up. Please try again later.");
     }
     // Billing has not been migrated yet. Preserve the existing workspace

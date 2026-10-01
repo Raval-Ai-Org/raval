@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { HttpError } from "@/server/http-error";
 import { accountForUser, invalidateBillingAccount } from "./accounts.server";
 import { getEntitlements } from "./entitlements.server";
+import { globalBillingMode } from "./mode.server";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 
@@ -45,7 +46,7 @@ export async function reconcilePendingBillingCapacity(
     .select("owner_user_id")
     .order("capacity_reconciled_at", { ascending: true, nullsFirst: true })
     .limit(limit);
-  if (process.env.BILLING_ENFORCEMENT !== "on") query = query.eq("enforcement_override", "on");
+  if (globalBillingMode() !== "on") query = query.eq("enforcement_override", "on");
   const { data, error } = await query;
   if (error) throw new Error("Could not load accounts for capacity reconciliation.");
   let checked = 0;

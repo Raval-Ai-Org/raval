@@ -948,8 +948,8 @@ function HealthPage({ report }: { report: Record<string, unknown> }) {
         })}
       </div>
       <p className="mt-4 text-[12.5px] text-muted-foreground">
-        Global limits mode: set <code>BILLING_ENFORCEMENT</code> to off, shadow or on. Admins:{" "}
-        <code>BILLING_ADMIN_USER_IDS</code>.
+        Global credits mode: <strong>{String(report.globalEnforcement ?? "unknown")}</strong>. Set{" "}
+        <code>BILLING_ENFORCEMENT=on</code> in the deployment to charge completed work.
       </p>
     </SurfacePage>
   );

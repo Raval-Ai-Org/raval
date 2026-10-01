@@ -8,7 +8,8 @@ Last update: 30 September 2026. Source of truth for prices: `src/lib/billing/cat
 - **One wallet per owner**, shared by all their brands: credits, videos, Pro messages,
   chat messages. Charged only when an action works; failed work is released.
 - **`BILLING_ENFORCEMENT`** = `off` / `shadow` / `on`, plus a per-account override in
-  `/admin`. Local `.env.local` is now `on`; set the same on the deployment when ready.
+  `/admin`. Local `.env.local` is `on`. An unset production value now defaults to
+  `on`; an explicit `off` still disables spending. Admin Health shows the effective mode.
 - **Payments:** Stripe later. Until then **Upgrade now** sends a request (emailed to
   `BILLING_ADMIN_EMAILS`); an admin confirms payment and activates the plan or pack at
   `/admin`. Manual plans are comps until a date, so grants and the fall back to Free
@@ -49,8 +50,8 @@ Last update: 30 September 2026. Source of truth for prices: `src/lib/billing/cat
 
 - **Real-time balance:** every hold, charge or refund marks the request, and both API
   transports answer with `X-Billing-Changed: 1`; the browser refreshes the balance
-  at once (debounced). Chat refreshes when a reply finishes; a light 60-second check
-  catches background jobs.
+  at once (debounced). Chat refreshes when a reply finishes; held balances are checked
+  every 5 seconds until settlement, then every 60 seconds for background changes.
 - **No billing errors:** a 402 is never shown as an error. Chat and the Studio composer
   show an inline upgrade card (`billing/UpgradePrompt.tsx`); everywhere else one
   friendly toast with an Upgrade / Get credits button. Billing messages are filtered
@@ -58,6 +59,9 @@ Last update: 30 September 2026. Source of truth for prices: `src/lib/billing/cat
 - **Security:** RPC and API results are `no-store`; customer free text (contact, note,
   teammate message) is stripped of control characters; catalog keys are validated by
   pattern; a startup warning when `BILLING_ENFORCEMENT` is not `on` or no admin is set.
+  Grant and hold replays now reject changed financial terms (migration
+  `20261002092500`); competitor profile charges verify workspace ownership and wait
+  for a fresh result before capture.
 
 ## Remaining
 

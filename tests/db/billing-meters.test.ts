@@ -229,6 +229,58 @@ describe("account meter foundation", () => {
     expect(await wallet()).toEqual({ available: 90, held: 0, any: 90 });
   });
 
+  it("rejects a reused financial key with different terms", async () => {
+    const grantKey = "test:replay-terms:grant";
+    expect(
+      (
+        await rpc("meter_grant", {
+          account_id: account,
+          meter: "credits",
+          source: "promo",
+          restriction: "ai_only",
+          amount: 25,
+          idempotency_key: grantKey,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      await rpc("meter_grant", {
+        account_id: account,
+        meter: "credits",
+        source: "promo",
+        restriction: "ai_only",
+        amount: 250,
+        idempotency_key: grantKey,
+      }),
+    ).toMatchObject({ ok: false, code: "idempotency_conflict" });
+
+    const holdKey = "test:replay-terms:hold";
+    expect(
+      (
+        await rpc("meter_hold", {
+          account_id: account,
+          workspace_id: workspace,
+          meter: "credits",
+          action: "ideas",
+          amount: 10,
+          idempotency_key: holdKey,
+        })
+      ).ok,
+    ).toBe(true);
+    const before = await wallet();
+    expect(
+      await rpc("meter_hold", {
+        account_id: account,
+        workspace_id: workspace,
+        meter: "credits",
+        action: "coach_briefing",
+        amount: 10,
+        idempotency_key: holdKey,
+      }),
+    ).toMatchObject({ ok: false, code: "idempotency_conflict" });
+    expect(await wallet()).toEqual(before);
+  });
+
   it("requires paid grants for backlinks and makes the old wrapper replay-safe", async () => {
     const blocked = await rpc("meter_hold", {
       account_id: account,

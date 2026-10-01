@@ -61,6 +61,42 @@ describe("background job charges settle from the job's own status", () => {
     // The job row disappeared (deleted brand): release after an hour.
     expect(outcomeFor("brand_voice", null, 2 * HOUR)).toMatchObject({ ok: false });
   });
+
+  it("waits for fresh profile research before charging a full refresh", () => {
+    const linkedAt = "2026-10-01T12:00:00Z";
+    expect(
+      outcomeFor(
+        "competitor_profile",
+        { profile_status: "ready", updated_at: "2026-09-30T12:00:00Z" },
+        0,
+        linkedAt,
+      ),
+    ).toEqual({ final: false });
+    expect(
+      outcomeFor(
+        "competitor_profile",
+        { profile_status: "failed", updated_at: "2026-09-30T12:00:00Z" },
+        0,
+        linkedAt,
+      ),
+    ).toEqual({ final: false });
+    expect(
+      outcomeFor(
+        "competitor_profile",
+        { profile_status: "ready", updated_at: "2026-10-01T12:01:00Z" },
+        60_000,
+        linkedAt,
+      ),
+    ).toEqual({ final: true, ok: true });
+    expect(
+      outcomeFor(
+        "competitor_profile",
+        { profile_status: "ready", updated_at: "2026-09-30T12:00:00Z" },
+        25 * HOUR,
+        linkedAt,
+      ),
+    ).toEqual({ final: true, ok: false });
+  });
 });
 
 describe("billing notices", () => {

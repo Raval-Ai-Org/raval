@@ -8,6 +8,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { HttpError } from "@/server/http-error";
 import { assertPublicUrl } from "@/server/safe-fetch";
 import { webResearchAvailable } from "@/server/research/web-search.server";
 import { normalizeCompetitorDomain } from "./service.server";
@@ -307,12 +308,15 @@ export async function setStatus(args: {
     patch.lease_until = null;
     patch.locked_by = null;
   }
-  const { error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("workspace_competitors")
     .update(patch)
     .eq("id", args.competitorId)
-    .eq("workspace_id", args.workspaceId);
+    .eq("workspace_id", args.workspaceId)
+    .select("id")
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  if (!data) throw new HttpError(404, "Competitor not found.");
 }
 
 /** Queue a fresh research pass for one competitor. */
@@ -330,13 +334,16 @@ export async function requestRefresh(args: {
     locked_by: null,
   };
   if (args.full) patch.profile_status = "pending";
-  const { error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("workspace_competitors")
     .update(patch)
     .eq("id", args.competitorId)
     .eq("workspace_id", args.workspaceId)
-    .eq("status", "tracked");
+    .eq("status", "tracked")
+    .select("id")
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  if (!data) throw new HttpError(404, "Tracked competitor not found.");
 }
 
 export async function markUpdatesRead(args: {

@@ -5,6 +5,7 @@
 // missing OPTIONAL variables are listed once as warnings (features degrade).
 import "server-only";
 import { z } from "zod";
+import { globalBillingMode } from "./billing/mode.server";
 
 const optionalUrl = z.string().url().optional().or(z.literal(""));
 
@@ -208,7 +209,7 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
     );
   }
   // Billing: with the switch off nothing is charged and no plan limit applies.
-  const enforcement = (env.BILLING_ENFORCEMENT ?? "").toLowerCase();
+  const enforcement = globalBillingMode(env);
   if (enforcement !== "on") {
     warnings.push(
       enforcement === "shadow"

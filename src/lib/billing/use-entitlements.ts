@@ -38,9 +38,12 @@ export function useEntitlements(options: { enabled?: boolean } = {}) {
     enabled: options.enabled ?? true,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
-    // Background jobs (videos, reports, agent runs) settle after the request
-    // that started them: a light check keeps the balance current meanwhile.
-    refetchInterval: 60_000,
+    // A held balance means work is still settling. Check it promptly, then
+    // return to the light background check once the hold is captured/released.
+    refetchInterval: (current) =>
+      Object.values(current.state.data?.meters ?? {}).some((meter) => meter.held > 0)
+        ? 5_000
+        : 60_000,
     refetchIntervalInBackground: false,
   });
   useEffect(

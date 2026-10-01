@@ -5,6 +5,7 @@ import { HttpError } from "@/server/http-error";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireBillingAdmin } from "@/server/billing/admin.server";
 import { clawbackMeter, grantMeter } from "@/server/billing/meters.server";
+import { globalBillingMode } from "@/server/billing/mode.server";
 
 export const dynamic = "force-dynamic";
 const admin = supabaseAdmin as unknown as SupabaseClient;
@@ -50,7 +51,11 @@ export const GET = defineRoute({
       throw new HttpError(503, "Billing report is unavailable.");
     }
     return {
-      report: { ...report.data, capacityUnchecked: pendingCapacity.count ?? 0 },
+      report: {
+        ...report.data,
+        capacityUnchecked: pendingCapacity.count ?? 0,
+        globalEnforcement: globalBillingMode(),
+      },
       margin: margin.data,
       providerHealth: health.data ?? [],
       failedEvents: failed.data ?? [],

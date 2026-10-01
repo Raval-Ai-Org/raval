@@ -5,7 +5,7 @@ import type { Meter } from "@/lib/billing/catalog";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { HttpError } from "@/server/http-error";
 import { setRequestScope } from "@/server/request-context";
-import { InsufficientBalanceError } from "./errors";
+import { InsufficientBalanceError, LimitReachedError } from "./errors";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 
@@ -22,6 +22,8 @@ export type MeterResult = {
   held?: number;
   available_any?: number;
   debt?: number;
+  used?: number;
+  max?: number;
 };
 
 async function meterRpc(
@@ -40,7 +42,7 @@ async function meterRpc(
   if (!result || typeof result.ok !== "boolean") {
     throw new HttpError(503, "Billing balance is temporarily unavailable.");
   }
-  if (!result.ok && result.code !== "insufficient_balance") {
+  if (!result.ok && result.code !== "insufficient_balance" && result.code !== "brand_cap") {
     throw new HttpError(409, result.reason ?? "Billing balance could not be updated.");
   }
   // Tell the browser to refresh its balance with this response.
@@ -102,6 +104,13 @@ export async function holdMeter(args: {
     require_any: args.requireAny ?? false,
   });
   if (!result.ok) {
+    if (result.code === "brand_cap") {
+      throw new LimitReachedError({
+        limit: "monthly_brand_credits",
+        used: Number(result.used ?? 0),
+        max: Number(result.max ?? 0),
+      });
+    }
     throw new InsufficientBalanceError({
       meter: args.meter,
       needed: args.amount,

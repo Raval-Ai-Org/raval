@@ -294,6 +294,7 @@ export const refreshCompetitor = createServerFn({ method: "POST" })
         role,
         competitorId: data.competitorId,
         profileStatus: "pending",
+        requireTracked: true,
       });
     }
     await requestRefresh({

@@ -88,10 +88,13 @@ export async function beginAsyncCharge(args: {
         throw new HttpError(503, "Billing is temporarily unavailable. Nothing was charged.");
       }
       linked = true;
-      // A job that already finished inline settles now.
-      await settleAsyncCharge(kind, refId).catch((cause) =>
-        console.error("[billing] inline async settle failed", kind, cause),
-      );
+      // A profile can still show the previous "ready" result here. Its new
+      // research has not necessarily started, so only the worker/cron settles it.
+      if (kind !== "competitor_profile") {
+        await settleAsyncCharge(kind, refId).catch((cause) =>
+          console.error("[billing] inline async settle failed", kind, cause),
+        );
+      }
     },
     async release() {
       if (!linked) await deferred.release();
@@ -138,6 +141,7 @@ export function outcomeFor(
   kind: AsyncChargeKind,
   row: Record<string, unknown> | null,
   linkAgeMs: number,
+  linkedAt?: string,
 ): Outcome {
   if (!row) return linkAgeMs > HOUR ? { final: true, ok: false } : { final: false };
   switch (kind) {
@@ -165,6 +169,15 @@ export function outcomeFor(
     }
     case "competitor_profile": {
       const status = String(row.profile_status ?? "");
+      // A full refresh starts from an already-ready row. An old result is
+      // never proof that the newly paid research finished.
+      if (
+        (status === "ready" || status === "failed") &&
+        linkedAt &&
+        (!row.updated_at || new Date(String(row.updated_at)) <= new Date(linkedAt))
+      ) {
+        return linkAgeMs > 24 * HOUR ? { final: true, ok: false } : { final: false };
+      }
       if (status === "ready") return { final: true, ok: true };
       if (status === "failed") return { final: true, ok: false };
       return linkAgeMs > 24 * HOUR ? { final: true, ok: false } : { final: false };
@@ -191,7 +204,7 @@ async function jobRow(kind: AsyncChargeKind, refId: string) {
         // ref_id is "<competitor id>:<request time>".
         return admin
           .from("workspace_competitors")
-          .select("profile_status")
+          .select("profile_status,updated_at")
           .eq("id", refId.split(":")[0]);
       case "brand_voice":
         return admin.from("brand_kit_assets").select("analysis_status").eq("id", refId);
@@ -213,7 +226,7 @@ export async function settleAsyncCharge(kind: AsyncChargeKind, refId: string): P
   if (error || !data) return;
   const link = data as LinkRow;
   if (link.settled_at) return;
-  const outcome = outcomeFor(kind, await jobRow(kind, refId), age(link));
+  const outcome = outcomeFor(kind, await jobRow(kind, refId), age(link), link.created_at);
   if (!outcome.final) return;
   let captured = 0;
   if (outcome.ok) {
@@ -291,7 +304,19 @@ export async function chargeCompetitorProfile(args: {
   role: Role;
   competitorId: string;
   profileStatus: string | null | undefined;
+  requireTracked?: boolean;
 }): Promise<void> {
+  const { data: competitor, error } = await admin
+    .from("workspace_competitors")
+    .select("id,status")
+    .eq("id", args.competitorId)
+    .eq("workspace_id", args.workspaceId)
+    .maybeSingle();
+  if (error) throw new HttpError(503, "Could not verify competitor billing.");
+  if (!competitor) throw new HttpError(404, "Competitor not found.");
+  if (args.requireTracked && competitor.status !== "tracked") {
+    throw new HttpError(404, "Tracked competitor not found.");
+  }
   if (args.profileStatus === "ready" || args.profileStatus === "running") return;
   const requestKey = `${args.competitorId}:${Date.now()}`;
   const charge = await beginAsyncCharge({
