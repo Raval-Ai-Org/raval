@@ -7,7 +7,7 @@
 // _MONTHLY_VIDEOS, _MAX_EXPERIMENTS — so pricing experiments need no deploy.
 import "server-only";
 
-export type PlanId = "starter" | "growth" | "agency";
+export type PlanId = "free" | "starter" | "growth" | "agency" | "scale";
 
 export type PlanLimits = {
   id: PlanId;
@@ -26,6 +26,16 @@ export type PlanLimits = {
 };
 
 const PLANS: Record<PlanId, PlanLimits> = {
+  free: {
+    id: "free",
+    label: "Free",
+    dailyUsd: 1,
+    monthlyUsd: 3,
+    monthlyImages: 0,
+    monthlyVideos: 0,
+    geoMaxPages: 25,
+    maxConcurrentExperiments: 0,
+  },
   starter: {
     id: "starter",
     label: "Starter",
@@ -56,6 +66,16 @@ const PLANS: Record<PlanId, PlanLimits> = {
     geoMaxPages: 300,
     maxConcurrentExperiments: 15,
   },
+  scale: {
+    id: "scale",
+    label: "Scale",
+    dailyUsd: 96,
+    monthlyUsd: 767,
+    monthlyImages: 2_500,
+    monthlyVideos: 100,
+    geoMaxPages: 500,
+    maxConcurrentExperiments: 50,
+  },
 };
 
 /** Spend ceiling for a user acting outside any workspace (USD per UTC day). */
@@ -78,7 +98,9 @@ export function normalizePlanId(plan: string | null | undefined): PlanId {
   if (p === "growth" || p === "pro") return "growth";
   if (p === "agency" || p === "agency-os" || p === "agency_os" || p === "enterprise")
     return "agency";
-  return "starter";
+  if (p === "scale") return "scale";
+  if (p === "starter") return "starter";
+  return "free";
 }
 
 export function getPlanLimits(plan: string | null | undefined): PlanLimits {
