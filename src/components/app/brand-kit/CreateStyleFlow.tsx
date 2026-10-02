@@ -1,8 +1,10 @@
 "use client";
-// CreateStyleFlow — make a new Style in a few steps:
+// CreateStyleFlow — make a new Style:
 //
-//   start → (examples → learning | describe) → finish
+//   examples → learning → finish      (or: describe → finish, or straight to finish)
 //
+// The first screen is the best path (add posts you like) with the other ways
+// to start as quiet buttons under it.
 // Examples are uploaded and studied as soon as they're added, so by the time
 // someone presses Continue most of the work is done. Finish shows the style
 // with its colours, fonts and mood ready to change, and a name to save it under.
@@ -16,10 +18,10 @@ import {
   Brain,
   Check,
   ChevronDown,
-  FileText,
   ImagePlus,
   Link,
   PenLine,
+  Plus,
   Sparkles,
   Spinner,
   Wand,
@@ -29,8 +31,6 @@ import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/bu
 import type { BrandKitOverview, KitAssetView } from "@/lib/brand-kit/contracts";
 import { applySuggestion, markUserEdited, type Suggestion } from "@/lib/brand-kit/merge";
 import {
-  STYLE_FORMATS,
-  STYLE_FORMAT_LABELS,
   emptySpec,
   type StyleFormat,
   type StyleSpec,
@@ -49,7 +49,7 @@ import { MatchControl, MoodChips, swatchGroups } from "./look";
 import { ExampleThumb } from "./StyleEditor";
 import { PostPreview, resolveView, useStyleFonts } from "./preview";
 
-type Step = "start" | "examples" | "learning" | "describe" | "finish";
+type Step = "examples" | "learning" | "describe" | "finish";
 
 const MEDIA_ACCEPT = "image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime";
 
@@ -73,22 +73,20 @@ export function CreateStyleFlow({
   onCancel: () => void;
   onCreated: (styleId: string) => void;
 }) {
-  const [step, setStep] = React.useState<Step>(preselected?.length ? "learning" : "start");
+  const [step, setStep] = React.useState<Step>(preselected?.length ? "learning" : "examples");
   const [assetIds, setAssetIds] = React.useState<string[]>(preselected ?? []);
   const [spec, setSpec] = React.useState<StyleSpec>(emptySpec());
   const [suggestion, setSuggestion] = React.useState<Suggestion | null>(null);
   const [name, setName] = React.useState("");
-  const [appliesTo, setAppliesTo] = React.useState<StyleFormat[]>([]);
+  const appliesTo: StyleFormat[] = [];
   const [makeDefault, setMakeDefault] = React.useState(
     !data.styles.some((s) => s.isDefault && !s.archived),
   );
   const create = useCreateStyle(workspaceId);
 
   const back = () => {
-    if (step === "examples" || step === "describe") setStep("start");
-    else if (step === "learning") setStep("examples");
-    else if (step === "finish")
-      setStep(assetIds.length ? "examples" : suggestion ? "describe" : "start");
+    if (step === "describe" || step === "learning") setStep("examples");
+    else if (step === "finish") setStep(!assetIds.length && suggestion ? "describe" : "examples");
     else onCancel();
   };
 
@@ -110,7 +108,6 @@ export function CreateStyleFlow({
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h3 className="ds-page-title">New style</h3>
-        <StepDots step={step} />
       </div>
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
@@ -120,30 +117,6 @@ export function CreateStyleFlow({
           exit={{ opacity: 0, x: -12 }}
           transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
         >
-          {step === "start" && (
-            <StartStep
-              hasDna={data.dna.hasDna}
-              onPick={(how) => {
-                if (how === "examples") setStep("examples");
-                else if (how === "describe") setStep("describe");
-                else {
-                  const s = emptySpec();
-                  if (how === "blank")
-                    s.inherit = {
-                      colors: false,
-                      fonts: false,
-                      voice: false,
-                      logo: true,
-                      rules: true,
-                    };
-                  setSpec(s);
-                  setSuggestion(null);
-                  setName(how === "dna" ? `${data.dna.brandName ?? "Brand"} default` : "");
-                  setStep("finish");
-                }
-              }}
-            />
-          )}
           {step === "examples" && (
             <ExamplesStep
               workspaceId={workspaceId}
@@ -151,6 +124,22 @@ export function CreateStyleFlow({
               assetIds={assetIds}
               onChange={setAssetIds}
               onNext={() => setStep("learning")}
+              onOther={(how) => {
+                if (how === "describe") return setStep("describe");
+                const s = emptySpec();
+                if (how === "blank")
+                  s.inherit = {
+                    colors: false,
+                    fonts: false,
+                    voice: false,
+                    logo: true,
+                    rules: true,
+                  };
+                setSpec(s);
+                setSuggestion(null);
+                setName(how === "dna" ? `${data.dna.brandName ?? "Brand"} default` : "");
+                setStep("finish");
+              }}
             />
           )}
           {step === "learning" && (
@@ -185,7 +174,6 @@ export function CreateStyleFlow({
               name={name}
               onName={setName}
               appliesTo={appliesTo}
-              onAppliesTo={setAppliesTo}
               makeDefault={makeDefault}
               onMakeDefault={setMakeDefault}
               busy={create.isPending}
@@ -198,104 +186,6 @@ export function CreateStyleFlow({
   );
 }
 
-const STEP_ORDER: Step[] = ["start", "examples", "learning", "finish"];
-function StepDots({ step }: { step: Step }) {
-  const idx = step === "describe" ? 1 : STEP_ORDER.indexOf(step);
-  return (
-    <div className="ml-auto flex items-center gap-1.5" aria-hidden>
-      {STEP_ORDER.map((s, i) => (
-        <span
-          key={s}
-          className={cn(
-            "h-1.5 rounded-full transition-all duration-300",
-            i === idx
-              ? "w-6 bg-primary"
-              : i < idx
-                ? "w-1.5 bg-primary/60"
-                : "w-1.5 bg-[var(--ds-well-bg-hover)]",
-          )}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ── Start ───────────────────────────────────────────────────────────────────
-
-function StartStep({
-  hasDna,
-  onPick,
-}: {
-  hasDna: boolean;
-  onPick: (how: "examples" | "describe" | "dna" | "blank") => void;
-}) {
-  const options = [
-    {
-      id: "examples" as const,
-      icon: ImagePlus,
-      title: "From examples",
-      body: "Upload posts you like. Mellox copies the look.",
-      best: true,
-    },
-    {
-      id: "describe" as const,
-      icon: PenLine,
-      title: "Describe it",
-      body: "Say the look in a sentence.",
-    },
-    ...(hasDna
-      ? [
-          {
-            id: "dna" as const,
-            icon: Brain,
-            title: "From Brand DNA",
-            body: "Use your saved colors and fonts.",
-          },
-        ]
-      : []),
-    {
-      id: "blank" as const,
-      icon: Sparkles,
-      title: "Start blank",
-      body: "Set it up yourself.",
-    },
-  ];
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {options.map((o, i) => (
-        <motion.button
-          key={o.id}
-          type="button"
-          onClick={() => onPick(o.id)}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.05, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className={cn(
-            "ds-tile ds-tile-hover group relative flex min-h-[150px] flex-col items-start gap-3 p-5 text-left",
-            o.best && "ds-glow ring-1 ring-primary/25",
-          )}
-        >
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/12 text-primary transition-transform duration-300 group-hover:scale-110">
-            <o.icon className="h-5 w-5" />
-          </span>
-          <div>
-            <div className="flex items-center gap-2 text-[15px] font-semibold">
-              {o.title}
-              {o.best && (
-                <span className="rounded-full bg-primary px-2 py-0.5 text-[10.5px] font-semibold text-primary-foreground">
-                  Best
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{o.body}</p>
-          </div>
-          <ArrowRight className="absolute right-5 top-5 h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-        </motion.button>
-      ))}
-    </div>
-  );
-}
-
 // ── Examples ────────────────────────────────────────────────────────────────
 
 function ExamplesStep({
@@ -304,12 +194,14 @@ function ExamplesStep({
   assetIds,
   onChange,
   onNext,
+  onOther,
 }: {
   workspaceId: string;
   data: BrandKitOverview;
   assetIds: string[];
   onChange: (ids: string[]) => void;
   onNext: () => void;
+  onOther: (how: "describe" | "dna" | "blank") => void;
 }) {
   const upload = useUploadKitFiles(workspaceId);
   const addSample = useAddWritingSample(workspaceId);
@@ -348,38 +240,89 @@ function ExamplesStep({
     });
   };
 
+  const thumb = (a: KitAssetView) =>
+    a.kind === "writing_sample" ? (
+      <div className="ds-well grid aspect-square place-items-center p-1.5 text-[10px] leading-tight text-muted-foreground">
+        <span className="line-clamp-4">{a.textContent}</span>
+      </div>
+    ) : (
+      <ExampleThumb asset={a} />
+    );
+
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <div className="space-y-4">
-        <DropZone
-          accept={MEDIA_ACCEPT}
-          onFiles={onFiles}
-          busy={upload.isPending}
-          icon={ImagePlus}
-          title="Add posts or videos"
-          hint="3 to 8 that look alike work best"
-        />
-        <Tile className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-[13.5px] font-medium">
-              <FileText className="h-4 w-4 text-primary" /> Writing (optional)
-            </div>
-            <Segmented
-              size="sm"
-              value={mode}
-              onChange={(v) => v && setMode(v)}
-              options={[
-                { value: "text", label: "Text" },
-                { value: "link", label: "Link" },
-              ]}
-            />
+    <div className="mx-auto max-w-[720px] space-y-4">
+      <DropZone
+        accept={MEDIA_ACCEPT}
+        onFiles={onFiles}
+        busy={upload.isPending}
+        icon={ImagePlus}
+        title="Add posts you like"
+        hint="3 to 8 that look alike work best"
+        className="ds-glow min-h-[200px]"
+      />
+
+      {picked.length > 0 && (
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+          {picked.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => onChange(assetIds.filter((x) => x !== a.id))}
+              aria-label="Remove"
+              className="group relative"
+            >
+              {thumb(a)}
+              <span className="absolute inset-0 grid place-items-center rounded-[14px] bg-black/40 text-[11px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+                Remove
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {library.length > 0 && (
+        <details className="group">
+          <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Pick from
+            your kit
+          </summary>
+          <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">
+            {library.slice(0, 18).map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => onChange([...assetIds, a.id])}
+                className="rounded-[14px] transition-transform hover:scale-[1.04]"
+                title={a.label ?? undefined}
+              >
+                {thumb(a)}
+              </button>
+            ))}
           </div>
+        </details>
+      )}
+
+      <details className="group">
+        <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Add writing
+          too
+        </summary>
+        <Tile className="mt-3 space-y-3">
+          <Segmented
+            size="sm"
+            value={mode}
+            onChange={(v) => v && setMode(v)}
+            options={[
+              { value: "text", label: "Text" },
+              { value: "link", label: "Link" },
+            ]}
+          />
           {mode === "text" ? (
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={4}
-              placeholder="Paste captions or posts in the voice you want"
+              placeholder="Paste captions or posts that sound like you"
               className="ds-well w-full resize-none px-4 py-3 text-[13.5px] outline-none placeholder:text-muted-foreground/70"
             />
           ) : (
@@ -402,83 +345,61 @@ function ExamplesStep({
               }
               onClick={addText}
             >
-              {addSample.isPending ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : null} Add
+              {addSample.isPending ? (
+                <Spinner className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Plus className="h-3.5 w-3.5" />
+              )}
+              Add
             </button>
           </div>
         </Tile>
-        {library.length > 0 && (
-          <Tile>
-            <div className="mb-3 text-[13px] font-medium text-muted-foreground">From your kit</div>
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-              {library.slice(0, 18).map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => onChange([...assetIds, a.id])}
-                  className="rounded-[14px] transition-transform hover:scale-[1.04]"
-                  title={a.label ?? undefined}
-                >
-                  {a.kind === "writing_sample" ? (
-                    <div className="ds-well grid aspect-square place-items-center p-1.5 text-[10px] leading-tight text-muted-foreground">
-                      <span className="line-clamp-4">{a.textContent}</span>
-                    </div>
-                  ) : (
-                    <ExampleThumb asset={a} />
-                  )}
-                </button>
-              ))}
-            </div>
-          </Tile>
-        )}
-      </div>
-      <Tile className="flex flex-col gap-3 lg:sticky lg:top-4 lg:self-start">
-        <div className="ds-label">Added ({picked.length})</div>
-        {picked.length ? (
-          <div className="grid grid-cols-3 gap-2">
-            {picked.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => onChange(assetIds.filter((x) => x !== a.id))}
-                title="Remove"
-                className="group relative"
-              >
-                {a.kind === "writing_sample" ? (
-                  <div className="ds-well grid aspect-square place-items-center p-1.5 text-[10px] leading-tight text-muted-foreground">
-                    <span className="line-clamp-4">{a.textContent}</span>
-                  </div>
-                ) : (
-                  <ExampleThumb asset={a} />
-                )}
-                <span className="absolute inset-0 grid place-items-center rounded-[14px] bg-black/40 text-[11px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
-                  Remove
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <button
-          type="button"
-          className={cn(dsPrimaryBtn, "h-10 text-[13px]")}
-          disabled={!picked.length || upload.isPending}
-          onClick={onNext}
-        >
-          Continue <ArrowRight className="h-4 w-4" />
-        </button>
-      </Tile>
+      </details>
+
+      {picked.length > 0 ? (
+        <div className="flex justify-end pt-2">
+          <button
+            type="button"
+            className={cn(dsPrimaryBtn, "h-11 px-6 text-[14px]")}
+            disabled={upload.isPending}
+            onClick={onNext}
+          >
+            Continue <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 pt-2">
+          <span className="mr-1 text-[13px] text-muted-foreground">Or</span>
+          <button
+            type="button"
+            className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
+            onClick={() => onOther("describe")}
+          >
+            <PenLine className="h-4 w-4" /> Describe it
+          </button>
+          {data.dna.hasDna && (
+            <button
+              type="button"
+              className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
+              onClick={() => onOther("dna")}
+            >
+              <Brain className="h-4 w-4" /> Use Brand DNA
+            </button>
+          )}
+          <button
+            type="button"
+            className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
+            onClick={() => onOther("blank")}
+          >
+            <Sparkles className="h-4 w-4" /> Start blank
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Learning ────────────────────────────────────────────────────────────────
-
-const LEARNING_LINES = [
-  "Picking out the colors",
-  "Reading the fonts and layout",
-  "Looking at light and mood",
-  "Listening to the writing voice",
-  "Putting it all together",
-];
 
 function LearningStep({
   workspaceId,
@@ -498,13 +419,7 @@ function LearningStep({
     (a) => (a.analysisStatus === "pending" || a.analysisStatus === "running") && !a.stale,
   );
   const done = items.filter((a) => a.analysisStatus === "done");
-  const [line, setLine] = React.useState(0);
   const started = React.useRef(false);
-
-  React.useEffect(() => {
-    const t = setInterval(() => setLine((n) => (n + 1) % LEARNING_LINES.length), 1800);
-    return () => clearInterval(t);
-  }, []);
 
   React.useEffect(() => {
     if (busy.length || started.current || !items.length) return;
@@ -528,19 +443,9 @@ function LearningStep({
           <Sparkles className="h-6 w-6" />
         </span>
       </div>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={suggest.isPending ? "merge" : line}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          className="text-[16px] font-medium"
-        >
-          {suggest.isPending ? "Putting it all together" : LEARNING_LINES[line]}
-        </motion.div>
-      </AnimatePresence>
+      <div className="text-[16px] font-medium">Reading your examples</div>
       <p className="mt-1 text-[13px] text-muted-foreground">
-        {done.length} of {items.length} studied
+        {done.length} of {items.length}
       </p>
       <div className="mx-auto mt-4 h-1.5 max-w-[320px] overflow-hidden rounded-full bg-[var(--ds-well-bg-hover)]">
         <motion.div
@@ -615,13 +520,13 @@ function DescribeStep({
   return (
     <div className="mx-auto max-w-[680px]">
       <Tile className="ds-glow space-y-4 p-5 sm:p-6">
-        <div className="text-[15px] font-semibold">Describe the look and voice</div>
         <textarea
           autoFocus
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, 2000))}
           rows={5}
-          placeholder="Bright and friendly, flat illustrations, lots of color, short punchy captions with a few emoji"
+          aria-label="Describe the look and voice"
+          placeholder="Describe the look and voice. Bright and friendly, flat illustrations, short punchy captions"
           className="ds-well w-full resize-none px-4 py-3 text-[14px] leading-relaxed outline-none placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-primary/30"
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && text.trim().length >= 8)
@@ -743,7 +648,6 @@ export function FinishStep({
   name,
   onName,
   appliesTo,
-  onAppliesTo,
   makeDefault,
   onMakeDefault,
   busy,
@@ -756,7 +660,6 @@ export function FinishStep({
   name: string;
   onName: (v: string) => void;
   appliesTo: StyleFormat[];
-  onAppliesTo: (v: StyleFormat[]) => void;
   makeDefault: boolean;
   onMakeDefault: (v: boolean) => void;
   busy: boolean;
@@ -832,8 +735,6 @@ export function FinishStep({
     else next[key] = (suggestion?.spec[section] as Record<string, unknown>)[key];
     onSpec({ ...spec, [section]: next });
   };
-  const toggleFormat = (f: StyleFormat) =>
-    onAppliesTo(appliesTo.includes(f) ? appliesTo.filter((x) => x !== f) : [...appliesTo, f]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -905,38 +806,6 @@ export function FinishStep({
                   { value: "none", label: "No text" },
                 ]}
               />
-            </Field>
-            <Field label="Use it for">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => onAppliesTo([])}
-                  className={cn(
-                    "h-9 rounded-full px-4 text-[13px] font-medium transition-all",
-                    !appliesTo.length
-                      ? "bg-primary text-primary-foreground"
-                      : "ds-well text-muted-foreground",
-                  )}
-                >
-                  Everything
-                </button>
-                {STYLE_FORMATS.map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => toggleFormat(f)}
-                    className={cn(
-                      "inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[13px] font-medium transition-all",
-                      appliesTo.includes(f)
-                        ? "bg-primary/15 ring-1 ring-primary/40"
-                        : "ds-well text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {appliesTo.includes(f) && <Check className="h-3.5 w-3.5 text-primary" />}
-                    {STYLE_FORMAT_LABELS[f]}
-                  </button>
-                ))}
-              </div>
             </Field>
             {details.length > 0 && (
               <Field label="What Mellox learned">

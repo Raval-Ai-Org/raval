@@ -158,6 +158,20 @@ approve in the existing review queue), each role-checked for that workspace.
   `autopilot.opportunities` in `INCLUDED_ROUTES`). Each piece costs the normal
   Studio price, held and captured exactly as when a person makes it.
 
+### 9. Beyond posts, and adapting (added 2026-10-03)
+
+- `autopilot_programs.automations` lists recurring work. Each week the plan
+  step queues one `task` action per automation; the runner calls
+  `ports.tasks.run`, which starts the work in the system that owns it
+  (`geo_scan` → `createScan`, idempotent on `autopilot:<actionId>`). Autopilot
+  does not re-implement scanning, fixing or verifying.
+- A finished scan under 85 becomes a `visibility` idea that opens AI Visibility.
+- `summarizeLearnings` (pure) reads the workspace's measured Autopilot posts
+  and writes up to three findings into the next plan prompt and the plan
+  action's result, which the home screen shows.
+- The view carries `readiness` (accounts, Brand DNA, website) so the UI can ask
+  for what is missing instead of failing later.
+
 ## Decisions made with the product owner
 
 The product owner left the design decisions to the implementation. The ones

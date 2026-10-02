@@ -22,7 +22,15 @@ for (const vp of VIEWPORTS) {
         timeout: 30_000,
       });
       await expect(frame.getByText("Brewing know-how")).toBeVisible();
-      for (const row of ["Goal", "Where", "How often", "What", "Who approves", "Weekly limit"]) {
+      for (const row of [
+        "Goal",
+        "Where",
+        "How often",
+        "What",
+        "Who approves",
+        "Also",
+        "Weekly limit",
+      ]) {
         await expect(frame.getByText(row, { exact: true })).toBeVisible();
       }
       await frame.getByRole("button", { name: /How often/ }).click();
@@ -40,6 +48,14 @@ for (const vp of VIEWPORTS) {
       const frame = page.getByTestId("autopilot-lab-frame");
       await expect(frame.getByText("Autopilot is on")).toBeVisible({ timeout: 30_000 });
       await expect(frame.getByText(/1 post needs your OK/)).toBeVisible();
+      // What is missing is asked for, with the button that fixes it.
+      await expect(frame.getByText("Connect your social accounts")).toBeVisible();
+      await frame.getByRole("button", { name: "Connect", exact: true }).click();
+      await expect(page.getByTestId("lab-last")).toContainText('open ["accounts"]');
+      // The pipeline, the weekly AI visibility check and what was learned are on the page.
+      await expect(frame.getByRole("list", { name: "Where your posts are" })).toBeVisible();
+      await expect(frame.getByText("AI visibility", { exact: true })).toBeVisible();
+      await expect(frame.getByText(/reaches about 2.4× more people/)).toBeVisible();
       await frame.getByRole("button", { name: "Review" }).click();
       await frame.getByRole("button", { name: "Approve", exact: true }).click();
       await expect(page.getByTestId("lab-last")).toContainText("decide");

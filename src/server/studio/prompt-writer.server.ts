@@ -25,6 +25,9 @@ import {
   type PromptMode,
 } from "@/lib/studio/prompt-writer";
 import { sections } from "@/lib/studio/prompts";
+import { playbookSection } from "@/lib/studio/playbook";
+import { memorySection } from "@/lib/studio/memory";
+import { TRENDS_RULE, trendLines } from "@/lib/studio/trends";
 import { getTemplate } from "@/lib/studio/templates";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 import { loadStudioContext } from "./context.server";
@@ -82,6 +85,10 @@ export async function writeStudioPrompt(args: {
   const avoid = (args.avoid ?? []).slice(0, 30);
   const signal = pickSignal(signals, avoid);
   const sparks = pickSparks(args.type);
+  const platforms = args.controls?.platforms?.length
+    ? args.controls.platforms
+    : format.defaultPlatforms;
+  const working = trendLines(ctx.socialTrends, platforms, 5);
 
   const system = [
     "You are Mellox, a senior creative strategist and prompt writer for marketing teams.",
@@ -94,7 +101,9 @@ export async function writeStudioPrompt(args: {
     "Make it long, vivid and complete — typically 250–550 words — so nothing is left for the person to figure out. Every line must be specific to this brand and idea; no filler and no generic marketing phrases ('elevate', 'unlock', 'game-changer', 'in today's fast-paced world').",
     "Write in plain, everyday language, matching the spelling style of the brand context.",
     "Never invent statistics, prices, discounts, deadlines, product sizes or specifications, ingredients, customer names, reviews, awards or events. Use only facts present in the brand context or the person's text; otherwise describe things generally.",
-    "Do not repeat or lightly reword anything in the 'Already used' list.",
+    "Do not repeat or lightly reword anything in the 'Already used' list, and do not reuse an opening from 'Already made'.",
+    "Build the description the way the format and platform work today (see 'How this platform and format work'). If 'What is working right now' lists something that suits this brand and idea, write it into the description as a concrete instruction (the structure, the opening, the pacing), without calling it a trend.",
+    "The result must still look and sound like this brand: follow the selected Brand Kit style when one is given.",
     UNTRUSTED_DATA_RULE,
     "Return STRICT JSON only.",
     'Schema: {"title": string (a specific working title, ≤ 70 characters), "prompt": string (the full sectioned description), "why": string (≤ 110 characters: what makes this timely or relevant, citing the signal plainly), "goal": "awareness"|"engagement"|"leads"|"launch"|"education"|"offer"}',
@@ -148,6 +157,13 @@ export async function writeStudioPrompt(args: {
         ? wrapUntrusted("signals", others, { maxChars: 1500, route: "studio.prompt" })
         : "",
     },
+    { label: "How this platform and format work", body: playbookSection(args.type, platforms) },
+    {
+      label: "What is working right now",
+      body: working
+        ? `${TRENDS_RULE}\n${wrapUntrusted("social-trends", working, { maxChars: 2500, route: "studio.prompt" })}`
+        : "",
+    },
     { label: "Creative direction for this one", body: sparks.map((s) => `- ${s}`).join("\n") },
     { label: "Settings", body: describeSettings(args.type, args.controls) },
     { label: "Goal", body: args.goal ? `The person picked the goal: ${args.goal}.` : "" },
@@ -171,6 +187,7 @@ export async function writeStudioPrompt(args: {
         .map((t) => `- ${t}`)
         .join("\n"),
     },
+    { label: "Already made", body: memorySection(ctx.recent) },
     // A per-call token so no two requests are identical upstream.
     { label: "Request", body: `Variation ${Math.random().toString(36).slice(2, 10)}` },
   ]);

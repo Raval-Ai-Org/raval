@@ -33,7 +33,9 @@ export const getAutopilotStatus = createServerFn({ method: "POST" })
     const { requireWorkspaceRole } = await import("@/server/workspace-access.server");
     await requireWorkspaceRole(context, data.workspaceId, "viewer");
     const { isAutopilotEnabled } = await import("@/lib/feature-flags");
-    return { enabled: isAutopilotEnabled(data.workspaceId) };
+    if (!isAutopilotEnabled(data.workspaceId)) return { enabled: false, status: null, waiting: 0 };
+    const { getAutopilotBadge } = await svc();
+    return { enabled: true, ...(await getAutopilotBadge(data.workspaceId)) };
   });
 
 export const getAutopilot = createServerFn({ method: "POST" })

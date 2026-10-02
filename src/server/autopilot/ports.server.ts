@@ -16,6 +16,7 @@ import { estimateCost, type PlanProposal } from "@/lib/autopilot/policy";
 import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
 import { CreateJobSchema, type GoalId, type StudioJob } from "@/lib/studio/jobs";
 import type { StudioType } from "@/lib/studio/formats";
+import { summarizeLearnings, type MeasuredPiece } from "@/lib/autopilot/learn";
 import { underperformers } from "@/lib/studio/performance";
 import { agentsGloballyDisabled } from "@/server/agents/policy";
 import type { WorkspaceRole } from "@/server/api-auth";
@@ -26,10 +27,13 @@ import { runWithScope } from "@/server/request-context";
 import { scheduleForWorkspace } from "@/server/social/schedule.server";
 import { createBilledStudioJob } from "@/server/studio/billed.server";
 import { loadStudioContext } from "@/server/studio/context.server";
+import { trendsFor } from "@/lib/studio/trends";
+import type { PlatformId } from "@/lib/social-platforms";
 import { advanceStudioJob, getJobRow } from "@/server/studio/runner.server";
 import type { AutopilotPorts, ContentLite, JobLite, PlanInput } from "./engine";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
+const NL = String.fromCharCode(10);
 const DAY = 86_400_000;
 
 /** Program goals are the calendar's; Studio has its own, slightly different list. */
@@ -171,7 +175,9 @@ Rules:
 - Do not repeat anything in "Already made".
 - Use only facts found in the brand context or in an opportunity. Never invent statistics, customer names, prices, awards or dates.
 - Use an opportunity only when it truly fits the brand, and at most once.
-- If a slot has a key date, the piece may be about it, but only if it suits the brand.`;
+- If a slot has a key date, the piece may be about it, but only if it suits the brand.
+- Lines starting "Working now" describe formats and openings doing well on a platform. Where one suits the brand and the slot's platform, shape the piece with it and say how in the brief. Never write that something is trending.
+- Each brief must open differently from the others and from anything in "Already made".`;
 
 /** The confirmed brand strategy, so every week follows it without being told again. */
 function strategyBlock(raw: Record<string, unknown>): string {
@@ -210,6 +216,12 @@ function planUser(input: PlanInput, brandText: string, extras: string[]): string
     strategyBlock(program.strategy),
     program.goal_note ? `WHAT THE TEAM ADDED: ${program.goal_note}` : "",
     `BRAND CONTEXT:\n${brandText || "(none saved yet)"}`,
+    input.learnings.length
+      ? [
+          "WHAT YOUR OWN RESULTS SHOW (lean into this):",
+          ...input.learnings.map((l) => "- " + l),
+        ].join(NL)
+      : "",
     extras.length ? `WHAT MELLOX ALREADY KNOWS:\n${extras.join("\n")}` : "",
     `SLOTS:\n${slotLines}`,
     opportunities.length
@@ -272,6 +284,24 @@ Rules:
 
 async function context(workspaceId: string) {
   return loadStudioContext(db, workspaceId, null);
+}
+
+/** Autopilot's own posts that have numbers, for what it learns between weeks. */
+async function measuredPieces(workspaceId: string): Promise<MeasuredPiece[]> {
+  const { data } = await db
+    .from("autopilot_actions")
+    .select("title, platform, content_type, result")
+    .eq("workspace_id", workspaceId)
+    .eq("kind", "content")
+    .eq("status", "measured")
+    .order("updated_at", { ascending: false })
+    .limit(60);
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    title: String(row.title ?? ""),
+    platform: typeof row.platform === "string" ? row.platform : null,
+    contentType: typeof row.content_type === "string" ? row.content_type : null,
+    views: Number(record(record(row.result).metrics).views) || 0,
+  }));
 }
 
 /* ───────────────────────── ports ───────────────────────── */
@@ -431,6 +461,10 @@ export const realPorts: AutopilotPorts = {
   },
 
   plan: {
+    async learnings(workspaceId) {
+      return summarizeLearnings(await measuredPieces(workspaceId));
+    },
+
     async recentTitles(workspaceId) {
       const ctx = await context(workspaceId);
       const { data } = await db
@@ -454,6 +488,14 @@ export const realPorts: AutopilotPorts = {
         ...ctx.performanceSignals.slice(0, 3).map((s) => `Worked recently: ${s}`),
         ...ctx.competitorMoves.slice(0, 3).map((s) => `Competitor move: ${s}`),
         ...ctx.opportunities.slice(0, 3).map((s) => `Market: ${s}`),
+        ...trendsFor(
+          ctx.socialTrends,
+          [...new Set(input.slots.map((s) => s.platform).filter(Boolean))] as PlatformId[],
+          6,
+        ).map(
+          (t) =>
+            `Working now on ${t.platform === "all" ? "every platform" : t.platform}: ${t.title}. ${t.detail}`,
+        ),
       ];
       const out = await runWithScope(
         {
@@ -486,6 +528,43 @@ export const realPorts: AutopilotPorts = {
         });
       }
       return proposals;
+    },
+  },
+
+  tasks: {
+    async run(name, { workspaceId, userId, actionId }) {
+      if (name !== "geo_scan") return { status: "skipped", summary: "Unknown task." };
+      const { data: ws } = await db
+        .from("workspaces")
+        .select("website_url")
+        .eq("id", workspaceId)
+        .maybeSingle();
+      const url = (ws as { website_url?: string | null } | null)?.website_url;
+      if (!url) {
+        return {
+          status: "skipped",
+          summary: "Skipped the AI visibility check: no website is set for this workspace.",
+        };
+      }
+      const { createScan, GeoScanConflictError } = await import("@/server/geo/service.server");
+      try {
+        await runWithScope({ workspaceId, userId, route: "autopilot.run" }, () =>
+          createScan({
+            workspaceId,
+            userId,
+            url,
+            mode: "full",
+            trigger: "scheduled",
+            idempotencyKey: `autopilot:${actionId}`,
+          }),
+        );
+      } catch (error) {
+        if (error instanceof GeoScanConflictError) {
+          return { status: "done", summary: "An AI visibility scan is already running." };
+        }
+        throw error;
+      }
+      return { status: "done", summary: "Started this week's AI visibility scan." };
     },
   },
 
@@ -613,6 +692,29 @@ export const realPorts: AutopilotPorts = {
             date: new Date(now).toISOString(),
           });
         }
+      }
+      // 4. Fixes waiting in AI Visibility after the latest finished scan.
+      const { data: scan } = await db
+        .from("geo_scans")
+        .select("id, overall_score, completed_at")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "succeeded")
+        .not("overall_score", "is", null)
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const latest = scan as { id: string; overall_score: number; completed_at: string } | null;
+      if (latest && latest.overall_score < 85) {
+        candidates.push({
+          kind: "visibility",
+          title: `Your AI visibility score is ${latest.overall_score} out of 100`,
+          summary: "The latest scan found things that stop AI assistants from recommending you.",
+          evidence: [],
+          sourceKind: "geo_scan",
+          sourceId: latest.id,
+          significance: latest.overall_score < 60 ? "major" : "notable",
+          date: latest.completed_at,
+        });
       }
       return candidates;
     },

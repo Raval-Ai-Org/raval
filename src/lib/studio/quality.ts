@@ -1,5 +1,6 @@
 import type { StudioJobOutput, StudioControls } from "./jobs";
 import type { StudioType } from "./formats";
+import { carouselStoryIssue } from "./carousel/story";
 
 const ARTICLE_TARGET = { short: 600, standard: 1100, long: 1800 } as const;
 
@@ -19,8 +20,8 @@ export function studioOutputQualityIssue(
   if (type === "carousel") {
     if (output.slides?.length !== (controls.slideCount ?? 6))
       return "The carousel has the wrong number of slides.";
-    if (output.slides.slice(1, -1).some((slide) => slide.body.trim().length < 25))
-      return "A carousel teaching slide is too thin.";
+    const story = carouselStoryIssue(output.slides);
+    if (story) return story;
   }
   if (type === "article") {
     const target = ARTICLE_TARGET[controls.length ?? "standard"];

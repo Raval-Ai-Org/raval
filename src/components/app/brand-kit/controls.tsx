@@ -42,8 +42,8 @@ export function Field({
   );
 }
 
-/** "Linked to Brand DNA" — when on, the field follows Brand DNA. */
-export function LinkedToggle({
+/** One switch per tab: anything left empty here follows Brand DNA. */
+export function FollowBrand({
   on,
   onChange,
   disabled,
@@ -55,15 +55,39 @@ export function LinkedToggle({
   return (
     <label
       className={cn(
-        "inline-flex cursor-pointer items-center gap-2 rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors",
-        on ? "bg-primary/12 text-foreground" : "text-muted-foreground hover:bg-[var(--ds-well-bg)]",
+        "flex cursor-pointer items-center justify-between gap-3 text-[13px] font-medium",
         disabled && "pointer-events-none opacity-50",
       )}
     >
-      <Link className="h-3.5 w-3.5" />
-      <span>Use Brand DNA</span>
-      <Switch checked={on} onCheckedChange={onChange} disabled={disabled} className="scale-[0.8]" />
+      <span className="inline-flex items-center gap-2">
+        <Link className="h-4 w-4 text-muted-foreground" /> Fill the rest from Brand DNA
+      </span>
+      <Switch checked={on} onCheckedChange={onChange} disabled={disabled} />
     </label>
+  );
+}
+
+/** The rarely needed fields of a tab, closed until asked for. */
+export function MoreOptions({
+  label = "More options",
+  children,
+}: {
+  label?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="ds-tile group">
+      <summary
+        className={cn(
+          "flex cursor-pointer select-none list-none items-center justify-between gap-2 rounded-[20px] px-4 py-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:text-foreground sm:px-5 [&::-webkit-details-marker]:hidden",
+          dsFocus,
+        )}
+      >
+        {label}
+        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="space-y-5 px-4 pb-5 pt-1 sm:px-5">{children}</div>
+    </details>
   );
 }
 

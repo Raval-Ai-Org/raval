@@ -72,7 +72,18 @@ import type {
   StudioJobOutput,
 } from "@/lib/studio/jobs";
 import { invalidateStudioContext, loadStudioContext } from "./context.server";
-import { findSimilarRecent, hasResearchCitation } from "@/lib/studio/novelty";
+import { findRepeatedOpening, findSimilarRecent, hasResearchCitation } from "@/lib/studio/novelty";
+import { pickHookStyle } from "@/lib/studio/memory";
+import { normalizeSlides, pickCarouselStructure } from "@/lib/studio/carousel/story";
+import {
+  carouselTheme,
+  pickCarouselDesign,
+  safeDesign,
+  safeTheme,
+} from "@/lib/studio/carousel/design";
+import { paletteFromDnaColors } from "@/lib/brand-kit/resolve";
+import type { CarouselSpecOutput } from "@/lib/studio/jobs";
+import { storeCarouselSlides } from "./carousel-assets.server";
 import { studioOutputQualityIssue } from "@/lib/studio/quality";
 import { reviewGeneratedImage } from "./image-review.server";
 
@@ -275,7 +286,11 @@ function draftRows(type: StudioType, output: StudioJobOutput, platforms: Platfor
         channel: channelForPlatform(v.platform),
         body: v.body,
         hashtags: v.hashtags,
-        meta: { platform: v.platform, slides: output.slides ?? [] },
+        meta: {
+          platform: v.platform,
+          slides: output.slides ?? [],
+          ...(output.carousel ? { carousel: output.carousel } : {}),
+        },
       }));
     case "ad":
       return platforms.map((p) => ({
@@ -572,6 +587,84 @@ async function loadJobStyle(
   }
 }
 
+/* ───────────────────────── carousel look ───────────────────────── */
+
+function siteLabel(website: string | null | undefined): string | undefined {
+  if (!website) return undefined;
+  try {
+    const host = new URL(/^https?:\/\//i.test(website) ? website : `https://${website}`).hostname;
+    return host.replace(/^www\./, "").slice(0, 60) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * How this carousel looks. A revision keeps the look its draft had; a new
+ * carousel keeps the brand's layout and takes a colourway and motif the last
+ * carousel didn't use, so the profile is consistent without repeating itself.
+ */
+function carouselSpec(args: {
+  job: JobRow;
+  input: CreateJobInput;
+  ctx: StudioContext;
+  dna: Record<string, unknown> | null;
+  parent: JobRow | null;
+  structure: string;
+  ratio: AspectRatio;
+}): CarouselSpecOutput {
+  const { job, input, ctx, dna, parent } = args;
+  const brand = ctx.brandName.slice(0, 60);
+  const site = siteLabel(ctx.website);
+  const kept = parent?.output?.carousel;
+  const keptDesign = safeDesign(kept?.design);
+  const keptTheme = safeTheme(kept?.theme);
+  if (input.refine && keptDesign && keptTheme) {
+    return { ...kept, design: keptDesign, theme: keptTheme, brand, site, ratio: args.ratio };
+  }
+  const palette = ctx.style
+    ? ctx.style.visual.palette
+    : paletteFromDnaColors((dna?.colors as never) ?? null);
+  const dnaFonts = Array.isArray(dna?.fonts) ? (dna.fonts as string[]) : [];
+  const fonts = ctx.style?.visual.typography ?? {
+    heading: dnaFonts[0],
+    body: dnaFonts[1] ?? dnaFonts[0],
+  };
+  const design = pickCarouselDesign({
+    profileKey: `${job.workspace_id}:${ctx.style?.styleId ?? "brand"}`,
+    seed: input.idempotencyKey,
+    previous: ctx.recent.filter((r) => r.type === "carousel" && r.design).map((r) => r.design),
+    palette,
+  });
+  return {
+    structure: args.structure,
+    design,
+    theme: carouselTheme({ palette, fonts, colorway: design.colorway }),
+    brand,
+    site,
+    ratio: args.ratio,
+  };
+}
+
+/** Draw and store the slide images. Never fails the job: the copy is still good. */
+async function finishCarousel(
+  job: Pick<JobRow, "workspace_id" | "content_item_ids">,
+  output: StudioJobOutput,
+): Promise<string | null> {
+  if (!output.slides?.length || !output.carousel) return null;
+  const cover = output.media?.find((m) => m.status === "ready" && m.kind === "image");
+  const stored = await storeCarouselSlides({
+    workspaceId: job.workspace_id,
+    contentItemIds: job.content_item_ids,
+    slides: output.slides,
+    spec: output.carousel,
+    coverPath: cover?.storagePath ?? null,
+  });
+  return stored
+    ? null
+    : "The slides were saved as text, but their images could not be made. Open the carousel and save it to try again.";
+}
+
 /* ───────────────────────── media ───────────────────────── */
 
 function brandLite(brand: CreateJobInput["brand"]): BrandDnaLite | null {
@@ -728,7 +821,16 @@ async function startMedia(args: {
     ratio,
     seed,
     variationKey,
-    extra: [refineNote, noveltyNote].filter(Boolean).join("\n\n"),
+    extra: [
+      // The cover headline is drawn over this picture by the slide design.
+      job.type === "carousel"
+        ? "This picture is the background of a carousel cover. NO text, letters, numbers or logos anywhere in it, whatever the rules above allow. Keep the lower half calm and uncluttered so a headline can sit on it, with the subject in the upper half."
+        : "",
+      refineNote,
+      noveltyNote,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     style: ctx.style
       ? imageStyleInput(ctx.style, args.referenceUrl ? 0 : referenceAssets.length)
       : null,
@@ -919,6 +1021,23 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     ctx.recent.map((r) => r.angle),
     input.refine ? ANGLE_ID(previousAngle) : undefined,
   );
+  // A new piece opens in a way the last few didn't; a revision keeps its opening.
+  const hook = input.refine
+    ? undefined
+    : pickHookStyle(
+        input.idempotencyKey,
+        ctx.recent.map((r) => r.hookStyle),
+      );
+  const carouselStructure =
+    type === "carousel"
+      ? pickCarouselStructure({
+          seed: input.idempotencyKey,
+          angleId: angle.id,
+          template: input.intent.template,
+          recent: ctx.recent.filter((r) => r.type === "carousel").map((r) => r.structure),
+          preferred: input.refine ? parent?.output?.carousel?.structure : undefined,
+        })
+      : undefined;
 
   let output: StudioJobOutput = { ...(parent?.output ?? {}) };
   const partial: { target: string; error: string }[] = [];
@@ -933,12 +1052,15 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       intent: input.intent,
       controls,
       angle,
+      hook,
+      carouselStructure,
       refine: input.refine,
       current: parent?.output,
     });
     if (firstStage !== "writing" && format.stages.some((s) => s.id === "writing")) {
       await setStage(client, job.id, "writing");
     }
+    let rejected: string | null = null;
     for (let attempt = 0; attempt < 2; attempt++) {
       partial.length = 0;
       const parsed = (await runStructuredPrompt({
@@ -947,7 +1069,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         user:
           attempt === 0
             ? built.user
-            : `${built.user}\n\n## Required correction\nThe previous candidate was incomplete, repeated recent work, or omitted an available research citation. Meet the requested format and length exactly. Choose a different audience question, hook, example, structure and visual concept. If current web research is supplied, cite its exact URL beside the relevant article claim. Keep the user's brief and verified brand facts.`,
+            : `${built.user}\n\n## Required correction\nThe previous candidate was rejected: ${rejected ?? "it was incomplete or repeated recent work"} Meet the requested format and length exactly. Choose a different audience question, opening line, example, structure and visual concept from anything listed as already made. If current web research is supplied, cite its exact URL beside the relevant article claim. Keep the user's brief and verified brand facts.`,
         schema: built.schema as never,
         maxTokens: built.maxTokens,
         temperature: built.temperature,
@@ -962,9 +1084,13 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         ctx,
         input,
         angle,
+        hook,
         partial,
       });
       const similar = input.refine ? null : findSimilarRecent(type, candidate, ctx.recent);
+      // Same opening as an earlier piece: worth one more try, never a failure.
+      const repeatedOpening =
+        input.refine || attempt === 1 ? null : findRepeatedOpening(candidate, ctx.recent);
       const qualityIssue = input.refine
         ? null
         : studioOutputQualityIssue(type, candidate, controls, platforms.length);
@@ -975,10 +1101,17 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
           candidate.article?.markdown ?? "",
           ctx.liveResearch.sources.map((s) => s.url),
         );
-      if (!similar && !uncitedResearch && !qualityIssue) {
+      if (!similar && !uncitedResearch && !qualityIssue && !repeatedOpening) {
         output = candidate;
         break;
       }
+      rejected = qualityIssue
+        ? qualityIssue
+        : uncitedResearch
+          ? "It did not cite the research it was given."
+          : similar
+            ? `It was too close to “${similar.title}”.`
+            : `It opened the same way as “${repeatedOpening!.opening}”.`;
       if (attempt === 1 && qualityIssue)
         throw new StudioJobError(502, `${qualityIssue} Try again with a clearer brief.`);
       if (attempt === 1 && uncitedResearch)
@@ -1019,6 +1152,20 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     output = mergeAddedPlatforms(parent.output, output, platforms);
   }
   const title = (output.title || input.intent.brief).slice(0, 120);
+  if (type === "carousel" && output.slides?.length) {
+    output = {
+      ...output,
+      carousel: carouselSpec({
+        job,
+        input,
+        ctx,
+        dna: base.brand,
+        parent,
+        structure: carouselStructure?.id ?? "list",
+        ratio: mediaRatio(type, input, platforms),
+      }),
+    };
+  }
 
   // Drafts before rendering so the asset can link to them.
   const polishStage: StageId = format.stages.some((s) => s.id === "polish") ? "polish" : "save";
@@ -1031,6 +1178,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       rows,
       {
         angle: angle.id,
+        ...(hook ? { hook_style: hook.id } : {}),
         intent_goal: input.intent.goal ?? null,
         idea_id: input.intent.ideaId ?? null,
         template: input.intent.template ?? null,
@@ -1096,6 +1244,12 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     }
   }
 
+  // No cover picture to wait for: the slides can be drawn now.
+  if (type === "carousel") {
+    const warning = await finishCarousel(job, output);
+    if (warning) output = { ...output, warnings: [...(output.warnings ?? []), warning] };
+  }
+
   await patchJob(client, job.id, {
     status: "succeeded",
     stage: "polish",
@@ -1136,6 +1290,7 @@ async function shapeOutput(args: {
   ctx: StudioContext;
   input: CreateJobInput;
   angle: Angle;
+  hook?: ReturnType<typeof pickHookStyle>;
   partial: { target: string; error: string }[];
 }): Promise<StudioJobOutput> {
   const { client, job, type, parsed, platforms, ctx, input, angle, partial } = args;
@@ -1159,7 +1314,7 @@ async function shapeOutput(args: {
       const hashtags = (parsed.hashtags as string[]) ?? [];
       return {
         title,
-        slides: parsed.slides as StudioJobOutput["slides"],
+        slides: normalizeSlides(parsed.slides, input.controls.slideCount ?? 6),
         variants: platforms.map((p) => finalizeVariant(p, { title, body: caption, hashtags })),
       };
     }
@@ -1219,6 +1374,7 @@ async function shapeOutput(args: {
         intent: input.intent,
         controls: { ...input.controls, platforms },
         angle,
+        hook: args.hook,
         visual,
       });
       let variants: StudioJobOutput["variants"] = [];
@@ -1467,6 +1623,14 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           ].filter(Boolean),
         },
       });
+      // The cover picture is in (or failed): draw the slides around it.
+      if (row.type === "carousel") {
+        const warning = await finishCarousel(row, { ...row.output, media });
+        if (warning) {
+          const done = patch.output as StudioJobOutput;
+          patch.output = { ...done, warnings: [...new Set([...(done.warnings ?? []), warning])] };
+        }
+      }
       await revealDrafts(c, row.workspace_id, row.content_item_ids, !!row.input?.approve);
       await retireSourceDraft(c, row.workspace_id, row.input?.fromContentId, row.id);
     }

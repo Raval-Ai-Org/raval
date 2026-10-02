@@ -178,6 +178,16 @@ describeLive("Autopilot (live)", () => {
     const events = await store.listEvents(workspaceId, 20);
     expect(events.some((e) => e.kind === "plan_ready" && e.program_id === programId)).toBe(true);
 
+    // The week's other work is queued once, and the view says what still needs connecting.
+    const tasks = mine.filter((a) => a.kind === "task");
+    expect(tasks.map((t) => t.content_type)).toEqual(["geo_scan"]);
+    const { getAutopilotView } = await import("@/server/autopilot/service.server");
+    const view = await getAutopilotView({ workspaceId, userId: ownerId, role: "owner" });
+    expect(view.program?.id).toBe(programId);
+    expect(view.readiness.map((r) => r.id).sort()).toEqual(["accounts", "brand", "website"]);
+    expect(view.proposed.length).toBe(pieces.length);
+    expect(view.tasks).toHaveLength(1);
+
     // Planning the same week again adds no second set of pieces.
     const again = await store.insertActions(
       pieces.map((a) => ({

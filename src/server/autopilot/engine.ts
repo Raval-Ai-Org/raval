@@ -164,7 +164,8 @@ export interface AutopilotStore {
       | "pause_reason"
       | "strategy"
       | "last_notified_at"
-    > & { strategy?: Record<string, unknown> },
+      | "automations"
+    > & { strategy?: Record<string, unknown>; automations?: string[] },
   ): Promise<ProgramRow>;
   updateProgram(
     id: string,
@@ -221,6 +222,8 @@ export type PlanInput = {
   slots: CycleSlot[];
   opportunities: OpportunityRow[];
   recentTitles: string[];
+  /** What earlier results showed, in plain sentences. */
+  learnings: string[];
 };
 
 export interface AutopilotPorts {
@@ -269,7 +272,17 @@ export interface AutopilotPorts {
 
   plan: {
     recentTitles(workspaceId: string): Promise<string[]>;
+    /** What this workspace's own measured posts show so far. */
+    learnings(workspaceId: string): Promise<string[]>;
     propose(input: PlanInput): Promise<PlanProposal[]>;
+  };
+
+  /** Recurring work done by other Mellox systems (for example the AI visibility scan). */
+  tasks: {
+    run(
+      name: string,
+      args: { workspaceId: string; userId: string; actionId: string },
+    ): Promise<{ status: "done" | "skipped"; summary: string }>;
   };
 
   scan: {
@@ -507,6 +520,7 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
     return;
   }
 
+  let learnings: string[] = [];
   const slots = cycleSlots(program, cycle, now);
   let planned = 0;
   let droppedCount = 0;
@@ -516,7 +530,14 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
       limit: 5,
     });
     const recentTitles = await ports.plan.recentTitles(program.workspace_id);
-    const proposals = await ports.plan.propose({ program, slots, opportunities, recentTitles });
+    learnings = await ports.plan.learnings(program.workspace_id).catch(() => []);
+    const proposals = await ports.plan.propose({
+      program,
+      slots,
+      opportunities,
+      recentTitles,
+      learnings,
+    });
     const usage = await store.usage(program.id, cycle);
     const verdict = planVerdict({
       slots,
@@ -556,6 +577,21 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
     }
   }
 
+  // This week's recurring work beyond posts (for example the AI visibility check).
+  await store.insertActions(
+    program.automations.map((name) => ({
+      workspace_id: program.workspace_id,
+      program_id: program.id,
+      kind: "task" as const,
+      status: "planned" as const,
+      dedupe_key: `task:${program.id}:${cycle}:${name}`,
+      cycle,
+      content_type: name,
+      title: TASK_TITLE[name] ?? name,
+      next_attempt_at: now.toISOString(),
+    })),
+  );
+
   // Next week's plan, two days before that week starts.
   const nextStart = cycleStart(program, cycle + 1);
   if (nextStart <= program.ends_on) {
@@ -583,7 +619,7 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
     ctx,
     action,
     "done",
-    { result: { planned, dropped: droppedCount }, finished_at: now.toISOString() },
+    { result: { planned, dropped: droppedCount, learnings }, finished_at: now.toISOString() },
     {
       kind: "plan_ready",
       summary:
@@ -596,6 +632,34 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
     },
   );
   if (planned === 0) await maybeComplete(ctx, program);
+}
+
+/* ───────────────────────── tasks ───────────────────────── */
+
+const TASK_TITLE: Record<string, string> = {
+  geo_scan: "Check AI visibility",
+};
+
+async function runTask(ctx: Ctx, action: ActionRow, actor: Actor): Promise<void> {
+  const now = ctx.ports.now();
+  const out = await ctx.ports.tasks.run(action.content_type ?? "", {
+    workspaceId: action.workspace_id,
+    userId: actor.userId,
+    actionId: action.id,
+  });
+  await finish(
+    ctx,
+    action,
+    out.status,
+    {
+      finished_at: now.toISOString(),
+      last_error: out.status === "skipped" ? out.summary.slice(0, 480) : null,
+    },
+    {
+      kind: out.status === "done" ? "task_done" : "task_skipped",
+      summary: out.summary.slice(0, 480),
+    },
+  );
 }
 
 /* ───────────────────────── scan ───────────────────────── */
@@ -627,20 +691,26 @@ async function runScan(ctx: Ctx, action: ActionRow): Promise<void> {
   });
 
   // A drop in the workspace's own numbers needs no model to be relevant.
-  for (const candidate of candidates.filter((c) => c.kind === "performance")) {
+  const internal = (c: Candidate) => c.kind === "performance" || c.kind === "visibility";
+  for (const candidate of candidates.filter(internal)) {
+    const visibility = candidate.kind === "visibility";
     const { score, parts } = scoreOpportunity(candidate, 75, now);
     rows.push({
       ...base(candidate),
-      why_relevant: "These posts reached far fewer people than your usual.",
-      suggested_action: "Try a different angle or format on this channel.",
+      why_relevant: visibility
+        ? "AI assistants can only recommend what they can read and trust."
+        : "These posts reached far fewer people than your usual.",
+      suggested_action: visibility
+        ? "Open AI Visibility and apply the fixes?"
+        : "Try a different angle or format on this channel.",
       suggested_type: "social",
-      suggested_platforms: candidate.sourceId ? [candidate.sourceId] : [],
+      suggested_platforms: !visibility && candidate.sourceId ? [candidate.sourceId] : [],
       score,
       score_parts: parts,
     });
   }
 
-  const external = candidates.filter((c) => c.kind !== "performance");
+  const external = candidates.filter((c) => !internal(c));
   if (external.length) {
     const ratings = await ports.scan.rate(workspaceId, external);
     const grounded = new Map<string, boolean>();
@@ -688,7 +758,13 @@ async function runScan(ctx: Ctx, action: ActionRow): Promise<void> {
     let room = AUTO_ACT_PER_WEEK - (await store.autoActedInCycle(program.id, cycle));
     for (const opportunity of [...inserted].sort((a, b) => b.score - a.score)) {
       if (room <= 0) break;
-      if (opportunity.kind === "performance" || opportunity.score < AUTO_ACT_SCORE) continue;
+      if (
+        opportunity.kind === "performance" ||
+        opportunity.kind === "visibility" ||
+        opportunity.score < AUTO_ACT_SCORE
+      ) {
+        continue;
+      }
       const format = (
         opportunity.suggested_type === "campaign" ? "social" : opportunity.suggested_type
       ) as OpportunityFormat;
@@ -1253,6 +1329,7 @@ export async function advance(ctx: Ctx, action: ActionRow): Promise<void> {
   }
 
   if (action.kind === "plan") return runPlan(ctx, action, program!);
+  if (action.kind === "task") return runTask(ctx, action, actor);
 
   switch (action.status) {
     case "planned":
@@ -1277,6 +1354,7 @@ export type SweepResult = { claimed: number; advanced: number; failed: number; d
 
 /** Steps that spend money or take a while; at most one per workspace per sweep. */
 function isHeavy(action: ActionRow): boolean {
+  if (action.kind === "task") return false;
   return action.kind !== "content" || action.status === "planned";
 }
 

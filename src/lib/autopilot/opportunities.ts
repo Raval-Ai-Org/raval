@@ -47,6 +47,7 @@ const HORIZON_DAYS: Record<OpportunityKind, number> = {
   trend: 30,
   customer: 30,
   performance: 14,
+  visibility: 21,
 };
 
 const SHELF_DAYS: Record<OpportunityKind, number> = {
@@ -55,6 +56,7 @@ const SHELF_DAYS: Record<OpportunityKind, number> = {
   trend: 14,
   customer: 14,
   performance: 10,
+  visibility: 10,
 };
 
 export function isStale(candidate: Pick<Candidate, "kind" | "date">, now: Date): boolean {
@@ -104,7 +106,8 @@ export function filterCandidates(
     const evidence = raw.evidence.filter((e) => e.url && !isLowQualitySource(e.url));
     const candidate = { ...raw, evidence };
     // A claim from the web carries its link, or it is not shown.
-    if (candidate.kind !== "performance" && evidence.length === 0) continue;
+    const internal = candidate.kind === "performance" || candidate.kind === "visibility";
+    if (!internal && evidence.length === 0) continue;
     if (candidate.title.trim().length < 6) continue;
     if (isStale(candidate, opts.now)) continue;
     const fp = candidateFingerprint(candidate);

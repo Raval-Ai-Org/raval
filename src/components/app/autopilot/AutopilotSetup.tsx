@@ -10,12 +10,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { SurfacePage, Tile } from "@/components/app/surface/SurfaceLayout";
 import {
+  AUTOMATION_INFO,
+  AUTOMATIONS,
   AUTOPILOT_MODES,
   AUTOPILOT_TYPES,
   MODE_INFO,
   type AutopilotMode,
   type ProgramSettings,
   type ProgramView,
+  type ReadinessItem,
   type Strategy,
   type StrategySuggestion,
 } from "@/lib/autopilot/contracts";
@@ -24,6 +27,7 @@ import { PLAN_GOALS } from "@/lib/calendar/planner";
 import { PLATFORM_ORDER, PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import { Chip } from "./autopilot-ui";
+import { Readiness } from "./Readiness";
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -70,6 +74,7 @@ export function settingsFromProgram(program: ProgramView): ProgramSettings {
     actOnOpportunities: program.actOnOpportunities,
     styleId: program.styleId,
     strategy: program.strategy,
+    automations: program.automations,
   };
 }
 
@@ -139,7 +144,7 @@ export function StrategyCard({
 
 /* ───────────────────────── setting rows ───────────────────────── */
 
-type RowId = "goal" | "where" | "pace" | "what" | "mode" | "limit";
+type RowId = "goal" | "where" | "pace" | "what" | "mode" | "also" | "limit";
 
 function Row({
   id,
@@ -475,6 +480,36 @@ export function SettingRows({
         </Row>
 
         <Row
+          id="also"
+          open={open === "also"}
+          onToggle={toggleRow}
+          label="Also"
+          value={
+            s.automations.length
+              ? s.automations.map((a) => AUTOMATION_INFO[a].label).join(", ")
+              : "Posts only"
+          }
+        >
+          {AUTOMATIONS.map((a) => (
+            <label key={a} className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={s.automations.includes(a)}
+                onChange={() => set("automations", toggle(s.automations, a))}
+                className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
+              />
+              <span>
+                <span className="block text-[13.5px] font-medium">{AUTOMATION_INFO[a].label}</span>
+                <span className="block text-[12.5px] text-muted-foreground">
+                  {AUTOMATION_INFO[a].detail}
+                </span>
+              </span>
+            </label>
+          ))}
+          <Hint>Market and competitor watching is always on and feeds your ideas.</Hint>
+        </Row>
+
+        <Row
           id="limit"
           open={open === "limit"}
           onToggle={toggleRow}
@@ -523,12 +558,16 @@ export function AutopilotSetup({
   fullAvailable,
   busy,
   onStart,
+  readiness,
+  onOpen,
 }: {
   suggestion: SuggestionState;
   connected: PlatformId[];
   fullAvailable: boolean;
   busy: boolean;
   onStart: (settings: ProgramSettings) => void;
+  readiness: ReadinessItem[];
+  onOpen: (target: ReadinessItem["id"]) => void;
 }) {
   const [s, setS] = useState<ProgramSettings | null>(suggestion.data?.settings ?? null);
   useEffect(() => {
@@ -546,8 +585,7 @@ export function AutopilotSetup({
           Let Mellox run your marketing
         </h3>
         <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted-foreground">
-          Set it up once. Mellox plans the week, writes the posts and sends them out, and keeps
-          going until you tell it to stop.
+          Set it up once. Mellox plans, writes, posts and learns, every week.
         </p>
 
         {!s || !suggestion.data ? (
@@ -576,6 +614,12 @@ export function AutopilotSetup({
                 }
               />
             </div>
+            {readiness.some((r) => !r.ok) && (
+              <>
+                <p className="ds-label mb-2.5 mt-6">Connect first</p>
+                <Readiness items={readiness} onOpen={onOpen} />
+              </>
+            )}
             <p className="ds-label mb-2.5 mt-6">How it will run</p>
             <SettingRows
               s={s}

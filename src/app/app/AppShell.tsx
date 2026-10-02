@@ -470,6 +470,25 @@ function AppShell() {
 
         {/* Workspace actions */}
         <SidebarSection label="Workspace">
+          {autopilot?.enabled &&
+            sidebarAction({
+              icon: Bot,
+              label: "Autopilot",
+              hint:
+                autopilot.status === "running"
+                  ? autopilot.waiting
+                    ? `${autopilot.waiting} to approve`
+                    : "On"
+                  : autopilot.status === "paused"
+                    ? "Paused"
+                    : "Set up once",
+              accent: "hsl(var(--brand-green))",
+              feature: "autopilot",
+              onClick: () => {
+                navigate({ to: workspacePath(workspaceId, "autopilot") });
+                setNavOpen(false);
+              },
+            })}
           {sidebarAction({
             icon: BarChart3,
             label: "Analytics",
@@ -483,18 +502,6 @@ function AppShell() {
             accent: "hsl(var(--brand-blue))",
             onClick: () => emitAppEvent("open:content-calendar"),
           })}
-          {autopilot?.enabled &&
-            sidebarAction({
-              icon: Bot,
-              label: "Autopilot",
-              hint: "Runs your plan",
-              accent: "hsl(var(--brand-green))",
-              feature: "autopilot",
-              onClick: () => {
-                navigate({ to: workspacePath(workspaceId, "autopilot") });
-                setNavOpen(false);
-              },
-            })}
         </SidebarSection>
 
         <div className="h-px bg-border/50" />

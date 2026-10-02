@@ -1542,6 +1542,7 @@ export type Database = {
         Row: {
           act_on_opportunities: boolean;
           acting_user_id: string | null;
+          automations: string[];
           content_types: string[];
           created_at: string;
           created_by: string | null;
@@ -1570,6 +1571,7 @@ export type Database = {
         Insert: {
           act_on_opportunities?: boolean;
           acting_user_id?: string | null;
+          automations?: string[];
           content_types?: string[];
           created_at?: string;
           created_by?: string | null;
@@ -1598,6 +1600,7 @@ export type Database = {
         Update: {
           act_on_opportunities?: boolean;
           acting_user_id?: string | null;
+          automations?: string[];
           content_types?: string[];
           created_at?: string;
           created_by?: string | null;

@@ -11,6 +11,8 @@ import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
 import { upcomingMoments } from "@/lib/studio/moments";
 import type { StudioContext } from "@/lib/studio/prompts";
 import { recentPerformanceSignals } from "@/lib/studio/performance";
+import { openingLine } from "@/lib/studio/memory";
+import { getSocialTrends } from "./social-trends.server";
 
 type WorkspaceSnapshot = Omit<StudioContext, "brandText" | "brandName" | "moments" | "today"> & {
   name: string;
@@ -154,6 +156,19 @@ async function loadWorkspaceSnapshot(
         angle: str(meta.angle),
         status: str(r.status),
         createdAt: String(r.created_at ?? ""),
+        // What a reader saw first: a carousel's cover, else the first line.
+        hook:
+          (Array.isArray(meta.slides) ? str(record(meta.slides[0]).heading) : null) ??
+          (openingLine(str(r.body)) || undefined),
+        hookStyle: str(meta.hook_style),
+        structure: str(record(meta.carousel).structure),
+        design: meta.carousel
+          ? {
+              colorway: str(record(record(meta.carousel).design).colorway) ?? undefined,
+              motif: str(record(record(meta.carousel).design).motif) ?? undefined,
+            }
+          : null,
+        sample: str(r.body)?.slice(0, 500),
         excerpt: (
           str(meta.concept) ??
           (Array.isArray(meta.slides)
@@ -213,9 +228,11 @@ export async function loadStudioContext(
   workspaceId: string,
   brand: Record<string, unknown> | null | undefined,
 ): Promise<StudioContext & { brand: Record<string, unknown> | null }> {
-  const [snapshot, stored] = await Promise.all([
+  const [snapshot, stored, socialTrends] = await Promise.all([
     loadWorkspaceSnapshot(db, workspaceId),
     settle(readBrandDna(db, workspaceId), null, "brand dna"),
+    // The stored snapshot only; a job never searches for trends itself.
+    getSocialTrends(),
   ]);
   const storedDna = stored && Object.keys(stored.dna).length ? stored.dna : null;
   const dna = (storedDna ?? brand ?? null) as BrandCtxDna | null;
@@ -236,6 +253,7 @@ export async function loadStudioContext(
     brandName: str(dna?.brandName) ?? name,
     brandText: `${brandText}${insightsBlock}`.trim(),
     today: new Date().toISOString().slice(0, 10),
+    socialTrends,
     moments: upcomingMoments(new Date(), { limit: 4 }),
   };
 }

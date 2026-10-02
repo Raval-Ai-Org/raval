@@ -31,6 +31,8 @@ type World = {
   relevance: number;
   createError: Error | null;
   scheduleReason: string | null;
+  learnings: string[];
+  tasksRun: string[];
 };
 
 function world(): World {
@@ -49,6 +51,8 @@ function world(): World {
     relevance: 90,
     createError: null as Error | null,
     scheduleReason: null as string | null,
+    learnings: [] as string[],
+    tasksRun: [] as string[],
   } as World;
   w.store = createMemoryAutopilotStore(() => w.clock);
   let n = 0;
@@ -118,6 +122,7 @@ function world(): World {
     },
     plan: {
       recentTitles: async () => [],
+      learnings: async () => w.learnings,
       propose: async ({ slots }) =>
         slots.map((s, i) => ({
           slot: s.index,
@@ -130,6 +135,12 @@ function world(): World {
           brief: "Explain the problem our customers face and show the one step that fixes it.",
           reason: "Buyers ask about this.",
         })),
+    },
+    tasks: {
+      run: async (name) => {
+        w.tasksRun.push(name);
+        return { status: "done", summary: "Started the scan." };
+      },
     },
     scan: {
       collect: async () => w.candidates,
@@ -226,6 +237,27 @@ describe("plan", () => {
     expect(w.store.actions.some((a) => a.dedupe_key === `plan:${p.id}:2`)).toBe(true);
     expect(w.store.events.some((e) => e.kind === "plan_ready")).toBe(true);
     expect(w.created).toHaveLength(0);
+  });
+
+  it("starts the week's other work (the AI visibility check) once, and passes on what it learned", async () => {
+    const p = await program(w);
+    w.learnings = ["LinkedIn reaches about 2× more people than Instagram."];
+    await w.store.insertActions([
+      { workspace_id: WS, program_id: p.id, kind: "plan", dedupe_key: `plan:${p.id}:1`, cycle: 1 },
+    ]);
+    await sweep(w);
+    const plan = w.store.actions.find((a) => a.kind === "plan" && a.cycle === 1)!;
+    expect(plan.result.learnings).toEqual(w.learnings);
+    const tasks = w.store.actions.filter((a) => a.kind === "task");
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].content_type).toBe("geo_scan");
+
+    tick(w, 2);
+    await sweep(w);
+    await sweep(w);
+    expect(w.tasksRun).toEqual(["geo_scan"]);
+    expect(tasks[0].status).toBe("done");
+    expect(w.store.events.some((e) => e.kind === "task_done")).toBe(true);
   });
 
   it("in Assist mode makes nothing until the plan is approved", async () => {

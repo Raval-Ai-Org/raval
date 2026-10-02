@@ -3,13 +3,15 @@
 // Autopilot — everything a person sees, drawn from one view object and a set
 // of handlers. It holds no data of its own, so the real panel and the dev-only
 // lab page render exactly the same screen.
-import { useMemo, useState } from "react";
+import { useState, type ReactNode } from "react";
+import { motion, MotionConfig } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   Bot,
   Check,
   ExternalLink,
+  Eye,
   History,
   Lightbulb,
   ListChecks,
@@ -17,6 +19,7 @@ import {
   Play,
   RotateCcw,
   Settings,
+  TrendingUp,
   X,
 } from "@/components/icons";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -29,9 +32,7 @@ import {
   type SurfaceNavItem,
 } from "@/components/app/surface/SurfaceLayout";
 import {
-  MODE_INFO,
   OPPORTUNITY_FORMATS,
-  type ActionView,
   type AutopilotView,
   type OpportunityFormat,
   type OpportunityView,
@@ -51,7 +52,6 @@ import {
 import {
   ActionLine,
   Chip,
-  dayLabel,
   Dot,
   KIND_LABEL,
   pieceLabel,
@@ -59,6 +59,10 @@ import {
   timeAgo,
   whenLabel,
 } from "./autopilot-ui";
+import { Readiness } from "./Readiness";
+import { Pipeline, rise, ScoreRing, Timeline, WeekStrip } from "./visuals";
+
+export type OpenTarget = "accounts" | "brand" | "website" | "visibility" | "calendar";
 
 export type AutopilotHandlers = {
   start: (settings: ProgramSettings) => void;
@@ -74,8 +78,8 @@ export type AutopilotHandlers = {
     format?: OpportunityFormat;
     platform?: PlatformId;
   }) => void;
-  /** Open the piece where it can be edited (the content calendar). */
-  edit: () => void;
+  /** Go to the place in Mellox where something is connected, fixed or edited. */
+  open: (target: OpenTarget) => void;
   busy: boolean;
 };
 
@@ -124,6 +128,8 @@ export function AutopilotScreen({
           fullAvailable={view.fullAvailable}
           busy={handlers.busy}
           onStart={handlers.start}
+          readiness={view.readiness}
+          onOpen={handlers.open}
         />
       </div>
     );
@@ -139,17 +145,31 @@ export function AutopilotScreen({
   ];
 
   return (
-    <SurfaceLayout items={items} value={section} onChange={setSection} label="Autopilot">
-      {section === "home" && <Home view={view} handlers={handlers} onSection={setSection} />}
-      {section === "approvals" && <Approvals view={view} handlers={handlers} />}
-      {section === "ideas" && <Ideas view={view} handlers={handlers} />}
-      {section === "activity" && <Activity view={view} handlers={handlers} />}
-      {section === "settings" && <SettingsPage view={view} handlers={handlers} />}
-    </SurfaceLayout>
+    <MotionConfig reducedMotion="user">
+      <SurfaceLayout items={items} value={section} onChange={setSection} label="Autopilot">
+        {section === "home" && <Home view={view} handlers={handlers} onSection={setSection} />}
+        {section === "approvals" && <Approvals view={view} handlers={handlers} />}
+        {section === "ideas" && <Ideas view={view} handlers={handlers} />}
+        {section === "activity" && <Activity view={view} handlers={handlers} />}
+        {section === "settings" && <SettingsPage view={view} handlers={handlers} />}
+      </SurfaceLayout>
+    </MotionConfig>
   );
 }
 
 /* ───────────────────────── home ───────────────────────── */
+
+function More({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
+    >
+      {children}
+    </button>
+  );
+}
 
 function Home({
   view,
@@ -166,109 +186,84 @@ function Home({
   const waiting = view.approvals.length;
   const planning =
     !paused && !view.upcoming.length && !view.proposed.length && !view.approvals.length;
-
-  const days = useMemo(() => {
-    const groups = new Map<string, ActionView[]>();
-    for (const action of [...view.approvals, ...view.upcoming]
-      .sort((a, b) => (a.plannedFor ?? "").localeCompare(b.plannedFor ?? ""))
-      .slice(0, 8)) {
-      const key = dayLabel(action.plannedFor);
-      groups.set(key, [...(groups.get(key) ?? []), action]);
-    }
-    return [...groups.entries()];
-  }, [view.approvals, view.upcoming]);
+  const scanTask = view.tasks.find((t) => t.contentType === "geo_scan");
+  const scans = program.automations.includes("geo_scan");
+  const soon = [...view.approvals, ...view.upcoming]
+    .sort((a, b) => (a.plannedFor ?? "").localeCompare(b.plannedFor ?? ""))
+    .slice(0, 4);
 
   return (
     <SurfacePage width="narrow">
-      {/* The one thing to know: is it on, and what happens next. */}
-      <Tile className="ds-enter">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2.5 text-[22px] font-semibold leading-tight tracking-tight">
-              <Dot tone={paused ? "attention" : "active"} pulse={!paused} />
-              {paused ? "Autopilot is paused" : "Autopilot is on"}
-            </p>
-            <p className="mt-1.5 text-[13.5px] text-muted-foreground">
-              {paused
-                ? `${pauseReasonText(program.pauseReason)}. Posts already scheduled still go out.`
-                : next
-                  ? `Next: ${whenLabel(next.plannedFor)} · ${pieceLabel(next)}`
-                  : planning
-                    ? "Writing your first plan. This takes about a minute."
-                    : "Nothing scheduled right now."}
-            </p>
+      <motion.div {...rise(0)}>
+        <Tile>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2.5 text-[22px] font-semibold leading-tight tracking-tight">
+                <Dot tone={paused ? "attention" : "active"} pulse={!paused} />
+                {paused ? "Autopilot is paused" : "Autopilot is on"}
+              </p>
+              <p className="mt-1.5 text-[13.5px] text-muted-foreground">
+                {paused
+                  ? `${pauseReasonText(program.pauseReason)}.`
+                  : next
+                    ? `Next: ${whenLabel(next.plannedFor)} · ${pieceLabel(next)}`
+                    : planning
+                      ? "Writing your first plan…"
+                      : "Nothing scheduled right now."}
+              </p>
+            </div>
+            {view.canEdit && (
+              <button
+                type="button"
+                disabled={handlers.busy}
+                onClick={() => handlers.pause(!paused)}
+                className={cn(paused ? dsPrimaryBtn : dsGhostBtn, "h-10 px-5 text-[13.5px]")}
+              >
+                {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                {paused ? "Resume" : "Pause"}
+              </button>
+            )}
           </div>
-          {view.canEdit && (
-            <button
-              type="button"
-              disabled={handlers.busy}
-              onClick={() => handlers.pause(!paused)}
-              className={cn(paused ? dsPrimaryBtn : dsGhostBtn, "h-10 px-5 text-[13.5px]")}
-            >
-              {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-              {paused ? "Resume" : "Pause"}
-            </button>
-          )}
-        </div>
-        <dl className="mt-5 grid grid-cols-3 gap-2 border-t border-border/50 pt-4 text-center sm:text-left">
-          <div>
-            <dt className="text-[12px] text-muted-foreground">Posted</dt>
-            <dd className="mt-0.5 text-[19px] font-semibold tabular-nums">
-              {view.finished.length}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[12px] text-muted-foreground">Credits, this week</dt>
-            <dd className="mt-0.5 text-[19px] font-semibold tabular-nums">
-              {view.budget?.creditsUsed ?? 0}
-              <span className="text-[13px] font-medium text-muted-foreground">
-                {" "}
-                / {view.budget?.creditCap ?? 0}
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[12px] text-muted-foreground">Mode</dt>
-            <dd className="mt-1 truncate text-[13.5px] font-semibold">
-              {MODE_INFO[program.mode].label}
-            </dd>
-          </div>
-        </dl>
-      </Tile>
+        </Tile>
+      </motion.div>
+
+      {/* Anything that stops real work comes first, with the button that fixes it. */}
+      {view.readiness.some((r) => !r.ok) && (
+        <motion.div {...rise(1)} className="mt-3">
+          <Readiness items={view.readiness} onOpen={handlers.open} onlyMissing />
+        </motion.div>
+      )}
 
       {view.proposed.length > 0 && (
-        <div className="mt-4">
+        <div className="mt-3">
           <ProposedPlan view={view} handlers={handlers} />
         </div>
       )}
 
       {waiting > 0 && (
-        <Tile className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-warning/12 text-warning">
-              <ListChecks className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
+        <motion.div {...rise(1)} className="mt-3">
+          <Tile className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-warning/12 text-warning">
+                <ListChecks className="h-5 w-5" />
+              </span>
               <p className="text-[15px] font-semibold">
                 {waiting} {waiting === 1 ? "post needs" : "posts need"} your OK
               </p>
-              <p className="truncate text-[12.5px] text-muted-foreground">
-                They go out at their planned time once you approve.
-              </p>
             </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => onSection("approvals")}
-            className={cn(dsPrimaryBtn, "h-10 px-5 text-[13.5px]")}
-          >
-            Review
-          </button>
-        </Tile>
+            <button
+              type="button"
+              onClick={() => onSection("approvals")}
+              className={cn(dsPrimaryBtn, "h-10 px-5 text-[13.5px]")}
+            >
+              Review
+            </button>
+          </Tile>
+        </motion.div>
       )}
 
       {view.failed.length > 0 && (
-        <Tile className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <Tile className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-destructive/12 text-destructive">
               <AlertTriangle className="h-5 w-5" />
@@ -287,52 +282,94 @@ function Home({
         </Tile>
       )}
 
-      <GroupLabel>Coming up</GroupLabel>
-      {days.length ? (
-        <Tile className="py-1 sm:py-1">
-          {days.map(([day, list]) => (
-            <div key={day} className="border-b border-border/50 py-2 last:border-b-0">
-              <p className="pt-1.5 text-[12px] font-semibold text-muted-foreground">{day}</p>
-              <ul>
-                {list.map((a) => (
-                  <ActionLine key={a.id} action={a} />
-                ))}
-              </ul>
-            </div>
-          ))}
-        </Tile>
-      ) : (
-        <Tile>
-          <p className="text-[13.5px] text-muted-foreground">
-            {planning
-              ? "Your plan will show here in a minute."
-              : "The next plan is written two days before each week starts."}
-          </p>
+      <GroupLabel>Right now</GroupLabel>
+      <Pipeline view={view} onApprove={() => onSection("approvals")} />
+
+      <GroupLabel action={<More onClick={() => handlers.open("calendar")}>Open calendar</More>}>
+        Next 7 days
+      </GroupLabel>
+      <WeekStrip view={view} />
+      {soon.length > 0 && (
+        <Tile className="mt-2 py-1 sm:py-1">
+          <ul className="divide-y divide-border/50">
+            {soon.map((a) => (
+              <ActionLine key={a.id} action={a} />
+            ))}
+          </ul>
         </Tile>
       )}
 
-      {view.opportunities.length > 0 && (
+      <GroupLabel>Also on Autopilot</GroupLabel>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => handlers.open("visibility")}
+          className="ds-tile ds-tile-hover flex items-center gap-3.5 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          <ScoreRing score={view.visibility?.score ?? null} />
+          <span className="min-w-0">
+            <span className="block text-[14px] font-semibold">AI visibility</span>
+            <span className="block truncate text-[12.5px] text-muted-foreground">
+              {!scans
+                ? "Weekly check is off"
+                : scanTask?.status === "skipped"
+                  ? "Add your website to start"
+                  : view.visibility?.scannedAt
+                    ? `Checked ${timeAgo(view.visibility.scannedAt)} · weekly`
+                    : "First check is running"}
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onSection("ideas")}
+          className="ds-tile ds-tile-hover flex items-center gap-3.5 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
+            <Eye className="h-5 w-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[14px] font-semibold">Market and competitors</span>
+            <span className="block truncate text-[12.5px] text-muted-foreground">
+              {view.opportunities.length
+                ? `${view.opportunities.length} ${view.opportunities.length === 1 ? "idea" : "ideas"} found`
+                : "Watching. Nothing new."}
+            </span>
+          </span>
+        </button>
+      </div>
+
+      {view.learnings.length > 0 && (
         <>
-          <GroupLabel
-            action={
-              <button
-                type="button"
-                onClick={() => onSection("ideas")}
-                className="text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
-              >
-                See all {view.opportunities.length}
-              </button>
-            }
-          >
-            Worth a post
+          <GroupLabel>What Mellox learned</GroupLabel>
+          <Tile>
+            <ul className="space-y-2.5">
+              {view.learnings.map((line) => (
+                <li key={line} className="flex items-start gap-2.5 text-[13.5px] leading-snug">
+                  <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  {line}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-[12px] text-muted-foreground">Used in next week&apos;s plan.</p>
+          </Tile>
+        </>
+      )}
+
+      {view.events.length > 0 && (
+        <>
+          <GroupLabel action={<More onClick={() => onSection("activity")}>See all</More>}>
+            Latest
           </GroupLabel>
-          <OpportunityCard opportunity={view.opportunities[0]} view={view} handlers={handlers} />
+          <Tile>
+            <Timeline events={view.events.slice(0, 4)} />
+          </Tile>
         </>
       )}
 
       {program.strategy && (
         <>
-          <GroupLabel>What Mellox is working to</GroupLabel>
+          <GroupLabel>Strategy</GroupLabel>
           <StrategyCard strategy={program.strategy} compact />
         </>
       )}
@@ -344,12 +381,7 @@ function ProposedPlan({ view, handlers }: { view: AutopilotView; handlers: Autop
   return (
     <Tile>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[15px] font-semibold">Your plan is ready</p>
-          <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-            Nothing is made until you say yes. Remove anything you don&apos;t want.
-          </p>
-        </div>
+        <p className="text-[15px] font-semibold">Your plan is ready</p>
         {view.canEdit && (
           <button
             type="button"
@@ -370,7 +402,6 @@ function ProposedPlan({ view, handlers }: { view: AutopilotView; handlers: Autop
               <p className="mt-0.5 text-[12px] text-muted-foreground">
                 {pieceLabel(a)} · {whenLabel(a.plannedFor)}
               </p>
-              {a.reason && <p className="mt-1 text-[12.5px] text-muted-foreground">{a.reason}</p>}
             </div>
             {view.canEdit && (
               <button
@@ -394,11 +425,7 @@ function ProposedPlan({ view, handlers }: { view: AutopilotView; handlers: Autop
 
 function Approvals({ view, handlers }: { view: AutopilotView; handlers: AutopilotHandlers }) {
   return (
-    <SurfacePage
-      title="To approve"
-      subtitle="Nothing here goes out until you say yes."
-      width="narrow"
-    >
+    <SurfacePage title="To approve" width="narrow">
       {view.proposed.length > 0 && (
         <div className="mb-3">
           <ProposedPlan view={view} handlers={handlers} />
@@ -412,59 +439,61 @@ function Approvals({ view, handlers }: { view: AutopilotView; handlers: Autopilo
         />
       )}
       <div className="space-y-3">
-        {view.approvals.map((a) => (
-          <Tile key={a.id} as="article">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="ds-label">{pieceLabel(a)}</p>
-                <h4 className="mt-1 text-[15px] font-semibold leading-snug">
-                  {a.preview?.title || a.title}
-                </h4>
+        {view.approvals.map((a, i) => (
+          <motion.div key={a.id} {...rise(i)}>
+            <Tile as="article">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="ds-label">{pieceLabel(a)}</p>
+                  <h4 className="mt-1 text-[15px] font-semibold leading-snug">
+                    {a.preview?.title || a.title}
+                  </h4>
+                </div>
+                <span className="shrink-0 rounded-full bg-[var(--ds-well-bg)] px-2.5 py-1 text-[11.5px] font-medium text-muted-foreground">
+                  {whenLabel(a.plannedFor)}
+                </span>
               </div>
-              <span className="shrink-0 rounded-full bg-[var(--ds-well-bg)] px-2.5 py-1 text-[11.5px] font-medium text-muted-foreground">
-                {whenLabel(a.plannedFor)}
-              </span>
-            </div>
-            {a.preview?.body && (
-              <p className="ds-well mt-3 line-clamp-[10] whitespace-pre-wrap rounded-[var(--ds-radius-well)] p-3.5 text-[13.5px] leading-relaxed">
-                {a.preview.body}
-              </p>
-            )}
-            {a.reason && (
-              <p className="mt-3 text-[12.5px] text-muted-foreground">
-                <span className="font-medium text-foreground/80">Why this: </span>
-                {a.reason}
-              </p>
-            )}
-            {view.canEdit && (
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={handlers.busy}
-                  onClick={() => handlers.decide(a.id, "approve")}
-                  className={cn(dsPrimaryBtn, "h-10 px-5 text-[13.5px]")}
-                >
-                  <Check className="h-4 w-4" />
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  onClick={handlers.edit}
-                  className={cn(dsGhostBtn, "h-10 px-4 text-[13px]")}
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  disabled={handlers.busy}
-                  onClick={() => handlers.decide(a.id, "skip")}
-                  className={cn(dsGhostBtn, "h-10 px-4 text-[13px]")}
-                >
-                  Skip
-                </button>
-              </div>
-            )}
-          </Tile>
+              {a.preview?.body && (
+                <p className="ds-well mt-3 line-clamp-[10] whitespace-pre-wrap rounded-[var(--ds-radius-well)] p-3.5 text-[13.5px] leading-relaxed">
+                  {a.preview.body}
+                </p>
+              )}
+              {a.reason && (
+                <p className="mt-3 text-[12.5px] text-muted-foreground">
+                  <span className="font-medium text-foreground/80">Why this: </span>
+                  {a.reason}
+                </p>
+              )}
+              {view.canEdit && (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={handlers.busy}
+                    onClick={() => handlers.decide(a.id, "approve")}
+                    className={cn(dsPrimaryBtn, "h-10 px-5 text-[13.5px]")}
+                  >
+                    <Check className="h-4 w-4" />
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlers.open("calendar")}
+                    className={cn(dsGhostBtn, "h-10 px-4 text-[13px]")}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    disabled={handlers.busy}
+                    onClick={() => handlers.decide(a.id, "skip")}
+                    className={cn(dsGhostBtn, "h-10 px-4 text-[13px]")}
+                  >
+                    Skip
+                  </button>
+                </div>
+              )}
+            </Tile>
+          </motion.div>
         ))}
       </div>
     </SurfacePage>
@@ -484,6 +513,7 @@ function OpportunityCard({
 }) {
   const [format, setFormat] = useState<OpportunityFormat>(opportunity.suggestedType);
   const [picking, setPicking] = useState(false);
+  const visibility = opportunity.kind === "visibility";
   return (
     <Tile as="article">
       <div className="flex items-center justify-between gap-3">
@@ -495,11 +525,6 @@ function OpportunityCard({
       </div>
       <h4 className="mt-1.5 text-[15px] font-semibold leading-snug">{opportunity.title}</h4>
       {opportunity.why && <p className="mt-1.5 text-[13.5px] leading-relaxed">{opportunity.why}</p>}
-      {opportunity.suggestedAction && (
-        <p className="mt-1.5 text-[13.5px] font-medium text-foreground/90">
-          {opportunity.suggestedAction}
-        </p>
-      )}
       {opportunity.evidence.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-2">
           {opportunity.evidence.map((e) => (
@@ -529,17 +554,31 @@ function OpportunityCard({
             </div>
           )}
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              disabled={handlers.busy}
-              onClick={() =>
-                handlers.opportunity({ opportunityId: opportunity.id, decision: "create", format })
-              }
-              className={cn(dsPrimaryBtn, "h-10 px-5 text-[13.5px]")}
-            >
-              Create {FORMAT_LABEL[format].toLowerCase()}
-            </button>
-            {!picking && (
+            {visibility ? (
+              <button
+                type="button"
+                onClick={() => handlers.open("visibility")}
+                className={cn(dsPrimaryBtn, "h-10 px-5 text-[13.5px]")}
+              >
+                Open AI Visibility
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={handlers.busy}
+                onClick={() =>
+                  handlers.opportunity({
+                    opportunityId: opportunity.id,
+                    decision: "create",
+                    format,
+                  })
+                }
+                className={cn(dsPrimaryBtn, "h-10 px-5 text-[13.5px]")}
+              >
+                Create {FORMAT_LABEL[format].toLowerCase()}
+              </button>
+            )}
+            {!picking && !visibility && (
               <button
                 type="button"
                 onClick={() => setPicking(true)}
@@ -567,15 +606,13 @@ function OpportunityCard({
 
 function Ideas({ view, handlers }: { view: AutopilotView; handlers: AutopilotHandlers }) {
   return (
-    <SurfacePage
-      title="Ideas"
-      subtitle="Things happening around your brand that are worth a post."
-      width="narrow"
-    >
+    <SurfacePage title="Ideas" width="narrow">
       {view.opportunities.length ? (
         <div className="space-y-3">
-          {view.opportunities.map((o) => (
-            <OpportunityCard key={o.id} opportunity={o} view={view} handlers={handlers} />
+          {view.opportunities.map((o, i) => (
+            <motion.div key={o.id} {...rise(i)}>
+              <OpportunityCard opportunity={o} view={view} handlers={handlers} />
+            </motion.div>
           ))}
         </div>
       ) : (
@@ -593,11 +630,7 @@ function Ideas({ view, handlers }: { view: AutopilotView; handlers: AutopilotHan
 
 function Activity({ view, handlers }: { view: AutopilotView; handlers: AutopilotHandlers }) {
   return (
-    <SurfacePage
-      title="Activity"
-      subtitle="Everything Autopilot did, and who decided what."
-      width="narrow"
-    >
+    <SurfacePage title="Activity" width="narrow">
       {view.failed.length > 0 && (
         <>
           <GroupLabel>Needs a look</GroupLabel>
@@ -652,27 +685,8 @@ function Activity({ view, handlers }: { view: AutopilotView; handlers: Autopilot
       )}
       <GroupLabel>History</GroupLabel>
       {view.events.length ? (
-        <Tile className="py-1 sm:py-1">
-          <ol className="divide-y divide-border/50">
-            {view.events.map((e) => (
-              <li key={e.id} className="flex items-start gap-3 py-3">
-                <span
-                  className={cn(
-                    "mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
-                    e.actor === "user"
-                      ? "bg-primary/12 text-foreground"
-                      : "bg-[var(--ds-well-bg)] text-muted-foreground",
-                  )}
-                >
-                  {e.actor === "user" ? "Team" : "Mellox"}
-                </span>
-                <p className="min-w-0 flex-1 text-[13.5px] leading-snug">{e.summary}</p>
-                <time className="shrink-0 text-[12px] text-muted-foreground" dateTime={e.createdAt}>
-                  {timeAgo(e.createdAt)}
-                </time>
-              </li>
-            ))}
-          </ol>
+        <Tile>
+          <Timeline events={view.events} />
         </Tile>
       ) : (
         <EmptyState icon={History} size="sm" title="No history yet" />
@@ -692,7 +706,6 @@ function SettingsPage({ view, handlers }: { view: AutopilotView; handlers: Autop
   return (
     <SurfacePage
       title="Settings"
-      subtitle={`Runs until ${new Date(`${program.endsOn}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}`}
       width="narrow"
       actions={
         <button
@@ -705,12 +718,15 @@ function SettingsPage({ view, handlers }: { view: AutopilotView; handlers: Autop
         </button>
       }
     >
-      <SettingRows
-        s={s}
-        onChange={setS}
-        connected={view.connectedPlatforms}
-        fullAvailable={view.fullAvailable}
-      />
+      <Readiness items={view.readiness} onOpen={handlers.open} />
+      <div className="mt-3">
+        <SettingRows
+          s={s}
+          onChange={setS}
+          connected={view.connectedPlatforms}
+          fullAvailable={view.fullAvailable}
+        />
+      </div>
       <p className="mt-3 text-[12.5px] text-muted-foreground">
         Changes apply from the next weekly plan.
       </p>
@@ -718,7 +734,7 @@ function SettingsPage({ view, handlers }: { view: AutopilotView; handlers: Autop
       <GroupLabel>Stop</GroupLabel>
       <Tile className="flex flex-wrap items-center justify-between gap-3">
         <p className="min-w-0 flex-1 text-[13.5px] text-muted-foreground">
-          Ends this run. Drafts stay in your content. Posts already scheduled still go out.
+          Drafts stay. Posts already scheduled still go out.
         </p>
         {confirming ? (
           <span className="flex items-center gap-2">

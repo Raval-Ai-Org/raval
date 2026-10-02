@@ -14,6 +14,25 @@ Decision record: [ADR-0025](adr/0025-brand-kit-styles.md).
 Surface: `/w/<id>/app/brand-kit` (sidebar → Intelligence → Brand Kit, command
 bar, `open:brand-kit` event with `{ styleId?, section?, create? }`).
 
+## How the surface is laid out
+
+Kept deliberately small. Don't add a rail entry, a tab or an always-visible
+field without removing one.
+
+- **Rail:** Styles, Logos, Fonts, Images, Examples. Examples holds posts,
+  videos and writing (a Posts / Writing switch). Colours have no page of their
+  own: they are edited inside a style, or in Brand DNA. Old `colors` and
+  `writing` deep links still open the right place.
+- **Style editor:** three tabs (Look, Writing, Video). Each shows only the
+  choices most people change; everything else sits under one "More options"
+  fold (`MoreOptions` in `controls.tsx`). Examples are at the top of Look.
+  "Use for" is the pill in the header; Make default, Duplicate, Copy to Brand
+  DNA and Archive are in the header menu.
+- **Brand DNA fallback:** one switch per tab ("Fill the rest from Brand DNA",
+  `FollowBrand`), which sets that tab's `inherit` keys together.
+- **New style:** one screen. Add posts you like, or pick Describe it / Use
+  Brand DNA / Start blank underneath.
+
 ## Code map
 
 | Part | Where |

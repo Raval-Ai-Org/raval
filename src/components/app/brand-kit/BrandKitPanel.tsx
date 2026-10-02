@@ -21,11 +21,9 @@ import {
   BrandKit,
   Copy,
   Brain,
-  FileText,
   ImagePlus,
   Layers,
   MoreHorizontal,
-  Palette,
   Plus,
   Sparkles,
   Star,
@@ -41,16 +39,18 @@ import {
 import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { useAppEvent } from "@/hooks/use-app-event";
 import { emitAppEvent } from "@/lib/app-events";
-import type { BrandKitOverview, BrandStyleView, KitSection } from "@/lib/brand-kit/contracts";
-import { STYLE_FORMAT_LABELS, specCompleteness } from "@/lib/brand-kit/spec";
+import type { BrandKitOverview, BrandStyleView } from "@/lib/brand-kit/contracts";
+import { STYLE_FORMAT_LABELS } from "@/lib/brand-kit/spec";
 import { useBrandKit, useStyleActions } from "./hooks";
 import { PostPreview, Swatches, paletteList, resolveView, useStyleFonts } from "./preview";
 import { StyleEditor } from "./StyleEditor";
 import { CreateStyleFlow } from "./CreateStyleFlow";
-import { LibrarySection } from "./LibrarySections";
+import { LibrarySection, type LibrarySectionId } from "./LibrarySections";
+
+type RailSection = "styles" | LibrarySectionId;
 
 type View =
-  | { kind: "section"; section: KitSection }
+  | { kind: "section"; section: RailSection; writing?: boolean }
   | { kind: "style"; styleId: string }
   | { kind: "create"; assetIds?: string[] };
 
@@ -69,21 +69,26 @@ export function BrandKitPanel(props: BrandKitPanelProps) {
   return <Panel key={props.workspaceId} {...props} workspaceId={props.workspaceId} />;
 }
 
-const SECTIONS: Array<{ id: KitSection; label: string; icon: SurfaceNavItem<string>["icon"] }> = [
+const SECTIONS: Array<{ id: RailSection; label: string; icon: SurfaceNavItem<string>["icon"] }> = [
   { id: "styles", label: "Styles", icon: BrandKit },
   { id: "logos", label: "Logos", icon: Star },
-  { id: "colors", label: "Colors", icon: Palette },
   { id: "fonts", label: "Fonts", icon: Type },
-  { id: "elements", label: "Elements", icon: Layers },
+  { id: "elements", label: "Images", icon: Layers },
   { id: "inspiration", label: "Examples", icon: ImagePlus },
-  { id: "writing", label: "Writing", icon: FileText },
 ];
+
+/** Older links still name the two sections that were folded into others. */
+function sectionView(id: string | null | undefined): View | null {
+  if (id === "writing") return { kind: "section", section: "inspiration", writing: true };
+  if (id === "colors") return { kind: "section", section: "styles" };
+  const s = SECTIONS.find((x) => x.id === id);
+  return s ? { kind: "section", section: s.id } : null;
+}
 
 function initialView(p: BrandKitPanelProps): View {
   if (p.startCreate) return { kind: "create" };
   if (p.initialStyleId) return { kind: "style", styleId: p.initialStyleId };
-  const s = SECTIONS.find((x) => x.id === p.initialSection);
-  return { kind: "section", section: s?.id ?? "styles" };
+  return sectionView(p.initialSection) ?? { kind: "section", section: "styles" };
 }
 
 function Panel(props: BrandKitPanelProps & { workspaceId: string }) {
@@ -97,19 +102,14 @@ function Panel(props: BrandKitPanelProps & { workspaceId: string }) {
     const detail = event.detail;
     if (detail?.create) setView({ kind: "create" });
     else if (detail?.styleId) setView({ kind: "style", styleId: detail.styleId });
-    else if (detail?.section) {
-      const s = SECTIONS.find((x) => x.id === detail.section);
-      if (s) setView({ kind: "section", section: s.id });
+    else {
+      const next = sectionView(detail?.section);
+      if (next) setView(next);
     }
   });
 
   const counts = React.useMemo(() => countsFor(data), [data]);
-  const navValue: KitSection | null =
-    view.kind === "section"
-      ? view.section
-      : view.kind === "style" || view.kind === "create"
-        ? "styles"
-        : null;
+  const navValue: RailSection = view.kind === "section" ? view.section : "styles";
 
   return (
     <SurfaceLayout
@@ -196,6 +196,7 @@ function Panel(props: BrandKitPanelProps & { workspaceId: string }) {
                 workspaceId={workspaceId}
                 data={data}
                 section={view.section}
+                startOnWriting={view.writing}
                 onCreateFrom={(assetIds) => setView({ kind: "create", assetIds })}
                 onOpenStyle={(id) => setView({ kind: "style", styleId: id })}
               />
@@ -207,7 +208,7 @@ function Panel(props: BrandKitPanelProps & { workspaceId: string }) {
   );
 }
 
-function countsFor(data: BrandKitOverview | undefined): Partial<Record<KitSection, number>> {
+function countsFor(data: BrandKitOverview | undefined): Partial<Record<RailSection, number>> {
   if (!data) return {};
   const by = (kinds: string[]) => data.assets.filter((a) => kinds.includes(a.kind)).length;
   return {
@@ -215,14 +216,13 @@ function countsFor(data: BrandKitOverview | undefined): Partial<Record<KitSectio
     logos: by(["logo", "logo_dark", "logo_mark"]),
     fonts: by(["font_file"]),
     elements: by(["element", "pattern", "product_photo"]),
-    inspiration: by(["inspiration_image", "inspiration_video"]),
-    writing: by(["writing_sample"]),
+    inspiration: by(["inspiration_image", "inspiration_video", "writing_sample"]),
   };
 }
 
 // ── Styles gallery ──────────────────────────────────────────────────────────
 
-function StylesGallery({
+export function StylesGallery({
   workspaceId,
   data,
   onOpen,
@@ -238,7 +238,6 @@ function StylesGallery({
   return (
     <SurfacePage
       title="Styles"
-      subtitle="Pick one when you create."
       actions={
         data.canEdit ? (
           <button
@@ -255,7 +254,7 @@ function StylesGallery({
         <EmptyState
           icon={Sparkles}
           title="No styles yet"
-          description="Upload a few posts you like. Mellox copies the look every time."
+          description="Add posts you like. Mellox copies the look."
           action={
             data.canEdit ? (
               <button
@@ -263,7 +262,7 @@ function StylesGallery({
                 className={cn(dsPrimaryBtn, "h-10 px-5 text-[13px]")}
                 onClick={onCreate}
               >
-                <Wand className="h-4 w-4" /> Create your first style
+                <Wand className="h-4 w-4" /> New style
               </button>
             ) : null
           }
@@ -286,18 +285,6 @@ function StylesGallery({
               />
             </motion.div>
           ))}
-          {data.canEdit && (
-            <button
-              type="button"
-              onClick={onCreate}
-              className="ds-tile ds-tile-hover group flex min-h-[260px] flex-col items-center justify-center gap-3 border-dashed text-center"
-            >
-              <span className="grid h-12 w-12 place-items-center rounded-full bg-primary/12 text-primary transition-transform duration-300 group-hover:scale-110">
-                <Plus className="h-5 w-5" />
-              </span>
-              <span className="text-[14px] font-medium">New style</span>
-            </button>
-          )}
         </div>
       )}
       <ArchivedStyles workspaceId={workspaceId} data={data} />
@@ -321,7 +308,6 @@ function StyleCard({
   const resolved = React.useMemo(() => resolveView(style, data.dna), [style, data.dna]);
   useStyleFonts(resolved, data.assets);
   const actions = useStyleActions(workspaceId);
-  const done = Math.round(specCompleteness(style.spec) * 100);
   const learning = data.assets.some(
     (a) =>
       a.styleId === style.id &&
@@ -419,51 +405,16 @@ function StyleCard({
       </div>
       <div className="flex items-center justify-between gap-2 px-1.5 pb-1.5 pt-1">
         <Swatches colors={paletteList(resolved)} />
-        <div className="flex min-w-0 items-center gap-1.5">
+        {style.appliesTo.length > 0 && (
           <span className="truncate text-[11.5px] text-muted-foreground">
-            {style.appliesTo.length
-              ? style.appliesTo
-                  .map((f) => STYLE_FORMAT_LABELS[f])
-                  .slice(0, 2)
-                  .join(", ") +
-                (style.appliesTo.length > 2 ? ` +${style.appliesTo.length - 2}` : "")
-              : "Everything"}
+            {style.appliesTo
+              .map((f) => STYLE_FORMAT_LABELS[f])
+              .slice(0, 2)
+              .join(", ") + (style.appliesTo.length > 2 ? ` +${style.appliesTo.length - 2}` : "")}
           </span>
-          <CompletionRing value={done} />
-        </div>
+        )}
       </div>
     </div>
-  );
-}
-
-function CompletionRing({ value }: { value: number }) {
-  const r = 8;
-  const c = 2 * Math.PI * r;
-  return (
-    <span className="relative grid h-6 w-6 place-items-center" title={`${value}% filled in`}>
-      <svg viewBox="0 0 20 20" className="h-6 w-6 -rotate-90">
-        <circle
-          cx="10"
-          cy="10"
-          r={r}
-          fill="none"
-          stroke="var(--ds-well-bg-hover)"
-          strokeWidth="2.5"
-        />
-        <circle
-          cx="10"
-          cy="10"
-          r={r}
-          fill="none"
-          stroke="hsl(var(--primary))"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={c * (1 - value / 100)}
-          style={{ transition: "stroke-dashoffset 600ms var(--ds-ease)" }}
-        />
-      </svg>
-    </span>
   );
 }
 

@@ -568,6 +568,7 @@ export function ReviewPanel({
                 brand={brand}
                 ratio={ratio}
                 cover={media}
+                spec={draft.carousel}
                 editing={editing}
                 onSlideChange={(i, slide) =>
                   edit({ ...draft, slides: draft.slides!.map((s, j) => (j === i ? slide : s)) })

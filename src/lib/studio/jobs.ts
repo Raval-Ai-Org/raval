@@ -152,6 +152,33 @@ export type CarouselSlide = {
   body: string;
   /** Optional visual direction for the designer / image model. */
   visual?: string;
+  /** The slide's job in the story (src/lib/studio/carousel/story.ts). */
+  role?: "cover" | "context" | "point" | "proof" | "recap" | "cta";
+  /** A short label above the heading: "Step 2", "Myth", "The fix". */
+  kicker?: string;
+  /** Words from the heading to highlight. */
+  emphasis?: string;
+};
+
+/** How a carousel looks: chosen on the server, stored with the job and its drafts. */
+export type CarouselSpecOutput = {
+  /** The story structure id (steps, myths, story…). */
+  structure?: string;
+  design: { v: 1; look: string; colorway: string; motif: string };
+  theme: {
+    bg: string;
+    ink: string;
+    muted: string;
+    accent: string;
+    accentInk: string;
+    surface: string;
+    line: string;
+    headingFont: string;
+    bodyFont: string;
+  };
+  brand: string;
+  site?: string;
+  ratio?: string;
 };
 
 export type ArticleOutput = {
@@ -209,6 +236,8 @@ export type StudioJobOutput = {
   angle?: string;
   variants?: SocialVariant[];
   slides?: CarouselSlide[];
+  /** Carousel: the look every slide shares. */
+  carousel?: CarouselSpecOutput;
   article?: ArticleOutput;
   script?: ScriptOutput;
   ads?: AdVariant[];

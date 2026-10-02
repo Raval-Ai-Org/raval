@@ -35,5 +35,14 @@ const quota: PostQuota = {
 };
 
 export function getPostForMeDeps(workspaceId: string): SocialApiDeps {
-  return { api: createPostForMeAdapter(workspaceId), db: postForMeDb, brandId: workspaceId, quota };
+  return {
+    api: createPostForMeAdapter(workspaceId),
+    db: postForMeDb,
+    brandId: workspaceId,
+    quota,
+    carouselMedia: async (item) => {
+      const { ensureCarouselMedia } = await import("@/server/studio/carousel-assets.server");
+      return ensureCarouselMedia(item);
+    },
+  };
 }

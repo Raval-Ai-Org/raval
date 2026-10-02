@@ -150,6 +150,7 @@ export async function suggestStrategy(args: {
     actOnOpportunities: true,
     styleId: null,
     strategy,
+    automations: ["geo_scan"],
   };
   return { strategy, settings, source, hasBrand };
 }

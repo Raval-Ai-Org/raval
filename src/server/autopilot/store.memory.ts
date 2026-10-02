@@ -201,6 +201,7 @@ export function createMemoryAutopilotStore(
       }
       const row: ProgramRow = {
         strategy: {},
+        automations: ["geo_scan"],
         last_notified_at: null,
         ...input,
         id: id("p"),

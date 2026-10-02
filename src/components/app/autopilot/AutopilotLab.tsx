@@ -43,6 +43,7 @@ const settings: ProgramSettings = {
   actOnOpportunities: true,
   styleId: null,
   strategy,
+  automations: ["geo_scan"],
 };
 
 const action = (over: Partial<ActionView>): ActionView => ({
@@ -89,6 +90,7 @@ const running: AutopilotView = {
     videoCapPerWeek: 0,
     actOnOpportunities: true,
     strategy,
+    automations: ["geo_scan"],
     week: 2,
     totalWeeks: 52,
   },
@@ -213,6 +215,38 @@ const running: AutopilotView = {
     },
   ],
   connectedPlatforms: ["linkedin"],
+  readiness: [
+    {
+      id: "accounts",
+      ok: false,
+      required: true,
+      label: "Connect your social accounts",
+      detail: "Not connected: instagram",
+      cta: "Connect",
+    },
+    {
+      id: "brand",
+      ok: true,
+      required: false,
+      label: "Brand DNA ready",
+      detail: "Posts are written from it",
+      cta: "Add",
+    },
+    {
+      id: "website",
+      ok: true,
+      required: false,
+      label: "Website set",
+      detail: "Checked every week for AI visibility",
+      cta: "Add",
+    },
+  ],
+  learnings: [
+    'Best so far: "Why your grinder matters more than your machine" (1,840 views).',
+    "LinkedIn reaches about 2.4× more people than Instagram.",
+  ],
+  tasks: [action({ kind: "task", status: "done", contentType: "geo_scan", platform: null })],
+  visibility: { score: 72, scannedAt: at(-30) },
 };
 
 const SCENES = ["setup", "home", "approvals", "ideas", "activity", "settings", "paused"] as const;
@@ -242,7 +276,7 @@ export function AutopilotLab() {
     decide: log("decide"),
     retry: log("retry"),
     opportunity: log("opportunity"),
-    edit: log("edit"),
+    open: log("open"),
     busy: false,
   };
 

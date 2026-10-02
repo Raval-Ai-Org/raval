@@ -5,6 +5,7 @@
 // all on a switch and one brand's plan can never render under another.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { emitAppEvent } from "@/lib/app-events";
 import type { OpportunityFormat, ProgramSettings } from "@/lib/autopilot/contracts";
 import type { PlatformId } from "@/lib/social-platforms";
 import {
@@ -90,6 +91,8 @@ export function useAutopilotActions(workspaceId: string) {
   const refresh = () => {
     void client.invalidateQueries({ queryKey: autopilotKeys.all(workspaceId) });
     void client.invalidateQueries({ queryKey: autopilotKeys.agency });
+    // Approvals and new drafts change the calendar, the library and the review queue too.
+    emitAppEvent("content:changed");
   };
   const ws = { workspaceId };
 

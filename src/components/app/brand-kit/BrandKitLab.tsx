@@ -7,8 +7,10 @@
 import * as React from "react";
 import type { BrandKitOverview, KitAssetView } from "@/lib/brand-kit/contracts";
 import { ANALYSIS_VERSION, applySuggestion, mergeAnalyses } from "@/lib/brand-kit/merge";
-import { emptySpec, type StyleFormat, type StyleSpec } from "@/lib/brand-kit/spec";
+import { emptySpec, type StyleSpec } from "@/lib/brand-kit/spec";
 import { CreateStyleFlow, FinishStep } from "./CreateStyleFlow";
+import { StylesGallery } from "./BrandKitPanel";
+import { StyleEditor } from "./StyleEditor";
 
 const post = (bg: string, main: string, text: string) =>
   `data:image/svg+xml,${encodeURIComponent(
@@ -56,6 +58,8 @@ const ASSETS: KitAssetView[] = EXAMPLES.map(([id, bg, main, text]) => ({
   createdAt: "",
 }));
 
+const STYLE_ID = "b1111111-1111-4111-8111-111111111111";
+
 const DATA: BrandKitOverview = {
   styles: [],
   assets: ASSETS,
@@ -81,17 +85,58 @@ const SUGGESTION = (() => {
   return s;
 })();
 
+const WITH_STYLE: BrandKitOverview = {
+  ...DATA,
+  defaultStyleId: STYLE_ID,
+  styles: [
+    {
+      id: STYLE_ID,
+      name: "Launch look",
+      version: 1,
+      spec: {
+        ...applySuggestion(emptySpec(), SUGGESTION.spec),
+        references: SUGGESTION.spec.references,
+      },
+      appliesTo: [],
+      description: null,
+      isDefault: true,
+      status: "ready",
+      coverUrl: null,
+      createdAt: "",
+      updatedAt: "",
+      archived: false,
+    },
+  ],
+};
+
 export function BrandKitLab() {
   const [spec, setSpec] = React.useState<StyleSpec>(() => ({
     ...applySuggestion(emptySpec(), SUGGESTION.spec),
     references: SUGGESTION.spec.references,
   }));
   const [name, setName] = React.useState("");
-  const [appliesTo, setAppliesTo] = React.useState<StyleFormat[]>([]);
   const [makeDefault, setMakeDefault] = React.useState(true);
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-[1100px] space-y-12 px-4 py-10">
+        <section>
+          <h2 className="ds-label mb-4">Styles</h2>
+          <StylesGallery
+            workspaceId="lab"
+            data={WITH_STYLE}
+            onOpen={() => undefined}
+            onCreate={() => undefined}
+          />
+        </section>
+        <section data-testid="lab-editor">
+          <h2 className="ds-label mb-4">Edit a style</h2>
+          <StyleEditor
+            workspaceId="lab"
+            data={WITH_STYLE}
+            styleId={STYLE_ID}
+            onBack={() => undefined}
+          />
+        </section>
         <section>
           <h1 className="ds-label mb-4">Learned from examples</h1>
           <FinishStep
@@ -101,8 +146,7 @@ export function BrandKitLab() {
             onSpec={setSpec}
             name={name}
             onName={setName}
-            appliesTo={appliesTo}
-            onAppliesTo={setAppliesTo}
+            appliesTo={[]}
             makeDefault={makeDefault}
             onMakeDefault={setMakeDefault}
             busy={false}

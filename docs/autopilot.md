@@ -71,6 +71,23 @@ its slot), `rejected`, `failed`, `cancelled`, and `done` for an article.
 Approval is the content item's own status. Approving it in the Autopilot
 surface, the content calendar or the Command Center review queue all count.
 
+## More than posts
+
+- **AI visibility check** (on by default): once a week Autopilot starts a full
+  site scan through the existing GEO scanner. The score shows on Home; when it
+  is under 85 an idea appears that opens AI Visibility, where fixes are
+  proposed, approved and verified exactly as before.
+- **Market and competitors**: always watched through the existing sweeps; what
+  matters becomes an idea.
+- **Learning**: every measured post feeds a short "What Mellox learned" list
+  (best post, stronger platform, stronger format) that the next weekly plan uses.
+
+## What it asks you to connect
+
+Setup and Home show what is missing, each with a button: social accounts
+(required to post), Brand DNA (so posts are true to the brand) and the website
+(for the AI visibility check).
+
 ## Money
 
 - Writing the plan and rating signals is included.

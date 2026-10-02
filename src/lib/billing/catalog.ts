@@ -831,6 +831,8 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "memory-extract",
   "studio.naturalize",
   "studio.research",
+  // Shared social trends snapshot: collected for everyone, charged to no one.
+  "studio.trends",
   "studio.image.review",
   "brand-kit/analyze-visual",
   "brand-kit/describe",

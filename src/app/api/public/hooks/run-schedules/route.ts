@@ -1,6 +1,7 @@
 // POST /api/public/hooks/run-schedules — pg_cron (every minute) drives due
 // scheduled_jobs, due Market Brain collections and due Autopilot actions. Auth + heartbeat come from
 // defineCronRoute (x-cron-secret header, timing-safe; 503 if CRON_SECRET unset).
+import { after } from "next/server";
 import { defineCronRoute } from "@/server/cron";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,16 @@ export const POST = defineCronRoute({
         import("@/lib/market-brain-scheduler.server"),
         import("@/server/autopilot/service.server"),
       ]);
+    // Shared social trends: refreshed every few days, a no-op otherwise. Runs
+    // after the response so it never slows or fails the schedules.
+    after(async () => {
+      try {
+        const { refreshSocialTrendsIfDue } = await import("@/server/studio/social-trends.server");
+        await refreshSocialTrendsIfDue();
+      } catch (error) {
+        console.error("[social-trends] refresh failed", error);
+      }
+    });
     const [scheduled, marketBrain, autopilot] = await Promise.all([
       runDueScheduledJobs({ max: 25 }),
       runDueMarketBrainCollections({ max: 25 }),

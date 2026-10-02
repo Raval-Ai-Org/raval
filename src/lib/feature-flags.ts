@@ -104,6 +104,15 @@ export function isGoogleAnalyticsEnabled(workspaceId?: string): boolean {
  * as an operational kill-switch, not a cost gate.
  * FEATURE_FLAG_ASSET_METADATA_ENABLED_WS_<id> overrides per workspace.
  */
+/**
+ * Social trends: a shared snapshot of what is working on each platform,
+ * collected every few days (src/server/studio/social-trends.server.ts). On by
+ * default; it only runs where a web research provider is configured.
+ */
+export function isSocialTrendsEnabled(): boolean {
+  return !isFalsy((process.env.FEATURE_FLAG_SOCIAL_TRENDS_ENABLED ?? "").trim().toLowerCase());
+}
+
 export function isAssetMetadataFinalizeEnabled(workspaceId?: string): boolean {
   if (workspaceId) {
     const perWs = (process.env[`FEATURE_FLAG_ASSET_METADATA_ENABLED_WS_${workspaceId}`] ?? "")

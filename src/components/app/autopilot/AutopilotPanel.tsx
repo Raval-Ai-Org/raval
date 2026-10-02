@@ -5,6 +5,7 @@
 import { Bot } from "@/components/icons";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { emitAppEvent } from "@/lib/app-events";
 import { useNavigate } from "@/lib/navigation";
 import { ServerFnError } from "@/lib/rpc-client";
 import { workspacePath } from "@/lib/workspace/paths";
@@ -57,7 +58,14 @@ export function AutopilotPanel({ workspaceId }: { workspaceId: string }) {
     decide: (actionId, decision) => actions.decide.mutate({ actionId, decision }),
     retry: (actionId) => actions.retry.mutate(actionId),
     opportunity: (args) => actions.opportunity.mutate(args),
-    edit: () => navigate({ to: workspacePath(workspaceId, "", { calendar: 1 }) }),
+    open: (target) => {
+      // Each of these lives elsewhere in Mellox; Autopilot only sends people there.
+      if (target === "calendar") navigate({ to: workspacePath(workspaceId, "", { calendar: 1 }) });
+      else if (target === "accounts") emitAppEvent("open:settings", { section: "accounts" });
+      else if (target === "website") emitAppEvent("open:settings", { section: "website" });
+      else if (target === "brand") emitAppEvent("open:brand-dna");
+      else emitAppEvent("open:ai-visibility");
+    },
     busy: Object.values(actions).some((m) => m.isPending),
   };
 

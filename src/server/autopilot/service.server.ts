@@ -6,7 +6,10 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import {
+  AUTOMATIONS,
   AUTOPILOT_TYPES,
+  type Automation,
+  type ReadinessItem,
   OPPORTUNITY_FORMATS,
   StrategySchema,
   type ActionRow,
@@ -207,6 +210,9 @@ function presentProgram(row: ProgramRow, now: Date): ProgramView {
     videoCapPerWeek: row.video_cap_per_week,
     actOnOpportunities: row.act_on_opportunities,
     strategy: parseStrategy(row.strategy),
+    automations: (row.automations ?? []).filter((a): a is Automation =>
+      (AUTOMATIONS as readonly string[]).includes(a),
+    ),
     week: Math.min(total, Math.max(1, weekOf(row, ymdInZone(now, row.timezone)))),
     totalWeeks: total,
   };
@@ -267,13 +273,110 @@ function presentEvent(row: EventRow) {
 
 /* ───────────────────────── read ───────────────────────── */
 
+const admin = supabaseAdmin as unknown as SupabaseClient;
+
+/** What Autopilot needs before it can do real work, and what is still missing. */
+async function readiness(
+  workspaceId: string,
+  program: ProgramRow | null,
+  connected: string[],
+): Promise<ReadinessItem[]> {
+  const [{ data: ws }, { data: dna }] = await Promise.all([
+    admin.from("workspaces").select("website_url").eq("id", workspaceId).maybeSingle(),
+    admin.from("workspace_brand_dna").select("dna").eq("workspace_id", workspaceId).maybeSingle(),
+  ]);
+  const website = (ws as { website_url?: string | null } | null)?.website_url ?? null;
+  const dnaSize = JSON.stringify((dna as { dna?: unknown } | null)?.dna ?? {}).length;
+  const wanted = program?.platforms ?? [];
+  const missing = wanted.filter((p) => !connected.includes(p));
+  const accountsOk = connected.length > 0 && missing.length === 0;
+  return [
+    {
+      id: "accounts",
+      ok: accountsOk,
+      required: true,
+      label: accountsOk ? "Social accounts connected" : "Connect your social accounts",
+      detail: accountsOk
+        ? `${connected.length} connected`
+        : missing.length
+          ? `Not connected: ${missing.join(", ")}`
+          : "Posts can't go out until an account is connected.",
+      cta: "Connect",
+    },
+    {
+      id: "brand",
+      ok: dnaSize > 300,
+      required: false,
+      label: dnaSize > 300 ? "Brand DNA ready" : "Add your Brand DNA",
+      detail:
+        dnaSize > 300 ? "Posts are written from it" : "So posts sound like you and stay true.",
+      cta: "Add",
+    },
+    {
+      id: "website",
+      ok: Boolean(website),
+      required: false,
+      label: website ? "Website set" : "Add your website",
+      detail: website
+        ? "Checked every week for AI visibility"
+        : "Needed for the AI visibility check.",
+      cta: "Add",
+    },
+  ];
+}
+
+function latestLearnings(actions: ActionRow[]): string[] {
+  const plan = actions
+    .filter((a) => a.kind === "plan" && a.status === "done")
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+  const list = plan?.result?.learnings;
+  return Array.isArray(list) ? list.filter((l): l is string => typeof l === "string") : [];
+}
+
+function latestTasks(actions: ActionRow[]): ActionView[] {
+  const seen = new Set<string>();
+  return actions
+    .filter((a) => a.kind === "task")
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .filter((a) => {
+      const key = a.content_type ?? "";
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map(presentAction);
+}
+
+async function latestVisibility(workspaceId: string) {
+  const { data } = await admin
+    .from("geo_scans")
+    .select("overall_score, completed_at")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "succeeded")
+    .order("completed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const row = data as { overall_score: number | null; completed_at: string | null } | null;
+  return row ? { score: row.overall_score, scannedAt: row.completed_at } : null;
+}
+
+/** For the sidebar: is it available, is it running, is anything waiting. */
+export async function getAutopilotBadge(workspaceId: string) {
+  const program = await store.liveProgram(workspaceId);
+  if (!program) return { status: null, waiting: 0 };
+  const waiting = await store.listActions(workspaceId, {
+    statuses: ["needs_approval", "proposed"],
+    limit: 50,
+  });
+  return { status: program.status, waiting: waiting.length };
+}
+
 export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
   const { workspaceId, role } = caller;
   const now = new Date();
-  const [program, actions, opportunities, events, connected] = await Promise.all([
+  const [program, all, opportunities, events, connected] = await Promise.all([
     store.liveProgram(workspaceId),
     store.listActions(workspaceId, {
-      kind: "content",
       since: new Date(now.getTime() - 45 * DAY).toISOString(),
       limit: 300,
     }),
@@ -282,6 +385,7 @@ export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
     connectedPlatforms(workspaceId).catch(() => [] as string[]),
   ]);
 
+  const actions = all.filter((a) => a.kind === "content");
   const waiting = actions.filter((a) => a.status === "needs_approval");
   const previews = await loadContent(
     workspaceId,
@@ -338,6 +442,10 @@ export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
     opportunities: opportunities.map(presentOpportunity),
     events: events.map(presentEvent),
     connectedPlatforms: connected as PlatformId[],
+    readiness: await readiness(workspaceId, program, connected),
+    learnings: latestLearnings(all),
+    tasks: latestTasks(all),
+    visibility: await latestVisibility(workspaceId),
   };
 }
 
@@ -370,6 +478,7 @@ function programColumns(settings: ProgramSettings, startsOn: string) {
     credit_cap_per_week: settings.creditCapPerWeek,
     video_cap_per_week: settings.contentTypes.includes("video") ? settings.videoCapPerWeek : 0,
     act_on_opportunities: settings.actOnOpportunities,
+    automations: [...new Set(settings.automations ?? [])],
     ...(settings.strategy ? { strategy: settings.strategy } : {}),
   };
 }

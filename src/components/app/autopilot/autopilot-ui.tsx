@@ -64,6 +64,7 @@ export const KIND_LABEL: Record<OpportunityKind, string> = {
   news: "In the news",
   customer: "Customer signal",
   performance: "Your results",
+  visibility: "AI visibility",
 };
 
 /** "Tue 7 Oct, 09:00" in the viewer's own time zone. */

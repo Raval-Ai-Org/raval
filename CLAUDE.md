@@ -184,8 +184,8 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
   - leased `runner.server.ts`;
   - `service.server.ts`;
   - RPC `src/server/fns/geo-agent.ts`, UI `geo/agent/AgentPanel.tsx`.
-  Models: routes `geo.agent.investigate` / `implement` / `review` in
-  `task-models.ts` (Opus 5.5; override `AI_MODEL_GEO_AGENT_*`). Rules:
+    Models: routes `geo.agent.investigate` / `implement` / `review` in
+    `task-models.ts` (Opus 5.5; override `AI_MODEL_GEO_AGENT_*`). Rules:
   - **Ownership first:** no proposal, batch or run unless
     `src/lib/connectors/ownership.ts` verified the repository builds that host
     (`assertSourceOwnsHost`).
@@ -310,6 +310,18 @@ worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents p
 - The UI is one presentational component (`AutopilotScreen`) fed by
   `AutopilotPanel`; `/autopilot-lab` renders it with sample data in development
   for visual checks (`tests/integration/autopilot-lab.spec.ts`).
+- **More than posts.** A program's `automations` become weekly `task` actions
+  that start work in another Mellox system through `ports.tasks.run` (today:
+  `geo_scan` → `createScan`). A task only starts the work; that system keeps
+  its own rules (only a verification scan resolves a GEO finding). Add a new
+  automation there, never as a second implementation inside Autopilot.
+- **Adaptive.** `summarizeLearnings` (`src/lib/autopilot/learn.ts`, pure) turns
+  the workspace's own measured posts into a few sentences that go into the
+  next plan prompt and onto the home screen. No pattern is claimed from fewer
+  than two posts per group.
+- **Ask, don't fail.** `readiness` in the view lists what is missing (social
+  accounts, Brand DNA, website) with the place to fix it; the UI shows it in
+  setup and on Home.
 - Opportunity scans read stored Market Brain and competitor data only — no new
   web searches — and are queued from `runMarketBrainJob` and `advanceCompetitor`.
 - Worker: advanced by the **existing** `run-schedules` cron hook
@@ -382,11 +394,45 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   evidence never bills twice). Sources are wrapped as untrusted data
   (`src/server/guardrails/untrusted.ts`) before they reach the prompt.
 - **Daily re-collection** is a `scheduled_jobs` row (`task_type:
-  "market-brain"`) driven by `market-brain-scheduler.server.ts`, advanced by
+"market-brain"`) driven by `market-brain-scheduler.server.ts`, advanced by
   `runDueMarketBrainCollections()`.
 - UI: `MarketBrainPanel.tsx` + `MarketBrainInsights.tsx` +
   `MarketBrainProgress.tsx`, embedded in `MarketingCoachPanel.tsx`'s "Market"
   tab; routes `src/app/api/market/{trends,intelligence,latest}`.
+
+## Studio: carousels, trends and content memory
+
+- **A carousel is one story, drawn by code.** Pure core in
+  `src/lib/studio/carousel/`: `story.ts` (structure, a role per slide,
+  `normalizeSlides`, `carouselStoryIssue`), `design.ts` (look per brand,
+  colourway and motif per carousel, readable themes), `SlideArt.tsx` (the one
+  slide drawing).
+  - `SlideArt` is rendered by the Studio preview **and** by
+    `src/server/studio/carousel-render.server.tsx` (next/og → JPEG). Keep it to
+    inline styles, flexbox and numbers derived from the width, or the two drift.
+  - The image model only ever makes the optional cover picture. Slide text is
+    never sent to an image model.
+  - `carousel-assets.server.ts` stores the slides (`meta.asset_storage_paths`,
+    hash in `meta.carousel`). The publisher asks `ensureCarouselMedia` right
+    before sending, so an edited slide is redrawn, never published stale. Paths
+    and the stored look come from user-editable `meta`: both are re-validated.
+  - Scripts the fonts can't draw (`canRenderText`) keep the old behaviour; it
+    fails open and never fails a job.
+- **Social trends are one shared, stored snapshot** (`social_trend_snapshots`,
+  scope `global`; `src/server/studio/social-trends.server.ts`, pure half in
+  `src/lib/studio/trends.ts`). Refreshed every few days from the **existing**
+  run-schedules hook via the one search path. Generators only read it: a brief
+  never triggers a trends search. A trend is kept only if it cites a source the
+  search returned (`groundTrends`). Flag `FEATURE_FLAG_SOCIAL_TRENDS_ENABLED`.
+- `src/lib/studio/playbook.ts` is the steady layer (how each platform and
+  format works); review it when a platform changes.
+- **New idea, same brand** (`src/lib/studio/memory.ts`): the opening style
+  rotates (`pickHookStyle`), used openings are listed and checked
+  (`findRepeatedOpening`), and published copy is offered as a voice reference
+  only. The carousel look is fixed per brand; its colourway and motif never
+  repeat the previous carousel.
+- Live check: `tests/live/studio-carousel-trends.live.ts` (collecting behind
+  `TRENDS_LIVE_REFRESH=yes`).
 
 ## Backlink Growth (buying real placements)
 
@@ -412,7 +458,7 @@ never sees one.
     every workspace, and the pay call charges for the whole basket. So exactly
     one order cycle may touch the provider at a time, enforced by the lease row
     `provider_basket_lock` with a fencing token that every write carries.
-  - **No blind retry** — an unknown POST outcome is resolved by *reading* the
+  - **No blind retry** — an unknown POST outcome is resolved by _reading_ the
     basket. An unknown order resolves by items appearing; an unknown pay by
     items disappearing.
 - Anything the runner cannot resolve with certainty quarantines the lock and
@@ -441,7 +487,7 @@ never sees one.
   "published" is not proof. `link_order_lines_live_needs_proof` refuses `live`
   in the database without a real check, mirroring `backlink_opportunities`.
   Verification (`src/lib/backlinks/verify.ts` + `src/server/backlinks/
-  verify.server.ts`, through `safeFetch`) is deliberately conservative: a bot
+verify.server.ts`, through `safeFetch`) is deliberately conservative: a bot
   wall, truncated body or client-rendered page is `unreachable`, never
   `missing`, and a link is only `lost` after two consecutive misses a day apart.
 - Attribution from the provider's link list is `(target, keyword, donor, cost)`,

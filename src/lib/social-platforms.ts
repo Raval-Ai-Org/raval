@@ -35,9 +35,9 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
     color: "#0A66C2",
     maxChars: 3000,
     optimalChars: 1300,
-    hashtags: [3, 5],
+    hashtags: [1, 3],
     style:
-      "Professional, insight-led. Strong first line (the 'hook') visible above the fold — under 140 chars. Use short paragraphs and line breaks for scannability. Add a clear point of view, 2-3 concrete proof points or numbers, and end with one open question. No emoji walls; 0-2 emojis max. 3-5 niche hashtags at the end.",
+      "Professional, insight-led. Strong first line (the 'hook') visible above the fold — under 140 chars. Use short paragraphs and line breaks for scannability. Add a clear point of view and concrete, lived detail, and end with one open question. No emoji walls; 0-2 emojis max. 1-3 niche hashtags at the end.",
   },
   twitter: {
     id: "twitter",
@@ -57,9 +57,9 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
     color: "#E1306C",
     maxChars: 2200,
     optimalChars: 150,
-    hashtags: [8, 12],
+    hashtags: [3, 5],
     style:
-      "Caption-style. First line is the hook (visible before 'more'). Use 2-4 short lines, friendly tone, 1-3 tasteful emojis. End with a CTA (save / share / comment). Append 8-12 hashtags on a new line — mix broad, niche, and branded.",
+      "Caption-style. First line is the hook (visible before 'more') and names the topic in words people search. Use 2-4 short lines, friendly tone, 1-3 tasteful emojis. End with a CTA (save / share / comment). Append 3-5 specific hashtags on a new line.",
   },
   facebook: {
     id: "facebook",
@@ -90,9 +90,9 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
     color: "#FE2C55",
     maxChars: 2200,
     optimalChars: 150,
-    hashtags: [4, 8],
+    hashtags: [3, 5],
     style:
-      "Caption for a short video. Open with curiosity gap or POV. 1-2 short lines, trend-aware. End with 4-8 trending + niche hashtags. Emojis welcome but sparingly.",
+      "Caption for a short video. Open with a curiosity gap or POV and say the topic in plain, searchable words. 1-2 short lines. End with 3-5 specific hashtags. Emojis welcome but sparingly.",
   },
   youtube: {
     id: "youtube",

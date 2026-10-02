@@ -26,6 +26,7 @@ import { canTransition, isTerminal, WORKER_STATUSES } from "./state";
 import { buildAutopilotAttention, needsYou, rowState, sortAgencyRows } from "./status";
 import { addDaysYmd, ymdInZone, zonedInstant } from "./time";
 import { underperformers } from "@/lib/studio/performance";
+import { summarizeLearnings } from "./learn";
 
 const NOW = new Date("2026-10-05T08:00:00Z");
 
@@ -50,6 +51,7 @@ const program: ProgramRow = {
   act_on_opportunities: false,
   acting_user_id: "u1",
   strategy: {},
+  automations: ["geo_scan"],
   last_notified_at: null,
   cycle: 0,
   created_by: "u1",
@@ -433,6 +435,41 @@ describe("agency status", () => {
       "autopilot-opportunities",
     ]);
     expect(items[1].title).toBe("Acme is waiting on you");
+  });
+});
+
+describe("learnings", () => {
+  const piece = (title: string, platform: string, views: number, contentType = "social") => ({
+    title,
+    platform,
+    contentType,
+    views,
+  });
+
+  it("says nothing until there is enough to go on", () => {
+    expect(summarizeLearnings([piece("A", "linkedin", 500), piece("B", "linkedin", 300)])).toEqual(
+      [],
+    );
+  });
+
+  it("names the best post and the stronger platform", () => {
+    const lines = summarizeLearnings([
+      piece("Grinder guide", "linkedin", 1800),
+      piece("Roast day", "linkedin", 1200),
+      piece("Friday latte", "instagram", 400),
+      piece("New cups", "instagram", 600),
+    ]);
+    expect(lines[0]).toContain("Grinder guide");
+    expect(lines[1]).toBe("LinkedIn reaches about 3× more people than Instagram.");
+  });
+
+  it("does not call one lucky post a pattern", () => {
+    const lines = summarizeLearnings([
+      piece("A", "linkedin", 5000),
+      piece("B", "instagram", 300),
+      piece("C", "facebook", 200),
+    ]);
+    expect(lines).toHaveLength(1);
   });
 });
 

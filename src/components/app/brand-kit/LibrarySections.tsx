@@ -1,12 +1,11 @@
 "use client";
-// The Brand Kit library: logos, colours, fonts, elements, example posts and
-// writing samples. Styles draw on these; generators use them through a style.
+// The Brand Kit library: logos, fonts, images, and examples (posts, videos and
+// writing). Styles draw on these; generators use them through a style.
 import * as React from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
-  Brain,
   Check,
   Link,
   Plus,
@@ -20,20 +19,23 @@ import {
 } from "@/components/icons";
 import { SurfacePage, Tile, GroupLabel } from "@/components/app/surface/SurfaceLayout";
 import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
-import { emitAppEvent } from "@/lib/app-events";
 import { fontStack, loadFontFile } from "@/lib/brand-kit/fonts";
-import type { BrandKitOverview, KitAssetView, KitSection } from "@/lib/brand-kit/contracts";
+import type { BrandKitOverview, KitAssetView } from "@/lib/brand-kit/contracts";
 import { ANALYSIS_VERSION } from "@/lib/brand-kit/merge";
 import type { KitAssetKind } from "@/lib/brand-kit/spec";
 import { useAddWritingSample, useKitAssetActions, useUploadKitFiles } from "./hooks";
 import { DropZone, Segmented } from "./controls";
 import { AnalysisDot, ExampleThumb } from "./StyleEditor";
-import { Swatches, paletteList, resolveView } from "./preview";
+import { Swatches } from "./preview";
+
+export type LibrarySectionId = "logos" | "fonts" | "elements" | "inspiration";
 
 type Props = {
   workspaceId: string;
   data: BrandKitOverview;
-  section: Exclude<KitSection, "styles">;
+  section: LibrarySectionId;
+  /** Open Examples on its Writing tab. */
+  startOnWriting?: boolean;
   onCreateFrom: (assetIds: string[]) => void;
   onOpenStyle: (id: string) => void;
 };
@@ -44,16 +46,12 @@ export function LibrarySection(props: Props) {
   switch (props.section) {
     case "logos":
       return <LogosSection {...props} />;
-    case "colors":
-      return <ColorsSection {...props} />;
     case "fonts":
       return <FontsSection {...props} />;
     case "elements":
       return <ElementsSection {...props} />;
     case "inspiration":
       return <ExamplesSection {...props} />;
-    case "writing":
-      return <WritingSection {...props} />;
   }
 }
 
@@ -66,15 +64,15 @@ const LOGO_SLOTS: Array<{
   dark?: boolean;
 }> = [
   { kind: "logo", title: "Main logo", hint: "For light backgrounds" },
-  { kind: "logo_dark", title: "Logo for dark", hint: "White or light version", dark: true },
-  { kind: "logo_mark", title: "Icon", hint: "Square mark or favicon" },
+  { kind: "logo_dark", title: "Light logo", hint: "For dark backgrounds", dark: true },
+  { kind: "logo_mark", title: "Icon", hint: "Square" },
 ];
 
 function LogosSection({ workspaceId, data }: Props) {
   const upload = useUploadKitFiles(workspaceId);
   const actions = useKitAssetActions(workspaceId);
   return (
-    <SurfacePage title="Logos" subtitle="PNG with a clear background works best.">
+    <SurfacePage title="Logos">
       <div className="grid gap-4 sm:grid-cols-3">
         {LOGO_SLOTS.map((slot, i) => {
           const asset = data.assets.find((a) => a.kind === slot.kind);
@@ -144,105 +142,12 @@ function LogosSection({ workspaceId, data }: Props) {
               <img src={data.dna.logoUrl} alt="" className="max-h-12 max-w-20 object-contain" />
             </div>
             <div className="min-w-0 flex-1 text-[12.5px] text-muted-foreground">
-              Found when Mellox read your site. Styles use it until you upload your own.
+              Used until you upload your own.
             </div>
           </Tile>
         </>
       )}
     </SurfacePage>
-  );
-}
-
-// ── Colors ──────────────────────────────────────────────────────────────────
-
-function ColorsSection({ data, onOpenStyle }: Props) {
-  const styles = data.styles.filter((s) => !s.archived);
-  return (
-    <SurfacePage
-      title="Colors"
-      subtitle="Your brand colors. Each style can use its own."
-      actions={
-        <button
-          type="button"
-          className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
-          onClick={() => emitAppEvent("open:brand-dna", { tab: "colors" })}
-        >
-          <Brain className="h-4 w-4" /> Edit in Brand DNA
-        </button>
-      }
-    >
-      <Tile>
-        <div className="ds-label mb-3">Brand DNA</div>
-        {data.dna.colors.length ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {data.dna.colors.map((c, i) => (
-              <motion.div
-                key={`${c.hex}-${i}`}
-                initial={{ opacity: 0, scale: 0.94 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.04 }}
-              >
-                <CopySwatch hex={c.hex} name={c.name} />
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[13px] text-muted-foreground">No colors in Brand DNA yet.</p>
-        )}
-      </Tile>
-      <GroupLabel>In your styles</GroupLabel>
-      <div className="space-y-2">
-        {styles.map((s) => {
-          const r = resolveView(s, data.dna);
-          const own = !!s.spec.visual?.palette?.primary;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => onOpenStyle(s.id)}
-              className="ds-tile ds-tile-hover flex w-full items-center gap-4 p-3 text-left"
-            >
-              <Swatches colors={paletteList(r)} size={26} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-medium">{s.name}</div>
-                <div className="text-[12px] text-muted-foreground">
-                  {own ? "Own colors" : "Follows Brand DNA"}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-        {!styles.length && <p className="text-[13px] text-muted-foreground">No styles yet.</p>}
-      </div>
-    </SurfacePage>
-  );
-}
-
-function CopySwatch({ hex, name }: { hex: string; name?: string }) {
-  const [copied, setCopied] = React.useState(false);
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        void navigator.clipboard?.writeText(hex);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1200);
-      }}
-      className="group w-full text-left"
-    >
-      <div
-        className="relative aspect-[4/3] rounded-[14px] ring-1 ring-black/5 transition-transform group-hover:scale-[1.03]"
-        style={{ background: hex }}
-      >
-        {copied && (
-          <span className="absolute inset-0 grid place-items-center rounded-[14px] bg-black/30 text-white">
-            <Check className="h-5 w-5" />
-          </span>
-        )}
-      </div>
-      <div className="mt-1.5 truncate text-[12px] font-medium">{name || "Color"}</div>
-      <div className="font-mono text-[11px] uppercase text-muted-foreground">{hex}</div>
-    </button>
   );
 }
 
@@ -256,15 +161,15 @@ function FontsSection({ workspaceId, data }: Props) {
     for (const f of fonts) if (f.url && f.label) void loadFontFile(f.label, f.url);
   }, [fonts]);
   return (
-    <SurfacePage title="Fonts" subtitle="Upload your own, or pick one inside a style.">
+    <SurfacePage title="Fonts">
       {data.canEdit && (
         <DropZone
           accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"
           onFiles={(files) => upload.mutate({ kind: "font_file", files })}
           busy={upload.isPending}
           icon={Type}
-          title="Upload font files"
-          hint="WOFF2, WOFF, TTF or OTF, up to 2 MB"
+          title="Upload fonts"
+          hint="WOFF2, WOFF, TTF or OTF"
         />
       )}
       {fonts.length > 0 && (
@@ -358,9 +263,9 @@ function InlineLabel({
 
 type ElementKind = "element" | "pattern" | "product_photo";
 const ELEMENT_TABS: Array<{ value: ElementKind; label: string; hint: string }> = [
-  { value: "element", label: "Elements", hint: "Stickers, icons, shapes, mascots" },
-  { value: "pattern", label: "Patterns", hint: "Backgrounds and textures" },
-  { value: "product_photo", label: "Products", hint: "Clean photos of what you sell" },
+  { value: "element", label: "Graphics", hint: "Icons, shapes, stickers" },
+  { value: "pattern", label: "Backgrounds", hint: "Patterns and textures" },
+  { value: "product_photo", label: "Products", hint: "Photos of what you sell" },
 ];
 
 function ElementsSection({ workspaceId, data }: Props) {
@@ -371,8 +276,7 @@ function ElementsSection({ workspaceId, data }: Props) {
   const tab = ELEMENT_TABS.find((t) => t.value === kind)!;
   return (
     <SurfacePage
-      title="Elements"
-      subtitle="The pieces that make your posts yours."
+      title="Images"
       actions={
         <Segmented
           value={kind}
@@ -389,7 +293,7 @@ function ElementsSection({ workspaceId, data }: Props) {
             onFiles={(files) => upload.mutate({ kind, files })}
             busy={upload.isPending}
             icon={Plus}
-            title={`Add ${tab.label.toLowerCase()}`}
+            title="Add"
             hint={tab.hint}
             className="aspect-square min-h-0"
           />
@@ -443,7 +347,33 @@ function ElementsSection({ workspaceId, data }: Props) {
 
 // ── Examples ────────────────────────────────────────────────────────────────
 
-function ExamplesSection({ workspaceId, data, onCreateFrom }: Props) {
+type ExampleTab = "posts" | "writing";
+
+function ExamplesSection(props: Props) {
+  const [tab, setTab] = React.useState<ExampleTab>(props.startOnWriting ? "writing" : "posts");
+  const tabs = (
+    <Segmented<ExampleTab>
+      value={tab}
+      onChange={(v) => v && setTab(v)}
+      options={[
+        { value: "posts", label: "Posts" },
+        { value: "writing", label: "Writing" },
+      ]}
+    />
+  );
+  return tab === "posts" ? (
+    <PostsSection {...props} tabs={tabs} />
+  ) : (
+    <WritingSection {...props} tabs={tabs} />
+  );
+}
+
+function PostsSection({
+  workspaceId,
+  data,
+  onCreateFrom,
+  tabs,
+}: Props & { tabs: React.ReactNode }) {
   const upload = useUploadKitFiles(workspaceId);
   const actions = useKitAssetActions(workspaceId);
   const items = data.assets.filter(
@@ -468,9 +398,9 @@ function ExamplesSection({ workspaceId, data, onCreateFrom }: Props) {
   return (
     <SurfacePage
       title="Examples"
-      subtitle="Posts and videos you want to look like."
       actions={
         <>
+          {tabs}
           {failed.length > 0 && data.canEdit && (
             <button
               type="button"
@@ -488,7 +418,7 @@ function ExamplesSection({ workspaceId, data, onCreateFrom }: Props) {
               className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
               onClick={() => onCreateFrom([...selected])}
             >
-              <Wand className="h-4 w-4" /> Make a style from {selected.size}
+              <Wand className="h-4 w-4" /> New style from {selected.size}
             </button>
           )}
         </>
@@ -501,8 +431,7 @@ function ExamplesSection({ workspaceId, data, onCreateFrom }: Props) {
             accept={`${IMAGE_ACCEPT},video/mp4,video/webm,video/quicktime`}
             onFiles={onFiles}
             busy={upload.isPending}
-            title="Add examples"
-            hint="Images or short videos"
+            title="Add posts or videos"
             className="aspect-square min-h-0"
           />
         )}
@@ -537,9 +466,11 @@ function ExamplesSection({ workspaceId, data, onCreateFrom }: Props) {
                   <Check className="h-3.5 w-3.5" />
                 </button>
               )}
-              <div className="mt-1.5 line-clamp-1 px-0.5 text-[12px] text-muted-foreground">
-                {statusText(a)}
-              </div>
+              {(a.stale || a.analysisStatus === "failed") && (
+                <div className="mt-1.5 line-clamp-1 px-0.5 text-[12px] text-destructive">
+                  {statusText(a)}
+                </div>
+              )}
             </motion.div>
           );
         })}
@@ -557,8 +488,8 @@ function ExamplesSection({ workspaceId, data, onCreateFrom }: Props) {
 }
 
 function statusText(a: KitAssetView): string {
-  if (a.stale) return "Took too long. Try again.";
-  if (a.analysisStatus === "pending" || a.analysisStatus === "running") return "Reading the style…";
+  if (a.stale) return "Took too long";
+  if (a.analysisStatus === "pending" || a.analysisStatus === "running") return "Reading…";
   if (a.analysisStatus === "failed") return a.analysisError ?? "Couldn't read this one";
   if (a.analysisStatus === "done") return a.analysis?.summary ?? "Learned";
   return a.label ?? "";
@@ -675,7 +606,12 @@ function ExampleDetail({
 
 // ── Writing samples ─────────────────────────────────────────────────────────
 
-function WritingSection({ workspaceId, data, onCreateFrom }: Props) {
+function WritingSection({
+  workspaceId,
+  data,
+  onCreateFrom,
+  tabs,
+}: Props & { tabs: React.ReactNode }) {
   const add = useAddWritingSample(workspaceId);
   const actions = useKitAssetActions(workspaceId);
   const [mode, setMode] = React.useState<"text" | "link">("text");
@@ -691,18 +627,20 @@ function WritingSection({ workspaceId, data, onCreateFrom }: Props) {
   };
   return (
     <SurfacePage
-      title="Writing"
-      subtitle="Posts or captions that sound like you."
+      title="Examples"
       actions={
-        learned.length > 0 && data.canEdit ? (
-          <button
-            type="button"
-            className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
-            onClick={() => onCreateFrom(learned.map((s) => s.id))}
-          >
-            <Wand className="h-4 w-4" /> Make a style from these
-          </button>
-        ) : null
+        <>
+          {tabs}
+          {learned.length > 0 && data.canEdit && (
+            <button
+              type="button"
+              className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
+              onClick={() => onCreateFrom(learned.map((s) => s.id))}
+            >
+              <Wand className="h-4 w-4" /> New style from these
+            </button>
+          )}
+        </>
       }
     >
       {data.canEdit && (
@@ -712,8 +650,8 @@ function WritingSection({ workspaceId, data, onCreateFrom }: Props) {
             value={mode}
             onChange={(v) => v && setMode(v)}
             options={[
-              { value: "text", label: "Paste text" },
-              { value: "link", label: "From a link" },
+              { value: "text", label: "Text" },
+              { value: "link", label: "Link" },
             ]}
           />
           {mode === "text" ? (
@@ -721,7 +659,7 @@ function WritingSection({ workspaceId, data, onCreateFrom }: Props) {
               value={text}
               onChange={(e) => setText(e.target.value.slice(0, 20_000))}
               rows={5}
-              placeholder="Paste one or more posts you wrote. The more, the better."
+              placeholder="Paste posts or captions that sound like you"
               className="ds-well w-full resize-y px-4 py-3 text-[13.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
             />
           ) : (
@@ -737,9 +675,7 @@ function WritingSection({ workspaceId, data, onCreateFrom }: Props) {
           )}
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] text-muted-foreground">
-              {mode === "text"
-                ? `${text.trim().length.toLocaleString()} characters`
-                : "Public pages only. Some social sites hide the text; paste it instead."}
+              {mode === "link" ? "Public pages only" : ""}
             </span>
             <button
               type="button"
@@ -752,15 +688,14 @@ function WritingSection({ workspaceId, data, onCreateFrom }: Props) {
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              Add sample
+              Add
             </button>
           </div>
         </Tile>
       )}
       {samples.length > 0 && (
         <>
-          <GroupLabel>Samples</GroupLabel>
-          <ul className="space-y-2">
+          <ul className="mt-4 space-y-2">
             {samples.map((s, i) => (
               <motion.li
                 key={s.id}
@@ -774,7 +709,9 @@ function WritingSection({ workspaceId, data, onCreateFrom }: Props) {
                   <div className="line-clamp-3 whitespace-pre-line text-[13px] text-foreground/85">
                     {s.textContent}
                   </div>
-                  <div className="mt-1.5 text-[12px] text-muted-foreground">{statusText(s)}</div>
+                  {s.analysisStatus !== "done" && (
+                    <div className="mt-1.5 text-[12px] text-muted-foreground">{statusText(s)}</div>
+                  )}
                   {s.analysis?.writing?.tone && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {toneChips(s.analysis.writing.tone).map((t) => (

@@ -53,6 +53,16 @@ export const AUTOPILOT_GOALS = [
 ] as const;
 export type AutopilotGoal = (typeof AUTOPILOT_GOALS)[number];
 
+/** Recurring work Autopilot starts through other Mellox systems. */
+export const AUTOMATIONS = ["geo_scan"] as const;
+export type Automation = (typeof AUTOMATIONS)[number];
+export const AUTOMATION_INFO: Record<Automation, { label: string; detail: string }> = {
+  geo_scan: {
+    label: "AI visibility check",
+    detail: "Scans your site every week and lines up fixes.",
+  },
+};
+
 export const DURATION_WEEKS = [2, 4, 8, 12] as const;
 
 export const ProgramSettingsSchema = z.object({
@@ -70,11 +80,12 @@ export const ProgramSettingsSchema = z.object({
   actOnOpportunities: z.boolean().default(false),
   styleId: z.string().uuid().nullish(),
   strategy: StrategySchema.nullish(),
+  automations: z.array(z.enum(AUTOMATIONS)).max(4).default(["geo_scan"]),
 });
 export type ProgramSettings = z.infer<typeof ProgramSettingsSchema>;
 
 export type ProgramStatus = "running" | "paused" | "completed" | "stopped";
-export type ActionKind = "plan" | "content" | "scan";
+export type ActionKind = "plan" | "content" | "scan" | "task";
 export type ActionStatus =
   | "proposed"
   | "planned"
@@ -91,7 +102,20 @@ export type ActionStatus =
   | "failed"
   | "cancelled";
 
-export type OpportunityKind = "trend" | "competitor" | "news" | "customer" | "performance";
+export type OpportunityKind =
+  "trend" | "competitor" | "news" | "customer" | "performance" | "visibility";
+
+/** Something Autopilot needs before it can do its job, and where to fix it. */
+export type ReadinessItem = {
+  id: "brand" | "accounts" | "website";
+  ok: boolean;
+  label: string;
+  detail: string;
+  /** What the button says when it is not ready. */
+  cta: string;
+  /** Blocks posting (accounts) rather than just limiting what Autopilot can do. */
+  required: boolean;
+};
 export type OpportunityStatus = "new" | "accepted" | "dismissed" | "expired" | "done";
 
 /** What an opportunity can be turned into. A campaign is three linked pieces. */
@@ -123,6 +147,7 @@ export type ProgramRow = {
   act_on_opportunities: boolean;
   acting_user_id: string | null;
   strategy: Record<string, unknown>;
+  automations: string[];
   last_notified_at: string | null;
   cycle: number;
   created_by: string | null;
@@ -225,6 +250,7 @@ export type ProgramView = {
   videoCapPerWeek: number;
   actOnOpportunities: boolean;
   strategy: Strategy | null;
+  automations: Automation[];
   week: number;
   totalWeeks: number;
 };
@@ -306,6 +332,12 @@ export type AutopilotView = {
   opportunities: OpportunityView[];
   events: EventView[];
   connectedPlatforms: PlatformId[];
+  readiness: ReadinessItem[];
+  /** What Autopilot learned from its own results, used in the next plan. */
+  learnings: string[];
+  /** Recurring non-post work: latest run of each. */
+  tasks: ActionView[];
+  visibility: { score: number | null; scannedAt: string | null } | null;
 };
 
 /** What Mellox proposes at setup, so the person only has to say yes. */

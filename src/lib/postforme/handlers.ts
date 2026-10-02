@@ -69,6 +69,11 @@ export type SocialApiDeps = {
   quota?: PostQuota;
   now?: () => number;
   fetchFn?: typeof fetch;
+  /**
+   * A designed carousel's slide images, redrawn first if its slides changed
+   * (src/server/studio/carousel-assets.server.ts). Null for anything else.
+   */
+  carouselMedia?: (item: any) => Promise<string[] | null>;
 };
 
 export class DistributionError extends Error {
@@ -509,6 +514,24 @@ function storagePathOf(item: any): string | null {
   return isWorkspaceStoragePath(p, item?.workspace_id) ? (p as string) : null;
 }
 
+/**
+ * Every stored image of the item, in order: a carousel's slides when it has
+ * them, else its single asset. Each path must lie in the item's own workspace.
+ */
+function storagePathsOf(item: any): string[] {
+  const many = item?.meta?.asset_storage_paths;
+  if (
+    Array.isArray(many) &&
+    many.length > 1 &&
+    many.length <= 20 &&
+    many.every((p) => isWorkspaceStoragePath(p, item?.workspace_id))
+  ) {
+    return many as string[];
+  }
+  const one = storagePathOf(item);
+  return one ? [one] : [];
+}
+
 /** meta names a storage path that is not this workspace's (tampered or copied meta). */
 function hasForeignStoragePath(item: any): boolean {
   const p = item?.meta?.asset_storage_path;
@@ -806,16 +829,29 @@ async function distribute(
 
     const text = String(item.body ?? "");
     const title = platform === "youtube" ? youtubeTitle(item) : undefined;
-    const storagePath = storagePathOf(item);
+    // A carousel sends all its slides; the hook redraws them if they changed.
+    const slidePaths = deps.carouselMedia
+      ? await deps.carouselMedia(item).catch((e) => {
+          console.error("[postforme] carousel slides unavailable", id, e);
+          return null;
+        })
+      : null;
+    const storagePaths =
+      slidePaths &&
+      slidePaths.length > 1 &&
+      slidePaths.length <= 20 &&
+      slidePaths.every((p) => isWorkspaceStoragePath(p, item.workspace_id))
+        ? slidePaths
+        : storagePathsOf(item);
     const externalUrl = publicMediaUrl(item);
     let validationMedia: MediaSource[] = [];
-    if (storagePath) {
-      const url = await signedUrl(deps.db, storagePath);
-      if (!url) {
+    if (storagePaths.length) {
+      const urls = await Promise.all(storagePaths.map((p) => signedUrl(deps.db, p)));
+      if (urls.some((url) => !url)) {
         skip(id, "The attached media couldn't be read from storage.");
         continue;
       }
-      validationMedia = [{ source_type: "url", source: url }];
+      validationMedia = urls.map((url) => ({ source_type: "url", source: url as string }));
     } else if (externalUrl) {
       validationMedia = [{ source_type: "url", source: externalUrl }];
     }
@@ -906,14 +942,23 @@ async function distribute(
     // 4. Media for the real post. Scheduled posts copy stored assets into the
     //    provider library (a signed URL would expire before the schedule fires).
     let media: MediaSource[] = validationMedia;
-    if (kind === "schedule" && storagePath) {
-      const uploaded = await uploadStoredAsset(deps, storagePath);
-      if (!uploaded.ok) {
-        await release(uploaded.reason);
-        skip(id, uploaded.reason);
+    if (kind === "schedule" && storagePaths.length) {
+      const uploadedIds: string[] = [];
+      let uploadError: string | null = null;
+      for (const path of storagePaths) {
+        const uploaded = await uploadStoredAsset(deps, path);
+        if (!uploaded.ok) {
+          uploadError = uploaded.reason;
+          break;
+        }
+        uploadedIds.push(uploaded.mediaId);
+      }
+      if (uploadError) {
+        await release(uploadError);
+        skip(id, uploadError);
         continue;
       }
-      media = [{ source_type: "media_id", source: uploaded.mediaId }];
+      media = uploadedIds.map((mediaId) => ({ source_type: "media_id", source: mediaId }));
     }
 
     // 5. Create. Never auto-retried: POST /posts has no idempotency key.
@@ -1238,17 +1283,22 @@ export async function retryHandler(
     ) {
       return fail(400, "ACCOUNT_EXPIRED", "Reconnect the failed destination before retrying");
     }
-    const storagePath = storagePathOf(item);
-    const url = storagePath ? await signedUrl(deps.db, storagePath) : publicMediaUrl(item);
-    if (storagePath && !url)
+    const storagePaths = storagePathsOf(item);
+    const urls = storagePaths.length
+      ? await Promise.all(storagePaths.map((p) => signedUrl(deps.db, p)))
+      : [publicMediaUrl(item)];
+    if (storagePaths.length && urls.some((u) => !u))
       return fail(400, "PLATFORM_VALIDATION", "The attached media could not be read");
+    const mediaUrls = urls.filter((u): u is string => !!u);
     const res = await deps.api<ProviderPost>({
       method: "POST",
       path: "/posts",
       body: {
         text: String(item.body ?? ""),
         external_id: `${args.workspaceId}:${item.id}:retry:${nowMs(deps)}`,
-        ...(url ? { media: [{ source_type: "url", source: url }] } : {}),
+        ...(mediaUrls.length
+          ? { media: mediaUrls.map((source) => ({ source_type: "url", source })) }
+          : {}),
         targets: targetIds.map((accountId) => ({ account_id: accountId })),
         publish_now: true,
       },
