@@ -2,6 +2,7 @@ import "server-only";
 import type { AnyServerFn } from "@/server/server-fn";
 
 import * as analytics from "./analytics";
+import * as autopilot from "./autopilot";
 import * as brandDna from "./brand-dna";
 import * as brandKit from "./brand-kit";
 import * as campaignGeneration from "./campaign-generation";
@@ -30,6 +31,7 @@ import * as wordpress from "./wordpress";
 // the client stubs in src/lib/*.functions.ts were generated with.
 const MODULES: Record<string, Record<string, unknown>> = {
   analytics,
+  autopilot,
   "brand-dna": brandDna,
   "brand-kit": brandKit,
   "campaign-generation": campaignGeneration,

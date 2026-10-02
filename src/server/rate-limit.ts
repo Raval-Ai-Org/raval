@@ -56,6 +56,7 @@ export type RateLimitTier =
   | "backlinks"
   | "backlinks-verify"
   | "links-browse"
+  | "autopilot-write"
   | "links-match"
   | "links-brief"
   | "links-checkout"
@@ -142,6 +143,9 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   backlinks: { limit: 60, windowSeconds: 60, label: "backlink report" },
   // Link checks fetch third-party pages from our IP; keep the footprint small.
   "backlinks-verify": { limit: 60, windowSeconds: 3600, label: "link check" },
+  // Starting, changing or deciding Autopilot work. Every decision is cheap;
+  // the spend it leads to is metered where it happens.
+  "autopilot-write": { limit: 60, windowSeconds: 60, label: "Autopilot change" },
   // Browsing the mirrored placement catalog — a database read.
   "links-browse": { limit: 90, windowSeconds: 60, label: "placement search" },
   // Each match run reads up to two dozen third-party pages and spends model

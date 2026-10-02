@@ -120,6 +120,37 @@ export function isAssetMetadataFinalizeEnabled(workspaceId?: string): boolean {
  * overrides per workspace (either way). When off, the surface is hidden, its
  * routes and RPCs answer 404 and the worker skips the workspace.
  */
+/**
+ * Autopilot (ADR-0028). On unless set to "false"; `FEATURE_FLAG_AUTOPILOT_ENABLED_WS_<id>`
+ * overrides the global flag for one workspace in either direction. Off means
+ * the sidebar entry is hidden, RPCs answer 404 and the worker skips the workspace.
+ */
+export function isAutopilotEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_AUTOPILOT_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_AUTOPILOT_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Fully automatic mode: simple posts that pass every check are approved
+ * without a person. Separate from the flag above; on unless set to "false",
+ * and it needs Autopilot on. The checks themselves cannot be switched off.
+ */
+export function isFullAutopilotEnabled(workspaceId?: string): boolean {
+  if (!isAutopilotEnabled(workspaceId)) return false;
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_AUTOPILOT_FULL_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_AUTOPILOT_FULL_ENABLED ?? "").trim().toLowerCase());
+}
+
 export function isProofEngineEnabled(workspaceId?: string): boolean {
   if (workspaceId) {
     const perWs = (process.env[`FEATURE_FLAG_PROOF_ENGINE_ENABLED_WS_${workspaceId}`] ?? "")

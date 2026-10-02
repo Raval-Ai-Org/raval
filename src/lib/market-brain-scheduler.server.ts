@@ -148,9 +148,11 @@ async function runMarketBrainJob(job: MarketBrainJob): Promise<"completed" | "pe
     workspaceId: job.workspace_id,
     analysisType: "market_strategy",
   });
-  return intelligence.state === "completed" || intelligence.state === "cached"
-    ? "completed"
-    : "failed";
+  if (intelligence.state !== "completed" && intelligence.state !== "cached") return "failed";
+  // Fresh market evidence: let Autopilot look for opportunities in it (no-op when off).
+  const { requestOpportunityScan } = await import("@/server/autopilot/service.server");
+  await requestOpportunityScan(job.workspace_id);
+  return "completed";
 }
 
 export async function runDueMarketBrainCollections(

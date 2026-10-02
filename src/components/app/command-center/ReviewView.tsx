@@ -308,6 +308,11 @@ export function ReviewView({
                         <span className="block truncate text-[13.5px] font-medium">{it.title}</span>
                         <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
                           <ClientTag name={it.clientName} />
+                          {it.autopilot && (
+                            <span className="shrink-0 rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                              Autopilot
+                            </span>
+                          )}
                           <span className="truncate">
                             {channelLabel(it.channel)} · {timeAgo(it.createdAt, cc.now)}
                           </span>

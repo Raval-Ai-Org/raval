@@ -45,6 +45,8 @@ export type CcContentRow = {
   status: string;
   scheduled_at: string | null;
   created_at: string;
+  /** Present when the row was read with its meta; used only to spot Autopilot's pieces. */
+  meta?: Record<string, unknown> | null;
 };
 
 export type CcApprovalRow = {
@@ -83,6 +85,8 @@ export type ReviewItem = {
   createdAt: string;
   scheduledAt: string | null;
   canDecide: boolean;
+  /** Made by Autopilot (approving it lets Autopilot schedule it). */
+  autopilot?: boolean;
 };
 
 function titleOf(row: Pick<CcContentRow, "title" | "body">, fallback: string): string {
@@ -110,6 +114,7 @@ function toItem(row: CcContentRow, clients: Map<string, CcClient>, fallback: str
     createdAt: row.created_at,
     scheduledAt: row.scheduled_at,
     canDecide: canEdit(client?.role),
+    autopilot: typeof row.meta?.autopilot_action_id === "string",
   };
 }
 

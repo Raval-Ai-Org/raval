@@ -179,6 +179,11 @@ async function advanceCompetitor(row: CompetitorRow): Promise<"done" | "lost_lea
     } catch (error) {
       console.error("[competitors] update sweep failed", error);
     }
+    if (found > 0) {
+      // A competitor moved: let Autopilot judge whether it is worth a response (no-op when off).
+      const { requestOpportunityScan } = await import("@/server/autopilot/service.server");
+      await requestOpportunityScan(row.workspace_id);
+    }
 
     const quietSweeps = row.updates_checked_at
       ? Math.min(3, Math.floor(lookbackDays(row.updates_checked_at) / 2))

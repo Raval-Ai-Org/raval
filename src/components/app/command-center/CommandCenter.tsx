@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   BarChart,
+  Bot,
   Calendar,
   Command as CommandIcon,
   Copy,
@@ -45,16 +46,23 @@ import { ReviewView, type QueueTab } from "./ReviewView";
 import { ClientsView } from "./ClientsView";
 import { ScheduleView } from "./ScheduleView";
 import { PerformanceView } from "./PerformanceView";
+import { AutopilotView } from "./AutopilotView";
+import { useAgencyAutopilot } from "@/components/app/autopilot/hooks";
+import { needsYou } from "@/lib/autopilot/status";
 import { CommandPalette, type PaletteEntry } from "./CommandPalette";
 import { DraftWeekDialog } from "./DraftWeekDialog";
 import { ClientMark, clientHref } from "./ui";
 
-type View = "overview" | "review" | "clients" | "schedule" | "performance";
-const VIEWS: View[] = ["overview", "review", "clients", "schedule", "performance"];
+type View = "overview" | "review" | "clients" | "schedule" | "performance" | "autopilot";
+const VIEWS: View[] = ["overview", "review", "clients", "schedule", "performance", "autopilot"];
 const QUEUES: QueueTab[] = ["review", "ready", "failed"];
 
 export function CommandCenter() {
   const cc = useCommandCenter();
+  // Autopilot shows only when it is switched on for at least one client.
+  const autopilot = useAgencyAutopilot(!cc.loading);
+  const autopilotRows = (autopilot.data ?? []).filter((r) => cc.clientMap.has(r.workspaceId));
+  const autopilotWaiting = autopilotRows.reduce((n, r) => n + needsYou(r), 0);
   const navigate = useNavigate();
   const [view, setView] = useState<View>("overview");
   const [queue, setQueue] = useState<QueueTab>("review");
@@ -256,6 +264,17 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
         icon: <BarChart className={ic} />,
         run: () => switchView("performance"),
       },
+      ...(autopilotRows.length
+        ? [
+            {
+              key: "v-autopilot",
+              group: "Go to",
+              label: "Autopilot",
+              icon: <Bot className={ic} />,
+              run: () => switchView("autopilot"),
+            },
+          ]
+        : []),
       {
         key: "a-draft",
         group: "Actions",
@@ -354,7 +373,7 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
     ]);
     return [...base, ...perClient];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cc.clients, cc.review.length, cc.ready.length, cc.failed.length]);
+  }, [cc.clients, cc.review.length, cc.ready.length, cc.failed.length, autopilotRows.length]);
 
   const nav: { id: View; label: string; icon: typeof Inbox; badge?: number; alert?: boolean }[] = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -368,6 +387,17 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
     { id: "clients", label: "Clients", icon: Users },
     { id: "schedule", label: "Schedule", icon: Calendar },
     { id: "performance", label: "Performance", icon: BarChart },
+    ...(autopilotRows.length
+      ? [
+          {
+            id: "autopilot" as const,
+            label: "Autopilot",
+            icon: Bot,
+            badge: autopilotWaiting,
+            alert: autopilotRows.some((r) => r.failures > 0),
+          },
+        ]
+      : []),
   ];
 
   const renderNav = (id: string) => (
@@ -549,6 +579,13 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
                       const c = cc.clientMap.get(id);
                       if (c) go(clientHref(c, "home"));
                     }}
+                  />
+                )}
+                {view === "autopilot" && (
+                  <AutopilotView
+                    cc={cc}
+                    onGo={go}
+                    onReviewClient={(id) => openQueue("review", id)}
                   />
                 )}
                 {view === "clients" && (

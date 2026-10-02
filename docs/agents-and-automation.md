@@ -29,6 +29,17 @@ reconciliation, and provider webhooks. Claim functions use leases and
 `SKIP LOCKED`-style database coordination where implemented. Jobs must be
 idempotent because hooks can be retried.
 
+## Autopilot
+
+Autopilot ([docs/autopilot.md](autopilot.md), ADR-0028) is the one place where
+Mellox carries work from a plan to a scheduled post. It is not an agent with
+tools: it is a leased state machine that calls the same Studio, content and
+publishing code a person uses, and it honours the same switches as the agent
+control plane (`AGENTS_DISABLED`, a workspace's paused agents). Nothing it makes
+goes out without an approved content item, and every step is written to the
+append-only `autopilot_events` history. It runs from the existing
+`run-schedules` hook; there is no separate cron job.
+
 ## Tool execution boundary
 
 Read-only repository tools, safe fetching, GitHub API access, and provider

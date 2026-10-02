@@ -1340,6 +1340,299 @@ export type Database = {
           },
         ];
       };
+      autopilot_actions: {
+        Row: {
+          approved_by: string | null;
+          approved_via: string | null;
+          attempts: number;
+          brief: string;
+          content_item_ids: string[];
+          content_type: string | null;
+          created_at: string;
+          credits_charged: number;
+          cycle: number;
+          dedupe_key: string;
+          finished_at: string | null;
+          generation_attempt: number;
+          goal: string | null;
+          id: string;
+          kind: string;
+          last_error: string | null;
+          lease_until: string | null;
+          locked_by: string | null;
+          next_attempt_at: string;
+          opportunity_id: string | null;
+          planned_for: string | null;
+          platform: string | null;
+          program_id: string | null;
+          reason: string;
+          requested_by: string | null;
+          result: Json;
+          slot: number | null;
+          status: string;
+          studio_job_id: string | null;
+          title: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          approved_by?: string | null;
+          approved_via?: string | null;
+          attempts?: number;
+          brief?: string;
+          content_item_ids?: string[];
+          content_type?: string | null;
+          created_at?: string;
+          credits_charged?: number;
+          cycle?: number;
+          dedupe_key: string;
+          finished_at?: string | null;
+          generation_attempt?: number;
+          goal?: string | null;
+          id?: string;
+          kind: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          next_attempt_at?: string;
+          opportunity_id?: string | null;
+          planned_for?: string | null;
+          platform?: string | null;
+          program_id?: string | null;
+          reason?: string;
+          requested_by?: string | null;
+          result?: Json;
+          slot?: number | null;
+          status?: string;
+          studio_job_id?: string | null;
+          title?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          approved_by?: string | null;
+          approved_via?: string | null;
+          attempts?: number;
+          brief?: string;
+          content_item_ids?: string[];
+          content_type?: string | null;
+          created_at?: string;
+          credits_charged?: number;
+          cycle?: number;
+          dedupe_key?: string;
+          finished_at?: string | null;
+          generation_attempt?: number;
+          goal?: string | null;
+          id?: string;
+          kind?: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          next_attempt_at?: string;
+          opportunity_id?: string | null;
+          planned_for?: string | null;
+          platform?: string | null;
+          program_id?: string | null;
+          reason?: string;
+          requested_by?: string | null;
+          result?: Json;
+          slot?: number | null;
+          status?: string;
+          studio_job_id?: string | null;
+          title?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "autopilot_actions_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "marketing_opportunities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "autopilot_actions_program_id_fkey";
+            columns: ["program_id"];
+            isOneToOne: false;
+            referencedRelation: "autopilot_programs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "autopilot_actions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      autopilot_events: {
+        Row: {
+          action_id: string | null;
+          actor: string;
+          actor_id: string | null;
+          created_at: string;
+          data: Json;
+          id: string;
+          kind: string;
+          opportunity_id: string | null;
+          program_id: string | null;
+          summary: string;
+          workspace_id: string;
+        };
+        Insert: {
+          action_id?: string | null;
+          actor?: string;
+          actor_id?: string | null;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          kind: string;
+          opportunity_id?: string | null;
+          program_id?: string | null;
+          summary: string;
+          workspace_id: string;
+        };
+        Update: {
+          action_id?: string | null;
+          actor?: string;
+          actor_id?: string | null;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          kind?: string;
+          opportunity_id?: string | null;
+          program_id?: string | null;
+          summary?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "autopilot_events_action_id_fkey";
+            columns: ["action_id"];
+            isOneToOne: false;
+            referencedRelation: "autopilot_actions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "autopilot_events_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "marketing_opportunities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "autopilot_events_program_id_fkey";
+            columns: ["program_id"];
+            isOneToOne: false;
+            referencedRelation: "autopilot_programs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "autopilot_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      autopilot_programs: {
+        Row: {
+          act_on_opportunities: boolean;
+          acting_user_id: string | null;
+          content_types: string[];
+          created_at: string;
+          created_by: string | null;
+          credit_cap_per_week: number;
+          cycle: number;
+          ends_on: string;
+          finished_at: string | null;
+          goal: string;
+          goal_note: string;
+          id: string;
+          last_notified_at: string | null;
+          mode: string;
+          pause_reason: string | null;
+          platforms: string[];
+          posts_per_week: number;
+          starts_on: string;
+          status: string;
+          strategy: Json;
+          style_id: string | null;
+          timezone: string;
+          updated_at: string;
+          video_cap_per_week: number;
+          weekdays: number[];
+          workspace_id: string;
+        };
+        Insert: {
+          act_on_opportunities?: boolean;
+          acting_user_id?: string | null;
+          content_types?: string[];
+          created_at?: string;
+          created_by?: string | null;
+          credit_cap_per_week?: number;
+          cycle?: number;
+          ends_on: string;
+          finished_at?: string | null;
+          goal: string;
+          goal_note?: string;
+          id?: string;
+          last_notified_at?: string | null;
+          mode?: string;
+          pause_reason?: string | null;
+          platforms?: string[];
+          posts_per_week?: number;
+          starts_on: string;
+          status?: string;
+          strategy?: Json;
+          style_id?: string | null;
+          timezone?: string;
+          updated_at?: string;
+          video_cap_per_week?: number;
+          weekdays?: number[];
+          workspace_id: string;
+        };
+        Update: {
+          act_on_opportunities?: boolean;
+          acting_user_id?: string | null;
+          content_types?: string[];
+          created_at?: string;
+          created_by?: string | null;
+          credit_cap_per_week?: number;
+          cycle?: number;
+          ends_on?: string;
+          finished_at?: string | null;
+          goal?: string;
+          goal_note?: string;
+          id?: string;
+          last_notified_at?: string | null;
+          mode?: string;
+          pause_reason?: string | null;
+          platforms?: string[];
+          posts_per_week?: number;
+          starts_on?: string;
+          status?: string;
+          strategy?: Json;
+          style_id?: string | null;
+          timezone?: string;
+          updated_at?: string;
+          video_cap_per_week?: number;
+          weekdays?: number[];
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "autopilot_programs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       backlink_campaigns: {
         Row: {
           created_at: string;
@@ -6117,6 +6410,86 @@ export type Database = {
           },
         ];
       };
+      marketing_opportunities: {
+        Row: {
+          created_at: string;
+          decided_at: string | null;
+          decided_by: string | null;
+          evidence: Json;
+          expires_at: string;
+          fingerprint: string;
+          id: string;
+          kind: string;
+          score: number;
+          score_parts: Json;
+          source_id: string | null;
+          source_kind: string;
+          status: string;
+          suggested_action: string;
+          suggested_platforms: string[];
+          suggested_type: string;
+          summary: string;
+          title: string;
+          updated_at: string;
+          why_relevant: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          evidence?: Json;
+          expires_at: string;
+          fingerprint: string;
+          id?: string;
+          kind: string;
+          score: number;
+          score_parts?: Json;
+          source_id?: string | null;
+          source_kind: string;
+          status?: string;
+          suggested_action?: string;
+          suggested_platforms?: string[];
+          suggested_type?: string;
+          summary?: string;
+          title: string;
+          updated_at?: string;
+          why_relevant?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          evidence?: Json;
+          expires_at?: string;
+          fingerprint?: string;
+          id?: string;
+          kind?: string;
+          score?: number;
+          score_parts?: Json;
+          source_id?: string | null;
+          source_kind?: string;
+          status?: string;
+          suggested_action?: string;
+          suggested_platforms?: string[];
+          suggested_type?: string;
+          summary?: string;
+          title?: string;
+          updated_at?: string;
+          why_relevant?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "marketing_opportunities_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       memory_insights: {
         Row: {
           body: string;
@@ -8685,6 +9058,25 @@ export type Database = {
         }[];
       };
       apply_credit_entry: { Args: { p: Json }; Returns: Json };
+      autopilot_overview: {
+        Args: never;
+        Returns: {
+          workspace_id: string;
+          program_id: string;
+          status: string;
+          pause_reason: string;
+          mode: string;
+          ends_on: string;
+          needs_approval: number;
+          plan_waiting: number;
+          new_opportunities: number;
+          failures: number;
+          missed: number;
+          performance_warnings: number;
+          next_action_at: string;
+          next_action_title: string;
+        }[];
+      };
       backlink_spent_credits: { Args: { p_workspace: string }; Returns: number };
       billing_margin_report: { Args: never; Returns: Json };
       billing_rollout_report: { Args: never; Returns: Json };
@@ -8705,6 +9097,10 @@ export type Database = {
       claim_analytics_sync_runs: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["analytics_sync_runs"]["Row"][];
+      };
+      claim_autopilot_actions: {
+        Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
+        Returns: Database["public"]["Tables"]["autopilot_actions"]["Row"][];
       };
       claim_competitor_jobs: {
         Args: {

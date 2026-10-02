@@ -300,6 +300,7 @@ export type FeatureKey =
   | "backlinks"
   | "client_portal"
   | "command_center"
+  | "autopilot"
   | "white_label"
   | "sso_api";
 
@@ -461,6 +462,14 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     label: "Agency command center",
     pitch: "Every client brand's health, tasks and results on one screen.",
     minPlan: "agency",
+  },
+  autopilot: {
+    key: "autopilot",
+    module: "Studio",
+    label: "Autopilot",
+    pitch:
+      "Mellox plans, writes and schedules your marketing. You approve before anything goes out.",
+    minPlan: "growth",
   },
   white_label: {
     key: "white_label",
@@ -829,6 +838,11 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "agent.content-fit",
   "agent.distribution-reliability",
   "competitors.updates",
+  // Autopilot plans and reads signals for free; each piece it makes is
+  // charged at the normal Studio price.
+  "autopilot.plan",
+  "autopilot.strategy",
+  "autopilot.opportunities",
   "links-topical-fit",
   "links-relevance-pick",
   "links-profile",

@@ -5,21 +5,9 @@
 import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
-import { getWorkspaceSdrConfig } from "@/lib/sdr.helpers.server";
-import {
-  scheduleContentItemsHandler,
-  handleSdrDisabled,
-  type PublishSelection,
-  type ScheduleItem,
-} from "@/lib/sdr.handlers";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
-import { scheduleHandler } from "@/lib/socialapi/handlers";
-import { withSocialApi } from "@/lib/socialapi/route.server";
-import { scheduleHandler as schedulePostForMe } from "@/lib/postforme/handlers";
-import { withPostForMe } from "@/lib/postforme/route.server";
+import type { PublishSelection, ScheduleItem } from "@/lib/sdr.handlers";
 import { readDistributionOptions } from "@/app/api/sdr/publish/route";
-import { assertPublishingAction } from "@/server/billing/social-profiles.server";
+import { scheduleForWorkspace } from "@/server/social/schedule.server";
 
 export const dynamic = "force-dynamic";
 
@@ -50,42 +38,14 @@ export const POST = defineRoute({
     if (!selection || !SELECTION_TYPES.includes(selection.type)) {
       return jsonError(400, "Invalid destination selection");
     }
-    await assertPublishingAction({ workspaceId, userId, role, action: "social_schedule" });
-
-    const provider = getDistributionProviderForWorkspace(workspaceId);
-    // Distribution off → refuse honestly; nothing is marked scheduled.
-    if (!provider) {
-      const out = await handleSdrDisabled({
-        workspaceId,
-        contentItemIds: items.map((i) => i.contentItemId),
-        kind: "schedule",
-      });
-      return Response.json(out.body, { status: out.status });
-    }
-
-    if (provider === "postforme") {
-      const { tiktokPrivacyLevel } = readDistributionOptions(body.options);
-      return withPostForMe(workspaceId, (deps) =>
-        schedulePostForMe({ workspaceId, userId, items, selection, tiktokPrivacyLevel }, deps),
-      );
-    }
-
-    if (provider === "socialapi") {
-      const { tiktokPrivacyLevel } = readDistributionOptions(body.options);
-      return withSocialApi(workspaceId, (deps) =>
-        scheduleHandler({ workspaceId, userId, items, selection, tiktokPrivacyLevel }, deps),
-      );
-    }
-
-    try {
-      const { token, baseUrl } = await getWorkspaceSdrConfig(workspaceId);
-      const out = await scheduleContentItemsHandler(
-        { workspaceId, items, selection },
-        { sdrBaseUrl: baseUrl, token, db: supabaseAdmin },
-      );
-      return Response.json(out.body, { status: out.status });
-    } catch (e) {
-      return jsonError(503, e instanceof Error ? e.message : "SDR schedule failed");
-    }
+    // The fair-use check and the provider call are shared with Autopilot.
+    return scheduleForWorkspace({
+      workspaceId,
+      userId,
+      role,
+      items,
+      selection,
+      tiktokPrivacyLevel: readDistributionOptions(body.options).tiktokPrivacyLevel,
+    });
   },
 });

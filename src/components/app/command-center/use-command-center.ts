@@ -127,7 +127,7 @@ export function useCommandCenter() {
       supabase
         .from("content_items")
         .select(
-          "id, workspace_id, agent, kind, channel, title, body, hashtags, media_url, status, scheduled_at, created_at",
+          "id, workspace_id, agent, kind, channel, title, body, hashtags, media_url, status, scheduled_at, created_at, meta",
         )
         .in("workspace_id", list)
         .or(

@@ -109,6 +109,8 @@ export type AppEventMap = {
   "open:competitor-watch": undefined;
   /** Navigates to the full Competitors surface at /w/<id>/app/competitors. */
   "open:competitors": undefined;
+  /** Navigates to Autopilot at /w/<id>/app/autopilot. Only ever fired by a button. */
+  "open:autopilot": undefined;
   "open:content-calendar": undefined;
   "open:details": undefined;
   "open:marketing-coach": undefined;

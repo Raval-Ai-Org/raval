@@ -167,6 +167,11 @@ const REGISTRY: Record<string, TaskPlan> = {
   "competitors.discovery": tier(WORKHORSE, "low"),
   "competitors.profile": tier(WORKHORSE, "low"),
   "competitors.updates": tier(ECONOMY, "low"),
+  // Autopilot: a week's plan over fixed slots, and a relevance read of
+  // signals that were already collected.
+  "autopilot.plan": tier(WORKHORSE, "medium"),
+  "autopilot.strategy": tier(WORKHORSE, "low"),
+  "autopilot.opportunities": tier(ECONOMY, "low"),
   "competitor-intel": tier(WORKHORSE, "medium"),
 
   // GEO. Probes mirror real answer engines: each model in GEO_PROBE_MODELS is
@@ -213,6 +218,7 @@ export const NON_MODEL_ROUTES: readonly string[] = [
   "competitors.resolve-name",
   "competitors.advance",
   "market-brain.scheduled",
+  "autopilot.run",
   "ugc/renders:create",
   "ugc/projects:concepts",
   "market/trends",

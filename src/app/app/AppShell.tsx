@@ -11,6 +11,7 @@ ensureGeoRunCapture();
 import { useServerFn } from "@/lib/use-server-fn";
 import { useQuery } from "@tanstack/react-query";
 import { getProofEngineStatus } from "@/lib/experiments.functions";
+import { getAutopilotStatus } from "@/lib/autopilot.functions";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
@@ -19,6 +20,7 @@ import {
   ArrowLeft,
   BarChart3,
   BookOpen,
+  Bot,
   Brain,
   BrandKit,
   Calendar as CalendarIcon,
@@ -126,6 +128,13 @@ function AppShell() {
   const { data: proofEngine } = useQuery({
     queryKey: ["proof-engine-status", workspaceId],
     queryFn: () => proofEngineStatus({ data: { workspaceId } }),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const autopilotStatus = useServerFn(getAutopilotStatus);
+  const { data: autopilot } = useQuery({
+    queryKey: ["autopilot", workspaceId, "status"],
+    queryFn: () => autopilotStatus({ data: { workspaceId } }),
     staleTime: 10 * 60_000,
     retry: false,
   });
@@ -283,6 +292,13 @@ function AppShell() {
       window.removeEventListener("keydown", onKey);
     };
   }, []);
+
+  // Autopilot is a route; buttons elsewhere open it with this event.
+  useEffect(() => {
+    const onOpenAutopilot = () => navigate({ to: workspacePath(workspaceId, "autopilot") });
+    addAppEventListener("open:autopilot", onOpenAutopilot);
+    return () => removeAppEventListener("open:autopilot", onOpenAutopilot);
+  }, [navigate, workspaceId]);
 
   // Keep older chat and coach actions pointed at the Brand DNA section.
   useEffect(() => {
@@ -467,6 +483,18 @@ function AppShell() {
             accent: "hsl(var(--brand-blue))",
             onClick: () => emitAppEvent("open:content-calendar"),
           })}
+          {autopilot?.enabled &&
+            sidebarAction({
+              icon: Bot,
+              label: "Autopilot",
+              hint: "Runs your plan",
+              accent: "hsl(var(--brand-green))",
+              feature: "autopilot",
+              onClick: () => {
+                navigate({ to: workspacePath(workspaceId, "autopilot") });
+                setNavOpen(false);
+              },
+            })}
         </SidebarSection>
 
         <div className="h-px bg-border/50" />
@@ -656,6 +684,15 @@ function AppShell() {
                   label: "Calendar",
                   onClick: () => emitAppEvent("open:content-calendar"),
                 },
+                ...(autopilot?.enabled
+                  ? [
+                      {
+                        icon: Bot,
+                        label: "Autopilot",
+                        onClick: () => navigate({ to: workspacePath(workspaceId, "autopilot") }),
+                      },
+                    ]
+                  : []),
                 {
                   icon: Brain,
                   label: "Brand DNA",

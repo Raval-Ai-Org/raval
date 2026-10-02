@@ -19,6 +19,7 @@ export type ClientDestination =
   | "visibility"
   | "competitors"
   | "backlinks"
+  | "autopilot"
   | "accounts"
   | "brand";
 
@@ -35,6 +36,8 @@ export function clientHref(c: Pick<CcClient, "id" | "onboarded">, dest: ClientDe
       return workspacePath(c.id, "competitors");
     case "backlinks":
       return workspacePath(c.id, "backlinks");
+    case "autopilot":
+      return workspacePath(c.id, "autopilot");
     case "accounts":
       return workspacePath(c.id, "", { settings: "accounts" });
     default:

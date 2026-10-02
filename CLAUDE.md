@@ -263,6 +263,64 @@ sidebar entry is hidden, RPCs answer 404, and the worker pauses that workspace.
   GitHub webhook and a poll.
 - Live check: `tests/live/experiments.live.ts`.
 
+## Autopilot
+
+Full reference: [docs/autopilot.md](docs/autopilot.md), decision record
+[ADR-0028](docs/adr/0028-autopilot.md). Flag `FEATURE_FLAG_AUTOPILOT_ENABLED`
+(per workspace: `FEATURE_FLAG_AUTOPILOT_ENABLED_WS_<id>`), on unless set to
+`false`. When it's off the sidebar entry is hidden, RPCs answer 404, and the
+worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents pause it too.
+
+- One engine for every workspace: a program (`autopilot_programs`), leased
+  steps (`autopilot_actions`, kinds `plan` / `content` / `scan`), append-only
+  history (`autopilot_events`) and scored opportunities
+  (`marketing_opportunities`). Pure rules in `src/lib/autopilot/`; worker,
+  store and ports in `src/server/autopilot/`; RPC `src/server/fns/autopilot.ts`;
+  UI `src/components/app/autopilot/` at `/w/<id>/app/autopilot`.
+- **It owns no generator, publisher or approval.** A piece is made only through
+  `createBilledStudioJob` (`src/server/studio/billed.server.ts`, shared with the
+  Studio route) and scheduled only through `scheduleForWorkspace`
+  (`src/server/social/schedule.server.ts`, shared with `/api/sdr/schedule`).
+  Never add a second path for either.
+- **Approval is `content_items.status`, nothing else.** The worker hands an
+  item to the publisher only if it reads `approved` at that moment; the
+  publisher itself would promote a draft, so never rely on it for the gate. An
+  item edited after approval reads `draft` and goes back to waiting.
+- **The model proposes, pure code decides.** Dates, platforms, formats, weekly
+  limits, duplicates, freshness, scores and whether a person must approve are
+  decided in `policy.ts` / `opportunities.ts`. An opportunity's title, link and
+  date come from the source record; a web claim with no usable link is not shown.
+- **No duplicates:** `(workspace_id, dedupe_key)` is unique on actions,
+  `(workspace_id, fingerprint)` on opportunities, and the Studio idempotency key
+  is `autopilot:<actionId>:<attempt>`. Scheduling is never retried by the
+  worker; the outcome is read from the content item.
+- **It acts as a member.** `acting_user_id` is re-checked on every step; if
+  that person is no longer an editor the program pauses with a reason.
+- **Set up once.** `suggestStrategy` (`strategy.server.ts`) proposes a brand
+  strategy and settings from Brand DNA; the confirmed strategy is stored on the
+  program and every weekly plan is written against it. Never ask the person to
+  restate goals per week or per post.
+- **Fully automatic mode** only approves by itself through `publishDecision()`
+  (plain and image posts, no quality warning, no figure missing from Brand DNA,
+  two a day at most). `FEATURE_FLAG_AUTOPILOT_FULL_ENABLED=false` removes the
+  mode. Never add another way for a piece to become approved without a person,
+  and never loosen a check to make more posts go out.
+- When posts wait for a person, `notifyWaiting` emails the acting member at
+  most once a day (Resend, via `src/server/notify/email.server.ts`).
+- The UI is one presentational component (`AutopilotScreen`) fed by
+  `AutopilotPanel`; `/autopilot-lab` renders it with sample data in development
+  for visual checks (`tests/integration/autopilot-lab.spec.ts`).
+- Opportunity scans read stored Market Brain and competitor data only — no new
+  web searches — and are queued from `runMarketBrainJob` and `advanceCompetitor`.
+- Worker: advanced by the **existing** `run-schedules` cron hook
+  (`runDueAutopilot`) and `after()`; do not add a cron job. The runner is tested
+  against `store.memory.ts`; keep it store-agnostic.
+- Agency HQ: `autopilot_overview()` (`SECURITY INVOKER`) feeds
+  `command-center/AutopilotView.tsx`; every action there calls a per-workspace,
+  role-checked function. Never read another workspace's rows with the service role.
+- Live check: `tests/live/autopilot.live.ts` (paid step behind
+  `AUTOPILOT_LIVE_GENERATE=yes`).
+
 ## Web intelligence and Competitors
 
 Decision record [ADR-0022](docs/adr/0022-tavily-web-intelligence.md).
