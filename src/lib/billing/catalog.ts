@@ -524,7 +524,13 @@ export const CREDIT_ACTIONS = {
     unit: "up to 3 platforms",
     feature: "studio",
     expectedCostUsd: 0.023,
-    routes: ["studio.social", "content.generateBatch", "content.generateNextPost", "schedule.*"],
+    routes: [
+      "studio.social",
+      "content.generateBatch",
+      "content.generateNextPost",
+      "content.planCalendar",
+      "schedule.*",
+    ],
   },
   post_regenerate: {
     credits: 4,

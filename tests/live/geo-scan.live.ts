@@ -107,7 +107,14 @@ describeLive("AI visibility scan (live)", () => {
       .from("geo_findings")
       .select("fingerprint, rule_id, title, detail, severity, category, page_url, point_impact")
       .eq("scan_id", full.id);
-    expect(findings!.length).toBe(report.counts.findings);
+    // Counted by the database: a select returns at most 1,000 rows, and a large
+    // site has more findings than that.
+    const { count: findingCount } = await supabaseAdmin
+      .from("geo_findings")
+      .select("id", { count: "exact", head: true })
+      .eq("scan_id", full.id);
+    expect(findingCount).toBe(report.counts.findings);
+    expect(findings!.length).toBe(Math.min(1000, report.counts.findings));
 
     // 2) Quick homepage check, then compare the two by fingerprint.
     const quick = await createScan({

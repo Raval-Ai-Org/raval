@@ -246,6 +246,32 @@ ${ctx.playbook.conventions}
 </framework_playbook>${inputs}${revise}`;
 }
 
+/**
+ * After the base branch moved: is every file the plan relies on byte-identical
+ * to what the investigation read, and does every file it creates still not
+ * exist? Unknown (a file read before versions were recorded) counts as no.
+ */
+export function planStillHolds(
+  plan: Pick<AgentPlan, "files"> | null,
+  inspected: AgentFileInspected[] | null | undefined,
+  entries: { path: string; sha: string }[],
+): boolean {
+  if (!plan?.files.length) return false;
+  const now = new Map(entries.map((e) => [e.path, e.sha]));
+  const read = new Map<string, string>();
+  for (const f of inspected ?? []) {
+    if (typeof f?.path !== "string") continue;
+    if (typeof f.sha !== "string") return false;
+    read.set(f.path, f.sha);
+  }
+  for (const [path, sha] of read) if (now.get(path) !== sha) return false;
+  return plan.files.every((f) =>
+    f.action === "create"
+      ? !now.has(f.path)
+      : read.has(f.path) && now.get(f.path) === read.get(f.path),
+  );
+}
+
 /* ───────────────────────── investigate → plan ───────────────────────── */
 
 export function checkPlan(

@@ -250,6 +250,14 @@ export async function styleView(workspaceId: string, styleId: string): Promise<B
   return toStyleView(row, coverUrl);
 }
 
+/** A style learned from examples shows one of them as its cover. */
+async function firstReferenceId(workspaceId: string, spec: StyleSpec): Promise<string | null> {
+  const id = spec.references?.[0]?.assetId;
+  if (!id) return null;
+  const [asset] = await getAssetRows(workspaceId, [id]).catch(() => []);
+  return asset ? asset.id : null;
+}
+
 async function countStyles(workspaceId: string): Promise<number> {
   const { count } = await admin()
     .from("brand_styles")
@@ -274,6 +282,7 @@ export async function createStyle(args: {
       `A workspace can keep up to ${MAX_STYLES_PER_WORKSPACE} styles. Archive one first.`,
     );
   }
+  const spec = parseStyleSpec(args.spec ?? emptySpec());
   const { data, error } = await admin()
     .from("brand_styles")
     .insert({
@@ -281,7 +290,8 @@ export async function createStyle(args: {
       name: args.name.trim().slice(0, 80) || "Untitled style",
       description: args.description?.trim().slice(0, 400) || null,
       applies_to: args.appliesTo ?? [],
-      spec: parseStyleSpec(args.spec ?? emptySpec()),
+      spec,
+      cover_asset_id: await firstReferenceId(args.workspaceId, spec),
       status: args.status ?? "draft",
       created_by: args.userId,
       updated_by: args.userId,
@@ -328,6 +338,10 @@ export async function updateStyle(args: {
   if (args.patch.spec !== undefined) update.spec = parseStyleSpec(args.patch.spec);
   if (args.patch.status !== undefined) update.status = args.patch.status;
   if (args.patch.coverAssetId !== undefined) update.cover_asset_id = args.patch.coverAssetId;
+  else if (args.patch.spec !== undefined && !current.cover_asset_id) {
+    const cover = await firstReferenceId(args.workspaceId, parseStyleSpec(args.patch.spec));
+    if (cover) update.cover_asset_id = cover;
+  }
   // Compare-and-set on version so two editors can't silently overwrite each other.
   const { data, error } = await admin()
     .from("brand_styles")

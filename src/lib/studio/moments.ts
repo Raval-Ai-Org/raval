@@ -265,6 +265,28 @@ export function upcomingMoments(
     .slice(0, opts.limit ?? 6);
 }
 
+/** Every moment that falls on a day from `from` to `to` (inclusive, YYYY-MM-DD). */
+export function momentsBetween(from: string, to: string): MarketingMoment[] {
+  const out = new Map<string, MarketingMoment>();
+  for (const def of definitions()) {
+    for (const date of Object.values(def.dates)) {
+      if (date < from || date > to) continue;
+      const id = `${def.key}-${date.slice(0, 4)}`;
+      if (!out.has(id)) {
+        out.set(id, {
+          id,
+          name: def.name,
+          date,
+          leadDays: def.leadDays,
+          tags: def.tags,
+          angle: def.angle,
+        });
+      }
+    }
+  }
+  return [...out.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export function daysUntil(date: string, today: Date = new Date()): number {
   const start = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
   return Math.round((Date.parse(`${date}T00:00:00Z`) - start) / 86_400_000);

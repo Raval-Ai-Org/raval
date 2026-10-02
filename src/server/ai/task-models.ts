@@ -114,6 +114,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   "content.regenerate": tier(WORKHORSE, "medium"),
   "content.generateBatch": tier(WORKHORSE, "medium"),
   "content.generateNextPost": tier(WORKHORSE, "medium"),
+  "content.planCalendar": tier(WORKHORSE, "medium"),
   "social.multi": tier(WORKHORSE, "medium"),
   "ai-generate": tier(WORKHORSE, "medium", {
     escalate: toTier("long-form output over ~1,500 words", PREMIUM, "medium"),

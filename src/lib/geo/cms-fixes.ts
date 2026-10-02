@@ -105,6 +105,15 @@ export function cmsScopeForRule(ruleId: string): "page" | "site" {
 
 /** Rules with no CMS field mapping — kept explicit so the test can tell "manual" from "forgotten". */
 export const CMS_MANUAL_RULES: ReadonlySet<string> = new Set([
+  "ai.live_access",
+  "tech.snippet",
+  "tech.sitemap_lastmod",
+  "tech.sitemap_coverage",
+  "tech.orphan_pages",
+  "schema.valid",
+  "schema.matches_page",
+  "content.evidence",
+  "trust.freshness",
   "tech.https",
   "tech.sitemap",
   "tech.http_errors",

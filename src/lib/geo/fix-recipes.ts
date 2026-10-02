@@ -5,6 +5,8 @@
 // Recipes never invent facts about the business: where a fix needs real
 // information (credentials, sources, legal pages) it gives steps, not copy.
 
+import { ANSWER_BOTS } from "./robots";
+
 export type FixRecipe = {
   title: string;
   /** Where the snippet goes, in one line. */
@@ -24,17 +26,9 @@ export type FixContext = {
   description?: string | null;
 };
 
-const AI_CRAWLERS = [
-  "GPTBot",
-  "ChatGPT-User",
-  "OAI-SearchBot",
-  "ClaudeBot",
-  "Claude-Web",
-  "PerplexityBot",
-  "Google-Extended",
-  "Applebot-Extended",
-  "CCBot",
-];
+// The crawlers that decide whether a site shows up in AI answers. Training
+// crawlers are left out on purpose: allowing them is the owner's choice.
+const AI_CRAWLERS = ANSWER_BOTS.map((b) => b.id);
 
 function resolveOrigin(url: string): { origin: string; host: string } {
   try {
@@ -429,6 +423,91 @@ export function fixRecipeFor(fixId: string, ctx: FixContext): FixRecipe | null {
           "Link each statistic to the study, dataset or report it came from, using the source's name as the link text.",
           "Remove or soften figures you can't source.",
           "Never fabricate citations — engines and readers check them.",
+        ],
+      };
+    case "bot-firewall":
+      return {
+        title: "Let AI crawlers through your firewall",
+        placement: "In your CDN, firewall or bot-protection settings",
+        steps: [
+          "On Cloudflare: Security → Bots → turn off “Block AI bots”, or allow verified AI search crawlers.",
+          "Allow OAI-SearchBot, ChatGPT-User, PerplexityBot, Claude-SearchBot and Claude-User. Each vendor publishes its IP ranges, so you can allow the real crawlers without opening the door to imitators.",
+          "Check your host or security plugin (Wordfence, Sucuri, Vercel Firewall) for a bot rule returning 403 or a challenge page.",
+          "This test used a look-alike request. If your firewall only admits verified crawlers, the real ones may already get through — confirm in your bot logs.",
+        ],
+      };
+    case "snippet":
+      return {
+        title: "Allow snippets",
+        placement: "Inside <head> — and remove any X-Robots-Tag: nosnippet header",
+        lang: "html",
+        code: `<meta name="robots" content="index, follow, max-snippet:-1" />`,
+        steps: [
+          "Remove nosnippet and max-snippet:0 from pages you want quoted.",
+          "Use data-nosnippet only on the parts that must stay out of answers (prices under contract, legal notes).",
+        ],
+      };
+    case "sitemap-lastmod":
+      return {
+        title: "Add last-modified dates to your sitemap",
+        placement: `In ${origin}/sitemap.xml`,
+        lang: "xml",
+        code: `<url>\n  <loc>${escHtml(page)}</loc>\n  <lastmod>2026-01-31</lastmod>\n</url>`,
+        steps: [
+          "Use the date the page's content really changed — not the build date on every URL.",
+          "Most frameworks and SEO plugins fill this in when you turn it on.",
+        ],
+      };
+    case "sitemap-coverage":
+      return {
+        title: "Keep the sitemap in step with the site",
+        placement: `In ${origin}/sitemap.xml`,
+        steps: [
+          "Remove URLs that return an error, redirect, or are marked noindex.",
+          "Add every page you want found. Generate the sitemap from your routes or CMS instead of by hand.",
+        ],
+      };
+    case "schema-fields":
+      return {
+        title: "Complete the required schema fields",
+        placement: `In the JSON-LD on ${page}`,
+        steps: [
+          "Article: headline, author and datePublished.",
+          "Product: name, plus offers, review or aggregateRating.",
+          "FAQPage: every question needs a name and an acceptedAnswer with text.",
+          "BreadcrumbList: every step needs a name.",
+          "Fill them with what the page really shows — never placeholder values.",
+        ],
+      };
+    case "schema-match":
+      return {
+        title: "Make markup match the page",
+        placement: `In the JSON-LD on ${page}`,
+        steps: [
+          "The Article headline should be the page's H1 or title.",
+          "Every FAQ question in the markup must appear on the page, word for word, with its answer.",
+          "Remove markup for content the page doesn't show — engines ignore or distrust it.",
+        ],
+      };
+    case "add-evidence":
+      return {
+        title: "Back articles with figures, quotes and sources",
+        placement: "In the article body",
+        steps: [
+          "Add the real numbers behind your points, each linked to where it came from.",
+          "Quote a named expert or customer in their own words.",
+          "Link claims to the study, dataset or documentation that supports them.",
+          "Use only facts you can stand behind — never invent a figure or a quote.",
+        ],
+      };
+    case "refresh-content":
+      return {
+        title: "Review and re-date old articles",
+        placement: "In the article and its Article schema",
+        steps: [
+          "Check the facts, figures, screenshots and links still hold, and update what changed.",
+          "Then set dateModified and the visible “Updated” date to the day you revised it.",
+          "Don't change the date without changing the content.",
         ],
       };
     default:

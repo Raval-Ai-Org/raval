@@ -53,6 +53,8 @@ export async function applyCmsChanges(s: CmsSession, changes: CmsChange[]): Prom
     }
   } catch (error) {
     for (const w of [...written].reverse()) {
+      // An unknown old value can't be put back; writing a blank would wipe it.
+      if (w.value === null) continue;
       await writeField(s, changes[w.index], w.value).catch(() => null);
     }
     throw error;
@@ -65,13 +67,20 @@ export async function rollbackCmsChanges(
   s: CmsSession,
   changes: CmsChange[],
   snapshot: CmsSnapshotEntry[],
-): Promise<{ restored: number; skipped: string[]; published: boolean }> {
+): Promise<{ restored: number; skipped: string[]; unknown: string[]; published: boolean }> {
   const skipped: string[] = [];
+  /** Fields whose old value Mellox never could read (Rank Math): left as they are. */
+  const unknown: string[] = [];
   let restored = 0;
   const reverted: CmsChange[] = [];
   for (const entry of [...snapshot].reverse()) {
     const change = changes[entry.index];
     if (!change) continue;
+    if (entry.value === null) {
+      // Putting back "nothing" would blank a value that may have existed.
+      unknown.push(change.label);
+      continue;
+    }
     const now = await readField(s, change);
     if (now !== null && !sameValue(now, change.after)) {
       skipped.push(change.label);
@@ -82,5 +91,5 @@ export async function rollbackCmsChanges(
     restored++;
   }
   const published = await publishWebflowIfNeeded(s, reverted);
-  return { restored, skipped, published };
+  return { restored, skipped, unknown, published };
 }

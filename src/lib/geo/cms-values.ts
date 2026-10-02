@@ -2,7 +2,7 @@
 // Nothing here is invented: every name, URL, date and answer comes from the
 // scanned site, the CMS object or the article itself. Pure; browser-safe.
 
-import { AI_BOTS } from "./robots";
+import { AI_BOTS, ANSWER_BOTS } from "./robots";
 
 /** Absolute page URL without query or fragment — a self-referencing canonical. */
 export function canonicalFor(url: string): string {
@@ -178,7 +178,8 @@ export function robotsAdditions(input: {
     : null;
   if (bot) lines.push(`User-agent: ${bot}`, "Allow: /");
   else if (input.ruleId === "ai.robots_txt")
-    for (const b of AI_BOTS) lines.push(`User-agent: ${b.id}`, "Allow: /", "");
+    // Search and user crawlers only: training crawlers stay the owner's choice.
+    for (const b of ANSWER_BOTS) lines.push(`User-agent: ${b.id}`, "Allow: /", "");
   if (
     (input.ruleId === "tech.robots_sitemap" || input.ruleId === "ai.robots_txt") &&
     input.sitemapUrl

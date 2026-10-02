@@ -3,7 +3,7 @@
  * Plugin Name:       Mellox GEO
  * Plugin URI:        https://mellox.ai
  * Description:       Lets Mellox fix AI-search and SEO issues on this site: page titles, meta descriptions, canonical links, structured data (JSON-LD), robots.txt and llms.txt. Every change is made through your own WordPress account and can be undone from Mellox.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Mellox
@@ -21,15 +21,16 @@
  *
  * When Yoast SEO or Rank Math is active, title / description / canonical /
  * robots / Open Graph are written into THEIR fields, so they keep printing a
- * single set of tags. Otherwise this plugin prints them itself. JSON-LD is
- * always printed by this plugin, in its own script tag.
+ * single set of tags. With All in One SEO the values go through its filters,
+ * so it still prints one set. Otherwise this plugin prints them itself.
+ * JSON-LD is always printed by this plugin, in its own script tag.
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MELLOX_GEO_VERSION', '1.0.0');
+define('MELLOX_GEO_VERSION', '1.1.0');
 define('MELLOX_GEO_META', '_mellox_geo');
 define('MELLOX_GEO_SITE_OPTION', 'mellox_geo_site');
 
@@ -387,10 +388,67 @@ add_action('wp', function () {
     }
 });
 
+/*
+ * All in One SEO keeps its values in its own table, so Mellox doesn't write
+ * there. It prints the tags; these filters hand it Mellox's value for the
+ * fields Mellox holds on the current post or page, and leave the rest alone.
+ */
+function mellox_geo_aioseo_field($key)
+{
+    if (mellox_geo_seo_plugin() !== 'aioseo') {
+        return null;
+    }
+    $fields = mellox_geo_current_fields();
+    return $fields && array_key_exists($key, $fields) ? $fields[$key] : null;
+}
+
+add_filter('aioseo_title', function ($title) {
+    $value = mellox_geo_aioseo_field('title');
+    return $value ? $value : $title;
+}, 20);
+
+add_filter('aioseo_description', function ($description) {
+    $value = mellox_geo_aioseo_field('description');
+    return $value ? $value : $description;
+}, 20);
+
+add_filter('aioseo_canonical_url', function ($url) {
+    $value = mellox_geo_aioseo_field('canonical');
+    return $value ? $value : $url;
+}, 20);
+
+add_filter('aioseo_robots_meta', function ($attributes) {
+    $noindex = mellox_geo_aioseo_field('noindex');
+    if ($noindex === null || !is_array($attributes)) {
+        return $attributes;
+    }
+    if ($noindex) {
+        $attributes['noindex'] = 'noindex';
+    } else {
+        unset($attributes['noindex']);
+    }
+    return $attributes;
+}, 20);
+
+add_filter('aioseo_facebook_tags', function ($tags) {
+    if (!is_array($tags)) {
+        return $tags;
+    }
+    $title = mellox_geo_aioseo_field('og_title');
+    $description = mellox_geo_aioseo_field('og_description');
+    if ($title) {
+        $tags['og:title'] = $title;
+    }
+    if ($description) {
+        $tags['og:description'] = $description;
+    }
+    return $tags;
+}, 20);
+
 add_action('wp_head', function () {
     $seo = mellox_geo_seo_plugin();
     $fields = mellox_geo_current_fields();
-    if ($fields && (!$seo || $seo === 'aioseo')) {
+    if ($fields) {
         if (!$seo) {
             if (!empty($fields['description'])) {
                 echo '<meta name="description" content="' . esc_attr($fields['description']) . '" />' . "\n";

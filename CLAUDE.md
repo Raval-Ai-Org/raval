@@ -150,7 +150,21 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
   UI `src/components/app/GeoAeoPanel.tsx` + `src/components/app/geo/`.
 - Rule ids and finding fingerprints are **stable** — add rules, don't rename.
   Every `fixId` must have a recipe in `fix-recipes.ts` (a test enforces it).
+- A new rule needs four entries or a test fails: `RULE_DIMENSIONS`
+  (`dimensions.ts`), `STRATEGIES` (`fixes/strategies.ts`), `RULE_FIELDS` or
+  `CMS_MANUAL_RULES` (`cms-fixes.ts`), and a recipe for its `fixId`.
 - Scores are server-computed; never let the browser write `geo_audit_runs`.
+- **The score must stay honest and reachable** (score version 2, `SCORE_VERSION`):
+  - a well-built site reaches 100 (`rules.v2.test.ts` builds one — keep it passing);
+  - crawlers have tiers in `robots.ts`: blocking a `training` crawler is the
+    owner's choice and is never scored; only `search` / `user` crawlers are;
+  - `ai.live_access` (a look-alike crawler request) only ever warns;
+  - every rule that claims an AI effect carries an `evidence` label
+    (`documented` / `measured` / `emerging`) — don't add checks for myths;
+  - bump `SCORE_VERSION` when scoring changes enough that old and new scores
+    aren't comparable; the UI doesn't compare across versions.
+- Rules that compare pages (`COMPARISON_RULES` in `verify.ts`) verify only when
+  the other pages are re-read; never let them pass on a single-page scan.
 - AI answer probes are paid and flagged off (`FEATURE_FLAG_GEO_AI_PROBES_ENABLED`).
 - The runner is tested against `store.memory.ts`; keep it store-agnostic.
 - Fix workflow (ADR-0012): `src/server/geo/fixes/` (targets → generate → validate →

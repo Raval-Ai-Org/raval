@@ -167,6 +167,8 @@ export const VisualSchema = z.object({
   grading: short(160).optional(),
   texture: short(160).optional(),
   composition: short(300).optional(),
+  /** What sits behind everything: solid colour, gradient, full photo, texture. */
+  background: short(200).optional(),
   textPlacement: z.enum(["top", "center", "bottom", "left", "right", "none"]).optional(),
   whitespace: z.enum(["minimal", "balanced", "generous"]).optional(),
   elements: list(8, 120).optional(),

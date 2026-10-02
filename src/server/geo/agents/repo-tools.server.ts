@@ -5,6 +5,7 @@
 //   search_code        literal or safe-regex search over bounded blob reads
 //   read_file          line-numbered file excerpts (recorded as "inspected")
 //   get_page_facts     what Mellox's scan extracted from a page of this site
+//   list_scanned_pages every page the scan read, in brief (titles, status)
 //   get_rule_info      the finding's rule, recipe and framework conventions
 //   inspect_live_page  the live page's head and text via the SSRF-guarded fetcher
 //
@@ -63,7 +64,17 @@ export type RepoToolDeps = {
   fetchLive: (url: string) => Promise<{ status: number; html: string } | null>;
   /** Scan facts for pages of the scanned site. */
   pageFacts: (url: string | null) => Promise<PageFactsView[]>;
+  /** Every page the scan read, in brief (for fixes that involve other pages). */
+  pageList?: () => Promise<ScannedPageBrief[]>;
   ruleInfo: () => string;
+};
+
+export type ScannedPageBrief = {
+  url: string;
+  status: number | null;
+  type: string;
+  title: string | null;
+  description: string | null;
 };
 
 export type RepoToolState = {
@@ -73,6 +84,13 @@ export type RepoToolState = {
   filesRead: Set<string>;
   inspected: AgentFileInspected[];
 };
+
+/** The run has read as many files as it may; the agent is told, the run isn't crashed. */
+class ReadBudgetError extends Error {
+  constructor() {
+    super("File read budget for this run is used up.");
+  }
+}
 
 export function newToolState(): RepoToolState {
   return { blobsRead: 0, liveFetches: 0, filesRead: new Set(), inspected: [] };
@@ -214,6 +232,20 @@ export const REPO_TOOLS: LlmTool[] = [
     strict: true,
   },
   {
+    name: "list_scanned_pages",
+    description:
+      "The pages Mellox's scan read on this site: URL, HTTP status, page type, title and meta description. Use it when a fix involves other pages — telling duplicate titles or descriptions apart, choosing real pages to link to, or finding what a broken link should point at. Optionally filter by text in the URL or title.",
+    input_schema: {
+      type: "object",
+      properties: {
+        filter: { type: ["string", "null"], description: "Text to match in the URL or title." },
+      },
+      required: ["filter"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
     name: "get_rule_info",
     description:
       "The finding's rule: what it checks, why it matters, the recommended fix recipe, likely target files for this framework, and the framework's conventions.",
@@ -257,8 +289,7 @@ export function createRepoToolHandlers(args: {
   const readText = async (entry: TreeEntry): Promise<string | null> => {
     if (entry.size > MAX_BLOB_BYTES || BINARY_EXT.test(entry.path)) return null;
     if (blobCache.has(entry.sha)) return blobCache.get(entry.sha)!;
-    if (state.blobsRead >= MAX_BLOBS_PER_RUN)
-      throw new Error("File read budget for this run is used up.");
+    if (state.blobsRead >= MAX_BLOBS_PER_RUN) throw new ReadBudgetError();
     state.blobsRead++;
     const text = await deps.readBlob(entry.sha);
     blobCache.set(entry.sha, text);
@@ -387,7 +418,13 @@ export function createRepoToolHandlers(args: {
     state.filesRead.add(path);
     const reason = str(input.reason, 200) || "Inspected";
     if (!state.inspected.some((f) => f.path === path)) {
-      state.inspected.push({ path, reason, lines: `${start}-${end}`, via: "read_file" });
+      state.inspected.push({
+        path,
+        reason,
+        lines: `${start}-${end}`,
+        via: "read_file",
+        sha: entry.sha,
+      });
     }
     return {
       content: `${wrapFile(path, start, end, redactSecrets(body))}${end < lines.length ? `\n(${lines.length} lines total)` : ""}`,
@@ -421,6 +458,27 @@ export function createRepoToolHandlers(args: {
       content: `<page_facts>\n${redactSecrets(JSON.stringify(facts.slice(0, 5), null, 1))}\n</page_facts>`,
       summary: `Looked up scan facts for ${facts[0].url}`,
       detail: { url: facts[0].url },
+    };
+  }
+
+  async function listScannedPages(input: Record<string, unknown>): Promise<ToolOutcome> {
+    const all = (await deps.pageList?.()) ?? [];
+    if (!all.length) return { content: "The scan has no page list.", summary: "No scanned pages" };
+    const filter = str(input.filter, 120).toLowerCase();
+    const hits = filter
+      ? all.filter((p) => `${p.url} ${p.title ?? ""}`.toLowerCase().includes(filter))
+      : all;
+    const shown = hits.slice(0, 80).map((p) => ({
+      url: p.url,
+      status: p.status,
+      type: p.type,
+      title: p.title?.slice(0, 120) ?? null,
+      description: p.description?.slice(0, 160) ?? null,
+    }));
+    return {
+      content: `<scanned_pages total="${hits.length}">\n${redactSecrets(JSON.stringify(shown, null, 1))}\n</scanned_pages>`,
+      summary: `Looked at ${hits.length} scanned page(s)${filter ? ` matching “${filter.slice(0, 40)}”` : ""}`,
+      detail: { pages: hits.length },
     };
   }
 
@@ -485,6 +543,7 @@ export function createRepoToolHandlers(args: {
     search_code: searchCode,
     read_file: readFile,
     get_page_facts: pageFacts,
+    list_scanned_pages: listScannedPages,
     get_rule_info: ruleInfo,
     inspect_live_page: inspectLive,
   };
@@ -496,7 +555,17 @@ export function createRepoToolHandlers(args: {
       if (!fn)
         return { content: `Unknown tool ${name}.`, isError: true, summary: `Unknown tool ${name}` };
       const obj = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
-      return fn(obj);
+      try {
+        return await fn(obj);
+      } catch (error) {
+        if (!(error instanceof ReadBudgetError)) throw error;
+        return {
+          content:
+            "You have read as many files as this run allows. Submit your result now from what you have already read.",
+          isError: true,
+          summary: "File read limit reached",
+        };
+      }
     },
     exists: (path: string) => byPath.has(path),
   };

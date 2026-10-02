@@ -55,12 +55,19 @@ import {
   implementPlan,
   investigateAndPlan,
   hashPlan,
+  planStillHolds,
   STAGE_LIMITS,
   type AgentContext,
   type AgentDeps,
   type StageEvent,
 } from "./geo-coding-agent";
-import { newToolState, type PageFactsView, type RepoSnapshot } from "./repo-tools.server";
+import type { AgentFileInspected } from "@/lib/geo/agent-contracts";
+import {
+  newToolState,
+  type PageFactsView,
+  type RepoSnapshot,
+  type RepoToolState,
+} from "./repo-tools.server";
 
 const WORKER = `geo-agent-${process.pid}-${randomUUID().slice(0, 8)}`;
 const LEASE_SECONDS = 200;
@@ -119,7 +126,12 @@ export type AgentRunRow = {
   result: Record<string, unknown> | null;
   model: string | null;
   usage: Partial<AgentUsage>;
-  checkpoint: { stage: "investigate" | "implement"; messages: LlmLoopMessage[] } | null;
+  checkpoint: {
+    stage: "investigate" | "implement";
+    messages: LlmLoopMessage[];
+    /** What the stage had read so far, so a resumed stage keeps its footing. */
+    tool?: { filesRead: string[]; inspected: AgentFileInspected[]; blobsRead: number };
+  } | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -450,6 +462,7 @@ function agentDeps(
   pages: ScanPageRow[],
   ruleText: string,
   stage: "investigate" | "implement",
+  state: RepoToolState,
 ): AgentDeps {
   const installationId = connection.external_account_id;
   return {
@@ -479,6 +492,14 @@ function agentDeps(
           .slice(0, 1)
           .map(factsOf);
       },
+      pageList: async () =>
+        pages.map((r) => ({
+          url: r.final_url ?? r.url,
+          status: r.status_code,
+          type: r.analysis!.pageType,
+          title: r.analysis!.title,
+          description: r.analysis!.metaDescription,
+        })),
       ruleInfo: () => ruleText,
     },
     onEvent: async (e: StageEvent) => {
@@ -502,7 +523,15 @@ function agentDeps(
       await supabaseAdmin
         .from("geo_agent_runs")
         .update({
-          checkpoint: { stage: s ?? stage, messages } as unknown as Json,
+          checkpoint: {
+            stage: s ?? stage,
+            messages,
+            tool: {
+              filesRead: [...state.filesRead],
+              inspected: state.inspected,
+              blobsRead: state.blobsRead,
+            },
+          } as unknown as Json,
           lease_until: new Date(Date.now() + LEASE_SECONDS * 1000).toISOString(),
         })
         .eq("id", run.id)
@@ -544,6 +573,30 @@ function resumableCheckpoint(
   return isLoopConversation(run.checkpoint.messages) ? run.checkpoint.messages : undefined;
 }
 
+/**
+ * The tool state a stage starts with. A resumed stage gets back what it had
+ * read (the plan check refuses files the agent "never read"). The implement
+ * stage also inherits the files the investigation read, so it can re-open a
+ * helper or layout it looked at without them being part of the plan.
+ */
+function toolStateFor(run: AgentRunRow, stage: "investigate" | "implement"): RepoToolState {
+  const state = newToolState();
+  const saved = run.checkpoint?.stage === stage ? run.checkpoint.tool : undefined;
+  if (saved) {
+    for (const p of saved.filesRead ?? []) if (typeof p === "string") state.filesRead.add(p);
+    state.inspected.push(...(saved.inspected ?? []));
+    // Reads are cached per process, so a resumed stage re-reads; half the
+    // earlier count keeps a crash loop from getting an endless budget.
+    state.blobsRead = Math.floor((saved.blobsRead ?? 0) / 2);
+  }
+  if (stage === "implement") {
+    for (const f of (run.files_inspected ?? []) as { path?: unknown }[]) {
+      if (typeof f?.path === "string") state.filesRead.add(f.path);
+    }
+  }
+  return state;
+}
+
 /* ───────────────────────── stages ───────────────────────── */
 
 async function runInvestigation(run: AgentRunRow) {
@@ -573,12 +626,13 @@ async function runInvestigation(run: AgentRunRow) {
   const spent = usageOf(run);
   const budget = geoAgentMaxCostUsd() * STAGE_LIMITS.investigate.maxCostShare;
   const resume = resumableCheckpoint(run, "investigate");
+  const state = resume ? toolStateFor(run, "investigate") : newToolState();
 
   const outcome = await investigateAndPlan(
     full,
-    agentDeps(run, connection, ctx.snapshot.repo, pages, ruleInfoText(ctx), "investigate"),
+    agentDeps(run, connection, ctx.snapshot.repo, pages, ruleInfoText(ctx), "investigate", state),
     {
-      state: newToolState(),
+      state,
       budgetUsd: Math.max(0.05, budget),
       resume,
     },
@@ -666,6 +720,22 @@ async function runImplementation(run: AgentRunRow) {
   if (!run.plan || !run.plan_approved_at)
     throw new AgentRunError("no_plan", "The plan hasn't been approved.");
   const { ctx, connection, source, pages } = await loadContext(run);
+  if (
+    run.base_sha &&
+    ctx.snapshot.sha !== run.base_sha &&
+    planStillHolds(run.plan, run.files_inspected as AgentFileInspected[], ctx.snapshot.entries)
+  ) {
+    // New commits landed, but none touched what the plan was built on: carry on
+    // against the latest code instead of paying for a second investigation.
+    await patchRun(run, { base_sha: ctx.snapshot.sha });
+    run.base_sha = ctx.snapshot.sha;
+    await logAgentEvent(run, {
+      stage: "implement",
+      kind: "stage_started",
+      actor: "system",
+      summary: `${run.base_branch} has new commits, but the files this plan uses are unchanged`,
+    });
+  }
   if (run.base_sha && ctx.snapshot.sha !== run.base_sha) {
     await transition(run, "base_moved", {
       error_code: "base_moved",
@@ -693,12 +763,13 @@ async function runImplementation(run: AgentRunRow) {
     summary: "Implementing the approved plan",
   });
   const resume = resumableCheckpoint(run, "implement");
+  const state = toolStateFor(run, "implement");
   const outcome = await implementPlan(
     full,
     run.plan,
-    agentDeps(run, connection, ctx.snapshot.repo, pages, ruleInfoText(ctx), "implement"),
+    agentDeps(run, connection, ctx.snapshot.repo, pages, ruleInfoText(ctx), "implement", state),
     {
-      state: newToolState(),
+      state,
       budgetUsd: budget,
       resume,
     },
@@ -735,7 +806,13 @@ async function runImplementation(run: AgentRunRow) {
   }
 
   // Record the patch, then walk the machine: reviewing → validating → awaiting approval.
-  const files = outcome.files.map(storedFile);
+  // Each file remembers the exact version it was edited from, so a later commit
+  // elsewhere in the branch doesn't make an untouched file's patch "stale".
+  const baseBlob = new Map(ctx.snapshot.entries.map((e) => [e.path, e.sha]));
+  const files = outcome.files.map((f) => ({
+    ...storedFile(f),
+    baseBlobSha: f.action === "update" ? (baseBlob.get(f.path) ?? null) : null,
+  }));
   let r = await transition(run, "patch_submitted", {
     usage,
     correction_rounds: outcome.corrections,
@@ -961,6 +1038,20 @@ async function advance(run: AgentRunRow) {
     await cancelRunNow(run, null);
     return;
   }
+  // One model turn or the self-review can outlast the lease. While this
+  // process is alive and working, keep the claim; if it dies, the beat stops
+  // and the lease runs out as before.
+  const heartbeat = setInterval(() => {
+    void supabaseAdmin
+      .from("geo_agent_runs")
+      .update({ lease_until: new Date(Date.now() + LEASE_SECONDS * 1000).toISOString() })
+      .eq("id", run.id)
+      .eq("locked_by", WORKER)
+      .then(
+        () => undefined,
+        () => undefined,
+      );
+  }, 60_000);
   try {
     if (run.provider && run.provider !== "github") {
       // CMS runs have one working stage; an interrupted one starts it again.
@@ -997,6 +1088,7 @@ async function advance(run: AgentRunRow) {
   } catch (error) {
     await handleRunError(run, error);
   } finally {
+    clearInterval(heartbeat);
     await supabaseAdmin
       .from("geo_agent_runs")
       .update({ lease_until: null, locked_by: null })

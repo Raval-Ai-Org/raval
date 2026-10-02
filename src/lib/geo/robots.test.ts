@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  blockedPathsFor,
+  contentSignals,
   crawlDelayFor,
   isPathAllowed,
   parseRobotsAllow,
@@ -48,12 +50,21 @@ describe("parseRobotsAllow", () => {
 describe("summarizeEngines", () => {
   it("reports unknown without robots.txt, partial when some crawlers are blocked", () => {
     expect(summarizeEngines("").every((e) => e.state === "unknown")).toBe(true);
-    const engines = summarizeEngines("User-agent: GPTBot\nDisallow: /");
+    const engines = summarizeEngines("User-agent: OAI-SearchBot\nDisallow: /");
     expect(engines.find((e) => e.id === "chatgpt")).toMatchObject({
       state: "partial",
-      blocked: ["GPTBot"],
+      blocked: ["OAI-SearchBot"],
     });
     expect(engines.find((e) => e.id === "claude")!.state).toBe("open");
+  });
+
+  it("treats a blocked training crawler as a choice, not a blocked engine", () => {
+    const engines = summarizeEngines("User-agent: GPTBot\nDisallow: /");
+    expect(engines.find((e) => e.id === "chatgpt")).toMatchObject({
+      state: "open",
+      blocked: [],
+      trainingBlocked: ["GPTBot"],
+    });
   });
 
   it("marks every engine blocked behind a wildcard Disallow: /", () => {
@@ -96,6 +107,24 @@ describe("isPathAllowed (RFC 9309)", () => {
 
   it("resolves an equal-length Allow/Disallow tie to allow", () => {
     expect(isPathAllowed("User-agent: *\nDisallow: /a\nAllow: /a", "X", "/a")).toBe(true);
+  });
+});
+
+describe("blockedPathsFor / contentSignals", () => {
+  it("finds the pages a partial rule hides from one crawler", () => {
+    const robots = "User-agent: OAI-SearchBot\nDisallow: /blog/";
+    expect(blockedPathsFor(robots, "OAI-SearchBot", ["/", "/blog/a", "/pricing"])).toEqual([
+      "/blog/a",
+    ]);
+    expect(blockedPathsFor(robots, "PerplexityBot", ["/blog/a"])).toEqual([]);
+  });
+
+  it("reads Content-Signal lines and ignores junk", () => {
+    expect(contentSignals("User-agent: *\nContent-Signal: search=yes, ai-train=no\n")).toEqual({
+      search: "yes",
+      "ai-train": "no",
+    });
+    expect(contentSignals("User-agent: *\nAllow: /")).toBeNull();
   });
 });
 

@@ -105,9 +105,21 @@ const STRATEGIES: Record<string, FixStrategy> = {
   "ai.bots": discovery(
     "robots",
     [
-      "Remove Disallow rules that block GPTBot, ClaudeBot, PerplexityBot and Google-Extended in robots.txt.",
+      "Remove Disallow rules that block AI search and lookup crawlers in robots.txt: OAI-SearchBot, ChatGPT-User, PerplexityBot, Perplexity-User, Claude-SearchBot, Claude-User, Googlebot and Bingbot.",
+      "Training crawlers (GPTBot, ClaudeBot, Google-Extended, CCBot) are your choice; blocking them doesn't remove you from answers.",
     ],
-    "curl -s https://your-site/robots.txt and confirm no Disallow: / for those user agents.",
+    "curl -s https://your-site/robots.txt and confirm no Disallow rule covers your pages for those user agents.",
+  ),
+  "ai.live_access": manual(
+    [
+      "In your CDN or firewall (Cloudflare: Security → Bots), stop blocking AI search crawlers, or allow the verified ones.",
+      "Check security plugins and host-level bot rules for a 403 or a challenge page served to OAI-SearchBot, PerplexityBot or Claude-SearchBot.",
+    ],
+    [
+      "curl -A 'OAI-SearchBot/1.0' -I https://your-site/ returns 200, not 403 or a challenge.",
+      "Run a new scan in Mellox.",
+    ],
+    "full",
   ),
 
   /* ── Technical ── */
@@ -203,6 +215,37 @@ const STRATEGIES: Record<string, FixStrategy> = {
     ["Run a full re-scan; key pages should be found at depth ≤ 3."],
     "full",
   ),
+  "tech.snippet": agent({
+    editClasses: META,
+    risk: "Allowing snippets lets search and AI answers quote this page. Confirm nothing on it must stay unquoted.",
+    manualSteps: [
+      "Remove nosnippet and max-snippet:0 from the robots meta tag (and any X-Robots-Tag header) on pages you want quoted.",
+    ],
+    validationSteps: [
+      viewSource("no nosnippet or max-snippet:0 in the robots meta tag"),
+      rescanPage,
+    ],
+  }),
+  "tech.sitemap_lastmod": manual(
+    [
+      "Turn on last-modified dates in your sitemap generator or SEO plugin, using each page's real change date.",
+    ],
+    ["curl -s https://your-site/sitemap.xml shows a <lastmod> on each URL.", "Run a new scan."],
+    "full",
+  ),
+  "tech.sitemap_coverage": manual(
+    [
+      "Remove sitemap URLs that return errors or are noindex, and add the pages that are missing. Generating the sitemap from your routes or CMS keeps it right.",
+    ],
+    ["Run a full re-scan; every sitemap URL should load and be indexable."],
+    "full",
+  ),
+  "tech.orphan_pages": agent({
+    editClasses: ["links to existing pages of the site"],
+    verifyScope: "full",
+    manualSteps: ["Link to this page from a related page, a hub page or the navigation."],
+    validationSteps: ["Run a full re-scan; the page should be linked from another page."],
+  }),
 
   /* ── Structured data ── */
   "schema.jsonld": agent({
@@ -278,6 +321,22 @@ const STRATEGIES: Record<string, FixStrategy> = {
     verifyScope: "site",
     manualSteps: ["Use the same organisation name in schema, og:site_name and the page footer."],
     validationSteps: ["Run a full re-scan and confirm one consistent name."],
+  }),
+  "schema.valid": agent({
+    editClasses: SCHEMA,
+    grounding: "page_text_inputs",
+    manualSteps: [
+      "Fill in the missing required fields of the page's schema markup from what the page shows (headline, author, date, offers, answers).",
+    ],
+    validationSteps: ["Validate with https://validator.schema.org/.", rescanPage],
+  }),
+  "schema.matches_page": agent({
+    editClasses: SCHEMA,
+    grounding: "page_text",
+    manualSteps: [
+      "Change the markup so its headline and FAQ questions are the ones shown on the page, or remove markup for content that isn't there.",
+    ],
+    validationSteps: ["Validate with https://validator.schema.org/.", rescanPage],
   }),
 
   /* ── Content ── */
@@ -364,6 +423,12 @@ const STRATEGIES: Record<string, FixStrategy> = {
     ],
     validationSteps: [rescanPage],
   }),
+  "content.evidence": manual(
+    [
+      "Add real figures, a quote from a named person, or links to the sources behind the article's points. Mellox won't invent facts or quotes.",
+    ],
+    [rescanPage],
+  ),
 
   /* ── Authority & trust ── */
   "trust.about": manual(
@@ -450,6 +515,12 @@ const STRATEGIES: Record<string, FixStrategy> = {
     manualSteps: ["Show when the page was published/updated and match it in the schema."],
     validationSteps: [rescanPage],
   }),
+  "trust.freshness": manual(
+    [
+      "Review the article, update what has changed, then set the visible “Updated” date and dateModified to the day you revised it. Don't change the date alone.",
+    ],
+    [rescanPage],
+  ),
   "trust.claims_sourced": manual(
     ["Link statistics and strong claims to their sources. Only you know the sources."],
     [rescanPage],

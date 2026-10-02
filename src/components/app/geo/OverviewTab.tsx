@@ -26,6 +26,8 @@ import {
   type CategoryScore,
   type GeoAction,
   type GeoCategoryId,
+  type PathTo100 as PathTo100Data,
+  type RuleEvidence,
 } from "@/lib/geo/types";
 import { Tile } from "../surface/SurfaceLayout";
 import { FixDrawer } from "./FixDrawer";
@@ -56,6 +58,97 @@ const ENGINE_STATE = {
 } as const;
 
 const EFFORT_LABEL = { low: "Quick", medium: "Medium effort", high: "Bigger job" } as const;
+
+// How sure anyone can be that a check moves AI answers. Shown beside each
+// check so a convention is never dressed up as a proven signal.
+const EVIDENCE_LABEL: Record<RuleEvidence, { label: string; hint: string }> = {
+  documented: { label: "Confirmed", hint: "The AI engines say this matters." },
+  measured: { label: "Studied", hint: "Published studies found this helps." },
+  emerging: { label: "Early", hint: "A new convention. Little proof yet." },
+};
+
+const ROUTE_LABEL = {
+  auto: "Mellox can fix",
+  needs_input: "Needs one answer from you",
+  manual: "For you to do",
+} as const;
+
+function PathTo100({
+  path,
+  overall,
+  onOpenFindings,
+}: {
+  path: PathTo100Data;
+  overall: number;
+  onOpenFindings: (filter: { ruleId?: string; fixAll?: boolean }) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  if (!path.steps.length) return null;
+  const steps = showAll ? path.steps : path.steps.slice(0, 6);
+  const buckets = [
+    ["auto", path.auto, "success"],
+    ["needs_input", path.needsInput, "warning"],
+    ["manual", path.manual, "muted"],
+  ] as const;
+  return (
+    <div>
+      <SectionTitle>
+        {overall >= 100 ? "Keep it at 100" : `${100 - overall} points to 100`}
+      </SectionTitle>
+      <Tile>
+        <div className="grid grid-cols-3 gap-2">
+          {buckets.map(([route, points, tone]) => (
+            <div key={route} className="min-w-0 rounded-2xl bg-foreground/[0.04] px-3 py-2.5">
+              <div className={cn("text-[20px] font-semibold tabular-nums", TONE[tone].text)}>
+                +{points}
+              </div>
+              <div className="truncate text-[12px] text-muted-foreground">{ROUTE_LABEL[route]}</div>
+            </div>
+          ))}
+        </div>
+        <ul className="mt-3 divide-y divide-border/40">
+          {steps.map((s) => (
+            <li key={s.ruleId}>
+              <button
+                type="button"
+                onClick={() => onOpenFindings({ ruleId: s.ruleId })}
+                className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl py-2.5 text-left hover:bg-foreground/[0.03]"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-medium text-foreground/90">
+                    {s.title}
+                  </span>
+                  <span className="block truncate text-[12px] text-muted-foreground">
+                    {ROUTE_LABEL[s.route]}
+                    {s.affectedPages > 1 ? ` · ${s.affectedPages} pages` : ""}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="text-[12px] font-semibold tabular-nums text-success">
+                    +{s.points}
+                  </span>
+                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {path.steps.length > 6 && (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="mt-1 flex w-full items-center justify-center gap-1 rounded-xl py-2 text-[12.5px] font-medium text-muted-foreground hover:bg-foreground/[0.03] hover:text-foreground"
+          >
+            {showAll ? "Show less" : `Show ${path.steps.length - 6} more`}
+            <ChevronDown
+              className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")}
+            />
+          </button>
+        )}
+      </Tile>
+    </div>
+  );
+}
 
 export function buildReport(scan: GeoScanView): string {
   const r = scan.report!;
@@ -168,9 +261,19 @@ function CategoryExplanation({
                     <span className="block truncate text-[13px] font-medium text-foreground/90">
                       {r.title}
                     </span>
-                    {r.scope === "page" && r.applicable > 1 && (
-                      <span className="block text-[12px] text-muted-foreground">
-                        {r.failed + r.warned} of {r.applicable} pages
+                    {((r.scope === "page" && r.applicable > 1) || r.evidence) && (
+                      <span
+                        className="block truncate text-[12px] text-muted-foreground"
+                        title={r.evidence ? EVIDENCE_LABEL[r.evidence].hint : undefined}
+                      >
+                        {[
+                          r.scope === "page" && r.applicable > 1
+                            ? `${r.failed + r.warned} of ${r.applicable} pages`
+                            : null,
+                          r.evidence ? EVIDENCE_LABEL[r.evidence].label : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </span>
                     )}
                   </span>
@@ -528,15 +631,25 @@ export function OverviewTab({
                 <li
                   key={e.id}
                   title={
-                    e.state === "partial"
+                    e.blocked.length
                       ? `Blocks ${e.blocked.join(", ")}`
                       : `Crawlers: ${e.bots.join(", ")}`
                   }
                   className="flex min-w-0 items-center gap-3 py-2"
                 >
                   <EngineMark id={e.id} name={e.name} size={28} />
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-foreground">
-                    {e.name}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13.5px] font-medium text-foreground">
+                      {e.name}
+                    </span>
+                    {!!e.trainingBlocked?.length && e.state === "open" && (
+                      <span
+                        className="block truncate text-[12px] text-muted-foreground"
+                        title={`You block ${e.trainingBlocked.join(", ")}. That's your choice and doesn't affect your score.`}
+                      >
+                        Training off
+                      </span>
+                    )}
                   </span>
                   <span
                     className={cn(
@@ -578,6 +691,14 @@ export function OverviewTab({
           )}
         </AnimatePresence>
       </div>
+
+      {report.pathTo100 && (
+        <PathTo100
+          path={report.pathTo100}
+          overall={report.overall}
+          onOpenFindings={onOpenFindings}
+        />
+      )}
 
       {/* Fixes + snapshot */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
@@ -669,6 +790,7 @@ export function OverviewTab({
                 ["Words", report.snapshot.words.toLocaleString()],
                 ["Sitemap", report.snapshot.sitemapUrls.toLocaleString()],
                 ["llms.txt", report.snapshot.llmsTxt ? "Yes" : "Missing"],
+                ...(report.agent ? [["Markdown", report.agent.markdown ? "Yes" : "No"]] : []),
               ].map(([label, value]) => (
                 <div key={label} className="min-w-0">
                   <dt className="truncate text-[12px] text-muted-foreground">{label}</dt>

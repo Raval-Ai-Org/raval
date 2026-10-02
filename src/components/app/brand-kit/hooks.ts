@@ -301,7 +301,8 @@ export function useKitAssetActions(workspaceId: string | null) {
     onError: (e) => toast.error(message(e, "Couldn't save")),
   });
   const reanalyze = useMutation({
-    mutationFn: (assetIds: string[]) => analyzeKitAssets({ data: { workspaceId: ws, assetIds } }),
+    mutationFn: (v: { assetIds: string[]; refresh?: boolean }) =>
+      analyzeKitAssets({ data: { workspaceId: ws, ...v } }),
     onSuccess: invalidate,
     onError: (e) => toast.error(message(e, "Couldn't start")),
   });

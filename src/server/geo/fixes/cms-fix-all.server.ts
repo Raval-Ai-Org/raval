@@ -110,14 +110,30 @@ export async function startCmsFixAll(ctx: FixContext, scanId: string): Promise<C
   const { picked } = await candidates(ctx, scanId);
   // Start again only where the last attempt ended without a usable result.
   const RETRY = ["failed", "cancelled", "closed", "stale", "not_verified"];
+  // A refusal (daily limit, site no longer confirmed) is shown on its finding
+  // instead of leaving a row that silently never starts.
+  const refused = new Map<string, string>();
   for (const f of picked) {
     const { run } = await agents.getAgentRunForFinding(ctx, f.id);
     if (run && !RETRY.includes(run.status)) continue;
-    await agents.startAgentRun(ctx, { findingId: f.id }).catch((e) => {
+    try {
+      const result = await agents.startAgentRun(ctx, { findingId: f.id });
+      if (!result.ok) refused.set(f.id, result.reason);
+    } catch (e) {
       console.warn("[cms-fix-all] start failed", f.id, e instanceof Error ? e.message : e);
-    });
+      refused.set(
+        f.id,
+        e instanceof FixWorkflowError ? e.message : "Couldn't start this fix. Try again.",
+      );
+    }
   }
-  return getCmsFixAll(ctx, scanId);
+  const view = await getCmsFixAll(ctx, scanId);
+  return {
+    ...view,
+    items: view.items.map((i) =>
+      refused.has(i.findingId) ? { ...i, startError: refused.get(i.findingId) } : i,
+    ),
+  };
 }
 
 /** Apply every approved change, one at a time; one failure doesn't stop the rest. */

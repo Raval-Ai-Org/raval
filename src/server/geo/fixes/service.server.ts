@@ -837,6 +837,21 @@ Proposed by Mellox AI Visibility and approved by a workspace member. Mellox neve
 After this PR is merged and deployed, Mellox re-scans the affected page and only marks the finding resolved if the check passes on the live site.`;
 }
 
+/**
+ * The version each proposed file was edited from, when all are known: lets an
+ * approved change still be committed after unrelated commits landed on the
+ * base branch. An `update` without a recorded version means "unknown".
+ */
+export function fileBaseOf(
+  files: { path: string; action: string; baseBlobSha: string | null }[],
+): { path: string; blobSha: string | null }[] | undefined {
+  if (files.some((f) => f.action === "update" && !f.baseBlobSha)) return undefined;
+  return files.map((f) => ({
+    path: f.path,
+    blobSha: f.action === "update" ? f.baseBlobSha : null,
+  }));
+}
+
 export async function approveAndApply(
   ctx: FixContext,
   args: { proposalId: string; contentHash: string },
@@ -920,6 +935,7 @@ export async function approveAndApply(
         headBranch,
         message: `${title}\n\nProposed by Mellox AI Visibility (rule ${row.rule_id}) and approved in Mellox.`,
         files: row.files.map((f) => ({ path: f.path, content: f.after! })),
+        fileBase: fileBaseOf(row.files),
       }),
     );
     branchCreated = true;
@@ -1182,7 +1198,9 @@ export async function undoCmsProposal(
   );
   if (!result.restored)
     throw new FixWorkflowError(
-      `Nothing was undone: ${result.skipped.join(", ")} changed on ${cmsName(provider)} since Mellox applied it.`,
+      result.skipped.length
+        ? `Nothing was undone: ${result.skipped.join(", ")} changed on ${cmsName(provider)} since Mellox applied it.`
+        : `Mellox can't undo ${result.unknown.join(", ")} because it couldn't read the old value. Change it back in your SEO plugin.`,
       409,
     );
   await supabaseAdmin
@@ -1194,9 +1212,17 @@ export async function undoCmsProposal(
     status: "rolled_back",
     rolled_back_at: new Date().toISOString(),
     rolled_back_by: ctx.userId,
-    error: result.skipped.length
-      ? `Not undone because they changed since: ${result.skipped.join(", ")}`
-      : null,
+    error:
+      [
+        result.skipped.length
+          ? `Not undone because they changed since: ${result.skipped.join(", ")}.`
+          : "",
+        result.unknown.length
+          ? `Not undone because the old value couldn't be read: ${result.unknown.join(", ")}. Change it back in your SEO plugin.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ") || null,
   });
   await supabaseAdmin.from("geo_finding_states").upsert(
     {

@@ -14,9 +14,14 @@ import {
   type SafeFetchOptions,
   type SafeFetchResult,
 } from "@/server/safe-fetch";
-import { robotsSitemaps } from "@/lib/geo/robots";
-import { looksLikeLlmsTxt, looksLikeRobotsTxt, parseSitemap } from "@/lib/geo/sitemap";
-import type { SiteArtifacts } from "@/lib/geo/types";
+import { contentSignals, isPathAllowed, robotsSitemaps } from "@/lib/geo/robots";
+import {
+  looksLikeLlmsTxt,
+  looksLikeRobotsTxt,
+  parseSitemap,
+  validateLlmsTxt,
+} from "@/lib/geo/sitemap";
+import { SITEMAP_PATH_CAP, type SiteArtifacts } from "@/lib/geo/types";
 
 /** Product token robots.txt groups can target to allow or block Mellox scans. */
 export const GEO_CRAWLER_TOKEN = "MelloxAI-Audit";
@@ -63,17 +68,25 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function fetchWithRetry(
   fetcher: Fetcher,
   url: string,
-  opts: { timeoutMs?: number; maxBytes?: number; retries?: number; accept?: string } = {},
+  opts: {
+    timeoutMs?: number;
+    maxBytes?: number;
+    retries?: number;
+    accept?: string;
+    userAgent?: string;
+  } = {},
 ): Promise<FetchOutcome> {
   const retries = opts.retries ?? 2;
-  const started = Date.now();
+  let started = Date.now();
   let last: FetchOutcome | null = null;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
+    // Timed per attempt: a retry's backoff is our wait, not the site's speed.
+    started = Date.now();
     try {
       const res = await fetcher(url, {
         headers: {
-          "user-agent": geoUserAgent(),
+          "user-agent": opts.userAgent ?? geoUserAgent(),
           accept: opts.accept ?? "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.5",
           "accept-language": "en;q=0.9,*;q=0.5",
         },
@@ -203,9 +216,74 @@ export function normalizeCrawlUrl(raw: string, host: string): string | null {
 const MAX_SITEMAP_URLS = 5000;
 const MAX_SITEMAP_DOCS = 6;
 
+// The user agents answer-engine search crawlers send, as their vendors publish them.
+const BOT_USER_AGENTS: { bot: string; userAgent: string }[] = [
+  {
+    bot: "OAI-SearchBot",
+    userAgent:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; OAI-SearchBot/1.0; +https://openai.com/searchbot",
+  },
+  {
+    bot: "PerplexityBot",
+    userAgent:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)",
+  },
+  {
+    bot: "Claude-SearchBot",
+    userAgent:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-SearchBot/1.0; +Claude-SearchBot@anthropic.com)",
+  },
+];
+
+const CHALLENGE_PAGE =
+  /cf-chl|just a moment\.\.\.|attention required|verify (?:that )?you are (?:a )?human|access denied|captcha/i;
+
+/**
+ * Ask for the homepage the way each answer-engine search crawler would. A
+ * crawler robots.txt already turns away is skipped: that block is reported by
+ * its own check and the site has asked not to be fetched under that name.
+ */
+async function probeBotAccess(
+  fetcher: Fetcher,
+  origin: string,
+  robotsText: string,
+  /** What Mellox's own crawler got for the same page: the yardstick. */
+  baseline: Pick<FetchOutcome, "ok" | "status" | "body">,
+): Promise<NonNullable<SiteArtifacts["botAccess"]>> {
+  if (!baseline.ok) return { baselineStatus: baseline.status, checks: [] };
+  const targets = BOT_USER_AGENTS.filter(
+    (b) => !robotsText || isPathAllowed(robotsText, b.bot, "/"),
+  );
+  const checks = await Promise.all(
+    targets.map(async ({ bot, userAgent }) => {
+      const res = await fetchWithRetry(fetcher, `${origin}/`, {
+        timeoutMs: 8000,
+        maxBytes: 256 * 1024,
+        retries: 0,
+        userAgent,
+      });
+      const refused = res.status !== null && [401, 403, 406, 429, 451, 503].includes(res.status);
+      const challenged =
+        res.ok &&
+        res.bytes < 60_000 &&
+        CHALLENGE_PAGE.test(res.body) &&
+        !CHALLENGE_PAGE.test(baseline.body);
+      return {
+        bot,
+        status: res.status,
+        blocked: refused || challenged,
+        reason: refused ? `HTTP ${res.status}` : challenged ? "A challenge page" : null,
+      };
+    }),
+  );
+  return { baselineStatus: baseline.status, checks };
+}
+
 export async function discoverSiteArtifacts(
   fetcher: Fetcher,
   origin: string,
+  /** `home`: the homepage as already fetched; with it, crawler access is tested too. */
+  opts: { home?: Pick<FetchOutcome, "ok" | "status" | "body"> } = {},
 ): Promise<{ site: SiteArtifacts; sitemapUrls: string[] }> {
   const url = new URL(origin);
   const host = siteHost(origin);
@@ -248,6 +326,7 @@ export async function discoverSiteArtifacts(
   const sources: string[] = [];
   const locs = new Set<string>();
   let isIndex = false;
+  let withLastmod = 0;
   while (queue.length && seenDocs.size < MAX_SITEMAP_DOCS && locs.size < MAX_SITEMAP_URLS) {
     const doc = queue.shift()!;
     if (seenDocs.has(doc)) continue;
@@ -266,6 +345,7 @@ export async function discoverSiteArtifacts(
       isIndex = true;
       queue.push(...parsed.locs.slice(0, MAX_SITEMAP_DOCS));
     } else {
+      withLastmod += parsed.lastmods;
       for (const loc of parsed.locs) {
         if (siteHost(loc) === host) locs.add(loc);
         if (locs.size >= MAX_SITEMAP_URLS) break;
@@ -276,6 +356,37 @@ export async function discoverSiteArtifacts(
   const sitemapFound = sources.length > 0;
 
   const llmsFound = llmsRes.ok && looksLikeLlmsTxt(llmsRes.body, llmsRes.contentType);
+  const llmsFull = llmsFullRes.ok && looksLikeLlmsTxt(llmsFullRes.body, llmsFullRes.contentType);
+  const llmsCheck = llmsFound ? validateLlmsTxt(llmsRes.body) : null;
+
+  const paths: string[] = [];
+  for (const loc of locs) {
+    if (paths.length >= SITEMAP_PATH_CAP) break;
+    try {
+      const u = new URL(loc);
+      paths.push(`${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`);
+    } catch {
+      /* skip a malformed entry */
+    }
+  }
+
+  // Optional extras: neither may fail discovery.
+  const [botAccess, markdown] = await Promise.all([
+    opts.home
+      ? probeBotAccess(fetcher, origin, robotsText, opts.home).catch(() => undefined)
+      : Promise.resolve(undefined),
+    opts.home
+      ? fetchWithRetry(fetcher, `${origin}/`, {
+          timeoutMs: 8000,
+          maxBytes: 64 * 1024,
+          retries: 0,
+          accept: "text/markdown",
+        })
+          .then((r) => r.ok && /markdown/i.test(r.contentType ?? ""))
+          .catch(() => false)
+      : Promise.resolve(false),
+  ]);
+
   const site: SiteArtifacts = {
     origin,
     host,
@@ -284,9 +395,21 @@ export async function discoverSiteArtifacts(
     llms: {
       found: llmsFound,
       bytes: llmsFound ? llmsRes.bytes : 0,
-      full: llmsFullRes.ok && looksLikeLlmsTxt(llmsFullRes.body, llmsFullRes.contentType),
+      full: llmsFull,
+      ...(llmsCheck ? { issues: llmsCheck.issues, links: llmsCheck.links } : {}),
     },
-    sitemap: { found: sitemapFound, urls: locs.size, isIndex, sources },
+    sitemap: {
+      found: sitemapFound,
+      urls: locs.size,
+      isIndex,
+      sources,
+      withLastmod: Math.min(withLastmod, locs.size),
+      paths,
+    },
+    ...(botAccess ? { botAccess } : {}),
+    ...(opts.home
+      ? { agent: { markdown, contentSignals: contentSignals(robotsText), llmsFull } }
+      : {}),
   };
   return { site, sitemapUrls: [...locs] };
 }

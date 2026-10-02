@@ -12,6 +12,7 @@ import {
   type FontCategory,
 } from "@/lib/brand-kit/fonts";
 import { dsFocus } from "@/components/app/surface/buttons";
+import { ColorPicker, type SwatchGroup } from "./ColorPicker";
 
 /** A labelled row inside a tile. */
 export function Field({
@@ -224,72 +225,55 @@ export function ChipsInput({
   );
 }
 
-const HEX_RE = /^#?[0-9a-fA-F]{6}$/;
-
-/** A colour well: swatch (native picker) plus a hex field. */
+/** A colour well: a swatch that opens the colour picker, with its hex beside it. */
 export function ColorField({
   label,
   value,
   onChange,
   onClear,
+  groups,
   disabled,
 }: {
   label: string;
   value: string | undefined;
   onChange: (hex: string) => void;
   onClear?: () => void;
+  groups?: SwatchGroup[];
   disabled?: boolean;
 }) {
-  const [text, setText] = React.useState(value ?? "");
-  React.useEffect(() => setText(value ?? ""), [value]);
   return (
-    <div className="group flex items-center gap-3">
-      <label
+    <ColorPicker
+      label={label}
+      value={value}
+      onChange={onChange}
+      onClear={onClear}
+      groups={groups}
+      disabled={disabled}
+    >
+      <button
+        type="button"
         className={cn(
-          "relative h-11 w-11 shrink-0 cursor-pointer overflow-hidden rounded-[14px] ring-1 ring-[var(--ds-tile-border)] transition-transform hover:scale-[1.04]",
-          !value &&
-            "bg-[repeating-conic-gradient(var(--ds-well-bg-hover)_0_25%,transparent_0_50%)] [background-size:10px_10px]",
+          "group flex w-full items-center gap-3 rounded-[16px] p-1 text-left transition-colors hover:bg-[var(--ds-well-bg)]",
           disabled && "pointer-events-none",
+          dsFocus,
         )}
-        style={value ? { background: value } : undefined}
       >
-        <input
-          type="color"
-          value={value ?? "#888888"}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          aria-label={`${label} colour`}
+        <span
+          className={cn(
+            "h-11 w-11 shrink-0 rounded-[14px] ring-1 ring-[var(--ds-tile-border)] transition-transform group-hover:scale-[1.04]",
+            !value &&
+              "bg-[repeating-conic-gradient(var(--ds-well-bg-hover)_0_25%,transparent_0_50%)] [background-size:10px_10px]",
+          )}
+          style={value ? { background: value } : undefined}
         />
-      </label>
-      <div className="min-w-0 flex-1">
-        <div className="text-[12px] font-medium text-muted-foreground">{label}</div>
-        <input
-          value={text}
-          disabled={disabled}
-          placeholder="—"
-          onChange={(e) => setText(e.target.value)}
-          onBlur={() => {
-            const t = text.trim();
-            if (!t && onClear) onClear();
-            else if (HEX_RE.test(t))
-              onChange(t.startsWith("#") ? t.toLowerCase() : `#${t.toLowerCase()}`);
-            else setText(value ?? "");
-          }}
-          className="w-full bg-transparent font-mono text-[13px] uppercase tracking-wide text-foreground outline-none"
-        />
-      </div>
-      {value && onClear && !disabled && (
-        <button
-          type="button"
-          onClick={onClear}
-          aria-label={`Clear ${label}`}
-          className="grid h-7 w-7 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-[var(--ds-well-bg)] group-hover:opacity-100"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </div>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[12px] font-medium text-muted-foreground">{label}</span>
+          <span className="block font-mono text-[13px] uppercase tracking-wide text-foreground">
+            {value ?? "—"}
+          </span>
+        </span>
+      </button>
+    </ColorPicker>
   );
 }
 

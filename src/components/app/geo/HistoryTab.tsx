@@ -208,8 +208,10 @@ export function HistoryTab({
               const prev = history
                 .slice(i + 1)
                 .find((p) => p.host === s.host && p.status === "succeeded");
+              // A score from an older way of scoring isn't a fair comparison.
+              const rescored = !!prev && prev.scoreVersion !== s.scoreVersion;
               const delta =
-                s.overallScore !== null && prev?.overallScore != null
+                !rescored && s.overallScore !== null && prev?.overallScore != null
                   ? s.overallScore - prev.overallScore
                   : null;
               const checked = selected.includes(s.id);
@@ -271,6 +273,14 @@ export function HistoryTab({
                               <ArrowDown className="h-3 w-3" />
                             )}
                             {Math.abs(delta)}
+                          </span>
+                        )}
+                        {rescored && (
+                          <span
+                            className="text-[11.5px] text-muted-foreground"
+                            title="Scoring was updated, so this isn't compared with older scans."
+                          >
+                            New scoring
                           </span>
                         )}
                       </span>

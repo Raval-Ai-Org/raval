@@ -11,6 +11,7 @@ import {
   analyzeSemanticCoverage,
   analyzeStructure,
   analyzeTopic,
+  titleH1Alignment,
 } from "./analyze/content";
 import { analyzeClaims, analyzeSources, analyzeTrust } from "./analyze/trust";
 import { clip, hostOf } from "./analyze/text";
@@ -139,6 +140,10 @@ export function analyzePage(
   const sourceResult = analyzeSources(external, raw.headings, raw.bodyText);
   const bodyWords = raw.bodyText ? raw.bodyText.split(" ").length : 0;
 
+  const maxSnippet = /max-snippet\s*:\s*(-?\d+)/i.exec(robotsRaw);
+  const firstH1 = raw.headings.find((h) => h.level === 1 && h.text)?.text ?? null;
+  const schemaMismatches = schemaVersusPage(schema, { title, h1: firstH1, text: raw.bodyText });
+
   return {
     v: 1,
     url: pageUrl,
@@ -192,5 +197,44 @@ export function analyzePage(
     trust: analyzeTrust({ internal, mailto, tel, text: raw.bodyText, schema, og: raw.og }),
     claims: analyzeClaims(mainText, sourceResult.candidates),
     sources: sourceResult.sources,
+    snippet: {
+      maxSnippet: maxSnippet ? Number(maxSnippet[1]) : null,
+      nosnippetWords: raw.nosnippetWords,
+    },
+    schemaMismatches,
+    quotes: raw.quotes,
+    inlineScriptBytes: raw.inlineScriptBytes,
   };
+}
+
+const squash = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+/**
+ * Structured data has to describe what a visitor can see (Google's rule for
+ * every rich result). Returns what the markup says that the page doesn't.
+ */
+export function schemaVersusPage(
+  schema: SchemaSummary,
+  page: { title: string | null; h1: string | null; text: string },
+): string[] {
+  const out: string[] = [];
+  const text = squash(page.text);
+  if (schema.headline) {
+    const matches =
+      titleH1Alignment(schema.headline, page.h1) || titleH1Alignment(schema.headline, page.title);
+    if (!matches)
+      out.push(`Article headline "${clip(schema.headline, 80)}" isn't the page's H1 or title`);
+  }
+  for (const item of schema.faq) {
+    const q = squash(item.question);
+    if (q.length >= 8 && !text.includes(q)) {
+      out.push(`FAQ question "${clip(item.question, 80)}" isn't shown on the page`);
+      if (out.length >= 6) break;
+    }
+  }
+  return out;
 }

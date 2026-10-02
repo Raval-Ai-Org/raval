@@ -38,7 +38,11 @@ import {
   type ScoreTier,
   type Severity,
   type SiteArtifacts,
+  SITEMAP_PATH_CAP,
 } from "./types";
+
+/** Bumped when scoring changes enough that old and new scores aren't comparable. */
+export const SCORE_VERSION = 2;
 
 const CREDIT: Record<Exclude<RuleStatus, "na">, number> = { pass: 1, warn: 0.5, fail: 0 };
 const SEVERITY_IMPACT: Record<Severity, number> = {
@@ -88,7 +92,12 @@ export function fingerprintFor(ruleId: string, host: string, pageUrl: string | n
   }
 }
 
-function buildContext(site: SiteArtifacts, pages: CrawledPage[], mode: ScanMode): SiteContext {
+function buildContext(
+  site: SiteArtifacts,
+  pages: CrawledPage[],
+  mode: ScanMode,
+  now = Date.now(),
+): SiteContext {
   const analyzed = pages
     .filter((p) => p.state === "fetched" && p.analysis && (p.statusCode ?? 200) < 400)
     .map((p) => ({ page: p, a: p.analysis! }));
@@ -111,7 +120,38 @@ function buildContext(site: SiteArtifacts, pages: CrawledPage[], mode: ScanMode)
     analyzed.find(({ a }) => a.pageType === "home") ??
     analyzed.slice().sort((x, y) => x.page.depth - y.page.depth)[0] ??
     null;
-  return { site, mode, pages, analyzed, home, statusByUrl, titleCounts, descriptionCounts };
+  const urls = new Set(analyzed.map(({ a }) => a.url));
+  const inbound = new Map<string, number>();
+  for (const { a } of analyzed) {
+    for (const link of a.links.internal) {
+      if (link.href === a.url || !urls.has(link.href)) continue;
+      inbound.set(link.href, (inbound.get(link.href) ?? 0) + 1);
+    }
+  }
+  const paths = site.sitemap.paths;
+  return {
+    site,
+    mode,
+    pages,
+    analyzed,
+    home,
+    statusByUrl,
+    titleCounts,
+    descriptionCounts,
+    now,
+    inbound,
+    // Complete = nothing was left unread: no page skipped at the limit, no
+    // sitemap bigger than the crawl, and no link to a page that wasn't visited.
+    crawlComplete:
+      !pages.some((p) => p.skipReason === "Page limit reached") &&
+      site.sitemap.urls <= pages.length &&
+      !analyzed.some(({ a }) => a.links.internal.some((l) => !statusByUrl.has(l.href))),
+    // A list cut at the cap can't prove a page is missing from the sitemap.
+    sitemapPaths:
+      site.sitemap.found && paths?.length && paths.length < SITEMAP_PATH_CAP
+        ? new Set(paths)
+        : null,
+  };
 }
 
 type Evaluation = {
@@ -192,6 +232,7 @@ function summarizeRule(ev: Evaluation): Omit<RuleSummary, "pointsLost"> {
     warned,
     failed,
     detail,
+    ...(ev.rule.evidence ? { evidence: ev.rule.evidence } : {}),
   };
 }
 
@@ -203,11 +244,11 @@ export function ruleOutcomes(
   site: SiteArtifacts,
   pages: CrawledPage[],
   ruleId: string,
-  opts: { mode: ScanMode },
+  opts: { mode: ScanMode; now?: number },
 ): { pageUrl: string | null; outcome: RuleOutcome }[] | null {
   const rule = GEO_RULES.find((r) => r.id === ruleId);
   if (!rule) return null;
-  const ctx = buildContext(site, pages, opts.mode);
+  const ctx = buildContext(site, pages, opts.mode, opts.now);
   return evaluateRules(ctx, [rule])[0].outcomes;
 }
 
@@ -221,12 +262,14 @@ export type ScoredScan = {
 export function scoreScan(
   site: SiteArtifacts,
   pages: CrawledPage[],
-  opts: { mode: ScanMode; rules?: readonly GeoRule[] } = { mode: "full" },
+  opts: { mode: ScanMode; rules?: readonly GeoRule[]; now?: number } = { mode: "full" },
 ): ScoredScan {
-  const ctx = buildContext(site, pages, opts.mode);
+  const ctx = buildContext(site, pages, opts.mode, opts.now);
   const evaluations = evaluateRules(ctx, opts.rules ?? GEO_RULES);
 
   /* ── Categories and points ── */
+  // The overall score is built from the exact category scores and rounded once.
+  const exact = new Map<GeoCategoryId, number>();
   const categories: CategoryScore[] = GEO_CATEGORIES.map((meta) => {
     const evs = evaluations.filter((e) => e.rule.category === meta.id);
     const summaries = evs.map(summarizeRule);
@@ -234,6 +277,7 @@ export function scoreScan(
     const weightSum = active.reduce((sum, s) => sum + s.weight, 0);
     const earned = active.reduce((sum, s) => sum + s.weight * s.credit, 0);
     const score = weightSum ? (earned / weightSum) * 100 : 100;
+    exact.set(meta.id, score);
     const rules: RuleSummary[] = summaries.map((s) => ({
       ...s,
       pointsLost:
@@ -255,7 +299,7 @@ export function scoreScan(
   });
   const totalWeight = GEO_CATEGORIES.reduce((s, c) => s + c.weight, 0);
   const overall = Math.round(
-    categories.reduce((sum, c) => sum + (c.score * c.weight) / totalWeight, 0),
+    categories.reduce((sum, c) => sum + ((exact.get(c.id) ?? c.score) * c.weight) / totalWeight, 0),
   );
   const ruleSummaryById = new Map(
     categories.flatMap((c) => c.rules.map((r) => [r.ruleId, r] as const)),
@@ -405,6 +449,8 @@ export function scoreScan(
       .map(([url, v]) => ({ url, score: v.score, categories: v.categories }))
       .sort((x, y) => x.score - y.score)
       .slice(0, 500),
+    scoreVersion: SCORE_VERSION,
+    ...(site.agent ? { agent: site.agent } : {}),
   };
 
   return { report, findings, pageScores };

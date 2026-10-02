@@ -289,7 +289,12 @@ export function validateProposal(input: {
     if (f.before !== null && f.before === f.after) unchanged++;
     const c = changedLines(f.before ?? "", f.after);
     totalChanged += c.additions + c.deletions;
-    added.push({ path: f.path, lines: c.added });
+    // A line the file already had, only re-indented or moved (wrapping content
+    // in <main>, say), is not new code: the safety checks judge what the
+    // change introduces, not what was there before.
+    const squash = (l: string) => l.trim().replace(/\s+/g, " ");
+    const had = new Set((f.before ?? "").split(/\r?\n/).map(squash));
+    added.push({ path: f.path, lines: c.added.filter((l) => !had.has(squash(l))) });
   }
   add({
     id: "size",

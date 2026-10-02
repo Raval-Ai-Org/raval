@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseRobotsAllow } from "@/lib/geo/robots";
 import { needsRendering } from "@/lib/geo/rendering";
 import { analyzePage } from "@/lib/geo/analyze-page";
-import { evaluateVerification } from "@/lib/geo/verify";
+import { comparisonUrls, evaluateVerification } from "@/lib/geo/verify";
 import { fingerprintFor } from "@/lib/geo/score";
 import type { CrawledPage, SiteArtifacts } from "@/lib/geo/types";
 import {
@@ -11,7 +11,7 @@ import {
   isValidBaseBranch,
   proposalBranchName,
 } from "@/server/connectors/github/paths";
-import { applyEdits } from "./generate.server";
+import { applyEdits, locateEdit } from "./generate.server";
 import { fixKindForRule, planFixTarget } from "./targets";
 import { buildLlmsTxt, buildRobotsTxt, buildSitemapXml } from "./text-artifacts";
 import { validateProposal } from "./validate";
@@ -277,6 +277,42 @@ describe("model edits are applied exactly", () => {
         .ok,
     ).toBe(false);
   });
+
+  it("edits a Windows (CRLF) file and keeps its line endings", () => {
+    const crlf = [
+      {
+        path: "index.html",
+        action: "update" as const,
+        content: "<head>\r\n  <title>A</title>\r\n  <meta charset='utf-8'>\r\n</head>\r\n",
+      },
+    ];
+    const r = applyEdits(crlf, [
+      {
+        path: "index.html",
+        find: "<title>A</title>\n  <meta charset='utf-8'>",
+        replace: "<title>Better</title>\n  <meta charset='utf-8'>",
+        why: "x",
+      },
+    ]);
+    expect(r.ok && r.files[0].after).toBe(
+      "<head>\r\n  <title>Better</title>\r\n  <meta charset='utf-8'>\r\n</head>\r\n",
+    );
+  });
+
+  it("matches re-indented text, but never an ambiguous or tiny fragment", () => {
+    const text =
+      "<main>\n      <h2>Plans and pricing for teams</h2>\n</main>\n<p>x  y</p><p>x y</p>";
+    expect(locateEdit(text, "<main>\n  <h2>Plans and pricing for teams</h2>")).toMatchObject({
+      ok: true,
+      start: 0,
+    });
+    expect(locateEdit(text, "x y z")).toEqual({ ok: false, matches: 0 });
+    const twice = "<li>Plans and pricing  for teams</li>\n<li>Plans and pricing\nfor teams</li>";
+    expect(locateEdit(twice, "<li>Plans and pricing for teams</li>")).toEqual({
+      ok: false,
+      matches: 2,
+    });
+  });
 });
 
 describe("proposal validation", () => {
@@ -323,6 +359,22 @@ describe("proposal validation", () => {
     expect(status.safety).toBe("fail");
     expect(status.syntax).toBe("fail");
     expect(status.rule).toBe("skipped");
+  });
+
+  it("doesn't blame a change for code the file already had, only re-indented", () => {
+    const before =
+      'export default function P() {\n  return (\n    <div>\n      <button onClick={() => fetch("/api/x")}>Go</button>\n    </div>\n  );\n}\n';
+    const after =
+      'export default function P() {\n  return (\n    <main>\n      <div>\n        <button onClick={() => fetch("/api/x")}>Go</button>\n      </div>\n    </main>\n  );\n}\n';
+    const v = validateProposal({
+      kind: null,
+      ruleId: "content.semantic_html",
+      pageUrl: "https://example.com/",
+      site,
+      files: [{ path: "app/page.tsx", action: "update", before, after }],
+      crawlerReadsFile: false,
+    });
+    expect(v.checks.find((c) => c.id === "safety")?.status).toBe("pass");
   });
 
   it("rejects writes to forbidden paths", () => {
@@ -380,6 +432,62 @@ describe("verification decision", () => {
     });
     expect(d.outcome).toBe("inconclusive");
     expect(d.after[target.fingerprint].status).toBe("missing");
+  });
+
+  describe("findings that compare pages", () => {
+    const a = "https://example.com/a";
+    const b = "https://example.com/b";
+    const doc = (title: string) =>
+      `<html lang="en"><head><title>${title}</title></head><body><h1>Hi</h1></body></html>`;
+    const dup = {
+      fingerprint: fingerprintFor("tech.duplicate_title", "example.com", a),
+      ruleId: "tech.duplicate_title",
+      pageUrl: a,
+    };
+
+    it("finds the pages that shared the title", () => {
+      expect(
+        comparisonUrls({
+          targets: [dup],
+          baselinePages: [
+            { url: a, title: "Same title", description: null },
+            { url: b, title: "same title ", description: null },
+            { url: "https://example.com/c", title: "Other", description: null },
+          ],
+          evidence: {},
+        }),
+      ).toEqual([b]);
+    });
+
+    it("is inconclusive when the other pages weren't re-read", () => {
+      const d = evaluateVerification({
+        targets: [dup],
+        site,
+        pages: [page(a, doc("Now unique"))],
+        baselineFingerprints: [],
+      });
+      expect(d.outcome).toBe("inconclusive");
+    });
+
+    it("verifies once the title differs from the page it used to share with", () => {
+      const comparison = { [dup.fingerprint]: [b] };
+      const fixed = evaluateVerification({
+        targets: [dup],
+        site,
+        pages: [page(a, doc("A page about apples")), page(b, doc("A page about pears"))],
+        baselineFingerprints: [],
+        comparison,
+      });
+      expect(fixed.outcome).toBe("verified");
+      const still = evaluateVerification({
+        targets: [dup],
+        site,
+        pages: [page(a, doc("Same title")), page(b, doc("Same title"))],
+        baselineFingerprints: [],
+        comparison,
+      });
+      expect(still.outcome).toBe("not_verified");
+    });
   });
 });
 

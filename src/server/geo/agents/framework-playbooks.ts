@@ -145,7 +145,22 @@ export function allowedImportsFor(playbook: Playbook, dependencies: string[]): S
     spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0];
   // Virtual modules (#app, $app/…, astro:…) belong to the framework itself.
   const isVirtual = (spec: string) => /^(#|\$|astro:)/.test(spec);
-  return new Set(
-    playbook.allowedImports.filter((spec) => isVirtual(spec) || deps.has(packageOf(spec))),
-  );
+  return new Set([
+    ...playbook.allowedImports.filter((spec) => isVirtual(spec) || deps.has(packageOf(spec))),
+    // Head and schema helpers, only where the repository already uses them: a
+    // site built on next-seo should be fixed with next-seo, not around it.
+    ...HEAD_HELPERS.filter((spec) => deps.has(packageOf(spec))),
+  ]);
 }
+
+/** Well-known packages that only set head tags or type schema.org data. */
+const HEAD_HELPERS = [
+  "next-seo",
+  "react-helmet",
+  "react-helmet-async",
+  "@unhead/react",
+  "@vueuse/head",
+  "astro-seo",
+  "svelte-meta-tags",
+  "schema-dts",
+];

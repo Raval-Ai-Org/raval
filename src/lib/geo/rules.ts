@@ -10,13 +10,14 @@
 // Rule ids are stable — findings, workflow state and scan comparisons key off
 // them. Add new rules; don't rename existing ones.
 
-import { AI_BOTS, parseRobotsAllow } from "./robots";
+import { AI_BOTS, blockedPathsFor, parseRobotsAllow } from "./robots";
 import type {
   CrawledPage,
   Effort,
   FixSafety,
   GeoCategoryId,
   PageAnalysis,
+  RuleEvidence,
   RuleOutcome,
   Severity,
   SiteArtifacts,
@@ -34,6 +35,14 @@ export type SiteContext = {
   statusByUrl: Map<string, number | null>;
   titleCounts: Map<string, number>;
   descriptionCounts: Map<string, number>;
+  /** Epoch ms the scan is judged at (freshness). */
+  now: number;
+  /** Internal links pointing at each analyzed page from the other analyzed pages. */
+  inbound: Map<string, number>;
+  /** False when the crawl stopped at its page limit: "nothing links here" can't be trusted. */
+  crawlComplete: boolean;
+  /** Paths listed in the sitemap, or null when it wasn't read (or was cut short). */
+  sitemapPaths: Set<string> | null;
 };
 
 export type PageContext = { page: CrawledPage; a: PageAnalysis; site: SiteContext };
@@ -55,6 +64,12 @@ type BaseRule = {
   effort: Effort;
   /** 0..1 — how reliable the heuristic is (feeds prioritisation). */
   confidence: number;
+  /**
+   * How well established the link to AI answers is: "documented" by an engine
+   * vendor, "measured" in published studies, or "emerging" (a convention with
+   * little proof yet). Unset reads as general good practice.
+   */
+  evidence?: RuleEvidence;
 };
 
 export type SiteRule = BaseRule & { scope: "site"; evaluate: (ctx: SiteContext) => RuleOutcome };
@@ -82,6 +97,32 @@ const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
 const isContentPage = (a: PageAnalysis) => a.pageType !== "legal" && a.pageType !== "contact";
 const isArticle = (a: PageAnalysis) => a.pageType === "article";
 
+const pathOf = (url: string): string => {
+  try {
+    const u = new URL(url);
+    return `${u.pathname}${u.search}`;
+  } catch {
+    return "/";
+  }
+};
+const sitemapKey = (url: string): string => {
+  try {
+    const u = new URL(url);
+    return `${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
+  } catch {
+    return url;
+  }
+};
+const hostKey = (url: string): string => {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+};
+const isNoindex = (page: CrawledPage, a: PageAnalysis) =>
+  Boolean(a.robotsMeta?.noindex) || /noindex|none/.test((page.xRobotsTag ?? "").toLowerCase());
+
 /* ───────────────────────── AI engine access ───────────────────────── */
 
 const botRules: SiteRule[] = AI_BOTS.map((bot) => ({
@@ -89,22 +130,40 @@ const botRules: SiteRule[] = AI_BOTS.map((bot) => ({
   scope: "site",
   category: "ai_access",
   title: `${bot.id} can crawl`,
-  weight: 2,
-  severity: "high",
+  // A search crawler decides whether you can be cited at all; a user crawler
+  // only whether a live lookup works.
+  weight: bot.tier === "search" ? 3 : 2,
+  severity: bot.tier === "search" ? "critical" : "high",
   recommendation: "Unblock AI crawlers in robots.txt",
   actionKey: "ai.bots",
   fixId: "bots",
   safety: "auto_safe",
   effort: "low",
   confidence: 0.95,
-  evaluate: ({ site }) => {
+  evidence: "documented",
+  evaluate: ({ site, analyzed }) => {
     if (site.robots.status !== "found") {
       return na(`No robots.txt — ${bot.who} is allowed by default.`);
     }
     const verdict = parseRobotsAllow(site.robots.text, bot.id);
-    return verdict === "block"
-      ? fail(`Blocked in robots.txt — ${bot.who} can't read your site.`, { bot: bot.id })
-      : pass(`${bot.who} can crawl.`, { bot: bot.id });
+    if (bot.tier === "training") {
+      // Never scored: keeping training crawlers out is the owner's call and
+      // doesn't decide whether the site appears in answers.
+      return na(
+        verdict === "block"
+          ? `Blocked in robots.txt. That's your choice: ${bot.who} collects training data and doesn't decide whether you appear in answers.`
+          : `${bot.who} can crawl. Blocking it wouldn't change whether you appear in answers.`,
+      );
+    }
+    if (verdict === "block") {
+      return fail(`Blocked in robots.txt — ${bot.who} can't read your site.`, { bot: bot.id });
+    }
+    const paths = analyzed.map(({ a }) => pathOf(a.url));
+    const blocked = blockedPathsFor(site.robots.text, bot.id, paths);
+    if (!blocked.length) return pass(`${bot.who} can crawl.`, { bot: bot.id });
+    const detail = `robots.txt hides ${blocked.length} of ${paths.length} scanned pages from ${bot.id}, e.g. ${blocked[0]}.`;
+    const evidence = { bot: bot.id, blockedPaths: blocked.slice(0, 10) };
+    return blocked.length / paths.length > 0.5 ? fail(detail, evidence) : warn(detail, evidence);
   },
 }));
 
@@ -133,20 +192,63 @@ const aiAccess: GeoRule[] = [
     scope: "site",
     category: "ai_access",
     title: "llms.txt for AI crawlers",
-    weight: 5,
-    severity: "high",
+    // Light on purpose: a useful convention for agents, but no engine has said
+    // it uses the file to choose what to cite.
+    weight: 2,
+    severity: "medium",
     recommendation: "Publish /llms.txt",
     fixId: "llms",
     safety: "assisted",
     effort: "low",
     confidence: 0.9,
-    evaluate: ({ site }) =>
-      site.llms.found
-        ? pass(
-            `Found at ${site.origin}/llms.txt${site.llms.full ? " (plus llms-full.txt)" : ""}.`,
-            { bytes: site.llms.bytes },
-          )
-        : warn("Missing — add /llms.txt so LLMs know which pages are your canonical sources."),
+    evidence: "emerging",
+    evaluate: ({ site, statusByUrl }) => {
+      if (!site.llms.found) {
+        return warn("Missing — add /llms.txt to point AI agents at your key pages.");
+      }
+      const dead = (site.llms.links ?? []).filter((l) => (statusByUrl.get(l) ?? 0) >= 400);
+      const issues = [
+        ...(site.llms.issues ?? []),
+        ...(dead.length ? [`${dead.length} listed link(s) return errors, e.g. ${dead[0]}`] : []),
+      ];
+      if (issues.length) {
+        return warn(`Found, but it needs work: ${issues[0]}.`, { issues, deadLinks: dead });
+      }
+      return pass(
+        `Found at ${site.origin}/llms.txt${site.llms.full ? " (plus llms-full.txt)" : ""}.`,
+        { bytes: site.llms.bytes },
+      );
+    },
+  },
+  {
+    id: "ai.live_access",
+    scope: "site",
+    category: "ai_access",
+    title: "AI crawlers get the real page",
+    weight: 4,
+    severity: "critical",
+    recommendation: "Let AI crawlers through your firewall",
+    fixId: "bot-firewall",
+    safety: "manual_review",
+    effort: "medium",
+    // A look-alike request can be turned away where the real crawler isn't, so
+    // this is a strong hint rather than proof — it only ever warns.
+    confidence: 0.6,
+    evidence: "documented",
+    evaluate: ({ site }) => {
+      const access = site.botAccess;
+      if (!access || !access.checks.length) return na("Not tested in this scan.");
+      const blocked = access.checks.filter((c) => c.blocked);
+      if (!blocked.length) {
+        return pass(
+          `The homepage loaded normally for ${access.checks.map((c) => c.bot).join(", ")}.`,
+        );
+      }
+      return warn(
+        `Your site turned away ${blocked.map((c) => `${c.bot} (${c.reason})`).join(", ")} while loading fine for a normal visitor. A firewall or bot-protection setting is the usual cause.`,
+        { checks: access.checks },
+      );
+    },
   },
   ...botRules,
 ];
@@ -275,14 +377,31 @@ const technical: GeoRule[] = [
     safety: "auto_safe",
     effort: "low",
     confidence: 0.9,
-    evaluate: ({ a }) => {
+    evaluate: ({ a, site }) => {
       if (!a.canonicals.length) return warn("No <link rel=canonical>.");
       if (a.canonicals.length > 1) {
         return fail(`${a.canonicals.length} conflicting canonical URLs.`, {
           canonicals: a.canonicals,
         });
       }
-      const self = a.canonicals[0].replace(/\/$/, "") === a.url.replace(/\/$/, "");
+      const canonical = a.canonicals[0];
+      const self = canonical.replace(/\/$/, "") === a.url.replace(/\/$/, "");
+      if (!self) {
+        // A canonical tells engines "index that page instead of this one".
+        if (hostKey(canonical) !== site.site.host) {
+          return fail(`Canonical points to another site (${canonical}).`, { canonical });
+        }
+        const status = site.statusByUrl.get(canonical);
+        if (status && status >= 400) {
+          return fail(`Canonical points to a page that returns HTTP ${status}.`, { canonical });
+        }
+        const target = site.analyzed.find(
+          (p) => p.a.url.replace(/\/$/, "") === canonical.replace(/\/$/, ""),
+        );
+        if (target && isNoindex(target.page, target.a)) {
+          return fail("Canonical points to a page marked noindex.", { canonical });
+        }
+      }
       return pass(
         self ? "Self-referencing canonical." : `Canonical points to ${a.canonicals[0]}.`,
         {
@@ -456,6 +575,140 @@ const technical: GeoRule[] = [
             )
           : pass(`${page.depth} click(s) from the homepage.`),
   },
+  {
+    id: "tech.snippet",
+    scope: "page",
+    category: "technical",
+    title: "Text can be quoted in answers",
+    weight: 4,
+    severity: "critical",
+    recommendation: "Allow snippets so AI answers can quote your pages",
+    fixId: "snippet",
+    safety: "manual_review",
+    effort: "low",
+    confidence: 0.95,
+    evidence: "documented",
+    evaluate: ({ a, page }) => {
+      if (isNoindex(page, a)) return na("The page is noindex; fix that first.");
+      const header = (page.xRobotsTag ?? "").toLowerCase();
+      const headerMax = /max-snippet\s*:\s*(-?\d+)/.exec(header);
+      const max = a.snippet?.maxSnippet ?? (headerMax ? Number(headerMax[1]) : null);
+      if (a.robotsMeta?.nosnippet || /nosnippet/.test(header)) {
+        return fail("Marked nosnippet — Google's AI answers can't quote or use this page.", {
+          meta: a.robotsMeta?.raw ?? null,
+          header: page.xRobotsTag,
+        });
+      }
+      if (max === 0) {
+        return fail("max-snippet:0 — the page can't be quoted in AI answers.", { maxSnippet: 0 });
+      }
+      if (max !== null && max > 0 && max < 160) {
+        return warn(`max-snippet:${max} limits quotes to ${max} characters — too short to cite.`, {
+          maxSnippet: max,
+        });
+      }
+      if (!a.snippet) return pass("No snippet limits.");
+      const hidden = a.snippet.nosnippetWords;
+      if (hidden >= 50 && hidden / Math.max(1, a.text.words) > 0.5) {
+        return warn(
+          `${hidden.toLocaleString()} of ${a.text.words.toLocaleString()} words sit inside data-nosnippet and can't be quoted.`,
+          { nosnippetWords: hidden },
+        );
+      }
+      return pass("No snippet limits.");
+    },
+  },
+  {
+    id: "tech.sitemap_lastmod",
+    scope: "site",
+    category: "technical",
+    title: "Sitemap says when pages changed",
+    weight: 1,
+    severity: "low",
+    recommendation: "Add last-modified dates to your sitemap",
+    fixId: "sitemap-lastmod",
+    safety: "assisted",
+    effort: "low",
+    confidence: 0.85,
+    evidence: "documented",
+    evaluate: ({ site }) => {
+      const { found, urls, withLastmod } = site.sitemap;
+      if (!found || !urls || withLastmod === undefined) return na("No sitemap entries to check.");
+      const share = withLastmod / urls;
+      const detail = `${withLastmod.toLocaleString()} of ${urls.toLocaleString()} sitemap URLs have a <lastmod> date.`;
+      return share >= 0.8
+        ? pass(detail)
+        : warn(`${detail} Engines use it to re-crawl fresh pages.`);
+    },
+  },
+  {
+    id: "tech.sitemap_coverage",
+    scope: "site",
+    category: "technical",
+    title: "Sitemap matches the real site",
+    weight: 2,
+    severity: "medium",
+    recommendation: "Keep your sitemap in step with your pages",
+    fixId: "sitemap-coverage",
+    safety: "assisted",
+    effort: "low",
+    confidence: 0.8,
+    evaluate: (ctx) => {
+      if (ctx.mode === "quick" || !ctx.sitemapPaths)
+        return na("Needs a multi-page scan and a sitemap.");
+      const listed = ctx.sitemapPaths;
+      const bad = ctx.pages
+        .filter((p) => listed.has(sitemapKey(p.url)))
+        .filter(
+          (p) =>
+            (p.statusCode ?? 0) >= 400 ||
+            p.state === "failed" ||
+            (p.analysis && isNoindex(p, p.analysis)),
+        );
+      const indexable = ctx.analyzed.filter(({ page, a }) => !isNoindex(page, a));
+      const missing = indexable.filter(({ a }) => !listed.has(sitemapKey(a.url)));
+      const evidence = {
+        listedButBroken: bad.slice(0, 10).map((p) => p.url),
+        notListed: missing.slice(0, 10).map(({ a }) => a.url),
+      };
+      if (bad.length) {
+        return warn(
+          `${bad.length} sitemap URL(s) return an error or are noindex, e.g. ${bad[0].url}.`,
+          evidence,
+        );
+      }
+      if (indexable.length >= 5 && missing.length / indexable.length > 0.2) {
+        return warn(
+          `${missing.length} of ${indexable.length} scanned pages aren't in the sitemap, e.g. ${missing[0].a.url}.`,
+          evidence,
+        );
+      }
+      return pass("The sitemap lists working, indexable pages.");
+    },
+  },
+  {
+    id: "tech.orphan_pages",
+    scope: "page",
+    category: "technical",
+    title: "Linked from another page",
+    weight: 1,
+    severity: "low",
+    recommendation: "Link related pages to each other",
+    actionKey: "content.internal_links",
+    fixId: "internal-links",
+    safety: "assisted",
+    effort: "medium",
+    confidence: 0.75,
+    evaluate: ({ a, site }) => {
+      if (site.mode === "quick" || !site.crawlComplete)
+        return na("Needs a complete multi-page scan.");
+      if (a.pageType === "home" || site.analyzed.length < 3) return na("Not applicable.");
+      const n = site.inbound.get(a.url) ?? 0;
+      return n === 0
+        ? warn("No scanned page links here — crawlers can only find it through the sitemap.")
+        : pass(`Linked from ${n} scanned page(s).`);
+    },
+  },
 ];
 
 /* ───────────────────────── Structured data & entities ───────────────────────── */
@@ -475,6 +728,7 @@ const structuredData: GeoRule[] = [
     confidence: 0.95,
     evaluate: ({ a }) => {
       const { blocks, parseErrors, types } = a.schema;
+      if (!blocks && !isContentPage(a)) return na("Legal and contact pages don't need markup.");
       if (!blocks)
         return fail("No JSON-LD — AI engines have nothing structured to ground answers on.");
       if (parseErrors) {
@@ -608,6 +862,7 @@ const structuredData: GeoRule[] = [
     confidence: 0.95,
     evaluate: ({ a }) => {
       const has = ["og:title", "og:description", "og:image"].filter((k) => a.og[k]);
+      if (!isContentPage(a)) return na("Legal and contact pages are rarely shared.");
       return has.length === 3
         ? pass("og:title, og:description and og:image set.")
         : warn(
@@ -631,7 +886,9 @@ const structuredData: GeoRule[] = [
     evaluate: ({ a }) =>
       a.twitter["twitter:card"]
         ? pass(`twitter:card = ${a.twitter["twitter:card"]}.`)
-        : warn("Missing twitter:card."),
+        : !isContentPage(a)
+          ? na("Legal and contact pages are rarely shared.")
+          : warn("Missing twitter:card."),
   },
   {
     id: "schema.entity_consistency",
@@ -651,6 +908,49 @@ const structuredData: GeoRule[] = [
         : a.entities.consistencyIssues.length
           ? warn(a.entities.consistencyIssues[0], { issues: a.entities.consistencyIssues })
           : pass("Declared entities are named on the page."),
+  },
+  {
+    id: "schema.valid",
+    scope: "page",
+    category: "structured_data",
+    title: "Markup has its required fields",
+    weight: 3,
+    severity: "medium",
+    recommendation: "Complete the required fields in your schema markup",
+    fixId: "schema-fields",
+    safety: "assisted",
+    effort: "low",
+    confidence: 0.9,
+    evidence: "documented",
+    evaluate: ({ a }) => {
+      const { issues, checkedTypes } = a.schema;
+      if (!issues || !checkedTypes?.length)
+        return na("No Article, Product, FAQ or breadcrumb markup.");
+      if (!issues.length) return pass(`${checkedTypes.join(", ")} markup is complete.`);
+      const detail = `Missing ${issues.slice(0, 3).join("; ")}${issues.length > 3 ? ` and ${issues.length - 3} more` : ""}.`;
+      return issues.length >= 3 ? fail(detail, { issues }) : warn(detail, { issues });
+    },
+  },
+  {
+    id: "schema.matches_page",
+    scope: "page",
+    category: "structured_data",
+    title: "Markup matches what visitors see",
+    weight: 2,
+    severity: "high",
+    recommendation: "Make schema markup match the visible page",
+    fixId: "schema-match",
+    safety: "assisted",
+    effort: "low",
+    confidence: 0.8,
+    evidence: "documented",
+    evaluate: ({ a }) => {
+      if (!a.schemaMismatches) return na("Not checked on this scan.");
+      if (!a.schema.headline && !a.schema.faq.length) return na("No article or FAQ markup.");
+      return a.schemaMismatches.length
+        ? warn(`${a.schemaMismatches[0]}.`, { mismatches: a.schemaMismatches })
+        : pass("The markup describes what's on the page.");
+    },
   },
 ];
 
@@ -859,7 +1159,15 @@ const content: GeoRule[] = [
     evaluate: ({ a }) => {
       const n = a.landmarks.length;
       const detail = `${n} of 7 landmarks: ${a.landmarks.join(", ") || "none"}.`;
-      return n >= 4 ? pass(detail) : n >= 2 ? warn(detail) : fail(detail);
+      // What matters to an extractor is that the content region is marked;
+      // short legal and contact pages only need that.
+      const hasContentRegion = a.landmarks.includes("main") || a.landmarks.includes("article");
+      if (!isContentPage(a)) return hasContentRegion || n >= 2 ? pass(detail) : warn(detail);
+      return n >= 4 || (n >= 3 && hasContentRegion)
+        ? pass(detail)
+        : n >= 2
+          ? warn(detail)
+          : fail(detail);
     },
   },
   {
@@ -897,6 +1205,7 @@ const content: GeoRule[] = [
     evaluate: ({ a }) => {
       const n = a.links.internal.length;
       const detail = `${n} internal · ${a.links.external.length} external links.`;
+      if (!isContentPage(a)) return n >= 1 ? pass(detail) : warn(detail);
       return n >= 5 ? pass(detail) : n >= 1 ? warn(detail) : fail(detail);
     },
   },
@@ -923,6 +1232,34 @@ const content: GeoRule[] = [
       return problems.length
         ? warn(`${problems.join("; ")}.`, { emptySections, thinSections })
         : pass("Sections are well-sized.");
+    },
+  },
+  {
+    id: "content.evidence",
+    scope: "page",
+    category: "content",
+    title: "Backed by facts, quotes or sources",
+    weight: 2,
+    severity: "medium",
+    recommendation: "Add figures, quotes and sources to long articles",
+    fixId: "add-evidence",
+    safety: "manual_review",
+    effort: "medium",
+    confidence: 0.7,
+    // Aggarwal et al., "GEO: Generative Engine Optimization" (KDD 2024): adding
+    // quotations, statistics and cited sources raised visibility the most.
+    evidence: "measured",
+    evaluate: ({ a }) => {
+      if (!isArticle(a) || a.text.words < 600) return na("Not long-form content.");
+      if (a.quotes === undefined) return na("Not checked on this scan.");
+      const kinds = [
+        a.claims.statistical > 0 && "figures",
+        a.quotes > 0 && "quotes",
+        a.sources.citationCandidates > 0 && "sources",
+      ].filter(Boolean);
+      return kinds.length
+        ? pass(`Includes ${kinds.join(", ")}.`)
+        : warn("A long article with no figures, quotes or cited sources for engines to lift.");
     },
   },
 ];
@@ -1185,6 +1522,32 @@ const authority: GeoRule[] = [
           : warn("No published or updated date — engines favour fresh, dated sources."),
   },
   {
+    id: "trust.freshness",
+    scope: "page",
+    category: "authority",
+    title: "Article is up to date",
+    weight: 1,
+    severity: "low",
+    recommendation: "Review and re-date old articles",
+    fixId: "refresh-content",
+    safety: "manual_review",
+    effort: "medium",
+    confidence: 0.7,
+    evidence: "measured",
+    evaluate: ({ a, site }) => {
+      if (!isArticle(a)) return na("Not an article.");
+      const raw = a.trust.dateModified ?? a.trust.datePublished;
+      const at = raw ? Date.parse(raw) : NaN;
+      if (Number.isNaN(at)) return na("No readable date.");
+      const months = Math.floor((site.now - at) / (30.44 * 24 * 3600 * 1000));
+      return months >= 18
+        ? warn(`Last dated ${months} months ago — AI answers lean towards recent sources.`, {
+            date: raw,
+          })
+        : pass(`Dated ${raw}.`);
+    },
+  },
+  {
     id: "trust.claims_sourced",
     scope: "page",
     category: "authority",
@@ -1414,7 +1777,9 @@ const performance: GeoRule[] = [
     effort: "high",
     confidence: 0.9,
     evaluate: ({ a }) => {
-      const kb = a.bytes / 1024;
+      // Inline framework data (hydration payloads) isn't markup a crawler has
+      // to wade through, so it doesn't count towards the size.
+      const kb = Math.max(0, a.bytes - (a.inlineScriptBytes ?? 0)) / 1024;
       const detail = `${kb.toFixed(0)} KB of HTML${a.truncated ? " (over the 2 MB read limit)" : ""}.`;
       return a.truncated || kb >= 600 ? fail(detail) : kb >= 250 ? warn(detail) : pass(detail);
     },
@@ -1454,12 +1819,13 @@ const performance: GeoRule[] = [
     safety: "manual_review",
     effort: "high",
     confidence: 0.6,
-    evaluate: ({ a }) =>
-      a.bytes > 3000 && a.text.textToHtmlRatio < 0.03
-        ? warn(
-            `Visible text is ${(a.text.textToHtmlRatio * 100).toFixed(1)}% of the HTML — mostly scripts and markup.`,
-          )
-        : pass(`Text is ${(a.text.textToHtmlRatio * 100).toFixed(1)}% of the HTML.`),
+    evaluate: ({ a }) => {
+      const markup = Math.max(1, a.bytes - (a.inlineScriptBytes ?? 0));
+      const ratio = Math.min(1, (a.text.textToHtmlRatio * a.bytes) / markup);
+      return markup > 3000 && ratio < 0.03
+        ? warn(`Visible text is ${(ratio * 100).toFixed(1)}% of the HTML — mostly markup.`)
+        : pass(`Text is ${(ratio * 100).toFixed(1)}% of the HTML.`);
+    },
   },
 ];
 

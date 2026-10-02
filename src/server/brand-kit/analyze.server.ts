@@ -13,7 +13,13 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { llmJson, LLM_MAX_IMAGE_BYTES, type LlmImageInput } from "@/lib/ai-gateway.server";
 import { wrapUntrusted } from "@/server/guardrails/untrusted";
 import { nearestCatalogFont } from "@/lib/brand-kit/fonts";
-import { mergeAnalyses, type ReferenceAnalysis, type Suggestion } from "@/lib/brand-kit/merge";
+import {
+  ANALYSIS_VERSION,
+  mergeAnalyses,
+  type ColorRoles,
+  type ReferenceAnalysis,
+  type Suggestion,
+} from "@/lib/brand-kit/merge";
 import {
   parseStyleSpec,
   type StyleSpec,
@@ -45,12 +51,17 @@ const VISUAL_SCHEMA = {
   properties: {
     summary: str,
     colors: strList,
+    backgroundColor: str,
+    textColor: str,
+    mainColor: str,
+    accentColor: str,
     medium: oneOf("photo", "illustration", "3d", "flat", "collage", "typographic", "mixed"),
     mood: str,
     lighting: str,
     grading: str,
     texture: str,
     composition: str,
+    background: str,
     textPlacement: oneOf("top", "center", "bottom", "left", "right", "none"),
     whitespace: oneOf("minimal", "balanced", "generous"),
     headingFont: str,
@@ -72,12 +83,17 @@ const VISUAL_SCHEMA = {
   required: [
     "summary",
     "colors",
+    "backgroundColor",
+    "textColor",
+    "mainColor",
+    "accentColor",
     "medium",
     "mood",
     "lighting",
     "grading",
     "texture",
     "composition",
+    "background",
     "textPlacement",
     "whitespace",
     "headingFont",
@@ -101,12 +117,17 @@ const VISUAL_SCHEMA = {
 type VisualOut = {
   summary: string;
   colors: string[];
+  backgroundColor?: string;
+  textColor?: string;
+  mainColor?: string;
+  accentColor?: string;
   medium: VisualStyle["medium"];
   mood: string;
   lighting: string;
   grading: string;
   texture: string;
   composition: string;
+  background?: string;
   textPlacement: VisualStyle["textPlacement"];
   whitespace: VisualStyle["whitespace"];
   headingFont: string;
@@ -200,8 +221,13 @@ type WritingOut = {
 
 const VISUAL_SYSTEM = `You are a senior brand designer. You study example social posts, ads and video frames and write down their visual style so a designer could make new work that looks like it came from the same brand.
 
-Describe the STYLE, never the subject: say "warm top-left window light on a neutral backdrop", not "a woman holding a cup". Be concrete and short (under 25 words per field).
+Describe the STYLE, never the subject: say "warm top-left window light on a neutral backdrop", not "a woman holding a cup". Be concrete and short (under 30 words per field). Write each field as a direction a designer could follow without seeing the example.
 - colors: the 3-7 most prominent colours as #rrggbb hex, most prominent first. Include background and text colours.
+- backgroundColor / textColor / mainColor / accentColor: the one #rrggbb hex doing each job. mainColor is the brand colour that leads the design; accentColor is the small highlight colour. "" when there is none (a full photo has no backgroundColor).
+- composition: the layout grid. Where the headline, the picture and any logo sit, how they are aligned, how wide the margins are, and how text and picture share the canvas.
+- background: what sits behind everything (solid colour, gradient and its direction, full-bleed photo, texture, pattern).
+- elements: the recurring shapes and details: corner style, cards, borders, icons, stickers, arrows, underlines, badges, frames.
+- textStyle: how text is treated: headline size and weight against the small text, alignment, highlight boxes, coloured or underlined words.
 - headingFont / bodyFont: name the closest well-known typeface for any text you see (e.g. "Montserrat ExtraBold", "Playfair Display"); "" if there is no text.
 - maxWordsOnImage: roughly how many words of text sit on the image (0 if none).
 - avoid: things this style clearly never does (e.g. "gradients", "stock-photo smiles").
@@ -237,6 +263,7 @@ export function visualToAnalysis(out: VisualOut): ReferenceAnalysis {
     grading: clean(out.grading),
     texture: clean(out.texture),
     composition: clean(out.composition),
+    background: clean(out.background),
     textPlacement: out.textPlacement,
     whitespace: out.whitespace,
     typography:
@@ -283,14 +310,21 @@ export function visualToAnalysis(out: VisualOut): ReferenceAnalysis {
             : undefined,
     };
   }
-  const colors = (out.colors ?? [])
-    .filter((c) => /^#?[0-9a-fA-F]{6}$|^#?[0-9a-fA-F]{3}$/.test(c.trim()))
-    .slice(0, 8);
+  const isHex = (c: string | undefined): c is string =>
+    !!c && /^#?[0-9a-fA-F]{6}$|^#?[0-9a-fA-F]{3}$/.test(c.trim());
+  const colors = (out.colors ?? []).filter(isHex).slice(0, 8);
+  const roles: ColorRoles = {};
+  if (isHex(out.backgroundColor)) roles.background = out.backgroundColor.trim();
+  if (isHex(out.textColor)) roles.text = out.textColor.trim();
+  if (isHex(out.mainColor)) roles.primary = out.mainColor.trim();
+  if (isHex(out.accentColor)) roles.accent = out.accentColor.trim();
   // Round-trip through the spec schema so nothing malformed is stored.
   const spec = parseStyleSpec({ visual, video });
   return {
     kind: "visual",
+    v: ANALYSIS_VERSION,
     colors,
+    roles: Object.keys(roles).length ? roles : undefined,
     visual: spec.visual,
     video: spec.video,
     summary: clean(out.summary),
@@ -328,6 +362,7 @@ export function writingToAnalysis(out: WritingOut): ReferenceAnalysis {
   };
   return {
     kind: "writing",
+    v: ANALYSIS_VERSION,
     writing: parseStyleSpec({ writing }).writing,
     summary: clean(out.summary),
   };
@@ -465,6 +500,31 @@ function settleVoiceCharge(assetId: string): void {
   void import("@/server/billing/async-charges.server").then((billing) =>
     billing.settleAsyncChargeSoon("brand_voice", assetId),
   );
+}
+
+/**
+ * Put already-read examples back in the queue when they were read by an older,
+ * thinner version of the reader. Returns the ids that will be read again.
+ */
+export async function requeueOutdated(workspaceId: string, assetIds: string[]): Promise<string[]> {
+  const rows = await getAssetRows(workspaceId, assetIds.slice(0, 12));
+  const outdated = rows
+    .filter(
+      (r) =>
+        r.analysis_status === "done" &&
+        r.kind !== "writing_sample" &&
+        ((r.analysis as ReferenceAnalysis | null)?.v ?? 1) < ANALYSIS_VERSION,
+    )
+    .map((r) => r.id);
+  if (!outdated.length) return [];
+  const { error } = await admin()
+    .from("brand_kit_assets")
+    .update({ analysis_status: "pending", analysis_error: null })
+    .eq("workspace_id", workspaceId)
+    .eq("analysis_status", "done")
+    .in("id", outdated);
+  if (error) throw new Error(error.message);
+  return outdated;
 }
 
 /** Analyse after the response is sent, so uploads return at once. */

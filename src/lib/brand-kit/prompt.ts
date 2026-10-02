@@ -151,6 +151,7 @@ export function visualStyleBlock(resolved: ResolvedStyle): string {
   push("Colour grading", v.grading);
   push("Texture", v.texture);
   push("Composition", v.composition);
+  push("Background", v.background);
   if (v.textPlacement && v.textPlacement !== "none") push("Text placement", v.textPlacement);
   if (v.textPlacement === "none") push("Text on image", "none");
   push("Whitespace", v.whitespace);
@@ -244,6 +245,8 @@ export function imageStyleInput(
   maxWords?: number;
   logoCorner?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
   useLogo?: boolean;
+  composition?: string;
+  mood?: string;
   references?: { count: number; strength: "close" | "exact" };
 } | null {
   const block = visualStyleBlock(resolved);
@@ -268,6 +271,8 @@ export function imageStyleInput(
     maxWords: resolved.visual.textPlacement === "none" ? 0 : resolved.visual.textOnImage?.maxWords,
     logoCorner: resolved.visual.logo?.corner,
     useLogo: resolved.visual.logo?.use,
+    composition: resolved.visual.composition?.trim() || undefined,
+    mood: resolved.visual.mood?.trim() || undefined,
     references: referenceCount
       ? { count: referenceCount, strength: exact ? "exact" : "close" }
       : undefined,

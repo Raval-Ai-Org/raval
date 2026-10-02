@@ -1,38 +1,40 @@
 "use client";
 // CreateStyleFlow — make a new Style in a few steps:
 //
-//   start → (examples → learning | describe) → review → name
+//   start → (examples → learning | describe) → finish
 //
 // Examples are uploaded and studied as soon as they're added, so by the time
-// someone presses Continue most of the work is done. Review lists what was
-// learned, one line per field, each one optional.
+// someone presses Continue most of the work is done. Finish shows the style
+// with its colours, fonts and mood ready to change, and a name to save it under.
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 import {
   ArrowLeft,
   ArrowRight,
   Brain,
   Check,
+  ChevronDown,
   FileText,
   ImagePlus,
   Link,
   PenLine,
   Sparkles,
   Spinner,
-  Star,
   Wand,
 } from "@/components/icons";
 import { SurfacePage, Tile } from "@/components/app/surface/SurfaceLayout";
 import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import type { BrandKitOverview, KitAssetView } from "@/lib/brand-kit/contracts";
-import { applySuggestion, type Suggestion } from "@/lib/brand-kit/merge";
+import { applySuggestion, markUserEdited, type Suggestion } from "@/lib/brand-kit/merge";
 import {
   STYLE_FORMATS,
   STYLE_FORMAT_LABELS,
   emptySpec,
   type StyleFormat,
   type StyleSpec,
+  type VisualStyle,
 } from "@/lib/brand-kit/spec";
 import {
   useAddWritingSample,
@@ -41,11 +43,13 @@ import {
   useSuggestStyle,
   useUploadKitFiles,
 } from "./hooks";
-import { DropZone, Segmented } from "./controls";
+import { PaletteEditor } from "./ColorPicker";
+import { DropZone, Field, FontPicker, Segmented } from "./controls";
+import { MatchControl, MoodChips, swatchGroups } from "./look";
 import { ExampleThumb } from "./StyleEditor";
-import { PostPreview, Swatches, VideoPreview, resolveView, useStyleFonts } from "./preview";
+import { PostPreview, resolveView, useStyleFonts } from "./preview";
 
-type Step = "start" | "examples" | "learning" | "describe" | "review" | "name";
+type Step = "start" | "examples" | "learning" | "describe" | "finish";
 
 const MEDIA_ACCEPT = "image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime";
 
@@ -83,15 +87,15 @@ export function CreateStyleFlow({
   const back = () => {
     if (step === "examples" || step === "describe") setStep("start");
     else if (step === "learning") setStep("examples");
-    else if (step === "review") setStep(assetIds.length ? "examples" : "describe");
-    else if (step === "name") setStep(suggestion ? "review" : "start");
+    else if (step === "finish")
+      setStep(assetIds.length ? "examples" : suggestion ? "describe" : "start");
     else onCancel();
   };
 
   const finish = () =>
     create.mutate(
       {
-        name: name.trim() || "New style",
+        name: name.trim() || "My style",
         appliesTo,
         spec,
         makeDefault,
@@ -135,7 +139,7 @@ export function CreateStyleFlow({
                   setSpec(s);
                   setSuggestion(null);
                   setName(how === "dna" ? `${data.dna.brandName ?? "Brand"} default` : "");
-                  setStep("name");
+                  setStep("finish");
                 }
               }}
             />
@@ -157,7 +161,7 @@ export function CreateStyleFlow({
               onDone={(s) => {
                 setSuggestion(s);
                 setSpec(applySuggestion(emptySpec(), s.spec));
-                setStep("review");
+                setStep("finish");
               }}
             />
           )}
@@ -168,23 +172,16 @@ export function CreateStyleFlow({
                 setSuggestion({ spec: result.spec, confidence: {}, sources: 0 });
                 setSpec(applySuggestion(emptySpec(), result.spec));
                 setName(result.name);
-                setStep("review");
+                setStep("finish");
               }}
             />
           )}
-          {step === "review" && suggestion && (
-            <ReviewStep
+          {step === "finish" && (
+            <FinishStep
               data={data}
               suggestion={suggestion}
               spec={spec}
               onSpec={setSpec}
-              onNext={() => setStep("name")}
-            />
-          )}
-          {step === "name" && (
-            <NameStep
-              data={data}
-              spec={spec}
               name={name}
               onName={setName}
               appliesTo={appliesTo}
@@ -201,7 +198,7 @@ export function CreateStyleFlow({
   );
 }
 
-const STEP_ORDER: Step[] = ["start", "examples", "learning", "review", "name"];
+const STEP_ORDER: Step[] = ["start", "examples", "learning", "finish"];
 function StepDots({ step }: { step: Step }) {
   const idx = step === "describe" ? 1 : STEP_ORDER.indexOf(step);
   return (
@@ -237,14 +234,14 @@ function StartStep({
       id: "examples" as const,
       icon: ImagePlus,
       title: "From examples",
-      body: "Upload posts, videos or writing you love. Mellox studies them and copies the look.",
+      body: "Upload posts you like. Mellox copies the look.",
       best: true,
     },
     {
       id: "describe" as const,
       icon: PenLine,
       title: "Describe it",
-      body: "Say the look and voice in a sentence. Mellox fills in the details.",
+      body: "Say the look in a sentence.",
     },
     ...(hasDna
       ? [
@@ -252,7 +249,7 @@ function StartStep({
             id: "dna" as const,
             icon: Brain,
             title: "From Brand DNA",
-            body: "Start with your saved colors, fonts and voice.",
+            body: "Use your saved colors and fonts.",
           },
         ]
       : []),
@@ -260,7 +257,7 @@ function StartStep({
       id: "blank" as const,
       icon: Sparkles,
       title: "Start blank",
-      body: "Set every choice yourself.",
+      body: "Set it up yourself.",
     },
   ];
   return (
@@ -359,13 +356,13 @@ function ExamplesStep({
           onFiles={onFiles}
           busy={upload.isPending}
           icon={ImagePlus}
-          title="Drop example posts or videos"
-          hint="3 to 8 examples that share one look work best. Videos are read from a few still frames."
+          title="Add posts or videos"
+          hint="3 to 8 that look alike work best"
         />
         <Tile className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-[13.5px] font-medium">
-              <FileText className="h-4 w-4 text-primary" /> Writing to learn from
+              <FileText className="h-4 w-4 text-primary" /> Writing (optional)
             </div>
             <Segmented
               size="sm"
@@ -411,9 +408,7 @@ function ExamplesStep({
         </Tile>
         {library.length > 0 && (
           <Tile>
-            <div className="mb-3 text-[13px] font-medium text-muted-foreground">
-              Or pick from your kit
-            </div>
+            <div className="mb-3 text-[13px] font-medium text-muted-foreground">From your kit</div>
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
               {library.slice(0, 18).map((a) => (
                 <button
@@ -461,18 +456,14 @@ function ExamplesStep({
               </button>
             ))}
           </div>
-        ) : (
-          <p className="text-[12.5px] text-muted-foreground">
-            Nothing yet. Add images, videos or writing.
-          </p>
-        )}
+        ) : null}
         <button
           type="button"
-          className={cn(dsPrimaryBtn, "mt-2 h-10 text-[13px]")}
+          className={cn(dsPrimaryBtn, "h-10 text-[13px]")}
           disabled={!picked.length || upload.isPending}
           onClick={onNext}
         >
-          Learn this style <ArrowRight className="h-4 w-4" />
+          Continue <ArrowRight className="h-4 w-4" />
         </button>
       </Tile>
     </div>
@@ -603,7 +594,7 @@ function LearningStep({
       )}
       {!busy.length && !done.length && items.length > 0 && !suggest.isPending && (
         <p className="mt-6 text-[13px] text-destructive">
-          Mellox couldn't read these. Go back and try other examples.
+          Couldn't read these. Try other examples.
         </p>
       )}
     </div>
@@ -669,76 +660,54 @@ function DescribeStep({
   );
 }
 
-// ── Review ──────────────────────────────────────────────────────────────────
+// ── Finish ──────────────────────────────────────────────────────────────────
 
-const FIELD_LABELS: Record<string, string> = {
-  "visual.palette": "Colors",
-  "visual.typography": "Fonts",
+/** Learned details that have no control of their own on this screen. */
+const DETAIL_LABELS: Record<string, string> = {
   "visual.medium": "Kind of image",
-  "visual.mood": "Mood",
   "visual.lighting": "Light",
   "visual.grading": "Color feel",
   "visual.texture": "Texture",
   "visual.composition": "Layout",
-  "visual.textPlacement": "Text on images",
+  "visual.background": "Background",
   "visual.whitespace": "Space",
-  "visual.elements": "Details",
+  "visual.elements": "Shapes and details",
   "visual.textOnImage": "Words on images",
-  "visual.logo": "Logo",
+  "visual.logo": "Logo corner",
   "visual.avoid": "Never do",
-  "visual.notes": "Notes",
   "writing.voice": "Voice",
   "writing.tone": "Tone",
   "writing.sentenceLength": "Sentences",
-  "writing.readingLevel": "Reading level",
-  "writing.casing": "Capitals",
   "writing.person": "Speaks as",
   "writing.emoji": "Emoji",
-  "writing.favoriteEmoji": "Favourite emoji",
   "writing.hashtags": "Hashtags",
   "writing.hooks": "How posts open",
   "writing.cta": "Call to action",
-  "writing.formatting": "Line breaks",
   "writing.signaturePhrases": "Phrases",
-  "writing.examples": "Example writing",
   "video.pacing": "Pace",
   "video.shots": "Shots",
   "video.transitions": "Cuts",
   "video.hook": "First seconds",
   "video.captions": "Captions",
   "video.music": "Music",
-  "video.intro": "Opening",
-  "video.outro": "Ending",
-  "video.notes": "Notes",
 };
 
-function summarize(path: string, value: unknown): React.ReactNode {
-  if (value == null) return null;
-  if (path === "visual.palette") {
-    const p = value as Record<string, unknown>;
-    const colors = [
-      p.primary,
-      p.secondary,
-      p.accent,
-      p.background,
-      p.text,
-      ...((p.extra as string[]) ?? []),
-    ].filter(Boolean) as string[];
-    return <Swatches colors={colors} size={20} />;
-  }
-  if (path === "visual.typography") {
-    const t = value as { heading?: string; body?: string };
-    return [t.heading, t.body !== t.heading ? t.body : null].filter(Boolean).join(" · ");
-  }
+function summarize(path: string, value: unknown): string {
+  if (value == null) return "";
   if (path === "writing.tone") {
     const t = value as Record<string, number | undefined>;
-    const words = [
-      t.casual != null ? (t.casual >= 60 ? "casual" : t.casual <= 40 ? "formal" : "") : "",
-      t.playful != null ? (t.playful >= 60 ? "playful" : t.playful <= 40 ? "serious" : "") : "",
-      t.detailed != null ? (t.detailed >= 60 ? "detailed" : t.detailed <= 40 ? "short" : "") : "",
-      t.bold != null ? (t.bold >= 60 ? "bold" : t.bold <= 40 ? "quiet" : "") : "",
-    ].filter(Boolean);
-    return words.join(", ") || "balanced";
+    const word = (v: number | undefined, low: string, high: string) =>
+      v == null ? "" : v >= 60 ? high : v <= 40 ? low : "";
+    return (
+      [
+        word(t.casual, "formal", "casual"),
+        word(t.playful, "serious", "playful"),
+        word(t.detailed, "short", "detailed"),
+        word(t.bold, "quiet", "bold"),
+      ]
+        .filter(Boolean)
+        .join(", ") || "balanced"
+    );
   }
   if (path === "writing.hashtags") {
     const h = value as { count?: number; always?: string[] };
@@ -749,8 +718,6 @@ function summarize(path: string, value: unknown): React.ReactNode {
       .filter(Boolean)
       .join(", ");
   }
-  if (path === "writing.examples")
-    return `${(value as string[]).length} excerpt${(value as string[]).length === 1 ? "" : "s"}`;
   if (path === "visual.textOnImage") {
     const t = value as { maxWords?: number; style?: string };
     return [t.maxWords != null ? `up to ${t.maxWords} words` : "", t.style ?? ""]
@@ -759,200 +726,20 @@ function summarize(path: string, value: unknown): React.ReactNode {
   }
   if (path === "visual.logo")
     return (value as { corner?: string }).corner?.replace("-", " ") ?? "on";
-  if (path === "video.captions")
-    return (
-      (value as { style?: string; position?: string }).style ??
-      (value as { position?: string }).position ??
-      "on"
-    );
-  if (path === "writing.formatting") return (value as { lineBreaks?: string }).lineBreaks ?? "";
+  if (path === "video.captions") {
+    const c = value as { style?: string; position?: string };
+    return c.style ?? c.position ?? "on";
+  }
   if (Array.isArray(value)) return value.join(", ");
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") return "";
   return String(value);
 }
 
-function ReviewStep({
+export function FinishStep({
   data,
   suggestion,
   spec,
   onSpec,
-  onNext,
-}: {
-  data: BrandKitOverview;
-  suggestion: Suggestion;
-  spec: StyleSpec;
-  onSpec: (s: StyleSpec) => void;
-  onNext: () => void;
-}) {
-  const paths = React.useMemo(() => {
-    const out: string[] = [];
-    for (const section of ["visual", "writing", "video"] as const) {
-      const s = suggestion.spec[section];
-      if (s)
-        for (const k of Object.keys(s))
-          if (FIELD_LABELS[`${section}.${k}`]) out.push(`${section}.${k}`);
-    }
-    return out;
-  }, [suggestion]);
-  const [accepted, setAccepted] = React.useState<Set<string>>(() => new Set(paths));
-  React.useEffect(() => {
-    onSpec({
-      ...applySuggestion(emptySpec(), suggestion.spec, [...accepted]),
-      references: suggestion.spec.references,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accepted, suggestion]);
-  const resolved = React.useMemo(
-    () =>
-      resolveView(
-        {
-          id: "draft",
-          name: "New style",
-          version: 1,
-          spec,
-          appliesTo: [],
-          description: null,
-          isDefault: false,
-          status: "draft",
-          coverUrl: null,
-          createdAt: "",
-          updatedAt: "",
-          archived: false,
-        },
-        data.dna,
-      ),
-    [spec, data.dna],
-  );
-  useStyleFonts(resolved, data.assets);
-  const logo = data.assets.find((a) => a.kind === "logo")?.url ?? data.dna.logoUrl;
-  const videoFrame = data.assets.find(
-    (a) =>
-      a.kind === "inspiration_video" && suggestion.spec.references?.some((r) => r.assetId === a.id),
-  )?.frameUrls[0];
-  const groups: Array<[string, string]> = [
-    ["visual", "Look"],
-    ["writing", "Writing"],
-    ["video", "Video"],
-  ];
-
-  if (!paths.length) {
-    return (
-      <Tile className="mx-auto max-w-[560px] space-y-3 text-center">
-        <div className="text-[15px] font-semibold">Nothing clear to learn yet</div>
-        <p className="text-[13px] text-muted-foreground">
-          These examples didn't share a clear style. You can still create the style and set it up by
-          hand.
-        </p>
-        <button
-          type="button"
-          className={cn(dsPrimaryBtn, "h-10 px-5 text-[13px]")}
-          onClick={onNext}
-        >
-          Continue <ArrowRight className="h-4 w-4" />
-        </button>
-      </Tile>
-    );
-  }
-
-  return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="space-y-4">
-        <p className="text-[13px] text-muted-foreground">
-          Here's what Mellox found
-          {suggestion.sources
-            ? ` in ${suggestion.sources} example${suggestion.sources === 1 ? "" : "s"}`
-            : ""}
-          . Untick anything you don't want.
-        </p>
-        {groups.map(([section, title]) => {
-          const list = paths.filter((p) => p.startsWith(`${section}.`));
-          if (!list.length) return null;
-          return (
-            <Tile key={section} className="p-2 sm:p-2">
-              <div className="ds-label px-3 pb-1 pt-2">{title}</div>
-              <ul>
-                {list.map((path, i) => {
-                  const [sec, key] = path.split(".") as ["visual" | "writing" | "video", string];
-                  const on = accepted.has(path);
-                  const conf = suggestion.confidence[path];
-                  return (
-                    <motion.li
-                      key={path}
-                      initial={{ opacity: 0, x: -6 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.03 }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setAccepted((s) => {
-                            const n = new Set(s);
-                            if (n.has(path)) n.delete(path);
-                            else n.add(path);
-                            return n;
-                          })
-                        }
-                        className={cn(
-                          "flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors hover:bg-[var(--ds-well-bg)]",
-                          !on && "opacity-50",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "grid h-5 w-5 shrink-0 place-items-center rounded-full ring-1 transition-colors",
-                            on
-                              ? "bg-primary text-primary-foreground ring-primary"
-                              : "ring-[var(--ds-tile-border)]",
-                          )}
-                        >
-                          {on && <Check className="h-3 w-3" />}
-                        </span>
-                        <span className="w-[120px] shrink-0 text-[12.5px] text-muted-foreground">
-                          {FIELD_LABELS[path]}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-[13px]">
-                          {summarize(path, (suggestion.spec[sec] as Record<string, unknown>)[key])}
-                        </span>
-                        {conf != null && conf < 0.5 && (
-                          <span className="shrink-0 rounded-full bg-[var(--ds-well-bg)] px-2 py-0.5 text-[10.5px] text-muted-foreground">
-                            mixed
-                          </span>
-                        )}
-                      </button>
-                    </motion.li>
-                  );
-                })}
-              </ul>
-            </Tile>
-          );
-        })}
-      </div>
-      <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
-        <Tile className="p-3 sm:p-3">
-          <PostPreview resolved={resolved} brandName={data.dna.brandName} logoUrl={logo} />
-        </Tile>
-        {suggestion.spec.video && (
-          <Tile className="mx-auto max-w-[180px] p-2 sm:p-2">
-            <VideoPreview resolved={resolved} posterUrl={videoFrame} />
-          </Tile>
-        )}
-        <button
-          type="button"
-          className={cn(dsPrimaryBtn, "h-10 w-full text-[13px]")}
-          onClick={onNext}
-        >
-          Looks right <ArrowRight className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Name ────────────────────────────────────────────────────────────────────
-
-function NameStep({
-  data,
-  spec,
   name,
   onName,
   appliesTo,
@@ -963,7 +750,9 @@ function NameStep({
   onCreate,
 }: {
   data: BrandKitOverview;
+  suggestion: Suggestion | null;
   spec: StyleSpec;
+  onSpec: (s: StyleSpec) => void;
   name: string;
   onName: (v: string) => void;
   appliesTo: StyleFormat[];
@@ -996,72 +785,213 @@ function NameStep({
   );
   useStyleFonts(resolved, data.assets);
   const logo = data.assets.find((a) => a.kind === "logo")?.url ?? data.dna.logoUrl;
-  const toggle = (f: StyleFormat) =>
+  const visual = spec.visual ?? {};
+  const type = visual.typography ?? {};
+  const refs = spec.references ?? [];
+  const groups = React.useMemo(() => swatchGroups(data, spec), [data, spec]);
+  const byId = new Map(data.assets.map((a) => [a.id, a]));
+  const examples = refs.map((r) => byId.get(r.assetId)).filter(Boolean) as KitAssetView[];
+  const uploadedFonts = data.assets
+    .filter((a) => a.kind === "font_file")
+    .map((a) => ({ id: a.id, family: a.label ?? "Custom font" }));
+
+  /** Set one look field and mark it as the person's own. */
+  const setVisual = <K extends keyof VisualStyle>(key: K, value: VisualStyle[K] | undefined) => {
+    const next = { ...visual };
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    onSpec(markUserEdited({ ...spec, visual: next }, [`visual.${key}`]));
+  };
+  const setFont = (role: "heading" | "body", family: string | undefined, fileId?: string) => {
+    const files = { ...(type.files ?? {}) };
+    if (fileId) files[role] = fileId;
+    else delete files[role];
+    setVisual("typography", {
+      ...type,
+      [role]: family,
+      files: Object.keys(files).length ? files : undefined,
+    });
+  };
+
+  const details = React.useMemo(() => {
+    const out: string[] = [];
+    for (const section of ["visual", "writing", "video"] as const) {
+      for (const key of Object.keys(suggestion?.spec[section] ?? {}))
+        if (DETAIL_LABELS[`${section}.${key}`]) out.push(`${section}.${key}`);
+    }
+    return out;
+  }, [suggestion]);
+  const has = (path: string) => {
+    const [section, key] = path.split(".") as ["visual" | "writing" | "video", string];
+    return (spec[section] as Record<string, unknown> | undefined)?.[key] !== undefined;
+  };
+  const toggleDetail = (path: string) => {
+    const [section, key] = path.split(".") as ["visual" | "writing" | "video", string];
+    const next = { ...((spec[section] ?? {}) as Record<string, unknown>) };
+    if (has(path)) delete next[key];
+    else next[key] = (suggestion?.spec[section] as Record<string, unknown>)[key];
+    onSpec({ ...spec, [section]: next });
+  };
+  const toggleFormat = (f: StyleFormat) =>
     onAppliesTo(appliesTo.includes(f) ? appliesTo.filter((x) => x !== f) : [...appliesTo, f]);
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <Tile className="space-y-6 p-5 sm:p-6">
-        <div className="space-y-2">
-          <label className="text-[13px] font-medium" htmlFor="style-name">
-            Name
-          </label>
-          <input
-            id="style-name"
-            autoFocus
-            value={name}
-            onChange={(e) => onName(e.target.value.slice(0, 80))}
-            placeholder="Launch posts, Calm tips, Founder voice…"
-            className="ds-well h-12 w-full px-4 text-[15px] outline-none placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-primary/30"
-            onKeyDown={(e) => e.key === "Enter" && !busy && onCreate()}
+        <input
+          autoFocus
+          value={name}
+          aria-label="Style name"
+          onChange={(e) => onName(e.target.value.slice(0, 80))}
+          placeholder="Name your style"
+          className="ds-well h-12 w-full px-4 text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-primary/30"
+          onKeyDown={(e) => e.key === "Enter" && !busy && onCreate()}
+        />
+
+        <Field label="Colors">
+          <PaletteEditor
+            palette={visual.palette ?? {}}
+            fallback={resolved.visual.palette}
+            groups={groups}
+            onChange={(palette) => setVisual("palette", palette)}
           />
-        </div>
-        <div className="space-y-2">
-          <div className="text-[13px] font-medium">Use it for</div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => onAppliesTo([])}
-              className={cn(
-                "h-9 rounded-full px-4 text-[13px] font-medium transition-all",
-                !appliesTo.length
-                  ? "bg-primary text-primary-foreground"
-                  : "ds-well text-muted-foreground",
-              )}
-            >
-              Everything
-            </button>
-            {STYLE_FORMATS.map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => toggle(f)}
-                className={cn(
-                  "inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[13px] font-medium transition-all",
-                  appliesTo.includes(f)
-                    ? "bg-primary/15 ring-1 ring-primary/40"
-                    : "ds-well text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {appliesTo.includes(f) && <Check className="h-3.5 w-3.5 text-primary" />}
-                {STYLE_FORMAT_LABELS[f]}
-              </button>
-            ))}
+        </Field>
+
+        <Field label="Fonts">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FontPicker
+              value={type.heading ?? resolved.visual.typography?.heading}
+              uploaded={uploadedFonts}
+              placeholder="Headline font"
+              sampleText="Big bold headline"
+              onChange={(family, id) => setFont("heading", family, id)}
+            />
+            <FontPicker
+              value={type.body ?? resolved.visual.typography?.body}
+              uploaded={uploadedFonts}
+              placeholder="Text font"
+              sampleText="Easy to read at any size"
+              onChange={(family, id) => setFont("body", family, id)}
+            />
           </div>
-        </div>
-        <label className="ds-well flex cursor-pointer items-center gap-3 p-4">
-          <input
-            type="checkbox"
-            checked={makeDefault}
-            onChange={(e) => onMakeDefault(e.target.checked)}
-            className="h-4 w-4 accent-[hsl(var(--primary))]"
-          />
-          <Star className="h-4 w-4 text-primary" />
-          <span className="text-[13.5px]">
-            Make it the default{" "}
-            <span className="text-muted-foreground">— used whenever you don't pick one</span>
-          </span>
-        </label>
-        <div className="flex justify-end">
+        </Field>
+
+        {refs.length > 0 && (
+          <Field label="Copy my examples">
+            <MatchControl
+              references={refs}
+              onChange={(references) => onSpec({ ...spec, references })}
+            />
+          </Field>
+        )}
+
+        <Field label="Mood">
+          <MoodChips value={visual.mood} onChange={(mood) => setVisual("mood", mood)} />
+        </Field>
+
+        <details className="group">
+          <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground">
+            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> More
+          </summary>
+          <div className="mt-4 space-y-5">
+            <Field label="Text on images">
+              <Segmented
+                value={visual.textPlacement}
+                onChange={(p) => setVisual("textPlacement", p)}
+                options={[
+                  { value: "top", label: "Top" },
+                  { value: "center", label: "Middle" },
+                  { value: "bottom", label: "Bottom" },
+                  { value: "none", label: "No text" },
+                ]}
+              />
+            </Field>
+            <Field label="Use it for">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => onAppliesTo([])}
+                  className={cn(
+                    "h-9 rounded-full px-4 text-[13px] font-medium transition-all",
+                    !appliesTo.length
+                      ? "bg-primary text-primary-foreground"
+                      : "ds-well text-muted-foreground",
+                  )}
+                >
+                  Everything
+                </button>
+                {STYLE_FORMATS.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => toggleFormat(f)}
+                    className={cn(
+                      "inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[13px] font-medium transition-all",
+                      appliesTo.includes(f)
+                        ? "bg-primary/15 ring-1 ring-primary/40"
+                        : "ds-well text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {appliesTo.includes(f) && <Check className="h-3.5 w-3.5 text-primary" />}
+                    {STYLE_FORMAT_LABELS[f]}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            {details.length > 0 && (
+              <Field label="What Mellox learned">
+                <ul className="-mx-2">
+                  {details.map((path) => {
+                    const [section, key] = path.split(".") as [
+                      "visual" | "writing" | "video",
+                      string,
+                    ];
+                    const on = has(path);
+                    return (
+                      <li key={path}>
+                        <button
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => toggleDetail(path)}
+                          className={cn(
+                            "flex w-full items-center gap-3 rounded-[14px] px-2 py-2 text-left transition-colors hover:bg-[var(--ds-well-bg)]",
+                            !on && "opacity-50",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "grid h-5 w-5 shrink-0 place-items-center rounded-full ring-1 transition-colors",
+                              on
+                                ? "bg-primary text-primary-foreground ring-primary"
+                                : "ring-[var(--ds-tile-border)]",
+                            )}
+                          >
+                            {on && <Check className="h-3 w-3" />}
+                          </span>
+                          <span className="w-[120px] shrink-0 text-[12.5px] text-muted-foreground">
+                            {DETAIL_LABELS[path]}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-[13px]">
+                            {summarize(
+                              path,
+                              (suggestion?.spec[section] as Record<string, unknown>)[key],
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Field>
+            )}
+          </div>
+        </details>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--ds-tile-border)] pt-5">
+          <label className="inline-flex cursor-pointer items-center gap-2.5 text-[13.5px]">
+            <Switch checked={makeDefault} onCheckedChange={onMakeDefault} />
+            Use by default
+          </label>
           <button
             type="button"
             className={cn(dsPrimaryBtn, "h-11 px-6 text-[14px]")}
@@ -1069,13 +999,23 @@ function NameStep({
             onClick={onCreate}
           >
             {busy ? <Spinner className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Create style
+            Save style
           </button>
         </div>
       </Tile>
-      <Tile className="p-3 sm:p-3 lg:sticky lg:top-4 lg:self-start">
-        <PostPreview resolved={resolved} brandName={data.dna.brandName} logoUrl={logo} />
-      </Tile>
+
+      <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
+        <Tile className="p-3 sm:p-3">
+          <PostPreview resolved={resolved} brandName={data.dna.brandName} logoUrl={logo} />
+        </Tile>
+        {examples.length > 0 && (
+          <div className="grid grid-cols-4 gap-2">
+            {examples.slice(0, 8).map((a) => (
+              <ExampleThumb key={a.id} asset={a} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

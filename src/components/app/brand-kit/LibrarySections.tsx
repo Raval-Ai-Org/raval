@@ -23,6 +23,7 @@ import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/bu
 import { emitAppEvent } from "@/lib/app-events";
 import { fontStack, loadFontFile } from "@/lib/brand-kit/fonts";
 import type { BrandKitOverview, KitAssetView, KitSection } from "@/lib/brand-kit/contracts";
+import { ANALYSIS_VERSION } from "@/lib/brand-kit/merge";
 import type { KitAssetKind } from "@/lib/brand-kit/spec";
 import { useAddWritingSample, useKitAssetActions, useUploadKitFiles } from "./hooks";
 import { DropZone, Segmented } from "./controls";
@@ -73,10 +74,7 @@ function LogosSection({ workspaceId, data }: Props) {
   const upload = useUploadKitFiles(workspaceId);
   const actions = useKitAssetActions(workspaceId);
   return (
-    <SurfacePage
-      title="Logos"
-      subtitle="Placed on images in the corner each style chooses. PNG with a clear background works best."
-    >
+    <SurfacePage title="Logos" subtitle="PNG with a clear background works best.">
       <div className="grid gap-4 sm:grid-cols-3">
         {LOGO_SLOTS.map((slot, i) => {
           const asset = data.assets.find((a) => a.kind === slot.kind);
@@ -162,7 +160,7 @@ function ColorsSection({ data, onOpenStyle }: Props) {
   return (
     <SurfacePage
       title="Colors"
-      subtitle="Brand DNA holds your main colors. Each style can follow them or use its own."
+      subtitle="Your brand colors. Each style can use its own."
       actions={
         <button
           type="button"
@@ -258,10 +256,7 @@ function FontsSection({ workspaceId, data }: Props) {
     for (const f of fonts) if (f.url && f.label) void loadFontFile(f.label, f.url);
   }, [fonts]);
   return (
-    <SurfacePage
-      title="Fonts"
-      subtitle="Upload your own fonts, or pick any Google Font inside a style."
-    >
+    <SurfacePage title="Fonts" subtitle="Upload your own, or pick one inside a style.">
       {data.canEdit && (
         <DropZone
           accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"
@@ -269,7 +264,7 @@ function FontsSection({ workspaceId, data }: Props) {
           busy={upload.isPending}
           icon={Type}
           title="Upload font files"
-          hint="WOFF2, WOFF, TTF or OTF, up to 2 MB. Only upload fonts you're licensed to use."
+          hint="WOFF2, WOFF, TTF or OTF, up to 2 MB"
         />
       )}
       {fonts.length > 0 && (
@@ -473,14 +468,16 @@ function ExamplesSection({ workspaceId, data, onCreateFrom }: Props) {
   return (
     <SurfacePage
       title="Examples"
-      subtitle="Posts, ads and videos you want to look like. Mellox studies each one."
+      subtitle="Posts and videos you want to look like."
       actions={
         <>
           {failed.length > 0 && data.canEdit && (
             <button
               type="button"
               className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
-              onClick={() => actions.reanalyze.mutate(failed.map((a) => a.id).slice(0, 12))}
+              onClick={() =>
+                actions.reanalyze.mutate({ assetIds: failed.map((a) => a.id).slice(0, 12) })
+              }
             >
               <RefreshCw className="h-4 w-4" /> Try again ({failed.length})
             </button>
@@ -586,6 +583,7 @@ function ExampleDetail({
     ["Light", v?.lighting],
     ["Color feel", v?.grading],
     ["Layout", v?.composition],
+    ["Background", v?.background],
     [
       "Fonts",
       [v?.typography?.heading, v?.typography?.body].filter(Boolean).join(", ") || undefined,
@@ -644,11 +642,12 @@ function ExampleDetail({
             <div className="mt-4 flex flex-wrap gap-2">
               {(asset.analysisStatus === "failed" ||
                 asset.stale ||
-                asset.analysisStatus === "done") && (
+                (asset.analysisStatus === "done" &&
+                  (asset.analysis?.v ?? 1) < ANALYSIS_VERSION)) && (
                 <button
                   type="button"
                   className={cn(dsGhostBtn, "h-8 px-3.5 text-[12.5px]")}
-                  onClick={() => actions.reanalyze.mutate([asset.id])}
+                  onClick={() => actions.reanalyze.mutate({ assetIds: [asset.id], refresh: true })}
                 >
                   <RefreshCw className="h-3.5 w-3.5" /> Read again
                 </button>
@@ -693,7 +692,7 @@ function WritingSection({ workspaceId, data, onCreateFrom }: Props) {
   return (
     <SurfacePage
       title="Writing"
-      subtitle="Posts, captions or emails that sound like you. Mellox learns the voice, not the facts."
+      subtitle="Posts or captions that sound like you."
       actions={
         learned.length > 0 && data.canEdit ? (
           <button
@@ -793,7 +792,7 @@ function WritingSection({ workspaceId, data, onCreateFrom }: Props) {
                         type="button"
                         className={dsIconBtn}
                         aria-label="Read again"
-                        onClick={() => actions.reanalyze.mutate([s.id])}
+                        onClick={() => actions.reanalyze.mutate({ assetIds: [s.id] })}
                       >
                         <RefreshCw className="h-4 w-4" />
                       </button>

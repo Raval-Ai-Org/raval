@@ -308,13 +308,21 @@ export const deleteKitAsset = createServerFn({ method: "POST" })
 export const analyzeKitAssets = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("brand-kit-analyze")])
   .inputValidator((data) =>
-    z.object({ workspaceId: uuid, assetIds: z.array(uuid).min(1).max(12) }).parse(data),
+    z
+      .object({
+        workspaceId: uuid,
+        assetIds: z.array(uuid).min(1).max(12),
+        /** Also read again examples that an older reader already studied. */
+        refresh: z.boolean().optional(),
+      })
+      .parse(data),
   )
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "editor");
-    const { kickAnalysis } = await import("@/server/brand-kit/analyze.server");
+    const { kickAnalysis, requeueOutdated } = await import("@/server/brand-kit/analyze.server");
+    const requeued = data.refresh ? await requeueOutdated(data.workspaceId, data.assetIds) : [];
     kickAnalysis(data.workspaceId, data.assetIds);
-    return { queued: data.assetIds.length };
+    return { queued: data.assetIds.length, requeued: requeued.length };
   });
 
 export const suggestStyle = createServerFn({ method: "POST" })

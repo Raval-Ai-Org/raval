@@ -4,11 +4,24 @@
 import { normalizeHex, parseStyleSpec } from "./spec";
 import type { StyleSpec, VideoStyle, VisualStyle, WritingStyle } from "./spec";
 
+/** Bumped when the reading gets richer; older analyses can be read again. */
+export const ANALYSIS_VERSION = 2;
+
+/** The job each colour does in an example, as the reader saw it. */
+export type ColorRoles = {
+  background?: string;
+  text?: string;
+  primary?: string;
+  accent?: string;
+};
+
 /** What analysing one inspiration / writing sample produced (stored on the asset). */
 export type ReferenceAnalysis = {
   kind: "visual" | "writing";
+  v?: number;
   /** Dominant colours, most prominent first. */
   colors?: string[];
+  roles?: ColorRoles;
   visual?: Partial<VisualStyle>;
   writing?: Partial<WritingStyle>;
   video?: Partial<VideoStyle>;
@@ -98,6 +111,34 @@ export function rolesFromColors(colors: string[]): NonNullable<VisualStyle["pale
   };
 }
 
+/**
+ * Palette from the roles the reader saw in each example (what the background,
+ * the text and the main colour actually were), which beats guessing roles from
+ * brightness. Null when no example carried roles.
+ */
+export function paletteFromRoles(
+  roles: Array<ColorRoles | undefined>,
+  colors: string[],
+): NonNullable<VisualStyle["palette"]> | null {
+  const pick = (role: keyof ColorRoles): string | undefined =>
+    clusterColors(roles.map((r) => (r?.[role] ? [r[role] as string] : [])))[0];
+  const background = pick("background");
+  const text = pick("text");
+  const near = (a: string | undefined, b: string | undefined) =>
+    !!a && !!b && colorDistance(a, b) < 36;
+  let primary: string | undefined = pick("primary");
+  if (near(primary, background)) primary = undefined;
+  let accent: string | undefined = pick("accent");
+  if (!primary && !background) return null;
+  const rest = colors.filter((c) => ![background, text, primary, accent].some((u) => near(u, c)));
+  primary ??= rest.shift();
+  if (near(accent, primary) || near(accent, background)) accent = undefined;
+  const secondary = rest.shift();
+  accent ??= rest.shift();
+  const extra = rest.slice(0, 3);
+  return { primary, secondary, accent, background, text, extra: extra.length ? extra : undefined };
+}
+
 function mode<T>(values: T[]): { value: T; share: number } | null {
   if (!values.length) return null;
   const counts = new Map<string, { value: T; n: number }>();
@@ -126,13 +167,32 @@ function unionList(lists: Array<string[] | undefined>, max: number): string[] | 
   return out.length ? out : undefined;
 }
 
-function longestText(values: Array<string | undefined>): string | undefined {
-  const v = values.filter((x): x is string => !!x?.trim());
+const words = (s: string) => new Set(s.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+
+/**
+ * One description that stands for all of them: the most common, else the one
+ * that shares the most words with the others (so an odd-one-out example never
+ * sets the style), else the most detailed.
+ */
+function representativeText(values: Array<string | undefined>): string | undefined {
+  const v = values.filter((x): x is string => !!x?.trim()).map((s) => s.trim());
   if (!v.length) return undefined;
-  // Pick the most common; fall back to the most detailed description.
-  const m = mode(v.map((s) => s.trim()));
+  const m = mode(v);
   if (m && m.share > 0.5) return m.value;
-  return v.sort((a, b) => b.length - a.length)[0];
+  const sets = v.map(words);
+  const score = (i: number) =>
+    sets.reduce((sum, other, j) => {
+      if (i === j) return sum;
+      const shared = [...sets[i]].filter((w) => other.has(w)).length;
+      const union = new Set([...sets[i], ...other]).size;
+      return sum + (union ? shared / union : 0);
+    }, 0);
+  let best = 0;
+  for (let i = 1; i < v.length; i++) {
+    const [a, b] = [score(i), score(best)];
+    if (a > b || (a === b && v[i].length > v[best].length)) best = i;
+  }
+  return v[best];
 }
 
 export function mergeAnalyses(analyses: ReferenceAnalysis[]): Suggestion {
@@ -145,7 +205,11 @@ export function mergeAnalyses(analyses: ReferenceAnalysis[]): Suggestion {
     const v: VisualStyle = {};
     const colors = clusterColors(visuals.map((a) => a.colors ?? []));
     if (colors.length) {
-      v.palette = rolesFromColors(colors);
+      v.palette =
+        paletteFromRoles(
+          visuals.map((a) => a.roles),
+          colors,
+        ) ?? rolesFromColors(colors);
       confidence["visual.palette"] = Math.min(
         1,
         colors.length ? visuals.filter((a) => a.colors?.length).length / visuals.length : 0,
@@ -163,8 +227,16 @@ export function mergeAnalyses(analyses: ReferenceAnalysis[]): Suggestion {
     enumField("medium");
     enumField("textPlacement");
     enumField("whitespace");
-    for (const key of ["mood", "lighting", "grading", "texture", "composition", "notes"] as const) {
-      const t = longestText(visuals.map((a) => a.visual?.[key]));
+    for (const key of [
+      "mood",
+      "lighting",
+      "grading",
+      "texture",
+      "composition",
+      "background",
+      "notes",
+    ] as const) {
+      const t = representativeText(visuals.map((a) => a.visual?.[key]));
       if (t) {
         v[key] = t;
         confidence[`visual.${key}`] =
@@ -199,7 +271,7 @@ export function mergeAnalyses(analyses: ReferenceAnalysis[]): Suggestion {
     const words = avg(
       visuals.map((a) => a.visual?.textOnImage?.maxWords).filter((n): n is number => n != null),
     );
-    const textStyle = longestText(visuals.map((a) => a.visual?.textOnImage?.style));
+    const textStyle = representativeText(visuals.map((a) => a.visual?.textOnImage?.style));
     if (words != null || textStyle) v.textOnImage = { maxWords: words, style: textStyle };
     const corner = mode(visuals.map((a) => a.visual?.logo?.corner).filter(Boolean) as string[]);
     if (corner)
@@ -222,7 +294,7 @@ export function mergeAnalyses(analyses: ReferenceAnalysis[]): Suggestion {
         "outro",
         "notes",
       ] as const) {
-        const t = longestText(videos.map((a) => a.video?.[key]));
+        const t = representativeText(videos.map((a) => a.video?.[key]));
         if (t) vid[key] = t;
       }
       const cap = videos.map((a) => a.video?.captions).find(Boolean);
@@ -233,7 +305,7 @@ export function mergeAnalyses(analyses: ReferenceAnalysis[]): Suggestion {
 
   if (writings.length) {
     const w: WritingStyle = {};
-    const voice = longestText(writings.map((a) => a.writing?.voice));
+    const voice = representativeText(writings.map((a) => a.writing?.voice));
     if (voice) w.voice = voice;
     const tones = writings.map((a) => a.writing?.tone).filter(Boolean) as NonNullable<
       WritingStyle["tone"]
@@ -282,7 +354,7 @@ export function mergeAnalyses(analyses: ReferenceAnalysis[]): Suggestion {
       writings.map((a) => a.writing?.examples),
       3,
     );
-    const cta = longestText(writings.map((a) => a.writing?.cta));
+    const cta = representativeText(writings.map((a) => a.writing?.cta));
     if (cta) w.cta = cta;
     const lb = mode(
       writings.map((a) => a.writing?.formatting?.lineBreaks).filter(Boolean) as string[],

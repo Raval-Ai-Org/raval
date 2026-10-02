@@ -40,16 +40,17 @@ components, metadata helpers and data files, so most findings became "manual".
    - Changing the site or branch resets the verdict.
 
 2. **A tool-using agent replaces one-shot generation.** `src/server/geo/agents/`:
-   - `claudeToolLoop` (`anthropic-gateway.server.ts`):
+   - `llmToolLoop` (`src/lib/ai-gateway.tool-loop.server.ts`, OpenRouter — see ADR-0026):
      - meters and budget-checks every turn;
      - uses strict tools and handles parallel tool calls;
      - puts cache breakpoints on the system prompt and the latest turn;
      - enforces caps on turns, cost and wall clock, and supports cancellation;
      - handles refusals, cut-off turns and context overflow.
-   - Model: `GEO_AGENT_MODEL`, default `claude-sonnet-5`.
+   - Model: routes `geo.agent.investigate` / `implement` / `review` in
+     `src/server/ai/task-models.ts` (Opus 5.5; override `AI_MODEL_GEO_AGENT_*`).
    - Read-only tools (`repo-tools.server.ts`):
      - `list_files`, `search_code`, `read_file`;
-     - `get_page_facts`, `get_rule_info`;
+     - `get_page_facts`, `list_scanned_pages`, `get_rule_info`;
      - `inspect_live_page` (the SSRF-guarded fetcher, same host only).
    - Tool limits:
      - Credential paths are never read.

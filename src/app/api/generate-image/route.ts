@@ -32,7 +32,7 @@ const BodySchema = z.object({
 });
 
 /**
- * Append the workspace's Style to the prompt (server-side, so the browser
+ * Lead the prompt with the workspace's Style (server-side, so the browser
  * can't claim a style it doesn't own) and supply its reference posts when
  * the caller brought none. Never throws — a failed load means no style.
  */
@@ -44,22 +44,23 @@ async function styled(
 ): Promise<{ prompt: string; references: string[] }> {
   if (!workspaceId || !choice || choice === "none") return { prompt, references };
   try {
-    const [{ loadResolvedStyle }, { visualStyleBlock }] = await Promise.all([
+    const [{ loadResolvedStyle }, { imageStyleInput }, { restyleImagePrompt }] = await Promise.all([
       import("@/server/brand-kit/resolve.server"),
       import("@/lib/brand-kit/prompt"),
+      import("@/lib/post-image"),
     ]);
     const loaded = await loadResolvedStyle(workspaceId, choice === "default" ? null : choice);
-    if (!loaded.resolved.styleId) return { prompt, references };
-    const block = visualStyleBlock(loaded.resolved);
+    const { resolved } = loaded;
+    if (!resolved.styleId) return { prompt, references };
+    // The default only applies where it says it does; an explicit pick always applies.
+    const explicit = choice !== "default" && !loaded.fellBack;
+    const listed = resolved.appliesTo;
+    if (!explicit && listed.length && !listed.includes("image") && !listed.includes("social"))
+      return { prompt, references };
     const refs = references.length ? references : loaded.referenceUrls.slice(0, 4);
-    const refNote =
-      !references.length && refs.length
-        ? `\n\nREFERENCE IMAGES (${refs.length} attached): examples of the brand's style. Match their look closely (palette, lighting, composition, type treatment, graphic elements). Create a NEW image; never copy their subject or text.`
-        : "";
-    const full = block
-      ? `${prompt}\n\nBRAND STYLE (follow it where it differs from the above):\n${block.split("\n").slice(1).join("\n")}${refNote}`
-      : `${prompt}${refNote}`;
-    return { prompt: full.slice(0, 7000), references: refs };
+    const style = imageStyleInput(resolved, references.length ? 0 : refs.length);
+    if (!style) return { prompt, references };
+    return { prompt: restyleImagePrompt(prompt, style).slice(0, 9500), references: refs };
   } catch (error) {
     console.error("[generate-image] style load failed, generating without it", error);
     return { prompt, references };

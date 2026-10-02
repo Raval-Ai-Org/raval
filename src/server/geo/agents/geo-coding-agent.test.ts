@@ -9,6 +9,7 @@ import {
   hashPlan,
   implementPlan,
   investigateAndPlan,
+  planStillHolds,
   resolveImport,
   type AgentContext,
   type AgentDeps,
@@ -240,6 +241,32 @@ describe("plan checks", () => {
     expect(resolveImport(snapshot, "./lib/seo", "src/App.tsx")).toBe(true);
     expect(resolveImport(snapshot, "@/lib/seo", "src/App.tsx")).toBe(true);
     expect(resolveImport(snapshot, "./lib/missing", "src/App.tsx")).toBe(false);
+  });
+
+  it("keeps a plan when the branch moved but its files didn't", () => {
+    const plan = {
+      files: [
+        { path: "index.html", action: "update" as const, reason: "x", evidence: [] },
+        { path: "public/llms.txt", action: "create" as const, reason: "x", evidence: [] },
+      ],
+    };
+    const read = (s: string | undefined) => [
+      { path: "index.html", reason: "x", lines: "1-9", via: "read_file" as const, sha: s },
+    ];
+    const tree = [
+      { path: "index.html", sha: "a1" },
+      { path: "README.md", sha: "new" },
+    ];
+    expect(planStillHolds(plan, read("a1"), tree)).toBe(true);
+    // The file it edits changed.
+    expect(planStillHolds(plan, read("old"), tree)).toBe(false);
+    // The file it creates now exists.
+    expect(planStillHolds(plan, read("a1"), [...tree, { path: "public/llms.txt", sha: "z" }])).toBe(
+      false,
+    );
+    // A file read before versions were recorded can't be vouched for.
+    expect(planStillHolds(plan, read(undefined), tree)).toBe(false);
+    expect(planStillHolds(null, read("a1"), tree)).toBe(false);
   });
 });
 

@@ -14,6 +14,8 @@ export type RawSection = {
   words: number;
   lists: number;
   firstParagraph: string | null;
+  /** The heading sits inside <main>, <article> or role=main. */
+  inMain?: boolean;
 };
 
 export type RawExtraction = {
@@ -29,8 +31,15 @@ export type RawExtraction = {
   hreflang: { lang: string; href: string }[];
   jsonLd: string[];
   microdataTypes: string[];
-  headings: { level: number; text: string }[];
+  /** `inMain`: inside <main>, <article> or role=main (page chrome is outside). */
+  headings: { level: number; text: string; inMain?: boolean }[];
   sections: RawSection[];
+  /** Words inside `data-nosnippet` elements. */
+  nosnippetWords: number;
+  /** <blockquote> and <q> elements. */
+  quotes: number;
+  /** Bytes of inline <script> text (JSON-LD excluded). */
+  inlineScriptBytes: number;
   paragraphs: string[];
   lists: number;
   images: { total: number; missingAlt: number; emptyAlt: number };
@@ -102,6 +111,9 @@ export function extractHtml(html: string): RawExtraction {
     microdataTypes: [],
     headings: [],
     sections: [],
+    nosnippetWords: 0,
+    quotes: 0,
+    inlineScriptBytes: 0,
     paragraphs: [],
     lists: 0,
     images: { total: 0, missingAlt: 0, emptyAlt: 0 },
@@ -133,6 +145,10 @@ export function extractHtml(html: string): RawExtraction {
   let mainDepth = 0;
   let articleDepth = 0;
   const roleMainStack: string[] = [];
+  // The open `data-nosnippet` element: nested same-name tags are counted so its
+  // own end tag closes it, not a child's.
+  let nosnippet: { name: string; depth: number } | null = null;
+  let inScript = false;
 
   let section: RawSection = {
     heading: null,
@@ -188,7 +204,8 @@ export function extractHtml(html: string): RawExtraction {
         }
       }
 
-      if (name === "title") {
+      // An <svg><title> names an icon, not the page.
+      if (name === "title" && ignoreDepth === 0) {
         inTitle = true;
         titleParts = [];
         continue;
@@ -212,10 +229,23 @@ export function extractHtml(html: string): RawExtraction {
       if ((attrs.role || "").toLowerCase() === "main") landmarks.add("main");
 
       if (IGNORE_CONTENT.has(name) && !token.selfClosing) {
+        if (name === "script" && !inJsonLd && !attrs.src) inScript = true;
         ignoreDepth++;
         continue;
       }
       if (ignoreDepth > 0) continue;
+
+      if (nosnippet && nosnippet.name === name && !VOID_ELEMENTS.has(name) && !token.selfClosing) {
+        nosnippet.depth++;
+      } else if (
+        !nosnippet &&
+        "data-nosnippet" in attrs &&
+        !VOID_ELEMENTS.has(name) &&
+        !token.selfClosing
+      ) {
+        nosnippet = { name, depth: 1 };
+      }
+      if (name === "blockquote" || name === "q") out.quotes++;
 
       if (name === "main") mainDepth++;
       if (name === "article") articleDepth++;
@@ -274,17 +304,30 @@ export function extractHtml(html: string): RawExtraction {
       }
 
       if (IGNORE_CONTENT.has(name)) {
+        if (name === "script") inScript = false;
         if (ignoreDepth > 0) ignoreDepth--;
         continue;
       }
       if (ignoreDepth > 0) continue;
 
+      if (nosnippet && nosnippet.name === name && --nosnippet.depth <= 0) nosnippet = null;
+
       if (HEADINGS.has(name) && headingLevel !== null) {
         const text = collapse(headingParts.join(" "));
-        if (out.headings.length < MAX_HEADINGS) out.headings.push({ level: headingLevel, text });
+        const inMain = mainDepth > 0 || articleDepth > 0 || roleMainStack.length > 0;
+        if (out.headings.length < MAX_HEADINGS) {
+          out.headings.push({ level: headingLevel, text, ...(inMain ? { inMain } : {}) });
+        }
         closeParagraph();
         finishSection();
-        section = { heading: text, level: headingLevel, words: 0, lists: 0, firstParagraph: null };
+        section = {
+          heading: text,
+          level: headingLevel,
+          words: 0,
+          lists: 0,
+          firstParagraph: null,
+          ...(inMain ? { inMain } : {}),
+        };
         headingLevel = null;
         headingParts = [];
         body.push("\n");
@@ -321,8 +364,12 @@ export function extractHtml(html: string): RawExtraction {
       jsonLdParts.push(text);
       continue;
     }
-    if (ignoreDepth > 0) continue;
+    if (ignoreDepth > 0) {
+      if (inScript) out.inlineScriptBytes += text.length;
+      continue;
+    }
 
+    if (nosnippet) out.nosnippetWords += wordCount(text);
     body.push(text);
     if (headingLevel !== null) headingParts.push(text);
     else section.words += wordCount(text);

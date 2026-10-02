@@ -147,8 +147,15 @@ function Panel({
   const current = scans.current;
   const sameHostHistory = useMemo(() => {
     if (!current || !scans.history) return [];
+    // Only scans scored the same way are compared; an older scoring version
+    // would show a jump that nothing on the site caused.
+    const version = current.report?.scoreVersion ?? 1;
     return scans.history.filter(
-      (h) => h.host === current.host && h.status === "succeeded" && h.overallScore !== null,
+      (h) =>
+        h.host === current.host &&
+        h.status === "succeeded" &&
+        h.overallScore !== null &&
+        (h.scoreVersion ?? 1) === version,
     );
   }, [current, scans.history]);
   const previousScore = useMemo(() => {

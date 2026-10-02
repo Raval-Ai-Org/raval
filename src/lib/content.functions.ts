@@ -30,6 +30,12 @@ export const regenerateContentItem = serverFn<typeof Handlers.regenerateContentI
 export const generateContentBatch = serverFn<typeof Handlers.generateContentBatch>(
   "content/generateContentBatch",
 );
+export const planContentCalendar = serverFn<typeof Handlers.planContentCalendar>(
+  "content/planContentCalendar",
+);
+export const setContentPlanDate = serverFn<typeof Handlers.setContentPlanDate>(
+  "content/setContentPlanDate",
+);
 export const setContentItemStatus = serverFn<typeof Handlers.setContentItemStatus>(
   "content/setContentItemStatus",
 );

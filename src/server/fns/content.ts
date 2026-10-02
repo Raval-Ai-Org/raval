@@ -3,6 +3,7 @@ import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rateLimitFor } from "@/server/rate-limit";
+import { HttpError } from "@/server/http-error";
 import { requireWorkspaceRole } from "@/server/workspace-access.server";
 import { AiOutputError, runJsonPrompt, runStructuredPrompt } from "@/lib/ai";
 import { contentBatchPrompt, nextPostPrompt, regeneratePrompt } from "@/lib/ai/prompts";
@@ -10,6 +11,18 @@ import { isNearDuplicateCopy } from "@/lib/studio/novelty";
 import { validContentBatch } from "@/lib/content-batch-quality";
 import { loadStudioContext, invalidateStudioContext } from "@/server/studio/context.server";
 import { buildNextSteps } from "@/lib/ai/deterministic-suggestions";
+import { humanizeText } from "@/lib/ai/humanize-text";
+import { isHM, isYMD } from "@/lib/calendar/model";
+import {
+  buildPlanSlots,
+  industryById,
+  MAX_PLAN_POSTS,
+  PLAN_GOALS,
+  PLAN_TOPICS,
+  topicLabel,
+  type PlanSlot,
+  type PlanTopicId,
+} from "@/lib/calendar/planner";
 import {
   assertContentTransition,
   CONTENT_STATUSES,
@@ -109,7 +122,9 @@ export const listContentItems = createServerFn({ method: "POST" })
       .select("content_item_id, storage_path")
       .in("content_item_id", contentIds)
       .is("deleted_at", null)
-      .not("storage_path", "is", null);
+      .not("storage_path", "is", null)
+      // Oldest first, so the newest picture is the one a post ends up with.
+      .order("created_at", { ascending: true });
     const assets = (assetRows ?? []) as AssetRow[];
     const paths = assets
       .map((asset) => asset.storage_path)
@@ -602,6 +617,276 @@ export const generateContentBatch = createServerFn({ method: "POST" })
       },
     );
     return result;
+  });
+
+/* ------------------------------------------------------------ */
+/* Content Calendar: plan a set of dated posts                   */
+/* ------------------------------------------------------------ */
+// Days, times, channels and topics are decided by `buildPlanSlots` (pure), so a
+// plan always holds exactly what was asked for. The model works in two steps:
+// one call picks a distinct idea for every slot, then the posts are written a
+// few at a time with the whole list in view, so no two say the same thing.
+const PlanChannelEnum = z.enum([
+  "instagram",
+  "facebook",
+  "linkedin",
+  "x",
+  "threads",
+  "tiktok",
+  "youtube",
+  "blog",
+  "email",
+]);
+const ymd = z.string().refine(isYMD, "Use a real date (YYYY-MM-DD).");
+const PlanSchema = z.object({
+  workspaceId: uuid,
+  startDate: ymd,
+  weeks: z.number().int().min(1).max(6),
+  postsPerWeek: z.number().int().min(1).max(14),
+  channels: z.array(PlanChannelEnum).min(1).max(9),
+  weekdays: z.array(z.number().int().min(0).max(6)).max(7).default([]),
+  topics: z
+    .array(z.enum(PLAN_TOPICS.map((t) => t.id) as [string, ...string[]]))
+    .min(1)
+    .max(PLAN_TOPICS.length),
+  goal: z.enum(PLAN_GOALS.map((g) => g.id) as [string, ...string[]]),
+  industry: z.string().max(40).default("auto"),
+  keyDates: z.boolean().default(true),
+  notes: z.string().max(1500).optional(),
+  /** Brand Kit Style: an id, "none", or absent for the workspace default. */
+  styleId: z.union([uuid, z.literal("none")]).nullish(),
+});
+
+const PlanIdeasSchema = z.object({
+  ideas: z.array(z.object({ slot: z.number().int(), idea: z.string().min(3).max(300) })),
+});
+const PlanPostsSchema = z.object({
+  posts: z.array(
+    z.object({
+      slot: z.number().int(),
+      title: z.string().min(2).max(200),
+      caption: z.string().min(20),
+      hashtags: z.array(z.string()).optional(),
+    }),
+  ),
+});
+
+const PLAN_CHUNK = 6;
+
+function slotLine(slot: PlanSlot): string {
+  const topic = PLAN_TOPICS.find((t) => t.id === slot.topic);
+  return `${slot.index}. ${slot.date} · ${slot.channel} · ${slot.format} · topic: ${topic?.label ?? slot.topic}${
+    slot.moment ? ` · about ${slot.moment.name} (${slot.moment.date}): ${slot.moment.angle}` : ""
+  }`;
+}
+
+export const planContentCalendar = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("generate")])
+  .inputValidator((data) => PlanSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const slots = buildPlanSlots({
+      startDate: data.startDate,
+      weeks: data.weeks,
+      postsPerWeek: data.postsPerWeek,
+      channels: data.channels,
+      weekdays: data.weekdays,
+      topics: data.topics as PlanTopicId[],
+      industry: data.industry,
+      keyDates: data.keyDates,
+    });
+    if (!slots.length) throw new HttpError(400, "Pick at least one day to post on.");
+    if (slots.length > MAX_PLAN_POSTS)
+      throw new HttpError(
+        400,
+        `A plan can hold up to ${MAX_PLAN_POSTS} posts. Choose fewer weeks or posts.`,
+      );
+
+    const { runMetered } = await import("@/server/billing/metered.server");
+    const { result } = await runMetered(
+      {
+        workspaceId: data.workspaceId,
+        userId: context.userId,
+        role,
+        action: "post_set",
+        // One post set covers up to three drafts.
+        quantity: Math.ceil(slots.length / 3),
+        idempotencyKey: crypto.randomUUID(),
+        route: "content.planCalendar",
+      },
+      async () => {
+        const studioContext = await loadStudioContext(
+          context.supabase as never,
+          data.workspaceId,
+          null,
+        );
+        const { styleTextFor } = await import("@/server/brand-kit/resolve.server");
+        const styleText = await styleTextFor(data.workspaceId, data.styleId, "social");
+        const goal = PLAN_GOALS.find((g) => g.id === data.goal) ?? PLAN_GOALS[0];
+        const industry = industryById(data.industry);
+        const usedTopics = PLAN_TOPICS.filter((t) => data.topics.includes(t.id));
+
+        const shared = [
+          `## Brand\n${studioContext.brandText || "No brand details saved. Keep claims general."}`,
+          styleText
+            ? `## Writing style (follow exactly)\n${styleText.replace(/^## /gm, "### ")}`
+            : "",
+          `## Goal\n${goal.brief}`,
+          industry.id !== "auto"
+            ? `## Kind of business\n${industry.label}.${industry.rule ? ` ${industry.rule}` : ""}`
+            : "",
+          `## Topics\n${usedTopics.map((t) => `- ${t.label}: ${t.brief}`).join("\n")}`,
+          data.notes?.trim() ? `## What the owner wants covered\n${data.notes.trim()}` : "",
+          studioContext.recent.length
+            ? `## Already posted or drafted (do not repeat)\n${studioContext.recent
+                .slice(0, 12)
+                .map((item) => `- ${item.title}`)
+                .join("\n")}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+
+        const rules =
+          "Write for this brand only, in its voice. Never invent customers, quotes, results, statistics, prices, offers or news: use what the brand context and the owner's notes give you, and keep everything else general. No placeholders such as [brand]. Return strict JSON only, no code fences.";
+
+        // Step 1 — one distinct idea per slot, chosen with the whole plan in view.
+        const ideas = await runStructuredPrompt({
+          route: "content.planCalendar",
+          system: `You plan a brand's content calendar. Give every numbered slot one specific post idea (one sentence: the point of the post and its angle). No two ideas may make the same point. Each idea must fit its slot's channel, type and topic; a slot marked "about" a date must be about that date. ${rules}\nSchema: {"ideas":[{"slot":number,"idea":string}]}`,
+          user: `${shared}\n\n## Slots\n${slots.map(slotLine).join("\n")}`,
+          schema: PlanIdeasSchema,
+          maxTokens: 500 + slots.length * 90,
+          temperature: 0.8,
+          regenerate: true,
+        });
+        const ideaBySlot = new Map(ideas.ideas.map((i) => [i.slot, i.idea.trim()]));
+        const planned = slots.filter((s) => ideaBySlot.has(s.index));
+        if (planned.length < Math.ceil(slots.length / 2))
+          throw new AiOutputError("The plan came back incomplete. Please try again.");
+        const overview = planned.map((s) => `${s.index}. ${ideaBySlot.get(s.index)}`).join("\n");
+
+        // Step 2 — write the posts a few at a time.
+        const chunks: PlanSlot[][] = [];
+        for (let i = 0; i < planned.length; i += PLAN_CHUNK)
+          chunks.push(planned.slice(i, i + PLAN_CHUNK));
+        const written = await Promise.allSettled(
+          chunks.map((chunk) =>
+            runStructuredPrompt({
+              route: "content.planCalendar",
+              system: `You write ready-to-post content. Write the post for each slot listed under "Write these", following its idea. The first line of every caption is the hook. Social posts: 50-150 words, written the way that channel reads, with one clear next step. Article: a 120-200 word outline with a direct answer first, then the section headings. Email: the title is the subject line, the caption is the email body. Up to 6 hashtags for social posts, none for articles and emails. ${rules}\nSchema: {"posts":[{"slot":number,"title":string,"caption":string,"hashtags":string[]}]}`,
+              user: `${shared}\n\n## The whole plan (for context; do not repeat another slot's point)\n${overview}\n\n## Write these\n${chunk
+                .map((s) => `${slotLine(s)}\n   idea: ${ideaBySlot.get(s.index)}`)
+                .join("\n")}`,
+              schema: PlanPostsSchema,
+              maxTokens: 500 + chunk.length * 480,
+              temperature: 0.75,
+              regenerate: true,
+            }),
+          ),
+        );
+        const postBySlot = new Map<number, z.infer<typeof PlanPostsSchema>["posts"][number]>();
+        for (const outcome of written) {
+          if (outcome.status !== "fulfilled") continue;
+          for (const post of outcome.value.posts) postBySlot.set(post.slot, post);
+        }
+        const ready = planned.filter((s) => postBySlot.has(s.index));
+        if (!ready.length) {
+          const failure = written.find((o) => o.status === "rejected");
+          if (failure?.status === "rejected" && failure.reason instanceof Error)
+            throw failure.reason;
+          throw new AiOutputError("The posts could not be written. Please try again.");
+        }
+
+        const rows = ready.map((slot) => {
+          const post = postBySlot.get(slot.index)!;
+          const kind =
+            slot.channel === "blog" ? "blog" : slot.channel === "email" ? "email" : "post";
+          return {
+            workspace_id: data.workspaceId,
+            agent: "spark",
+            kind,
+            channel: slot.channel,
+            title: humanizeText(post.title).slice(0, 280),
+            body: humanizeText(post.caption).slice(0, 8000),
+            hashtags:
+              kind === "post" && Array.isArray(post.hashtags)
+                ? post.hashtags
+                    .map((tag) => tag.trim().slice(0, 60))
+                    .filter(Boolean)
+                    .slice(0, 6)
+                : [],
+            status: "draft",
+            created_by: context.userId,
+            meta: {
+              source: "calendar-generator",
+              calendar_date: slot.date,
+              calendar_time: slot.time,
+              format: slot.format,
+              pillar: topicLabel(slot.topic),
+              ...(slot.moment ? { moment: slot.moment.name } : {}),
+            } as Json,
+          };
+        });
+
+        const { data: inserted, error } = await context.supabase
+          .from("content_items")
+          .insert(rows)
+          .select(CONTENT_COLS);
+        if (error) throw new Error(error.message);
+        invalidateStudioContext(data.workspaceId);
+
+        return {
+          items: (inserted ?? []) as ContentItem[],
+          requested: slots.length,
+        };
+      },
+    );
+    return result;
+  });
+
+/* ------------------------------------------------------------ */
+/* Content Calendar: move a post to another day                  */
+/* ------------------------------------------------------------ */
+// Changes only where a post sits on the calendar. It never schedules, never
+// approves and never un-approves: a post that is on its way out (or already
+// out) is refused, because its time belongs to the publishing provider.
+export const setContentPlanDate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) =>
+    z
+      .object({
+        id: uuid,
+        date: ymd,
+        time: z.string().refine(isHM, "Use a real time (HH:mm).").optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: current, error: readError } = await context.supabase
+      .from("content_items")
+      .select("workspace_id, status, meta")
+      .eq("id", data.id)
+      .single();
+    if (readError || !current) throw new HttpError(404, "Post not found");
+    await requireWorkspaceRole(context, current.workspace_id, "editor");
+    if (["scheduled", "publishing", "published"].includes(current.status))
+      throw new HttpError(
+        409,
+        "This post is already scheduled or posted. Cancel the schedule to move it.",
+      );
+    const meta = mergeMeta(current.meta, {
+      calendar_date: data.date,
+      ...(data.time ? { calendar_time: data.time } : {}),
+    });
+    const { data: row, error } = await context.supabase
+      .from("content_items")
+      .update({ meta: meta as Json })
+      .eq("id", data.id)
+      .select(CONTENT_COLS)
+      .single();
+    if (error || !row) throw new Error(error?.message ?? "Update failed");
+    return row as ContentItem;
   });
 
 /* ------------------------------------------------------------ */

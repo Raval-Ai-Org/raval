@@ -109,6 +109,12 @@ export type SchemaSummary = {
   hasBreadcrumbList: boolean;
   hasWebSite: boolean;
   hasAddress: boolean;
+  /** Headline of the first Article-like node (absent on analyses stored before v2 rules). */
+  headline?: string | null;
+  /** Required properties missing from top-level nodes, e.g. `Article: author`. */
+  issues?: string[];
+  /** Top-level types that were checked for required properties. */
+  checkedTypes?: string[];
 };
 
 export type QuestionItem = {
@@ -246,6 +252,19 @@ export type PageAnalysis = {
     social: number;
     referenceSection: boolean;
   };
+  /** Snippet controls. Absent on analyses stored before these checks existed. */
+  snippet?: {
+    /** `max-snippet:N` from meta robots; null when not set. */
+    maxSnippet: number | null;
+    /** Words inside `data-nosnippet` elements. */
+    nosnippetWords: number;
+  };
+  /** Structured data that says something the visible page doesn't. */
+  schemaMismatches?: string[];
+  /** Quotations on the page (`<blockquote>`, `<q>`). */
+  quotes?: number;
+  /** Bytes of inline `<script>` payload (framework data), excluded from size checks. */
+  inlineScriptBytes?: number;
   /**
    * How the page was read. Absent on pages whose server HTML was used as-is
    * without needing a decision (and on analyses stored before rendering).
@@ -271,9 +290,43 @@ export type SiteArtifacts = {
   host: string;
   https: boolean;
   robots: { status: "found" | "missing" | "error"; text: string; sitemaps: string[] };
-  llms: { found: boolean; bytes: number; full: boolean };
-  sitemap: { found: boolean; urls: number; isIndex: boolean; sources: string[] };
+  llms: {
+    found: boolean;
+    bytes: number;
+    full: boolean;
+    /** Problems against the llmstxt.org format. Absent on older scans. */
+    issues?: string[];
+    /** Links the file lists (capped). */
+    links?: string[];
+  };
+  sitemap: {
+    found: boolean;
+    urls: number;
+    isIndex: boolean;
+    sources: string[];
+    /** URL entries that carry a `<lastmod>`. Absent on older scans. */
+    withLastmod?: number;
+    /** Same-site paths listed (capped at `SITEMAP_PATH_CAP`), for coverage checks. */
+    paths?: string[];
+  };
+  /**
+   * What answer-engine crawlers got when the homepage was requested with their
+   * user agent. A refusal here is a strong hint, not proof: a firewall may turn
+   * away a look-alike and still let the real crawler in.
+   */
+  botAccess?: {
+    baselineStatus: number | null;
+    checks: { bot: string; status: number | null; blocked: boolean; reason: string | null }[];
+  };
+  /** Agent-facing extras. Reported, never scored. */
+  agent?: {
+    markdown: boolean;
+    contentSignals: Record<string, string> | null;
+    llmsFull: boolean;
+  };
 };
+
+export const SITEMAP_PATH_CAP = 2000;
 
 export type PageState = "pending" | "fetched" | "failed" | "skipped";
 
@@ -337,6 +390,7 @@ export type RuleSummary = {
   /** Overall score points lost to this rule (positive). */
   pointsLost: number;
   detail: string;
+  evidence?: RuleEvidence;
 };
 
 export type CategoryScore = {
@@ -372,6 +426,40 @@ export type EngineAccess = {
   state: EngineState;
   bots: string[];
   blocked: string[];
+  /** Blocked training crawlers: the owner's choice, not counted against the site. */
+  trainingBlocked?: string[];
+};
+
+/** How strong the evidence is that a check affects AI answers. */
+export type RuleEvidence = "documented" | "measured" | "emerging";
+
+/** Who can close a gap: Mellox alone, Mellox after one answer, or the owner. */
+export type FixRoute = "auto" | "needs_input" | "manual";
+
+export type PathStep = {
+  ruleId: string;
+  title: string;
+  points: number;
+  affectedPages: number;
+  route: FixRoute;
+};
+
+export type PathTo100 = {
+  /** Points available by route; the three add up to 100 − overall (± rounding). */
+  auto: number;
+  needsInput: number;
+  manual: number;
+  steps: PathStep[];
+};
+
+export type DimensionSummary = {
+  id: string;
+  name: string;
+  question: string;
+  /** null when no applicable check fed this dimension. */
+  score: number | null;
+  failed: number;
+  warned: number;
 };
 
 export type ScoreTier = "strong" | "workable" | "needs_work";
@@ -402,4 +490,9 @@ export type ScanReport = {
   pageScores: { url: string; score: number; categories: Partial<Record<GeoCategoryId, number>> }[];
   /** Browser-rendering use in this scan (absent on older scans). */
   rendering?: { available: boolean; reason: string; rendered: number; needed: number };
+  /** 2 = tiered crawlers, page-type applicability, single rounding. Absent = 1. */
+  scoreVersion?: number;
+  dimensions?: DimensionSummary[];
+  pathTo100?: PathTo100;
+  agent?: SiteArtifacts["agent"];
 };

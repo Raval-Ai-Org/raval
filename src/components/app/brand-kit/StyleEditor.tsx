@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   Brain,
   Check,
+  ChevronDown,
   Eye,
   ImagePlus,
   Plus,
@@ -24,7 +25,7 @@ import {
   Wand,
   X,
 } from "@/components/icons";
-import { SurfacePage, Tile, GroupLabel } from "@/components/app/surface/SurfaceLayout";
+import { SurfacePage, Tile } from "@/components/app/surface/SurfaceLayout";
 import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { emitAppEvent } from "@/lib/app-events";
 import type { BrandKitOverview, BrandStyleView, KitAssetView } from "@/lib/brand-kit/contracts";
@@ -38,7 +39,8 @@ import {
   type VisualStyle,
   type WritingStyle,
 } from "@/lib/brand-kit/spec";
-import { applySuggestion, markUserEdited } from "@/lib/brand-kit/merge";
+import { ANALYSIS_VERSION, applySuggestion, markUserEdited } from "@/lib/brand-kit/merge";
+import { contrastRatio } from "@/lib/brand-kit/color";
 import {
   useKitAssetActions,
   useStyleActions,
@@ -55,6 +57,8 @@ import {
   resolveView,
   useStyleFonts,
 } from "./preview";
+import { PaletteEditor, type SwatchGroup } from "./ColorPicker";
+import { MatchControl, MoodChips, swatchGroups } from "./look";
 import {
   ChipsInput,
   ColorField,
@@ -68,8 +72,8 @@ import {
 
 type Tab = "writing" | "look" | "video" | "examples" | "use";
 const TABS: Array<{ id: Tab; label: string }> = [
-  { id: "writing", label: "Writing" },
   { id: "look", label: "Look" },
+  { id: "writing", label: "Writing" },
   { id: "video", label: "Video" },
   { id: "examples", label: "Examples" },
   { id: "use", label: "Use for" },
@@ -132,7 +136,7 @@ function Editor({
   onBack: () => void;
 }) {
   const canEdit = data.canEdit && !style.archived;
-  const [tab, setTab] = React.useState<Tab>("writing");
+  const [tab, setTab] = React.useState<Tab>("look");
   const [draft, setDraft] = React.useState<Draft>(() => ({
     name: style.name,
     description: style.description ?? "",
@@ -222,6 +226,7 @@ function Editor({
     [style, draft, data.dna],
   );
   useStyleFonts(resolved, data.assets);
+  const groups = React.useMemo(() => swatchGroups(data, draft.spec), [data, draft.spec]);
 
   const logoUrl = React.useMemo(() => {
     const variant = draft.spec.visual?.logo?.variant;
@@ -327,6 +332,7 @@ function Editor({
                   resolvedPalette={resolved.visual.palette}
                   resolvedFonts={resolved.visual.typography ?? {}}
                   assets={data.assets}
+                  groups={groups}
                   set={(k, v) => setField("visual", k, v)}
                   setInherit={setInherit}
                   disabled={!canEdit}
@@ -336,6 +342,7 @@ function Editor({
                 <VideoTab
                   vid={draft.spec.video ?? {}}
                   set={(k, v) => setField("video", k, v)}
+                  groups={groups}
                   disabled={!canEdit}
                 />
               )}
@@ -352,7 +359,6 @@ function Editor({
               {tab === "use" && (
                 <UseTab
                   draft={draft}
-                  style={style}
                   disabled={!canEdit}
                   onChange={(patch) => edit((d) => ({ ...d, ...patch }))}
                   onArchive={() => {
@@ -485,9 +491,6 @@ function PreviewColumn({
             {kind === "video" && <VideoPreview resolved={resolved} posterUrl={posterUrl} />}
           </motion.div>
         </AnimatePresence>
-        <p className="mt-3 px-1 text-[11.5px] leading-relaxed text-muted-foreground">
-          A sketch of the look. Real content uses your images and words.
-        </p>
       </Tile>
       <button
         type="button"
@@ -495,7 +498,7 @@ function PreviewColumn({
         className="mt-3 flex w-full items-center justify-between rounded-full px-4 py-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-[var(--ds-well-bg)] hover:text-foreground"
       >
         <span className="inline-flex items-center gap-2">
-          <Eye className="h-4 w-4" /> What the AI sees
+          <Eye className="h-4 w-4" /> What Mellox follows
         </span>
         <span>{showPrompt ? "Hide" : "Show"}</span>
       </button>
@@ -516,7 +519,7 @@ function PreviewColumn({
                     kind === "video" ? prompt.data?.video : "",
                   ]
                     .filter(Boolean)
-                    .join("\n\n") || "Nothing set yet. Fill in a few fields and it shows up here."}
+                    .join("\n\n") || "Nothing set yet."}
               {!!prompt.data?.references &&
                 `\n\n+ ${prompt.data.references} example image${prompt.data.references === 1 ? "" : "s"} sent with every picture.`}
             </div>
@@ -772,7 +775,6 @@ function WritingTab({
       <Tile className="space-y-4">
         <Field
           label="Example writing"
-          hint="Up to three short pieces in this style. Mellox copies the rhythm, never the facts."
           aside={
             <LinkedToggle
               on={inheritRules}
@@ -856,14 +858,6 @@ function WritingTab({
 
 // ── Look ────────────────────────────────────────────────────────────────────
 
-const ROLES = [
-  ["primary", "Main"],
-  ["secondary", "Second"],
-  ["accent", "Accent"],
-  ["background", "Background"],
-  ["text", "Text"],
-] as const;
-
 function LookTab({
   v,
   inheritColors,
@@ -872,6 +866,7 @@ function LookTab({
   resolvedPalette,
   resolvedFonts,
   assets,
+  groups,
   set,
   setInherit,
   disabled,
@@ -883,12 +878,16 @@ function LookTab({
   resolvedPalette: NonNullable<VisualStyle["palette"]>;
   resolvedFonts: NonNullable<VisualStyle["typography"]>;
   assets: KitAssetView[];
+  groups: SwatchGroup[];
   set: (key: keyof VisualStyle, value: unknown) => void;
   setInherit: (key: "colors" | "fonts" | "logo", on: boolean) => void;
   disabled: boolean;
 }) {
   const palette = v.palette ?? {};
   const t = v.typography ?? {};
+  const textOn = palette.text ?? resolvedPalette.text;
+  const bgOn = palette.background ?? resolvedPalette.background;
+  const hardToRead = !!textOn && !!bgOn && contrastRatio(textOn, bgOn) < 3;
   const uploadedFonts = assets
     .filter((a) => a.kind === "font_file")
     .map((a) => ({ id: a.id, family: a.label ?? "Custom font" }));
@@ -910,7 +909,7 @@ function LookTab({
       <Tile className="space-y-4">
         <Field
           label="Colors"
-          hint={inheritColors ? "Empty ones use your Brand DNA colors" : "Only these colors"}
+          hint={hardToRead ? "Text is hard to read on this background" : undefined}
           aside={
             <LinkedToggle
               on={inheritColors}
@@ -919,31 +918,19 @@ function LookTab({
             />
           }
         >
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {ROLES.map(([role, label]) => (
-              <ColorField
-                key={role}
-                label={
-                  palette[role] ? label : resolvedPalette[role] ? `${label} (Brand DNA)` : label
-                }
-                value={palette[role] ?? resolvedPalette[role]}
-                disabled={disabled}
-                onChange={(hex) => set("palette", { ...palette, [role]: hex })}
-                onClear={
-                  palette[role]
-                    ? () => set("palette", { ...palette, [role]: undefined })
-                    : undefined
-                }
-              />
-            ))}
-          </div>
+          <PaletteEditor
+            palette={palette}
+            fallback={resolvedPalette}
+            groups={groups}
+            disabled={disabled}
+            onChange={(next) => set("palette", next)}
+          />
         </Field>
       </Tile>
 
       <Tile className="space-y-5">
         <Field
           label="Fonts"
-          hint="Used on images, carousels and video captions"
           aside={
             <LinkedToggle
               on={inheritFonts}
@@ -1022,35 +1009,8 @@ function LookTab({
             ]}
           />
         </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {(
-            [
-              ["mood", "Mood", "Warm, calm, optimistic"],
-              ["lighting", "Light", "Soft daylight from the side"],
-              ["grading", "Color feel", "Muted, slightly warm film look"],
-              ["texture", "Texture", "Clean, a little paper grain"],
-            ] as const
-          ).map(([key, label, ph]) => (
-            <Field key={key} label={label}>
-              <input
-                value={(v[key] as string | undefined) ?? ""}
-                disabled={disabled}
-                onChange={(e) => set(key, e.target.value.slice(0, 160))}
-                placeholder={ph}
-                className="ds-well h-10 w-full px-4 text-[13.5px] outline-none placeholder:text-muted-foreground/70"
-              />
-            </Field>
-          ))}
-        </div>
-        <Field label="Layout">
-          <textarea
-            value={v.composition ?? ""}
-            disabled={disabled}
-            onChange={(e) => set("composition", e.target.value.slice(0, 300))}
-            placeholder="Subject off-center on the left, lots of empty space, headline in a band at the bottom"
-            rows={2}
-            className="ds-well w-full resize-none px-4 py-3 text-[13.5px] outline-none placeholder:text-muted-foreground/70"
-          />
+        <Field label="Mood">
+          <MoodChips value={v.mood} onChange={(m) => set("mood", m)} disabled={disabled} />
         </Field>
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Text on images">
@@ -1094,24 +1054,63 @@ function LookTab({
             />
           </Field>
         )}
-        <Field label="Shapes and details">
-          <ChipsInput
-            values={v.elements ?? []}
-            onChange={(x) => set("elements", x)}
-            placeholder="Rounded cards, thin outline icons"
-            max={8}
-            disabled={disabled}
-          />
-        </Field>
-        <Field label="Never do">
-          <ChipsInput
-            values={v.avoid ?? []}
-            onChange={(x) => set("avoid", x)}
-            placeholder="Stock photos, neon"
-            max={12}
-            disabled={disabled}
-          />
-        </Field>
+        <details className="group">
+          <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground">
+            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> More
+            details
+          </summary>
+          <div className="mt-4 space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {(
+                [
+                  ["mood", "Mood in your words", "Warm, calm, optimistic"],
+                  ["lighting", "Light", "Soft daylight from the side"],
+                  ["grading", "Color feel", "Muted, slightly warm film look"],
+                  ["texture", "Texture", "Clean, a little paper grain"],
+                  ["background", "Background", "Solid cream, no gradient"],
+                ] as const
+              ).map(([key, label, ph]) => (
+                <Field key={key} label={label}>
+                  <input
+                    value={(v[key] as string | undefined) ?? ""}
+                    disabled={disabled}
+                    onChange={(e) => set(key, e.target.value.slice(0, 160))}
+                    placeholder={ph}
+                    className="ds-well h-10 w-full px-4 text-[13.5px] outline-none placeholder:text-muted-foreground/70"
+                  />
+                </Field>
+              ))}
+            </div>
+            <Field label="Layout">
+              <textarea
+                value={v.composition ?? ""}
+                disabled={disabled}
+                onChange={(e) => set("composition", e.target.value.slice(0, 300))}
+                placeholder="Picture on the left, headline in a band at the bottom"
+                rows={2}
+                className="ds-well w-full resize-none px-4 py-3 text-[13.5px] outline-none placeholder:text-muted-foreground/70"
+              />
+            </Field>
+            <Field label="Shapes and details">
+              <ChipsInput
+                values={v.elements ?? []}
+                onChange={(x) => set("elements", x)}
+                placeholder="Rounded cards, thin outline icons"
+                max={8}
+                disabled={disabled}
+              />
+            </Field>
+            <Field label="Never do">
+              <ChipsInput
+                values={v.avoid ?? []}
+                onChange={(x) => set("avoid", x)}
+                placeholder="Stock photos, neon"
+                max={12}
+                disabled={disabled}
+              />
+            </Field>
+          </div>
+        </details>
       </Tile>
 
       <Tile className="space-y-4">
@@ -1164,11 +1163,6 @@ function LookTab({
               />
             </div>
           )}
-          {!logos.length && (
-            <p className="text-[12px] text-muted-foreground">
-              Upload logos under Logos to pick one here.
-            </p>
-          )}
         </Field>
       </Tile>
     </div>
@@ -1180,10 +1174,12 @@ function LookTab({
 function VideoTab({
   vid,
   set,
+  groups,
   disabled,
 }: {
   vid: VideoStyle;
   set: (key: keyof VideoStyle, value: unknown) => void;
+  groups: SwatchGroup[];
   disabled: boolean;
 }) {
   const cap = vid.captions ?? {};
@@ -1247,6 +1243,7 @@ function VideoTab({
                 <ColorField
                   label="Text"
                   value={cap.color}
+                  groups={groups}
                   disabled={disabled}
                   onChange={(h) => set("captions", { ...cap, color: h })}
                   onClear={() => set("captions", { ...cap, color: undefined })}
@@ -1254,6 +1251,7 @@ function VideoTab({
                 <ColorField
                   label="Highlight"
                   value={cap.highlight}
+                  groups={groups}
                   disabled={disabled}
                   onChange={(h) => set("captions", { ...cap, highlight: h })}
                   onClear={() => set("captions", { ...cap, highlight: undefined })}
@@ -1298,6 +1296,7 @@ function ExamplesTab({
   const assetActions = useKitAssetActions(workspaceId);
   const suggest = useSuggestStyle(workspaceId);
   const [picking, setPicking] = React.useState(false);
+  const [waiting, setWaiting] = React.useState(false);
   const refs = spec.references ?? [];
   const byId = new Map(assets.map((a) => [a.id, a]));
   const attached = refs
@@ -1337,78 +1336,77 @@ function ExamplesTab({
       );
   };
 
-  const relearn = () =>
+  const apply = () =>
     suggest.mutate(learnIds, {
-      onSuccess: (s) => {
-        if (s.pending) {
-          toastLater("Still reading some examples. Try again in a moment.");
-          return;
-        }
-        onSpec(applySuggestion(spec, s.spec));
-      },
+      onSuccess: (s) => onSpec(applySuggestion(spec, s.spec)),
     });
+  const reading = [...attached.map((x) => x.asset), ...writing].some(
+    (a) => (a.analysisStatus === "pending" || a.analysisStatus === "running") && !a.stale,
+  );
+  // Examples read by the older, thinner reader are read again first.
+  const outdated = attached
+    .map((x) => x.asset)
+    .filter((a) => a.analysisStatus === "done" && (a.analysis?.v ?? 1) < ANALYSIS_VERSION);
+  const relearn = () => {
+    if (!outdated.length && !reading) return apply();
+    setWaiting(true);
+    if (outdated.length)
+      assetActions.reanalyze.mutate(
+        { assetIds: outdated.map((a) => a.id), refresh: true },
+        { onError: () => setWaiting(false) },
+      );
+  };
+  React.useEffect(() => {
+    if (!waiting || reading || outdated.length || assetActions.reanalyze.isPending) return;
+    setWaiting(false);
+    apply();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, reading, outdated.length, assetActions.reanalyze.isPending]);
+  const busy = waiting || suggest.isPending;
 
   return (
     <div className="space-y-4">
       <Tile>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="text-[13.5px] font-medium">Example posts and videos</div>
-            <div className="text-[12px] text-muted-foreground">
-              Sent with every picture this style makes. "Exact" makes new images look like the next
-              post in the series.
-            </div>
-          </div>
+          <div className="text-[13.5px] font-medium">Example posts and videos</div>
           {!disabled && learnIds.length > 0 && (
             <button
               type="button"
               className={cn(dsGhostBtn, "h-8 px-3.5 text-[12.5px]")}
               onClick={relearn}
-              disabled={suggest.isPending}
+              disabled={busy}
             >
-              {suggest.isPending ? (
+              {busy ? (
                 <Spinner className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <RefreshCw className="h-3.5 w-3.5" />
               )}
-              Learn again
+              {busy ? "Reading" : "Update style from these"}
             </button>
           )}
         </div>
         {attached.length > 0 && (
+          <div className="mb-4">
+            <Field label="Copy my examples">
+              <MatchControl references={refs} onChange={setRefs} disabled={disabled} />
+            </Field>
+          </div>
+        )}
+        {attached.length > 0 && (
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {attached.map(({ ref, asset }) => (
+            {attached.map(({ asset }) => (
               <div key={asset.id} className="group relative">
                 <ExampleThumb asset={asset} />
-                <div className="mt-2 flex items-center justify-between gap-1">
-                  <Segmented
-                    size="sm"
-                    value={ref.strength}
-                    disabled={disabled}
-                    onChange={(s) =>
-                      setRefs(
-                        refs.map((r) =>
-                          r.assetId === asset.id ? { ...r, strength: s ?? "close" } : r,
-                        ),
-                      )
-                    }
-                    options={[
-                      { value: "loose", label: "Loose" },
-                      { value: "close", label: "Close" },
-                      { value: "exact", label: "Exact" },
-                    ]}
-                  />
-                  {!disabled && (
-                    <button
-                      type="button"
-                      className={dsIconBtn}
-                      aria-label="Detach example"
-                      onClick={() => setRefs(refs.filter((r) => r.assetId !== asset.id))}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
+                {!disabled && (
+                  <button
+                    type="button"
+                    aria-label="Remove example"
+                    onClick={() => setRefs(refs.filter((r) => r.assetId !== asset.id))}
+                    className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/55 text-white opacity-0 transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover:opacity-100"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -1421,8 +1419,7 @@ function ExamplesTab({
               onFiles={onUpload}
               busy={upload.isPending}
               icon={ImagePlus}
-              title="Upload examples"
-              hint="Posts, ads or short videos you want to look like"
+              title="Add examples"
             />
             <button
               type="button"
@@ -1431,12 +1428,7 @@ function ExamplesTab({
               className="ds-well flex min-h-[120px] flex-col items-center justify-center gap-2 p-4 text-center transition-colors hover:bg-[var(--ds-well-bg-hover)] disabled:opacity-50"
             >
               <Plus className="h-5 w-5 text-primary" />
-              <span className="text-[13.5px] font-medium">Pick from your kit</span>
-              <span className="text-[12px] text-muted-foreground">
-                {library.length
-                  ? `${library.length} examples not used here`
-                  : "Nothing else in your kit yet"}
-              </span>
+              <span className="text-[13.5px] font-medium">From your kit</span>
             </button>
           </div>
         )}
@@ -1468,7 +1460,7 @@ function ExamplesTab({
       </Tile>
 
       <Tile>
-        <div className="mb-3 text-[13.5px] font-medium">Writing samples for this style</div>
+        <div className="mb-3 text-[13.5px] font-medium">Writing samples</div>
         {writing.length ? (
           <ul className="space-y-2">
             {writing.map((w) => (
@@ -1498,17 +1490,11 @@ function ExamplesTab({
             ))}
           </ul>
         ) : (
-          <p className="text-[12.5px] text-muted-foreground">
-            Add samples under Writing, or when you create a style.
-          </p>
+          <p className="text-[12.5px] text-muted-foreground">None yet.</p>
         )}
       </Tile>
     </div>
   );
-}
-
-function toastLater(msg: string) {
-  void import("sonner").then(({ toast }) => toast(msg));
 }
 
 export function AnalysisDot({ asset }: { asset: KitAssetView }) {
@@ -1586,7 +1572,6 @@ export function ExampleThumb({ asset, className }: { asset: KitAssetView; classN
 
 function UseTab({
   draft,
-  style,
   disabled,
   onChange,
   onArchive,
@@ -1594,7 +1579,6 @@ function UseTab({
   onToDna,
 }: {
   draft: Draft;
-  style: BrandStyleView;
   disabled: boolean;
   onChange: (patch: Partial<Draft>) => void;
   onArchive: () => void;
@@ -1609,14 +1593,7 @@ function UseTab({
   return (
     <div className="space-y-4">
       <Tile className="space-y-4">
-        <Field
-          label="Use this style for"
-          hint={
-            style.isDefault
-              ? "As the default, it's used for these unless you pick another style."
-              : "When you pick it, it's used for anything. As a default, only for these."
-          }
-        >
+        <Field label="Use this style for">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -1671,7 +1648,7 @@ function UseTab({
             className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
             onClick={onToDna}
           >
-            <Brain className="h-4 w-4" /> Copy colors and fonts to Brand DNA
+            <Brain className="h-4 w-4" /> Copy to Brand DNA
           </button>
           <button
             type="button"
@@ -1692,11 +1669,6 @@ function UseTab({
           </button>
         </Tile>
       )}
-      <GroupLabel>Where it's used</GroupLabel>
-      <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-        Studio posts, carousels, articles, scripts, ads, images and videos, UGC videos, chat drafts
-        and calendar images. Brand DNA still supplies the facts.
-      </p>
     </div>
   );
 }

@@ -8,7 +8,6 @@ import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import { PlanLock } from "@/components/app/billing/billing-ui";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import {
   ArrowLeft,
@@ -22,7 +21,6 @@ import {
   type LucideIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
-import { duration, ease } from "@/lib/motion";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { rememberStudioType } from "@/hooks/use-studio";
 import { chooseType, openComposer } from "@/lib/studio/session-store";
@@ -69,7 +67,7 @@ function optionsFor(group: StudioGroup): Option[] {
 }
 
 const CARD =
-  "group relative isolate overflow-hidden rounded-2xl border border-border/80 bg-surface-3 text-left shadow-1 transition-[border-color,box-shadow,translate] duration-[--motion-duration-base] ease-[--motion-ease-emphasized] hover:-translate-y-0.5 hover:border-[hsl(var(--tone)/0.45)] hover:shadow-[0_18px_40px_-20px_hsl(var(--tone)/0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--tone))]";
+  "group relative isolate cursor-pointer overflow-hidden rounded-2xl border border-border/80 bg-surface-3 text-left shadow-1 transition-[border-color,box-shadow,translate] duration-200 hover:-translate-y-0.5 hover:border-[hsl(var(--tone)/0.45)] hover:shadow-[0_18px_40px_-20px_hsl(var(--tone)/0.55)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--tone))]";
 
 /** A soft wash of the card's colour that fades in on hover. */
 const GLOW = (
@@ -80,15 +78,11 @@ const GLOW = (
 );
 
 export function CreateLauncher() {
-  const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [groupId, setGroupId] = useState<StudioGroup | null>(null);
-  /** 1 = moving into a category, -1 = back out; drives the slide direction. */
-  const [direction, setDirection] = useState<1 | -1>(1);
 
   useEffect(() => {
     const onOpen = () => {
-      setDirection(1);
       setGroupId(null);
       setOpen(true);
     };
@@ -97,11 +91,9 @@ export function CreateLauncher() {
   }, []);
 
   const enter = (id: StudioGroup) => {
-    setDirection(1);
     setGroupId(id);
   };
   const back = () => {
-    setDirection(-1);
     setGroupId(null);
   };
 
@@ -133,17 +125,6 @@ export function CreateLauncher() {
   };
 
   const group = STUDIO_GROUPS.find((g) => g.id === groupId) ?? null;
-  const slide = reduce ? 0 : 28;
-  const panel = {
-    initial: (d: number) => ({ opacity: 0, x: d * slide }),
-    animate: { opacity: 1, x: 0 },
-    exit: (d: number) => ({ opacity: 0, x: -d * slide, transition: { duration: duration.fast } }),
-  };
-  const item = (i: number) => ({
-    initial: { opacity: 0, y: reduce ? 0 : 10 },
-    animate: { opacity: 1, y: 0 },
-    transition: { delay: 0.04 + i * 0.045, duration: duration.medium, ease: ease.emphasized },
-  });
 
   return (
     <AppModalShell
@@ -169,111 +150,89 @@ export function CreateLauncher() {
       }
       bodyClassName="overflow-x-hidden p-4 sm:p-5"
     >
-      <AnimatePresence mode="wait" initial={false} custom={direction}>
-        {!group ? (
-          <motion.div
-            key="categories"
-            custom={direction}
-            variants={panel}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={{ duration: duration.medium, ease: ease.emphasized }}
-            className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2"
-          >
-            {STUDIO_GROUPS.map((g, i) => {
-              const Icon = GROUP_ICON[g.id];
-              const options = optionsFor(g.id);
-              const summary =
-                options.length === 1 ? options[0].tagline : options.map((o) => o.label).join(" · ");
-              return (
-                <motion.button
-                  key={g.id}
-                  type="button"
-                  {...item(i)}
-                  whileTap={reduce ? undefined : { scale: 0.98 }}
-                  onClick={() => enter(g.id)}
-                  className={cn(
-                    `studio-tone-${GROUP_TONE_TYPE[g.id]}`,
-                    CARD,
-                    "flex min-w-0 flex-row items-center gap-3 p-3 min-[360px]:flex-col min-[360px]:items-stretch min-[360px]:gap-0 min-[360px]:p-4",
-                  )}
-                >
-                  {GLOW}
-                  <span className="flex items-start justify-between">
-                    <span className="studio-glyph grid size-12 place-items-center rounded-2xl transition-transform duration-[--motion-duration-slow] ease-[--motion-ease-spring] group-hover:-rotate-6 group-hover:scale-110">
-                      <Icon className="size-[22px]" />
-                    </span>
-                    <ArrowRight className="hidden size-4 -translate-x-1 text-muted-foreground opacity-0 transition-[opacity,translate] duration-[--motion-duration-base] group-hover:translate-x-0 group-hover:opacity-100 min-[360px]:block" />
+      {!group ? (
+        <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+          {STUDIO_GROUPS.map((g) => {
+            const Icon = GROUP_ICON[g.id];
+            const options = optionsFor(g.id);
+            const summary =
+              options.length === 1 ? options[0].tagline : options.map((o) => o.label).join(" · ");
+            return (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => enter(g.id)}
+                className={cn(
+                  `studio-tone-${GROUP_TONE_TYPE[g.id]}`,
+                  CARD,
+                  "flex min-w-0 flex-row items-center gap-3 p-3 min-[360px]:min-h-36 min-[360px]:flex-col min-[360px]:items-stretch min-[360px]:gap-0 min-[360px]:p-4",
+                )}
+              >
+                {GLOW}
+                <span className="flex items-start justify-between">
+                  <span className="studio-glyph grid size-12 place-items-center rounded-2xl transition-transform duration-[--motion-duration-slow] ease-[--motion-ease-spring] group-hover:-rotate-6 group-hover:scale-110">
+                    <Icon className="size-[22px]" />
                   </span>
-                  <span className="min-w-0 min-[360px]:mt-5">
-                    <span className="block text-[15px] font-semibold tracking-tight text-foreground">
-                      {g.label}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {summary}
-                    </span>
+                  <ArrowRight className="hidden size-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 min-[360px]:block" />
+                </span>
+                <span className="min-w-0 min-[360px]:mt-5">
+                  <span className="block text-[15px] font-semibold tracking-tight text-foreground">
+                    {g.label}
                   </span>
-                </motion.button>
-              );
-            })}
-          </motion.div>
-        ) : (
-          <motion.ul
-            key={group.id}
-            custom={direction}
-            variants={panel}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={{ duration: duration.medium, ease: ease.emphasized }}
-            className="grid gap-2.5"
-          >
-            {optionsFor(group.id).map((o, i) => (
-              <motion.li key={o.kind === "ugc" ? "ugc" : o.type} {...item(i)}>
-                <button
-                  type="button"
-                  onClick={() => pick(o)}
-                  className={cn(
-                    o.kind === "ugc" ? "studio-tone-ugc" : `studio-tone-${o.type}`,
-                    CARD,
-                    "flex w-full items-center gap-3.5 p-3.5",
-                  )}
-                >
-                  {GLOW}
-                  {o.kind === "ugc" ? (
-                    <span className="studio-glyph grid size-11 shrink-0 place-items-center rounded-xl">
-                      <UserCircle2 className="size-5" />
-                    </span>
-                  ) : (
-                    <TypeGlyph type={o.type} className="size-11 rounded-xl [&_svg]:size-5" />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-foreground">
-                      {o.label}
-                      {o.kind === "ugc" ? (
-                        <span className="rounded-full bg-[hsl(var(--tone)/0.14)] px-1.5 py-px text-[10px] font-semibold text-[var(--tone-ink)] ring-1 ring-[hsl(var(--tone)/0.3)]">
-                          {o.badge}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {o.tagline}
-                    </span>
+                  <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+                    {summary}
                   </span>
-                  {lockFor(o) ? (
-                    <PlanLock plan={lockFor(o)!} />
-                  ) : (
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-muted-foreground transition-colors duration-[--motion-duration-base] group-hover:bg-[hsl(var(--tone))] group-hover:text-[hsl(var(--tone-foreground))] group-focus-visible:bg-[hsl(var(--tone))] group-focus-visible:text-[hsl(var(--tone-foreground))]">
-                      <ArrowRight className="size-4 transition-transform duration-[--motion-duration-base] group-hover:translate-x-0.5" />
-                    </span>
-                  )}
-                </button>
-              </motion.li>
-            ))}
-          </motion.ul>
-        )}
-      </AnimatePresence>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <ul className="grid gap-2.5">
+          {optionsFor(group.id).map((o) => (
+            <li key={o.kind === "ugc" ? "ugc" : o.type}>
+              <button
+                type="button"
+                onClick={() => pick(o)}
+                className={cn(
+                  o.kind === "ugc" ? "studio-tone-ugc" : `studio-tone-${o.type}`,
+                  CARD,
+                  "flex w-full items-center gap-3.5 p-3.5",
+                )}
+              >
+                {GLOW}
+                {o.kind === "ugc" ? (
+                  <span className="studio-glyph grid size-11 shrink-0 place-items-center rounded-xl">
+                    <UserCircle2 className="size-5" />
+                  </span>
+                ) : (
+                  <TypeGlyph type={o.type} className="size-11 rounded-xl [&_svg]:size-5" />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-foreground">
+                    {o.label}
+                    {o.kind === "ugc" ? (
+                      <span className="rounded-full bg-[hsl(var(--tone)/0.14)] px-1.5 py-px text-[10px] font-semibold text-[var(--tone-ink)] ring-1 ring-[hsl(var(--tone)/0.3)]">
+                        {o.badge}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+                    {o.tagline}
+                  </span>
+                </span>
+                {lockFor(o) ? (
+                  <PlanLock plan={lockFor(o)!} />
+                ) : (
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-muted-foreground transition-colors duration-[--motion-duration-base] group-hover:bg-[hsl(var(--tone))] group-hover:text-[hsl(var(--tone-foreground))] group-focus-visible:bg-[hsl(var(--tone))] group-focus-visible:text-[hsl(var(--tone-foreground))]">
+                    <ArrowRight className="size-4 transition-transform duration-[--motion-duration-base] group-hover:translate-x-0.5" />
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </AppModalShell>
   );
 }

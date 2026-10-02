@@ -427,9 +427,79 @@ export type ImageStyleInput = {
   maxWords?: number;
   logoCorner?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
   useLogo?: boolean;
+  /** The style's own layout and mood: they replace the seeded/derived ones. */
+  composition?: string;
+  mood?: string;
   /** Reference images attached to the request, and how closely to follow them. */
   references?: { count: number; strength: "close" | "exact" };
 };
+
+const STYLE_NEVER =
+  "• Absolutely NOT: off-palette colors, low-resolution textures, decorative clutter, or any look the brand style above does not use.";
+
+function textRule(maxWords: number): string {
+  return maxWords === 0
+    ? "• NO text on the image at all. No letters, no words, no numbers."
+    : `• If any text appears, it must be a short real phrase pulled directly from the post hook (max ${maxWords} words). No lorem ipsum, no gibberish, no repeated letters, no misspellings.`;
+}
+
+/**
+ * The style, stated first and as the top priority. A style that sits at the
+ * end of a long prompt loses to whatever came before it, so the look leads and
+ * the brief below it only decides what the image says and shows.
+ */
+function styleLead(style: ImageStyleInput): string[] {
+  const refs = style.references;
+  return [
+    `BRAND STYLE${style.name ? ` "${style.name}"` : ""} — THE LOOK, highest priority. This is the brand's own design. Every colour, font, layout and finish choice comes from here; the brief further down only decides what the image says and shows.`,
+    ...style.block
+      .split("\n")
+      .slice(1)
+      .map((line) => `• ${line}`),
+    ...(refs?.count
+      ? [
+          refs.strength === "exact"
+            ? `REFERENCE IMAGES (${refs.count} attached): these are the brand's own posts. Make this image look like the next post in that exact series: same layout grid, type treatment, palette, background, lighting, graphic elements and finish. Change only the subject and message for this post. Never copy their text.`
+            : `REFERENCE IMAGES (${refs.count} attached): the brand's own posts. A viewer should believe this image came from the same designer: match their layout, palette, background, lighting, type treatment and graphic elements. Create a NEW image for this post; never copy their subject or text.`,
+        ]
+      : []),
+  ];
+}
+
+/** The layout line a style supplies, if any (its own words, else its examples). */
+function styleComposition(style: ImageStyleInput | null | undefined): string | null {
+  if (style?.composition) return style.composition;
+  if (style?.references?.count) return "follow the layout of the attached reference images";
+  return null;
+}
+
+/**
+ * Apply a Style to an image prompt that was built without one (the browser
+ * builds post-image prompts before the server knows the style). Drops the
+ * generic palette, font, layout and mood lines the style replaces, then leads
+ * with the style. A prompt that didn't come from the builder just gets the lead.
+ */
+export function restyleImagePrompt(prompt: string, style: ImageStyleInput): string {
+  const layout = styleComposition(style);
+  const lines = prompt
+    .split("\n")
+    .filter((line) => {
+      if (style.colors.length && /^• (EXACT brand palette|Palette \(seeded)/.test(line))
+        return false;
+      if (style.fonts.length && /^• (EXACT brand fonts|Typography \(seeded)/.test(line))
+        return false;
+      if (layout && /^• Composition:/.test(line)) return false;
+      if (style.mood && /^• Visual mood/.test(line)) return false;
+      return true;
+    })
+    .map((line) => {
+      if (/^• Absolutely NOT:/.test(line)) return STYLE_NEVER;
+      if (style.maxWords != null && /^• If any text appears/.test(line))
+        return textRule(style.maxWords);
+      return line;
+    });
+  return [...styleLead(style), "", ...lines].join("\n");
+}
 
 export function buildImagePromptDetailed(args: {
   postBody: string;
@@ -602,6 +672,7 @@ export function buildImagePromptDetailed(args: {
   const prompt = [
     `Design ONE premium, on-brand social image for ${brandName}${industry ? ` (${industry})` : ""}.`,
     "",
+    ...(style && (style.block || style.references?.count) ? [...styleLead(style), ""] : []),
     brandDnaHasAny
       ? "BRAND DNA — the image must feel unmistakably from this brand. Treat these as authoritative source-of-truth:"
       : "BRAND DNA — no explicit brand profile yet, so infer a tasteful, timeless identity from the post message below. Keep it neutral, editorial, and platform-agnostic:",
@@ -625,47 +696,33 @@ export function buildImagePromptDetailed(args: {
     `• Draft copy: ${snippet}`,
     "",
     ...strategyPromptLines(creativeStrategy),
+    style && (style.block || style.references?.count)
+      ? "• Keep the idea, but render it in the brand style above: its medium, layout and colours win over any format named here."
+      : "",
     "",
     `VISUAL SYSTEM (style anchor: ${styleSeed}) — LOCK these across every size and every regeneration of this post:`,
     brandColors.length > 0
-      ? `• EXACT brand palette (use ONLY these hex values, do NOT invent new colors): ${brandColors.join(", ")}. Canvas defaults — bg ${vis.palette.bg}, surface ${vis.palette.surface}, text ${vis.palette.fg}, accent ${vis.palette.accent}.`
+      ? `• EXACT brand palette (use ONLY these hex values, do NOT invent new colors): ${brandColors.join(", ")}.${style?.colors.length ? " Each colour's job is set in the brand style above." : ` Canvas defaults — bg ${vis.palette.bg}, surface ${vis.palette.surface}, text ${vis.palette.fg}, accent ${vis.palette.accent}.`}`
       : `• Palette (seeded fallback — no brand colors provided): ${vis.palette.promptDescription} Use bg ${vis.palette.bg}, surface ${vis.palette.surface}, text ${vis.palette.fg}, accent ${vis.palette.accent}.`,
     brandFonts.length > 0
       ? `• EXACT brand fonts (or the closest visual equivalent): ${brandFonts.map((f) => `"${f}"`).join(", ")}. Match weight, tracking, and rhythm.`
       : `• Typography (seeded fallback — no brand fonts provided): ${vis.typography.promptDescription}`,
-    `• Composition: ${vis.composition}`,
-    `• Visual mood (derived from brand voice): ${moodLine}.`,
+    `• Composition: ${styleComposition(style) ?? vis.composition}`,
+    style?.mood
+      ? `• Visual mood: ${style.mood}.`
+      : `• Visual mood (derived from brand voice): ${moodLine}.`,
     "• Feel: match the brand's stated style and the audience's context. Make the message immediately understandable at feed size.",
     "• Rendering quality: clean edges, readable contrast, intentional lighting and composition. No fuzzy artifacts, distorted product details, or decorative clutter.",
     hasLogo
       ? `• LOGO OVERLAY: the real brand logo will be composited onto this image after generation in the ${corner} corner at ~12% width. LEAVE THAT CORNER CLEAN — no busy pattern, no text, no faces, no high-contrast detail in that ~18% square region. Do NOT draw any logo, wordmark, monogram, or letter mark yourself.`
       : `• No brand logo provided — do NOT invent a logo, wordmark, or monogram. Compose without any brand mark; keep the corner clean.`,
     `• Consistency rule: any other image tagged with style anchor "${styleSeed}" must look like it came from the same art-directed set — same palette, same type system, same compositional grammar. Only reframe for the target aspect ratio.`,
-    "• Absolutely NOT: stock-photo, clip-art, AI-generic collage, cliché 3D blobs, generic gradient mesh, purple-pink SaaS gradient, off-palette colors, low-resolution textures.",
-    ...(style?.block
-      ? [
-          "",
-          `BRAND STYLE${style.name ? ` "${style.name}"` : ""} — the brand's own chosen look. Where it differs from the defaults above, follow the style:`,
-          ...style.block
-            .split("\n")
-            .slice(1)
-            .map((line) => `• ${line}`),
-        ]
-      : []),
-    ...(style?.references?.count
-      ? [
-          "",
-          style.references.strength === "exact"
-            ? `REFERENCE IMAGES (${style.references.count} attached): these are the brand's own posts. Make this image look like the next post in that exact series: same layout grid, type treatment, palette, lighting, graphic elements and finish. Change only the subject and message for this post. Never copy their text.`
-            : `REFERENCE IMAGES (${style.references.count} attached): examples of the brand's style. Match their look closely: palette, lighting, composition, typography treatment and graphic elements. Create a NEW image for this post; never copy their subject or text.`,
-        ]
-      : []),
-
+    style?.block
+      ? STYLE_NEVER
+      : "• Absolutely NOT: stock-photo, clip-art, AI-generic collage, cliché 3D blobs, generic gradient mesh, purple-pink SaaS gradient, off-palette colors, low-resolution textures.",
     "",
     "TEXT ON IMAGE:",
-    maxWords === 0
-      ? "• NO text on the image at all. No letters, no words, no numbers."
-      : `• If any text appears, it must be a short real phrase pulled directly from the post hook (max ${maxWords} words). No lorem ipsum, no gibberish, no repeated letters, no misspellings.`,
+    textRule(maxWords),
     "• Type must sit in the brand palette. Kerning tight, hierarchy clear. Legible at thumbnail size.",
     "",
     "GUARDRAILS:",

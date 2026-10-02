@@ -10,28 +10,56 @@ export type RobotsVerdict = "allow" | "block" | "unknown";
 
 type RobotsGroup = { agents: string[]; allow: string[]; disallow: string[]; crawlDelay?: number };
 
-export const AI_BOTS = [
-  { id: "GPTBot", who: "OpenAI training crawler (ChatGPT)" },
-  { id: "ChatGPT-User", who: "ChatGPT browsing user-agent" },
-  { id: "OAI-SearchBot", who: "ChatGPT search index" },
-  { id: "ClaudeBot", who: "Anthropic Claude crawler" },
-  { id: "Claude-Web", who: "Claude browsing user-agent" },
-  { id: "PerplexityBot", who: "Perplexity index" },
-  { id: "Google-Extended", who: "Gemini training and grounding" },
-  { id: "Applebot-Extended", who: "Apple Intelligence" },
-  { id: "CCBot", who: "Common Crawl (feeds most LLMs)" },
-  { id: "Bytespider", who: "ByteDance / Doubao" },
-] as const;
+/**
+ * What a crawler is for, as its vendor documents it:
+ *   search    builds the index answers are drawn from — blocking it removes you from answers
+ *   user      fetches a page when a person asks about it — blocking it breaks live lookups
+ *   training  collects model training data — blocking it is a policy choice and
+ *             does not decide whether you appear in answers
+ */
+export type AiBotTier = "search" | "user" | "training";
 
-// Which answer engine each crawler feeds. A product is only fully readable when
-// none of its crawlers are blocked (ChatGPT search can't cite a GPTBot-only allow).
+export type AiBot = { id: string; who: string; tier: AiBotTier };
+
+// Order is stable: rule ids (`ai.bot.<id>`) derive from these ids. Add, don't rename.
+export const AI_BOTS: readonly AiBot[] = [
+  { id: "GPTBot", who: "OpenAI training crawler", tier: "training" },
+  { id: "ChatGPT-User", who: "ChatGPT fetching a page for a person", tier: "user" },
+  { id: "OAI-SearchBot", who: "ChatGPT search index", tier: "search" },
+  { id: "ClaudeBot", who: "Anthropic training crawler", tier: "training" },
+  { id: "Claude-Web", who: "Claude's older browsing agent", tier: "training" },
+  { id: "PerplexityBot", who: "Perplexity search index", tier: "search" },
+  { id: "Google-Extended", who: "Gemini training control", tier: "training" },
+  { id: "Applebot-Extended", who: "Apple Intelligence training control", tier: "training" },
+  { id: "CCBot", who: "Common Crawl", tier: "training" },
+  { id: "Bytespider", who: "ByteDance / Doubao", tier: "training" },
+  { id: "Claude-SearchBot", who: "Claude search index", tier: "search" },
+  { id: "Claude-User", who: "Claude fetching a page for a person", tier: "user" },
+  { id: "Perplexity-User", who: "Perplexity fetching a page for a person", tier: "user" },
+  { id: "Googlebot", who: "Google Search, AI Overviews and AI Mode", tier: "search" },
+  { id: "Bingbot", who: "Bing and Microsoft Copilot", tier: "search" },
+  { id: "DuckAssistBot", who: "DuckDuckGo AI answers", tier: "user" },
+  { id: "MistralAI-User", who: "Mistral Le Chat fetching a page for a person", tier: "user" },
+  { id: "Meta-ExternalAgent", who: "Meta AI crawler", tier: "training" },
+  { id: "Amazonbot", who: "Amazon crawler (Alexa and AI)", tier: "training" },
+];
+
+export const AI_BOT_BY_ID: ReadonlyMap<string, AiBot> = new Map(
+  AI_BOTS.map((b) => [b.id.toLowerCase(), b]),
+);
+
+/** Crawlers that decide whether a site can appear in AI answers. */
+export const ANSWER_BOTS: readonly AiBot[] = AI_BOTS.filter((b) => b.tier !== "training");
+
+// Which answer engine each crawler feeds. An engine's state is judged on its
+// search and user crawlers only; a blocked training crawler is listed apart.
 export const AI_ENGINES = [
-  { id: "chatgpt", name: "ChatGPT", bots: ["GPTBot", "ChatGPT-User", "OAI-SearchBot"] },
-  { id: "claude", name: "Claude", bots: ["ClaudeBot", "Claude-Web"] },
-  { id: "gemini", name: "Gemini", bots: ["Google-Extended"] },
-  { id: "perplexity", name: "Perplexity", bots: ["PerplexityBot"] },
+  { id: "chatgpt", name: "ChatGPT", bots: ["OAI-SearchBot", "ChatGPT-User", "GPTBot"] },
+  { id: "claude", name: "Claude", bots: ["Claude-SearchBot", "Claude-User", "ClaudeBot"] },
+  { id: "gemini", name: "Google AI", bots: ["Googlebot", "Google-Extended"] },
+  { id: "perplexity", name: "Perplexity", bots: ["PerplexityBot", "Perplexity-User"] },
+  { id: "copilot", name: "Copilot", bots: ["Bingbot"] },
   { id: "apple", name: "Apple Intelligence", bots: ["Applebot-Extended"] },
-  { id: "commoncrawl", name: "Common Crawl", bots: ["CCBot"] },
 ] as const;
 
 /** Split robots.txt into groups: consecutive User-agent lines share one rule set. */
@@ -97,19 +125,55 @@ export type EngineAccessSummary = {
   name: string;
   state: "open" | "partial" | "blocked" | "unknown";
   bots: string[];
+  /** Blocked search / user crawlers — these keep the site out of answers. */
   blocked: string[];
+  /** Blocked training crawlers — a choice, not a problem. */
+  trainingBlocked?: string[];
 };
 
 /** Roll the per-crawler robots.txt verdicts up to one state per AI product. */
 export function summarizeEngines(robots: string): EngineAccessSummary[] {
   return AI_ENGINES.map((e) => {
-    const bots = [...e.bots];
+    const bots: string[] = [...e.bots];
     if (!robots) return { id: e.id, name: e.name, state: "unknown", bots, blocked: [] };
-    const blocked = bots.filter((b) => parseRobotsAllow(robots, b) === "block");
+    const isBlocked = (b: string) => parseRobotsAllow(robots, b) === "block";
+    const answer = bots.filter((b) => AI_BOT_BY_ID.get(b.toLowerCase())?.tier !== "training");
+    const blocked = answer.filter(isBlocked);
+    const trainingBlocked = bots.filter((b) => !answer.includes(b) && isBlocked(b));
+    // An engine with only a training control (Apple) is open unless that is blocked.
+    const judged = answer.length ? answer : bots;
+    const judgedBlocked = answer.length ? blocked : trainingBlocked;
     const state =
-      blocked.length === 0 ? "open" : blocked.length === bots.length ? "blocked" : "partial";
-    return { id: e.id, name: e.name, state, bots, blocked };
+      judgedBlocked.length === 0
+        ? "open"
+        : judgedBlocked.length === judged.length
+          ? "blocked"
+          : "partial";
+    return { id: e.id, name: e.name, state, bots, blocked, trainingBlocked };
   });
+}
+
+/** Paths (with query) from `paths` that robots.txt disallows for `bot`. */
+export function blockedPathsFor(robots: string, bot: string, paths: string[]): string[] {
+  if (!robots) return [];
+  return paths.filter((p) => !isPathAllowed(robots, bot, p));
+}
+
+/**
+ * Cloudflare's Content Signals line (`Content-Signal: search=yes, ai-input=no, ai-train=no`).
+ * A proposal no engine has confirmed honouring — reported, never scored.
+ */
+export function contentSignals(robots: string): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  for (const raw of robots.split(/\r?\n/)) {
+    const m = /^\s*content-signal\s*:\s*(.+)$/i.exec(raw.replace(/#.*/, ""));
+    if (!m) continue;
+    for (const part of m[1].split(",")) {
+      const [k, v] = part.split("=").map((s) => s.trim().toLowerCase());
+      if (k && v && /^[a-z-]+$/.test(k) && /^(yes|no)$/.test(v)) out[k] = v;
+    }
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 function patternToRegex(pattern: string): RegExp {

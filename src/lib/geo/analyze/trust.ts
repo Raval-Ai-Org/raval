@@ -321,6 +321,9 @@ export function analyzeSources(
 // and product pages every price would otherwise read as an unsourced statistic.
 const STATISTICAL_RE =
   /\b\d+(?:\.\d+)?\s?%|\b\d+(?:\.\d+)?x\s+(?:faster|more|better|higher|lower)|\b\d{1,3}(?:,\d{3}){2,}\b|\b\d+(?:\.\d+)?\s+(?:million|billion|percent)\b/i;
+// Mellox: a discount, rate or fee is an offer, not a statistic that needs a source.
+const OFFER_RE =
+  /\b\d+(?:\.\d+)?\s?%\s*(?:off|discount|cashback|cash back|apr|apy|vat|tax|commission|fee|deposit|interest)\b|\b(?:save|saving|discount of)\s+(?:up to\s+)?\d+(?:\.\d+)?\s?%/i;
 const COMPARATIVE_RE =
   /\b(?:outperform(?:s|ed)?|outpaces?|compared (?:to|with)|twice as (?:fast|likely)|significantly (?:higher|lower|better) than)\b/i;
 const SUPERLATIVE_RE =
@@ -338,13 +341,14 @@ export function analyzeClaims(text: string, candidates: SourceCandidate[]): Clai
   for (const sent of sents) {
     if (sent.length < 15 || seen.has(sent)) continue;
     seen.add(sent);
-    const kind = STATISTICAL_RE.test(sent)
-      ? "statistical"
-      : COMPARATIVE_RE.test(sent)
-        ? "comparative"
-        : SUPERLATIVE_RE.test(sent)
-          ? "superlative"
-          : null;
+    const kind =
+      STATISTICAL_RE.test(sent) && !OFFER_RE.test(sent)
+        ? "statistical"
+        : COMPARATIVE_RE.test(sent)
+          ? "comparative"
+          : SUPERLATIVE_RE.test(sent)
+            ? "superlative"
+            : null;
     if (!kind) continue;
 
     const pos = text.indexOf(sent);

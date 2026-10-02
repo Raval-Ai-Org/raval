@@ -11,7 +11,9 @@ import "server-only";
 import { analyzePage } from "@/lib/geo/analyze-page";
 import { needsRendering } from "@/lib/geo/rendering";
 import { crawlDelayFor, isPathAllowed } from "@/lib/geo/robots";
+import { buildPathTo100, summarizeDimensions } from "@/lib/geo/path";
 import { scoreScan } from "@/lib/geo/score";
+import { strategyForRule } from "./fixes/strategies";
 import type { GeoAction, PageAnalysis, SiteArtifacts } from "@/lib/geo/types";
 import type { Renderer } from "./render.server";
 import {
@@ -178,7 +180,12 @@ async function discover(scan: ScanRow, deps: RunnerDeps): Promise<SliceResult | 
   const finalUrl = home.finalUrl ?? scan.url;
   const origin = new URL(finalUrl).origin;
   const host = siteHost(finalUrl);
-  const { site, sitemapUrls } = await discoverSiteArtifacts(deps.fetcher, origin);
+  // A verification scan re-reads a few pages; it doesn't re-test crawler access.
+  const { site, sitemapUrls } = await discoverSiteArtifacts(
+    deps.fetcher,
+    origin,
+    scan.mode === "targeted" ? {} : { home },
+  );
 
   const homeHtml = home.ok && isHtmlResponse(home.contentType, home.body);
   if (!homeHtml && scan.mode === "quick") {
@@ -505,6 +512,11 @@ async function analyze(scan: ScanRow, deps: RunnerDeps) {
   // A targeted scan reads a handful of pages: multi-page rules don't apply.
   const { report, findings, pageScores } = scoreScan(site, rows.map(pageRowToCrawled), {
     mode: scan.mode === "targeted" ? "quick" : scan.mode,
+  });
+  report.dimensions = summarizeDimensions(report);
+  report.pathTo100 = buildPathTo100(report, (ruleId) => {
+    const s = strategyForRule(ruleId);
+    return s.mode === "manual" ? "manual" : s.inputs.length ? "needs_input" : "auto";
   });
   const renderNeeded = rows.filter((r) => r.analysis?.rendering).length;
   report.rendering = {

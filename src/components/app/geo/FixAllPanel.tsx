@@ -592,6 +592,9 @@ export function FixAllPanel({
                   {Math.min(preflight.fixable.length, preflight.maxFindings)} fixes
                 </span>{" "}
                 will be prepared
+                {preflight.engineerCount
+                  ? ` · ${preflight.engineerCount} more Mellox can fix one at a time from Issues`
+                  : ""}
                 {preflight.manualCount ? ` · ${preflight.manualCount} need manual work` : ""}
                 {preflight.inProgressCount
                   ? ` · ${preflight.inProgressCount} already in progress`

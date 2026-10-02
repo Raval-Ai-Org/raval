@@ -209,6 +209,47 @@ function countOccurrences(haystack: string, needle: string): number {
   return n;
 }
 
+const usesCrlf = (text: string) => text.includes("\r\n");
+const toCrlf = (s: string) => s.replace(/\r?\n/g, "\r\n");
+
+/**
+ * Where `find` sits in `text`. Exact first. The model reads files as
+ * LF-separated lines, so a Windows (CRLF) file is tried with its own line
+ * endings next; last, runs of whitespace are allowed to differ (re-indented or
+ * re-wrapped text). Every step still needs exactly one match — an ambiguous
+ * edit is never applied.
+ */
+export function locateEdit(
+  text: string,
+  find: string,
+): { ok: true; start: number; end: number } | { ok: false; matches: number } {
+  const exact = (needle: string) => {
+    const n = countOccurrences(text, needle);
+    if (n === 1) {
+      const start = text.indexOf(needle);
+      return { ok: true as const, start, end: start + needle.length };
+    }
+    return { ok: false as const, matches: n };
+  };
+  const first = exact(find);
+  if (first.ok || first.matches > 1) return first;
+  if (usesCrlf(text)) {
+    const crlf = exact(toCrlf(find));
+    if (crlf.ok || crlf.matches > 1) return crlf;
+  }
+  const tokens = find.trim().split(/\s+/).filter(Boolean);
+  // Too little text to match loosely without risking the wrong place.
+  if (tokens.length < 3 || find.trim().length < 20) return { ok: false, matches: 0 };
+  const loose = new RegExp(
+    tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+"),
+    "g",
+  );
+  const hits = [...text.matchAll(loose)];
+  if (hits.length !== 1) return { ok: false, matches: hits.length };
+  const start = hits[0].index ?? 0;
+  return { ok: true, start, end: start + hits[0][0].length };
+}
+
 /** Apply model edits to the real file contents; any ambiguity rejects the whole proposal. */
 export function applyEdits(
   current: GenerationInput["current"],
@@ -228,20 +269,19 @@ export function applyEdits(
     if (actions.get(e.path) === "create" && e.find === "") {
       contents.set(e.path, e.replace);
     } else {
-      const n = countOccurrences(text, e.find);
-      if (n !== 1) {
+      const hit = locateEdit(text, e.find);
+      if (!hit.ok) {
         return {
           ok: false,
           reason:
-            n === 0
+            hit.matches === 0
               ? `An edit to ${e.path} didn't match the file.`
-              : `An edit to ${e.path} matched ${n} places.`,
+              : `An edit to ${e.path} matched ${hit.matches} places.`,
         };
       }
-      contents.set(
-        e.path,
-        text.replace(e.find, () => e.replace),
-      );
+      // The file keeps its own line endings whatever the model wrote.
+      const replace = usesCrlf(text) ? toCrlf(e.replace) : e.replace;
+      contents.set(e.path, text.slice(0, hit.start) + replace + text.slice(hit.end));
     }
     why.set(e.path, [why.get(e.path), e.why].filter(Boolean).join(" "));
   }

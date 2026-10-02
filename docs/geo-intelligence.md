@@ -58,6 +58,41 @@ scheduled_jobs task_type 'geo-scan' → runDueScheduledJobs → createScan (moni
 - Finding fingerprint = `ruleId|host+path(+query)` — stable across scans; keys
   workflow state (`geo_finding_states`) and scan comparison.
 
+**Score version 2** (`SCORE_VERSION` in `score.ts`, stored as
+`report.scoreVersion`). Scores from different versions are not compared: the
+Overview delta and History mark the change as "New scoring".
+
+- **A well-built site reaches 100** (a test builds one). The overall score is
+  rounded once, from the exact category scores.
+- **Crawlers have tiers** (`AI_BOTS` in `robots.ts`): `search` (OAI-SearchBot,
+  PerplexityBot, Claude-SearchBot, Googlebot, Bingbot), `user` (ChatGPT-User,
+  Claude-User, Perplexity-User, …) and `training` (GPTBot, ClaudeBot,
+  Google-Extended, CCBot, …). Blocking a search or user crawler fails;
+  blocking a training crawler is the owner's choice and is never scored. A
+  partial block (`Disallow: /blog/`) is caught against the scanned pages.
+- **`ai.live_access`**: the homepage is requested with three search-crawler
+  user agents (skipping any robots.txt already blocks). A refusal or challenge
+  page only ever warns — a firewall may turn away a look-alike and still admit
+  the real crawler.
+- **Checks added**: `tech.snippet` (nosnippet / max-snippet / data-nosnippet),
+  canonical targets (off-site, broken or noindex), `schema.valid` (required
+  fields), `schema.matches_page` (markup vs visible text), `tech.sitemap_lastmod`,
+  `tech.sitemap_coverage`, `tech.orphan_pages`, `trust.freshness`,
+  `content.evidence`; llms.txt is validated against the format and weighs less.
+- **Page types**: legal and contact pages aren't asked for JSON-LD, social
+  tags or five internal links. Headings and sections are judged inside the
+  page's content region; discounts aren't statistics; inline framework data
+  doesn't count as HTML weight; response time excludes retry backoff.
+- **Evidence label** per rule (`documented` · `measured` · `emerging`), shown
+  beside each check, so a convention is never presented as a proven signal.
+- **Path to 100** (`path.ts` → `report.pathTo100`): every lost point by who
+  can close it — Mellox alone, Mellox after one answer, or the owner.
+- **Agent extras, never scored** (`report.agent`): markdown content
+  negotiation, Content Signals, `llms-full.txt`.
+- **Verification of comparison rules**: shared titles, shared descriptions
+  and broken links are verified by re-reading the other pages involved
+  (`comparisonUrls` in `verify.ts`); without them the result is inconclusive.
+
 ## Database (migration `20260914120000_add_geo_intelligence.sql`)
 
 | Table | Purpose | Access |
@@ -207,9 +242,11 @@ See [ADR-0013](adr/0013-geo-coding-agent-and-repo-ownership.md).
 - Settings → Connections and the finding's setup step show what would prove it.
 
 **From a finding, "Fix with AI Agent"** starts a run (`geo_agent_runs`):
-1. **Investigate.** Claude Sonnet 5 (`GEO_AGENT_MODEL`) uses read-only tools:
-   list/search/read repository files, the scan's page facts, the rule and
-   framework playbook, and the live page via the SSRF-guarded fetcher.
+1. **Investigate.** The agent (routes `geo.agent.*` in
+   `src/server/ai/task-models.ts`, Opus 5.5 through OpenRouter) uses read-only
+   tools: list/search/read repository files, the scan's page facts, the list
+   of scanned pages, the rule and framework playbook, and the live page via
+   the SSRF-guarded fetcher.
 2. **Plan.** Files with reasons and evidence, risks, scope and validation
    criteria. The server rejects plans that change unread files, blocked paths,
    more than 4 files, or manual-only rules. Missing facts become `needs_input`.
@@ -228,6 +265,19 @@ See [ADR-0013](adr/0013-geo-coding-agent-and-repo-ownership.md).
   restart, cancel (closing Mellox's PR), and retry from investigation or from
   the approved plan.
 
+**Staying valid while the repository moves.**
+- Each file the agent reads is recorded with its Git blob id. If the base
+  branch gains commits before the plan is implemented, the run carries on when
+  every file it read is unchanged (`planStillHolds`); otherwise it is stale.
+- A proposal's files keep the blob id they were edited from. On approval,
+  `commitToNewBranch` accepts a moved base only when those files are
+  byte-identical (and new files still don't exist), and commits on the latest
+  code. The approved content never changes.
+- The implement stage can re-open files the investigation read; a resumed
+  stage gets its read list back from the checkpoint.
+- Edits match exactly first, then with the file's own line endings (CRLF),
+  then with flexible whitespace — always exactly one match (`locateEdit`).
+
 **Limits.**
 - `GEO_AGENT_MAX_COST_USD` per run and `GEO_AGENT_DAILY_RUNS` per workspace.
 - `geo-agent` and `geo-agent-action` rate-limit tiers.
@@ -236,8 +286,9 @@ See [ADR-0013](adr/0013-geo-coding-agent-and-repo-ownership.md).
 **Dimensions** (`src/lib/geo/dimensions.ts`) — crawlability, indexability,
 technical SEO, extractability, answer readiness, entity clarity, structured
 data, authority & trust, AI search readiness, plus overall readiness:
-- They are derived from each scan's rule summaries, with every rule mapped.
-- The legacy overall score is unchanged.
+- They are derived from each scan's rule summaries, with every rule mapped,
+  and stored on the report (`report.dimensions`).
+- The overall score stays the six-category score.
 - Findings carry `fixMode` and `verifyScope`, and can be marked reviewed or
   ignored with a reason.
 
@@ -271,13 +322,15 @@ JavaScript. When rendering is unavailable the report says so.
 - FastAPI routes, SQLAlchemy models, its orchestration layer (in-memory queue,
   worker, scheduler) — replaced by Mellox's leases, pg_cron and `scheduled_jobs`.
 - The module's auto-apply connectors — replaced by approval-gated GitHub pull
-  requests (ADR-0012); WordPress/Webflow/Framer/Shopify aren't implemented.
+  requests (ADR-0012) and approval-gated WordPress / Webflow field changes
+  (`src/server/geo/cms/`); Framer and Shopify aren't implemented.
 - Simulated validation — replaced by real rescans and fingerprint comparison.
 - The controlled-site lab, keyword stuffing of intent/content-gap rules that
   depended on unimplemented taxonomies.
 
 ## Future improvements
 
-Search Console / GA4 connectors; backlink and brand-mention data; CMS connectors
-(WordPress, Webflow, Shopify, Framer) on the same proposal/verification records;
-probe trends over time and competitor sets.
+Search Console / GA4 connectors; backlink and brand-mention data; Shopify and
+Framer connectors on the same proposal/verification records; probe trends over
+time and competitor sets; agent-fixable findings inside the one "Fix all" pull
+request (today they are fixed one at a time); WordPress custom post types.

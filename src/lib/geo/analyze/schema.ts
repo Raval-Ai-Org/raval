@@ -57,6 +57,61 @@ function answerText(q: Node): string {
   return "";
 }
 
+const ARTICLE_TYPES = /^(article|blogposting|newsarticle|techarticle|report)$/i;
+
+/** The nodes a block declares at the top: the root, an array of roots, or `@graph` members. */
+function topLevelNodes(parsed: unknown): Node[] {
+  const roots = asArray(parsed).filter((x): x is Node => !!x && typeof x === "object");
+  return roots.flatMap((r) =>
+    Array.isArray(r["@graph"])
+      ? (r["@graph"] as unknown[]).filter((x): x is Node => !!x && typeof x === "object")
+      : [r],
+  );
+}
+
+const has = (node: Node, key: string) => {
+  const v = node[key];
+  return Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && v !== "";
+};
+
+/**
+ * Properties Google documents as required for the rich result of each type.
+ * Only top-level nodes are checked: a nested `publisher` with just a name is fine.
+ */
+function requiredIssues(node: Node): { type: string; missing: string[] } | null {
+  const types = typesOf(node);
+  const article = types.find((t) => ARTICLE_TYPES.test(t));
+  if (article) {
+    const missing = ["headline", "author", "datePublished"].filter((k) => !has(node, k));
+    const date = str(node.datePublished);
+    if (date && Number.isNaN(Date.parse(date))) missing.push("datePublished (not a valid date)");
+    return { type: article, missing };
+  }
+  if (types.includes("Product")) {
+    const missing = has(node, "name") ? [] : ["name"];
+    if (!["offers", "review", "aggregateRating"].some((k) => has(node, k)))
+      missing.push("offers, review or aggregateRating");
+    return { type: "Product", missing };
+  }
+  if (types.some((t) => /^(faqpage|qapage)$/i.test(t))) {
+    const questions = asArray(node.mainEntity) as Node[];
+    const missing = questions.length ? [] : ["mainEntity"];
+    if (questions.some((q) => !str(q?.name) || !answerText(q ?? {}))) {
+      missing.push("a question without a name or an answer");
+    }
+    return { type: types.find((t) => /^(faqpage|qapage)$/i.test(t))!, missing };
+  }
+  if (types.includes("BreadcrumbList")) {
+    const items = asArray(node.itemListElement) as Node[];
+    const missing = items.length ? [] : ["itemListElement"];
+    if (items.some((i) => !str(i?.name) && !str((i?.item as Node)?.name)))
+      missing.push("a breadcrumb without a name");
+    return { type: "BreadcrumbList", missing };
+  }
+  // Organization has no required properties in Google's documentation, so it isn't checked.
+  return null;
+}
+
 export function summarizeJsonLd(blocks: string[]): SchemaSummary {
   const summary: SchemaSummary = {
     blocks: blocks.length,
@@ -72,7 +127,12 @@ export function summarizeJsonLd(blocks: string[]): SchemaSummary {
     hasBreadcrumbList: false,
     hasWebSite: false,
     hasAddress: false,
+    headline: null,
+    issues: [],
+    checkedTypes: [],
   };
+  const issues = new Set<string>();
+  const checked = new Set<string>();
   const types = new Set<string>();
   const names = new Set<string>();
   const orgs = new Map<string, SchemaOrganization>();
@@ -99,9 +159,17 @@ export function summarizeJsonLd(blocks: string[]): SchemaSummary {
       }
     }
 
+    for (const node of topLevelNodes(parsed)) {
+      const result = requiredIssues(node);
+      if (!result) continue;
+      checked.add(result.type);
+      for (const m of result.missing) issues.add(`${result.type}: ${m}`);
+    }
+
     walk(parsed, (node) => {
       const nodeTypes = typesOf(node);
       nodeTypes.forEach((t) => types.add(t));
+      if (nodeTypes.some((t) => ARTICLE_TYPES.test(t))) summary.headline ??= str(node.headline);
       const name = str(node.name);
       if (name && nodeTypes.length) names.add(name);
 
@@ -162,5 +230,7 @@ export function summarizeJsonLd(blocks: string[]): SchemaSummary {
   summary.names = [...names].slice(0, 50);
   summary.organizations = [...orgs.values()].slice(0, 10);
   summary.authors = [...authors.values()].slice(0, 10);
+  summary.issues = [...issues].slice(0, 20);
+  summary.checkedTypes = [...checked];
   return summary;
 }

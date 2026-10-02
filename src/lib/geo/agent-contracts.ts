@@ -167,6 +167,8 @@ export type AgentFileInspected = {
   reason: string;
   lines: string | null;
   via: "read_file" | "search_code" | "list_tree";
+  /** Git blob id of the version that was read: tells whether the file changed since. */
+  sha?: string;
 };
 
 export type TimelineStepId =

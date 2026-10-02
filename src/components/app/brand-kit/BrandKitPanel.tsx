@@ -238,7 +238,7 @@ function StylesGallery({
   return (
     <SurfacePage
       title="Styles"
-      subtitle="Pick one when you create, and everything follows it."
+      subtitle="Pick one when you create."
       actions={
         data.canEdit ? (
           <button
@@ -255,7 +255,7 @@ function StylesGallery({
         <EmptyState
           icon={Sparkles}
           title="No styles yet"
-          description="Upload a few posts you love, or describe the look you want. Mellox learns it and uses it every time."
+          description="Upload a few posts you like. Mellox copies the look every time."
           action={
             data.canEdit ? (
               <button
@@ -296,9 +296,6 @@ function StylesGallery({
                 <Plus className="h-5 w-5" />
               </span>
               <span className="text-[14px] font-medium">New style</span>
-              <span className="max-w-[220px] text-[12.5px] text-muted-foreground">
-                From examples, a short description, or your Brand DNA.
-              </span>
             </button>
           )}
         </div>
@@ -407,7 +404,7 @@ function StyleCard({
                 <Copy className="mr-2 h-4 w-4" /> Duplicate
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => actions.toDna.mutate(style)}>
-                <Brain className="mr-2 h-4 w-4" /> Copy colors and fonts to Brand DNA
+                <Brain className="mr-2 h-4 w-4" /> Copy to Brand DNA
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

@@ -15,7 +15,7 @@ export const SCAN_VIEW_COLS =
   "id, workspace_id, url, origin, host, mode, trigger, status, stage, config, progress, overall_score, category_scores, report, probes, previous_scan_id, error, cancel_requested, lease_until, created_at, started_at, completed_at";
 
 export const SCAN_SUMMARY_COLS =
-  "id, url, host, mode, trigger, status, overall_score, category_scores, created_at, completed_at, counts:report->counts";
+  "id, url, host, mode, trigger, status, overall_score, category_scores, created_at, completed_at, counts:report->counts, score_version:report->scoreVersion";
 
 export const FINDING_COLS =
   "id, rule_id, category, status, severity, priority, priority_score, title, detail, evidence, page_id, page_url, fingerprint, point_impact, fix_id, safety, effort";
@@ -79,6 +79,7 @@ export function presentSummary(row: Row): GeoScanSummary {
     completedAt: row.completed_at ?? null,
     pagesCrawled: num(counts.pagesCrawled),
     findings: num(counts.findings),
+    scoreVersion: num(row.score_version, 1),
   };
 }
 

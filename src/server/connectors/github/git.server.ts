@@ -425,6 +425,13 @@ export async function commitToNewBranch(args: {
   files: FileWrite[];
   /** Defaults to a single-finding change; a batch may pass up to MAX_FILES_PER_BATCH. */
   maxFiles?: number;
+  /**
+   * The version each file was edited from (`blobSha: null` = the file is new).
+   * With it, a base branch that gained unrelated commits is still accepted:
+   * the change is committed on top of the latest code when every one of these
+   * files is exactly as it was. Without it, any move of the base is refused.
+   */
+  fileBase?: { path: string; blobSha: string | null }[];
 }): Promise<{ commitSha: string }> {
   const { installationId, repo } = args;
   assertWritable(
@@ -437,10 +444,21 @@ export async function commitToNewBranch(args: {
   if (!base)
     throw new GitOperationError(`Branch “${args.baseBranch}” no longer exists`, "not_found");
   if (base.sha !== args.baseSha) {
-    throw new GitOperationError(
+    const moved = new GitOperationError(
       `“${args.baseBranch}” changed since this proposal was generated. Regenerate it against the latest code.`,
       "base_moved",
     );
+    const known = new Map((args.fileBase ?? []).map((f) => [f.path, f.blobSha]));
+    if (!args.files.every((f) => known.has(f.path))) throw moved;
+    const tree = await getTreeEntries(installationId, repo, base.treeSha);
+    // A partial listing can't prove a file is unchanged or still absent.
+    if (tree.truncated) throw moved;
+    const now = new Map(tree.entries.map((e) => [e.path, e.sha]));
+    const untouched = args.files.every((f) => {
+      const was = known.get(f.path) ?? null;
+      return was === null ? !now.has(f.path) : now.get(f.path) === was;
+    });
+    if (!untouched) throw moved;
   }
   const existing = await getBranch(installationId, repo, args.headBranch);
   if (existing)

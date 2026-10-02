@@ -159,12 +159,15 @@ const FILTER_STATES: { value: FindingWorkflowState; label: string }[] = [
 ];
 const PRIORITY_RANK: Record<Priority, number> = { critical: 3, high: 2, medium: 1, low: 0 };
 /** Checks that compare pages across the site can't be verified by rescanning one page. */
+// Checks only a full scan can confirm. Shared titles, shared descriptions and
+// broken links are not here: their check re-reads the other pages involved.
 const SITE_COMPARISON_RULES = new Set([
-  "tech.duplicate_title",
-  "tech.duplicate_description",
-  "tech.broken_links",
   "tech.crawl_depth",
   "tech.http_errors",
+  "tech.orphan_pages",
+  "tech.sitemap_coverage",
+  "tech.sitemap_lastmod",
+  "ai.live_access",
 ]);
 
 type Activity = Awaited<ReturnType<typeof listFixActivity>>;

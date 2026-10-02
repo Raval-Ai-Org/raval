@@ -6,22 +6,46 @@
 
 import { decodeEntities } from "./html-tokenizer";
 
-export type ParsedSitemap = { kind: "urlset" | "index" | "invalid"; locs: string[] };
+export type ParsedSitemap = {
+  kind: "urlset" | "index" | "invalid";
+  locs: string[];
+  /** `<lastmod>` entries in the document (urlset only). */
+  lastmods: number;
+};
 
 const LOOKS_LIKE_HTML = /^\s*(<!doctype html|<html[\s>]|<head[\s>]|<body[\s>])/i;
 
 export function parseSitemap(xml: string, limit = 5000): ParsedSitemap {
-  if (!xml || LOOKS_LIKE_HTML.test(xml)) return { kind: "invalid", locs: [] };
+  if (!xml || LOOKS_LIKE_HTML.test(xml)) return { kind: "invalid", locs: [], lastmods: 0 };
   const isIndex = /<sitemapindex[\s>]/i.test(xml);
   const isUrlset = /<urlset[\s>]/i.test(xml);
-  if (!isIndex && !isUrlset) return { kind: "invalid", locs: [] };
+  if (!isIndex && !isUrlset) return { kind: "invalid", locs: [], lastmods: 0 };
   const locs: string[] = [];
   for (const m of xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?([^<\]]+?)(?:\]\]>)?\s*<\/loc>/gi)) {
     const loc = decodeEntities(m[1].trim());
     if (/^https?:\/\//i.test(loc)) locs.push(loc);
     if (locs.length >= limit) break;
   }
-  return { kind: isIndex ? "index" : "urlset", locs };
+  const lastmods = isIndex
+    ? 0
+    : Math.min(limit, (xml.match(/<lastmod>\s*\d{4}-\d{2}/gi) ?? []).length);
+  return { kind: isIndex ? "index" : "urlset", locs, lastmods };
+}
+
+/**
+ * Check an llms.txt against the llmstxt.org format: an H1 title first, then
+ * optional summary, then H2 sections of `- [name](url)` links.
+ */
+export function validateLlmsTxt(text: string): { issues: string[]; links: string[] } {
+  const lines = text.split(/\r?\n/).map((l) => l.trim());
+  const first = lines.find((l) => l.length > 0) ?? "";
+  const issues: string[] = [];
+  if (!/^#\s+\S/.test(first)) issues.push("It should start with a title line like “# Your name”");
+  const links = [...text.matchAll(/\[[^\]]+\]\((https?:\/\/[^)\s]+)\)/g)].map((m) => m[1]);
+  if (!links.length) issues.push("It lists no pages — add links to your key pages");
+  if (links.length && !lines.some((l) => /^##\s+\S/.test(l)))
+    issues.push("Group the links under “## Section” headings");
+  return { issues, links: [...new Set(links)].slice(0, 100) };
 }
 
 /**

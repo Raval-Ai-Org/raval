@@ -13,7 +13,12 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
 import type { RuleCheckState } from "@/lib/geo/fix-contracts";
 import type { SiteArtifacts } from "@/lib/geo/types";
-import { evaluateVerification, type VerificationTarget } from "@/lib/geo/verify";
+import {
+  COMPARISON_RULES,
+  comparisonUrls,
+  evaluateVerification,
+  type VerificationTarget,
+} from "@/lib/geo/verify";
 import { recordAudit } from "@/server/audit.server";
 import { createScan, driveScan } from "../service.server";
 import { pageRowToCrawled, type PageRow } from "../store.server";
@@ -110,7 +115,49 @@ type Stored = {
   /** Batch verifications: fingerprints already confirmed fixed on earlier attempts. */
   resolved?: string[];
   checks?: Record<string, RuleCheckState>;
+  /** Per comparison finding: the other pages this verification re-reads. */
+  comparison?: Record<string, string[]>;
 };
+
+/**
+ * For findings that compare pages (shared titles, broken links), find the other
+ * pages in the scan that raised them, so the verification scan reads those too.
+ */
+async function loadComparison(row: VerificationRow): Promise<Record<string, string[]>> {
+  const targets = storedTargets(row).filter((t) => COMPARISON_RULES.has(t.ruleId));
+  if (!targets.length || !row.baseline_scan_id) return {};
+  const [{ data: pages }, { data: findings }] = await Promise.all([
+    supabaseAdmin
+      .from("geo_scan_pages")
+      .select("url, title:analysis->>title, description:analysis->>metaDescription")
+      .eq("scan_id", row.baseline_scan_id)
+      .limit(1000),
+    supabaseAdmin
+      .from("geo_findings")
+      .select("fingerprint, evidence")
+      .eq("scan_id", row.baseline_scan_id)
+      .in(
+        "fingerprint",
+        targets.map((t) => t.fingerprint),
+      ),
+  ]);
+  const baselinePages = (
+    (pages ?? []) as unknown as {
+      url: string;
+      title: string | null;
+      description: string | null;
+    }[]
+  ).map((p) => ({ url: p.url, title: p.title, description: p.description }));
+  const evidence = Object.fromEntries(
+    (findings ?? []).map((f) => [f.fingerprint, f.evidence as Record<string, unknown>]),
+  );
+  const out: Record<string, string[]> = {};
+  for (const t of targets) {
+    const urls = comparisonUrls({ targets: [t], baselinePages, evidence, limit: 6 });
+    if (urls.length) out[t.fingerprint] = urls;
+  }
+  return out;
+}
 
 function storedTargets(row: VerificationRow): VerificationTarget[] {
   const stored = (row.after ?? {}) as Stored;
@@ -244,6 +291,7 @@ async function conclude(row: VerificationRow) {
   const targets = storedTargets(row);
   const decision = evaluateVerification({
     targets,
+    comparison: ((row.after ?? {}) as Stored).comparison,
     site: scan.site as unknown as SiteArtifacts,
     pages: ((pageRows ?? []) as unknown as PageRow[]).map(pageRowToCrawled),
     baselineFingerprints: row.baseline_scan_id
@@ -436,13 +484,18 @@ async function advance(row: VerificationRow, deadline: number): Promise<"done" |
   if (!row.scan_id) {
     let scanId: string;
     try {
+      const comparison = await loadComparison(row).catch(() => ({}) as Record<string, string[]>);
+      if (Object.keys(comparison).length) {
+        await update(row, { after: { ...((row.after ?? {}) as Stored), comparison } });
+      }
       const scan = await createScan({
         workspaceId: row.workspace_id,
         userId: row.created_by,
         url: row.origin,
         mode: "targeted",
         trigger: "verification",
-        urls: row.urls,
+        // The affected pages first; a targeted scan reads at most 20.
+        urls: [...new Set([...row.urls, ...Object.values(comparison).flat()])].slice(0, 20),
       });
       scanId = scan.id;
     } catch (error) {

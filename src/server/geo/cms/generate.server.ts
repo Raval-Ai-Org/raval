@@ -164,12 +164,24 @@ Write ${need === "both" ? "a new title and description" : `a new ${need} (repeat
   const sentence = (p?.excerpt ?? "").split(/(?<=[.!?])\s+/).reduce((acc, s) => {
     return acc.length + s.length < 155 ? `${acc} ${s}`.trim() : acc;
   }, "");
+  const description = (sentence || p?.description || "").slice(0, 155);
+  // The fallback must meet the same bar as a model answer: a value that would
+  // still fail the check (or an empty one) is not a fix.
+  if (need !== "description" && title.trim().length < 15)
+    throw new CmsNoSafeValue("Mellox couldn't write a title from this page's own text.");
+  if (need !== "title" && description.trim().length < 70)
+    throw new CmsNoSafeValue(
+      "This page has too little text to write a description from. Add one by hand.",
+    );
   return {
     title,
-    description: (sentence || p?.description || "").slice(0, 155),
+    description,
     reason: "Built from the page's own heading and first sentences.",
   };
 }
+
+/** No value could be produced that is both grounded and good enough to pass the check. */
+class CmsNoSafeValue extends Error {}
 
 type ContentEdits = { edits: { find: string; replace: string; why: string }[]; summary: string };
 
@@ -410,6 +422,16 @@ export async function planCmsFix(input: CmsFixInput): Promise<CmsFixPlan> {
     });
   };
 
+  const safeMeta = async (need: "title" | "description" | "both") => {
+    try {
+      return await metaText(input, need);
+    } catch (e) {
+      if (!(e instanceof CmsNoSafeValue)) throw e;
+      notes.push(e.message);
+      return null;
+    }
+  };
+
   for (const field of fields) {
     const pageTarget = resolved.target;
     const siteTarget = resolved.siteTarget;
@@ -421,7 +443,8 @@ export async function planCmsFix(input: CmsFixInput): Promise<CmsFixPlan> {
     switch (field) {
       case "seo_title":
       case "meta_description": {
-        const m = await metaText(input, field === "seo_title" ? "title" : "description");
+        const m = await safeMeta(field === "seo_title" ? "title" : "description");
+        if (!m) break;
         await add(
           field,
           pageTarget,
@@ -432,7 +455,8 @@ export async function planCmsFix(input: CmsFixInput): Promise<CmsFixPlan> {
         break;
       }
       case "og": {
-        const m = await metaText(input, "both");
+        const m = await safeMeta("both");
+        if (!m) break;
         await add(field, pageTarget, key("title"), m.title, m.reason, "Social sharing title");
         await add(
           field,
@@ -563,12 +587,13 @@ export async function planCmsFix(input: CmsFixInput): Promise<CmsFixPlan> {
           html = k ? String((await readField(s, { target: pageTarget, key: k })) ?? "") : null;
         }
         if (!html || !k) {
-          await add(
-            field,
-            null,
-            null,
-            "",
-            "This page's text isn't stored in a place Mellox can edit.",
+          // Nothing exact to paste here, so say what to do instead of showing
+          // an empty value.
+          notes.push(
+            provider === "webflow"
+              ? "This page's text is edited in the Webflow Designer, which Mellox can't reach. Make the change there:"
+              : "This page's text isn't stored in a place Mellox can edit. Make the change in your theme or page builder:",
+            CONTENT_TASK[input.ruleId] ?? input.finding.detail,
           );
           break;
         }
@@ -600,7 +625,40 @@ export async function planCmsFix(input: CmsFixInput): Promise<CmsFixPlan> {
       case "image_alt": {
         const html = resolved.wordpress?.content ?? null;
         if (!html || !pageTarget) {
-          await add(field, null, null, "", "Add a short description to each image that has none.");
+          // Mellox can't write the alt text here, but it can still draft it
+          // from the live page so there is something real to paste.
+          const live = imagesMissingAlt(resolved.html ?? "");
+          const drafted = live.length
+            ? await altTexts(
+                input,
+                live.map((m) => {
+                  const i = (resolved.html ?? "").indexOf(m.tag);
+                  return {
+                    src: m.src,
+                    context: (resolved.html ?? "")
+                      .slice(Math.max(0, i - 400), i + m.tag.length + 400)
+                      .replace(/<[^>]+>/g, " ")
+                      .replace(/\s+/g, " ")
+                      .trim()
+                      .slice(0, 300),
+                  };
+                }),
+              )
+            : new Map<number, string>();
+          const lines = [...drafted].map(
+            ([i, alt]) => `${live[i].src.split("/").pop()?.split("?")[0] ?? live[i].src}: ${alt}`,
+          );
+          if (lines.length) {
+            await add(
+              field,
+              null,
+              null,
+              lines.join("\n"),
+              "Alt text drafted from each image's file name and the text around it.",
+            );
+          } else {
+            notes.push("Add a short description to each image that has none.");
+          }
           break;
         }
         const missing = imagesMissingAlt(html);

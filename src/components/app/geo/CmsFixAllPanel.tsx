@@ -193,6 +193,9 @@ export function CmsFixAllPanel({
                   <span className="block truncate text-[11.5px] text-muted-foreground">
                     {pathOf(item.pageUrl)}
                   </span>
+                  {item.startError ? (
+                    <span className="block text-[11.5px] text-warning">{item.startError}</span>
+                  ) : null}
                 </button>
                 <span
                   className={cn(

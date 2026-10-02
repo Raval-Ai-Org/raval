@@ -325,6 +325,8 @@ export type FixAllPreflight = {
   }[];
   /** Open findings that need manual work. */
   manualCount: number;
+  /** Open findings Mellox fixes one at a time (the GEO Engineer), not in this pull request. */
+  engineerCount?: number;
   /** Findings that already have a fix in progress. */
   inProgressCount: number;
   maxFindings: number;
@@ -385,6 +387,8 @@ export type CmsFixAllItem = {
     assistedCount: number;
     applied: boolean;
   } | null;
+  /** Why a fix couldn't be started for this finding (daily limit, site not confirmed…). */
+  startError?: string | null;
 };
 
 export type CmsFixAllView = {

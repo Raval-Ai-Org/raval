@@ -67,7 +67,12 @@ export type GeoScanSummary = Pick<
   | "categoryScores"
   | "createdAt"
   | "completedAt"
-> & { pagesCrawled: number; findings: number };
+> & {
+  pagesCrawled: number;
+  findings: number;
+  /** Scores from different versions aren't compared (see SCORE_VERSION in score.ts). */
+  scoreVersion: number;
+};
 
 export type GeoFindingView = {
   id: string;

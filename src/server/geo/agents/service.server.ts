@@ -716,8 +716,24 @@ export async function retryAgentRun(
     );
   const run = await loadRunRls(ctx, args.runId);
   if (!canRetry(run.status)) throw new FixWorkflowError("This run can't be retried now.", 409);
-  await sourceForRun(ctx, run);
+  // A WordPress or Webflow run has no repository: the site binding is what
+  // must still hold, and there is no approved plan to resume from.
+  const cms = !run.source_id && run.provider && run.provider !== "github";
+  if (cms) {
+    const { resolveSite } = await import("@/server/sites/resolve.server");
+    const resolution = await resolveSite(ctx.workspaceId, run.site_host, { live: true });
+    const binding = resolution.binding;
+    if (!binding || binding.provider !== run.provider || !binding.verified) {
+      throw new FixWorkflowError(
+        binding?.proof ?? "Mellox can't confirm this site is still connected. Reconnect it first.",
+        409,
+      );
+    }
+  } else {
+    await sourceForRun(ctx, run);
+  }
   const fromPlan =
+    !cms &&
     args.fromStage === "implement" &&
     run.plan?.feasible &&
     run.plan_approved_at &&
@@ -738,6 +754,7 @@ export async function retryAgentRun(
       repo_full_name: run.repo_full_name,
       repo_external_id: run.repo_external_id,
       base_branch: run.base_branch,
+      ...(cms ? { provider: run.provider, site_ref: run.site_ref as unknown as Json } : {}),
       status: fromPlan ? "implementing" : "queued",
       status_detail: fromPlan ? "Retrying the approved plan" : "Queued",
       created_by: ctx.userId,

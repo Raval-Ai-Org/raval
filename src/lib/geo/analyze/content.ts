@@ -50,7 +50,10 @@ export function analyzeStructure(
   raw: RawExtraction,
   title: string | null,
 ): Structure & { hierarchyIssues: string[]; titleH1Aligned: boolean | null } {
-  const headings = raw.headings;
+  // Mellox: the outline is judged on the page's own content. Headings in the
+  // header, sidebar or footer (a "Menu" H3 before the H1) aren't the article's.
+  const inMain = raw.headings.filter((h) => h.inMain);
+  const headings = inMain.some((h) => h.level === 1) ? inMain : raw.headings;
   const issues: string[] = [];
   let valid = true;
   if (headings.length && headings[0].level !== 1) {
@@ -74,7 +77,17 @@ export function analyzeStructure(
     .map(([text]) => clip(headings.find((h) => h.text.toLowerCase() === text)?.text, 80))
     .slice(0, 10);
 
-  const withHeading = raw.sections.filter((s) => s.heading !== null);
+  // Mellox: a heading followed straight away by a deeper heading introduces
+  // sub-sections; it isn't an empty section.
+  const contentOnly = raw.sections.some((s) => s.inMain);
+  const withHeading = raw.sections.filter((s, i) => {
+    if (s.heading === null) return false;
+    // A widget title in the sidebar or footer isn't a section of the page's content.
+    if (contentOnly && !s.inMain) return false;
+    const next = raw.sections[i + 1];
+    const parent = next && next.level !== null && s.level !== null && next.level > s.level;
+    return !(parent && s.words < 5);
+  });
   const emptySections = withHeading
     .filter((s) => s.words === 0 && s.lists === 0)
     .map((s) => clip(s.heading, 80))

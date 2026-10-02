@@ -135,8 +135,10 @@ describe("scan runner", () => {
     });
     expect(byUrl["https://acme.io/brochure.pdf"]).toBeUndefined();
     expect(calls).not.toContain("https://acme.io/private/secret");
-    // The homepage is fetched once, during discovery.
-    expect(calls.filter((c) => c === "https://acme.io/")).toHaveLength(1);
+    // The homepage is read once for the crawl; discovery asks for it again as
+    // each of three AI search crawlers and once as markdown, never while crawling.
+    expect(calls.filter((c) => c === "https://acme.io/")).toHaveLength(5);
+    expect(final.site.botAccess?.checks.map((c) => c.blocked)).toEqual([false, false, false]);
 
     const findings = store.findings.get(scan.id)!;
     expect(findings.length).toBeGreaterThan(0);

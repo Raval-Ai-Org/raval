@@ -23,7 +23,9 @@ bar, `open:brand-kit` event with `{ styleId?, section?, create? }`).
 | View contracts, upload limits | `src/lib/brand-kit/contracts.ts` |
 | Store, uploads, analysis, resolve | `src/server/brand-kit/*.server.ts` |
 | RPC / browser stubs | `src/server/fns/brand-kit.ts`, `src/lib/brand-kit.functions.ts` |
-| UI | `src/components/app/brand-kit/` (`BrandKitPanel`, `StyleEditor`, `CreateStyleFlow`, `LibrarySections`, `StylePicker`) |
+| UI | `src/components/app/brand-kit/` (`BrandKitPanel`, `StyleEditor`, `CreateStyleFlow`, `LibrarySections`, `StylePicker`, `ColorPicker`, `look`) |
+| Colour maths for the picker (pure) | `src/lib/brand-kit/color.ts` |
+| Visual QA without a sign-in (dev only) | `/brand-kit-lab` (`BrandKitLab.tsx`) |
 
 ## Where a style is applied
 
@@ -31,22 +33,46 @@ bar, `open:brand-kit` event with `{ styleId?, section?, create? }`).
 |---|---|
 | Studio text (all formats) | `CreateJobSchema.styleId` → `loadJobStyle` → `ctx.style` → `styleSection` in `prompts.ts` |
 | Studio images | `imageStyleInput` → `buildImagePromptDetailed({ style })`; close/exact references go as `referenceAssets` |
+| Calendar, post images | the browser builds the prompt without the style; `/api/generate-image` applies it with `restyleImagePrompt` |
 | Studio video | `videoStyleBlock` in `videoPrompt` |
 | Caption naturalize | style block + protected terms in `naturalize.server.ts` |
 | UGC | `brief.styleId` → `projectStyle` → concepts (`styleText`) and render (`styleNotes`) |
 | Chat | `styleId` on `/api/chat` → writing block for drafted copy |
-| Calendar, post images | `brandStyle` on `/api/generate-image` (verified workspace only) |
 | Batches, social-multi | `styleTextFor(workspaceId, styleId, format)` |
 | Campaign brief, experiment copy | default style's voice only |
 
 The browser remembers the last pick per workspace (`studio:style:<id>`), shared
 by Studio, chat, UGC and the calendar.
 
+## How a style decides the look
+
+- **The style leads the image prompt.** `styleLead` in `src/lib/post-image.ts`
+  puts the style and its reference images first, as the top priority. The
+  seeded layout, the mood derived from the brand voice and the "canvas
+  defaults" are only used when there is no style; with one, the layout is the
+  style's own (or "follow the reference images") and the mood is the style's.
+- **Examples are read for design, not just colour.** Each example gives the
+  job of each colour (`roles`: background, text, main, accent), the layout
+  grid, the background treatment, the shapes and the text treatment
+  (`analyze.server.ts`). `mergeAnalyses` builds the palette from those roles
+  (`paletteFromRoles`) and picks the description most of the examples agree on
+  (`representativeText`), so one odd example never sets the style.
+- **Analyses carry a version** (`ANALYSIS_VERSION`). "Update style from these"
+  in the editor reads again any example studied by an older reader
+  (`requeueOutdated`), then applies what it learned without touching fields a
+  person set.
+- **Copy my examples** (A little / Closely / Exactly) sets the strength of
+  every reference at once. Only Closely and Exactly send the examples with
+  each picture.
+- A style made from examples uses its first example as its cover.
+
 ## Rules
 
 - Generators get a style only through `loadResolvedStyle` / `styleTextFor`.
 - Never trust a style id from the browser without the workspace check there.
-- Analysis goes through the Anthropic gateway; never call a model directly.
+- Analysis goes through the AI gateway (`llmJson`); never call a model directly.
+- Colours are picked with `ColorPicker` / `PaletteEditor`, never a native
+  `<input type="color">`.
 - Don't overwrite a user-set field from analysis (`provenance`).
 
 ## Checks

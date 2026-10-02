@@ -18,13 +18,24 @@ for (const { width, height } of [
     expect(box?.x).toBeGreaterThanOrEqual(-1);
     expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width + 1);
 
+    for (const [category, format] of [
+      ["Video", "Creator video ad"],
+      ["Picture", "Image post"],
+      ["Text", "Social post"],
+      ["Ads", "Ad"],
+    ]) {
+      await dialog.getByRole("button", { name: new RegExp(`^${category}`) }).click();
+      await expect(dialog.getByRole("button", { name: new RegExp(`^${format}`) })).toBeVisible();
+      const back = dialog.getByRole("button", { name: "Back to all categories" });
+      const backBox = await back.boundingBox();
+      expect(backBox?.height).toBeGreaterThanOrEqual(43.5);
+      await back.click();
+      await expect(dialog.getByRole("button", { name: new RegExp(`^${category}`) })).toBeVisible();
+    }
+
     await dialog.getByRole("button", { name: /^Text/ }).click();
-    const back = dialog.getByRole("button", { name: "Back to all categories" });
-    await expect(back).toBeVisible();
-    const backBox = await back.boundingBox();
-    expect(backBox?.height).toBeGreaterThanOrEqual(43.5);
-    await back.click();
-    await expect(dialog.getByRole("button", { name: /^Text/ })).toBeVisible();
+    await dialog.getByRole("button", { name: /^Social post/ }).click();
+    await expect(page.getByText("Choose a workspace first")).toBeVisible();
     await dialog.getByRole("button", { name: "Close dialog" }).click();
     await expect(dialog).toHaveCount(0);
   });
