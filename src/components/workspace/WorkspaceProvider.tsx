@@ -235,3 +235,7 @@ export function useWorkspaceActions(): Pick<Ctx, "refresh" | "patch"> {
 export function useOptionalWorkspaceId(): string | null {
   return useContext(WorkspaceContext)?.workspace.id ?? null;
 }
+
+export function useOptionalWorkspaceRole(): WorkspaceRole | null {
+  return useContext(WorkspaceContext)?.workspace.role ?? null;
+}

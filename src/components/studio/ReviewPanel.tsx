@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DeliveryView } from "@/components/app/DeliveryView";
 import { DownloadAssetButton } from "@/components/app/DownloadAssetButton";
+import { CanvaEditButton } from "./CanvaEditButton";
 import { StudioPublishFlow } from "./StudioPublishFlow";
 import { supabase } from "@/integrations/supabase/client";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
@@ -1139,6 +1140,9 @@ export function ReviewPanel({
                       filename={`mellox-${media!.kind}-${new Date().toISOString().slice(0, 10)}`}
                       compact
                     />
+                    {media?.kind === "image" && media.assetId && !fixtureRows ? (
+                      <CanvaEditButton assetId={media.assetId} />
+                    ) : null}
                     <button
                       type="button"
                       className={TOOL_ICON}
@@ -1149,6 +1153,12 @@ export function ReviewPanel({
                       <Maximize2 />
                     </button>
                   </>
+                ) : null}
+                {session.type === "carousel" &&
+                !dirty &&
+                rows[0]?.meta?.asset_storage_paths &&
+                !fixtureRows ? (
+                  <CanvaEditButton contentId={rows[0].id} />
                 ) : null}
               </motion.div>
             ) : null}

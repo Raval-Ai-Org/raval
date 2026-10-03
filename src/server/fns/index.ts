@@ -6,6 +6,7 @@ import * as autopilot from "./autopilot";
 import * as brandDna from "./brand-dna";
 import * as brandKit from "./brand-kit";
 import * as campaignGeneration from "./campaign-generation";
+import * as canva from "./canva";
 import * as coach from "./coach";
 import * as competitorIntel from "./competitor-intel";
 import * as competitors from "./competitors";
@@ -33,6 +34,7 @@ import * as wordpress from "./wordpress";
 // the client stubs in src/lib/*.functions.ts were generated with.
 const MODULES: Record<string, Record<string, unknown>> = {
   analytics,
+  canva,
   autopilot,
   "brand-dna": brandDna,
   "brand-kit": brandKit,

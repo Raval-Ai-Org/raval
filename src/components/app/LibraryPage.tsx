@@ -23,6 +23,7 @@ import {
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { DownloadAssetButton } from "@/components/app/DownloadAssetButton";
+import { CanvaEditButton } from "@/components/studio/CanvaEditButton";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { PlatformStack, TypeGlyph } from "@/components/studio/studio-ui";
 import { openItemOrJob } from "@/hooks/use-studio";
@@ -1149,6 +1150,9 @@ function PostDetail({
               Download {group.mediaType === "video" ? "video" : "image"}
             </DownloadAssetButton>
           ) : null}
+          {thumb && group.mediaType !== "video" && group.ids[0] ? (
+            <CanvaEditButton contentId={group.ids[0]} />
+          ) : null}
         </div>
       </div>
     </div>
@@ -1224,6 +1228,12 @@ function MediaDetail({ asset, onCreate }: { asset: LibraryAsset; onCreate: () =>
         </dl>
 
         <div className="mt-6 flex flex-wrap gap-2">
+          {kind === "image" &&
+          asset.source === "generated" &&
+          asset.status === "ready" &&
+          asset.url ? (
+            <CanvaEditButton assetId={asset.id} />
+          ) : null}
           {asset.url ? (
             <DownloadAssetButton
               url={asset.url}
