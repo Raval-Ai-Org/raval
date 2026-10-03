@@ -34,7 +34,7 @@ const BILLING_ROUTE: Record<CreateJobInput["type"], string> = {
 
 /** Whether this request starts an image or video render (charged when it finishes). */
 export function studioJobRenders(input: Pick<CreateJobInput, "type" | "controls">): boolean {
-  if (input.type === "story" && input.controls.storyMode === "video") return true;
+  if (input.type === "carousel" || input.type === "story") return true;
   const media = STUDIO_FORMATS[input.type].media;
   return (
     media === "video" ||

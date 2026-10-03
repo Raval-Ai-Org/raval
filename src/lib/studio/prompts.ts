@@ -572,7 +572,7 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
           : "`kicker` is a label of 1 to 3 words above the heading that shows where the reader is. Keep one consistent pattern.",
         "`emphasis` is the 1 to 3 words of that slide's heading that carry its meaning, copied exactly from the heading. They are highlighted in the design.",
         "`role` is one of cover, context, point, proof, recap, cta, matching the slide order above.",
-        "Slide text is drawn on an image: no emoji, no hashtags, no markdown, no 'swipe' or arrow instructions (the design adds those).",
+        "The image model typesets each complete slide. Keep every heading to 8 words or fewer and each body to 20 words or fewer so every word stays legible on a phone. No emoji, hashtags, markdown, or 'swipe' instructions.",
         "`visual` is one line of art direction for that slide. Keep one visual idea running through every slide (the same setting, object or metaphor), never unrelated pictures. No text-in-image instructions.",
         "`caption` is the post caption: an opening line that names the topic in plain searchable words, 1-3 short lines of context, and a call to action. Hashtags go in the array.",
         args.controls.cta ? `Use this call to action: ${args.controls.cta}` : "",

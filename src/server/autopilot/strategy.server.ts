@@ -144,8 +144,9 @@ export async function suggestStrategy(args: {
       ? storyPlatforms
       : ["instagram"]) as StorySettings["platforms"],
   };
+  const contentTypes = ["social", "image", "carousel", "video"] as const;
   const estimate =
-    estimateCost("social").credits * postsPerWeek +
+    Math.max(...contentTypes.map((type) => estimateCost(type).credits)) * postsPerWeek +
     (stories.enabled ? estimateCost("story").credits * stories.perDay * 7 : 0);
   const settings: ProgramSettings = {
     // Set up once and it runs: fully automatic where that is allowed. Its
@@ -154,13 +155,13 @@ export async function suggestStrategy(args: {
     goal,
     goalNote: "",
     platforms,
-    contentTypes: ["social"],
+    contentTypes: [...contentTypes],
     postsPerWeek,
     weekdays: [1, 2, 3, 4, 5],
     timezone: isValidTimeZone(args.timezone) ? args.timezone : "UTC",
     weeks: 52,
     creditCapPerWeek: Math.ceil((estimate * 1.5) / 10) * 10,
-    videoCapPerWeek: 0,
+    videoCapPerWeek: 1,
     actOnOpportunities: true,
     styleId: null,
     strategy,

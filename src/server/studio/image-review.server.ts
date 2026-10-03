@@ -26,7 +26,7 @@ const defaultCall: ReviewCall = async (dataUrl, brief) => {
         content: [
           {
             type: "text",
-            text: `Inspect this generated marketing image against the brief below. Flag only CLEARLY VISIBLE defects: the focal subject contradicts the brief, unreadable/gibberish prominent text, invented brand logos, severe crop of the subject, or obvious malformed product details. Do not critique subjective taste or assume unseen facts. If uncertain, pass. Return JSON only: {"status":"pass"|"warn","issues":string[]}. For pass, issues must be empty. Brief: ${brief.slice(0, 1800)}`,
+            text: `Inspect this finished social media artwork against the brief below. Flag CLEARLY VISIBLE defects: focal subject contradicts the brief; prominent words misspelled, omitted or gibberish; unrequested words or logos; severe crop or unsafe margins; malformed product details; weak legibility or visual hierarchy at phone size. For a carousel or Story, check the exact supplied headline and safe zone. Do not infer unseen facts or reject merely because of subjective taste. If uncertain, pass. Return JSON only: {"status":"pass"|"warn","issues":string[]}. For pass, issues must be empty. Brief: ${brief.slice(0, 2400)}`,
           },
           { type: "image_url", image_url: { url: dataUrl } },
         ],

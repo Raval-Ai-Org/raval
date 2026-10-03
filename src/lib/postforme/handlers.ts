@@ -1049,7 +1049,12 @@ async function distribute(
           return null;
         })
       : null;
-    if (story && item.meta?.story?.mode === "frames" && deps.designedMedia && !designedPaths) {
+    if (
+      ((story && item.meta?.story?.mode === "frames") ||
+        item.meta?.carousel?.render_mode === "model") &&
+      deps.designedMedia &&
+      !designedPaths
+    ) {
       skip(id, "The Story frames could not be updated. Try again before publishing.");
       continue;
     }
@@ -1515,8 +1520,8 @@ export async function retryHandler(
     }
     const designed = deps.designedMedia ? await deps.designedMedia(item).catch(() => null) : null;
     if (
-      isStoryItem(item) &&
-      item.meta?.story?.mode === "frames" &&
+      ((isStoryItem(item) && item.meta?.story?.mode === "frames") ||
+        item.meta?.carousel?.render_mode === "model") &&
       deps.designedMedia &&
       !designed
     ) {

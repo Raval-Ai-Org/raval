@@ -63,7 +63,7 @@ import {
 import { Readiness } from "./Readiness";
 import { Pipeline, rise, ScoreRing, Timeline, WeekStrip } from "./visuals";
 
-export type OpenTarget = "accounts" | "brand" | "website" | "visibility" | "calendar";
+export type OpenTarget = "accounts" | "brand" | "style" | "website" | "visibility" | "calendar";
 
 export type AutopilotHandlers = {
   start: (settings: ProgramSettings) => void;

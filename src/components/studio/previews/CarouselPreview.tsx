@@ -50,6 +50,7 @@ export function CarouselPreview({
   brand,
   ratio = "4:5",
   cover,
+  generatedSlides,
   spec,
   editing,
   onSlideChange,
@@ -58,6 +59,7 @@ export function CarouselPreview({
   brand: PreviewBrand;
   ratio?: AspectRatio;
   cover?: MediaOutput | null;
+  generatedSlides?: MediaOutput[];
   /** The look chosen for this carousel; older carousels fall back to the brand's. */
   spec?: CarouselSpecOutput | null;
   editing?: boolean;
@@ -148,7 +150,21 @@ export function CarouselPreview({
                 exit="exit"
                 transition={{ duration: duration.slow, ease: ease.emphasized }}
               >
-                {width > 0 ? (
+                {generatedSlides?.length ? (
+                  generatedSlides[current]?.status === "ready" && generatedSlides[current]?.url ? (
+                    <img
+                      src={generatedSlides[current].url}
+                      alt={`Slide ${current + 1}: ${slide.heading}`}
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <div className="grid size-full place-items-center bg-surface-2 px-8 text-center text-sm text-muted-foreground">
+                      {generatedSlides[current]?.status === "failed"
+                        ? "This slide needs another render."
+                        : "Creating slide artwork…"}
+                    </div>
+                  )
+                ) : width > 0 ? (
                   <SlideArt {...art} index={current} width={width} height={height} />
                 ) : null}
               </motion.div>
@@ -235,12 +251,18 @@ export function CarouselPreview({
             style={{ width: thumbWidth, height: (thumbWidth * meta.h) / meta.w }}
           >
             <span aria-hidden className="pointer-events-none absolute inset-0">
-              <SlideArt
-                {...art}
-                index={i}
-                width={thumbWidth}
-                height={(thumbWidth * meta.h) / meta.w}
-              />
+              {generatedSlides?.[i]?.url ? (
+                <img src={generatedSlides[i].url} alt="" className="size-full object-cover" />
+              ) : generatedSlides?.length ? (
+                <span className="block size-full bg-surface-2" />
+              ) : (
+                <SlideArt
+                  {...art}
+                  index={i}
+                  width={thumbWidth}
+                  height={(thumbWidth * meta.h) / meta.w}
+                />
+              )}
             </span>
           </button>
         ))}

@@ -23,6 +23,14 @@ export function studioOutputQualityIssue(
       return "The carousel has the wrong number of slides.";
     const story = carouselStoryIssue(output.slides);
     if (story) return story;
+    if (
+      output.slides?.some(
+        (slide) =>
+          slide.heading.trim().split(/\s+/).length > 8 ||
+          slide.body.trim().split(/\s+/).length > 20,
+      )
+    )
+      return "A slide has too much text to read clearly on a phone.";
   }
   if (type === "story") {
     if (output.story?.mode === "video")

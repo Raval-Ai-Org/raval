@@ -841,7 +841,14 @@ export function AutopilotSetup({
             <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
               <button
                 type="button"
-                disabled={busy || !settingsValid(s)}
+                disabled={
+                  busy ||
+                  !settingsValid(s) ||
+                  (s.mode === "full" &&
+                    readiness.some(
+                      (item) => item.required && !item.ok && !(item.id === "style" && !!s.styleId),
+                    ))
+                }
                 onClick={() => onStart(s)}
                 className={cn(dsPrimaryBtn, "h-12 px-7 text-[15px]")}
               >

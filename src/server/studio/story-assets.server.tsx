@@ -31,6 +31,57 @@ function db(): SupabaseClient {
 
 export type StoryLook = Pick<CarouselSpecOutput, "design" | "theme" | "brand" | "site">;
 
+function modelFrameHash(frames: StoryFrame[]): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify(frames.map((f) => [f.role, f.kicker, f.heading, f.body, f.visual, f.options])),
+    )
+    .digest("hex");
+}
+
+/** Attach complete model-generated Story artwork without drawing over it. */
+export async function linkGeneratedStory(args: {
+  workspaceId: string;
+  contentItemIds: string[];
+  frames: StoryFrame[];
+  assets: Array<{ id: string; path: string }>;
+}): Promise<boolean> {
+  if (
+    args.assets.length !== args.frames.length ||
+    !args.assets.length ||
+    args.assets.some((a) => !isWorkspaceStoragePath(a.path, args.workspaceId))
+  )
+    return false;
+  const { data: rows, error } = await db()
+    .from("content_items")
+    .select("id, meta")
+    .in("id", args.contentItemIds)
+    .eq("workspace_id", args.workspaceId);
+  if (error || rows?.length !== args.contentItemIds.length) return false;
+  const paths = args.assets.map((a) => a.path);
+  for (const row of rows as Array<{ id: string; meta: unknown }>) {
+    const meta = record(row.meta);
+    const story = record(meta.story);
+    const updated = await db()
+      .from("content_items")
+      .update({
+        media_url: null,
+        meta: mergeMeta(row.meta, {
+          story: { ...story, render_mode: "model", frame_hash: modelFrameHash(args.frames) },
+          asset_storage_paths: paths,
+          asset_id: args.assets[0].id,
+          asset_storage_path: paths[0],
+          asset_status: "ready",
+          media_type: "image",
+        }),
+      })
+      .eq("id", row.id)
+      .eq("workspace_id", args.workspaceId);
+    if (updated.error) return false;
+  }
+  return true;
+}
+
 export function storyHash(
   frames: StoryFrame[],
   look: StoryLook,
@@ -263,6 +314,16 @@ export async function ensureStoryMedia(item: {
   if (item.kind !== "story" && meta.studio_type !== "story") return null;
   const story = record(meta.story);
   if (story.mode === "video") return null;
+  if (story.render_mode === "model") {
+    const frames = framesFromMeta(meta);
+    const paths = Array.isArray(meta.asset_storage_paths) ? meta.asset_storage_paths : [];
+    return story.frame_hash === modelFrameHash(frames) &&
+      paths.length === frames.length &&
+      paths.length > 0 &&
+      paths.every((p) => isWorkspaceStoragePath(p, item.workspace_id))
+      ? (paths as string[])
+      : null;
+  }
   const look = storyLookFromMeta(meta);
   const frames = framesFromMeta(meta);
   if (!look || !frames.length) return null;

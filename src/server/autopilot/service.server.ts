@@ -313,12 +313,29 @@ async function readiness(
   program: ProgramRow | null,
   connected: string[],
 ): Promise<ReadinessItem[]> {
-  const [{ data: ws }, { data: dna }] = await Promise.all([
+  const styleQuery = admin
+    .from("brand_styles")
+    .select("id, status, spec")
+    .eq("workspace_id", workspaceId)
+    .is("archived_at", null);
+  const [{ data: ws }, { data: dna }, { data: defaultStyle }] = await Promise.all([
     admin.from("workspaces").select("website_url").eq("id", workspaceId).maybeSingle(),
     admin.from("workspace_brand_dna").select("dna").eq("workspace_id", workspaceId).maybeSingle(),
+    program?.style_id
+      ? styleQuery.eq("id", program.style_id).maybeSingle()
+      : styleQuery.eq("is_default", true).maybeSingle(),
   ]);
   const website = (ws as { website_url?: string | null } | null)?.website_url ?? null;
   const dnaSize = JSON.stringify((dna as { dna?: unknown } | null)?.dna ?? {}).length;
+  const refs = (defaultStyle as { spec?: { references?: unknown[] } } | null)?.spec?.references;
+  const styleReferences = Array.isArray(refs)
+    ? refs.filter(
+        (ref) =>
+          ref &&
+          typeof ref === "object" &&
+          ["close", "exact"].includes(String((ref as { strength?: string }).strength)),
+      ).length
+    : 0;
   const stories = readStorySettings(program?.stories);
   const wanted = [
     ...new Set([
@@ -344,11 +361,27 @@ async function readiness(
     {
       id: "brand",
       ok: dnaSize > 300,
-      required: false,
+      required: true,
       label: dnaSize > 300 ? "Brand DNA ready" : "Add your Brand DNA",
       detail:
         dnaSize > 300 ? "Posts are written from it" : "So posts sound like you and stay true.",
       cta: "Add",
+    },
+    {
+      id: "style",
+      ok: (defaultStyle as { status?: string } | null)?.status === "ready" && styleReferences >= 2,
+      required: true,
+      label:
+        (defaultStyle as { status?: string } | null)?.status === "ready" && styleReferences >= 2
+          ? "Visual style ready"
+          : defaultStyle
+            ? "Finish your visual style"
+            : "Set your visual style once",
+      detail:
+        styleReferences >= 2
+          ? "Your posts and Stories will share this look."
+          : "Add two visual examples so Mellox can learn the whole look.",
+      cta: "Set style",
     },
     {
       id: "website",
@@ -361,6 +394,46 @@ async function readiness(
       cta: "Add",
     },
   ];
+}
+
+/** Full automation needs a real identity, set once for the workspace. */
+async function requireFullAutoIdentity(
+  workspaceId: string,
+  settings: ProgramSettings,
+): Promise<void> {
+  if (settings.mode !== "full") return;
+  const styleQuery = admin
+    .from("brand_styles")
+    .select("id, status, spec")
+    .eq("workspace_id", workspaceId)
+    .is("archived_at", null);
+  const [{ data: dna }, { data: style }] = await Promise.all([
+    admin.from("workspace_brand_dna").select("dna").eq("workspace_id", workspaceId).maybeSingle(),
+    settings.styleId
+      ? styleQuery.eq("id", settings.styleId).maybeSingle()
+      : styleQuery.eq("is_default", true).maybeSingle(),
+  ]);
+  if (JSON.stringify((dna as { dna?: unknown } | null)?.dna ?? {}).length <= 300) {
+    throw new HttpError(409, "Add your Brand DNA before turning on full autopilot.");
+  }
+  if ((style as { status?: string } | null)?.status !== "ready") {
+    throw new HttpError(409, "Set a ready visual style before turning on full autopilot.");
+  }
+  const references = (style as { spec?: { references?: unknown[] } } | null)?.spec?.references;
+  if (
+    !Array.isArray(references) ||
+    references.filter(
+      (ref) =>
+        ref &&
+        typeof ref === "object" &&
+        ["close", "exact"].includes(String((ref as { strength?: string }).strength)),
+    ).length < 2
+  ) {
+    throw new HttpError(
+      409,
+      "Add two visual examples to your style before turning on full autopilot.",
+    );
+  }
 }
 
 function latestLearnings(actions: ActionRow[]): string[] {
@@ -622,6 +695,7 @@ async function log(
 export async function startProgram(caller: Caller, settings: ProgramSettings): Promise<void> {
   const { workspaceId, userId, role } = caller;
   checkSettings(workspaceId, settings);
+  await requireFullAutoIdentity(workspaceId, settings);
   await requireBillingFeature({ workspaceId, userId, role, feature: "autopilot", spending: true });
   if (await store.liveProgram(workspaceId)) {
     throw new HttpError(409, "Autopilot is already set up for this workspace.");
@@ -669,6 +743,7 @@ export async function startProgram(caller: Caller, settings: ProgramSettings): P
 export async function updateProgram(caller: Caller, settings: ProgramSettings): Promise<void> {
   const { workspaceId } = caller;
   checkSettings(workspaceId, settings);
+  await requireFullAutoIdentity(workspaceId, settings);
   const program = await store.liveProgram(workspaceId);
   if (!program) throw new HttpError(404, "Autopilot isn't set up yet.");
   const columns = programColumns(settings, program.starts_on);

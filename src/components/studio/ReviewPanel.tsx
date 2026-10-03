@@ -327,6 +327,12 @@ export function ReviewPanel({
 
   const save = async (): Promise<boolean> => {
     if (!dirty) return true;
+    const visualChanged =
+      (session.type === "carousel" &&
+        JSON.stringify(draft.slides) !== JSON.stringify(job.output.slides)) ||
+      (session.type === "story" &&
+        draft.story?.mode === "frames" &&
+        JSON.stringify(draft.story.frames) !== JSON.stringify(job.output.story?.frames));
     setBusy("save");
     try {
       for (const row of rows) {
@@ -380,8 +386,22 @@ export function ReviewPanel({
       setEditing(false);
       emitAppEvent("content:changed");
       toast.success("Changes saved", {
-        description: approvable ? undefined : "Edited work goes back for approval.",
+        description: visualChanged
+          ? "Creating updated artwork for your words."
+          : approvable
+            ? undefined
+            : "Edited work goes back for approval.",
       });
+      if (visualChanged) {
+        void generate(session.id, {
+          kind: "refine",
+          refine: {
+            instruction: "Update the artwork to exactly match the saved slide or frame copy.",
+            target: "media",
+          },
+        });
+        return false;
+      }
       return true;
     } catch (e) {
       toast.error("Couldn't save your edits", {
@@ -579,6 +599,7 @@ export function ReviewPanel({
             brand={brand}
             spec={draft.story.spec}
             background={draft.story.mode === "frames" && media?.kind === "image" ? media : null}
+            generatedFrames={draft.media?.filter((m) => m.slot.startsWith("frame:"))}
             video={draft.story.mode === "video" ? media : null}
             editing={editing}
             onFrameChange={(i, frame) =>
@@ -601,6 +622,7 @@ export function ReviewPanel({
                 brand={brand}
                 ratio={ratio}
                 cover={media}
+                generatedSlides={draft.media?.filter((m) => m.slot.startsWith("slide:"))}
                 spec={draft.carousel}
                 editing={editing}
                 onSlideChange={(i, slide) =>

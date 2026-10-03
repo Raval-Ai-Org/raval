@@ -26,6 +26,54 @@ const RENDER_VERSION = "carousel-design-1";
 
 export type StoredCarousel = { paths: string[]; hash: string };
 
+function modelSlideHash(slides: CarouselSlide[]): string {
+  return createHash("sha256")
+    .update(JSON.stringify(slides.map((s) => [s.role, s.kicker, s.heading, s.body, s.visual])))
+    .digest("hex");
+}
+
+/** Attach the model's complete slide images in story order. */
+export async function linkGeneratedCarousel(args: {
+  workspaceId: string;
+  contentItemIds: string[];
+  slides: CarouselSlide[];
+  spec: Spec;
+  assets: Array<{ id: string; path: string }>;
+}): Promise<boolean> {
+  if (
+    args.assets.length !== args.slides.length ||
+    !args.assets.length ||
+    args.assets.some((a) => !isWorkspaceStoragePath(a.path, args.workspaceId))
+  )
+    return false;
+  const { data: rows, error } = await db()
+    .from("content_items")
+    .select("id, meta")
+    .in("id", args.contentItemIds)
+    .eq("workspace_id", args.workspaceId);
+  if (error || rows?.length !== args.contentItemIds.length) return false;
+  const paths = args.assets.map((a) => a.path);
+  for (const row of rows as Array<{ id: string; meta: unknown }>) {
+    const updated = await db()
+      .from("content_items")
+      .update({
+        media_url: null,
+        meta: mergeMeta(row.meta, {
+          carousel: { ...args.spec, render_mode: "model", slide_hash: modelSlideHash(args.slides) },
+          asset_storage_paths: paths,
+          asset_id: args.assets[0].id,
+          asset_storage_path: paths[0],
+          asset_status: "ready",
+          media_type: "image",
+        }),
+      })
+      .eq("id", row.id)
+      .eq("workspace_id", args.workspaceId);
+    if (updated.error) return false;
+  }
+  return true;
+}
+
 type Spec = CarouselSpecOutput & { ratio?: string | null };
 
 function db(): SupabaseClient {
@@ -182,6 +230,16 @@ export async function ensureCarouselMedia(item: {
   if (item.kind !== "carousel" && meta.studio_type !== "carousel") return null;
   const stored = record(meta.carousel);
   const rawSlides = Array.isArray(meta.slides) ? meta.slides : [];
+  if (stored.render_mode === "model") {
+    const paths = Array.isArray(meta.asset_storage_paths) ? meta.asset_storage_paths : [];
+    const slides = normalizeSlides(rawSlides, rawSlides.length);
+    return stored.slide_hash === modelSlideHash(slides) &&
+      paths.length === slides.length &&
+      paths.length >= 2 &&
+      paths.every((p) => isWorkspaceStoragePath(p, item.workspace_id))
+      ? (paths as string[])
+      : null;
+  }
   if (!stored.design || !stored.theme || rawSlides.length < 2) return null;
   const design = safeDesign(stored.design);
   const theme = safeTheme(stored.theme);

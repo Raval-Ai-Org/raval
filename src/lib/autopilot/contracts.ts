@@ -131,7 +131,7 @@ export type OpportunityKind =
 
 /** Something Autopilot needs before it can do its job, and where to fix it. */
 export type ReadinessItem = {
-  id: "brand" | "accounts" | "website";
+  id: "brand" | "style" | "accounts" | "website";
   ok: boolean;
   label: string;
   detail: string;

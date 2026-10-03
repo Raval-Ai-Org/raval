@@ -403,7 +403,7 @@ export const realPorts: AutopilotPorts = {
         },
         controls: {
           platforms: platforms?.length ? platforms : action.platform ? [action.platform] : [],
-          // Autopilot Stories are designed frames: drawn by code, no paid render.
+          // Story frames are individually generated and reviewed by the image model.
           ...(story
             ? { storyMode: "frames", frameCount: story.frames, storyTheme: story.theme }
             : {}),

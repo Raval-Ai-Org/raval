@@ -45,6 +45,7 @@ export function StoryPreview({
   brand,
   spec,
   background,
+  generatedFrames,
   video,
   editing,
   onFrameChange,
@@ -54,6 +55,7 @@ export function StoryPreview({
   spec?: CarouselSpecOutput | null;
   /** The generated photo behind the first frame, if any. */
   background?: MediaOutput | null;
+  generatedFrames?: MediaOutput[];
   /** A video Story's video, if this is one. */
   video?: MediaOutput | null;
   editing?: boolean;
@@ -155,6 +157,20 @@ export function StoryPreview({
             ) : (
               <div className="grid size-full place-items-center text-xs text-white/70">
                 {video?.status === "failed" ? "The video didn't render." : "Making the video…"}
+              </div>
+            )
+          ) : generatedFrames?.length ? (
+            generatedFrames[current]?.status === "ready" && generatedFrames[current]?.url ? (
+              <img
+                src={generatedFrames[current].url}
+                alt={`Story frame ${current + 1}: ${frame?.heading ?? ""}`}
+                className="size-full object-cover"
+              />
+            ) : (
+              <div className="grid size-full place-items-center bg-surface-2 px-8 text-center text-sm text-muted-foreground">
+                {generatedFrames[current]?.status === "failed"
+                  ? "This frame needs another render."
+                  : "Creating Story artwork…"}
               </div>
             )
           ) : width > 0 && frame ? (

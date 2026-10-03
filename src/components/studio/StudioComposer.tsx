@@ -857,6 +857,7 @@ function StudioPrice({ session }: { session: StudioSession }) {
     type: session.type,
     includeImage: session.controls.includeImage,
     length: session.controls.length,
+    storyMode: session.controls.storyMode,
     regenerate: Boolean(session.lastGood),
   });
   return charge === "studio_video" ? (
