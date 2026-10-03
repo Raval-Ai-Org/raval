@@ -5,6 +5,7 @@
 // (primary = Mellox lime, success/warning/destructive) — no one-off colours.
 
 import { useEffect, type ComponentType } from "react";
+import Image from "next/image";
 import { animate, motion, useMotionValue, useTransform } from "framer-motion";
 import {
   AlertTriangle,
@@ -149,9 +150,21 @@ const ENGINE_LOGO: Record<string, "openai" | "claude" | "gemini"> = {
   gemini: "gemini",
 };
 
-/** An AI engine's mark: the real logo where we have it, else a monogram. */
-export function EngineMark({ id, name, size = 28 }: { id: string; name: string; size?: number }) {
+const ENGINE_ASSET: Record<string, string> = {
+  perplexity: "/assets/ai-engines/perplexity.svg",
+  copilot: "/assets/ai-engines/copilot-color.svg",
+  grok: "/assets/ai-engines/grok.svg",
+  apple: "/assets/ai-engines/apple-intelligence.png",
+  metaai: "/assets/ai-engines/metaai-color.svg",
+  deepseek: "/assets/ai-engines/deepseek.svg",
+  qwen: "/assets/ai-engines/qwen.svg",
+  poe: "/assets/ai-engines/poe.svg",
+};
+
+/** An AI engine's mark, using local brand artwork for the supported assistants. */
+export function EngineMark({ id, size = 28 }: { id: string; name: string; size?: number }) {
   const logo = ENGINE_LOGO[id];
+  const asset = ENGINE_ASSET[id];
   return (
     <span
       aria-hidden
@@ -160,8 +173,17 @@ export function EngineMark({ id, name, size = 28 }: { id: string; name: string; 
     >
       {logo ? (
         <BrandLogo name={logo} brand size={Math.round(size * 0.55)} />
+      ) : asset ? (
+        <Image
+          src={asset}
+          alt=""
+          width={Math.round(size * (id === "apple" ? 0.78 : 0.7))}
+          height={Math.round(size * (id === "apple" ? 0.78 : 0.7))}
+          className={id === "grok" ? "dark:invert" : undefined}
+          unoptimized
+        />
       ) : (
-        name.charAt(0).toUpperCase()
+        <Bot className="h-4 w-4 text-muted-foreground" aria-hidden />
       )}
     </span>
   );

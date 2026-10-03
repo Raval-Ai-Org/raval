@@ -284,7 +284,7 @@ function Panel({
           {scans.active ? (
             <ScanProgress scan={scans.active} onCancel={() => void scans.cancel()} />
           ) : (
-            <ScanIntro hasUrl={!!target}>{scanBar}</ScanIntro>
+            <ScanIntro>{scanBar}</ScanIntro>
           )}
         </div>
       </div>

@@ -3,12 +3,13 @@
 // Settings → AI assistants. Lets an admin allow Claude, ChatGPT and other
 // assistants to work in this workspace, and shows what they did.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Image from "next/image";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Check, Copy } from "@/components/icons";
+import { Bot, Check, Copy } from "@/components/icons";
 import { GroupLabel, Tile } from "@/components/app/surface/SurfaceLayout";
 import { getMcpSettings, listMcpActivity, updateMcpSettings } from "@/lib/mcp.functions";
 
@@ -23,17 +24,29 @@ function message(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-const STEPS = [
+const ASSISTANTS = [
   {
     name: "Claude",
-    text: "Settings, Connectors, Add custom connector. Paste the address and sign in.",
+    logo: "claude",
+    steps:
+      "Open Customize → Connectors → Add custom connector. Name it Mellox AI, paste the Mellox server address, and sign in.",
+    help: "https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp",
   },
   {
     name: "ChatGPT",
-    text: "Settings, Connectors, Create. Paste the address and sign in.",
+    logo: "chatgpt",
+    steps:
+      "Open Settings → Apps → Create. Name the app Mellox AI, paste the Mellox server address, scan its tools, and sign in.",
+    help: "https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt",
   },
-  { name: "Other apps", text: "Add a remote MCP server with this address." },
-];
+  {
+    name: "Other MCP apps",
+    logo: "other",
+    steps:
+      "Add a remote MCP server in your app. Use Mellox AI as its name, paste the Mellox server address, and sign in.",
+    help: null,
+  },
+] as const;
 
 export function McpConnector({ workspaceId }: { workspaceId: string }) {
   const client = useQueryClient();
@@ -105,10 +118,18 @@ export function McpConnector({ workspaceId }: { workspaceId: string }) {
         <p className="mt-2 text-[12.5px] text-muted-foreground">Only an admin can change this.</p>
       )}
 
-      {enabled && (
-        <>
-          <GroupLabel>Connect</GroupLabel>
-          <Tile>
+      <GroupLabel>Connect an assistant</GroupLabel>
+      <Tile>
+        <p className="text-[13px] leading-relaxed text-muted-foreground">
+          Connect Claude, ChatGPT, or another MCP app to Mellox. Use{" "}
+          <strong className="font-medium text-foreground">Mellox AI</strong> as the connection name.
+          The same server address works in every app.
+        </p>
+        {enabled ? (
+          <>
+            <p className="mb-2 mt-4 text-[13px] font-medium text-foreground">
+              Mellox server address
+            </p>
             <div className="flex items-center gap-2">
               <code className="ds-well min-w-0 flex-1 truncate px-3 py-2 text-[13px] text-foreground">
                 {serverUrl}
@@ -118,23 +139,63 @@ export function McpConnector({ workspaceId }: { workspaceId: string }) {
                 Copy
               </Button>
             </div>
-            <ul className="mt-4 space-y-2.5">
-              {STEPS.map((step) => (
-                <li key={step.name} className="text-[13px] text-muted-foreground">
-                  <span className="font-medium text-foreground">{step.name}</span> · {step.text}
-                </li>
-              ))}
-            </ul>
-          </Tile>
+          </>
+        ) : (
+          <p className="ds-well mt-4 rounded-xl px-3 py-3 text-[13px] text-muted-foreground">
+            Turn on “Let AI assistants use this workspace” above to see the server address. Access
+            is off until then.
+          </p>
+        )}
+        <ul className="mt-4 divide-y divide-border/50 border-t border-border/50">
+          {ASSISTANTS.map((assistant) => (
+            <li key={assistant.name} className="flex gap-3 py-4 last:pb-0">
+              <AssistantLogo kind={assistant.logo} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-semibold text-foreground">{assistant.name}</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                  {assistant.steps}
+                </p>
+                {assistant.help && (
+                  <a
+                    href={assistant.help}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1.5 inline-block text-[12.5px] font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    Setup help
+                    <span className="sr-only"> for {assistant.name} (opens in a new tab)</span>
+                  </a>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-[12.5px] leading-relaxed text-muted-foreground">
+          Each teammate signs in with their own Mellox account. Their workspace role and the two
+          switches above decide what the assistant can do.
+        </p>
+      </Tile>
 
+      {enabled && (
+        <>
           <GroupLabel>What an assistant can do</GroupLabel>
           <Tile>
             <p className="text-[13px] text-muted-foreground">
-              Each person signs in as themselves and can only do what their role allows. Posts must
-              be approved before they can be scheduled or posted.
+              Your Mellox role still applies. Posts must be approved before they can be scheduled or
+              published.
             </p>
-            <Abilities title="Read" items={reads.map((t) => t.title)} on />
-            <Abilities title="Change" items={changes.map((t) => t.title)} on={allowWrites} />
+            <Abilities
+              title="Read workspace information"
+              summary="See content, calendars, analytics, brand details and AI visibility."
+              items={reads.map((t) => t.title)}
+              on
+            />
+            <Abilities
+              title="Make changes"
+              summary="Create and edit content, manage schedules and Autopilot, and use credits when a tool needs them."
+              items={changes.map((t) => t.title)}
+              on={allowWrites}
+            />
           </Tile>
 
           {canManage && (
@@ -175,6 +236,38 @@ export function McpConnector({ workspaceId }: { workspaceId: string }) {
   );
 }
 
+function AssistantLogo({ kind }: { kind: (typeof ASSISTANTS)[number]["logo"] }) {
+  return (
+    <span
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/50 bg-[var(--ds-well-bg)]"
+      aria-hidden
+    >
+      {kind === "claude" ? (
+        <Image src="/assets/assistant-connectors/claude.svg" alt="" width={32} height={32} />
+      ) : kind === "chatgpt" ? (
+        <>
+          <Image
+            src="/assets/assistant-connectors/openai-blossom-black.svg"
+            alt=""
+            width={32}
+            height={32}
+            className="dark:hidden"
+          />
+          <Image
+            src="/assets/assistant-connectors/openai-blossom-white.svg"
+            alt=""
+            width={32}
+            height={32}
+            className="hidden dark:block"
+          />
+        </>
+      ) : (
+        <Bot className="h-5 w-5 text-muted-foreground" />
+      )}
+    </span>
+  );
+}
+
 function Row({
   label,
   description,
@@ -199,7 +292,17 @@ function Row({
   );
 }
 
-function Abilities({ title, items, on }: { title: string; items: string[]; on: boolean }) {
+function Abilities({
+  title,
+  summary,
+  items,
+  on,
+}: {
+  title: string;
+  summary: string;
+  items: string[];
+  on: boolean;
+}) {
   return (
     <div className="mt-4">
       <div className="flex items-center gap-1.5 text-[13px] font-medium text-foreground">
@@ -207,9 +310,11 @@ function Abilities({ title, items, on }: { title: string; items: string[]; on: b
         {title}
         {!on && <span className="font-normal text-muted-foreground">· off</span>}
       </div>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-        {items.join(" · ")}
-      </p>
+      <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{summary}</p>
+      <details className="mt-1.5 text-[12.5px] text-muted-foreground">
+        <summary className="w-fit cursor-pointer text-primary">See all tools</summary>
+        <p className="mt-2 leading-relaxed">{items.join(" · ")}</p>
+      </details>
     </div>
   );
 }

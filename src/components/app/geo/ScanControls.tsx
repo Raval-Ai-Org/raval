@@ -1,8 +1,9 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle, Globe, RefreshCw, Spinner, Stop } from "@/components/icons";
-import { StarAgent as BrandStar } from "@/components/StarAgent";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { cn } from "@/lib/utils";
 import type { GeoScanMode, GeoScanView } from "@/lib/geo/contracts";
 import { displayUrl, EngineMark, ghostBtn, primaryBtn } from "./geo-ui";
@@ -184,7 +185,7 @@ export function ScanProgress({ scan, onCancel }: { scan: GeoScanView; onCancel: 
       className="rounded-[24px] border border-border/50 bg-surface-3 p-5 dark:border-white/[0.06] dark:bg-white/[0.035] sm:p-6"
     >
       <div className="flex items-center gap-4">
-        <BrandStar mood="scanning" size={52} animate />
+        <CyclingEngineMark />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-semibold text-foreground">
             {scan.cancelRequested ? "Stopping" : "Scanning"} {displayUrl(scan.url)}
@@ -248,37 +249,115 @@ export function ScanProgress({ scan, onCancel }: { scan: GeoScanView; onCancel: 
 const ENGINES = [
   { id: "chatgpt", name: "ChatGPT" },
   { id: "claude", name: "Claude" },
-  { id: "gemini", name: "Gemini" },
   { id: "perplexity", name: "Perplexity" },
-];
+  { id: "gemini", name: "Gemini" },
+  { id: "copilot", name: "Copilot" },
+  { id: "grok", name: "Grok" },
+  { id: "apple", name: "Apple Intelligence" },
+  { id: "metaai", name: "Meta AI" },
+  { id: "deepseek", name: "DeepSeek" },
+  { id: "qwen", name: "Qwen" },
+  { id: "poe", name: "Poe" },
+] as const;
+
+function CyclingEngineMark() {
+  const reduceMotion = useReducedMotionSafe();
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const timer = window.setInterval(
+      () => setIndex((current) => (current + 1) % ENGINES.length),
+      900,
+    );
+    return () => window.clearInterval(timer);
+  }, [reduceMotion]);
+
+  const engine = ENGINES[index];
+  return (
+    <div
+      aria-hidden="true"
+      className="relative grid h-[72px] w-[72px] shrink-0 place-items-center rounded-[22px] border border-primary/20 bg-background shadow-[0_12px_30px_-18px_hsl(var(--primary)/0.65)]"
+    >
+      {!reduceMotion && (
+        <motion.span
+          className="pointer-events-none absolute inset-[3px] rounded-[19px] border-[1.5px] border-transparent border-t-primary/75 border-r-primary/25"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 3.2, ease: "linear", repeat: Infinity }}
+        />
+      )}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={engine.id}
+          initial={reduceMotion ? false : { opacity: 0, scale: 0.78, y: 10, filter: "blur(5px)" }}
+          animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+          exit={reduceMotion ? undefined : { opacity: 0, scale: 0.82, y: -9, filter: "blur(5px)" }}
+          transition={{ duration: 0.22, ease: "easeOut" }}
+        >
+          <EngineMark id={engine.id} name={engine.name} size={48} />
+        </motion.div>
+      </AnimatePresence>
+      <span className="absolute -bottom-2 left-3 right-3 h-0.5 overflow-hidden rounded-full bg-primary/10">
+        {!reduceMotion && (
+          <motion.span
+            className="block h-full bg-primary"
+            initial={{ width: 0 }}
+            animate={{ width: "100%" }}
+            transition={{ duration: 0.9, ease: "linear", repeat: Infinity }}
+          />
+        )}
+      </span>
+    </div>
+  );
+}
 
 /** First run: a centred question, the engines as logos, and the scan box. */
-export function ScanIntro({ hasUrl, children }: { hasUrl: boolean; children: React.ReactNode }) {
+export function ScanIntro({ children }: { children: React.ReactNode }) {
+  const reduceMotion = useReducedMotionSafe();
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col items-center text-center"
     >
-      <BrandStar mood={hasUrl ? "happy" : "waving"} size={72} animate />
-      <h3 className="mt-5 text-[26px] font-semibold leading-tight tracking-tight text-foreground sm:text-[30px]">
+      <div className="w-full max-w-[500px] rounded-[28px] border border-border/60 bg-surface-3 px-4 py-5 shadow-[0_16px_48px_-36px_hsl(var(--primary)/0.35)] dark:border-white/[0.08] dark:bg-white/[0.035] sm:px-6">
+        <div className="mb-4 flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+          AI search landscape
+        </div>
+        <ul
+          className="flex flex-wrap items-center justify-center gap-2"
+          aria-label="AI assistants and search engines"
+        >
+          {ENGINES.map((engine, index) => (
+            <motion.li
+              key={engine.id}
+              initial={reduceMotion ? false : { opacity: 0, y: 12, scale: 0.92 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.35, delay: reduceMotion ? 0 : index * 0.13 }}
+              className="flex items-center gap-2 rounded-full border border-border/60 bg-background py-1.5 pl-1.5 pr-3 text-[12px] font-medium text-foreground/85 shadow-sm dark:border-white/[0.08]"
+            >
+              <EngineMark id={engine.id} name={engine.name} size={27} />
+              {engine.name}
+            </motion.li>
+          ))}
+        </ul>
+        <div className="mx-auto mt-5 h-1 max-w-[210px] overflow-hidden rounded-full bg-primary/10">
+          <motion.div
+            className="h-full rounded-full bg-primary"
+            initial={reduceMotion ? { width: "100%" } : { width: 0 }}
+            animate={{ width: "100%" }}
+            transition={{ duration: reduceMotion ? 0 : 1.3, ease: "easeOut" }}
+          />
+        </div>
+      </div>
+      <h3 className="mt-6 text-[26px] font-semibold leading-tight tracking-tight text-foreground sm:text-[30px]">
         How does AI see your site?
       </h3>
       <p className="mt-2 text-[14px] text-muted-foreground">
         One scan. Clear fixes. Nothing on your site changes.
       </p>
-      <ul className="mt-6 flex flex-wrap items-center justify-center gap-2" aria-label="AI engines">
-        {ENGINES.map((e) => (
-          <li
-            key={e.id}
-            className="flex items-center gap-2 rounded-full bg-foreground/[0.05] py-1.5 pl-1.5 pr-3.5 text-[12.5px] font-medium text-foreground/85"
-          >
-            <EngineMark id={e.id} name={e.name} size={24} />
-            {e.name}
-          </li>
-        ))}
-      </ul>
-      <div className="mt-8 w-full text-left">{children}</div>
+      <div className="mt-7 w-full text-left">{children}</div>
     </motion.div>
   );
 }
