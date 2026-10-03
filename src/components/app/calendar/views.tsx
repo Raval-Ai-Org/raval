@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus, RefreshCw, Star } from "@/components/icons";
+import { Loader2, Plus, RefreshCw, Star, Story } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { dsIconBtn } from "@/components/app/surface/buttons";
 import { cn } from "@/lib/utils";
@@ -177,6 +177,16 @@ export function MonthView({
                     >
                       {p.busyIds.has(e.id) ? (
                         <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin" />
+                      ) : e.story ? (
+                        // The Story ring marks what disappears after a day.
+                        <Story
+                          aria-label="Story"
+                          className="h-2.5 w-2.5 shrink-0"
+                          style={{
+                            color,
+                            opacity: e.status === "draft" || e.status === "review" ? 0.6 : 1,
+                          }}
+                        />
                       ) : (
                         // A hollow dot is a post nobody has approved yet.
                         <span

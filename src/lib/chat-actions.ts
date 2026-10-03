@@ -14,6 +14,7 @@ const RE = {
   audit:
     /\b(audit|scan|ai\s*visibil|geo\b|aeo\b|llms?\.txt|robots\.txt|schema|structured\s*data|how\s*do\s*(ai|engines|chatgpt|gemini|perplexity)\s*see)/i,
   carousel: /\b(carousel|swipe\s*post|slides?\s*post)\b/i,
+  story: /\b((instagram|insta|ig|facebook|fb)\s*stor(y|ies)|daily\s*stories|story\s*frames?)\b/i,
   video: /\b(reels?|tiktok|shorts|video\s*script|short[-\s]?form\s*video)\b/i,
   social: /\b(social\s*post|linkedin|instagram|tweet|x\s*post|threads|facebook\s*post)\b/i,
   ad: /\b(ad\s*copy|ad\s*creative|facebook\s*ads?|meta\s*ads?|paid\s*social|advert)\b/i,
@@ -24,6 +25,12 @@ const RE = {
 };
 
 const STUDIO_CHIPS: { re: RegExp; canvas: StudioType; label: string; hint: string }[] = [
+  {
+    re: RE.story,
+    canvas: "story",
+    label: "Create a Story",
+    hint: "Vertical frames for Instagram and Facebook",
+  },
   {
     re: RE.carousel,
     canvas: "carousel",

@@ -60,6 +60,7 @@ function world(): World {
     now: () => w.clock,
     enabled: () => w.enabled,
     fullEnabled: () => w.full,
+    storiesEnabled: () => true,
     automationPaused: async () => w.paused,
     memberRole: async () => w.role,
     connectedPlatforms: async () => ["linkedin", "instagram"],
@@ -123,6 +124,7 @@ function world(): World {
     plan: {
       recentTitles: async () => [],
       learnings: async () => w.learnings,
+      storyHours: async () => [],
       propose: async ({ slots }) =>
         slots.map((s, i) => ({
           slot: s.index,
@@ -595,5 +597,139 @@ describe("opportunities", () => {
     expect(first).toHaveLength(3);
     expect(second).toHaveLength(0);
     expect(first.every((a) => a.brief.includes("https://acme.com/blog/launch"))).toBe(true);
+  });
+});
+
+describe("Story Autopilot", () => {
+  const STORIES = {
+    enabled: true,
+    perDay: 1,
+    days: [],
+    windowStart: "09:00",
+    windowEnd: "20:00",
+    platforms: ["instagram", "facebook"],
+    themes: ["tip", "behind", "question"],
+    frames: 3,
+    smartTiming: true,
+  };
+  const TITLES = [
+    "Why your grinder matters most",
+    "Kettle temperature for pour over",
+    "Paper filters versus metal",
+    "Weighing beans takes ten seconds",
+    "Roast dates explained simply",
+    "Steaming oat milk without splitting",
+    "Which cup keeps espresso hot",
+    "Storing beans away from light",
+    "Decaf that still tastes sweet",
+    "Cleaning a machine on Fridays",
+  ];
+  const uniqueTitles = () => {
+    w.ports.plan.propose = async ({ slots }) =>
+      slots.map((s, i) => ({
+        slot: s.index,
+        title: TITLES[i % TITLES.length],
+        brief: "Explain the problem our customers face and show the one step that fixes it.",
+        reason: "Buyers ask about this.",
+      }));
+  };
+  const plan = async (over: Partial<ProgramRow> = {}) => {
+    const p = await program(w, { stories: STORIES, credit_cap_per_week: 400, ...over });
+    await w.store.insertActions([
+      { workspace_id: WS, program_id: p.id, kind: "plan", dedupe_key: `plan:${p.id}:1`, cycle: 1 },
+    ]);
+    uniqueTitles();
+    await sweep(w);
+    return p;
+  };
+  const storiesOf = () => w.store.actions.filter((a) => a.content_type === "story");
+
+  it("plans a Story for every day, each with a theme, made the day before its slot", async () => {
+    await plan();
+    const stories = storiesOf();
+    expect(stories).toHaveLength(7);
+    expect(new Set(stories.map((s) => s.planned_for!.slice(0, 10))).size).toBe(7);
+    // No two days in a row share a theme.
+    const themes = stories
+      .sort((a, b) => a.planned_for!.localeCompare(b.planned_for!))
+      .map((s) => s.result.story_theme);
+    for (let i = 1; i < themes.length; i++) expect(themes[i]).not.toBe(themes[i - 1]);
+    for (const s of stories) {
+      expect(s.result.story_platforms).toEqual(["instagram", "facebook"]);
+      const lead = Date.parse(s.planned_for!) - Date.parse(s.next_attempt_at);
+      // Never made at the slot itself; at most 30 hours ahead.
+      expect(lead).toBeGreaterThan(60 * 60_000);
+      expect(lead).toBeLessThanOrEqual(30 * 60 * 60_000);
+    }
+    // Feed posts are still planned alongside.
+    expect(w.store.actions.filter((a) => a.content_type === "social").length).toBeGreaterThan(0);
+  });
+
+  it("plans only Stories when the program has no feed posts", async () => {
+    await plan({ posts_per_week: 0 });
+    const content = w.store.actions.filter((a) => a.kind === "content");
+    expect(content.length).toBe(7);
+    expect(content.every((a) => a.content_type === "story")).toBe(true);
+  });
+
+  it("plans no Stories when Stories are switched off for the workspace", async () => {
+    w.ports.storiesEnabled = () => false;
+    await plan();
+    expect(storiesOf()).toHaveLength(0);
+  });
+
+  it("uses the hours this brand's Stories did best", async () => {
+    w.ports.plan.storyHours = async () => [{ hour: 18, avg: 900, count: 3 }];
+    await plan();
+    expect(storiesOf().every((s) => s.planned_for!.slice(11, 16) === "18:15")).toBe(true);
+  });
+
+  it("asks Studio for designed frames on every Story account, with the slot's theme", async () => {
+    const p = await program(w, { stories: STORIES });
+    const calls: unknown[] = [];
+    const create = w.ports.studio.create;
+    w.ports.studio.create = async (args) => {
+      calls.push({ platforms: args.platforms, story: args.story });
+      return create(args);
+    };
+    await piece(w, p, {
+      content_type: "story",
+      platform: "instagram",
+      result: { story_theme: "question", story_platforms: ["instagram", "facebook"] },
+    });
+    await sweep(w);
+    expect(calls).toEqual([
+      { platforms: ["instagram", "facebook"], story: { frames: 3, theme: "question" } },
+    ]);
+  });
+
+  it("drops a Story nobody approved within six hours of its slot", async () => {
+    const p = await program(w, { stories: STORIES });
+    const a = await piece(w, p, { content_type: "story", platform: "instagram" });
+    await sweep(w); // made, waiting for approval
+    expect(w.store.actions.find((x) => x.id === a.id)!.status).toBe("needs_approval");
+    w.clock = new Date(Date.parse(a.planned_for!) + 5 * 60 * 60_000);
+    await sweep(w);
+    expect(w.store.actions.find((x) => x.id === a.id)!.status).toBe("needs_approval");
+    w.clock = new Date(Date.parse(a.planned_for!) + 7 * 60 * 60_000);
+    await sweep(w);
+    expect(w.store.actions.find((x) => x.id === a.id)!.status).toBe("missed");
+    expect(w.scheduled).toHaveLength(0);
+  });
+
+  it("in fully automatic mode approves a clean Story, up to the daily number chosen", async () => {
+    w.full = true;
+    const p = await program(w, { mode: "full", stories: STORIES });
+    const first = await piece(w, p, { content_type: "story", platform: "instagram" });
+    const second = await piece(w, p, { content_type: "story", platform: "instagram" });
+    for (let i = 0; i < 4; i++) {
+      await sweep(w);
+      tick(w, 4);
+    }
+    const status = (id: string) => w.store.actions.find((x) => x.id === id)!;
+    const auto = [first, second].filter((a) => status(a.id).approved_via === "auto");
+    // One a day was chosen: the second waits for a person.
+    expect(auto).toHaveLength(1);
+    expect([first, second].filter((a) => status(a.id).status === "needs_approval")).toHaveLength(1);
   });
 });

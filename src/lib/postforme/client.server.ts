@@ -8,11 +8,46 @@ import type {
 
 // The distribution pipeline uses a small provider-neutral post shape. This
 // adapter translates it to Post for Me without exposing the project key.
+//
+// Placements (feed / Reels / Stories) and per-account media go out as Post for
+// Me's own `platform_configurations` and `account_configurations`. A Story
+// post with several media items becomes one Story per item, reported as one
+// result per (account, item); each result is mapped back to its frame by the
+// media it carries, so the handlers can track frames individually.
 type Json = Record<string, any>;
 const platformToPfm = (value: string) => (value === "twitter" ? "x" : value);
 const platformFromPfm = (value: string) => (value === "x" ? "twitter" : value);
 
-function resultTarget(result: any) {
+function mediaUrl(m: any): string {
+  return typeof m?.url === "string" ? m.url : "";
+}
+
+/** The media an account was sent: its own override, else the post's. */
+function mediaForAccount(post: any, accountId: string): any[] {
+  const own = (post.account_configurations ?? []).find(
+    (c: any) => c?.social_account_id === accountId,
+  )?.configuration?.media;
+  return Array.isArray(own) && own.length ? own : (post.media ?? []);
+}
+
+function placementForAccount(post: any, account: { id: string; platform?: string }): string | null {
+  const own = (post.account_configurations ?? []).find(
+    (c: any) => c?.social_account_id === account.id,
+  )?.configuration?.placement;
+  return own ?? post.platform_configurations?.[account.platform ?? ""]?.placement ?? null;
+}
+
+/** Which of the account's media items a result is for, or null when unknown. */
+function frameOf(result: any, post: any): number | null {
+  const sent = mediaForAccount(post, result.social_account_id);
+  if (sent.length < 2) return sent.length === 1 ? 0 : null;
+  const url = mediaUrl(result.media?.[0]);
+  if (!url) return null;
+  const matches = sent.flatMap((m: any, index: number) => (mediaUrl(m) === url ? [index] : []));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function resultTarget(result: any, post?: any) {
   const errorMessage =
     typeof result.error === "string"
       ? result.error
@@ -25,7 +60,35 @@ function resultTarget(result: any) {
     platform_post_id: result.platform_data?.id ?? null,
     permalink: result.platform_data?.url ?? null,
     error: result.success ? null : { message: errorMessage },
+    ...(post ? { frame: frameOf(result, post) } : {}),
   };
+}
+
+/** Our placement names to Post for Me's, per platform, in its configuration shape. */
+function placementConfigs(body: Json): Json {
+  const out: Json = {};
+  const placements = body.placements && typeof body.placements === "object" ? body.placements : {};
+  for (const [platform, placement] of Object.entries(placements)) {
+    if (!["instagram", "facebook", "threads"].includes(platform)) continue;
+    if (!["timeline", "reels", "stories"].includes(String(placement))) continue;
+    if (platform === "threads" && placement === "stories") continue;
+    out[platform] = { placement };
+  }
+  return out;
+}
+
+/** Neutral media → Post for Me media, keeping thumbnails and Instagram tags. */
+function toPfmMedia(list: any[]): any[] {
+  return list
+    .filter((m) => typeof m?.source === "string" && m.source)
+    .map((m) => ({
+      url: m.source,
+      ...(typeof m.thumbnail_url === "string" ? { thumbnail_url: m.thumbnail_url } : {}),
+      ...(typeof m.thumbnail_timestamp_ms === "number"
+        ? { thumbnail_timestamp_ms: m.thumbnail_timestamp_ms }
+        : {}),
+      ...(Array.isArray(m.tags) && m.tags.length ? { tags: m.tags } : {}),
+    }));
 }
 
 export function createPostForMeAdapter(
@@ -36,23 +99,40 @@ export function createPostForMeAdapter(
   const client = new PostForMe({ apiKey: key, maxRetries: 0, timeout: 60_000 });
   const options = { maxRetries: 0 };
 
-  async function resultsFor(postId: string) {
-    const found = await client.socialPostResults.list({ post_id: [postId], limit: 50 }, options);
-    return found.data.map(resultTarget);
+  async function resultsFor(post: any) {
+    const results: any[] = [];
+    for (let offset = 0; offset < 500; offset += 50) {
+      const page = await client.socialPostResults.list(
+        { post_id: [post.id], limit: 50, offset },
+        options,
+      );
+      results.push(...page.data);
+      if (!page.meta.next || page.data.length === 0) break;
+    }
+    return results.map((r) => resultTarget(r, post));
   }
 
   async function postShape(post: any) {
-    const targets = post.status === "processed" ? await resultsFor(post.id) : [];
+    const targets = post.status === "processed" ? await resultsFor(post) : [];
     const accounts = (post.social_accounts ?? []).map((a: any) => ({
       account_id: typeof a === "string" ? a : a.id,
       platform: platformFromPfm(a.platform ?? ""),
       status: post.status === "scheduled" ? "pending" : "publishing",
     }));
+    const complete = (post.social_accounts ?? []).every((account: any) => {
+      const id = typeof account === "string" ? account : account.id;
+      const story = placementForAccount(post, { ...account, id }) === "stories";
+      const expected = story ? Math.max(1, mediaForAccount(post, id).length) : 1;
+      return targets.filter((target: any) => target.account_id === id).length >= expected;
+    });
+    const missing = accounts.filter(
+      (account: any) => !targets.some((target: any) => target.account_id === account.account_id),
+    );
     return {
       id: post.id,
       status:
         post.status === "processed"
-          ? targets.length === 0
+          ? !complete
             ? "publishing"
             : targets.some((t: any) => t.status === "failed")
               ? "failed"
@@ -64,7 +144,24 @@ export function createPostForMeAdapter(
               : "publishing",
       text: post.caption,
       scheduled_at: post.scheduled_at,
-      targets: targets.length ? targets : accounts,
+      targets: targets.length ? [...targets, ...missing] : accounts,
+      media_count: Array.isArray(post.media) ? post.media.length : 0,
+    };
+  }
+
+  /** Everything an update must resend so a reschedule never drops a placement. */
+  function keep(current: any): Json {
+    return {
+      caption: current.caption,
+      social_accounts: current.social_accounts.map((a: any) => a.id),
+      media: current.media,
+      ...(current.platform_configurations
+        ? { platform_configurations: current.platform_configurations }
+        : {}),
+      ...(current.account_configurations?.length
+        ? { account_configurations: current.account_configurations }
+        : {}),
+      ...(current.external_id ? { external_id: current.external_id } : {}),
     };
   }
 
@@ -91,32 +188,65 @@ export function createPostForMeAdapter(
           {
             social_post_id: [postId],
             expand: ["metrics"],
-            limit: 10,
+            // A Story post is one feed entry per frame.
+            limit: 20,
           },
           options,
         );
-        const entry = feed.data.find((item) => item.social_post_id === postId);
-        if (!entry?.metrics) continue;
-        const raw = entry.metrics as Record<string, any>;
-        const nested = raw.public_metrics ?? raw.organic_metrics ?? raw.lifetime_metrics ?? {};
-        const metric = (keys: string[]) => {
+        const entries = feed.data.filter((item) => item.social_post_id === postId && item.metrics);
+        if (!entries.length) continue;
+        const sum: Record<string, number> = {};
+        const metric = (raw: Record<string, any>, keys: string[]) => {
+          const nested = raw.public_metrics ?? raw.organic_metrics ?? raw.lifetime_metrics ?? {};
           for (const key of keys) {
             const value = raw[key] ?? nested[key];
             if (typeof value === "number" && Number.isFinite(value)) return value;
           }
           return 0;
         };
+        for (const entry of entries) {
+          const raw = entry.metrics as Record<string, any>;
+          const add = (name: string, keys: string[]) => {
+            sum[name] = (sum[name] ?? 0) + metric(raw, keys);
+          };
+          add("likes", ["likes", "like_count", "reactions", "reaction", "reactions_like"]);
+          add("comments", ["comments", "comment_count"]);
+          add("shares", ["shares", "share_count", "reposts", "retweets"]);
+          add("saves", ["saves", "save_count", "bookmark_count", "save", "saved"]);
+          add("views", [
+            "views",
+            "view_count",
+            "video_views",
+            "media_views",
+            "impressions",
+            "impression",
+          ]);
+          add("replies", ["replies"]);
+          add("navigation", ["navigation"]);
+          add("profile_visits", ["profile_visits"]);
+          add("follows", ["follows"]);
+        }
         targets.push({
           account_id: account.id,
           metrics: {
-            likes: metric(["likes", "like_count", "reactions", "reaction"]),
-            comments: metric(["comments", "comment_count"]),
-            shares: metric(["shares", "share_count", "reposts", "retweets"]),
-            saves: metric(["saves", "save_count", "bookmark_count", "save"]),
+            likes: sum.likes ?? 0,
+            comments: sum.comments ?? 0,
+            shares: sum.shares ?? 0,
+            saves: sum.saves ?? 0,
             extra: {
-              views: metric(["views", "view_count", "video_views", "impressions", "impression"]),
+              views: sum.views ?? 0,
+              replies: sum.replies ?? 0,
+              navigation: sum.navigation ?? 0,
+              profile_visits: sum.profile_visits ?? 0,
+              follows: sum.follows ?? 0,
             },
           },
+          // Per frame, by the network's own post id, so a Story's frames can be told apart.
+          frames: entries.map((entry) => ({
+            platform_post_id: entry.platform_post_id,
+            posted_at: entry.posted_at ?? null,
+            metrics: entry.metrics,
+          })),
         });
       } catch {
         // Some networks do not expose metrics; keep other accounts' data.
@@ -194,9 +324,28 @@ export function createPostForMeAdapter(
       if (/^\/media\/.+\/verify$/.test(path) && method === "POST")
         return ok(200, { verified: true });
       if (path === "/posts" && method === "POST") {
-        const media = Array.isArray(body.media)
-          ? body.media.map((m: any) => ({ url: m.source }))
-          : [];
+        const media = toPfmMedia(Array.isArray(body.media) ? body.media : []);
+        const platformConfigurations: Json = {
+          ...placementConfigs(body),
+          ...(body.platform_data?.tiktok?.privacy_level
+            ? {
+                tiktok: {
+                  privacy_status:
+                    body.platform_data.tiktok.privacy_level === "PUBLIC_TO_EVERYONE"
+                      ? "public"
+                      : "private",
+                },
+              }
+            : {}),
+          ...(body.title ? { youtube: { title: body.title } } : {}),
+        };
+        // Per-account media (a Story retry sends each account only its failed frames).
+        const accountConfigurations = (Array.isArray(body.account_media) ? body.account_media : [])
+          .filter((a: any) => typeof a?.account_id === "string" && Array.isArray(a.media))
+          .map((a: any) => ({
+            social_account_id: a.account_id,
+            configuration: { media: toPfmMedia(a.media) },
+          }));
         const post = await client.socialPosts.create(
           {
             caption: String(body.text ?? ""),
@@ -207,22 +356,11 @@ export function createPostForMeAdapter(
               typeof body.external_id === "string" && body.external_id.startsWith(`${workspaceId}:`)
                 ? body.external_id
                 : workspaceId,
-            ...(body.platform_data?.tiktok?.privacy_level || body.title
-              ? {
-                  platform_configurations: {
-                    ...(body.platform_data?.tiktok?.privacy_level
-                      ? {
-                          tiktok: {
-                            privacy_status:
-                              body.platform_data.tiktok.privacy_level === "PUBLIC_TO_EVERYONE"
-                                ? "public"
-                                : "private",
-                          },
-                        }
-                      : {}),
-                    ...(body.title ? { youtube: { title: body.title } } : {}),
-                  } as any,
-                }
+            ...(Object.keys(platformConfigurations).length
+              ? { platform_configurations: platformConfigurations as any }
+              : {}),
+            ...(accountConfigurations.length
+              ? { account_configurations: accountConfigurations as any }
               : {}),
           },
           options,
@@ -273,12 +411,7 @@ export function createPostForMeAdapter(
         const current = await client.socialPosts.retrieve(decodeURIComponent(postId), options);
         const updated = await client.socialPosts.update(
           decodeURIComponent(postId),
-          {
-            caption: current.caption,
-            social_accounts: current.social_accounts.map((a) => a.id),
-            media: current.media,
-            scheduled_at: body.scheduled_at ?? null,
-          },
+          { ...(keep(current) as any), scheduled_at: body.scheduled_at ?? null },
           options,
         );
         return ok(200, await postShape(updated));
@@ -288,12 +421,7 @@ export function createPostForMeAdapter(
         const current = await client.socialPosts.retrieve(decodeURIComponent(publishId), options);
         const updated = await client.socialPosts.update(
           decodeURIComponent(publishId),
-          {
-            caption: current.caption,
-            social_accounts: current.social_accounts.map((a) => a.id),
-            media: current.media,
-            scheduled_at: null,
-          },
+          { ...(keep(current) as any), scheduled_at: null },
           options,
         );
         return ok(201, await postShape(updated));

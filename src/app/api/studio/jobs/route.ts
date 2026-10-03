@@ -4,7 +4,8 @@ import { defineRoute } from "@/server/route";
 import { CreateJobSchema } from "@/lib/studio/jobs";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import { listJobs, StudioJobError } from "@/server/studio/runner.server";
-import { createBilledStudioJob } from "@/server/studio/billed.server";
+import { createBilledStudioJob, studioJobRenders } from "@/server/studio/billed.server";
+import { isStoriesEnabled } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 // Text generation runs inside this request; renders do not.
@@ -20,9 +21,9 @@ export const POST = defineRoute({
   rateLimit: ({ body }) => {
     const media = STUDIO_FORMATS[body.type].media;
     const renders =
-      media === "video"
+      media === "video" || (body.type === "story" && body.controls.storyMode === "video")
         ? "video"
-        : media === "image" || (media === "optional-image" && body.controls.includeImage)
+        : studioJobRenders(body)
           ? "image"
           : null;
     // A caption-only refine never renders.
@@ -32,6 +33,9 @@ export const POST = defineRoute({
     return { tier: renders ?? "generate" };
   },
   handler: async ({ body, workspaceId, userId, role, supabase }) => {
+    if (body.type === "story" && !isStoriesEnabled(workspaceId)) {
+      return jsonError(404, "Stories aren't available for this workspace.");
+    }
     try {
       // Billing and the job share one path with Autopilot (billed.server.ts).
       const { job, balance } = await createBilledStudioJob({

@@ -15,6 +15,8 @@ import {
   type StrategySuggestion,
 } from "@/lib/autopilot/contracts";
 import { estimateCost } from "@/lib/autopilot/policy";
+import { DEFAULT_STORY_SETTINGS, type StorySettings } from "@/lib/stories/schedule";
+import { isStoryPlatform } from "@/lib/stories/placement";
 import { isValidTimeZone } from "@/lib/autopilot/time";
 import { isFullAutopilotEnabled } from "@/lib/feature-flags";
 import type { PlatformId } from "@/lib/social-platforms";
@@ -132,7 +134,19 @@ export async function suggestStrategy(args: {
 
   const platforms = (connected.length ? connected.slice(0, 3) : ["linkedin"]) as PlatformId[];
   const postsPerWeek = 5;
-  const estimate = estimateCost("social").credits * postsPerWeek;
+  // A daily Story when an Instagram or Facebook account is connected: it's
+  // where Stories live, and one a day is the habit that works.
+  const storyPlatforms = connected.filter(isStoryPlatform);
+  const stories = {
+    ...DEFAULT_STORY_SETTINGS,
+    enabled: storyPlatforms.length > 0,
+    platforms: (storyPlatforms.length
+      ? storyPlatforms
+      : ["instagram"]) as StorySettings["platforms"],
+  };
+  const estimate =
+    estimateCost("social").credits * postsPerWeek +
+    (stories.enabled ? estimateCost("story").credits * stories.perDay * 7 : 0);
   const settings: ProgramSettings = {
     // Set up once and it runs: fully automatic where that is allowed. Its
     // checks still hold anything unsure for a person.
@@ -151,6 +165,7 @@ export async function suggestStrategy(args: {
     styleId: null,
     strategy,
     automations: ["geo_scan"],
+    stories,
   };
   return { strategy, settings, source, hasBrand };
 }

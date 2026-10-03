@@ -493,6 +493,22 @@ export const Layers = createIcon(
   </>,
 );
 
+/**
+ * Story — a vertical frame inside the segmented ring people recognise from
+ * Instagram and Facebook Stories. The gaps in the ring say "a sequence".
+ */
+export const Story = createIcon(
+  "story",
+  <>
+    <path d="M12 3.4a8.6 8.6 0 0 1 6.6 3.1" />
+    <path d="M20.4 10.4a8.6 8.6 0 0 1-1.6 6.9" />
+    <path d="M15.9 19.7a8.6 8.6 0 0 1-7.8 0" />
+    <path d="M5.2 17.3a8.6 8.6 0 0 1-1.6-6.9" />
+    <path d="M5.4 6.5A8.6 8.6 0 0 1 12 3.4" />
+    <rect x="9.4" y="7.6" width="5.2" height="8.8" rx="1.3" />
+  </>,
+);
+
 /** A live/active indicator. Solid so it reads at 6–8px. */
 export const Dot = createIcon("dot", <circle cx="12" cy="12" r="4.4" />, { solid: true });
 

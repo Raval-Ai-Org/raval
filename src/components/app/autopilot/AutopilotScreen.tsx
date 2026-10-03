@@ -19,6 +19,7 @@ import {
   Play,
   RotateCcw,
   Settings,
+  Story,
   TrendingUp,
   X,
 } from "@/components/icons";
@@ -89,6 +90,7 @@ const FORMAT_LABEL: Record<OpportunityFormat, string> = {
   social: "Post",
   image: "Image post",
   carousel: "Carousel",
+  story: "Story",
   video: "Video",
   article: "Article",
   campaign: "Small campaign",
@@ -301,6 +303,27 @@ function Home({
 
       <GroupLabel>Also on Autopilot</GroupLabel>
       <div className="grid gap-2 sm:grid-cols-2">
+        {view.stories?.enabled && (
+          <button
+            type="button"
+            onClick={() => onSection(view.stories?.waiting ? "approvals" : "settings")}
+            className="ds-tile ds-tile-hover flex items-center gap-3.5 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
+              <Story className="h-5 w-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[14px] font-semibold">Daily Stories</span>
+              <span className="block truncate text-[12.5px] text-muted-foreground">
+                {view.stories.waiting
+                  ? `${view.stories.waiting} waiting for your OK`
+                  : view.stories.times.length
+                    ? `Around ${view.stories.times.join(", ")}${view.stories.timing === "learned" ? " · your best times" : ""}`
+                    : "Planned with next week"}
+              </span>
+            </span>
+          </button>
+        )}
         <button
           type="button"
           onClick={() => handlers.open("visibility")}
@@ -453,11 +476,24 @@ function Approvals({ view, handlers }: { view: AutopilotView; handlers: Autopilo
                   {whenLabel(a.plannedFor)}
                 </span>
               </div>
-              {a.preview?.body && (
+              {a.preview?.frames?.length ? (
+                <ul aria-label="Story frames" className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                  {a.preview.frames.map((src, k) => (
+                    <li key={k} className="shrink-0">
+                      <img
+                        src={src}
+                        alt={`Frame ${k + 1}`}
+                        loading="lazy"
+                        className="aspect-[9/16] w-[104px] rounded-xl object-cover ring-1 ring-border/60"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : a.preview?.body ? (
                 <p className="ds-well mt-3 line-clamp-[10] whitespace-pre-wrap rounded-[var(--ds-radius-well)] p-3.5 text-[13.5px] leading-relaxed">
                   {a.preview.body}
                 </p>
-              )}
+              ) : null}
               {a.reason && (
                 <p className="mt-3 text-[12.5px] text-muted-foreground">
                   <span className="font-medium text-foreground/80">Why this: </span>

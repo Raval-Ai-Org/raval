@@ -27,6 +27,7 @@ import {
   buildReadyQueue,
   buildReviewQueue,
   groupSchedule,
+  storyCoverage,
   transitionPath,
   undoTarget,
   type CcApprovalRow,
@@ -202,6 +203,7 @@ export function useCommandCenter() {
     [visibleRows, clientMap, now],
   );
   const stats = useMemo(() => activityStats(rows, clientMap, now), [rows, clientMap, now]);
+  const stories = useMemo(() => storyCoverage(rows, clientMap, now), [rows, clientMap, now]);
   const attention = useMemo(
     () => buildAttention(clients, { review, ready, failed }),
     [clients, review, ready, failed],
@@ -484,6 +486,7 @@ export function useCommandCenter() {
     failed,
     schedule,
     stats,
+    stories,
     attention,
     busy,
     drafting,

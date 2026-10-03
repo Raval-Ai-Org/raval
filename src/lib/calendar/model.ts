@@ -35,6 +35,8 @@ export type CalendarEntry = {
   hashtags: string[];
   status: CalendarStatus;
   images: string[];
+  /** An Instagram or Facebook Story: gone a day after it goes out. */
+  story?: boolean;
 };
 
 /** The stored row fields the calendar reads (a subset of `ContentItem`). */
@@ -125,6 +127,7 @@ export function isLocked(status: CalendarStatus): boolean {
 
 const KIND_FORMAT: Record<string, string> = {
   post: "Post",
+  story: "Story",
   carousel: "Carousel",
   image: "Image",
   video: "Video",
@@ -240,6 +243,7 @@ export function entryFromContent(item: CalendarSourceItem): CalendarEntry {
     hashtags: Array.isArray(item.hashtags) ? item.hashtags.filter(Boolean) : [],
     status,
     images: item.media_url ? [item.media_url] : [],
+    ...(item.kind === "story" || meta.placement === "stories" ? { story: true } : {}),
   };
 }
 
@@ -249,12 +253,24 @@ export type CalendarFilter = {
   channel: CalendarChannel | "all";
   status: CalendarStatus | "all";
   query: string;
+  /** Show everything, only Stories, or everything but Stories. */
+  format?: "all" | "stories" | "posts";
 };
 
-export const NO_FILTER: CalendarFilter = { channel: "all", status: "all", query: "" };
+export const NO_FILTER: CalendarFilter = {
+  channel: "all",
+  status: "all",
+  query: "",
+  format: "all",
+};
 
 export function isFiltering(filter: CalendarFilter): boolean {
-  return filter.channel !== "all" || filter.status !== "all" || filter.query.trim() !== "";
+  return (
+    filter.channel !== "all" ||
+    filter.status !== "all" ||
+    filter.query.trim() !== "" ||
+    (filter.format ?? "all") !== "all"
+  );
 }
 
 export function filterEntries(entries: CalendarEntry[], filter: CalendarFilter): CalendarEntry[] {
@@ -262,6 +278,8 @@ export function filterEntries(entries: CalendarEntry[], filter: CalendarFilter):
   return entries.filter((e) => {
     if (filter.channel !== "all" && e.channel !== filter.channel) return false;
     if (filter.status !== "all" && e.status !== filter.status) return false;
+    if (filter.format === "stories" && !e.story) return false;
+    if (filter.format === "posts" && e.story) return false;
     if (!q) return true;
     return [e.title, e.caption ?? "", e.hashtags.join(" "), e.topic ?? ""]
       .join("\n")

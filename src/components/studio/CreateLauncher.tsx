@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Sparkles,
   UserCircle2,
+  Story,
   Video,
   type LucideIcon,
 } from "@/components/icons";
@@ -35,6 +36,7 @@ import { TypeGlyph } from "./studio-ui";
 
 const GROUP_ICON: Record<StudioGroup, LucideIcon> = {
   video: Video,
+  stories: Story,
   picture: ImageIcon,
   text: MessageSquare,
   ads: Megaphone,
@@ -43,6 +45,7 @@ const GROUP_ICON: Record<StudioGroup, LucideIcon> = {
 /** A real StudioType per group, only to borrow its `--tone` colour. */
 const GROUP_TONE_TYPE: Record<StudioGroup, StudioType> = {
   video: "video",
+  stories: "story",
   picture: "image",
   text: "social",
   ads: "ad",

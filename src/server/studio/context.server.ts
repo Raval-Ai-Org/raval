@@ -149,6 +149,9 @@ async function loadWorkspaceSnapshot(
           .find((line) => line.trim())
           ?.slice(0, 90) ??
         "Untitled";
+      const story = record(meta.story);
+      const storyFrames = Array.isArray(story.frames) ? story.frames.map(record) : [];
+      const look = meta.carousel ? record(meta.carousel) : record(story.spec);
       return {
         title: title.replace(/^#+\s*/, "").slice(0, 120),
         type: str(meta.studio_type) ?? str(r.kind) ?? "post",
@@ -156,18 +159,21 @@ async function loadWorkspaceSnapshot(
         angle: str(meta.angle),
         status: str(r.status),
         createdAt: String(r.created_at ?? ""),
-        // What a reader saw first: a carousel's cover, else the first line.
+        // What a reader saw first: a carousel's cover or a Story's first frame, else the first line.
         hook:
           (Array.isArray(meta.slides) ? str(record(meta.slides[0]).heading) : null) ??
+          (storyFrames.length ? str(storyFrames[0].heading) : null) ??
           (openingLine(str(r.body)) || undefined),
+        storyTheme: str(story.theme),
         hookStyle: str(meta.hook_style),
         structure: str(record(meta.carousel).structure),
-        design: meta.carousel
-          ? {
-              colorway: str(record(record(meta.carousel).design).colorway) ?? undefined,
-              motif: str(record(record(meta.carousel).design).motif) ?? undefined,
-            }
-          : null,
+        design:
+          meta.carousel || story.spec
+            ? {
+                colorway: str(record(look.design).colorway) ?? undefined,
+                motif: str(record(look.design).motif) ?? undefined,
+              }
+            : null,
         sample: str(r.body)?.slice(0, 500),
         excerpt: (
           str(meta.concept) ??
@@ -177,6 +183,11 @@ async function loadWorkspaceSnapshot(
                   const item = record(slide);
                   return [str(item.heading), str(item.body)].filter(Boolean).join(" ");
                 })
+                .join(" ")
+            : null) ??
+          (storyFrames.length
+            ? storyFrames
+                .map((f) => [str(f.heading), str(f.body)].filter(Boolean).join(" "))
                 .join(" ")
             : null) ??
           str(r.body)

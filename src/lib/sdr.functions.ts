@@ -301,8 +301,14 @@ export type PublicationRow = {
     shares?: number;
     saves?: number;
     views?: number;
+    reach?: number;
+    replies?: number;
   } | null;
   metrics_synced_at?: string | null;
+  /** feed, reels or stories. */
+  placement?: string | null;
+  /** A Story's frames: which went out and which didn't. */
+  frames?: { i: number; status: string; error?: string | null }[] | null;
 };
 
 /** Per-platform delivery status + live links for a content item. */

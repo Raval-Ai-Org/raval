@@ -9,6 +9,7 @@ import { STUDIO_FORMATS, type StudioType } from "./formats";
 import { templateDirective } from "./templates";
 import type { ResolvedStyle } from "@/lib/brand-kit/resolve";
 import { slidePlanText, type CarouselStructure } from "./carousel/story";
+import { framePlanText, type StoryTheme } from "@/lib/stories/frames";
 import { consistencySection, memorySection, type HookStyle } from "./memory";
 import { playbookSection } from "./playbook";
 import { TRENDS_RULE, trendLines, type SocialTrends } from "./trends";
@@ -45,6 +46,8 @@ export type StudioContext = {
     /** Carousels: the story structure and the look it was given. */
     structure?: string | null;
     design?: { colorway?: string; motif?: string } | null;
+    /** Stories: the theme it followed, so the next one rotates. */
+    storyTheme?: string | null;
     /** A longer passage of the copy, used only as a voice reference. */
     sample?: string;
   }[];
@@ -500,6 +503,10 @@ type BuildArgs = {
   hook?: HookStyle;
   /** Carousels: the story structure the slides follow. */
   carouselStructure?: CarouselStructure;
+  /** Stories: the theme the frames follow. */
+  storyTheme?: StoryTheme;
+  /** Repurposing: the piece this one is made from (already in this workspace). */
+  source?: { title: string; body: string; kind: string } | null;
 };
 
 function platformRubric(platforms: PlatformId[]): string {
@@ -575,6 +582,68 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
     user: sections([...sharedUser(args, "carousel"), ...refineSections(args.refine, args.current)]),
     schema: CarouselSchema,
     maxTokens: 3200,
+    temperature: args.refine ? TEMPERATURE.refine : TEMPERATURE.draft,
+  };
+}
+
+export const StorySchema = z.object({
+  title: Str(120),
+  frames: z
+    .array(
+      z.object({
+        role: z.coerce.string().optional().catch(undefined),
+        kicker: Str(30).optional().catch(undefined),
+        heading: Str(90),
+        emphasis: Str(60).optional().catch(undefined),
+        body: z.coerce
+          .string()
+          .default("")
+          .transform((s) => s.trim().slice(0, 200)),
+        visual: Str(240).optional().catch(undefined),
+        options: z.array(z.coerce.string()).max(6).optional().catch(undefined),
+      }),
+    )
+    .min(1)
+    .max(7),
+});
+
+function sourceSection(source: BuildArgs["source"]): Section {
+  if (!source) return { label: "Source piece", body: null };
+  return {
+    label: "Source piece (make the Story from this; keep its facts, change the form)",
+    body: `${source.kind}: ${source.title}\n${source.body.slice(0, 2400)}`,
+  };
+}
+
+export function buildStoryPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof StorySchema>> {
+  const count = args.controls.frameCount ?? 3;
+  const theme = args.storyTheme;
+  return {
+    route: "studio.story",
+    system: systemPrompt(
+      "You are Mellox, a social lead who makes Instagram and Facebook Stories people watch to the last frame.",
+      [
+        theme
+          ? `Write exactly ${count} ${count === 1 ? "frame" : "frames"}, in this order:\n${framePlanText(theme, count)}`
+          : `Write exactly ${count} frames.`,
+        theme ? `Theme: ${theme.label}. ${theme.directive}` : "",
+        "A Story frame is seen for about five seconds on a phone. Big words, one idea per frame. Each frame must make the viewer want the next; the first frame must work alone.",
+        "It is ONE Story, not separate cards: keep the same subject and the same terms from the first frame to the last.",
+        "Frame text is drawn on the image: no emoji, no hashtags, no markdown, no 'swipe up', no arrows, no 'tap' instructions.",
+        "Stories posted this way cannot carry link, poll, question or music stickers. Never mention stickers. To get a response, ask people to reply; to send them to the website, say 'link in bio'.",
+        "`kicker` is an optional 1 to 3 word label above the heading. `emphasis` is 1 to 3 words copied exactly from that frame's heading, to highlight. `visual` is one line of art direction for an optional background picture, never text.",
+        "`options` only on a question frame: 2 to 4 answer choices, at most 3 words each.",
+        args.controls.cta ? `Use this call to action: ${args.controls.cta}` : "",
+      ].filter(Boolean),
+      `{"title": string, "frames": [{"role": string, "kicker": string, "heading": string, "emphasis": string, "body": string, "visual": string, "options": string[]}]}`,
+    ),
+    user: sections([
+      ...sharedUser(args, "story"),
+      sourceSection(args.source),
+      ...refineSections(args.refine, args.current),
+    ]),
+    schema: StorySchema,
+    maxTokens: 1800,
     temperature: args.refine ? TEMPERATURE.refine : TEMPERATURE.draft,
   };
 }
@@ -719,6 +788,10 @@ export function buildTextPrompt(type: StudioType, args: BuildArgs) {
       return buildSocialPrompt(args);
     case "carousel":
       return buildCarouselPrompt(args);
+    case "story":
+      return args.controls.storyMode === "video"
+        ? buildVisualBriefPrompt({ ...args, medium: "video" })
+        : buildStoryPrompt(args);
     case "article":
       return buildArticlePrompt(args);
     case "script":

@@ -324,7 +324,7 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     key: "studio",
     module: "Studio",
     label: "Studio",
-    pitch: "Posts, image posts, carousels, ads and scripts in your brand voice.",
+    pitch: "Posts, Stories, image posts, carousels, ads and scripts in your brand voice.",
     minPlan: "free",
   },
   premium_articles: {
@@ -564,6 +564,14 @@ export const CREDIT_ACTIONS = {
     feature: "studio",
     expectedCostUsd: 0.06,
     routes: ["studio.carousel"],
+  },
+  story: {
+    credits: 20,
+    label: "Story",
+    unit: "up to 7 frames",
+    feature: "studio",
+    expectedCostUsd: 0.04,
+    routes: ["studio.story"],
   },
   ad_set: {
     credits: 30,

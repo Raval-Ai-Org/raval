@@ -5,7 +5,14 @@ vi.mock("@/integrations/supabase/client.user.server", () => ({
   createUserClient: () => ({ auth: { getClaims } }),
 }));
 
-import { checkWorkspaceMembership, roleAtLeast, verifyBearer, type VerifiedUser } from "./api-auth";
+import {
+  checkWorkspaceMembership,
+  markMcpRequest,
+  oauthClientId,
+  roleAtLeast,
+  verifyBearer,
+  type VerifiedUser,
+} from "./api-auth";
 
 const withAuth = (value?: string) =>
   new Request("http://localhost/api/x", value ? { headers: { authorization: value } } : {});
@@ -92,5 +99,28 @@ describe("checkWorkspaceMembership roles", () => {
     const out = await checkWorkspaceMembership(authWithRole(null), WS);
     expect(out.ok).toBe(false);
     if (!out.ok) expect(out.response.status).toBe(403);
+  });
+});
+
+describe("verifyBearer and assistant (OAuth client) tokens", () => {
+  const claims = { sub: "user-1", client_id: "claude-app" };
+
+  it("refuses an assistant's token on ordinary routes", async () => {
+    getClaims.mockResolvedValue({ data: { claims }, error: null });
+    expect(await verifyBearer(withAuth("Bearer a.b.c"))).toMatchObject({ ok: false, status: 401 });
+  });
+
+  it("accepts it where the MCP server asks for it", async () => {
+    getClaims.mockResolvedValue({ data: { claims }, error: null });
+    const result = await verifyBearer(withAuth("Bearer a.b.c"), { allowOAuthClient: true });
+    expect(result).toMatchObject({ ok: true, userId: "user-1" });
+    expect(oauthClientId(claims as never)).toBe("claude-app");
+  });
+
+  it("accepts it on a request the MCP bridge built, and only that request", async () => {
+    getClaims.mockResolvedValue({ data: { claims }, error: null });
+    const marked = markMcpRequest(withAuth("Bearer a.b.c"));
+    expect(await verifyBearer(marked)).toMatchObject({ ok: true });
+    expect(await verifyBearer(withAuth("Bearer a.b.c"))).toMatchObject({ ok: false });
   });
 });

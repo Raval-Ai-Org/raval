@@ -5,6 +5,11 @@ import type { StudioType } from "./formats";
 
 /** Checked in order — "video script" is a script, "carousel guide" is a carousel. */
 const RULES: [StudioType, RegExp][] = [
+  // "Customer story" is a post, not a Story: only the Story format itself counts.
+  [
+    "story",
+    /\b((instagram|insta|ig|facebook|fb) stor(y|ies)|stor(y|ies) (for|on) (instagram|facebook)|story frames?|daily stories)\b/i,
+  ],
   ["script", /\b(scripts?|reels?|tiktoks?|shorts|voice-?overs?|talking[- ]head)\b/i],
   ["carousel", /\b(carousels?|slides?|slideshows?|swipe(able)?)\b/i],
   ["article", /\b(articles?|blogs?|blog ?posts?|long[- ]?form|seo|newsletters?|how-to guides?)\b/i],

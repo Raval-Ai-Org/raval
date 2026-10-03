@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { createPostForMeAdapter } from "@/lib/postforme/client.server";
+import { isStoriesEnabled } from "@/lib/feature-flags";
 import type { SocialApiDeps, PostQuota } from "@/lib/postforme/handlers";
 
 export const postForMeDb = supabaseAdmin as any;
@@ -11,13 +12,16 @@ const quota: PostQuota = {
     const start = new Date(
       Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
     ).toISOString();
-    const { count, error } = await postForMeDb
+    const { data, error } = await postForMeDb
       .from("social_usage_events")
-      .select("id", { count: "exact", head: true })
+      .select("targets")
       .eq("workspace_id", workspaceId)
       .gte("created_at", start);
     if (error) throw new Error("Could not check publishing activity");
-    const used = count ?? 0;
+    const used = (data ?? []).reduce(
+      (total: number, event: { targets: number | null }) => total + Math.max(1, event.targets ?? 1),
+      0,
+    );
     return { ok: used + needed <= 100, used, limit: 100 };
   },
   async record(event) {
@@ -40,9 +44,13 @@ export function getPostForMeDeps(workspaceId: string): SocialApiDeps {
     db: postForMeDb,
     brandId: workspaceId,
     quota,
-    carouselMedia: async (item) => {
-      const { ensureCarouselMedia } = await import("@/server/studio/carousel-assets.server");
-      return ensureCarouselMedia(item);
+    storiesEnabled: isStoriesEnabled(workspaceId),
+    designedMedia: async (item) => {
+      const [{ ensureCarouselMedia }, { ensureStoryMedia }] = await Promise.all([
+        import("@/server/studio/carousel-assets.server"),
+        import("@/server/studio/story-assets.server"),
+      ]);
+      return (await ensureStoryMedia(item)) ?? (await ensureCarouselMedia(item));
     },
   };
 }

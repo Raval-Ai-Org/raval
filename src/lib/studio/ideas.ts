@@ -348,6 +348,10 @@ const FRAMES: Record<
     title: `A 6-slide playbook on ${topic}`,
     brief: `Turn ${topic} into a practical carousel from ${brand}: a cover that promises a clear outcome, one step per slide, and a closing slide with a next step.`,
   }),
+  story: (topic, brand) => ({
+    title: `Story: ${topic}`,
+    brief: `A 3-frame Story from ${brand} on ${topic}: a hook people stop on, one useful point, and a question they answer by replying.`,
+  }),
   image: (topic, brand) => ({
     title: `Visual moment: ${topic}`,
     brief: `One striking visual that captures ${topic} in ${brand}'s world — the scene, the feeling, and a short caption that makes the point.`,

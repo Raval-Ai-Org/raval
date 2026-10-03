@@ -8,7 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { llmJson } from "@/lib/ai-gateway.server";
 import { PLAN_GOALS } from "@/lib/calendar/planner";
-import { isAutopilotEnabled, isFullAutopilotEnabled } from "@/lib/feature-flags";
+import { isAutopilotEnabled, isFullAutopilotEnabled, isStoriesEnabled } from "@/lib/feature-flags";
 import { StrategySchema } from "@/lib/autopilot/contracts";
 import type { Candidate, Rating } from "@/lib/autopilot/opportunities";
 import { matchEvidence } from "@/lib/autopilot/opportunities";
@@ -30,6 +30,8 @@ import { loadStudioContext } from "@/server/studio/context.server";
 import { trendsFor } from "@/lib/studio/trends";
 import type { PlatformId } from "@/lib/social-platforms";
 import { advanceStudioJob, getJobRow } from "@/server/studio/runner.server";
+import { bestHours } from "@/lib/stories/schedule";
+import { getStoryTheme } from "@/lib/stories/frames";
 import type { AutopilotPorts, ContentLite, JobLite, PlanInput } from "./engine";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
@@ -176,6 +178,8 @@ Rules:
 - Use only facts found in the brand context or in an opportunity. Never invent statistics, customer names, prices, awards or dates.
 - Use an opportunity only when it truly fits the brand, and at most once.
 - If a slot has a key date, the piece may be about it, but only if it suits the brand.
+- A slot with format "story" is an Instagram or Facebook Story: 1 to 5 vertical frames, each read in about five seconds, gone after a day. Give it a quick, timely idea that fits the slot's theme; never a long article idea. Stories in the same week must each be about something different, and different from the feed posts that week.
+- Stories can't carry link, poll or music stickers; plan replies ("reply with your pick") and "link in bio" instead.
 - Lines starting "Working now" describe formats and openings doing well on a platform. Where one suits the brand and the slot's platform, shape the piece with it and say how in the brief. Never write that something is trending.
 - Each brief must open differently from the others and from anything in "Already made".`;
 
@@ -196,13 +200,19 @@ function strategyBlock(raw: Record<string, unknown>): string {
     .join("\n");
 }
 
-function planUser(input: PlanInput, brandText: string, extras: string[]): string {
+function planUser(
+  input: PlanInput,
+  brandText: string,
+  extras: string[],
+  audience?: string | null,
+): string {
   const { program, slots, opportunities, recentTitles } = input;
   const goal = PLAN_GOALS.find((g) => g.id === program.goal);
   const slotLines = slots
-    .map(
-      (s) =>
-        `[${s.index}] ${s.date} ${s.time} · ${s.platform ?? "blog"} · format: ${s.type} · allowed: ${s.allowedTypes.join(", ")}${s.moment ? ` · key date: ${s.moment}` : ""}`,
+    .map((s) =>
+      s.type === "story"
+        ? `[${s.index}] ${s.date} ${s.time} · Story on ${(s.platforms ?? [s.platform]).join(" + ")} · format: story · theme: ${getStoryTheme(s.topic)?.label ?? s.topic} (${getStoryTheme(s.topic)?.detail ?? ""})`
+        : `[${s.index}] ${s.date} ${s.time} · ${s.platform ?? "blog"} · format: ${s.type} · allowed: ${s.allowedTypes.join(", ")}${s.moment ? ` · key date: ${s.moment}` : ""}`,
     )
     .join("\n");
   const oppLines = opportunities
@@ -216,6 +226,7 @@ function planUser(input: PlanInput, brandText: string, extras: string[]): string
     strategyBlock(program.strategy),
     program.goal_note ? `WHAT THE TEAM ADDED: ${program.goal_note}` : "",
     `BRAND CONTEXT:\n${brandText || "(none saved yet)"}`,
+    audience ? `CUSTOMERS (who this is for): ${audience}` : "",
     input.learnings.length
       ? [
           "WHAT YOUR OWN RESULTS SHOW (lean into this):",
@@ -310,6 +321,7 @@ export const realPorts: AutopilotPorts = {
   now: () => new Date(),
   enabled: (workspaceId) => isAutopilotEnabled(workspaceId),
   fullEnabled: (workspaceId) => isFullAutopilotEnabled(workspaceId),
+  storiesEnabled: (workspaceId) => isStoriesEnabled(workspaceId),
 
   async automationPaused(workspaceId) {
     if (agentsGloballyDisabled()) return true;
@@ -377,7 +389,7 @@ export const realPorts: AutopilotPorts = {
       return row ? toJobLite(row) : null;
     },
 
-    async create({ workspaceId, userId, role, idempotencyKey, action, styleId }) {
+    async create({ workspaceId, userId, role, idempotencyKey, action, styleId, platforms, story }) {
       const type = (action.content_type ?? "social") as StudioType;
       const input = CreateJobSchema.parse({
         workspaceId,
@@ -389,7 +401,13 @@ export const realPorts: AutopilotPorts = {
           ideaId: action.opportunity_id ?? undefined,
           ideaSource: "autopilot",
         },
-        controls: { platforms: action.platform ? [action.platform] : [] },
+        controls: {
+          platforms: platforms?.length ? platforms : action.platform ? [action.platform] : [],
+          // Autopilot Stories are designed frames: drawn by code, no paid render.
+          ...(story
+            ? { storyMode: "frames", frameCount: story.frames, storyTheme: story.theme }
+            : {}),
+        },
         styleId: styleId ?? undefined,
       });
       const { job, charge } = await runWithScope(
@@ -465,6 +483,39 @@ export const realPorts: AutopilotPorts = {
       return summarizeLearnings(await measuredPieces(workspaceId));
     },
 
+    async storyHours(workspaceId, timeZone) {
+      const { data } = await db
+        .from("content_publications")
+        .select("delivered_at, metrics")
+        .eq("workspace_id", workspaceId)
+        .eq("placement", "stories")
+        .eq("status", "published")
+        .gte("delivered_at", new Date(Date.now() - 90 * DAY).toISOString())
+        .limit(400);
+      const hourOf = (iso: string) => {
+        try {
+          return Number(
+            new Intl.DateTimeFormat("en-GB", {
+              timeZone,
+              hour: "2-digit",
+              hourCycle: "h23",
+            }).format(new Date(iso)),
+          );
+        } catch {
+          return new Date(iso).getUTCHours();
+        }
+      };
+      return bestHours(
+        ((data ?? []) as { delivered_at: string | null; metrics: unknown }[])
+          .filter((r) => r.delivered_at)
+          .map((r) => ({
+            hour: hourOf(r.delivered_at!),
+            reach: Number(record(r.metrics).reach) || 0,
+          }))
+          .filter((s) => s.reach > 0),
+      );
+    },
+
     async recentTitles(workspaceId) {
       const ctx = await context(workspaceId);
       const { data } = await db
@@ -485,6 +536,9 @@ export const realPorts: AutopilotPorts = {
       const { program } = input;
       const ctx = await context(program.workspace_id);
       const extras = [
+        ...ctx.upcoming
+          .slice(0, 8)
+          .map((u) => `Already scheduled: ${u.title}${u.channel ? ` (${u.channel})` : ""}`),
         ...ctx.performanceSignals.slice(0, 3).map((s) => `Worked recently: ${s}`),
         ...ctx.competitorMoves.slice(0, 3).map((s) => `Competitor move: ${s}`),
         ...ctx.opportunities.slice(0, 3).map((s) => `Market: ${s}`),
@@ -507,7 +561,7 @@ export const realPorts: AutopilotPorts = {
           llmJson<{ items?: unknown[] }>({
             route: "autopilot.plan",
             system: PLAN_SYSTEM,
-            user: planUser(input, ctx.brandText, extras),
+            user: planUser(input, ctx.brandText, extras, ctx.audience),
             maxTokens: 6_000,
             outputSchema: PLAN_SCHEMA as unknown as Record<string, unknown>,
             timeoutMs: 60_000,

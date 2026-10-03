@@ -66,7 +66,7 @@ export async function createPostFromDraft(
     ...base,
     platforms: platform && format.platforms.includes(platform) ? [platform] : base.platforms,
     // A finished post has a visual; text-only formats stay text.
-    ...(format.media === "optional-image" ? { includeImage: true } : {}),
+    ...(format.media === "optional-image" && type !== "story" ? { includeImage: true } : {}),
   };
 
   const title = cleanText(row.title);

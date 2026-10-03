@@ -4070,6 +4070,7 @@ pre {
   --tone-script: 170 72% 32%;
   --tone-article: 199 80% 40%;
   --tone-ugc: 316 78% 46%;
+  --tone-story: 286 70% 48%;
   /* Ink for a solid format-tone fill. Several light tones (orange, teal and
      green) are too bright for white icons; the dark palette is brighter still. */
   --tone-foreground: 0 0% 0%;
@@ -4083,6 +4084,10 @@ pre {
   --tone-script: 166 72% 55%;
   --tone-article: 198 92% 64%;
   --tone-ugc: 316 90% 70%;
+  --tone-story: 286 85% 74%;
+}
+.studio-tone-story {
+  --tone: var(--tone-story);
 }
 .studio-tone-social {
   --tone: var(--tone-social);
@@ -4109,11 +4114,13 @@ pre {
   --tone: var(--tone-ugc);
 }
 .studio-tone-video,
-.studio-tone-ugc {
+.studio-tone-ugc,
+.studio-tone-story {
   --tone-foreground: 0 0% 100%;
 }
 .dark .studio-tone-video,
-.dark .studio-tone-ugc {
+.dark .studio-tone-ugc,
+.dark .studio-tone-story {
   --tone-foreground: 0 0% 0%;
 }
 :where(
@@ -4124,7 +4131,8 @@ pre {
   .studio-tone-video,
   .studio-tone-script,
   .studio-tone-article,
-  .studio-tone-ugc
+  .studio-tone-ugc,
+  .studio-tone-story
 ) {
   --tone-ink: color-mix(in oklab, hsl(var(--tone)) 76%, black);
 }
@@ -4137,7 +4145,8 @@ pre {
     .studio-tone-video,
     .studio-tone-script,
     .studio-tone-article,
-    .studio-tone-ugc
+    .studio-tone-ugc,
+    .studio-tone-story
   ) {
   --tone-ink: hsl(var(--tone));
 }

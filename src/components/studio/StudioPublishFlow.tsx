@@ -39,7 +39,10 @@ export function StudioPublishFlow({
   onSubmit,
   morePlatforms,
   onAddPlatforms,
+  placement = "feed",
 }: {
+  /** Where on the network it goes; a Story says so everywhere in this dialog. */
+  placement?: "feed" | "reels" | "stories";
   open: boolean;
   mode: "publish" | "schedule";
   workspaceId: string;
@@ -205,8 +208,20 @@ export function StudioPublishFlow({
       disableClose={phase === "sending"}
       size="sm"
       Icon={mode === "publish" ? Send : CalendarClock}
-      title={mode === "publish" ? "Publish your post" : "Schedule your post"}
-      description="All ready versions and all connected accounts on each platform are selected."
+      title={
+        placement === "stories"
+          ? mode === "publish"
+            ? "Publish your Story"
+            : "Schedule your Story"
+          : mode === "publish"
+            ? "Publish your post"
+            : "Schedule your post"
+      }
+      description={
+        placement === "stories"
+          ? "It goes to Stories on each account below and shows for 24 hours."
+          : "All ready versions and all connected accounts on each platform are selected."
+      }
       bodyClassName="px-5 pb-5 pt-3 sm:px-6"
     >
       <AnimatePresence mode="wait">
@@ -313,7 +328,14 @@ export function StudioPublishFlow({
                       <BrandLogo name={platform.logo} brand size={18} />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold">{platform.label}</p>
+                      <p className="text-sm font-semibold">
+                        {platform.label}
+                        {placement === "stories"
+                          ? " · Story"
+                          : placement === "reels"
+                            ? " · Reel"
+                            : ""}
+                      </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {connected.length
                           ? connected

@@ -30,6 +30,7 @@ import { formatElapsed, useElapsed } from "./studio-ui";
 const TYPICAL_SECONDS: Record<StudioType, number> = {
   social: 20,
   carousel: 30,
+  story: 30,
   image: 50,
   ad: 60,
   video: 140,

@@ -28,6 +28,18 @@ const strategy: Strategy = {
   ],
 };
 
+const STORIES = {
+  enabled: true,
+  perDay: 1,
+  days: [],
+  windowStart: "09:00",
+  windowEnd: "20:00",
+  platforms: ["instagram" as const],
+  themes: ["tip" as const, "behind" as const, "question" as const],
+  frames: 3,
+  smartTiming: true,
+};
+
 const settings: ProgramSettings = {
   mode: "full",
   goal: "leads",
@@ -44,6 +56,7 @@ const settings: ProgramSettings = {
   styleId: null,
   strategy,
   automations: ["geo_scan"],
+  stories: STORIES,
 };
 
 const action = (over: Partial<ActionView>): ActionView => ({
@@ -91,6 +104,7 @@ const running: AutopilotView = {
     actOnOpportunities: true,
     strategy,
     automations: ["geo_scan"],
+    stories: STORIES,
     week: 2,
     totalWeeks: 52,
   },
@@ -247,6 +261,7 @@ const running: AutopilotView = {
   ],
   tasks: [action({ kind: "task", status: "done", contentType: "geo_scan", platform: null })],
   visibility: { score: 72, scannedAt: at(-30) },
+  stories: { enabled: true, times: ["12:30"], timing: "common", upcoming: 6, waiting: 0 },
 };
 
 const SCENES = ["setup", "home", "approvals", "ideas", "activity", "settings", "paused"] as const;

@@ -69,7 +69,9 @@ function statusText(status: string): string {
 function engagementLine(m: PublicationRow["metrics"]): string | null {
   if (!m) return null;
   const parts = [
+    [m.reach, "reached"],
     [m.views, "views"],
+    [m.replies, "replies"],
     [m.likes, "likes"],
     [m.comments, "comments"],
     [m.shares, "shares"],
@@ -210,6 +212,11 @@ export function DeliveryView({
                 <div className="flex items-center gap-2">
                   <span className="truncate text-[12.5px] font-medium text-foreground">
                     {labelFor(row.platform)}
+                    {row.placement === "stories"
+                      ? " · Story"
+                      : row.placement === "reels"
+                        ? " · Reel"
+                        : ""}
                   </span>
                   <span
                     className={cn(
@@ -231,8 +238,18 @@ export function DeliveryView({
                     <span className="truncate">{row.platform_post_url}</span>
                   </a>
                 )}
+                {row.frames && row.frames.length > 1 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    {row.frames.filter((f) => f.status === "published").length} of{" "}
+                    {row.frames.length} frames posted
+                  </p>
+                ) : null}
                 {engagement ? (
                   <p className="text-[11px] text-muted-foreground">{engagement}</p>
+                ) : row.placement === "stories" && row.status === "published" ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Story numbers show up within the hour and stop after 24 hours.
+                  </p>
                 ) : null}
                 {row.status === "failed" && row.last_error && (
                   <p

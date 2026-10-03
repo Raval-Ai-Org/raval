@@ -106,6 +106,47 @@ describe("Post for Me adapter", () => {
     });
   });
 
+  it("keeps a Story publishing until every account and frame has a result", async () => {
+    mocks.createPost.mockResolvedValue({
+      id: "sp_story",
+      status: "processed",
+      caption: "Story",
+      social_accounts: [
+        { id: "sa_ig", platform: "instagram" },
+        { id: "sa_fb", platform: "facebook" },
+      ],
+      platform_configurations: {
+        instagram: { placement: "stories" },
+        facebook: { placement: "stories" },
+      },
+      media: [{ url: "https://example.com/one.jpg" }, { url: "https://example.com/two.jpg" }],
+    });
+    mocks.listResults.mockResolvedValue({
+      data: [
+        {
+          social_account_id: "sa_ig",
+          success: true,
+          media: [{ url: "https://example.com/one.jpg" }],
+          platform_data: { id: "ig_1" },
+        },
+      ],
+      meta: { next: null },
+    });
+    const call = createPostForMeAdapter("ws_1", "pfm_test_key");
+    const result = await call({
+      method: "POST",
+      path: "/posts",
+      body: { text: "Story", targets: [{ account_id: "sa_ig" }, { account_id: "sa_fb" }] },
+    });
+    expect(result.data.status).toBe("publishing");
+    expect(result.data.targets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ account_id: "sa_ig", frame: 0, status: "published" }),
+        expect.objectContaining({ account_id: "sa_fb", status: "publishing" }),
+      ]),
+    );
+  });
+
   it("finds a timed-out create by its exact external ID", async () => {
     mocks.listPosts.mockResolvedValue({
       data: [

@@ -160,6 +160,39 @@ export function isFullAutopilotEnabled(workspaceId?: string): boolean {
   return !isFalsy((process.env.FEATURE_FLAG_AUTOPILOT_FULL_ENABLED ?? "").trim().toLowerCase());
 }
 
+/**
+ * Stories (ADR-0030): Instagram and Facebook Stories in Studio, publishing,
+ * the calendar, analytics and Story Autopilot. On unless set to "false";
+ * `FEATURE_FLAG_STORIES_ENABLED_WS_<id>` overrides it for one workspace. Off
+ * means Studio hides the format, new Story jobs answer 404, Story Autopilot
+ * plans no Stories and Story items are not sent. Existing rows stay readable.
+ */
+export function isStoriesEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_STORIES_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_STORIES_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * MCP server (ADR-0029): AI assistants operating Mellox. On unless set to
+ * "false"; `FEATURE_FLAG_MCP_ENABLED_WS_<id>` overrides it for one workspace.
+ * This is only the kill switch: a workspace is still off until an admin turns
+ * it on in Settings.
+ */
+export function isMcpEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_MCP_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_MCP_ENABLED ?? "").trim().toLowerCase());
+}
+
 export function isProofEngineEnabled(workspaceId?: string): boolean {
   if (workspaceId) {
     const perWs = (process.env[`FEATURE_FLAG_PROOF_ENGINE_ENABLED_WS_${workspaceId}`] ?? "")

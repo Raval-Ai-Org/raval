@@ -52,6 +52,7 @@ const program: ProgramRow = {
   acting_user_id: "u1",
   strategy: {},
   automations: ["geo_scan"],
+  stories: {},
   last_notified_at: null,
   cycle: 0,
   created_by: "u1",

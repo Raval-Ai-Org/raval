@@ -58,6 +58,9 @@ import { usePreviewBrand } from "./previews/brand";
 import { CarouselPreview } from "./previews/CarouselPreview";
 import { MediaLightbox } from "./previews/MediaLightbox";
 import { ScriptPreview } from "./previews/ScriptPreview";
+import { StoryPreview } from "./previews/StoryPreview";
+import { StoryNotes } from "./StoryNotes";
+import { storyText } from "@/lib/stories/frames";
 import { PublishToSite } from "./PublishToSite";
 import { useStyleConformance } from "@/components/app/brand-kit/use-style-conformance";
 import { conformanceFixInstruction } from "@/lib/brand-kit/conformance";
@@ -75,7 +78,7 @@ export type ReviewRow = {
 
 /** Used only until the workspace's distribution status has loaded (and in fixtures). */
 const FALLBACK_DELIVERABLE: PlatformId[] = ["linkedin", "twitter", "facebook", "instagram"];
-const SHIPPABLE_TYPES = ["social", "image", "video", "carousel"];
+const SHIPPABLE_TYPES = ["social", "image", "video", "carousel", "story"];
 
 type Tone = "warn" | "ok" | "muted" | "danger";
 
@@ -351,6 +354,14 @@ export function ReviewPanel({
             body: `${scriptToMarkdown(draft.script)}\n\n---\n\n${draft.script.caption}`,
             meta: { script: draft.script },
           });
+        } else if (session.type === "story" && draft.story) {
+          // meta merges one level deep: send the whole Story, keeping what the
+          // server stored with it (its look, background and image hash).
+          const stored = (row.meta?.story ?? {}) as Record<string, unknown>;
+          Object.assign(patch, {
+            body: draft.story.frames.length ? storyText(draft.story.frames) : (row.body ?? ""),
+            meta: { story: { ...stored, frames: draft.story.frames } },
+          });
         } else {
           const v = draft.variants?.find((x) => x.platform === platform);
           if (v) patch.body = v.body;
@@ -505,14 +516,16 @@ export function ReviewPanel({
         ? `# ${draft.article?.title}\n\n${draft.article?.markdown}`
         : session.type === "script" && draft.script
           ? `${scriptToMarkdown(draft.script)}\n\n${draft.script.caption}`
-          : session.type === "ad"
-            ? (draft.ads ?? [])
-                .map(
-                  (a, i) =>
-                    `Variant ${"ABCD"[i]}\n${a.primaryText}\nHeadline: ${a.headline}\nCTA: ${a.cta}`,
-                )
-                .join("\n\n")
-            : (draft.variants?.find((v) => v.platform === current)?.body ?? "");
+          : session.type === "story" && draft.story?.frames.length
+            ? storyText(draft.story.frames)
+            : session.type === "ad"
+              ? (draft.ads ?? [])
+                  .map(
+                    (a, i) =>
+                      `Variant ${"ABCD"[i]}\n${a.primaryText}\nHeadline: ${a.headline}\nCTA: ${a.cta}`,
+                  )
+                  .join("\n\n")
+              : (draft.variants?.find((v) => v.platform === current)?.body ?? "");
     void navigator.clipboard.writeText(text).then(
       () => toast.success("Copied to clipboard"),
       () => toast.error("Couldn't copy"),
@@ -558,6 +571,26 @@ export function ReviewPanel({
       case "script":
         return draft.script ? (
           <ScriptPreview script={draft.script} platform={platforms[0]} />
+        ) : null;
+      case "story":
+        return draft.story ? (
+          <StoryPreview
+            frames={draft.story.frames}
+            brand={brand}
+            spec={draft.story.spec}
+            background={draft.story.mode === "frames" && media?.kind === "image" ? media : null}
+            video={draft.story.mode === "video" ? media : null}
+            editing={editing}
+            onFrameChange={(i, frame) =>
+              edit({
+                ...draft,
+                story: {
+                  ...draft.story!,
+                  frames: draft.story!.frames.map((f, j) => (j === i ? frame : f)),
+                },
+              })
+            }
+          />
         ) : null;
       case "carousel":
         return (
@@ -776,6 +809,14 @@ export function ReviewPanel({
       state: "ok",
       label: "Slides designed",
       detail: draft.slides.length,
+    });
+  }
+  if (draft.story) {
+    checks.push({
+      key: "frames",
+      state: "ok",
+      label: draft.story.mode === "video" ? "Video Story" : "Frames",
+      detail: draft.story.mode === "video" ? "9:16" : draft.story.frames.length,
     });
   }
   if (draft.script) {
@@ -1335,6 +1376,19 @@ export function ReviewPanel({
             <div className="mt-5 hidden @5xl/composer:flex">{actions}</div>
           </div>
 
+          {session.type === "story" ||
+          (["video", "social", "image", "carousel"].includes(session.type) && rows.length) ? (
+            <InspectorSection title={session.type === "story" ? "About Stories" : "Stories"}>
+              <StoryNotes
+                workspaceId={session.workspaceId}
+                type={session.type}
+                rows={rows}
+                videoReady={mediaReady && media?.kind === "video"}
+                disabled={!!fixtureRows}
+              />
+            </InspectorSection>
+          ) : null}
+
           {session.type === "article" && rows[0] && !approvable && !fixtureRows ? (
             <InspectorSection title="Your website">
               <PublishToSite workspaceId={session.workspaceId} contentItemId={rows[0].id} />
@@ -1576,6 +1630,7 @@ export function ReviewPanel({
         mode={publishMode ?? "publish"}
         workspaceId={session.workspaceId}
         destinations={publishDestinations}
+        placement={session.type === "story" ? "stories" : "feed"}
         needsApproval={approvable}
         scheduleAt={scheduleAt}
         onScheduleAtChange={setScheduleAt}

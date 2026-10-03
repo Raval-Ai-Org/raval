@@ -10,6 +10,7 @@ export const STYLE_SPEC_VERSION = 1;
 export const STYLE_FORMATS = [
   "social",
   "carousel",
+  "story",
   "article",
   "script",
   "ad",
@@ -22,6 +23,7 @@ export type StyleFormat = (typeof STYLE_FORMATS)[number];
 export const STYLE_FORMAT_LABELS: Record<StyleFormat, string> = {
   social: "Posts",
   carousel: "Carousels",
+  story: "Stories",
   article: "Articles",
   script: "Scripts",
   ad: "Ads",

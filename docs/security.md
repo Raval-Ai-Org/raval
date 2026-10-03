@@ -13,11 +13,11 @@ called.
 The repository's security model assumes three main classes of data:
 
 - Workspace data: content, Brand DNA, approvals, assets, settings, and member
-	ownership information.
+  ownership information.
 - Sensitive operational data: tokens, webhook secrets, OAuth metadata, service
-	account credentials, and provider keys.
+  account credentials, and provider keys.
 - External evidence data: search results, crawled pages, provider responses, and
-	integration metadata used to inform decisions.
+  integration metadata used to inform decisions.
 
 Only the server layer should touch the second category. The first and third
 categories must stay scoped to a verified workspace and be treated as untrusted
@@ -63,6 +63,14 @@ GitHub and distribution writes are server-mediated, workspace-scoped,
 idempotent, and audited. GitHub source writes create reviewable branches/PRs;
 they do not push or merge a base branch. Public hooks require cron or provider
 verification as appropriate.
+
+## AI assistants (MCP)
+
+`/api/mcp` lets an assistant act as a signed-in member (see [mcp.md](mcp.md)).
+It is off per workspace until an admin enables it, tools call the app's own
+functions so role, plan and credit checks still apply, assistant tokens are
+refused on every other route, unapproved content cannot be scheduled or
+posted, and every call is recorded in the append-only `mcp_tool_calls`.
 
 ## Security TODOs
 

@@ -53,6 +53,11 @@ export const PROMPT_BLUEPRINTS: Record<StudioType, PromptBlueprint> = {
     guidance:
       "A swipeable carousel. 'Slide 1' is the cover headline (under 8 words) plus a short subline. 'Middle slides' lists each slide on its own line as 'Slide N: heading — one sentence of detail', 4–8 slides. 'Last slide' is the recap plus a save/follow prompt. 'Design look' covers colours, typography feel and layout style. 'Caption' is 2–3 sentences to post with it.",
   },
+  story: {
+    sections: ["Idea", "Why now", "Frame 1", "Middle frames", "Last frame", "Reply prompt"],
+    guidance:
+      "A short Instagram or Facebook Story of 1 to 5 vertical frames. 'Frame 1' is the hook in under 8 words. 'Middle frames' lists each frame on its own line as 'Frame N: big headline (under 9 words), one short supporting line'. 'Last frame' is one clear next step (reply, link in bio, book). 'Reply prompt' is the question people answer by replying. Never mention link, poll or music stickers: they can't be added when posting through Mellox.",
+  },
   image: {
     sections: [
       "Idea",

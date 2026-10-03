@@ -766,6 +766,103 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     controls: { length: "short" },
     thumb: "hero",
   },
+  /* ───────────── Stories ───────────── */
+  {
+    id: "story-quick-tip",
+    types: ["story"],
+    label: "Quick tip",
+    tagline: "One useful idea people can try today",
+    beats: ["The problem", "The tip", "Try it"],
+    starter: "Show [audience] one practical way to [achieve outcome].",
+    directive:
+      "Make a short vertical Story sequence with one clear idea per frame. Start with a relatable problem, show the practical tip, then invite viewers to try it. Keep on-frame text brief and away from the top and bottom controls.",
+    goal: "education",
+    thumb: "steps",
+  },
+  {
+    id: "story-behind-scenes",
+    types: ["story"],
+    label: "Behind the scenes",
+    tagline: "Show a real moment from the work",
+    beats: ["The moment", "What happens", "Why it matters"],
+    starter: "Take viewers behind the scenes of [process or place] and show [real detail].",
+    directive:
+      "Tell the story through concrete, observed details. Use a short opening, one frame that shows the work, and a closing frame that explains what customers gain. Do not invent people, quotes, or outcomes.",
+    goal: "awareness",
+    thumb: "story",
+  },
+  {
+    id: "story-product-detail",
+    types: ["story"],
+    label: "Product close-up",
+    tagline: "Show one detail and its benefit",
+    beats: ["Close-up", "Benefit", "Next step"],
+    starter: "Show the [product or service] detail that helps [audience] with [need].",
+    directive:
+      "Focus each frame on one visible detail. Explain the customer benefit in ordinary words, then end with a simple next step. Only show features stated in the brief or brand details.",
+    goal: "leads",
+    thumb: "hero",
+  },
+  {
+    id: "story-faq",
+    types: ["story"],
+    label: "One question answered",
+    tagline: "Make a common answer easy to see",
+    beats: ["Question", "Answer", "Example"],
+    starter: "Answer this common customer question about [topic]: [question].",
+    directive:
+      "Put the customer question on the first frame, give the direct answer on the next, and add one useful example on the last. Invite a reply for follow-up; do not imply a native question sticker exists.",
+    goal: "education",
+    thumb: "question",
+  },
+  {
+    id: "story-this-or-that",
+    types: ["story"],
+    label: "This or that",
+    tagline: "Invite people to reply with a choice",
+    beats: ["Set the scene", "Two choices", "Reply"],
+    starter: "Ask [audience] whether they prefer [option A] or [option B] for [situation].",
+    directive:
+      "Present two balanced choices with large readable labels and invite viewers to reply with their pick. This is a visual question, not a native poll sticker.",
+    goal: "engagement",
+    thumb: "compare",
+  },
+  {
+    id: "story-announcement",
+    types: ["story"],
+    label: "Announcement",
+    tagline: "Share news in a few clear frames",
+    beats: ["The news", "Who it helps", "How to act"],
+    starter: "Announce [news or launch] for [audience], available [when or where].",
+    directive:
+      "Lead with the news, show the practical benefit, then give a clear next step. Use only supplied dates and availability. If the next step involves a URL, print it visibly or refer to the profile bio; do not imply a link sticker.",
+    goal: "launch",
+    thumb: "countdown",
+  },
+  {
+    id: "story-customer-win",
+    types: ["story"],
+    label: "Customer win",
+    tagline: "Tell a short result story",
+    beats: ["Before", "Change", "Result"],
+    starter: "Tell how [customer type] moved from [challenge] to [verified result].",
+    directive:
+      "Make the customer the center of the sequence. Use only the supplied result and avoid made-up testimonials or figures. Close with a takeaway another viewer can use.",
+    goal: "awareness",
+    thumb: "story",
+  },
+  {
+    id: "story-day-in-life",
+    types: ["story"],
+    label: "A day in the life",
+    tagline: "Follow a real routine in order",
+    beats: ["Start", "The work", "The payoff"],
+    starter: "Show a typical day for [person or role] while [activity] at [business].",
+    directive:
+      "Arrange the moments in time order with one scene per frame. Use specific details provided in the brief; keep the tone natural and the text short enough to read before the next frame.",
+    goal: "awareness",
+    thumb: "story",
+  },
 ];
 
 /** A cross-format shortlist for the start screen. */

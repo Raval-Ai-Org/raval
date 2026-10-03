@@ -55,6 +55,8 @@ import {
   type PlanProposal,
 } from "@/lib/autopilot/policy";
 import { canTransition } from "@/lib/autopilot/state";
+import { STORY_MEASURE_AFTER_MS, readStorySettings, type HourScore } from "@/lib/stories/schedule";
+import { isStoryPlatform } from "@/lib/stories/placement";
 import { addDaysYmd, ymdInZone, zonedInstant } from "@/lib/autopilot/time";
 import type { StudioType } from "@/lib/studio/formats";
 import type { WorkspaceRole } from "@/server/api-auth";
@@ -79,6 +81,7 @@ export type NewAction = Pick<ActionRow, "workspace_id" | "kind" | "dedupe_key"> 
       | "opportunity_id"
       | "requested_by"
       | "next_attempt_at"
+      | "result"
     >
   >;
 
@@ -147,7 +150,15 @@ export interface AutopilotStore {
   ): Promise<ActionRow[]>;
   /** Credits and videos already spent by a program in one week. */
   usage(programId: string, cycle: number): Promise<{ credits: number; videos: number }>;
-  autoApprovedSince(workspaceId: string, since: string): Promise<number>;
+  /**
+   * Pieces approved automatically since `since`. Stories and posts have their
+   * own daily caps, so each can be counted alone.
+   */
+  autoApprovedSince(
+    workspaceId: string,
+    since: string,
+    opts?: { contentType?: string; excludeContentType?: string },
+  ): Promise<number>;
   autoActedInCycle(programId: string, cycle: number): Promise<number>;
   openActionCount(programId: string): Promise<number>;
 
@@ -165,7 +176,12 @@ export interface AutopilotStore {
       | "strategy"
       | "last_notified_at"
       | "automations"
-    > & { strategy?: Record<string, unknown>; automations?: string[] },
+      | "stories"
+    > & {
+      strategy?: Record<string, unknown>;
+      automations?: string[];
+      stories?: Record<string, unknown>;
+    },
   ): Promise<ProgramRow>;
   updateProgram(
     id: string,
@@ -230,6 +246,8 @@ export interface AutopilotPorts {
   now(): Date;
   enabled(workspaceId: string): boolean;
   fullEnabled(workspaceId: string): boolean;
+  /** The Stories flag: off means Story Autopilot plans no Stories. */
+  storiesEnabled(workspaceId: string): boolean;
   /** The global and per-workspace automation kill switches. */
   automationPaused(workspaceId: string): Promise<boolean>;
   memberRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null>;
@@ -256,6 +274,10 @@ export interface AutopilotPorts {
       idempotencyKey: string;
       action: ActionRow;
       styleId: string | null;
+      /** Every platform the piece goes to (a Story can go to Instagram and Facebook). */
+      platforms?: string[];
+      /** Story pieces: how many frames and which theme. */
+      story?: { frames: number; theme: string } | null;
     }): Promise<{ job: JobLite; credits: number }>;
     /** Check a running render once. */
     advance(workspaceId: string, jobId: string): Promise<JobLite | null>;
@@ -274,6 +296,8 @@ export interface AutopilotPorts {
     recentTitles(workspaceId: string): Promise<string[]>;
     /** What this workspace's own measured posts show so far. */
     learnings(workspaceId: string): Promise<string[]>;
+    /** Local hours this brand's own Stories reached the most people. */
+    storyHours(workspaceId: string, timeZone: string): Promise<HourScore[]>;
     propose(input: PlanInput): Promise<PlanProposal[]>;
   };
 
@@ -314,6 +338,7 @@ const PLATFORM_LABEL: Record<string, string> = {
   youtube: "YouTube",
 };
 const TYPE_NOUN: Record<string, string> = {
+  story: "Story",
   social: "post",
   image: "image post",
   carousel: "carousel",
@@ -437,13 +462,19 @@ export async function actionsFromOpportunity(
     : opportunity.suggested_platforms.length
       ? opportunity.suggested_platforms
       : (program?.platforms ?? []);
+  const storyPlatforms = platforms.filter(isStoryPlatform);
   const pieces: { type: string; platform: string | null }[] =
     args.format === "campaign"
       ? campaignPieces(platforms)
       : [
           {
             type: args.format,
-            platform: args.format === "article" ? null : (platforms[0] ?? null),
+            platform:
+              args.format === "article"
+                ? null
+                : args.format === "story"
+                  ? (storyPlatforms[0] ?? "instagram")
+                  : (platforms[0] ?? null),
           },
         ];
 
@@ -482,6 +513,14 @@ export async function actionsFromOpportunity(
       opportunity_id: opportunity.id,
       requested_by: args.requestedBy,
       next_attempt_at: now.toISOString(),
+      ...(piece.type === "story"
+        ? {
+            result: {
+              story_theme: "news",
+              story_platforms: storyPlatforms.length ? storyPlatforms : ["instagram"],
+            },
+          }
+        : {}),
     };
   });
   return store.insertActions(rows);
@@ -521,7 +560,20 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
   }
 
   let learnings: string[] = [];
-  const slots = cycleSlots(program, cycle, now);
+  const stories = ports.storiesEnabled(program.workspace_id)
+    ? readStorySettings(program.stories)
+    : { ...readStorySettings(program.stories), enabled: false };
+  const storyHours =
+    stories.enabled && stories.smartTiming
+      ? await ports.plan.storyHours(program.workspace_id, program.timezone).catch(() => [])
+      : [];
+  const slots = cycleSlots(
+    stories.enabled ? program : { ...program, stories: {} },
+    cycle,
+    now,
+    undefined,
+    storyHours,
+  );
   let planned = 0;
   let droppedCount = 0;
   if (slots.length) {
@@ -566,7 +618,16 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
       reason: item.reason,
       goal: program.goal,
       opportunity_id: item.opportunity === null ? null : opportunities[item.opportunity].id,
-      next_attempt_at: generateAt(item.slot.at, now).toISOString(),
+      // Made ahead of the slot (a day for a Story, three for a post), never at it.
+      next_attempt_at: generateAt(item.slot.at, now, item.type).toISOString(),
+      ...(item.type === "story"
+        ? {
+            result: {
+              story_theme: item.slot.topic,
+              story_platforms: item.slot.platforms ?? [item.slot.platform],
+            },
+          }
+        : {}),
     }));
     const inserted = await store.insertActions(rows);
     planned = inserted.length;
@@ -940,6 +1001,10 @@ async function generate(
   let credits: number | null = null;
   if (!job) {
     try {
+      const story = action.content_type === "story";
+      const storyPlatforms = Array.isArray(action.result.story_platforms)
+        ? (action.result.story_platforms as unknown[]).filter(isStoryPlatform)
+        : [];
       const made = await ports.studio.create({
         workspaceId: action.workspace_id,
         userId: actor.userId,
@@ -947,6 +1012,16 @@ async function generate(
         idempotencyKey: key,
         action,
         styleId: program?.style_id ?? null,
+        ...(story
+          ? {
+              platforms: storyPlatforms.length ? storyPlatforms : [action.platform ?? "instagram"],
+              story: {
+                frames: readStorySettings(program?.stories).frames,
+                theme:
+                  typeof action.result.story_theme === "string" ? action.result.story_theme : "tip",
+              },
+            }
+          : {}),
       });
       job = made.job;
       credits = made.credits;
@@ -1012,7 +1087,7 @@ async function awaitApproval(
     );
     return;
   }
-  if (isPastApproval(action.planned_for, now)) {
+  if (isPastApproval(action.planned_for, now, action.content_type)) {
     await finish(
       ctx,
       action,
@@ -1041,6 +1116,7 @@ async function awaitApproval(
     const connected = await ports.connectedPlatforms(action.workspace_id);
     let invented = 0;
     for (const item of items) invented += await ports.scan.inventedFacts(action.workspace_id, item);
+    const story = action.content_type === "story";
     const decision = publishDecision({
       mode: program?.mode ?? "assist",
       fullEnabled: ports.fullEnabled(action.workspace_id),
@@ -1048,7 +1124,14 @@ async function awaitApproval(
       contentType: action.content_type,
       warnings: Number(action.result.warnings ?? 0),
       inventedFacts: invented,
-      autoApprovedToday: await store.autoApprovedSince(action.workspace_id, inMs(now, -24 * HOUR)),
+      // Stories have their own daily cap: the number a day the person chose.
+      autoApprovedToday: await store.autoApprovedSince(
+        action.workspace_id,
+        inMs(now, -24 * HOUR),
+        story ? { contentType: "story" } : { excludeContentType: "story" },
+      ),
+      dailyCap: story ? readStorySettings(program?.stories).perDay : undefined,
+      video: story && items.some((i) => i.meta.media_type === "video"),
       accountConnected: !action.platform || connected.includes(action.platform),
     });
     if (decision.auto) {
@@ -1193,7 +1276,13 @@ async function watchScheduled(ctx: Ctx, action: ActionRow): Promise<void> {
       ctx,
       action,
       "published",
-      { next_attempt_at: inMs(now, 48 * HOUR) },
+      // A Story's numbers are final once it has expired.
+      {
+        next_attempt_at: inMs(
+          now,
+          action.content_type === "story" ? STORY_MEASURE_AFTER_MS : 48 * HOUR,
+        ),
+      },
       { kind: "piece_published", summary: `Posted: ${action.title}`.slice(0, 480) },
     );
     return;
@@ -1231,7 +1320,7 @@ async function measure(ctx: Ctx, action: ActionRow, program: ProgramRow | null):
   const items = await ctx.ports.content.get(action.workspace_id, action.content_item_ids);
   const metrics: Record<string, number> = {};
   for (const item of items) {
-    for (const key of ["views", "likes", "comments", "shares", "saves"]) {
+    for (const key of ["views", "likes", "comments", "shares", "saves", "reach", "replies"]) {
       const value = Number(item.metrics?.[key]);
       if (Number.isFinite(value) && value > 0) metrics[key] = (metrics[key] ?? 0) + value;
     }

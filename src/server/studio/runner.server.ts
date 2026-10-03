@@ -84,6 +84,10 @@ import {
 import { paletteFromDnaColors } from "@/lib/brand-kit/resolve";
 import type { CarouselSpecOutput } from "@/lib/studio/jobs";
 import { storeCarouselSlides } from "./carousel-assets.server";
+import { storeStoryFrames } from "./story-assets.server";
+import { normalizeFrames, pickStoryTheme, storyText, type StoryTheme } from "@/lib/stories/frames";
+import { cleanMentions } from "@/lib/stories/placement";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { studioOutputQualityIssue } from "@/lib/studio/quality";
 import { reviewGeneratedImage } from "./image-review.server";
 
@@ -185,10 +189,12 @@ function mediaRatio(type: StudioType, input: CreateJobInput, platforms: Platform
   const requested = input.controls.ratio;
   if (requested && format.ratios.includes(requested)) return requested;
   if (type === "carousel") return "4:5";
+  if (type === "story") return "9:16";
   return recommendedRatio(platforms, type === "video" ? "video" : "image", format.ratios);
 }
 
 function needsMedia(type: StudioType, input: CreateJobInput): boolean {
+  if (type === "story" && input.controls.storyMode === "video") return true;
   const media = STUDIO_FORMATS[type].media;
   return (
     media === "image" ||
@@ -292,6 +298,32 @@ function draftRows(type: StudioType, output: StudioJobOutput, platforms: Platfor
           ...(output.carousel ? { carousel: output.carousel } : {}),
         },
       }));
+    case "story": {
+      const story = output.story;
+      const text = story?.frames.length
+        ? storyText(story.frames)
+        : (output.concept ?? title).slice(0, 600);
+      return platforms.map((p) => ({
+        ...base,
+        platform: p,
+        channel: channelForPlatform(p),
+        body: text,
+        hashtags: [],
+        meta: {
+          platform: p,
+          placement: "stories",
+          story: {
+            mode: story?.mode ?? "frames",
+            theme: story?.theme ?? null,
+            frames: story?.frames ?? [],
+            ...(story?.spec ? { spec: story.spec } : {}),
+            mentions: p === "instagram" ? (story?.mentions ?? []) : [],
+            ...(story?.sourceContentId ? { source_content_id: story.sourceContentId } : {}),
+          },
+          ...(output.concept ? { concept: output.concept } : {}),
+        },
+      }));
+    }
     case "ad":
       return platforms.map((p) => ({
         ...base,
@@ -665,6 +697,112 @@ async function finishCarousel(
     : "The slides were saved as text, but their images could not be made. Open the carousel and save it to try again.";
 }
 
+/**
+ * How this Story looks: the brand's carousel look (one profile, one hand),
+ * with a colourway and motif the last Story didn't use. A revision keeps it.
+ */
+function storyLook(args: {
+  job: JobRow;
+  input: CreateJobInput;
+  ctx: StudioContext;
+  dna: Record<string, unknown> | null;
+  parent: JobRow | null;
+}): CarouselSpecOutput {
+  const kept = args.parent?.output?.story?.spec;
+  const keptDesign = safeDesign(kept?.design);
+  const keptTheme = safeTheme(kept?.theme);
+  const brand = args.ctx.brandName.slice(0, 60);
+  const site = siteLabel(args.ctx.website);
+  if (args.input.refine && kept && keptDesign && keptTheme) {
+    return { ...kept, design: keptDesign, theme: keptTheme, brand, site, ratio: "9:16" };
+  }
+  const palette = args.ctx.style
+    ? args.ctx.style.visual.palette
+    : paletteFromDnaColors((args.dna?.colors as never) ?? null);
+  const dnaFonts = Array.isArray(args.dna?.fonts) ? (args.dna.fonts as string[]) : [];
+  const fonts = args.ctx.style?.visual.typography ?? {
+    heading: dnaFonts[0],
+    body: dnaFonts[1] ?? dnaFonts[0],
+  };
+  const design = pickCarouselDesign({
+    profileKey: `${args.job.workspace_id}:${args.ctx.style?.styleId ?? "brand"}`,
+    seed: args.input.idempotencyKey,
+    previous: args.ctx.recent.filter((r) => r.type === "story" && r.design).map((r) => r.design),
+    palette,
+  });
+  return {
+    design,
+    theme: carouselTheme({ palette, fonts, colorway: design.colorway }),
+    brand,
+    site,
+    ratio: "9:16",
+  };
+}
+
+/** A repurposed source piece, read through the job's own client and workspace. */
+async function loadSource(
+  client: Db,
+  workspaceId: string,
+  id: string | undefined,
+): Promise<{ title: string; body: string; kind: string; imagePath: string | null } | null> {
+  if (!id) return null;
+  const { data } = await client
+    .from("content_items")
+    .select("id, kind, title, body, meta")
+    .eq("id", id)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  const row = data as {
+    kind: string;
+    title: string | null;
+    body: string | null;
+    meta: unknown;
+  } | null;
+  if (!row)
+    throw new StudioJobError(404, "The piece you're turning into a Story no longer exists.");
+  const meta = (row.meta ?? {}) as Record<string, unknown>;
+  const first =
+    Array.isArray(meta.asset_storage_paths) && typeof meta.asset_storage_paths[0] === "string"
+      ? meta.asset_storage_paths[0]
+      : meta.asset_storage_path;
+  const imagePath =
+    meta.media_type !== "video" && isWorkspaceStoragePath(first, workspaceId)
+      ? (first as string)
+      : null;
+  const slides = Array.isArray(meta.slides)
+    ? (meta.slides as Array<Record<string, unknown>>)
+        .map((s) => [s.heading, s.body].filter((x) => typeof x === "string").join(": "))
+        .join("\n")
+    : "";
+  return {
+    title: (row.title ?? "").slice(0, 200),
+    body: [slides, row.body ?? ""].filter(Boolean).join("\n\n").slice(0, 4000),
+    kind: row.kind,
+    imagePath,
+  };
+}
+
+/** Draw and store the frame images. Never fails the job: the words are still good. */
+async function finishStory(
+  job: Pick<JobRow, "workspace_id" | "content_item_ids">,
+  output: StudioJobOutput,
+  sourceImage: string | null,
+): Promise<string | null> {
+  const story = output.story;
+  if (!story || story.mode !== "frames" || !story.frames.length || !story.spec) return null;
+  const cover = output.media?.find((m) => m.status === "ready" && m.kind === "image");
+  const stored = await storeStoryFrames({
+    workspaceId: job.workspace_id,
+    contentItemIds: job.content_item_ids,
+    frames: story.frames,
+    look: story.spec,
+    backgroundPaths: [cover?.storagePath ?? sourceImage ?? null],
+  });
+  return stored
+    ? null
+    : "The Story was saved as text, but its frames could not be drawn. Open it and save it to try again.";
+}
+
 /* ───────────────────────── media ───────────────────────── */
 
 function brandLite(brand: CreateJobInput["brand"]): BrandDnaLite | null {
@@ -760,7 +898,7 @@ async function startMedia(args: {
     ? `Recent visual concepts to avoid repeating; preserve the brand identity while changing the scene and focal idea:\n${visualAvoidance}`
     : undefined;
 
-  if (job.type === "video") {
+  if (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video")) {
     const seconds = [4, 6, 8].includes(input.controls.durationSec ?? 0)
       ? input.controls.durationSec!
       : 6;
@@ -804,7 +942,11 @@ async function startMedia(args: {
         input.intent.brief)
       : job.type === "carousel"
         ? [output.slides?.[0]?.heading, output.slides?.[0]?.visual].filter(Boolean).join("\n")
-        : (concept ?? output.variants?.[0]?.body ?? input.intent.brief);
+        : job.type === "story"
+          ? [output.story?.frames[0]?.heading, output.story?.frames[0]?.visual]
+              .filter(Boolean)
+              .join("\n")
+          : (concept ?? output.variants?.[0]?.body ?? input.intent.brief);
   // A media refine edits the previous render; otherwise the style's own
   // reference posts (close/exact) steer the look through image-to-image.
   const referenceAssets = args.referenceUrl
@@ -825,7 +967,9 @@ async function startMedia(args: {
       // The cover headline is drawn over this picture by the slide design.
       job.type === "carousel"
         ? "This picture is the background of a carousel cover. NO text, letters, numbers or logos anywhere in it, whatever the rules above allow. Keep the lower half calm and uncluttered so a headline can sit on it, with the subject in the upper half."
-        : "",
+        : job.type === "story"
+          ? "This picture is the full-screen background of a vertical Instagram Story frame. NO text, letters, numbers or logos anywhere in it, whatever the rules above allow. Keep the top eighth and the lower half calm and uncluttered (the app's controls and a headline sit there); put the subject in the upper middle."
+          : "",
       refineNote,
       noveltyNote,
     ]
@@ -1039,6 +1183,21 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         })
       : undefined;
 
+  const storyTheme: StoryTheme | undefined =
+    type === "story"
+      ? pickStoryTheme({
+          seed: input.idempotencyKey,
+          mix: input.controls.storyTheme ? [input.controls.storyTheme] : undefined,
+          recent: ctx.recent.filter((r) => r.type === "story").map((r) => r.storyTheme),
+          preferred: input.refine
+            ? parent?.output?.story?.theme
+            : input.intent.sourceContentId
+              ? "repurpose"
+              : input.controls.storyTheme,
+        })
+      : undefined;
+  const source = await loadSource(client, job.workspace_id, input.intent.sourceContentId);
+
   let output: StudioJobOutput = { ...(parent?.output ?? {}) };
   const partial: { target: string; error: string }[] = [];
   const firstStage = format.stages[1]?.id ?? "writing";
@@ -1054,6 +1213,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       angle,
       hook,
       carouselStructure,
+      storyTheme,
+      source,
       refine: input.refine,
       current: parent?.output,
     });
@@ -1086,6 +1247,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         angle,
         hook,
         partial,
+        storyTheme,
+        sourceContentId: source ? input.intent.sourceContentId : undefined,
       });
       const similar = input.refine ? null : findSimilarRecent(type, candidate, ctx.recent);
       // Same opening as an earlier piece: worth one more try, never a failure.
@@ -1164,6 +1327,13 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         structure: carouselStructure?.id ?? "list",
         ratio: mediaRatio(type, input, platforms),
       }),
+    };
+  }
+
+  if (type === "story" && output.story?.mode === "frames" && output.story.frames.length) {
+    output = {
+      ...output,
+      story: { ...output.story, spec: storyLook({ job, input, ctx, dna: base.brand, parent }) },
     };
   }
 
@@ -1249,6 +1419,10 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     const warning = await finishCarousel(job, output);
     if (warning) output = { ...output, warnings: [...(output.warnings ?? []), warning] };
   }
+  if (type === "story") {
+    const warning = await finishStory(job, output, source?.imagePath ?? null);
+    if (warning) output = { ...output, warnings: [...(output.warnings ?? []), warning] };
+  }
 
   await patchJob(client, job.id, {
     status: "succeeded",
@@ -1292,6 +1466,8 @@ async function shapeOutput(args: {
   angle: Angle;
   hook?: ReturnType<typeof pickHookStyle>;
   partial: { target: string; error: string }[];
+  storyTheme?: StoryTheme;
+  sourceContentId?: string;
 }): Promise<StudioJobOutput> {
   const { client, job, type, parsed, platforms, ctx, input, angle, partial } = args;
   const title = String(parsed.title ?? "").trim() || input.intent.brief.slice(0, 80);
@@ -1353,6 +1529,39 @@ async function shapeOutput(args: {
           cta: String(parsed.cta ?? ""),
           caption: caption.body,
           durationSec: input.controls.durationSec ?? 30,
+        },
+      };
+    }
+    case "story": {
+      const theme = args.storyTheme?.id ?? "tip";
+      const mentions = cleanMentions(input.controls.mentions ?? []);
+      if (input.controls.storyMode === "video") {
+        return {
+          title,
+          story: {
+            mode: "video",
+            theme,
+            frames: [],
+            mentions,
+            ...(args.sourceContentId ? { sourceContentId: args.sourceContentId } : {}),
+          },
+          ...({
+            concept: String(parsed.concept ?? ""),
+            altText: String(parsed.altText ?? ""),
+          } as object),
+        };
+      }
+      return {
+        title,
+        story: {
+          mode: "frames",
+          theme,
+          frames: normalizeFrames(parsed.frames, {
+            theme: args.storyTheme,
+            count: input.controls.frameCount ?? 3,
+          }),
+          mentions,
+          ...(args.sourceContentId ? { sourceContentId: args.sourceContentId } : {}),
         },
       };
     }
@@ -1623,6 +1832,14 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           ].filter(Boolean),
         },
       });
+      // The background picture is in (or failed): draw the frames over it.
+      if (row.type === "story") {
+        const warning = await finishStory(row, { ...row.output, media }, null);
+        if (warning) {
+          const done = patch.output as StudioJobOutput;
+          patch.output = { ...done, warnings: [...new Set([...(done.warnings ?? []), warning])] };
+        }
+      }
       // The cover picture is in (or failed): draw the slides around it.
       if (row.type === "carousel") {
         const warning = await finishCarousel(row, { ...row.output, media });

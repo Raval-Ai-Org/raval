@@ -722,6 +722,24 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
                   </SelectContent>
                 </Select>
                 <Select
+                  value={filter.format ?? "all"}
+                  onValueChange={(v) =>
+                    setFilter((f) => ({ ...f, format: v as CalendarFilter["format"] }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 w-auto gap-1.5 rounded-full px-3 text-[12px]"
+                    aria-label="Posts or Stories"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Posts and Stories</SelectItem>
+                    <SelectItem value="posts">Posts only</SelectItem>
+                    <SelectItem value="stories">Stories only</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
                   value={filter.status}
                   onValueChange={(v) =>
                     setFilter((f) => ({ ...f, status: v as CalendarStatus | "all" }))

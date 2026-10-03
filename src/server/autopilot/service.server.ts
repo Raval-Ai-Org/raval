@@ -27,6 +27,9 @@ import {
 import { totalWeeks, weekOf } from "@/lib/autopilot/policy";
 import { CANCELLABLE_STATUSES } from "@/lib/autopilot/state";
 import { addDaysYmd, isValidTimeZone, ymdInZone } from "@/lib/autopilot/time";
+import { readStorySettings, storyTimes } from "@/lib/stories/schedule";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
+import { signAssetPath } from "@/server/assets/persist.server";
 import { isAutopilotEnabled, isFullAutopilotEnabled } from "@/lib/feature-flags";
 import type { PlatformId } from "@/lib/social-platforms";
 import { recordAudit } from "@/server/audit.server";
@@ -81,7 +84,9 @@ const NOTICE_EVERY_MS = 20 * 60 * 60_000;
 /**
  * Tell the member a program acts for that posts are waiting on them — by
  * email, at most once a day per program — so nobody has to open Mellox to
- * find out. Sent only when something is actually waiting.
+ * find out. Sent only when something is actually waiting. Pieces that failed
+ * to go out in the last day (a Story is gone for good if nobody retries it)
+ * ride in the same email; they never trigger one on their own schedule.
  */
 export async function notifyWaiting(limit = 20): Promise<number> {
   if (!emailConfigured()) return 0;
@@ -93,14 +98,27 @@ export async function notifyWaiting(limit = 20): Promise<number> {
     .not("program_id", "is", null)
     .limit(500);
   if (error) throw new Error(error.message);
-  const byProgram = new Map<string, { workspaceId: string; titles: string[] }>();
-  for (const row of (waiting ?? []) as {
+  const { data: failedRows } = await admin
+    .from("autopilot_actions")
+    .select("program_id, workspace_id, status, title")
+    .eq("status", "failed")
+    .eq("kind", "content")
+    .not("program_id", "is", null)
+    .gte("updated_at", new Date(Date.now() - NOTICE_EVERY_MS).toISOString())
+    .limit(200);
+  const byProgram = new Map<string, { workspaceId: string; titles: string[]; failed: string[] }>();
+  for (const row of [...(waiting ?? []), ...(failedRows ?? [])] as {
     program_id: string;
     workspace_id: string;
+    status: string;
     title: string;
   }[]) {
-    const entry = byProgram.get(row.program_id) ?? { workspaceId: row.workspace_id, titles: [] };
-    entry.titles.push(row.title);
+    const entry = byProgram.get(row.program_id) ?? {
+      workspaceId: row.workspace_id,
+      titles: [],
+      failed: [],
+    };
+    (row.status === "failed" ? entry.failed : entry.titles).push(row.title);
     byProgram.set(row.program_id, entry);
   }
   let sent = 0;
@@ -136,18 +154,31 @@ export async function notifyWaiting(limit = 20): Promise<number> {
       .maybeSingle();
     const name = (ws as { name?: string } | null)?.name ?? "your workspace";
     const n = entry.titles.length;
+    const f = entry.failed.length;
+    const list = (titles: string[]) =>
+      titles
+        .slice(0, 6)
+        .map((t) => `• ${t}`)
+        .join("\n");
     const ok = await sendEmail({
       to: email,
-      subject: `${n} ${n === 1 ? "post is" : "posts are"} waiting for your OK`,
+      subject: n
+        ? `${n} ${n === 1 ? "post is" : "posts are"} waiting for your OK`
+        : `${f} ${f === 1 ? "post" : "posts"} didn't go out`,
       text: [
-        `Autopilot for ${name} has ${n === 1 ? "a post" : `${n} posts`} ready:`,
-        entry.titles
-          .slice(0, 6)
-          .map((t) => `• ${t}`)
-          .join("\n"),
-        "Nothing goes out until you approve it.",
-      ].join("\n\n"),
-      action: ["Review and approve", appUrl(`/w/${entry.workspaceId}/app/autopilot`)],
+        n ? `Autopilot for ${name} has ${n === 1 ? "a post" : `${n} posts`} ready:` : "",
+        n ? list(entry.titles) : "",
+        n ? "Nothing goes out until you approve it." : "",
+        f ? `${f === 1 ? "This" : "These"} didn't go out for ${name}:` : "",
+        f ? list(entry.failed) : "",
+        f ? "Open Autopilot to see why and try again." : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      action: [
+        n ? "Review and approve" : "See what happened",
+        appUrl(`/w/${entry.workspaceId}/app/autopilot`),
+      ],
     });
     if (ok) sent++;
   }
@@ -213,6 +244,7 @@ function presentProgram(row: ProgramRow, now: Date): ProgramView {
     automations: (row.automations ?? []).filter((a): a is Automation =>
       (AUTOMATIONS as readonly string[]).includes(a),
     ),
+    stories: readStorySettings(row.stories),
     week: Math.min(total, Math.max(1, weekOf(row, ymdInZone(now, row.timezone)))),
     totalWeeks: total,
   };
@@ -287,7 +319,13 @@ async function readiness(
   ]);
   const website = (ws as { website_url?: string | null } | null)?.website_url ?? null;
   const dnaSize = JSON.stringify((dna as { dna?: unknown } | null)?.dna ?? {}).length;
-  const wanted = program?.platforms ?? [];
+  const stories = readStorySettings(program?.stories);
+  const wanted = [
+    ...new Set([
+      ...(program && program.posts_per_week > 0 ? program.platforms : []),
+      ...(stories.enabled ? stories.platforms : []),
+    ]),
+  ];
   const missing = wanted.filter((p) => !connected.includes(p));
   const accountsOk = connected.length > 0 && missing.length === 0;
   return [
@@ -360,6 +398,53 @@ async function latestVisibility(workspaceId: string) {
   return row ? { score: row.overall_score, scannedAt: row.completed_at } : null;
 }
 
+/** Story Autopilot at a glance: today's times and what's queued. */
+function storySummary(
+  program: ProgramRow,
+  actions: ActionRow[],
+  now: Date,
+): AutopilotView["stories"] {
+  const settings = readStorySettings(program.stories);
+  if (!settings.enabled) return null;
+  const stories = actions.filter((a) => a.content_type === "story");
+  const planned = stories
+    .filter((a) => a.planned_for && Date.parse(a.planned_for) > now.getTime())
+    .sort((a, b) => (a.planned_for ?? "").localeCompare(b.planned_for ?? ""));
+  const { times, source } = storyTimes({
+    windowStart: settings.windowStart,
+    windowEnd: settings.windowEnd,
+    perDay: settings.perDay,
+  });
+  return {
+    enabled: true,
+    times: planned.length
+      ? [
+          ...new Set(
+            planned.slice(0, settings.perDay).map((a) => hmIn(a.planned_for!, program.timezone)),
+          ),
+        ]
+      : times,
+    timing: settings.smartTiming && planned.length ? "learned" : source,
+    upcoming: stories.filter((a) =>
+      ["planned", "generating", "approved", "scheduled"].includes(a.status),
+    ).length,
+    waiting: stories.filter((a) => a.status === "needs_approval").length,
+  };
+}
+
+function hmIn(iso: string, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      hourCycle: "h23",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso.slice(11, 16);
+  }
+}
+
 /** For the sidebar: is it available, is it running, is anything waiting. */
 export async function getAutopilotBadge(workspaceId: string) {
   const program = await store.liveProgram(workspaceId);
@@ -416,23 +501,26 @@ export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
     program: program ? presentProgram(program, now) : null,
     budget,
     proposed: pick("proposed").map(presentAction),
-    approvals: waiting.map((a) => {
-      const item = previewById.get(a.content_item_ids[0]);
-      return {
-        ...presentAction(a),
-        preview: item
-          ? {
-              contentItemId: item.id,
-              status: item.status,
-              title: item.title,
-              body: item.body.slice(0, 1_200),
-              mediaUrl:
-                item.media_url && /^https?:\/\//.test(item.media_url) ? item.media_url : null,
-              channel: item.channel,
-            }
-          : null,
-      };
-    }),
+    approvals: await Promise.all(
+      waiting.map(async (a) => {
+        const item = previewById.get(a.content_item_ids[0]);
+        return {
+          ...presentAction(a),
+          preview: item
+            ? {
+                contentItemId: item.id,
+                status: item.status,
+                title: item.title,
+                body: item.body.slice(0, 1_200),
+                mediaUrl:
+                  item.media_url && /^https?:\/\//.test(item.media_url) ? item.media_url : null,
+                channel: item.channel,
+                frames: await storyFrameUrls(workspaceId, item),
+              }
+            : null,
+        };
+      }),
+    ),
     upcoming: pick("planned", "generating", "approved", "scheduled").map(presentAction),
     finished: pick("published", "measured", "done").sort(byRecent).slice(0, 30).map(presentAction),
     failed: pick("failed", "missed")
@@ -442,6 +530,7 @@ export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
     opportunities: opportunities.map(presentOpportunity),
     events: events.map(presentEvent),
     connectedPlatforms: connected as PlatformId[],
+    stories: program ? storySummary(program, actions, now) : null,
     readiness: await readiness(workspaceId, program, connected),
     learnings: latestLearnings(all),
     tasks: latestTasks(all),
@@ -462,6 +551,21 @@ function checkSettings(workspaceId: string, settings: ProgramSettings): void {
   }
 }
 
+/** Signed URLs of a Story's drawn frames, for the approval preview. */
+async function storyFrameUrls(
+  workspaceId: string,
+  item: { meta: Record<string, unknown> },
+): Promise<string[] | undefined> {
+  if (item.meta.studio_type !== "story") return undefined;
+  const paths = (
+    Array.isArray(item.meta.asset_storage_paths)
+      ? item.meta.asset_storage_paths
+      : [item.meta.asset_storage_path]
+  ).filter((p): p is string => isWorkspaceStoragePath(p, workspaceId));
+  const urls = await Promise.all(paths.slice(0, 7).map((p) => signAssetPath(p)));
+  return urls.filter((u): u is string => !!u);
+}
+
 function programColumns(settings: ProgramSettings, startsOn: string) {
   return {
     mode: settings.mode,
@@ -479,6 +583,7 @@ function programColumns(settings: ProgramSettings, startsOn: string) {
     video_cap_per_week: settings.contentTypes.includes("video") ? settings.videoCapPerWeek : 0,
     act_on_opportunities: settings.actOnOpportunities,
     automations: [...new Set(settings.automations ?? [])],
+    stories: settings.stories,
     ...(settings.strategy ? { strategy: settings.strategy } : {}),
   };
 }

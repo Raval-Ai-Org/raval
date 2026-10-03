@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { renameWorkspace, getWorkspaceDetails } from "@/lib/workspaces.functions";
 import { Globe, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
-import { BarChart, Monitor, Moon, SlidersHorizontal, Sun, Users } from "@/components/icons";
+import { BarChart, Bot, Monitor, Moon, SlidersHorizontal, Sun, Users } from "@/components/icons";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import {
@@ -27,8 +27,9 @@ import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
 import { WebflowConnector } from "@/components/app/connectors/WebflowConnector";
 import { WordPressConnector } from "@/components/app/connectors/WordPressConnector";
 import { GoogleConnectCard } from "@/components/app/analytics/GoogleConnectCard";
+import { McpConnector } from "@/components/app/connectors/McpConnector";
 
-type SettingsSection = "accounts" | "analytics" | "website" | "preferences";
+type SettingsSection = "accounts" | "analytics" | "website" | "assistants" | "preferences";
 
 /** The GitHub install returns to ?settings=connections, which means the website sources. */
 function sectionFromUrl(value: string | null): SettingsSection | null {
@@ -36,6 +37,7 @@ function sectionFromUrl(value: string | null): SettingsSection | null {
   return value === "accounts" ||
     value === "analytics" ||
     value === "website" ||
+    value === "assistants" ||
     value === "preferences"
     ? value
     : null;
@@ -313,6 +315,7 @@ const SETTINGS_NAV: SurfaceNavItem<SettingsSection>[] = [
   { id: "accounts", label: "Social accounts", icon: Users },
   { id: "analytics", label: "Analytics", icon: BarChart },
   { id: "website", label: "Website", icon: Globe },
+  { id: "assistants", label: "AI assistants", icon: Bot },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
 ];
 
@@ -401,6 +404,15 @@ function SettingsDialog({
               ) : (
                 noWorkspace
               )}
+            </SurfacePage>
+          )}
+          {section === "assistants" && (
+            <SurfacePage
+              title="AI assistants"
+              subtitle="Use Mellox from Claude, ChatGPT and other assistants"
+              width="narrow"
+            >
+              {workspaceId ? <McpConnector workspaceId={workspaceId} /> : noWorkspace}
             </SurfacePage>
           )}
           {section === "preferences" && (

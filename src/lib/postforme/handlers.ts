@@ -8,6 +8,11 @@
 // Delivery bookkeeping reuses the SDR pipeline tables: one content_publications
 // row per (content item × target account), sdr_post_id = Post for Me post id,
 // sdr_target_id = account id, provider = 'postforme'.
+//
+// Placement: every row records where it went (feed / reels / stories). A Story
+// row also records its frames (src/lib/stories/results.ts): one Story per
+// media item at the provider, tracked individually so a row is published only
+// when every frame went out and a retry resends only the frames that failed.
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import {
   socialApiErrorResponse as baseProviderErrorResponse,
@@ -36,6 +41,31 @@ import type {
   PublishSelection,
   ScheduleItem,
 } from "@/lib/sdr.handlers";
+import {
+  cleanMentions,
+  isStoryItem,
+  placementForItem,
+  supportsPlacement,
+  toProviderPlacement,
+  type Placement,
+} from "@/lib/stories/placement";
+import {
+  framePostIds,
+  framesToRetry,
+  initialFrames,
+  markRetried,
+  mergeFrames,
+  readFrames,
+  rowOutcome,
+  type FrameResult,
+  type FrameStatus,
+} from "@/lib/stories/results";
+import {
+  combineFrames,
+  holdRate,
+  storyMetricsFrom,
+  type StoryMetrics,
+} from "@/lib/stories/metrics";
 
 // ─── Shared shapes ──────────────────────────────────────────────────────────
 export type HandlerResult<T = any> = { status: number; body: T };
@@ -70,10 +100,14 @@ export type SocialApiDeps = {
   now?: () => number;
   fetchFn?: typeof fetch;
   /**
-   * A designed carousel's slide images, redrawn first if its slides changed
-   * (src/server/studio/carousel-assets.server.ts). Null for anything else.
+   * A designed piece's images in order, redrawn first if its words changed:
+   * a carousel's slides (src/server/studio/carousel-assets.server.ts) or a
+   * Story's frames (src/server/studio/story-assets.server.tsx). Null for
+   * anything else.
    */
-  carouselMedia?: (item: any) => Promise<string[] | null>;
+  designedMedia?: (item: any) => Promise<string[] | null>;
+  /** The Stories flag for this workspace; false holds Story items back. */
+  storiesEnabled?: boolean;
 };
 
 export class DistributionError extends Error {
@@ -112,6 +146,10 @@ export type ProviderTarget = {
   permalink?: string | null;
   error?: { category?: string; code?: string; message?: string } | null;
   metrics?: { likes?: number; comments?: number; shares?: number; saves?: number; extra?: any };
+  /** Which of the account's media items this result is for (Stories), when known. */
+  frame?: number | null;
+  /** Per-frame numbers by the network's post id (Stories). */
+  frames?: { platform_post_id?: string; posted_at?: string | null; metrics?: unknown }[];
 };
 export type ProviderPost = {
   id: string;
@@ -473,6 +511,18 @@ export async function applyPostSnapshot(
   const { data: rows } = await query;
   const touched = new Set<string>();
   for (const row of (rows ?? []) as any[]) {
+    const frames = readFrames(row.frames);
+    if (frames) {
+      const patch = storyRowPatch(row, frames, post, opts.now);
+      if (!patch) continue;
+      const { error } = await db.from("content_publications").update(patch).eq("id", row.id);
+      if (error) {
+        console.error("[postforme] story row update failed", row.id, error.message);
+        continue;
+      }
+      touched.add(row.content_item_id);
+      continue;
+    }
     const t = (post.targets ?? []).find((x) => x.account_id === row.sdr_target_id);
     const next = t ? targetStatus(t, post) : post.status === "cancelled" ? "cancelled" : null;
     if (!next) continue;
@@ -503,8 +553,158 @@ export async function applyPostSnapshot(
   return [...touched];
 }
 
+// ─── Story frames ───────────────────────────────────────────────────────────
+function frameStatusOf(t: ProviderTarget, post: ProviderPost): FrameStatus {
+  const s = targetStatus(t, post);
+  return s === "cancelled" ? "failed" : (s as FrameStatus);
+}
+
+/** A provider snapshot applied to one account's frames. */
+export function framesFromSnapshot(
+  frames: FrameResult[],
+  post: ProviderPost,
+  accountId: string,
+): FrameResult[] {
+  const mine = (post.targets ?? []).filter((t) => t.account_id === accountId);
+  // Only settled results say anything about a particular frame; an account
+  // listed without results is still waiting for all of its frames.
+  const settled = mine
+    .filter((t) => t.status === "published" || t.status === "failed")
+    .map((t) => ({
+      frame: t.frame ?? null,
+      status: frameStatusOf(t, post),
+      platformPostId: t.platform_post_id ?? null,
+      permalink: t.permalink ?? null,
+      error: t.error?.message ?? null,
+    }));
+  const fallback =
+    post.status === "cancelled"
+      ? { status: "failed" as const, error: "The Story was removed before it went out." }
+      : {
+          status: (post.status === "scheduled" || post.status === "draft"
+            ? "pending"
+            : "publishing") as FrameStatus,
+        };
+  return mergeFrames(frames, post.id, settled, fallback);
+}
+
+function storyRowPatch(row: any, frames: FrameResult[], post: ProviderPost, now: string) {
+  const next = framesFromSnapshot(frames, post, row.sdr_target_id);
+  const outcome = rowOutcome(next);
+  const unresolved =
+    (post.status === "published" || post.status === "failed") &&
+    next.some((frame) => frame.status === "publishing") &&
+    (post.targets ?? []).some(
+      (target) =>
+        target.account_id === row.sdr_target_id &&
+        (target.status === "published" || target.status === "failed") &&
+        target.frame == null,
+    );
+  const unresolvedMessage =
+    "Post for Me did not identify every Story frame. Check the account before creating another Story.";
+  // Deleted upstream before anything went out: cancelled, like a post.
+  const status =
+    post.status === "cancelled" && outcome.sent === 0 && row.status !== "failed"
+      ? "cancelled"
+      : unresolved
+        ? "failed"
+        : outcome.status;
+  if (row.status === "published" && status !== "published") return null;
+  const changed =
+    status !== row.status ||
+    JSON.stringify(next) !== JSON.stringify(frames) ||
+    (unresolved ? unresolvedMessage : (outcome.error ?? null)) !== (row.last_error ?? null);
+  if (!changed) return null;
+  return {
+    status,
+    frames: next,
+    updated_at: now,
+    platform_post_id: outcome.platformPostId ?? row.platform_post_id ?? null,
+    platform_post_url: outcome.permalink ?? row.platform_post_url ?? null,
+    ...(status === "published" ? { delivered_at: row.delivered_at ?? now } : {}),
+    last_error: status === "failed" ? (unresolved ? unresolvedMessage : outcome.error) : null,
+    error_category: status === "failed" ? (row.error_category ?? "platform") : null,
+    error_code: null,
+  };
+}
+
+/** Delivery rows for a freshly created post: one per account, Stories with their frames. */
+function deliveryRows(args: {
+  workspaceId: string;
+  contentItemId: string;
+  platform: string;
+  placement: Placement | null;
+  frameCount: number | null;
+  frameSources?: string[];
+  post: ProviderPost;
+  targets: ProviderTarget[];
+  now: string;
+}) {
+  const { post, now } = args;
+  const byAccount = new Map<string, ProviderTarget[]>();
+  for (const t of args.targets)
+    byAccount.set(t.account_id, [...(byAccount.get(t.account_id) ?? []), t]);
+  return [...byAccount.entries()].map(([accountId, list]) => {
+    const t = list[0];
+    const base = {
+      workspace_id: args.workspaceId,
+      content_item_id: args.contentItemId,
+      provider: "postforme",
+      sdr_post_id: post.id,
+      sdr_target_id: accountId,
+      platform: t.platform ?? args.platform,
+      account_id: accountId,
+      placement: args.placement ?? "feed",
+      created_at: now,
+      platform_post_id: null as string | null,
+      platform_post_url: null as string | null,
+      delivered_at: null as string | null,
+      error_category: null as string | null,
+      error_code: null as string | null,
+      metrics: null,
+      metrics_synced_at: null,
+    };
+    if (args.frameCount) {
+      const start = initialFrames(
+        args.frameCount,
+        post.id,
+        post.status === "scheduled" || post.status === "draft" ? "pending" : "publishing",
+      ).map((frame) => ({ ...frame, source: args.frameSources?.[frame.i] ?? null }));
+      const frames = framesFromSnapshot(start, post, accountId);
+      const outcome = rowOutcome(frames);
+      return {
+        ...base,
+        attempt: post.retry_count ?? 0,
+        updated_at: now,
+        frames,
+        status: outcome.status as string,
+        platform_post_id: outcome.platformPostId,
+        platform_post_url: outcome.permalink,
+        delivered_at: outcome.status === "published" ? now : null,
+        last_error: outcome.status === "failed" ? outcome.error : null,
+        error_category: outcome.status === "failed" ? "platform" : null,
+      };
+    }
+    const status = targetStatus(t, post);
+    return {
+      ...base,
+      frames: null,
+      ...rowPatchFor(t, post, status, now),
+      status,
+      last_error:
+        t.status === "failed" ? (t.error?.message ?? "The platform rejected this post.") : null,
+    };
+  });
+}
+
 // ─── Media ──────────────────────────────────────────────────────────────────
-type MediaSource = { source_type: "url" | "media_id"; source: string };
+type MediaSource = {
+  source_type: "url" | "media_id";
+  source: string;
+  /** Instagram user tags; on a Story they need no position. */
+  tags?: { id: string; platform: "instagram"; type: "user" }[];
+  thumbnail_timestamp_ms?: number;
+};
 const SERVER_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 const STORAGE_BUCKET = "generated-assets";
 
@@ -665,12 +865,14 @@ async function promoteForDistribution(
     return `Content in status "${from}" can't be ${target === "publishing" ? "published" : "scheduled"}`;
   }
   for (const status of path) {
-    const { error } = await db
+    const { data, error } = await db
       .from("content_items")
       .update({ status })
       .eq("id", item.id)
-      .eq("status", item.status);
+      .eq("status", item.status)
+      .select("id");
     if (error) return `Couldn't approve content before distribution: ${error.message}`;
+    if (!Array.isArray(data) || data.length === 0) return CLAIM_LOST;
     item.status = status;
   }
   return null;
@@ -785,6 +987,16 @@ async function distribute(
       skip(id, `No deliverable platform (${platform ?? "none"})`);
       continue;
     }
+    const story = isStoryItem(item);
+    const placement = placementForItem(item);
+    if (story && deps.storiesEnabled === false) {
+      skip(id, "Stories are switched off for this workspace.");
+      continue;
+    }
+    if (story && !supportsPlacement(platform, "stories")) {
+      skip(id, `${label(platform)} has no Stories. Stories go to Instagram and Facebook.`);
+      continue;
+    }
     const existingPostId: string | undefined = item.meta?.postforme_post_id;
 
     // A scheduled item that already has a provider post: publish it now, or
@@ -829,19 +1041,24 @@ async function distribute(
 
     const text = String(item.body ?? "");
     const title = platform === "youtube" ? youtubeTitle(item) : undefined;
-    // A carousel sends all its slides; the hook redraws them if they changed.
-    const slidePaths = deps.carouselMedia
-      ? await deps.carouselMedia(item).catch((e) => {
-          console.error("[postforme] carousel slides unavailable", id, e);
+    // A carousel sends all its slides and a Story all its frames; the hook
+    // redraws them first if their words changed.
+    const designedPaths = deps.designedMedia
+      ? await deps.designedMedia(item).catch((e) => {
+          console.error("[postforme] designed media unavailable", id, e);
           return null;
         })
       : null;
+    if (story && item.meta?.story?.mode === "frames" && deps.designedMedia && !designedPaths) {
+      skip(id, "The Story frames could not be updated. Try again before publishing.");
+      continue;
+    }
     const storagePaths =
-      slidePaths &&
-      slidePaths.length > 1 &&
-      slidePaths.length <= 20 &&
-      slidePaths.every((p) => isWorkspaceStoragePath(p, item.workspace_id))
-        ? slidePaths
+      designedPaths &&
+      designedPaths.length >= (story ? 1 : 2) &&
+      designedPaths.length <= 20 &&
+      designedPaths.every((p) => isWorkspaceStoragePath(p, item.workspace_id))
+        ? designedPaths
         : storagePathsOf(item);
     const externalUrl = publicMediaUrl(item);
     let validationMedia: MediaSource[] = [];
@@ -855,10 +1072,37 @@ async function distribute(
     } else if (externalUrl) {
       validationMedia = [{ source_type: "url", source: externalUrl }];
     }
+    if (story && !validationMedia.length) {
+      skip(id, "This Story has no frames to send yet. Open it in Studio to finish it.");
+      continue;
+    }
+    const decorate = (list: MediaSource[]): MediaSource[] => {
+      const mentions =
+        story && platform === "instagram" ? cleanMentions(item.meta?.story?.mentions) : [];
+      const thumbMs = Number(item.meta?.thumbnail_ms);
+      return list.map((m) => ({
+        ...m,
+        ...(mentions.length
+          ? {
+              tags: mentions.map((u) => ({
+                id: u,
+                platform: "instagram" as const,
+                type: "user" as const,
+              })),
+            }
+          : {}),
+        ...(!story && Number.isFinite(thumbMs) && thumbMs >= 0 && item.meta?.media_type === "video"
+          ? { thumbnail_timestamp_ms: Math.round(thumbMs) }
+          : {}),
+      }));
+    };
+    validationMedia = decorate(validationMedia);
+    const frameCount = story ? validationMedia.length : null;
     const baseBody = {
       text,
       ...(title ? { title } : {}),
       ...(Object.keys(platformData).length ? { platform_data: platformData } : {}),
+      ...(placement ? { placements: { [platform]: toProviderPlacement(placement) } } : {}),
     };
 
     // 1. Provider-side validation (free, authoritative per-platform rules).
@@ -887,7 +1131,7 @@ async function distribute(
 
     // 2. Daily fair-use guard. Plans include unlimited posts.
     if (deps.quota) {
-      const q = await deps.quota.check(args.workspaceId, 1);
+      const q = await deps.quota.check(args.workspaceId, targets.length * (frameCount ?? 1));
       if (!q.ok) {
         return {
           status: 429,
@@ -958,7 +1202,9 @@ async function distribute(
         skip(id, uploadError);
         continue;
       }
-      media = uploadedIds.map((mediaId) => ({ source_type: "media_id", source: mediaId }));
+      media = decorate(
+        uploadedIds.map((mediaId) => ({ source_type: "media_id", source: mediaId })),
+      );
     }
 
     // 5. Create. Never auto-retried: POST /posts has no idempotency key.
@@ -1008,28 +1254,17 @@ async function distribute(
     const providerTargets: ProviderTarget[] = post.targets?.length
       ? post.targets
       : targets.map((t) => ({ account_id: t.accountId, status: "pending" }));
-    const rows = providerTargets.map((t) => ({
-      workspace_id: args.workspaceId,
-      content_item_id: id,
-      provider: "postforme",
-      sdr_post_id: post.id,
-      sdr_target_id: t.account_id,
-      platform: t.platform ?? platform,
-      account_id: t.account_id,
-      created_at: now,
-      platform_post_id: null,
-      platform_post_url: null,
-      delivered_at: null,
-      error_category: null,
-      error_code: null,
-      metrics: null,
-      metrics_synced_at: null,
-      ...rowPatchFor(t, post, targetStatus(t, post), now),
-      // Restated with concrete types for the aggregation below.
-      status: targetStatus(t, post),
-      last_error:
-        t.status === "failed" ? (t.error?.message ?? "The platform rejected this post.") : null,
-    }));
+    const rows = deliveryRows({
+      workspaceId: args.workspaceId,
+      contentItemId: id,
+      platform,
+      placement,
+      frameCount,
+      frameSources: story ? (storagePaths.length ? storagePaths : [externalUrl ?? ""]) : undefined,
+      post,
+      targets: providerTargets,
+      now,
+    });
     const { error: upsertError } = await deps.db
       .from("content_publications")
       .upsert(rows, { onConflict: "content_item_id,sdr_target_id" });
@@ -1043,7 +1278,8 @@ async function distribute(
         providerPostId: post.id,
         contentItemId: id,
         userId: args.userId,
-        targets: rows.length,
+        // Each Story frame is its own post at the provider.
+        targets: rows.length * (frameCount ?? 1),
       })
       .catch((e) => console.error("[postforme] usage not recorded", e));
 
@@ -1252,26 +1488,20 @@ export async function retryHandler(
     if (!(await ownsProviderPost(deps.db, args.workspaceId, args.contentItemId, postId))) {
       return fail(403, "PLATFORM_VALIDATION", FOREIGN_POST);
     }
-    if (deps.quota) {
-      const q = await deps.quota.check(args.workspaceId, 1);
-      if (!q.ok) {
-        return fail(
-          429,
-          "QUOTA_EXCEEDED",
-          `This brand has reached the fair-use guard of ${q.limit} posts today. Try again tomorrow.`,
-        );
-      }
-    }
     const { data: failed } = await deps.db
       .from("content_publications")
-      .select("sdr_target_id")
+      .select("id, sdr_target_id, frames, placement")
       .eq("workspace_id", args.workspaceId)
       .eq("content_item_id", args.contentItemId)
       .eq("provider", "postforme")
       .eq("status", "failed");
-    const targetIds = ((failed ?? []) as Array<{ sdr_target_id: string }>).map(
-      (r) => r.sdr_target_id,
-    );
+    const failedRows = (failed ?? []) as Array<{
+      id: string;
+      sdr_target_id: string;
+      frames: unknown;
+      placement: string | null;
+    }>;
+    const targetIds = failedRows.map((r) => r.sdr_target_id);
     if (!targetIds.length)
       return fail(409, "CONFLICT", "There are no failed destinations to retry");
     const fetched = await fetchBrandAccounts(deps);
@@ -1283,55 +1513,178 @@ export async function retryHandler(
     ) {
       return fail(400, "ACCOUNT_EXPIRED", "Reconnect the failed destination before retrying");
     }
-    const storagePaths = storagePathsOf(item);
+    const designed = deps.designedMedia ? await deps.designedMedia(item).catch(() => null) : null;
+    if (
+      isStoryItem(item) &&
+      item.meta?.story?.mode === "frames" &&
+      deps.designedMedia &&
+      !designed
+    ) {
+      return fail(
+        409,
+        "CONFLICT",
+        "The Story frames could not be updated. Try again before retrying.",
+      );
+    }
+    const storagePaths =
+      designed?.length && designed.every((p) => isWorkspaceStoragePath(p, item.workspace_id))
+        ? designed
+        : storagePathsOf(item);
     const urls = storagePaths.length
       ? await Promise.all(storagePaths.map((p) => signedUrl(deps.db, p)))
       : [publicMediaUrl(item)];
     if (storagePaths.length && urls.some((u) => !u))
       return fail(400, "PLATFORM_VALIDATION", "The attached media could not be read");
     const mediaUrls = urls.filter((u): u is string => !!u);
-    const res = await deps.api<ProviderPost>({
-      method: "POST",
-      path: "/posts",
-      body: {
-        text: String(item.body ?? ""),
-        external_id: `${args.workspaceId}:${item.id}:retry:${nowMs(deps)}`,
-        ...(mediaUrls.length
-          ? { media: mediaUrls.map((source) => ({ source_type: "url", source })) }
-          : {}),
-        targets: targetIds.map((accountId) => ({ account_id: accountId })),
-        publish_now: true,
-      },
-      timeoutMs: 60_000,
+    const platform = String(item.meta?.platform ?? "");
+    const placement = placementForItem(item);
+    const story = isStoryItem(item);
+    const mentions =
+      story && platform === "instagram" ? cleanMentions(item.meta?.story?.mentions) : [];
+    const source = (url: string): MediaSource => ({
+      source_type: "url",
+      source: url,
+      ...(mentions.length
+        ? {
+            tags: mentions.map((u) => ({
+              id: u,
+              platform: "instagram" as const,
+              type: "user" as const,
+            })),
+          }
+        : {}),
     });
-    if (res.status !== 201 || !res.data?.id) return socialApiErrorResponse(res);
+
+    // A Story resends only the frames that failed, per account. Frames that
+    // already went out are never posted again.
+    const plan = failedRows.map((row) => {
+      const frames = story ? readFrames(row.frames) : null;
+      return { row, frames, retry: frames ? framesToRetry(frames) : null };
+    });
+    if (story) {
+      if (plan.some((p) => !p.frames || p.frames.length !== mediaUrls.length)) {
+        return fail(
+          409,
+          "CONFLICT",
+          "This Story changed after it was sent, so its missing frames can't be matched. Send it again as a new Story.",
+        );
+      }
+      const sources = storagePaths.length ? storagePaths : [publicMediaUrl(item)];
+      if (plan.some((p) => p.frames?.some((f) => !f.source || f.source !== sources[f.i]))) {
+        return fail(
+          409,
+          "CONFLICT",
+          "This Story's media changed after it was sent. Create a new Story to publish the new version.",
+        );
+      }
+      if (plan.every((p) => !p.retry?.length))
+        return fail(
+          409,
+          "CONFLICT",
+          "The provider did not identify which frames went out. Check the account and create a new Story if needed.",
+        );
+    }
+    const accountMedia = story
+      ? plan
+          .filter((p) => p.retry?.length)
+          .map((p) => ({
+            account_id: p.row.sdr_target_id,
+            media: p.retry!.map((i) => source(mediaUrls[i])),
+          }))
+      : [];
+    const sameFrames =
+      accountMedia.length > 0 &&
+      accountMedia.every((a) => JSON.stringify(a.media) === JSON.stringify(accountMedia[0].media));
+    const retryTargets = story ? accountMedia.map((a) => a.account_id) : targetIds;
+    if (deps.quota) {
+      const needed = story
+        ? accountMedia.reduce((total, account) => total + account.media.length, 0)
+        : retryTargets.length;
+      const q = await deps.quota.check(args.workspaceId, needed);
+      if (!q.ok) {
+        return fail(
+          429,
+          "QUOTA_EXCEEDED",
+          `This brand has reached the fair-use guard of ${q.limit} posts today. Try again tomorrow.`,
+        );
+      }
+    }
+    const retryItem = { ...item };
+    const notReady = await promoteForDistribution(deps.db, retryItem, "publishing");
+    if (notReady) return fail(409, "CONFLICT", notReady);
+    if (!(await claimItem(deps.db, retryItem, "publishing"))) {
+      return fail(409, "CONFLICT", CLAIM_LOST);
+    }
+    const externalId = `${args.workspaceId}:${item.id}:retry:${nowMs(deps)}`;
+    const body = {
+      text: String(item.body ?? ""),
+      external_id: externalId,
+      ...(story
+        ? {
+            media: accountMedia[0].media,
+            ...(sameFrames ? {} : { account_media: accountMedia }),
+          }
+        : mediaUrls.length
+          ? { media: mediaUrls.map((url) => source(url)) }
+          : {}),
+      ...(placement ? { placements: { [platform]: toProviderPlacement(placement) } } : {}),
+      targets: retryTargets.map((accountId) => ({ account_id: accountId })),
+      publish_now: true,
+    };
+    let retryPost: ProviderPost | null = null;
+    try {
+      const res = await deps.api<ProviderPost>({
+        method: "POST",
+        path: "/posts",
+        body,
+        timeoutMs: 60_000,
+      });
+      if (res.status === 201 && res.data?.id) retryPost = res.data;
+      else {
+        await moveItemStatus(deps.db, item.id, "publishing", "failed");
+        await recomputeSocialItemStatus(deps.db, item.id);
+        return socialApiErrorResponse(res);
+      }
+    } catch (error) {
+      retryPost = await findAcceptedPost(deps, retryTargets, externalId);
+      if (!retryPost) {
+        await moveItemStatus(deps.db, item.id, "publishing", "failed");
+        await recomputeSocialItemStatus(deps.db, item.id);
+        return distributionErrorResponse(error);
+      }
+    }
 
     const now = iso(nowMs(deps));
-    await deps.db
-      .from("content_publications")
-      .update({
-        sdr_post_id: res.data.id,
-        status: "publishing",
-        error_category: null,
-        error_code: null,
-        last_error: null,
-        updated_at: now,
-      })
-      .eq("content_item_id", args.contentItemId)
-      .eq("provider", "postforme")
-      .eq("status", "failed");
+    const newPostId = retryPost.id;
+    for (const p of plan) {
+      if (story && !p.retry?.length) continue;
+      const frames = p.frames && p.retry ? markRetried(p.frames, p.retry, newPostId) : null;
+      await deps.db
+        .from("content_publications")
+        .update({
+          sdr_post_id: newPostId,
+          status: "publishing",
+          error_category: null,
+          error_code: null,
+          last_error: null,
+          updated_at: now,
+          ...(frames ? { frames } : {}),
+        })
+        .eq("id", p.row.id)
+        .eq("status", "failed");
+    }
     await deps.quota
       ?.record({
         workspaceId: args.workspaceId,
         operation: "retry",
-        providerPostId: res.data.id,
+        providerPostId: newPostId,
         contentItemId: args.contentItemId,
         userId: args.userId,
-        targets: targetIds.length,
+        targets: story ? accountMedia.reduce((n, a) => n + a.media.length, 0) : targetIds.length,
       })
       .catch(() => undefined);
-    await moveItemStatus(deps.db, args.contentItemId, item.status, "publishing", {
-      meta: mergeMeta(item.meta, { postforme_post_id: res.data.id }),
+    await moveItemStatus(deps.db, args.contentItemId, "publishing", "publishing", {
+      meta: mergeMeta(item.meta, { postforme_post_id: newPostId }),
     });
     return { status: 200, body: { contentItemId: args.contentItemId, status: "publishing" } };
   } catch (e) {
@@ -1366,6 +1719,10 @@ export type EngagementTotals = {
   shares: number;
   saves: number;
   views: number;
+  /** Unique people reached, where the network reports it (Stories, Instagram, Facebook). */
+  reach: number;
+  /** Story replies (they arrive as direct messages). */
+  replies: number;
 };
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -1383,7 +1740,30 @@ export function targetEngagement(m: ProviderTarget["metrics"]): EngagementTotals
       num(extra.impressions),
       num(extra.plays),
     ),
+    reach: num(extra.reach),
+    replies: num(extra.replies),
   };
+}
+
+/** A Story row's numbers, frame by frame, matched by the network's own post ids. */
+export function storyRowMetrics(
+  frames: FrameResult[],
+  entries: NonNullable<ProviderTarget["frames"]>,
+): { total: StoryMetrics; perFrame: StoryMetrics[]; hold: number | null } | null {
+  const byId = new Map(
+    entries
+      .filter((e) => typeof e.platform_post_id === "string" && e.platform_post_id)
+      .map((e) => [e.platform_post_id as string, storyMetricsFrom(e.metrics)]),
+  );
+  const perFrame = frames.map((f) => (f.platformPostId ? byId.get(f.platformPostId) : undefined));
+  const known = perFrame.filter((m): m is StoryMetrics => !!m);
+  // Frames without a recorded id still count toward the totals, never twice.
+  const matched = new Set(frames.map((f) => f.platformPostId).filter(Boolean));
+  const unmatched = [...byId.entries()].filter(([id]) => !matched.has(id)).map(([, m]) => m);
+  const all = [...known, ...unmatched];
+  if (!all.length) return null;
+  const ordered = perFrame.every(Boolean) ? (perFrame as StoryMetrics[]) : all;
+  return { total: combineFrames(all), perFrame: ordered, hold: holdRate(ordered) };
 }
 
 /** Pull live metrics for one post into its rows and roll them up on the item. */
@@ -1391,15 +1771,22 @@ export async function syncPostMetrics(
   args: { postId: string; workspaceId?: string },
   deps: Pick<SocialApiDeps, "api" | "db" | "now">,
 ): Promise<{ updated: number }> {
-  const res = await deps.api<{ data?: { targets?: ProviderTarget[] } }>({
-    path: `/posts/${encodeURIComponent(args.postId)}/metrics`,
-    retry: true,
-  });
-  if (res.status !== 200) return { updated: 0 };
+  const cache = new Map<string, ProviderTarget[] | null>();
+  const targetsOf = async (postId: string): Promise<ProviderTarget[] | null> => {
+    if (cache.has(postId)) return cache.get(postId) ?? null;
+    const res = await deps.api<{ data?: { targets?: ProviderTarget[] } }>({
+      path: `/posts/${encodeURIComponent(postId)}/metrics`,
+      retry: true,
+    });
+    const targets = res.status === 200 ? (res.data?.data?.targets ?? []) : null;
+    cache.set(postId, targets);
+    return targets;
+  };
+  if (!(await targetsOf(args.postId))) return { updated: 0 };
   const now = iso(nowMs(deps));
   let query = deps.db
     .from("content_publications")
-    .select("id, content_item_id, sdr_target_id, metrics")
+    .select("id, content_item_id, sdr_target_id, metrics, frames")
     .eq("provider", "postforme")
     .eq("sdr_post_id", args.postId);
   if (args.workspaceId) query = query.eq("workspace_id", args.workspaceId);
@@ -1407,14 +1794,44 @@ export async function syncPostMetrics(
   let updated = 0;
   const items = new Set<string>();
   for (const row of (rows ?? []) as any[]) {
-    const t = (res.data?.data?.targets ?? []).find((x) => x.account_id === row.sdr_target_id);
-    if (!t?.metrics) continue;
+    const frames = readFrames(row.frames);
+    let metrics: Record<string, unknown> | null = null;
+    if (frames) {
+      // A retried Story has frames in more than one provider post.
+      const entries: NonNullable<ProviderTarget["frames"]> = [];
+      for (const postId of framePostIds(frames, args.postId)) {
+        const t = (await targetsOf(postId))?.find((x) => x.account_id === row.sdr_target_id);
+        entries.push(...(t?.frames ?? []));
+      }
+      const story = storyRowMetrics(frames, entries);
+      // Once a Story has expired a network may answer with zeros: the last
+      // live snapshot stays.
+      const hadNumbers = num(row.metrics?.reach) > 0 || num(row.metrics?.views) > 0;
+      if (story && (story.total.reach > 0 || story.total.views > 0 || !hadNumbers)) {
+        metrics = {
+          likes: 0,
+          comments: 0,
+          shares: story.total.shares,
+          saves: 0,
+          views: story.total.views,
+          reach: story.total.reach,
+          replies: story.total.replies,
+          taps: story.total.taps,
+          profile_visits: story.total.profileVisits,
+          follows: story.total.follows,
+          hold: story.hold,
+          frames: story.perFrame,
+          story: true,
+        };
+      }
+    } else {
+      const t = (await targetsOf(args.postId))?.find((x) => x.account_id === row.sdr_target_id);
+      if (t?.metrics) metrics = { ...targetEngagement(t.metrics), raw: t.metrics };
+    }
+    if (!metrics) continue;
     const { error } = await deps.db
       .from("content_publications")
-      .update({
-        metrics: { ...targetEngagement(t.metrics), raw: t.metrics },
-        metrics_synced_at: now,
-      })
+      .update({ metrics, metrics_synced_at: now })
       .eq("id", row.id);
     if (!error) {
       updated++;
@@ -1436,9 +1853,11 @@ export async function syncPostMetrics(
           shares: acc.shares + num(m.shares),
           saves: acc.saves + num(m.saves),
           views: acc.views + num(m.views),
+          reach: acc.reach + num(m.reach),
+          replies: acc.replies + num(m.replies),
         };
       },
-      { likes: 0, comments: 0, shares: 0, saves: 0, views: 0 },
+      { likes: 0, comments: 0, shares: 0, saves: 0, views: 0, reach: 0, replies: 0 },
     );
     // `metrics` is not an approval-invalidating field in the lifecycle trigger.
     await deps.db

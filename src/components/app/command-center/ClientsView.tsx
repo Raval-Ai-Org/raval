@@ -16,6 +16,7 @@ import {
   Plug,
   Plus,
   Search,
+  Story,
   Swords,
 } from "@/components/icons";
 import {
@@ -387,6 +388,7 @@ function ClientCard({
         <Metric label="Posted" value={c.publishedCount} />
         <Metric label="AI score" value={c.geoScore} />
       </div>
+      <StoryLine cov={cc.stories.get(c.id)} />
 
       <div className="mt-4 flex items-center gap-0.5 border-t border-[var(--ds-tile-border)] pt-3">
         {TOOLS.map((t) => (
@@ -408,6 +410,36 @@ function ClientCard({
         </div>
       </div>
     </motion.div>
+  );
+}
+
+/** One line on today's Stories, shown only for clients that use them. */
+function StoryLine({
+  cov,
+}: {
+  cov?: { today: number; nextAt: string | null; waiting: number; failed: number };
+}) {
+  if (!cov) return null;
+  const next = cov.nextAt
+    ? new Date(cov.nextAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    : null;
+  const text = cov.failed
+    ? `${cov.failed} ${cov.failed === 1 ? "Story" : "Stories"} didn't go out`
+    : cov.waiting
+      ? `${cov.waiting} ${cov.waiting === 1 ? "Story needs" : "Stories need"} an OK`
+      : cov.today
+        ? `${cov.today} ${cov.today === 1 ? "Story" : "Stories"} today${next ? ` · next ${next}` : ""}`
+        : "No Story today";
+  return (
+    <p
+      className={cn(
+        "mt-3 flex items-center gap-1.5 text-[12px]",
+        cov.failed ? "text-destructive" : cov.waiting ? "text-warning" : "text-muted-foreground",
+      )}
+    >
+      <Story className="h-3.5 w-3.5 shrink-0" />
+      {text}
+    </p>
   );
 }
 

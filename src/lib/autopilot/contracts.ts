@@ -4,6 +4,13 @@ import { z } from "zod";
 import { PlatformIdSchema } from "@/lib/studio/jobs";
 import type { PlatformId } from "@/lib/social-platforms";
 import type { StudioType } from "@/lib/studio/formats";
+import {
+  DEFAULT_STORY_SETTINGS,
+  StorySettingsSchema,
+  type StorySettings,
+} from "@/lib/stories/schedule";
+
+export { DEFAULT_STORY_SETTINGS, type StorySettings };
 
 export const AUTOPILOT_MODES = ["assist", "autopilot", "full"] as const;
 export type AutopilotMode = (typeof AUTOPILOT_MODES)[number];
@@ -40,8 +47,17 @@ export type Strategy = z.infer<typeof StrategySchema>;
 export const AUTOPILOT_TYPES = ["social", "image", "carousel", "video", "article"] as const;
 export type AutopilotType = (typeof AUTOPILOT_TYPES)[number];
 
+/** What a planned piece can be: a feed post format, or a Story (Story Autopilot). */
+export type PlanType = AutopilotType | "story";
+
 /** Types that end as a scheduled social post. An article stops at "ready". */
-export const PUBLISHABLE_TYPES: readonly StudioType[] = ["social", "image", "carousel", "video"];
+export const PUBLISHABLE_TYPES: readonly StudioType[] = [
+  "social",
+  "image",
+  "carousel",
+  "video",
+  "story",
+];
 
 export const AUTOPILOT_GOALS = [
   "awareness",
@@ -65,23 +81,31 @@ export const AUTOMATION_INFO: Record<Automation, { label: string; detail: string
 
 export const DURATION_WEEKS = [2, 4, 8, 12] as const;
 
-export const ProgramSettingsSchema = z.object({
-  mode: z.enum(AUTOPILOT_MODES),
-  goal: z.enum(AUTOPILOT_GOALS),
-  goalNote: z.string().trim().max(600).default(""),
-  platforms: z.array(PlatformIdSchema).min(1).max(5),
-  contentTypes: z.array(z.enum(AUTOPILOT_TYPES)).min(1).max(5),
-  postsPerWeek: z.number().int().min(1).max(14),
-  weekdays: z.array(z.number().int().min(0).max(6)).max(7).default([]),
-  timezone: z.string().min(1).max(64),
-  weeks: z.number().int().min(1).max(52),
-  creditCapPerWeek: z.number().int().min(0).max(100_000),
-  videoCapPerWeek: z.number().int().min(0).max(50).default(0),
-  actOnOpportunities: z.boolean().default(false),
-  styleId: z.string().uuid().nullish(),
-  strategy: StrategySchema.nullish(),
-  automations: z.array(z.enum(AUTOMATIONS)).max(4).default(["geo_scan"]),
-});
+export const ProgramSettingsSchema = z
+  .object({
+    mode: z.enum(AUTOPILOT_MODES),
+    goal: z.enum(AUTOPILOT_GOALS),
+    goalNote: z.string().trim().max(600).default(""),
+    platforms: z.array(PlatformIdSchema).min(1).max(5),
+    contentTypes: z.array(z.enum(AUTOPILOT_TYPES)).min(1).max(5),
+    /** 0 when the program only makes Stories. */
+    postsPerWeek: z.number().int().min(0).max(14),
+    weekdays: z.array(z.number().int().min(0).max(6)).max(7).default([]),
+    timezone: z.string().min(1).max(64),
+    weeks: z.number().int().min(1).max(52),
+    creditCapPerWeek: z.number().int().min(0).max(100_000),
+    videoCapPerWeek: z.number().int().min(0).max(50).default(0),
+    actOnOpportunities: z.boolean().default(false),
+    styleId: z.string().uuid().nullish(),
+    strategy: StrategySchema.nullish(),
+    automations: z.array(z.enum(AUTOMATIONS)).max(4).default(["geo_scan"]),
+    /** Story Autopilot: daily Stories alongside (or instead of) feed posts. */
+    stories: StorySettingsSchema.default(DEFAULT_STORY_SETTINGS),
+  })
+  .refine((s) => s.postsPerWeek > 0 || s.stories.enabled, {
+    message: "Choose at least one post a week, or turn on daily Stories.",
+    path: ["postsPerWeek"],
+  });
 export type ProgramSettings = z.infer<typeof ProgramSettingsSchema>;
 
 export type ProgramStatus = "running" | "paused" | "completed" | "stopped";
@@ -119,7 +143,7 @@ export type ReadinessItem = {
 export type OpportunityStatus = "new" | "accepted" | "dismissed" | "expired" | "done";
 
 /** What an opportunity can be turned into. A campaign is three linked pieces. */
-export const OPPORTUNITY_FORMATS = [...AUTOPILOT_TYPES, "campaign"] as const;
+export const OPPORTUNITY_FORMATS = [...AUTOPILOT_TYPES, "story", "campaign"] as const;
 export type OpportunityFormat = (typeof OPPORTUNITY_FORMATS)[number];
 
 export type Evidence = { title: string; url: string; date: string | null };
@@ -148,6 +172,8 @@ export type ProgramRow = {
   acting_user_id: string | null;
   strategy: Record<string, unknown>;
   automations: string[];
+  /** Story Autopilot settings (StorySettingsSchema); `{}` = off. */
+  stories: Record<string, unknown>;
   last_notified_at: string | null;
   cycle: number;
   created_by: string | null;
@@ -251,6 +277,7 @@ export type ProgramView = {
   actOnOpportunities: boolean;
   strategy: Strategy | null;
   automations: Automation[];
+  stories: StorySettings;
   week: number;
   totalWeeks: number;
 };
@@ -262,6 +289,8 @@ export type ActionPreview = {
   body: string;
   mediaUrl: string | null;
   channel: string | null;
+  /** A Story's drawn frames, in order (signed URLs). */
+  frames?: string[];
 };
 
 export type ActionView = {
@@ -338,6 +367,16 @@ export type AutopilotView = {
   /** Recurring non-post work: latest run of each. */
   tasks: ActionView[];
   visibility: { score: number | null; scannedAt: string | null } | null;
+  /** Story Autopilot at a glance: what's coming and when it goes out. */
+  stories: {
+    enabled: boolean;
+    /** Today's and the next days' Story times in the program's time zone. */
+    times: string[];
+    /** "learned": from this brand's own Stories; "common": typical peaks. */
+    timing: "learned" | "common" | "even";
+    upcoming: number;
+    waiting: number;
+  } | null;
 };
 
 /** What Mellox proposes at setup, so the person only has to say yes. */

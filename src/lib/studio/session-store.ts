@@ -39,6 +39,8 @@ export type StudioSession = {
   ideaSource?: string;
   /** StudioTemplate id — structure the generator follows. */
   template?: string;
+  /** Repurposing: the content item this piece is made from. */
+  sourceContentId?: string;
   /**
    * Brand Kit Style: an id, "none" for Brand DNA only, or null/undefined for
    * the workspace default. The server checks it belongs to the workspace.
@@ -249,6 +251,15 @@ function defaultControls(type: StudioType, platforms?: PlatformId[]): StudioCont
   if (format.media === "optional-image" && typeof remembered?.includeImage === "boolean")
     controls.includeImage = remembered.includeImage;
   if (type === "carousel") controls.slideCount = 6;
+  if (type === "story")
+    Object.assign(controls, {
+      ratio: "9:16",
+      storyMode: "frames",
+      frameCount: 3,
+      durationSec: 6,
+      videoResolution: "720P",
+      audio: true,
+    });
   if (type === "article") controls.length = "standard";
   if (type === "script") controls.durationSec = 30;
   if (type === "video")
@@ -319,6 +330,7 @@ export function openComposer(
     template?: string;
     platforms?: PlatformId[];
     styleId?: string | null;
+    sourceContentId?: string;
   } = {},
 ): string | null {
   hydrate();
@@ -352,6 +364,7 @@ export function openComposer(
         ideaId: opts.ideaId,
         ideaSource: opts.ideaSource,
         template: opts.template,
+        sourceContentId: opts.sourceContentId,
         styleId:
           opts.styleId !== undefined
             ? opts.styleId
@@ -375,6 +388,7 @@ export function openComposer(
         ideaId: opts.ideaId,
         ideaSource: opts.ideaSource,
         template: opts.template,
+        sourceContentId: opts.sourceContentId,
         styleId: opts.styleId !== undefined ? opts.styleId : rememberedStyle(workspaceId),
         controls: defaultControls(type, opts.platforms),
         job: null,
@@ -707,6 +721,7 @@ async function submit(
         ideaId: s.ideaId,
         ideaSource: s.ideaSource,
         template: s.template,
+        ...(s.sourceContentId ? { sourceContentId: s.sourceContentId } : {}),
       },
       controls: s.controls,
       brand: readBrandPayload(s.workspaceId),

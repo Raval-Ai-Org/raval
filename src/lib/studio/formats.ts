@@ -3,10 +3,11 @@
 import type { PlatformId } from "@/lib/social-platforms";
 import { IMAGE_RATIOS, VIDEO_RATIOS, type AspectRatio } from "./aspect";
 
-export type StudioType = "social" | "image" | "carousel" | "video" | "article" | "script" | "ad";
+export type StudioType =
+  "social" | "image" | "carousel" | "video" | "article" | "script" | "ad" | "story";
 
-/** How Create groups formats by what they produce: video, picture, text, or ads. */
-export type StudioGroup = "video" | "picture" | "text" | "ads";
+/** How Create groups formats by what they produce: video, stories, picture, text, or ads. */
+export type StudioGroup = "video" | "stories" | "picture" | "text" | "ads";
 
 export type StageId =
   "context" | "angle" | "outline" | "writing" | "brief" | "render" | "save" | "captions" | "polish";
@@ -23,7 +24,7 @@ export type StudioFormat = {
   /** A few words for compact pickers. */
   tagline: string;
   /** content_items.kind the output is stored as. */
-  kind: "post" | "image" | "carousel" | "video" | "blog" | "script" | "ad";
+  kind: "post" | "image" | "carousel" | "video" | "blog" | "script" | "ad" | "story";
   agent: "echo" | "spark" | "scout";
   /** Platforms this type can target; empty = not platform-bound (article). */
   platforms: PlatformId[];
@@ -50,6 +51,7 @@ const SOCIAL_PLATFORMS: PlatformId[] = [
 
 export const STUDIO_GROUPS: { id: StudioGroup; label: string; types: StudioType[] }[] = [
   { id: "video", label: "Video", types: ["video", "script"] },
+  { id: "stories", label: "Stories", types: ["story"] },
   { id: "picture", label: "Picture", types: ["image", "carousel"] },
   { id: "text", label: "Text", types: ["social", "article"] },
   { id: "ads", label: "Ads", types: ["ad"] },
@@ -125,6 +127,30 @@ export const STUDIO_FORMATS: Record<StudioType, StudioFormat> = {
       { id: "save", label: "Saving to your Library" },
     ],
     placeholder: "e.g. Our iced coffee on a sunny café table, with a caption about the heatwave",
+  },
+  story: {
+    id: "story",
+    group: "stories",
+    label: "Story",
+    noun: "Story",
+    description:
+      "Vertical frames for Instagram and Facebook Stories, in your brand style. Gone after 24 hours.",
+    tagline: "Instagram & Facebook Stories",
+    kind: "story",
+    agent: "echo",
+    platforms: ["instagram", "facebook"],
+    defaultPlatforms: ["instagram"],
+    multiPlatform: true,
+    ratios: ["9:16"],
+    media: "optional-image",
+    estimate: "About 30 seconds",
+    stages: [
+      { id: "context", label: "Reading your brand" },
+      { id: "outline", label: "Planning the frames" },
+      { id: "writing", label: "Writing the frames" },
+      { id: "polish", label: "Designing the Story" },
+    ],
+    placeholder: "e.g. 3 quick frames on how to keep cut flowers fresh, ending with a question",
   },
   ad: {
     id: "ad",
@@ -245,6 +271,9 @@ const ALIASES: Record<string, StudioType> = {
   carousel: "carousel",
   video: "video",
   reel: "script",
+  story: "story",
+  stories: "story",
+  "instagram-story": "story",
   script: "script",
   ad: "ad",
   ads: "ad",
@@ -288,6 +317,7 @@ export function studioTypeFromContent(
     case "script":
     case "ad":
     case "image":
+    case "story":
       return kind;
     default:
       return meta && (meta.asset_id || meta.canvas === "design-asset") ? "image" : "social";

@@ -420,6 +420,54 @@ export function groupSchedule(
   return [...byDay.values()];
 }
 
+/* ------------------------------------------------------------------ */
+/* Stories                                                             */
+/* ------------------------------------------------------------------ */
+
+export type StoryCoverage = {
+  /** Stories going out or already out today (the viewer's day). */
+  today: number;
+  /** The next Story still to go out, if any. */
+  nextAt: string | null;
+  /** Stories waiting for someone's OK. */
+  waiting: number;
+  /** Stories that failed in the last 7 days. */
+  failed: number;
+};
+
+/** Per client: is today's Story covered, what's next, and what needs a person. */
+export function storyCoverage(
+  rows: CcContentRow[],
+  clients: Map<string, CcClient>,
+  now: number,
+): Map<string, StoryCoverage> {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const dayStart = start.getTime();
+  const dayEnd = dayStart + DAY;
+  const out = new Map<string, StoryCoverage>();
+  for (const r of rows) {
+    if (r.kind !== "story" || !clients.has(r.workspace_id)) continue;
+    const cov = out.get(r.workspace_id) ?? { today: 0, nextAt: null, waiting: 0, failed: 0 };
+    const at = r.scheduled_at ? new Date(r.scheduled_at).getTime() : NaN;
+    const made = new Date(r.created_at).getTime();
+    if (r.status === "scheduled" && Number.isFinite(at)) {
+      if (at >= dayStart && at < dayEnd) cov.today++;
+      if (at > now && (!cov.nextAt || at < new Date(cov.nextAt).getTime()))
+        cov.nextAt = r.scheduled_at;
+    } else if (r.status === "published" || r.status === "publishing") {
+      const when = Number.isFinite(at) ? at : made;
+      if (when >= dayStart && when < dayEnd) cov.today++;
+    } else if (r.status === "pending" || r.status === "draft") {
+      cov.waiting++;
+    } else if ((r.status === "failed" || r.status === "partial_failed") && made > now - 7 * DAY) {
+      cov.failed++;
+    }
+    out.set(r.workspace_id, cov);
+  }
+  return out;
+}
+
 export function dayLabel(date: Date, now: number): string {
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);

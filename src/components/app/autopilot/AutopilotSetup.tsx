@@ -26,6 +26,9 @@ import { estimateCost } from "@/lib/autopilot/policy";
 import { PLAN_GOALS } from "@/lib/calendar/planner";
 import { PLATFORM_ORDER, PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
+import { STORY_THEMES, type StoryThemeId } from "@/lib/stories/frames";
+import { STORY_PLATFORMS } from "@/lib/stories/placement";
+import { storyTimes, toMinutes, type StorySettings } from "@/lib/stories/schedule";
 import { Chip } from "./autopilot-ui";
 import { Readiness } from "./Readiness";
 
@@ -48,14 +51,19 @@ export function browserTimeZone(): string {
 
 /** Roughly what a week costs at this pace. */
 export function weeklyEstimate(
-  settings: Pick<ProgramSettings, "contentTypes" | "postsPerWeek">,
+  settings: Pick<ProgramSettings, "contentTypes" | "postsPerWeek"> &
+    Partial<Pick<ProgramSettings, "stories">>,
 ): number {
+  const st = settings.stories;
+  const stories = st?.enabled
+    ? estimateCost("story").credits * st.perDay * (st.days.length || 7)
+    : 0;
   const social = settings.contentTypes.filter((t) => t !== "article" && t !== "video");
   const perPost = social.length
     ? social.reduce((n, t) => n + estimateCost(t).credits, 0) / social.length
     : estimateCost("social").credits;
   const article = settings.contentTypes.includes("article") ? estimateCost("article").credits : 0;
-  return Math.ceil(perPost * settings.postsPerWeek + article);
+  return Math.ceil(perPost * settings.postsPerWeek + article + stories);
 }
 
 export function settingsFromProgram(program: ProgramView): ProgramSettings {
@@ -75,7 +83,14 @@ export function settingsFromProgram(program: ProgramView): ProgramSettings {
     styleId: program.styleId,
     strategy: program.strategy,
     automations: program.automations,
+    stories: program.stories,
   };
+}
+
+function storiesLabel(st: StorySettings): string {
+  if (!st.enabled) return "Off";
+  const days = st.days.length && st.days.length < 7 ? `${st.days.length} days a week` : "every day";
+  return `${st.perDay} a day, ${days}`;
 }
 
 function toggle<T>(list: T[], value: T): T[] {
@@ -144,7 +159,7 @@ export function StrategyCard({
 
 /* ───────────────────────── setting rows ───────────────────────── */
 
-type RowId = "goal" | "where" | "pace" | "what" | "mode" | "also" | "limit";
+type RowId = "goal" | "where" | "pace" | "what" | "stories" | "mode" | "also" | "limit";
 
 function Row({
   id,
@@ -335,7 +350,7 @@ export function SettingRows({
             <NumberInput
               label="Posts a week"
               value={s.postsPerWeek}
-              min={1}
+              min={s.stories.enabled ? 0 : 1}
               max={14}
               suffix="posts a week"
               onChange={(n) => set("postsPerWeek", n)}
@@ -408,6 +423,21 @@ export function SettingRows({
         </Row>
 
         <Row
+          id="stories"
+          open={open === "stories"}
+          onToggle={toggleRow}
+          label="Stories"
+          value={storiesLabel(s.stories)}
+        >
+          <StoriesSettings
+            value={s.stories}
+            connected={connected}
+            timezone={s.timezone}
+            onChange={(stories) => set("stories", stories)}
+          />
+        </Row>
+
+        <Row
           id="mode"
           open={open === "mode"}
           onToggle={toggleRow}
@@ -455,9 +485,9 @@ export function SettingRows({
           </div>
           {s.mode === "full" && (
             <Hint>
-              Only plain and image posts go out by themselves, up to two a day, and only when they
-              state nothing Mellox can&apos;t find in your Brand DNA. We email you when something
-              waits.
+              Only plain posts, image posts and Stories go out by themselves (two posts a day at
+              most, plus your daily Stories), and only when they state nothing Mellox can&apos;t
+              find in your Brand DNA. We email you when something waits.
             </Hint>
           )}
           <label className="flex cursor-pointer items-start gap-3 pt-1">
@@ -537,10 +567,191 @@ export function SettingRows({
 }
 
 export function settingsValid(s: ProgramSettings): boolean {
+  const st = s.stories;
   return (
     s.platforms.length > 0 &&
     s.contentTypes.length > 0 &&
-    (!s.contentTypes.includes("video") || s.videoCapPerWeek > 0)
+    (!s.contentTypes.includes("video") || s.videoCapPerWeek > 0) &&
+    (s.postsPerWeek > 0 || st.enabled) &&
+    (!st.enabled ||
+      (st.platforms.length > 0 &&
+        st.themes.length > 0 &&
+        toMinutes(st.windowEnd) - toMinutes(st.windowStart) >= 60))
+  );
+}
+
+/** Story Autopilot: how many a day, when, where and about what. */
+function StoriesSettings({
+  value: st,
+  onChange,
+  connected,
+  timezone,
+}: {
+  value: StorySettings;
+  onChange: (next: StorySettings) => void;
+  connected: PlatformId[];
+  timezone: string;
+}) {
+  const set = <K extends keyof StorySettings>(key: K, v: StorySettings[K]) =>
+    onChange({ ...st, [key]: v });
+  const { times } = storyTimes({
+    windowStart: st.windowStart,
+    windowEnd: st.windowEnd,
+    perDay: st.perDay,
+  });
+  const windowOk = toMinutes(st.windowEnd) - toMinutes(st.windowStart) >= 60;
+  const timeInput =
+    "ds-well h-10 rounded-full border-0 px-4 text-[14px] font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+  return (
+    <>
+      <label className="flex cursor-pointer items-start gap-3">
+        <input
+          type="checkbox"
+          checked={st.enabled}
+          onChange={(e) => set("enabled", e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
+        />
+        <span>
+          <span className="block text-[13.5px] font-medium">Post Stories every day</span>
+          <span className="block text-[12.5px] text-muted-foreground">
+            Short Instagram and Facebook Stories in your brand look, made the day before so you can
+            check them.
+          </span>
+        </span>
+      </label>
+
+      {st.enabled && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {[1, 2, 3].map((n) => (
+              <Chip key={n} active={st.perDay === n} onClick={() => set("perDay", n)}>
+                {n} a day
+              </Chip>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {STORY_PLATFORMS.map((id) => (
+              <Chip
+                key={id}
+                active={st.platforms.includes(id)}
+                onClick={() => {
+                  const next = toggle(st.platforms, id);
+                  if (next.length) set("platforms", next);
+                }}
+              >
+                {PLATFORMS[id].label}
+                {!connected.includes(id) && (
+                  <span className="text-[11px] font-normal text-muted-foreground">
+                    not connected
+                  </span>
+                )}
+              </Chip>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="text-[13px] text-muted-foreground">Between</span>
+            <input
+              type="time"
+              aria-label="Earliest Story time"
+              value={st.windowStart}
+              onChange={(e) => e.target.value && set("windowStart", e.target.value)}
+              className={timeInput}
+            />
+            <span className="text-[13px] text-muted-foreground">and</span>
+            <input
+              type="time"
+              aria-label="Latest Story time"
+              value={st.windowEnd}
+              onChange={(e) => e.target.value && set("windowEnd", e.target.value)}
+              className={timeInput}
+            />
+          </div>
+          {windowOk ? (
+            <Hint>
+              Goes out around {times.join(", ")} ({timezone.replace(/_/g, " ")}).
+            </Hint>
+          ) : (
+            <p className="text-[12.5px] text-warning">Leave at least an hour between the two.</p>
+          )}
+
+          <div className="flex gap-1.5">
+            {DAYS.map((d, i) => {
+              const on = !st.days.length || st.days.includes(i);
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={DAY_NAMES[i]}
+                  aria-pressed={on}
+                  onClick={() => {
+                    const all = st.days.length ? st.days : [0, 1, 2, 3, 4, 5, 6];
+                    const next = toggle(all, i).sort();
+                    if (next.length) set("days", next.length === 7 ? [] : next);
+                  }}
+                  className={cn(
+                    "grid h-9 w-9 place-items-center rounded-full border text-[12.5px] font-semibold transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                    on
+                      ? "border-primary/40 bg-primary/12 text-foreground"
+                      : "border-border/70 text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+
+          <div>
+            <p className="mb-2 text-[13px] text-muted-foreground">What they&apos;re about</p>
+            <div className="flex flex-wrap gap-2">
+              {STORY_THEMES.filter((t) => t.id !== "repurpose").map((t) => (
+                <Chip
+                  key={t.id}
+                  active={st.themes.includes(t.id)}
+                  onClick={() => {
+                    const next = toggle<StoryThemeId>(st.themes, t.id);
+                    if (next.length) set("themes", next);
+                  }}
+                >
+                  {t.label}
+                </Chip>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13px] text-muted-foreground">Frames in each</span>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Chip key={n} active={st.frames === n} onClick={() => set("frames", n)}>
+                {n}
+              </Chip>
+            ))}
+          </div>
+
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={st.smartTiming}
+              onChange={(e) => set("smartTiming", e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
+            />
+            <span>
+              <span className="block text-[13.5px] font-medium">Pick the best times for me</span>
+              <span className="block text-[12.5px] text-muted-foreground">
+                Once your Stories have numbers, Mellox moves them to the hours they were seen most.
+              </span>
+            </span>
+          </label>
+          <Hint>
+            Stories can&apos;t carry link, poll or music stickers when an app posts them. Mellox
+            writes &quot;link in bio&quot; and asks for replies instead.
+          </Hint>
+        </>
+      )}
+    </>
   );
 }
 

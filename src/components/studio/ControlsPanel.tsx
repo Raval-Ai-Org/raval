@@ -6,6 +6,8 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { RATIOS, recommendedRatio } from "@/lib/studio/aspect";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
+import { STORY_THEMES, getStoryTheme } from "@/lib/stories/frames";
+import { cleanMentions } from "@/lib/stories/placement";
 import type { StudioControls } from "@/lib/studio/jobs";
 import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 import { FieldLabel, PlatformPicker, RatioPicker, Segmented } from "./studio-ui";
@@ -27,6 +29,15 @@ export function describeControls(session: StudioSession): string {
       `${c.durationSec ?? 6} seconds · ${{ "480P": "Basic", "720P": "HD", "1080P": "Full HD" }[c.videoResolution ?? "720P"]}`,
     );
   if (session.type === "carousel") parts.push(`${c.slideCount ?? 6} slides`);
+  if (session.type === "story") {
+    parts.push(
+      c.storyMode === "video"
+        ? `Video · ${c.durationSec ?? 6} seconds`
+        : `${c.frameCount ?? 3} ${(c.frameCount ?? 3) === 1 ? "frame" : "frames"}`,
+    );
+    const theme = getStoryTheme(c.storyTheme);
+    if (theme) parts.push(theme.label);
+  }
   if (
     c.ratio &&
     format.ratios.length &&
@@ -69,8 +80,10 @@ export function ControlsPanel({
       : recommendedRatio(c.platforms, mediaKind, format.ratios)
     : undefined;
   const showRatio =
+    session.type !== "story" &&
     format.ratios.length > 0 &&
     (format.media !== "optional-image" || c.includeImage || session.type === "carousel");
+  const storyVideo = session.type === "story" && c.storyMode === "video";
 
   return (
     <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
@@ -92,11 +105,17 @@ export function ControlsPanel({
         </div>
       ) : null}
 
-      {format.media === "optional-image" ? (
+      {session.type === "story" ? <StoryControls controls={c} set={set} /> : null}
+
+      {format.media === "optional-image" && !storyVideo ? (
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-surface-3 px-3.5 py-3">
           <span>
             <span className="block text-sm font-medium text-foreground">
-              {session.type === "carousel" ? "Generate a cover visual" : "Add a generated visual"}
+              {session.type === "carousel"
+                ? "Generate a cover visual"
+                : session.type === "story"
+                  ? "Add a photo behind the first frame"
+                  : "Add a generated visual"}
             </span>
             <span className="block text-xs text-muted-foreground">Uses 1 image credit</span>
           </span>
@@ -262,5 +281,106 @@ export function ControlsPanel({
         ) : null}
       </div>
     </fieldset>
+  );
+}
+
+/** What only a Story asks: designed frames or a video, how many, and what about. */
+function StoryControls({
+  controls: c,
+  set,
+}: {
+  controls: StudioControls;
+  set: (patch: Partial<StudioControls>) => void;
+}) {
+  const video = c.storyMode === "video";
+  const [mentions, setMentions] = useState((c.mentions ?? []).map((m) => `@${m}`).join(" "));
+  return (
+    <div className="space-y-4">
+      <div>
+        <FieldLabel>Made of</FieldLabel>
+        <Segmented
+          label="Made of"
+          value={(video ? "video" : "frames") as "frames" | "video"}
+          onChange={(storyMode) =>
+            set({ storyMode, ...(storyMode === "video" ? { includeImage: false } : {}) })
+          }
+          options={[
+            { value: "frames", label: "Designed frames", hint: "Your brand look" },
+            { value: "video", label: "AI video", hint: "Uses a video credit" },
+          ]}
+        />
+      </div>
+
+      {video ? (
+        <div>
+          <FieldLabel>Length</FieldLabel>
+          <Segmented
+            label="Length"
+            value={c.durationSec ?? 6}
+            onChange={(durationSec) => set({ durationSec })}
+            options={[4, 6, 8].map((v) => ({ value: v, label: `${v}s` }))}
+          />
+        </div>
+      ) : (
+        <div>
+          <FieldLabel hint="Each frame shows for about 5 seconds">Frames</FieldLabel>
+          <Segmented
+            label="Frames"
+            value={c.frameCount ?? 3}
+            onChange={(frameCount) => set({ frameCount })}
+            options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) }))}
+          />
+        </div>
+      )}
+
+      <div>
+        <FieldLabel hint="Optional">About</FieldLabel>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="What the Story is about">
+          {[
+            { id: "", label: "Mellox picks" },
+            ...STORY_THEMES.filter((t) => t.id !== "repurpose"),
+          ].map((t) => {
+            const on = (c.storyTheme ?? "") === t.id;
+            return (
+              <button
+                key={t.id || "auto"}
+                type="button"
+                aria-pressed={on}
+                title={"detail" in t ? t.detail : "Picked to differ from your last Stories"}
+                onClick={() => set({ storyTheme: t.id || undefined })}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  on
+                    ? "border-primary-border bg-primary-surface text-foreground"
+                    : "border-border bg-surface-3 text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {c.platforms.includes("instagram") ? (
+        <div>
+          <FieldLabel htmlFor="studio-mentions" hint="Instagram, optional">
+            Mention accounts
+          </FieldLabel>
+          <input
+            id="studio-mentions"
+            value={mentions}
+            onChange={(e) => setMentions(e.target.value.slice(0, 200))}
+            onBlur={() => {
+              const list = cleanMentions(mentions);
+              setMentions(list.map((m) => `@${m}`).join(" "));
+              set({ mentions: list.length ? list : undefined });
+            }}
+            placeholder="@partner @supplier"
+            className={INPUT}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }

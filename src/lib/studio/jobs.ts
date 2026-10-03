@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { PlatformId } from "@/lib/social-platforms";
 import type { AspectRatio } from "./aspect";
 import type { StageId, StudioType } from "./formats";
+import type { StoryFrame } from "@/lib/stories/frames";
 
 export const PlatformIdSchema = z.enum([
   "linkedin",
@@ -25,6 +26,7 @@ export const StudioTypeSchema = z.enum([
   "article",
   "script",
   "ad",
+  "story",
 ]);
 
 export const GOALS = [
@@ -49,6 +51,14 @@ export const ControlsSchema = z.object({
   audio: z.boolean().optional(),
   includeImage: z.boolean().optional(),
   cta: z.string().max(140).optional(),
+  /** Story: designed frames (default) or one vertical AI video. */
+  storyMode: z.enum(["frames", "video"]).optional(),
+  /** Story: how many frames, 1 to 7. */
+  frameCount: z.number().int().min(1).max(7).optional(),
+  /** Story: the theme from the content mix (src/lib/stories/frames.ts). */
+  storyTheme: z.string().max(24).optional(),
+  /** Story: Instagram usernames to tag (no @). */
+  mentions: z.array(z.string().max(31)).max(5).optional(),
 });
 
 export type StudioControls = z.infer<typeof ControlsSchema>;
@@ -60,6 +70,11 @@ export const IntentSchema = z.object({
   ideaSource: z.string().max(40).optional(),
   /** A StudioTemplate id; the prompt follows its structure. */
   template: z.string().max(40).optional(),
+  /**
+   * Repurpose: an existing content item this piece is made from (a post turned
+   * into a Story). Read on the server through the job's own workspace.
+   */
+  sourceContentId: z.string().uuid().optional(),
 });
 
 export type StudioIntent = z.infer<typeof IntentSchema>;
@@ -160,6 +175,19 @@ export type CarouselSlide = {
   emphasis?: string;
 };
 
+/** A Story: its frames and the look they share (the carousel design system). */
+export type StoryOutput = {
+  mode: "frames" | "video";
+  theme: string;
+  frames: StoryFrame[];
+  /** How the frames look; absent for a video Story. */
+  spec?: CarouselSpecOutput;
+  /** Instagram usernames tagged on the Story. */
+  mentions?: string[];
+  /** The content item it was made from, if repurposed. */
+  sourceContentId?: string;
+};
+
 /** How a carousel looks: chosen on the server, stored with the job and its drafts. */
 export type CarouselSpecOutput = {
   /** The story structure id (steps, myths, story…). */
@@ -238,6 +266,8 @@ export type StudioJobOutput = {
   slides?: CarouselSlide[];
   /** Carousel: the look every slide shares. */
   carousel?: CarouselSpecOutput;
+  /** Story: frames, theme and look. */
+  story?: StoryOutput;
   article?: ArticleOutput;
   script?: ScriptOutput;
   ads?: AdVariant[];

@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { ArrowUpRight, FileText } from "@/components/icons";
 import { SocialPerformance } from "@/components/app/SocialPerformance";
+import { StoriesPerformance } from "./StoriesPerformance";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { getAnalyticsSummary, type AnalyticsSummary } from "@/lib/analytics.functions";
@@ -180,6 +181,7 @@ export function ContentPanel() {
       </Card>
 
       <SocialPerformance workspaceId={workspaceId} days={days} />
+      {workspaceId ? <StoriesPerformance workspaceId={workspaceId} days={days} /> : null}
     </div>
   );
 }

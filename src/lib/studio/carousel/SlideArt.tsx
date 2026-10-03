@@ -136,7 +136,7 @@ function Motif({
 }
 
 /** Heading words, wrapped by hand so highlighted words can be styled. */
-function Heading({
+export function Heading({
   text,
   emphasis,
   size,

@@ -31,6 +31,8 @@ export function isNearDuplicateCopy(a: string, b: string): boolean {
 
 export function outputSubstance(output: StudioJobOutput): string {
   if (output.article) return output.article.markdown;
+  if (output.story?.frames.length)
+    return output.story.frames.map((f) => `${f.heading} ${f.body}`).join(" ");
   if (output.slides) return output.slides.map((s) => `${s.heading} ${s.body}`).join(" ");
   if (output.script)
     return [output.script.hook, ...output.script.beats.map((b) => b.voiceover)].join(" ");
@@ -61,6 +63,7 @@ export function findSimilarRecent(
 /** The first thing a reader sees in this output. */
 export function outputOpening(output: StudioJobOutput): string {
   if (output.slides?.length) return output.slides[0].heading;
+  if (output.story?.frames.length) return output.story.frames[0].heading;
   if (output.script) return output.script.hook;
   if (output.ads?.length) return output.ads[0].headline;
   if (output.article) return output.article.title;

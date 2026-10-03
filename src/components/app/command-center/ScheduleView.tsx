@@ -95,6 +95,7 @@ export function ScheduleView({
                           <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
                             <ClientTag name={it.clientName} />
                             {channelLabel(it.channel)}
+                            {it.kind === "story" ? " · Story" : ""}
                           </span>
                         </span>
                         {busy ? (

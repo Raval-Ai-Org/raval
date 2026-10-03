@@ -118,7 +118,8 @@ export type AppEventMap = {
   "open:rename": undefined;
   "open:schedule": undefined;
   /** Settings, optionally on a section (GitHub, Webflow and WordPress live under "website"). */
-  "open:settings": { section?: "accounts" | "analytics" | "website" | "preferences" } | undefined;
+  "open:settings":
+    { section?: "accounts" | "analytics" | "website" | "assistants" | "preferences" } | undefined;
   "open:share": undefined;
   "open:studio": undefined;
   "open:tasks": undefined;

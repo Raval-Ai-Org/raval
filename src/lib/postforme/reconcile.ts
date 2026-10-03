@@ -62,7 +62,20 @@ export async function reconcilePostForMe(deps: SocialReconcileDeps) {
     }
   }
 
-  // 2. Engagement metrics for posts delivered in the last 30 days.
+  // 2. Engagement metrics. Stories first: networks report Story numbers only
+  //    while the Story is live (24 h), so those are read hourly during the
+  //    first day and the last snapshot is kept. Everything else delivered in
+  //    the last 30 days is read every few hours.
+  const storyCutoff = new Date(now - 55 * 60 * 1000).toISOString();
+  const { data: liveStories } = await deps.db
+    .from("content_publications")
+    .select("workspace_id, sdr_post_id, metrics_synced_at")
+    .eq("provider", "postforme")
+    .eq("status", "published")
+    .eq("placement", "stories")
+    .gt("delivered_at", new Date(now - 26 * 3600 * 1000).toISOString())
+    .or(`metrics_synced_at.is.null,metrics_synced_at.lt.${storyCutoff}`)
+    .limit((deps.maxMetricsPosts ?? 20) * 4);
   const metricsCutoff = new Date(now - (deps.metricsEveryMs ?? 6 * 3600 * 1000)).toISOString();
   const { data: published } = await deps.db
     .from("content_publications")
@@ -73,7 +86,7 @@ export async function reconcilePostForMe(deps: SocialReconcileDeps) {
     .or(`metrics_synced_at.is.null,metrics_synced_at.lt.${metricsCutoff}`)
     .limit((deps.maxMetricsPosts ?? 20) * 4);
   const metricPosts = new Map<string, string>();
-  for (const row of (published ?? []) as any[]) {
+  for (const row of [...((liveStories ?? []) as any[]), ...((published ?? []) as any[])]) {
     if (!metricPosts.has(row.sdr_post_id)) metricPosts.set(row.sdr_post_id, row.workspace_id);
     if (metricPosts.size >= (deps.maxMetricsPosts ?? 20)) break;
   }

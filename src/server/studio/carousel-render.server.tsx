@@ -86,6 +86,11 @@ function loadFamily(family: string): Promise<FontFace[]> {
   return hit;
 }
 
+/** The faces for these catalogue families (cached; empty when unavailable). */
+export async function loadFonts(families: string[]): Promise<FontFace[]> {
+  return (await Promise.all([...new Set(families)].map(loadFamily))).flat();
+}
+
 export type CarouselRenderInput = {
   slides: CarouselSlide[];
   design: CarouselDesign;
@@ -107,8 +112,7 @@ export function carouselRenderable(input: Pick<CarouselRenderInput, "slides" | "
 /** One JPEG per slide, in order. Throws if a slide can't be drawn. */
 export async function renderCarouselSlides(input: CarouselRenderInput): Promise<Buffer[]> {
   const { width, height } = carouselCanvas(input.ratio);
-  const families = [...new Set([input.theme.headingFont, input.theme.bodyFont])];
-  const fonts = (await Promise.all(families.map(loadFamily))).flat();
+  const fonts = await loadFonts([input.theme.headingFont, input.theme.bodyFont]);
 
   let coverImage: string | null = null;
   if (input.coverArt?.length) {

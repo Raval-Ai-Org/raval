@@ -13,9 +13,17 @@ import {
   isAutopilotType,
   type AutopilotMode,
   type AutopilotType,
+  type PlanType,
   type ProgramRow,
 } from "./contracts";
 import { addDaysYmd, daysBetweenYmd, zonedInstant } from "./time";
+import {
+  STORY_APPROVAL_GRACE_MS,
+  STORY_GENERATE_LEAD_MS,
+  readStorySettings,
+  weekStorySlots,
+  type HourScore,
+} from "@/lib/stories/schedule";
 
 /* ───────────────────────── cost ───────────────────────── */
 
@@ -56,11 +64,14 @@ export type CycleSlot = {
   /** null for an article, which is not tied to a social account. */
   platform: PlatformId | null;
   /** The format this slot gets unless the plan picks another allowed one. */
-  type: AutopilotType;
-  allowedTypes: AutopilotType[];
+  type: PlanType;
+  allowedTypes: PlanType[];
+  /** A post's topic, or a Story's theme (src/lib/stories/frames.ts). */
   topic: string;
   moment?: string;
   at: string;
+  /** Story slots: every account the Story goes to (Instagram, Facebook). */
+  platforms?: PlatformId[];
 };
 
 const ARTICLE_SLOT = 100;
@@ -109,23 +120,29 @@ export function cycleSlots(
     | "weekdays"
     | "timezone"
     | "video_cap_per_week"
-  >,
+  > &
+    Partial<Pick<ProgramRow, "stories">>,
   cycle: number,
   now: Date,
   minLeadMs = 2 * 60 * 60_000,
+  /** Hours this brand's own Stories reached the most people (smart timing). */
+  storyHours?: HourScore[],
 ): CycleSlot[] {
   const start = cycleStart(program, cycle);
   const channels = program.platforms.map((p) => (p === "twitter" ? "x" : p)) as CalendarChannel[];
-  const base = buildPlanSlots({
-    startDate: start,
-    weeks: 1,
-    postsPerWeek: program.posts_per_week,
-    channels,
-    weekdays: program.weekdays,
-    topics: PLAN_TOPICS.map((t) => t.id),
-    industry: "auto",
-    keyDates: true,
-  });
+  const base =
+    program.posts_per_week > 0
+      ? buildPlanSlots({
+          startDate: start,
+          weeks: 1,
+          postsPerWeek: program.posts_per_week,
+          channels,
+          weekdays: program.weekdays,
+          topics: PLAN_TOPICS.map((t) => t.id),
+          industry: "auto",
+          keyDates: true,
+        })
+      : [];
 
   const turn = new Map<string, number>();
   let videos = 0;
@@ -171,6 +188,33 @@ export function cycleSlots(
     });
   }
 
+  // Story Autopilot: daily Story slots inside the posting window.
+  const stories = readStorySettings(program.stories);
+  if (stories.enabled && program.posts_per_week >= 0) {
+    const perWeek = stories.perDay * (stories.days.length || 7);
+    for (const s of weekStorySlots({
+      settings: stories,
+      weekStart: start,
+      endsOn: program.ends_on,
+      learned: storyHours,
+      offset: Math.max(0, cycle - 1) * perWeek,
+      addDays: addDaysYmd,
+      weekday: (date) => new Date(`${date}T12:00:00Z`).getUTCDay(),
+    })) {
+      slots.push({
+        index: s.index,
+        date: s.date,
+        time: s.time,
+        platform: s.platforms[0] as PlatformId,
+        platforms: s.platforms as PlatformId[],
+        type: "story",
+        allowedTypes: ["story"],
+        topic: s.theme,
+        at: zonedInstant(s.date, s.time, program.timezone).toISOString(),
+      });
+    }
+  }
+
   const earliest = now.getTime() + minLeadMs;
   return slots.filter((s) => s.date <= program.ends_on && Date.parse(s.at) >= earliest);
 }
@@ -189,7 +233,7 @@ export type PlanProposal = {
 
 export type PlanItem = {
   slot: CycleSlot;
-  type: AutopilotType;
+  type: PlanType;
   title: string;
   brief: string;
   reason: string;
@@ -248,7 +292,7 @@ export function planVerdict(args: {
       dropped.push({ slot: slot.index, reason: "duplicate" });
       continue;
     }
-    const type =
+    const type: PlanType =
       isAutopilotType(proposal.type) && slot.allowedTypes.includes(proposal.type)
         ? proposal.type
         : slot.type;
@@ -285,12 +329,23 @@ export const APPROVAL_GRACE_MS = 48 * HOUR;
 /** The soonest a just-approved piece may be scheduled. */
 export const MIN_SCHEDULE_LEAD_MS = 10 * 60_000;
 
-export function generateAt(plannedFor: string, now: Date): Date {
-  return new Date(Math.max(now.getTime(), Date.parse(plannedFor) - GENERATE_LEAD_MS));
+/**
+ * When to make a piece. Stories are made the day before (they are about now),
+ * everything else three days ahead. Never at the slot itself.
+ */
+export function generateAt(plannedFor: string, now: Date, type?: string | null): Date {
+  const lead = type === "story" ? STORY_GENERATE_LEAD_MS : GENERATE_LEAD_MS;
+  return new Date(Math.max(now.getTime(), Date.parse(plannedFor) - lead));
 }
 
-export function isPastApproval(plannedFor: string | null, now: Date): boolean {
-  return Boolean(plannedFor) && now.getTime() > Date.parse(plannedFor!) + APPROVAL_GRACE_MS;
+/** A Story is stale a few hours after its slot; a post can still go out two days late. */
+export function isPastApproval(
+  plannedFor: string | null,
+  now: Date,
+  type?: string | null,
+): boolean {
+  const grace = type === "story" ? STORY_APPROVAL_GRACE_MS : APPROVAL_GRACE_MS;
+  return Boolean(plannedFor) && now.getTime() > Date.parse(plannedFor!) + grace;
 }
 
 /** Approved late: send soon rather than in the past. Never earlier than planned. */
@@ -301,8 +356,12 @@ export function scheduleTime(plannedFor: string | null, now: Date): Date {
 
 /* ───────────────────────── approval ───────────────────────── */
 
-/** Formats Full Autopilot may send without a person. Everything else waits. */
-export const FULL_AUTO_TYPES: readonly StudioType[] = ["social", "image"];
+/**
+ * Formats Full Autopilot may send without a person. Everything else waits.
+ * A designed Story (frames drawn by code from checked text) passes the same
+ * checks as a post; a video Story never goes without a person.
+ */
+export const FULL_AUTO_TYPES: readonly StudioType[] = ["social", "image", "story"];
 export const FULL_AUTO_DAILY_CAP = 2;
 
 export type PublishDecision = { auto: boolean; reasons: string[] };
@@ -322,12 +381,15 @@ export function publishDecision(args: {
   autoApprovedToday: number;
   accountConnected: boolean;
   dailyCap?: number;
+  /** Stories: a video Story always waits for a person. */
+  video?: boolean;
 }): PublishDecision {
   const reasons: string[] = [];
   if (!args.hasProgram) reasons.push("one_off");
   if (args.mode !== "full") reasons.push("mode");
   if (!args.fullEnabled) reasons.push("full_not_enabled");
-  if (!FULL_AUTO_TYPES.includes(args.contentType as StudioType)) reasons.push("format");
+  if (!FULL_AUTO_TYPES.includes(args.contentType as StudioType) || args.video)
+    reasons.push("format");
   if (args.warnings > 0) reasons.push("quality_warnings");
   if (args.inventedFacts > 0) reasons.push("unverified_facts");
   if (args.autoApprovedToday >= (args.dailyCap ?? FULL_AUTO_DAILY_CAP)) reasons.push("daily_cap");

@@ -29,7 +29,10 @@ export type VerifyFailure = { ok: false; status: 401 | 500; message: string };
  * Validate the request's Bearer token and build the caller's RLS-bound client.
  * The single implementation behind `requireUserId` and `requireSupabaseAuth`.
  */
-export async function verifyBearer(request: Request): Promise<VerifiedUser | VerifyFailure> {
+export async function verifyBearer(
+  request: Request,
+  opts: { allowOAuthClient?: boolean } = {},
+): Promise<VerifiedUser | VerifyFailure> {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_PUBLISHABLE_KEY) {
     console.error("[auth] SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY not configured");
     return { ok: false, status: 500, message: "Server not configured" };
@@ -50,12 +53,35 @@ export async function verifyBearer(request: Request): Promise<VerifiedUser | Ver
     if (error || !data?.claims?.sub) {
       return { ok: false, status: 401, message: "Invalid session" };
     }
+    // A token issued to an OAuth client (an AI assistant, ADR-0029) is only
+    // good for /api/mcp, where the workspace's MCP switch is enforced. Without
+    // this an assistant's token could call any route and skip that switch.
+    if (oauthClientId(data.claims) && !opts.allowOAuthClient && !mcpRequests.has(request)) {
+      return { ok: false, status: 401, message: "Invalid session" };
+    }
     return { ok: true, userId: data.claims.sub, claims: data.claims, supabase };
   } catch {
     // getClaims throws (rather than returning an error) on tokens it cannot
     // decode, e.g. three dot-separated segments that are not base64url JSON.
     return { ok: false, status: 401, message: "Invalid session" };
   }
+}
+
+// Requests the MCP server built in-process, after its own access checks, to
+// call an existing route or server function as the same member. Membership is
+// by object identity, so nothing arriving over the network can be in this set.
+const mcpRequests = new WeakSet<Request>();
+
+/** Only src/server/mcp/bridge.server.ts calls this. */
+export function markMcpRequest(request: Request): Request {
+  mcpRequests.add(request);
+  return request;
+}
+
+/** The OAuth client a token was issued to, or null for an ordinary sign-in. */
+export function oauthClientId(claims: JwtPayload): string | null {
+  const value = (claims as Record<string, unknown>).client_id;
+  return typeof value === "string" && value ? value : null;
 }
 
 export async function requireUserId(

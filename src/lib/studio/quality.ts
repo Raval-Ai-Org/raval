@@ -1,6 +1,7 @@
 import type { StudioJobOutput, StudioControls } from "./jobs";
 import type { StudioType } from "./formats";
 import { carouselStoryIssue } from "./carousel/story";
+import { storyIssue } from "@/lib/stories/frames";
 
 const ARTICLE_TARGET = { short: 600, standard: 1100, long: 1800 } as const;
 
@@ -22,6 +23,13 @@ export function studioOutputQualityIssue(
       return "The carousel has the wrong number of slides.";
     const story = carouselStoryIssue(output.slides);
     if (story) return story;
+  }
+  if (type === "story") {
+    if (output.story?.mode === "video")
+      return (output.concept?.trim().length ?? 0) < 60
+        ? "The video idea is too vague to render reliably."
+        : null;
+    return storyIssue(output.story?.frames, controls.frameCount ?? 3);
   }
   if (type === "article") {
     const target = ARTICLE_TARGET[controls.length ?? "standard"];

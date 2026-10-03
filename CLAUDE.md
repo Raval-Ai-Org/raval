@@ -542,6 +542,35 @@ record [ADR-0011](docs/adr/0011-github-app-website-connector.md).
   paths checked by `paths.ts`, exact-content approval, a PR — never a push to or
   merge of a base branch. Every write is audited (`src/server/audit.server.ts`).
 
+## MCP server (AI assistants)
+
+Full reference: [docs/mcp.md](docs/mcp.md), decision record
+[ADR-0029](docs/adr/0029-mcp-server.md). Flag `FEATURE_FLAG_MCP_ENABLED`
+(per workspace: `FEATURE_FLAG_MCP_ENABLED_WS_<id>`), on unless `false`.
+
+- Route `src/app/api/mcp` (Streamable HTTP, stateless); server code in
+  `src/server/mcp/`; settings RPC `src/server/fns/mcp.ts`; UI
+  `connectors/McpConnector.tsx` under Settings → AI assistants; consent page
+  `src/app/oauth/consent`.
+- **Sign-in is Supabase's OAuth server.** The token is the person's own
+  Supabase JWT, so RLS applies. Never add API keys or a second token type.
+- **A tool only calls existing code** through `bridge.server.ts` (`callFn` for
+  server functions, `callRoute` for `/api` handlers). Never read or write the
+  database or a provider from a tool; never use `supabaseAdmin` for tool data.
+- **Assistant tokens work only via `/api/mcp`.** `verifyBearer` refuses a token
+  with a `client_id` claim elsewhere; only the bridge may `markMcpRequest`.
+- **Every call goes through `runTool`**: flag → input → membership and role →
+  the workspace's switch (`mcp_workspace_settings`, off by default; changes
+  need `allow_writes`) → rate limit → the tool → `mcp_tool_calls` (append-only).
+- **Approval is never skipped:** scheduling and posting check
+  `content_items.status === "approved"` in the tool itself.
+- Not exposed, on purpose: deleting workspaces, approving or applying website
+  fixes, billing, team and role changes, connecting accounts.
+- A new tool: add it in `src/server/mcp/tools/`, set `minRole`, `write`,
+  `destructive`; read tools are named `list_` / `get_` / `suggest_` (a test
+  enforces it); a bare record id must be checked against the verified workspace.
+- Live check: `tests/live/mcp.live.ts` (`MCP_LIVE_ACCESS_TOKEN` to run as a person).
+
 ## Caption naturalization & image metadata finalization
 
 Two quality passes, both fail open (a failure never blocks saving the

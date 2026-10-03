@@ -120,13 +120,17 @@ export const supabaseAutopilotStore: AutopilotStore = {
     return { credits, videos };
   },
 
-  async autoApprovedSince(workspaceId, since) {
-    const { count, error } = await db
+  async autoApprovedSince(workspaceId, since, opts) {
+    let query = db
       .from("autopilot_actions")
       .select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId)
       .eq("approved_via", "auto")
       .gte("updated_at", since);
+    if (opts?.contentType) query = query.eq("content_type", opts.contentType);
+    if (opts?.excludeContentType)
+      query = query.or(`content_type.is.null,content_type.neq.${opts.excludeContentType}`);
+    const { count, error } = await query;
     if (error) throw new Error(error.message);
     return count ?? 0;
   },

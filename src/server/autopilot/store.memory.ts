@@ -154,9 +154,14 @@ export function createMemoryAutopilotStore(
       };
     },
 
-    async autoApprovedSince(workspaceId, since) {
+    async autoApprovedSince(workspaceId, since, opts) {
       return actions.filter(
-        (a) => a.workspace_id === workspaceId && a.approved_via === "auto" && a.updated_at >= since,
+        (a) =>
+          a.workspace_id === workspaceId &&
+          a.approved_via === "auto" &&
+          a.updated_at >= since &&
+          (!opts?.contentType || a.content_type === opts.contentType) &&
+          (!opts?.excludeContentType || a.content_type !== opts.excludeContentType),
       ).length;
     },
 
@@ -202,6 +207,7 @@ export function createMemoryAutopilotStore(
       const row: ProgramRow = {
         strategy: {},
         automations: ["geo_scan"],
+        stories: {},
         last_notified_at: null,
         ...input,
         id: id("p"),

@@ -13,6 +13,7 @@ import {
   Layers,
   Megaphone,
   MessageSquare,
+  Story,
   Video,
   type LucideIcon,
 } from "@/components/icons";
@@ -30,6 +31,7 @@ export const TYPE_ICON: Record<StudioType, LucideIcon> = {
   video: Video,
   script: Clapperboard as unknown as LucideIcon,
   article: FileText,
+  story: Story,
 };
 
 export function TypeGlyph({

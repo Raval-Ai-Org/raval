@@ -51,6 +51,7 @@ const ChannelEnum = z.enum([
 const KindEnum = z.enum([
   "post",
   "carousel",
+  "story",
   "image",
   "video",
   "ad",

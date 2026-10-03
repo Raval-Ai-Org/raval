@@ -20,8 +20,10 @@ import * as geoFixes from "./geo-fixes";
 import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
 import * as links from "./links";
+import * as mcp from "./mcp";
 import * as schedules from "./schedules";
 import * as sitePublishing from "./site-publishing";
+import * as stories from "./stories";
 import * as trackedPrompts from "./tracked-prompts";
 import * as workspaces from "./workspaces";
 import * as webflow from "./webflow";
@@ -49,8 +51,10 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "google-analytics": googleAnalytics,
   insights,
   links,
+  mcp,
   schedules,
   "site-publishing": sitePublishing,
+  stories,
   "tracked-prompts": trackedPrompts,
   workspaces,
   webflow,

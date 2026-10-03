@@ -1543,6 +1543,7 @@ export type Database = {
           act_on_opportunities: boolean;
           acting_user_id: string | null;
           automations: string[];
+          stories: Json;
           content_types: string[];
           created_at: string;
           created_by: string | null;
@@ -1572,6 +1573,7 @@ export type Database = {
           act_on_opportunities?: boolean;
           acting_user_id?: string | null;
           automations?: string[];
+          stories?: Json;
           content_types?: string[];
           created_at?: string;
           created_by?: string | null;
@@ -1601,6 +1603,7 @@ export type Database = {
           act_on_opportunities?: boolean;
           acting_user_id?: string | null;
           automations?: string[];
+          stories?: Json;
           content_types?: string[];
           created_at?: string;
           created_by?: string | null;
@@ -3763,6 +3766,8 @@ export type Database = {
           metrics: Json | null;
           metrics_synced_at: string | null;
           platform: string;
+          placement: string;
+          frames: Json | null;
           platform_post_id: string | null;
           platform_post_url: string | null;
           provider: string;
@@ -3785,6 +3790,8 @@ export type Database = {
           metrics?: Json | null;
           metrics_synced_at?: string | null;
           platform: string;
+          placement?: string;
+          frames?: Json | null;
           platform_post_id?: string | null;
           platform_post_url?: string | null;
           provider?: string;
@@ -3807,6 +3814,8 @@ export type Database = {
           metrics?: Json | null;
           metrics_synced_at?: string | null;
           platform?: string;
+          placement?: string;
+          frames?: Json | null;
           platform_post_id?: string | null;
           platform_post_url?: string | null;
           provider?: string;
@@ -6493,6 +6502,88 @@ export type Database = {
           },
         ];
       };
+      mcp_tool_calls: {
+        Row: {
+          client_id: string | null;
+          created_at: string;
+          duration_ms: number;
+          error_code: string | null;
+          id: string;
+          is_write: boolean;
+          ok: boolean;
+          summary: Json;
+          tool: string;
+          user_id: string | null;
+          workspace_id: string | null;
+        };
+        Insert: {
+          client_id?: string | null;
+          created_at?: string;
+          duration_ms?: number;
+          error_code?: string | null;
+          id?: string;
+          is_write?: boolean;
+          ok: boolean;
+          summary?: Json;
+          tool: string;
+          user_id?: string | null;
+          workspace_id?: string | null;
+        };
+        Update: {
+          client_id?: string | null;
+          created_at?: string;
+          duration_ms?: number;
+          error_code?: string | null;
+          id?: string;
+          is_write?: boolean;
+          ok?: boolean;
+          summary?: Json;
+          tool?: string;
+          user_id?: string | null;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mcp_tool_calls_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mcp_workspace_settings: {
+        Row: {
+          allow_writes: boolean;
+          enabled: boolean;
+          updated_at: string;
+          updated_by: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          allow_writes?: boolean;
+          enabled?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          allow_writes?: boolean;
+          enabled?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mcp_workspace_settings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       memory_insights: {
         Row: {
           body: string;
@@ -7454,6 +7545,39 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      social_trend_snapshots: {
+        Row: {
+          claimed_at: string | null;
+          collected_at: string | null;
+          error: string | null;
+          scope: string;
+          sources: Json;
+          status: string;
+          trends: Json;
+          updated_at: string;
+        };
+        Insert: {
+          claimed_at?: string | null;
+          collected_at?: string | null;
+          error?: string | null;
+          scope: string;
+          sources?: Json;
+          status?: string;
+          trends?: Json;
+          updated_at?: string;
+        };
+        Update: {
+          claimed_at?: string | null;
+          collected_at?: string | null;
+          error?: string | null;
+          scope?: string;
+          sources?: Json;
+          status?: string;
+          trends?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       social_usage_events: {
         Row: {

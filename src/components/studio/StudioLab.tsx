@@ -146,6 +146,37 @@ const OUTPUTS: Partial<Record<StudioType, StudioJobOutput>> = {
     ],
     media: [],
   },
+  story: {
+    title: "Sour cold brew? Fix it in one step",
+    angle: "Practical how-to",
+    story: {
+      mode: "frames",
+      theme: "tip",
+      frames: [
+        {
+          role: "hook",
+          kicker: "Quick tip",
+          heading: "Sour cold brew? One fix.",
+          emphasis: "One fix",
+          body: "",
+        },
+        {
+          role: "value",
+          kicker: "The fix",
+          heading: "Steep it 3 hours longer",
+          emphasis: "3 hours",
+          body: "Sour means the sweet part never came out. Time fixes it.",
+        },
+        {
+          role: "question",
+          heading: "How long do you steep?",
+          body: "Reply with your pick",
+          options: ["12 hours", "18 hours", "A full day"],
+        },
+      ],
+    },
+    media: [],
+  },
   article: {
     title: "Decaf that doesn't taste like decaf: a buyer's guide",
     angle: "Practical how-to",
@@ -287,6 +318,16 @@ const ROWS: Partial<Record<StudioType, ReviewRow[]>> = {
       scheduled_at: null,
     },
   ],
+  story: [
+    {
+      id: "r-story",
+      status: "pending",
+      title: "Sour cold brew? Fix it in one step",
+      body: "",
+      meta: { platform: "instagram", placement: "stories", story: { mode: "frames" } },
+      scheduled_at: null,
+    },
+  ],
   carousel: [
     {
       id: "r3",
@@ -399,12 +440,13 @@ function session(
           ? []
           : type === "ad"
             ? ["facebook", "instagram"]
-            : type === "script"
+            : type === "script" || type === "story"
               ? ["instagram"]
               : ["linkedin", "instagram"],
       ratio: type === "ad" ? "4:5" : type === "carousel" ? "4:5" : "1:1",
       includeImage: type === "social",
       slideCount: 5,
+      ...(type === "story" ? { storyMode: "frames" as const, frameCount: 3 } : {}),
       length: "standard",
       durationSec: type === "video" ? 6 : 30,
     },
@@ -528,6 +570,17 @@ const SCENES: Scene[] = [
     label: "Review · Video rendering",
     make: () => session("video", "review"),
     fixtures: { rows: ROWS.video, distribution: true },
+  },
+  {
+    id: "brief-story",
+    label: "Brief · Story",
+    make: () => session("story", "intent"),
+  },
+  {
+    id: "review-story",
+    label: "Review · Story",
+    make: () => session("story", "review"),
+    fixtures: { rows: ROWS.story, distribution: true },
   },
   {
     id: "review-carousel",

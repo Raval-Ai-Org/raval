@@ -25,6 +25,7 @@ const BILLING_ROUTE: Record<CreateJobInput["type"], string> = {
   social: "studio.social",
   image: "studio.captions",
   carousel: "studio.carousel",
+  story: "studio.story",
   video: "video",
   article: "studio.article",
   script: "studio.script",
@@ -33,6 +34,7 @@ const BILLING_ROUTE: Record<CreateJobInput["type"], string> = {
 
 /** Whether this request starts an image or video render (charged when it finishes). */
 export function studioJobRenders(input: Pick<CreateJobInput, "type" | "controls">): boolean {
+  if (input.type === "story" && input.controls.storyMode === "video") return true;
   const media = STUDIO_FORMATS[input.type].media;
   return (
     media === "video" ||
@@ -63,8 +65,12 @@ export async function createBilledStudioJob(args: {
     includeImage: input.controls.includeImage,
     length: input.controls.length,
     regenerate: Boolean(input.regenerate || input.parentJobId),
+    storyMode: input.controls.storyMode,
   });
-  const billingRoute = BILLING_ROUTE[input.type];
+  const billingRoute =
+    input.type === "story" && input.controls.storyMode === "video"
+      ? "video"
+      : BILLING_ROUTE[input.type];
   const video = action === "studio_video";
   const amount = video ? STUDIO_VIDEO_UNITS : creditsFor(action as CreditAction);
   const price = { meter: video ? ("video" as const) : ("credits" as const), amount };

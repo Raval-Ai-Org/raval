@@ -17,6 +17,7 @@ export const PLATFORM_PLAYBOOK: Record<PlatformId, string[]> = {
     "The first caption line works like a search title: name the topic in the words people would type.",
     "Carousels are read slide by slide; each swipe has to feel earned by the slide before it.",
     "Use 3 to 5 specific hashtags. More than that does not help.",
+    "Stories reach the people who already follow you; replies to a Story land in your inbox and are the strongest signal there.",
   ],
   tiktok: [
     "People search here like a search engine: say the topic plainly in the first line and in any on-screen text.",
@@ -57,6 +58,13 @@ export const FORMAT_PLAYBOOK: Partial<Record<StudioType, string[]>> = {
     "The cover has one job: make the reader swipe. A specific promise or tension, never a topic label.",
     "Every slide carries one idea and hands over to the next, so the set reads as one piece.",
     "The second-to-last slide sums it up so the post is worth saving; the last asks for one action.",
+  ],
+  story: [
+    "Each frame is seen for about five seconds: one idea, big words, read in a glance.",
+    "The first frame decides whether people tap through; open on the point, never on a logo or a greeting.",
+    "Ask for a reply rather than a like: replies come as direct messages and keep the conversation going.",
+    "Keep text away from the top and bottom of the screen, where the app's controls sit.",
+    "Links can't be stickered on Stories posted through an API: point people to the link in your bio.",
   ],
   social: [
     "The opening line has to work alone, cut off before 'more'.",

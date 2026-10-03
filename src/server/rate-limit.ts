@@ -67,7 +67,9 @@ export type RateLimitTier =
   | "experiment-propose"
   | "experiment-action"
   | "brand-kit-upload"
-  | "brand-kit-analyze";
+  | "brand-kit-analyze"
+  | "mcp-read"
+  | "mcp-write";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -174,6 +176,11 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // Studying examples with Claude vision, or turning a description into a
   // style — one paid model call per example.
   "brand-kit-analyze": { limit: 60, windowSeconds: 3600, label: "style analysis" },
+  // AI assistants over MCP (ADR-0029). Reads are database work; an assistant
+  // chains several per question. Changes are deliberate, one at a time, and
+  // anything that spends is also held to the tier of the work it starts.
+  "mcp-read": { limit: 120, windowSeconds: 60, label: "assistant" },
+  "mcp-write": { limit: 30, windowSeconds: 60, label: "assistant change" },
 };
 
 export type RateLimitResult = {
