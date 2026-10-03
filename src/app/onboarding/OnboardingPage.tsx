@@ -4,7 +4,6 @@ import { Spinner } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { toast } from "sonner";
-import { Check } from "@/components/icons";
 import { Logo } from "@/components/brand/Logo";
 import { BrandReveal, type BrandEdits } from "@/components/onboarding/BrandReveal";
 import { SCAN_PHASES, advancePhase } from "@/components/onboarding/phases";
@@ -542,42 +541,39 @@ function Onboarding() {
 function StepIndicator({ step }: { step: Step }) {
   const current = step === "done" ? STEPS.length : STEPS.findIndex((s) => s.id === step);
   return (
-    <ol aria-label="Setup progress" className="flex items-center">
+    <ol aria-label="Setup progress" className="grid w-[132px] grid-cols-3 sm:w-[288px]">
       {STEPS.map((item, index) => {
         const state = index < current ? "done" : index === current ? "active" : "pending";
         return (
           <li
             key={item.id}
             aria-current={state === "active" ? "step" : undefined}
-            className="flex items-center"
+            className="relative flex min-w-0 flex-col items-center gap-1"
           >
             {index > 0 && (
               <span
                 aria-hidden
-                className={`mx-1.5 h-px w-4 transition-colors duration-500 sm:mx-2.5 sm:w-8 ${index <= current ? "bg-primary" : "bg-border"}`}
+                className={`absolute right-1/2 top-[13px] h-px w-full transition-colors duration-500 ${index <= current ? "bg-primary/50" : "bg-border"}`}
               />
             )}
             <span
-              className={`inline-flex items-center gap-1.5 text-[12px] transition-colors ${state === "pending" ? "text-muted-foreground" : "text-foreground"}`}
+              className={`relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[11px] font-semibold leading-none tabular-nums transition-colors duration-300 ${
+                state === "done"
+                  ? "border-primary/30 bg-primary/10 text-primary"
+                  : state === "active"
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm ring-4 ring-primary/10"
+                    : "border-border bg-background text-muted-foreground"
+              }`}
             >
-              <span
-                className={`grid h-5 w-5 place-items-center rounded-full text-[10px] font-semibold transition-colors duration-300 ${
-                  state === "done"
-                    ? "bg-primary text-primary-foreground"
-                    : state === "active"
-                      ? "border border-primary text-primary"
-                      : "border border-border text-muted-foreground"
-                }`}
-              >
-                {state === "done" ? (
-                  <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
-                ) : (
-                  index + 1
-                )}
-              </span>
-              <span className="hidden sm:inline">{item.label}</span>
-              {state === "done" && <span className="sr-only">(complete)</span>}
+              {index + 1}
             </span>
+            <span
+              className={`hidden whitespace-nowrap text-[11px] font-medium leading-none sm:block ${state === "pending" ? "text-muted-foreground" : "text-foreground"}`}
+            >
+              {item.label}
+            </span>
+            <span className="sr-only sm:hidden">{item.label}</span>
+            {state === "done" && <span className="sr-only">(complete)</span>}
           </li>
         );
       })}

@@ -10,6 +10,9 @@ Supabase/PostgreSQL. The server side owns credentials, provider integrations,
 role checks, metering, and database writes; the browser is used for editorial
 workflows and orchestration.
 
+The workspace Canva connection and image editing workflow are documented in
+[docs/canva-integration.md](docs/canva-integration.md).
+
 ## What is included in the current product
 
 - Workspace-scoped brand context and explicit authorization checks

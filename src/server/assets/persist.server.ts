@@ -25,6 +25,8 @@ export type PersistAssetInput = {
   sourceUrl?: string;
   /** Content items to link. The first becomes assets.content_item_id. */
   contentItemIds?: string[];
+  /** Server-owned derived asset relationship; callers must authorize this asset. */
+  parentAssetId?: string | null;
   assetType: "image" | "video";
   mimeType?: string;
   filename?: string;
@@ -237,6 +239,16 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
     linkIds = input.contentItemIds.filter((id) => valid.has(id));
   }
   const primaryContentId = linkIds[0] ?? null;
+  if (input.parentAssetId) {
+    const { data: parent } = await supabase
+      .from("assets")
+      .select("id")
+      .eq("id", input.parentAssetId)
+      .eq("workspace_id", workspaceId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!parent) return { ok: false, status: 403, message: "Parent asset is unavailable" };
+  }
 
   let assetId = existing?.id as string | undefined;
   if (!assetId) {
@@ -245,6 +257,7 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
       id: assetId,
       workspace_id: workspaceId,
       content_item_id: primaryContentId,
+      parent_asset_id: input.parentAssetId ?? null,
       generation_id: idempotencyKey,
       idempotency_key: idempotencyKey,
       asset_type: assetType,

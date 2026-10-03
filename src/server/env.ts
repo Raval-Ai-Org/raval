@@ -71,6 +71,10 @@ const Schema = z.object({
   // Google Analytics 4 + Search Console connector (docs/google-analytics-connector.md).
   // A web OAuth client separate from the Supabase sign-in client. Server-only.
   GOOGLE_ANALYTICS_CLIENT_ID: z.string().optional(),
+  CANVA_CLIENT_ID: z.string().optional(),
+  CANVA_CLIENT_SECRET: z.string().optional(),
+  CANVA_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  FEATURE_FLAG_CANVA_MAGIC_LAYERS_ENABLED: z.enum(["true", "false"]).optional(),
   GOOGLE_ANALYTICS_CLIENT_SECRET: z.string().optional(),
   GOOGLE_ANALYTICS_REDIRECT_URI: optionalUrl,
   // base64 of 32 random bytes — encrypts Google refresh/access tokens at rest.

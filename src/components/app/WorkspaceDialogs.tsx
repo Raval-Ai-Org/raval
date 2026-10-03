@@ -23,6 +23,7 @@ import {
   type SurfaceNavItem,
 } from "@/components/app/surface/SurfaceLayout";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
+import { CanvaConnection } from "@/components/app/connectors/CanvaConnection";
 import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
 import { WebflowConnector } from "@/components/app/connectors/WebflowConnector";
 import { WordPressConnector } from "@/components/app/connectors/WordPressConnector";
@@ -312,7 +313,7 @@ function DetailsDialog({
 }
 
 const SETTINGS_NAV: SurfaceNavItem<SettingsSection>[] = [
-  { id: "accounts", label: "Social accounts", icon: Users },
+  { id: "accounts", label: "Connections", icon: Users },
   { id: "analytics", label: "Analytics", icon: BarChart },
   { id: "website", label: "Website", icon: Globe },
   { id: "assistants", label: "AI assistants", icon: Bot },
@@ -380,6 +381,7 @@ function SettingsDialog({
           {section === "accounts" && (
             <SurfacePage width="narrow">
               <SocialAccountsSection variant="settings" />
+              <CanvaConnection />
             </SurfacePage>
           )}
           {section === "analytics" && (
