@@ -1,7 +1,6 @@
 "use client";
 
-import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
-import { BrandDnaStylesStrip } from "@/components/app/brand-kit/BrandDnaStylesStrip";
+import { LookEditor, LookTilePreview } from "@/components/app/brain/brand/look/LookEditor";
 import { mergeExtractionIntoDna } from "@/lib/brand-dna-merge";
 import { bootstrapCompetitors } from "@/lib/competitors.functions";
 import { flushBrandDnaFor } from "@/hooks/use-brand-dna";
@@ -11,7 +10,6 @@ import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Brain,
-  Check,
   Globe,
   Sparkles,
   Plus,
@@ -33,25 +31,12 @@ import {
   ShoppingBag,
   ShieldCheck,
   Download,
-  ChevronDown,
   CheckCircle2,
   XCircle,
   Link2,
 } from "@/components/ui/gemini-icons";
 import { ArrowLeft, Search as SearchIcon } from "lucide-react";
-import {
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  BrandDnaCompetitorsCallout,
-  BrandDnaCompetitorsTilePreview,
-} from "@/components/app/competitors/BrandDnaCompetitorsCallout";
 import { Input } from "@/components/ui/input";
 import {
   useBrandDna,
@@ -66,9 +51,6 @@ import { buildDesignMd, downloadDesignMd } from "@/lib/design-md";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { BrandDnaEditor } from "./BrandDnaEditor";
-
-const SEG =
-  "group relative inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-secondary/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand-green))] focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 function normalizeUrl(raw: string | null | undefined) {
   if (!raw) return null;
@@ -95,10 +77,19 @@ const PLATFORM_KEYS: Record<string, BrandKey | undefined> = {
   tiktok: "tiktok",
 };
 
-export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) {
+/**
+ * Brand DNA, as the Brand section of Brain. `tile` opens one editor (from a
+ * link elsewhere in Mellox); null is the overview.
+ */
+export function BrandDnaSurface({
+  workspaceId,
+  tile = null,
+}: {
+  workspaceId: string | null;
+  tile?: string | null;
+}) {
   const queryClient = useQueryClient();
-  const { dna, save: rawSave, replace, filledCount, total } = useBrandDna(workspaceId);
-  const [open, setOpen] = useState(false);
+  const { dna, save: rawSave, replace } = useBrandDna(workspaceId);
   const [dirty, setDirty] = useState(false);
   const save = useCallback(
     (patch: Partial<BrandDna>) => {
@@ -133,17 +124,6 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
   const closeTile = useCallback(() => {
     setActiveTile(null);
   }, []);
-  const requestClose = useCallback(() => {
-    if (dirty) {
-      const ok = window.confirm("Discard unsaved Brand DNA edits and close?");
-      if (!ok) return false;
-    }
-    setDirty(false);
-    setActiveTile(null);
-    setOpen(false);
-    return true;
-  }, [dirty]);
-
   // Restore overview scroll and focus the previously-opened tile
   useEffect(() => {
     if (activeTile !== null) {
@@ -183,22 +163,17 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
     };
   }, [workspaceId]);
 
+  // A link from elsewhere in Mellox names the editor to open.
   useEffect(() => {
-    const h = (e: Event) => {
-      setOpen(true);
-      const tab = (e as CustomEvent).detail?.tab as string | undefined;
-      // legacy map: essentials → voice tile, brand → overview
-      if (tab === "essentials") setActiveTile("voice");
-      else if (tab && TILE_KEYS.includes(tab as TileKey)) setActiveTile(tab as TileKey);
-      else setActiveTile(null);
-    };
-    addAppEventListener("open:brand-dna", h);
-    return () => removeAppEventListener("open:brand-dna", h);
-  }, []);
+    // legacy map: essentials → voice tile
+    if (tile === "essentials") setActiveTile("voice");
+    else if (tile && TILE_KEYS.includes(tile as TileKey)) setActiveTile(tile as TileKey);
+    else setActiveTile(null);
+  }, [tile]);
 
   // Escape from an open tile returns to the overview (without closing the dialog).
   useEffect(() => {
-    if (!open || !activeTile) return;
+    if (!activeTile) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -207,7 +182,7 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, activeTile]);
+  }, [activeTile]);
 
   useEffect(() => {
     if (!websiteUrl) return;
@@ -340,303 +315,186 @@ export function BrandDnaButton({ workspaceId }: { workspaceId: string | null }) 
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (v) {
-          setOpen(true);
-          return;
-        }
-        requestClose();
-      }}
-    >
-      <DialogTrigger asChild>
-        <button
-          className={SEG}
-          title="Brand DNA — everything Mellox AI knows about your brand"
-          aria-label={`Open Brand DNA (${filledCount} of ${total} fields filled)`}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-        >
-          <span className="relative grid h-3.5 w-3.5 place-items-center" aria-hidden="true">
-            <svg viewBox="0 0 14 14" className="absolute inset-0 -rotate-90">
-              <circle
-                cx="7"
-                cy="7"
-                r="5.5"
-                stroke="hsl(var(--border))"
-                strokeWidth="1.5"
-                fill="none"
-              />
-              <motion.circle
-                cx="7"
-                cy="7"
-                r="5.5"
-                stroke="hsl(var(--brand-green))"
-                strokeWidth="1.5"
-                fill="none"
-                strokeLinecap="round"
-                pathLength={1}
-                initial={{ strokeDasharray: 1, strokeDashoffset: 1 }}
-                animate={{ strokeDashoffset: 1 - (total ? filledCount / total : 0) }}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              />
-            </svg>
-            <Brain className="h-2 w-2 text-[hsl(var(--brand-green))]" strokeWidth={2.4} />
-          </span>
-          <span className="hidden md:inline">Brand DNA</span>
-          <span
-            aria-hidden="true"
-            className="rounded bg-secondary/80 px-1 text-[10px] tabular-nums text-muted-foreground group-hover:text-foreground"
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Sticky top bar */}
+      <div className="relative z-10 flex h-14 shrink-0 items-center gap-3 border-b border-border/50 bg-background/60 px-3 backdrop-blur-xl sm:px-5">
+        {activeTile ? (
+          <button
+            ref={backButtonRef}
+            onClick={closeTile}
+            aria-label="Back to Brand overview"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1.5 text-[12px] font-medium text-foreground/80 transition-all hover:-translate-x-0.5 hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand-green))] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            {filledCount}/{total}
-          </span>
-        </button>
-      </DialogTrigger>
-
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <DialogPrimitive.Content
-          aria-labelledby="brand-dna-title"
-          aria-describedby="brand-dna-desc"
-          data-mellox-app
-          // Focus the window, not its first button (no ring on open).
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            (e.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
-          }}
-          className="ds-window ds-glow fixed left-1/2 top-1/2 z-50 flex h-[min(92dvh,960px)] w-[min(calc(100vw-24px),1240px)] max-sm:h-dvh max-sm:w-screen max-sm:rounded-none -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden p-0 outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-        >
-          <DialogHeader className="sr-only">
-            <DialogTitle id="brand-dna-title">Brand DNA</DialogTitle>
-            <DialogDescription id="brand-dna-desc">
-              Everything Mellox AI knows about your brand. Use Tab to move between tiles, Enter or
-              Space to open one, and Escape to return to the overview.
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Sticky top bar */}
-          <div className="relative z-10 flex h-14 shrink-0 items-center gap-3 border-b border-border/50 bg-background/60 px-3 backdrop-blur-xl sm:px-5">
-            {activeTile ? (
-              <button
-                ref={backButtonRef}
-                onClick={closeTile}
-                aria-label="Back to Brand DNA overview"
-                className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1.5 text-[12px] font-medium text-foreground/80 transition-all hover:-translate-x-0.5 hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand-green))] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back
-              </button>
-            ) : (
-              <div className="flex items-center gap-2.5">
-                <span
-                  className="grid h-8 w-8 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20"
-                  aria-hidden="true"
-                >
-                  <Brain className="h-4 w-4" />
-                </span>
-                <div className="flex flex-col leading-tight">
-                  <span className="text-[15px] font-semibold tracking-tight text-foreground">
-                    Brand DNA
-                  </span>
-                  <span className="hidden text-[11.5px] text-muted-foreground sm:block">
-                    What Mellox knows about you
-                  </span>
-                </div>
-              </div>
-            )}
-            <div className="ml-auto flex items-center gap-2">
-              {dirty && (
-                <span
-                  role="status"
-                  aria-live="polite"
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-500 sm:px-2.5"
-                  title="You have edits that haven't been confirmed yet"
-                  aria-label="Unsaved changes"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse"
-                  />
-                  <span className="hidden sm:inline">Unsaved</span>
-                </span>
-              )}
-              <StatusPill status={status} extractedAt={dna.extractedAt} progress={progress} />
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => runFetch()}
-                disabled={status === "loading" || !connectedUrl}
-                className="h-8 rounded-full px-3 text-[12px] focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand-green))]"
-                title="Re-sync from your website"
-                aria-label={
-                  status === "loading"
-                    ? "Re-syncing from your website"
-                    : "Re-sync from your website"
-                }
-              >
-                {status === "loading" ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                <span className="hidden sm:inline">Re-sync</span>
-              </Button>
-              <DialogPrimitive.Close
-                aria-label="Close Brand DNA"
-                className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[var(--ds-well-bg-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </DialogPrimitive.Close>
-            </div>
-            {status === "loading" && (
-              <div
-                className="absolute inset-x-0 bottom-0 h-[2px] overflow-hidden"
-                role="progressbar"
-                aria-label="Syncing Brand DNA"
-                aria-valuenow={progress.pct}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <motion.div
-                  className="h-full w-1/3 bg-gradient-to-r from-transparent via-[hsl(var(--brand-green))] to-transparent"
-                  initial={{ x: "-100%" }}
-                  animate={{ x: "300%" }}
-                  transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
-                />
-              </div>
-            )}
-          </div>
-
-          <div
-            ref={scrollRef}
-            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] motion-safe:scroll-smooth"
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              {activeTile === null ? (
-                <motion.div
-                  key="overview"
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 4 }}
-                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                  className="px-4 py-4 sm:px-6 sm:py-5"
-                >
-                  <OverviewHero
-                    dna={dna}
-                    connectedUrl={connectedUrl}
-                    urlInput={urlInput}
-                    setUrlInput={setUrlInput}
-                    onSubmit={submitUrl}
-                    status={status}
-                  />
-                  <TileToolbar
-                    query={tileQuery}
-                    setQuery={setTileQuery}
-                    category={tileCategory}
-                    setCategory={setTileCategory}
-                  />
-                  <TileGrid dna={dna} onOpen={openTile} query={tileQuery} category={tileCategory} />
-                  <BrandDnaStylesStrip
-                    workspaceId={workspaceId}
-                    onNavigate={() => setOpen(false)}
-                  />
-                  {status === "error" && lastError && (
-                    <div className="mt-5 flex items-start gap-2 rounded-2xl border border-danger-border bg-danger-surface px-4 py-3 text-[12.5px] text-danger">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                      <div className="flex-1">
-                        <div className="font-medium text-danger">Couldn't read your site</div>
-                        <div className="opacity-80">{lastError}</div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => runFetch()}
-                        className="h-7 rounded-full px-2.5 text-danger hover:text-danger"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" /> Retry
-                      </Button>
-                    </div>
-                  )}
-                </motion.div>
-              ) : (
-                <motion.div
-                  key={`edit-${activeTile}`}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                  className="grid gap-5 px-4 py-4 sm:px-6 sm:py-5 lg:grid-cols-[minmax(0,1fr)_300px]"
-                >
-                  <div className="min-w-0">
-                    <TileEditor tile={activeTile} dna={dna} save={save} />
-                  </div>
-                  <aside aria-label="Live brand summary preview" className="hidden lg:block">
-                    <div className="sticky top-2">
-                      <LiveSummaryPane dna={dna} activeTile={activeTile} dirty={dirty} />
-                    </div>
-                  </aside>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="relative z-10 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border/50 bg-background/60 px-4 py-3 backdrop-blur-xl sm:px-6">
-            <div className="flex flex-wrap items-center gap-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  if (!workspaceId) return;
-                  const t = toast.loading("Reading chat for insights…");
-                  try {
-                    const { syncMemoryFromChat } = await import("@/lib/memory-sync");
-                    const res = await syncMemoryFromChat(workspaceId, dna, save);
-                    toast.dismiss(t);
-                    if (res.added > 0)
-                      toast.success(
-                        `Saved ${res.added} new memory item${res.added > 1 ? "s" : ""}`,
-                      );
-                    else
-                      toast.info(
-                        res.skipped ? `Nothing new (${res.skipped})` : "No new insights yet",
-                      );
-                  } catch {
-                    toast.dismiss(t);
-                    toast.error("Memory sync failed");
-                  }
-                }}
-                disabled={!workspaceId}
-                className="h-8 rounded-full px-2.5 text-[12px] text-muted-foreground hover:text-foreground"
-              >
-                <Brain className="h-3.5 w-3.5" />{" "}
-                <span className="hidden sm:inline">Sync from chat</span>
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={onDownloadDesignMd}
-                className="h-8 rounded-full px-2.5 text-[12px] text-muted-foreground hover:text-foreground"
-              >
-                <Download className="h-3.5 w-3.5" />{" "}
-                <span className="hidden sm:inline">Export</span>
-              </Button>
-            </div>
-            <Button
-              size="sm"
-              onClick={() => {
-                toast.success(dirty ? "Changes saved" : "All up to date");
-                setDirty(false);
-                setOpen(false);
-                setActiveTile(null);
-              }}
-              className="h-9 rounded-full px-5 text-[13px]"
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back
+          </button>
+        ) : (
+          <div className="flex items-center gap-2.5">
+            <span
+              className="grid h-8 w-8 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20"
+              aria-hidden="true"
             >
-              <Check className="h-3.5 w-3.5" /> {dirty ? "Save & close" : "Done"}
-            </Button>
+              <Brain className="h-4 w-4" />
+            </span>
+            <div className="flex flex-col leading-tight">
+              <span className="text-[15px] font-semibold tracking-tight text-foreground">
+                Brand DNA
+              </span>
+              <span className="hidden text-[11.5px] text-muted-foreground sm:block">
+                What Mellox knows about you
+              </span>
+            </div>
           </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </Dialog>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <StatusPill status={status} extractedAt={dna.extractedAt} progress={progress} />
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => runFetch()}
+            disabled={status === "loading" || !connectedUrl}
+            className="h-8 rounded-full px-3 text-[12px] focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand-green))]"
+            title="Re-sync from your website"
+            aria-label={
+              status === "loading" ? "Re-syncing from your website" : "Re-sync from your website"
+            }
+          >
+            {status === "loading" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            <span className="hidden sm:inline">Re-sync</span>
+          </Button>
+        </div>
+        {status === "loading" && (
+          <div
+            className="absolute inset-x-0 bottom-0 h-[2px] overflow-hidden"
+            role="progressbar"
+            aria-label="Syncing Brand DNA"
+            aria-valuenow={progress.pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <motion.div
+              className="h-full w-1/3 bg-gradient-to-r from-transparent via-[hsl(var(--brand-green))] to-transparent"
+              initial={{ x: "-100%" }}
+              animate={{ x: "300%" }}
+              transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
+            />
+          </div>
+        )}
+      </div>
+
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] motion-safe:scroll-smooth"
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {activeTile === null ? (
+            <motion.div
+              key="overview"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="px-4 py-4 sm:px-6 sm:py-5"
+            >
+              <OverviewHero
+                dna={dna}
+                connectedUrl={connectedUrl}
+                urlInput={urlInput}
+                setUrlInput={setUrlInput}
+                onSubmit={submitUrl}
+                status={status}
+              />
+              <TileToolbar
+                query={tileQuery}
+                setQuery={setTileQuery}
+                category={tileCategory}
+                setCategory={setTileCategory}
+              />
+              <TileGrid dna={dna} onOpen={openTile} query={tileQuery} category={tileCategory} />
+              {status === "error" && lastError && (
+                <div className="mt-5 flex items-start gap-2 rounded-2xl border border-danger-border bg-danger-surface px-4 py-3 text-[12.5px] text-danger">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium text-danger">Couldn't read your site</div>
+                    <div className="opacity-80">{lastError}</div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => runFetch()}
+                    className="h-7 rounded-full px-2.5 text-danger hover:text-danger"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Retry
+                  </Button>
+                </div>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key={`edit-${activeTile}`}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="grid gap-5 px-4 py-4 sm:px-6 sm:py-5 lg:grid-cols-[minmax(0,1fr)_300px]"
+            >
+              <div className="min-w-0">
+                <TileEditor tile={activeTile} dna={dna} save={save} />
+              </div>
+              <aside aria-label="Live brand summary preview" className="hidden lg:block">
+                <div className="sticky top-2">
+                  <LiveSummaryPane dna={dna} activeTile={activeTile} dirty={dirty} />
+                </div>
+              </aside>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border/50 bg-background/60 px-4 py-3 backdrop-blur-xl sm:px-6">
+        <div className="flex flex-wrap items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={async () => {
+              if (!workspaceId) return;
+              const t = toast.loading("Reading chat for insights…");
+              try {
+                const { syncMemoryFromChat } = await import("@/lib/memory-sync");
+                const res = await syncMemoryFromChat(workspaceId, dna, save);
+                toast.dismiss(t);
+                if (res.added > 0)
+                  toast.success(`Saved ${res.added} new memory item${res.added > 1 ? "s" : ""}`);
+                else
+                  toast.info(res.skipped ? `Nothing new (${res.skipped})` : "No new insights yet");
+              } catch {
+                toast.dismiss(t);
+                toast.error("Memory sync failed");
+              }
+            }}
+            disabled={!workspaceId}
+            className="h-8 rounded-full px-2.5 text-[12px] text-muted-foreground hover:text-foreground"
+          >
+            <Brain className="h-3.5 w-3.5" />{" "}
+            <span className="hidden sm:inline">Sync from chat</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDownloadDesignMd}
+            className="h-8 rounded-full px-2.5 text-[12px] text-muted-foreground hover:text-foreground"
+          >
+            <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Export</span>
+          </Button>
+        </div>
+        <span className="text-[12px] text-muted-foreground" role="status" aria-live="polite">
+          Saved as you go
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -800,8 +658,7 @@ type TileKey =
   | "voice"
   | "headline"
   | "audience"
-  | "competitors"
-  | "customers"
+  | "look"
   | "assets"
   | "notes";
 const TILE_KEYS: TileKey[] = [
@@ -812,8 +669,7 @@ const TILE_KEYS: TileKey[] = [
   "voice",
   "headline",
   "audience",
-  "competitors",
-  "customers",
+  "look",
   "assets",
   "notes",
 ];
@@ -866,16 +722,10 @@ const TILE_META: TileMeta[] = [
     keywords: "audience target market segment icp",
   },
   {
-    key: "competitors",
-    label: "Competitors",
-    category: "market",
-    keywords: "competitors rivals alternatives comparison",
-  },
-  {
-    key: "customers",
-    label: "Customers",
-    category: "market",
-    keywords: "customers personas testimonials quotes reviews",
+    key: "look",
+    label: "Look & voice",
+    category: "visual",
+    keywords: "look style design tone image mood emoji hashtags video writing",
   },
   {
     key: "assets",
@@ -1105,29 +955,14 @@ function TileGrid({
           <AudiencePreview dna={dna} />
         </Tile>
       )}
-      {show("competitors") && (
+      {show("look") && (
         <Tile
-          tileKey="competitors"
-          label="Competitors"
-          ariaLabel="Open competitor research in Brand DNA"
-          onClick={() => onOpen("competitors")}
+          tileKey="look"
+          label="Look & voice"
+          ariaLabel="Edit your look and voice"
+          onClick={() => onOpen("look")}
         >
-          <BrandDnaCompetitorsTilePreview fallbackCount={dna.competitors.length} />
-        </Tile>
-      )}
-      {show("customers") && (
-        <Tile
-          tileKey="customers"
-          label="Customers"
-          ariaLabel={`Edit Customers (${dna.customer.personas.length + dna.customer.testimonials.length} entries)`}
-          onClick={() => onOpen("customers")}
-        >
-          <CountPreview
-            count={dna.customer.personas.length + dna.customer.testimonials.length}
-            icon={Users}
-            label="personas + quotes"
-            empty="Add personas & signals"
-          />
+          <LookTilePreview dna={dna} />
         </Tile>
       )}
       {show("assets") && (
@@ -1748,11 +1583,10 @@ function TileEditor({
     voice: { title: "Voice & essentials", subtitle: "The 5 inputs Mellox uses to write like you." },
     headline: { title: "Tagline & positioning", subtitle: "The story behind what you sell." },
     audience: { title: "Audience", subtitle: "Who you're for — segments and tags." },
-    competitors: {
-      title: "Competitors",
-      subtitle: "Players in your space — strengths, gaps, positioning.",
+    look: {
+      title: "Look & voice",
+      subtitle: "How everything Mellox makes should look and sound.",
     },
-    customers: { title: "Customers", subtitle: "Personas, testimonials and buying signals." },
     assets: { title: "Assets", subtitle: "Reusable images, logos and links." },
     notes: { title: "Notes", subtitle: "Durable memory captured from chat." },
   };
@@ -1800,8 +1634,7 @@ function TileEditor({
           <RulesGrid dna={dna} save={save} />
         </div>
       )}
-      {tile === "competitors" && <CompetitorsTab dna={dna} save={save} />}
-      {tile === "customers" && <CustomersTab dna={dna} save={save} />}
+      {tile === "look" && <LookEditor dna={dna} save={save} />}
       {tile === "assets" && <AssetsTab dna={dna} save={save} />}
       {tile === "notes" && <NotesTab dna={dna} save={save} />}
     </div>
@@ -3122,92 +2955,15 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function CompetitorsTab({ dna, save }: { dna: BrandDna; save: (n: Partial<BrandDna>) => void }) {
-  const add = () => save({ competitors: [...dna.competitors, { id: uid(), name: "", url: "" }] });
-  const update = (id: string, patch: Partial<import("@/hooks/use-brand-dna").Competitor>) =>
-    save({ competitors: dna.competitors.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
-  const remove = (id: string) => save({ competitors: dna.competitors.filter((c) => c.id !== id) });
-
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground/80 inline-flex items-center gap-1.5">
-          <Building2 className="h-3.5 w-3.5 text-muted-foreground" /> Competitors
-        </div>
-        <Button size="sm" variant="outline" onClick={add}>
-          <Plus className="h-3.5 w-3.5" /> Add competitor
-        </Button>
-      </div>
-      {/* The researched set stays alongside the editable Brand DNA memory. */}
-      <BrandDnaCompetitorsCallout />
-      {dna.competitors.length === 0 && (
-        <EmptyAction onClick={add} label="Track your first competitor" />
-      )}
-      <div className="space-y-3">
-        {dna.competitors.map((c) => (
-          <div key={c.id} className="rounded-2xl border border-border/60 bg-card/40 p-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <Input
-                value={c.name}
-                onChange={(e) => update(c.id, { name: e.target.value })}
-                placeholder="Competitor name"
-                className="h-8 text-[13px] font-medium"
-              />
-              <Input
-                value={c.url ?? ""}
-                onChange={(e) => update(c.id, { url: e.target.value })}
-                placeholder="https://…"
-                className="h-8 text-[12px]"
-              />
-              <button
-                onClick={() => remove(c.id)}
-                className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
-                aria-label="Remove"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              <MiniField
-                label="Positioning"
-                value={c.positioning ?? ""}
-                onChange={(v) => update(c.id, { positioning: v })}
-              />
-              <MiniField
-                label="Pricing"
-                value={c.pricing ?? ""}
-                onChange={(v) => update(c.id, { pricing: v })}
-              />
-              <MiniField
-                label="Strengths"
-                value={c.strengths ?? ""}
-                onChange={(v) => update(c.id, { strengths: v })}
-                multiline
-              />
-              <MiniField
-                label="Weaknesses"
-                value={c.weaknesses ?? ""}
-                onChange={(v) => update(c.id, { weaknesses: v })}
-                multiline
-              />
-              <MiniField
-                label="Notes"
-                value={c.notes ?? ""}
-                onChange={(v) => update(c.id, { notes: v })}
-                multiline
-                className="md:col-span-2"
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 /* ─────────── CUSTOMERS ─────────── */
 
-function CustomersTab({ dna, save }: { dna: BrandDna; save: (n: Partial<BrandDna>) => void }) {
+export function CustomersTab({
+  dna,
+  save,
+}: {
+  dna: BrandDna;
+  save: (n: Partial<BrandDna>) => void;
+}) {
   const c = dna.customer;
   const upd = (patch: Partial<typeof c>) => save({ customer: { ...c, ...patch } });
 

@@ -47,11 +47,6 @@ function useOpenOnEvent(eventName: AppEventName, setOpen: (v: boolean) => void) 
   useAppEvent(eventName, () => setOpen(true));
 }
 
-/* ───────────────────────── BRAND DNA ───────────────────────── */
-
-import { BrandDnaButton } from "./BrandDnaPanel";
-export { BrandDnaButton };
-
 /* ───────────────────────── SCHEDULE ───────────────────────── */
 
 type Cadence = "once" | "hourly" | "daily" | "weekly";
@@ -539,8 +534,6 @@ export function TopBarActions({ workspaceId }: { workspaceId: string | null }) {
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
       className="flex h-8 items-center rounded-lg border border-border/60 bg-card/50 px-0.5 backdrop-blur-md shadow-[0_1px_0_hsl(0_0%_100%/0.04)_inset]"
     >
-      <BrandDnaButton workspaceId={workspaceId} />
-      <span className="mx-0.5 h-3.5 w-px bg-border/60" />
       <ScheduleButton workspaceId={workspaceId} />
     </motion.div>
   );

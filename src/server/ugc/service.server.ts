@@ -20,9 +20,8 @@ import {
 } from "@/lib/ugc/models";
 import { platformPreset } from "@/lib/ugc/options";
 import { buildModelPrompt } from "@/lib/ugc/prompt-adapters";
-import { styleAppliesTo } from "@/lib/brand-kit/resolve";
-import { styleBlockFor, ugcStyleNotes } from "@/lib/brand-kit/prompt";
-import { loadResolvedStyle } from "@/server/brand-kit/resolve.server";
+import { styleBlockFor, ugcStyleNotes } from "@/lib/brand-look/prompt";
+import { loadBrandLook } from "@/server/brand-look/resolve.server";
 import { routeVideo } from "@/lib/ugc/router";
 import {
   ACTIVE_RENDER_STATUSES,
@@ -271,15 +270,15 @@ export async function projectContext(db: UserSupabaseClient, workspaceId: string
   const [{ data: ws }, brand, style] = await Promise.all([
     db.from("workspaces").select("industry, audience").eq("id", workspaceId).maybeSingle(),
     workspaceBrand(db, workspaceId),
-    projectStyle(workspaceId, brief.styleId),
+    projectLook(workspaceId),
   ]);
   return {
     row,
     product: ProductSchema.parse(row.product ?? {}),
     brief,
     style,
-    styleText: style ? styleBlockFor(style.resolved, "ugc") : "",
-    styleNotes: style ? ugcStyleNotes(style.resolved) : "",
+    styleText: style ? styleBlockFor(style.look, "ugc") : "",
+    styleNotes: style ? ugcStyleNotes(style.look) : "",
     brand: Object.keys(brand).length
       ? brand
       : ((row.brand_snapshot ?? {}) as Record<string, unknown>),
@@ -289,18 +288,13 @@ export async function projectContext(db: UserSupabaseClient, workspaceId: string
 }
 
 /**
- * The Brand Kit Style for a UGC project (by the verified workspace id). An
- * explicit pick always applies; the default only when it lists UGC. Never
- * throws — no style just means Brand DNA only.
+ * The brand's look for a UGC project (by the verified workspace id). Never
+ * throws — no look just means Brand DNA only.
  */
-async function projectStyle(workspaceId: string, choice: string | null | undefined) {
-  if (choice === "none") return null;
+async function projectLook(workspaceId: string) {
   try {
-    const loaded = await loadResolvedStyle(workspaceId, choice ?? null);
-    if (!loaded.resolved.styleId) return null;
-    const explicit = !!choice && !loaded.fellBack;
-    if (!explicit && !styleAppliesTo(loaded.resolved, "ugc")) return null;
-    return loaded;
+    const loaded = await loadBrandLook(workspaceId);
+    return loaded.look.customized ? loaded : null;
   } catch {
     return null;
   }

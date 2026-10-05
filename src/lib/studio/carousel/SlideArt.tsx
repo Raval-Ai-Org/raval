@@ -6,7 +6,7 @@
 // every element with more than one child is a flex container, and every size
 // is a number derived from the canvas width. No hooks, no browser APIs.
 import type { CSSProperties, ReactElement } from "react";
-import { fontStack } from "@/lib/brand-kit/fonts";
+import { fontStack } from "@/lib/brand-look/fonts";
 import type { CarouselSlide } from "../jobs";
 import {
   bodySize,

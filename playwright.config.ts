@@ -22,7 +22,8 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"]],
   use: {
-    baseURL: "http://localhost:8080",
+    // Another port (e.g. the `verify` server on 8081): PLAYWRIGHT_BASE_URL=http://localhost:8081
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:8080",
     trace: "off",
     screenshot: "only-on-failure",
     viewport: { width: 1440, height: 900 },

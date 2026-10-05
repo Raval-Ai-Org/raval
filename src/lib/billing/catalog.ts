@@ -682,14 +682,6 @@ export const CREDIT_ACTIONS = {
     expectedCostUsd: 0.234,
     routes: ["brand-extract", "brand-extract.search"],
   },
-  brand_voice_rerun: {
-    credits: 45,
-    label: "Brand voice re-analysis",
-    unit: "first run per brand is free",
-    feature: null,
-    expectedCostUsd: 0.083,
-    routes: ["brand-kit/analyze-writing"],
-  },
   file_extract: {
     credits: 4,
     label: "File or image reading",
@@ -714,6 +706,14 @@ export const CREDIT_ACTIONS = {
     feature: "pro_chat",
     expectedCostUsd: 0.375,
     routes: [],
+  },
+  strategy_rebuild: {
+    credits: 200,
+    label: "Strategy rebuild",
+    unit: "first strategy per brand is free",
+    feature: null,
+    expectedCostUsd: 0.375,
+    routes: ["strategy.generate"],
   },
   market_brain_manual: {
     credits: 125,
@@ -868,8 +868,6 @@ export const INCLUDED_ROUTES: readonly string[] = [
   // Shared social trends snapshot: collected for everyone, charged to no one.
   "studio.trends",
   "studio.image.review",
-  "brand-kit/analyze-visual",
-  "brand-kit/describe",
   "analytics/insights-auto",
   "agent.content-fit",
   "agent.distribution-reliability",

@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 .next
+.next-notion-local
 .next-verify
 .next-proof
 .next-build

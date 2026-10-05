@@ -41,11 +41,6 @@ export type StudioSession = {
   template?: string;
   /** Repurposing: the content item this piece is made from. */
   sourceContentId?: string;
-  /**
-   * Brand Kit Style: an id, "none" for Brand DNA only, or null/undefined for
-   * the workspace default. The server checks it belongs to the workspace.
-   */
-  styleId?: string | null;
   controls: StudioControls;
   /** Current job (latest generate / regenerate / refine). */
   job: StudioJob | null;
@@ -297,29 +292,6 @@ export function getSession(id: string | null): StudioSession | null {
   return state.sessions.find((s) => s.id === id) ?? null;
 }
 
-/* ───────────────────────── style choice ───────────────────────── */
-
-const STYLE_KEY = (workspaceId: string) => `studio:style:${workspaceId}`;
-
-/** The style last picked in this workspace (per browser); undefined = default. */
-export function rememberedStyle(workspaceId: string): string | null | undefined {
-  if (typeof window === "undefined") return undefined;
-  try {
-    return localStorage.getItem(STYLE_KEY(workspaceId)) ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function rememberStyle(workspaceId: string, styleId: string | null | undefined) {
-  try {
-    if (styleId) localStorage.setItem(STYLE_KEY(workspaceId), styleId);
-    else localStorage.removeItem(STYLE_KEY(workspaceId));
-  } catch {
-    /* ignore */
-  }
-}
-
 export function openComposer(
   opts: {
     type?: StudioType;
@@ -329,7 +301,6 @@ export function openComposer(
     ideaSource?: string;
     template?: string;
     platforms?: PlatformId[];
-    styleId?: string | null;
     sourceContentId?: string;
   } = {},
 ): string | null {
@@ -365,10 +336,6 @@ export function openComposer(
         ideaSource: opts.ideaSource,
         template: opts.template,
         sourceContentId: opts.sourceContentId,
-        styleId:
-          opts.styleId !== undefined
-            ? opts.styleId
-            : (reusable.styleId ?? rememberedStyle(workspaceId)),
         type,
         controls:
           opts.platforms || reusable.type !== type
@@ -389,7 +356,6 @@ export function openComposer(
         ideaSource: opts.ideaSource,
         template: opts.template,
         sourceContentId: opts.sourceContentId,
-        styleId: opts.styleId !== undefined ? opts.styleId : rememberedStyle(workspaceId),
         controls: defaultControls(type, opts.platforms),
         job: null,
         lastGood: null,
@@ -420,7 +386,6 @@ export function startInBackground(opts: {
   goal?: GoalId;
   platforms?: PlatformId[];
   origin?: StudioSession["origin"];
-  styleId?: string | null;
 }): string | null {
   hydrate();
   const brief = opts.brief.trim().slice(0, 4000);
@@ -433,7 +398,6 @@ export function startInBackground(opts: {
     step: "intent",
     brief,
     goal: opts.goal,
-    styleId: opts.styleId !== undefined ? opts.styleId : rememberedStyle(opts.workspaceId),
     controls: defaultControls(opts.type, opts.platforms),
     job: null,
     lastGood: null,
@@ -479,7 +443,6 @@ export async function openJob(jobId: string, workspaceId?: string | null): Promi
             : "intent",
       brief: job.input?.intent?.brief ?? "",
       goal: job.input?.intent?.goal,
-      styleId: (job.input as { styleId?: string | null } | undefined)?.styleId ?? undefined,
       controls: job.input?.controls ?? defaultControls(job.type),
       job,
       lastGood: job.status === "succeeded" ? job : null,
@@ -508,22 +471,10 @@ export function updateSession(
   patch: Partial<
     Pick<
       StudioSession,
-      | "brief"
-      | "goal"
-      | "ideaId"
-      | "ideaSource"
-      | "template"
-      | "controls"
-      | "type"
-      | "error"
-      | "styleId"
+      "brief" | "goal" | "ideaId" | "ideaSource" | "template" | "controls" | "type" | "error"
     >
   >,
 ) {
-  if (patch.styleId !== undefined) {
-    const s = getSession(id);
-    if (s) rememberStyle(s.workspaceId, patch.styleId);
-  }
   patchSession(id, (s) => {
     if (patch.type && patch.type !== s.type) {
       return {
@@ -725,8 +676,6 @@ async function submit(
       },
       controls: s.controls,
       brand: readBrandPayload(s.workspaceId),
-      // undefined: the workspace default for a new piece, the draft's own style for a revision.
-      ...(s.styleId ? { styleId: s.styleId } : {}),
       parentJobId,
       refine,
       regenerate: kind === "regenerate",

@@ -273,7 +273,6 @@ export interface AutopilotPorts {
       role: WorkspaceRole;
       idempotencyKey: string;
       action: ActionRow;
-      styleId: string | null;
       /** Every platform the piece goes to (a Story can go to Instagram and Facebook). */
       platforms?: string[];
       /** Story pieces: how many frames and which theme. */
@@ -1011,7 +1010,6 @@ async function generate(
         role: actor.role,
         idempotencyKey: key,
         action,
-        styleId: program?.style_id ?? null,
         ...(story
           ? {
               platforms: storyPlatforms.length ? storyPlatforms : [action.platform ?? "instagram"],

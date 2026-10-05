@@ -22,6 +22,8 @@ import { isFullAutopilotEnabled } from "@/lib/feature-flags";
 import type { PlatformId } from "@/lib/social-platforms";
 import { runWithScope } from "@/server/request-context";
 import { loadStudioContext } from "@/server/studio/context.server";
+import { toAutopilotStrategy } from "@/lib/strategy/ground";
+import { readConfirmedStrategy } from "@/server/strategy/service.server";
 import { connectedPlatforms } from "./ports.server";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
@@ -93,7 +95,14 @@ export async function suggestStrategy(args: {
   let goal: AutopilotGoal = "awareness";
   let source: StrategySuggestion["source"] = "basic";
 
-  if (hasBrand) {
+  // A confirmed workspace strategy (Brain → Strategy) is the plan; nothing is
+  // written again and nobody is asked twice.
+  const confirmed = await readConfirmedStrategy(workspaceId).catch(() => null);
+  if (confirmed) {
+    strategy = toAutopilotStrategy(confirmed);
+    goal = confirmed.goal.type;
+    source = "model";
+  } else if (hasBrand) {
     try {
       const out = await runWithScope({ workspaceId, userId, route: "autopilot.strategy" }, () =>
         llmJson<Record<string, unknown>>({
@@ -163,7 +172,6 @@ export async function suggestStrategy(args: {
     creditCapPerWeek: Math.ceil((estimate * 1.5) / 10) * 10,
     videoCapPerWeek: 1,
     actOnOpportunities: true,
-    styleId: null,
     strategy,
     automations: ["geo_scan"],
     stories,

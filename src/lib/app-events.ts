@@ -41,8 +41,8 @@ export type AppEventMap = {
     max?: number;
   };
   "brand-dna:saved": undefined;
-  /** Brand Kit styles or files changed (pickers refetch their options). */
-  "brand-kit:changed": { workspaceId: string | null } | undefined;
+  /** This person has looked at the Brain updates (every "new" count resets). */
+  "brain:seen": { workspaceId: string; at: number };
   "notes:changed": { workspaceId: string };
   "assets:changed": undefined;
   "connections:changed": undefined;
@@ -70,9 +70,18 @@ export type AppEventMap = {
 
   // ── Open / toggle surfaces ──────────────────────────────────────────
   "open:analytics": { tab?: string } | undefined;
+  /**
+   * Open Brain (ADR-0032): the four brains and the strategy, optionally on a
+   * section and a place inside it. Only ever fired by a button.
+   */
+  "open:brain":
+    | {
+        section?: "home" | "brand" | "audience" | "competitors" | "market" | "strategy";
+        tab?: string;
+      }
+    | undefined;
+  /** Opens Brain → Brand, optionally on one editor ("look", "voice", "colors"…). */
   "open:brand-dna": { tab?: string } | undefined;
-  /** Open the Brand Kit, optionally on a style, a section, or the create flow. */
-  "open:brand-kit": { styleId?: string; section?: string; create?: boolean } | undefined;
   /** Open a Studio canvas. `type` is validated by the listener (use-studio). */
   "open:canvas":
     | {
@@ -84,8 +93,6 @@ export type AppEventMap = {
         ideaId?: string;
         ideaSource?: string;
         platforms?: string[];
-        /** Brand Kit Style id, or "none" for Brand DNA only. */
-        styleId?: string;
       }
     | undefined;
   /** Review a single content item outside a Studio job (legacy or chat-created). */
@@ -105,16 +112,15 @@ export type AppEventMap = {
   "open:create-launcher": undefined;
   "open:client-portal": undefined;
   "open:command-bar": undefined;
-  /** Opens the alert bell's popover (the quick "what changed" glance). */
-  "open:competitor-watch": undefined;
-  /** Navigates to the full Competitors surface at /w/<id>/app/competitors. */
+  /** Opens Brain → Competitors. */
   "open:competitors": undefined;
   /** Navigates to Autopilot at /w/<id>/app/autopilot. Only ever fired by a button. */
   "open:autopilot": undefined;
-  /** Navigates to Audience at /w/<id>/app/audience. Only ever fired by a button. */
+  /** Opens Brain → Audience. Only ever fired by a button. */
   "open:audience": undefined;
   "open:content-calendar": undefined;
   "open:details": undefined;
+  /** Opens Brain → Home → Today (the day's plan). */
   "open:marketing-coach": undefined;
   "open:publish": undefined;
   "open:rename": undefined;

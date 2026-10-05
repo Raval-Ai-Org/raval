@@ -34,7 +34,6 @@ describeLive("OpenRouter models (live)", () => {
   it.each([
     ["economy", "competitors.updates", "google/gemini-3.1-flash-lite"],
     ["workhorse", "ugc.notes", "google/gemini-3.8-flash"],
-    ["premium", "brand-kit/analyze-writing", "anthropic/claude-opus-5.5"],
   ])(
     "answers on the %s tier",
     async (_tier, route, expected) => {

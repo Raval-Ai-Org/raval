@@ -49,7 +49,6 @@ import {
   type StudioSession,
 } from "@/lib/studio/session-store";
 import { ControlsPanel } from "./ControlsPanel";
-import { StylePicker } from "@/components/app/brand-kit/StylePicker";
 import { GenerationProgress } from "./GenerationProgress";
 import { IdeasPanel } from "./IdeasPanel";
 import { ReviewPanel, type ReviewRow } from "./ReviewPanel";
@@ -788,17 +787,6 @@ export function IntentStep({
                   </ChipButton>
                 ))}
               </div>
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-medium text-foreground">Style</p>
-              <StylePicker
-                workspaceId={session.workspaceId}
-                value={session.styleId}
-                format={session.type}
-                disabled={busy}
-                onChange={(styleId) => updateSession(session.id, { styleId })}
-              />
             </div>
 
             <ControlsPanel session={session} disabled={busy} />

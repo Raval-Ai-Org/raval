@@ -64,7 +64,7 @@ export function AutopilotPanel({ workspaceId }: { workspaceId: string }) {
       else if (target === "accounts") emitAppEvent("open:settings", { section: "accounts" });
       else if (target === "website") emitAppEvent("open:settings", { section: "website" });
       else if (target === "brand") emitAppEvent("open:brand-dna");
-      else if (target === "style") emitAppEvent("open:brand-kit");
+      else if (target === "style") emitAppEvent("open:brand-dna", { tab: "look" });
       else emitAppEvent("open:ai-visibility");
     },
     busy: Object.values(actions).some((m) => m.isPending),

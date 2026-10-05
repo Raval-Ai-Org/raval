@@ -12,7 +12,7 @@
 // poll and question stickers) are drawn as honest design elements instead:
 // a web address with "link in bio", and answer chips people reply with.
 import type { CSSProperties, ReactElement } from "react";
-import { fontStack } from "@/lib/brand-kit/fonts";
+import { fontStack } from "@/lib/brand-look/fonts";
 import { Heading } from "@/lib/studio/carousel/SlideArt";
 import { mixHex, type CarouselDesign, type CarouselTheme } from "@/lib/studio/carousel/design";
 import type { StoryFrame, StoryFrameRole } from "./frames";

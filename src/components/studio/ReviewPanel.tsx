@@ -63,8 +63,8 @@ import { StoryPreview } from "./previews/StoryPreview";
 import { StoryNotes } from "./StoryNotes";
 import { storyText } from "@/lib/stories/frames";
 import { PublishToSite } from "./PublishToSite";
-import { useStyleConformance } from "@/components/app/brand-kit/use-style-conformance";
-import { conformanceFixInstruction } from "@/lib/brand-kit/conformance";
+import { useLookConformance } from "@/components/app/brain/brand/look/use-look-conformance";
+import { conformanceFixInstruction } from "@/lib/brand-look/conformance";
 import { SocialPostPreview } from "./previews/SocialPostPreview";
 import { Burst, DrawCheck } from "./studio-ui";
 import { AudienceInspector, AudienceScoreChip } from "@/components/app/audience/AudienceInspector";
@@ -562,11 +562,9 @@ export function ReviewPanel({
   };
 
   const variant = draft.variants?.find((v) => v.platform === current) ?? null;
-  // Does the copy follow the Brand Kit style it was made with?
-  const styleCheck = useStyleConformance(
+  // Does the copy follow the brand's own writing rules (Brand DNA → Look & voice)?
+  const styleCheck = useLookConformance(
     session.workspaceId,
-    (job.input as { styleId?: string | null } | undefined)?.styleId ?? session.styleId,
-    session.type,
     variant?.body ?? draft.article?.markdown ?? null,
   );
   const retryMedia = () => refine("Render the visual again.", "media");
@@ -873,7 +871,7 @@ export function ReviewPanel({
         ? {
             key: "style",
             state: "warn",
-            label: `Style "${styleCheck.name}": ${issues.length} to fix`,
+            label: `Brand voice: ${issues.length} to fix`,
             detail: issues[0].message,
             action: locked ? undefined : (
               <button
@@ -887,7 +885,7 @@ export function ReviewPanel({
               </button>
             ),
           }
-        : { key: "style", state: "ok", label: `Matches style "${styleCheck.name}"` },
+        : { key: "style", state: "ok", label: "Matches your brand voice" },
     );
   }
   checks.push(

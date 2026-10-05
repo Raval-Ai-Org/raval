@@ -29,7 +29,6 @@ const BodySchema = z.object({
   /** The user asked for a different take — bypass the cached answer. */
   regenerate: z.boolean().optional(),
   /** Brand Kit Style: an id, "none", or absent for the workspace default. */
-  styleId: z.union([z.string().uuid(), z.literal("none")]).nullish(),
 });
 
 const VariantsSchema = z.object({
@@ -143,8 +142,8 @@ export const POST = defineRoute({
 
         // The style is read on the server for the VERIFIED workspace only.
         const styleText = attributedWorkspaceId
-          ? await import("@/server/brand-kit/resolve.server").then((m) =>
-              m.styleTextFor(attributedWorkspaceId, body.styleId, "social"),
+          ? await import("@/server/brand-look/resolve.server").then((m) =>
+              m.lookTextFor(attributedWorkspaceId, "social"),
             )
           : "";
         const user = assemble([

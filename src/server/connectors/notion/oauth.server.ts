@@ -1,11 +1,18 @@
 import "server-only";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { safeReturnPath } from "@/server/connectors/return-url";
 import { HttpError } from "@/server/http-error";
 import { notionConfig } from "./config.server";
 
 const stateHash = (value: string) => createHash("sha256").update(value).digest("hex");
+export const NOTION_STATE_COOKIE = "notion_oauth_state";
+export function matchesNotionBrowserState(state: string, cookieValue: string | undefined) {
+  if (!/^[A-Za-z0-9_-]{40,128}$/.test(state) || !cookieValue || !/^[a-f0-9]{64}$/.test(cookieValue))
+    return false;
+  return timingSafeEqual(Buffer.from(stateHash(state), "hex"), Buffer.from(cookieValue, "hex"));
+}
 export function validNotionState(
   state: string,
   row: { user_id: string; expires_at: string; consumed_at: string | null } | null,
@@ -32,6 +39,13 @@ export async function startNotionOAuth(userId: string, workspaceId: string, retu
     expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
   });
   if (error) throw new HttpError(500, "Could not start Notion connection.");
+  (await cookies()).set(NOTION_STATE_COOKIE, stateHash(state), {
+    httpOnly: true,
+    secure: new URL(config.redirectUri).protocol === "https:",
+    sameSite: "lax",
+    path: "/api/integrations/notion/callback",
+    maxAge: 10 * 60,
+  });
   const url = new URL("https://api.notion.com/v1/oauth/authorize");
   url.searchParams.set("client_id", config.clientId);
   url.searchParams.set("response_type", "code");

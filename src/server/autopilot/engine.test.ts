@@ -175,7 +175,6 @@ async function program(w: World, over: Partial<ProgramRow> = {}): Promise<Progra
     timezone: "UTC",
     starts_on: "2026-10-05",
     ends_on: "2026-11-01",
-    style_id: null,
     credit_cap_per_week: 150,
     video_cap_per_week: 0,
     act_on_opportunities: false,

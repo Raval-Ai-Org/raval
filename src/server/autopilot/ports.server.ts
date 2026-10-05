@@ -389,7 +389,7 @@ export const realPorts: AutopilotPorts = {
       return row ? toJobLite(row) : null;
     },
 
-    async create({ workspaceId, userId, role, idempotencyKey, action, styleId, platforms, story }) {
+    async create({ workspaceId, userId, role, idempotencyKey, action, platforms, story }) {
       const type = (action.content_type ?? "social") as StudioType;
       const input = CreateJobSchema.parse({
         workspaceId,
@@ -408,7 +408,6 @@ export const realPorts: AutopilotPorts = {
             ? { storyMode: "frames", frameCount: story.frames, storyTheme: story.theme }
             : {}),
         },
-        styleId: styleId ?? undefined,
       });
       const { job, charge } = await runWithScope(
         { workspaceId, userId, route: "autopilot.run" },

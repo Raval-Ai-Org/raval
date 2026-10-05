@@ -3,6 +3,7 @@
 // the RPC layer; each change is written to the append-only history and the
 // workspace audit log.
 import "server-only";
+import { lookReady, resolveLook } from "@/lib/brand-look/resolve";
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import {
@@ -23,6 +24,7 @@ import {
   type ProgramRow,
   type ProgramSettings,
   type ProgramView,
+  type Strategy,
 } from "@/lib/autopilot/contracts";
 import { totalWeeks, weekOf } from "@/lib/autopilot/policy";
 import { CANCELLABLE_STATUSES } from "@/lib/autopilot/state";
@@ -236,7 +238,6 @@ function presentProgram(row: ProgramRow, now: Date): ProgramView {
     timezone: row.timezone,
     startsOn: row.starts_on,
     endsOn: row.ends_on,
-    styleId: row.style_id,
     creditCapPerWeek: row.credit_cap_per_week,
     videoCapPerWeek: row.video_cap_per_week,
     actOnOpportunities: row.act_on_opportunities,
@@ -313,29 +314,13 @@ async function readiness(
   program: ProgramRow | null,
   connected: string[],
 ): Promise<ReadinessItem[]> {
-  const styleQuery = admin
-    .from("brand_styles")
-    .select("id, status, spec")
-    .eq("workspace_id", workspaceId)
-    .is("archived_at", null);
-  const [{ data: ws }, { data: dna }, { data: defaultStyle }] = await Promise.all([
+  const [{ data: ws }, { data: dna }] = await Promise.all([
     admin.from("workspaces").select("website_url").eq("id", workspaceId).maybeSingle(),
     admin.from("workspace_brand_dna").select("dna").eq("workspace_id", workspaceId).maybeSingle(),
-    program?.style_id
-      ? styleQuery.eq("id", program.style_id).maybeSingle()
-      : styleQuery.eq("is_default", true).maybeSingle(),
   ]);
   const website = (ws as { website_url?: string | null } | null)?.website_url ?? null;
   const dnaSize = JSON.stringify((dna as { dna?: unknown } | null)?.dna ?? {}).length;
-  const refs = (defaultStyle as { spec?: { references?: unknown[] } } | null)?.spec?.references;
-  const styleReferences = Array.isArray(refs)
-    ? refs.filter(
-        (ref) =>
-          ref &&
-          typeof ref === "object" &&
-          ["close", "exact"].includes(String((ref as { strength?: string }).strength)),
-      ).length
-    : 0;
+  const lookOk = lookReady(resolveLook(((dna as { dna?: unknown } | null)?.dna ?? null) as never));
   const stories = readStorySettings(program?.stories);
   const wanted = [
     ...new Set([
@@ -369,19 +354,13 @@ async function readiness(
     },
     {
       id: "style",
-      ok: (defaultStyle as { status?: string } | null)?.status === "ready" && styleReferences >= 2,
+      ok: lookOk,
       required: true,
-      label:
-        (defaultStyle as { status?: string } | null)?.status === "ready" && styleReferences >= 2
-          ? "Visual style ready"
-          : defaultStyle
-            ? "Finish your visual style"
-            : "Set your visual style once",
-      detail:
-        styleReferences >= 2
-          ? "Your posts and Stories will share this look."
-          : "Add two visual examples so Mellox can learn the whole look.",
-      cta: "Set style",
+      label: lookOk ? "Brand look ready" : "Set your brand look once",
+      detail: lookOk
+        ? "Your posts and Stories will share this look."
+        : "Pick colours, a font and an image look in Brand DNA.",
+      cta: "Set look",
     },
     {
       id: "website",
@@ -402,36 +381,18 @@ async function requireFullAutoIdentity(
   settings: ProgramSettings,
 ): Promise<void> {
   if (settings.mode !== "full") return;
-  const styleQuery = admin
-    .from("brand_styles")
-    .select("id, status, spec")
+  const { data: dna } = await admin
+    .from("workspace_brand_dna")
+    .select("dna")
     .eq("workspace_id", workspaceId)
-    .is("archived_at", null);
-  const [{ data: dna }, { data: style }] = await Promise.all([
-    admin.from("workspace_brand_dna").select("dna").eq("workspace_id", workspaceId).maybeSingle(),
-    settings.styleId
-      ? styleQuery.eq("id", settings.styleId).maybeSingle()
-      : styleQuery.eq("is_default", true).maybeSingle(),
-  ]);
+    .maybeSingle();
   if (JSON.stringify((dna as { dna?: unknown } | null)?.dna ?? {}).length <= 300) {
     throw new HttpError(409, "Add your Brand DNA before turning on full autopilot.");
   }
-  if ((style as { status?: string } | null)?.status !== "ready") {
-    throw new HttpError(409, "Set a ready visual style before turning on full autopilot.");
-  }
-  const references = (style as { spec?: { references?: unknown[] } } | null)?.spec?.references;
-  if (
-    !Array.isArray(references) ||
-    references.filter(
-      (ref) =>
-        ref &&
-        typeof ref === "object" &&
-        ["close", "exact"].includes(String((ref as { strength?: string }).strength)),
-    ).length < 2
-  ) {
+  if (!lookReady(resolveLook(((dna as { dna?: unknown } | null)?.dna ?? null) as never))) {
     throw new HttpError(
       409,
-      "Add two visual examples to your style before turning on full autopilot.",
+      "Set your brand look in Brand DNA (colours, font, image look) before turning on full autopilot.",
     );
   }
 }
@@ -651,7 +612,6 @@ function programColumns(settings: ProgramSettings, startsOn: string) {
     timezone: settings.timezone,
     starts_on: startsOn,
     ends_on: addDaysYmd(startsOn, settings.weeks * 7 - 1),
-    style_id: settings.styleId ?? null,
     credit_cap_per_week: settings.creditCapPerWeek,
     video_cap_per_week: settings.contentTypes.includes("video") ? settings.videoCapPerWeek : 0,
     act_on_opportunities: settings.actOnOpportunities,
@@ -716,8 +676,6 @@ export async function startProgram(caller: Caller, settings: ProgramSettings): P
     if (/duplicate key|one_live/i.test(text)) {
       throw new HttpError(409, "Autopilot is already set up for this workspace.");
     }
-    if (/style is not in its workspace/i.test(text))
-      throw new HttpError(400, "That style isn't in this workspace.");
     throw error;
   }
   const [plan] = await store.insertActions([
@@ -740,6 +698,16 @@ export async function startProgram(caller: Caller, settings: ProgramSettings): P
   if (plan) kick(plan.id);
 }
 
+/**
+ * The workspace's confirmed marketing strategy changed (ADR-0032): a live
+ * program plans its coming weeks against it. No program, nothing to do.
+ */
+export async function syncProgramStrategy(workspaceId: string, strategy: Strategy): Promise<void> {
+  const program = await store.liveProgram(workspaceId);
+  if (!program) return;
+  await store.updateProgram(program.id, { strategy });
+}
+
 export async function updateProgram(caller: Caller, settings: ProgramSettings): Promise<void> {
   const { workspaceId } = caller;
   checkSettings(workspaceId, settings);
@@ -747,14 +715,7 @@ export async function updateProgram(caller: Caller, settings: ProgramSettings): 
   const program = await store.liveProgram(workspaceId);
   if (!program) throw new HttpError(404, "Autopilot isn't set up yet.");
   const columns = programColumns(settings, program.starts_on);
-  try {
-    await store.updateProgram(program.id, columns);
-  } catch (error) {
-    const text = error instanceof Error ? error.message : "";
-    if (/style is not in its workspace/i.test(text))
-      throw new HttpError(400, "That style isn't in this workspace.");
-    throw error;
-  }
+  await store.updateProgram(program.id, columns);
   await log(
     caller,
     "program_changed",

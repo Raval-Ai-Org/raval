@@ -37,9 +37,6 @@ Effort is OpenRouter `reasoning.effort`. "Max tokens" is the plan's floor for th
 | `analytics/insights-auto` | `google/gemini-3.8-flash` | low | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` |  |  |
 | `brand-extract` | `anthropic/claude-opus-5.5` | medium | `google/gemini-3.8-flash` | `google/gemini-3.8-flash` | 12000 |  |
 | `brand-extract.search` | `google/gemini-3.1-flash-lite` | low | `openai/gpt-5.6-luna` | `google/gemini-3.1-flash-lite` |  |  |
-| `brand-kit/analyze-visual` | `google/gemini-3.8-flash` | medium | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` |  |  |
-| `brand-kit/analyze-writing` | `anthropic/claude-opus-5.5` | low | `google/gemini-3.8-flash` | `google/gemini-3.8-flash` |  |  |
-| `brand-kit/describe` | `google/gemini-3.8-flash` | medium | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` |  |  |
 | `campaign-generation` | `anthropic/claude-opus-5.5` | low | `google/gemini-3.8-flash` | `google/gemini-3.8-flash` |  |  |
 | `chat` | `google/gemini-3.8-flash` | low | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` | 6000 |  |
 | `chat.history-summary` | `google/gemini-3.1-flash-lite` | low | `openai/gpt-5.6-luna` | `google/gemini-3.1-flash-lite` |  |  |
@@ -47,6 +44,7 @@ Effort is OpenRouter `reasoning.effort`. "Max tokens" is the plan's floor for th
 | `chat.research` | `google/gemini-3.8-flash` | medium | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` |  |  |
 | `clarify` | `google/gemini-3.8-flash` | low | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` |  |  |
 | `coach` | `anthropic/claude-opus-5.5` | low | `google/gemini-3.8-flash` | `google/gemini-3.8-flash` |  | deep strategy, isComplexStrategy or forced premium → anthropic/claude-opus-5.5 (high) |
+| `strategy.generate` | `anthropic/claude-opus-5.5` | medium | `google/gemini-3.8-flash` | `google/gemini-3.8-flash` | 12000 |  |
 | `coach.briefing` | `anthropic/claude-opus-5.5` | low | `google/gemini-3.8-flash` | `google/gemini-3.8-flash` | 8000 | deep strategy, isComplexStrategy or forced premium → anthropic/claude-opus-5.5 (high) |
 | `coach.research` | `google/gemini-3.8-flash` | low | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` |  |  |
 | `coach.trends` | `google/gemini-3.8-flash` | low | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` |  |  |

@@ -66,8 +66,6 @@ export type RateLimitTier =
   | "billing-admin"
   | "experiment-propose"
   | "experiment-action"
-  | "brand-kit-upload"
-  | "brand-kit-analyze"
   | "mcp-read"
   | "mcp-write"
   | "audience-score"
@@ -173,12 +171,6 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // Creating, assigning, cancelling experiments (database work, some reads of
   // Google data). Ship/rollout/rollback PRs use connector-write.
   "experiment-action": { limit: 40, windowSeconds: 3600, label: "experiment action" },
-  // Brand Kit: adding files and writing samples (storage + a page fetch for
-  // sample links). No model call here; analysis is its own tier.
-  "brand-kit-upload": { limit: 120, windowSeconds: 3600, label: "brand kit upload" },
-  // Studying examples with Claude vision, or turning a description into a
-  // style — one paid model call per example.
-  "brand-kit-analyze": { limit: 60, windowSeconds: 3600, label: "style analysis" },
   // AI assistants over MCP (ADR-0029). Reads are database work; an assistant
   // chains several per question. Changes are deliberate, one at a time, and
   // anything that spends is also held to the tier of the work it starts.

@@ -1,6 +1,7 @@
 # Audience
 
-Decision record: [ADR-0031](adr/0031-audience-intelligence.md).
+Decision record: [ADR-0031](adr/0031-audience-intelligence.md). Audience is shown in
+Brain → Audience ([docs/brain.md](brain.md)).
 
 Audience answers three questions for a workspace: who is this content for, how
 are they likely to react before it goes out, and what really happened after.
@@ -9,7 +10,7 @@ are they likely to react before it goes out, and what really happened after.
 
 | Where                                                          | What                                                                                                                                                       |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sidebar → Intelligence → **Audience** (`/w/<id>/app/audience`) | Groups with the source of every statement, what real results show, how close past scores were, recent checks. Edit, add, remove, "Refresh from Brand DNA". |
+| Sidebar → **Brain** → Audience (`/w/<id>/app/brain?s=audience`) | Groups with the source of every statement, what real results show, how close past scores were, recent checks. Edit, add, remove, "Refresh from Brand DNA". |
 | Studio editor                                                  | A score chip beside "Version N" and an **Audience** section: Predict, why, Improve, Ask your audience, Compare versions, Use this version.                 |
 | Content calendar                                               | Score chip in the list; the same Audience section in the entry editor.                                                                                     |
 | Video ad concepts                                              | "Test with your audience" ranks the ideas before a video is made.                                                                                          |

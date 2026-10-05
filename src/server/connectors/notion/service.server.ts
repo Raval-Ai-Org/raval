@@ -115,7 +115,16 @@ export async function withNotionSyncLock<T>(
   workspaceId: string,
   work: () => Promise<T>,
 ): Promise<T> {
-  const { conn } = await ready(workspaceId);
+  const conn = await connection(workspaceId);
+  if (!conn) return work();
+  const { data: stored, error: lookupError } = await db
+    .from("notion_oauth_credentials")
+    .select("connection_id")
+    .eq("workspace_id", workspaceId)
+    .eq("connection_id", conn.id)
+    .maybeSingle();
+  if (lookupError) throw new HttpError(500, "Could not start Notion operation.");
+  if (!stored) return work();
   const owner = randomUUID();
   const now = new Date().toISOString();
   const { data, error } = await db
@@ -163,20 +172,29 @@ export async function notionStatus(workspaceId: string) {
   const configured = notionConfigured();
   let status = conn?.status ?? "disconnected";
   if (status === "active" && !cred) status = "error";
+  if (status === "active" && !configured) status = "error";
   if (status === "active" && cred && configured) {
+    let token: string;
     try {
-      await notionRequest(decryptWithKey(cred.access_token_enc, notionConfig().key), "/users/me");
-    } catch (error) {
-      if (error instanceof HttpError && error.status === 409) {
-        const { error: updateError } = await db
-          .from("workspace_connections")
-          .update({ status: "error", last_error: "Reconnect Notion to continue." })
-          .eq("workspace_id", workspaceId)
-          .eq("id", conn!.id);
-        if (updateError) throw new HttpError(500, "Could not update Notion connection status.");
-        status = "error";
-      }
+      token = decryptWithKey(cred.access_token_enc, notionConfig().key);
+    } catch {
+      status = "error";
+      token = "";
     }
+    if (token)
+      try {
+        await notionRequest(token, "/users/me");
+      } catch (error) {
+        if (error instanceof HttpError && error.status === 409) {
+          const { error: updateError } = await db
+            .from("workspace_connections")
+            .update({ status: "error", last_error: "Reconnect Notion to continue." })
+            .eq("workspace_id", workspaceId)
+            .eq("id", conn!.id);
+          if (updateError) throw new HttpError(500, "Could not update Notion connection status.");
+          status = "error";
+        }
+      }
   }
   return {
     configured,

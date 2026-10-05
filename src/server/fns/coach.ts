@@ -357,6 +357,10 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
          * optionally run through Mastra for retry/observability. Off by
          * default: synthesizeCoachBriefing() is called directly, byte-for-byte
          * the same code path as before this extraction. */
+        // The confirmed marketing strategy leads, so the day's advice serves the plan.
+        const strategyText = await import("@/server/strategy/context.server").then((m) =>
+          m.strategyBlockFor(data.workspaceId),
+        );
         const synthesisInput: CoachSynthesisInput = {
           today,
           dayName,
@@ -365,7 +369,7 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
           model,
           deepStrategy,
           signals,
-          brandContext: data.brandContext,
+          brandContext: [strategyText, data.brandContext].filter(Boolean).join("\n\n") || undefined,
           siteText,
           siteMeta,
           compResults,

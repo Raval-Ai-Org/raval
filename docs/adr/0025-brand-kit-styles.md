@@ -1,6 +1,6 @@
 # ADR-0025: Brand Kit and Styles
 
-- Status: Accepted
+- Status: Superseded by [ADR-0032](0032-brain-strategy-and-one-look.md)
 - Date: 2026-09-25
 - Builds on: ADR-0014 (canonical workspaces); Brand DNA (`workspace_brand_dna`)
 

@@ -171,7 +171,6 @@ const view = {
     timezone: "UTC",
     startsOn: "2026-10-01",
     endsOn: "2026-12-01",
-    styleId: null,
     creditCapPerWeek: 150,
     videoCapPerWeek: 0,
     actOnOpportunities: false,

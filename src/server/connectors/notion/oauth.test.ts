@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { validNotionState } from "./oauth.server";
+import { matchesNotionBrowserState, validNotionState } from "./oauth.server";
 const state = "a".repeat(64);
 const row = {
   user_id: "user-one",
@@ -7,6 +8,12 @@ const row = {
   expires_at: new Date(Date.now() + 60000).toISOString(),
 };
 describe("Notion OAuth state", () => {
+  it("requires a matching browser cookie", () => {
+    const hash = createHash("sha256").update(state).digest("hex");
+    expect(matchesNotionBrowserState(state, hash)).toBe(true);
+    expect(matchesNotionBrowserState("b".repeat(64), hash)).toBe(false);
+    expect(matchesNotionBrowserState(state, undefined)).toBe(false);
+  });
   it("requires the initiating user and a live, unused state", () => {
     expect(validNotionState(state, row, "user-one")).toBe(true);
     expect(validNotionState(state, row, "other-user")).toBe(false);

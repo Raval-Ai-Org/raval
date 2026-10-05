@@ -10,7 +10,7 @@
 import "server-only";
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
-import { catalogFont } from "@/lib/brand-kit/fonts";
+import { catalogFont } from "@/lib/brand-look/fonts";
 import { SlideArt } from "@/lib/studio/carousel/SlideArt";
 import {
   canRenderText,

@@ -85,11 +85,6 @@ const REGISTRY: Record<string, TaskPlan> = {
   "brand-extract": tier(PREMIUM, "medium", { maxTokens: 12_000 }),
   "brand-extract.search": tier(ECONOMY, "low"),
 
-  // Brand Kit: vision reads of logos/posts; the writing voice feeds every caption.
-  "brand-kit/analyze-visual": tier(WORKHORSE, "medium"),
-  "brand-kit/describe": tier(WORKHORSE, "medium"),
-  "brand-kit/analyze-writing": tier(PREMIUM, "low"),
-
   "memory-extract": tier(WORKHORSE, "low"),
   "file-extract": tier(ECONOMY, "low", {
     escalate: toTier("the first read came back thin (THIN_TEXT_CHARS)", WORKHORSE, "low"),
@@ -173,6 +168,8 @@ const REGISTRY: Record<string, TaskPlan> = {
   // signals that were already collected.
   "autopilot.plan": tier(WORKHORSE, "medium"),
   "autopilot.strategy": tier(WORKHORSE, "low"),
+  // The workspace marketing strategy, written from all four brains (ADR-0032).
+  "strategy.generate": tier(PREMIUM, "medium", { maxTokens: 12_000 }),
   "autopilot.opportunities": tier(ECONOMY, "low"),
   "competitor-intel": tier(WORKHORSE, "medium"),
 

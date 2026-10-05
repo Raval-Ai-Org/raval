@@ -263,10 +263,6 @@ export const contentTools: McpTool[] = [
         .max(7)
         .optional()
         .describe("Stories only: how many frames (default 3)."),
-      styleId: z
-        .union([uuid, z.literal("none")])
-        .optional()
-        .describe('A Brand Kit style id, or "none". Leave out for the workspace default.'),
       requestId: z
         .string()
         .min(4)
@@ -296,7 +292,6 @@ export const contentTools: McpTool[] = [
             tone: args.tone,
             ...(args.type === "story" && args.frames ? { frameCount: args.frames } : {}),
           },
-          styleId: args.styleId,
         },
       });
       return presentJob(out.job);
@@ -354,7 +349,6 @@ export const contentTools: McpTool[] = [
       topics: z.array(z.enum(ids(PLAN_TOPICS))).min(1),
       goal: z.enum(ids(PLAN_GOALS)),
       notes: z.string().max(1500).optional().describe("What the person wants covered."),
-      styleId: z.union([uuid, z.literal("none")]).optional(),
     },
     scope: "workspace",
     minRole: "editor",

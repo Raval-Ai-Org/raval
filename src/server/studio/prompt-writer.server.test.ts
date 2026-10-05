@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyContext } from "@/lib/studio/prompts";
 
 const run = vi.fn();
-const styleTextFor = vi.fn();
+const lookTextFor = vi.fn();
 vi.mock("@/lib/ai", () => ({ runStructuredPrompt: (opts: unknown) => run(opts) }));
-vi.mock("@/server/brand-kit/resolve.server", () => ({
-  styleTextFor: (...args: unknown[]) => styleTextFor(...args),
+vi.mock("@/server/brand-look/resolve.server", () => ({
+  lookTextFor: (...args: unknown[]) => lookTextFor(...args),
 }));
 vi.mock("@/server/guardrails/events", () => ({ logGuardrailEvent: vi.fn() }));
 vi.mock("./context.server", () => ({
@@ -31,8 +31,8 @@ const longPrompt = `Idea: ${"A vivid, specific idea. ".repeat(30)}`;
 
 beforeEach(() => {
   run.mockReset();
-  styleTextFor.mockReset();
-  styleTextFor.mockResolvedValue("");
+  lookTextFor.mockReset();
+  lookTextFor.mockResolvedValue("");
   run.mockResolvedValue({
     title: "Cold brew season, the Huila way",
     prompt: `## ${longPrompt}`,
@@ -95,18 +95,13 @@ describe("writeStudioPrompt", () => {
     expect(call.user).toContain("Myths vs facts");
   });
 
-  it("uses the selected Brand Kit style when writing the creation brief", async () => {
+  it("uses the brand look when writing the creation brief", async () => {
     await writeStudioPrompt({
       client: {},
       workspaceId: "00000000-0000-0000-0000-000000000001",
       brand: null,
       type: "image",
-      styleId: "00000000-0000-0000-0000-000000000002",
     });
-    expect(styleTextFor).toHaveBeenCalledWith(
-      "00000000-0000-0000-0000-000000000001",
-      "00000000-0000-0000-0000-000000000002",
-      "image",
-    );
+    expect(lookTextFor).toHaveBeenCalledWith("00000000-0000-0000-0000-000000000001", "image");
   });
 });

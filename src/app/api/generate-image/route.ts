@@ -42,27 +42,20 @@ async function styled(
   prompt: string,
   references: string[],
 ): Promise<{ prompt: string; references: string[] }> {
-  if (!workspaceId || !choice || choice === "none") return { prompt, references };
+  if (!workspaceId || choice === "none") return { prompt, references };
   try {
-    const [{ loadResolvedStyle }, { imageStyleInput }, { restyleImagePrompt }] = await Promise.all([
-      import("@/server/brand-kit/resolve.server"),
-      import("@/lib/brand-kit/prompt"),
+    const [{ loadBrandLook }, { imageStyleInput }, { restyleImagePrompt }] = await Promise.all([
+      import("@/server/brand-look/resolve.server"),
+      import("@/lib/brand-look/prompt"),
       import("@/lib/post-image"),
     ]);
-    const loaded = await loadResolvedStyle(workspaceId, choice === "default" ? null : choice);
-    const { resolved } = loaded;
-    if (!resolved.styleId) return { prompt, references };
-    // The default only applies where it says it does; an explicit pick always applies.
-    const explicit = choice !== "default" && !loaded.fellBack;
-    const listed = resolved.appliesTo;
-    if (!explicit && listed.length && !listed.includes("image") && !listed.includes("social"))
-      return { prompt, references };
-    const refs = references.length ? references : loaded.referenceUrls.slice(0, 4);
-    const style = imageStyleInput(resolved, references.length ? 0 : refs.length);
+    const { look } = await loadBrandLook(workspaceId);
+    if (!look.customized) return { prompt, references };
+    const style = imageStyleInput(look);
     if (!style) return { prompt, references };
-    return { prompt: restyleImagePrompt(prompt, style).slice(0, 9500), references: refs };
+    return { prompt: restyleImagePrompt(prompt, style).slice(0, 9500), references };
   } catch (error) {
-    console.error("[generate-image] style load failed, generating without it", error);
+    console.error("[generate-image] look load failed, generating without it", error);
     return { prompt, references };
   }
 }

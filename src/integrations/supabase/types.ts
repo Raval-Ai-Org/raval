@@ -1201,7 +1201,6 @@ export type Database = {
           seed: string | null;
           status: string;
           storage_path: string | null;
-          style_id: string | null;
           thumbnail_path: string | null;
           updated_at: string;
           width: number | null;
@@ -1233,7 +1232,6 @@ export type Database = {
           seed?: string | null;
           status?: string;
           storage_path?: string | null;
-          style_id?: string | null;
           thumbnail_path?: string | null;
           updated_at?: string;
           width?: number | null;
@@ -1265,7 +1263,6 @@ export type Database = {
           seed?: string | null;
           status?: string;
           storage_path?: string | null;
-          style_id?: string | null;
           thumbnail_path?: string | null;
           updated_at?: string;
           width?: number | null;
@@ -1284,13 +1281,6 @@ export type Database = {
             columns: ["parent_asset_id"];
             isOneToOne: false;
             referencedRelation: "assets";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "assets_style_id_fkey";
-            columns: ["style_id"];
-            isOneToOne: false;
-            referencedRelation: "brand_styles";
             referencedColumns: ["id"];
           },
           {
@@ -1961,7 +1951,6 @@ export type Database = {
           status: string;
           stories: Json;
           strategy: Json;
-          style_id: string | null;
           timezone: string;
           updated_at: string;
           video_cap_per_week: number;
@@ -1991,7 +1980,6 @@ export type Database = {
           status?: string;
           stories?: Json;
           strategy?: Json;
-          style_id?: string | null;
           timezone?: string;
           updated_at?: string;
           video_cap_per_week?: number;
@@ -2021,7 +2009,6 @@ export type Database = {
           status?: string;
           stories?: Json;
           strategy?: Json;
-          style_id?: string | null;
           timezone?: string;
           updated_at?: string;
           video_cap_per_week?: number;
@@ -3312,93 +3299,6 @@ export type Database = {
           },
         ];
       };
-      brand_kit_assets: {
-        Row: {
-          analysis: Json | null;
-          analysis_error: string | null;
-          analysis_started_at: string | null;
-          analysis_status: string;
-          bytes: number | null;
-          created_at: string;
-          created_by: string | null;
-          frame_paths: string[];
-          height: number | null;
-          id: string;
-          kind: string;
-          label: string | null;
-          mime: string | null;
-          source_url: string | null;
-          storage_path: string | null;
-          style_id: string | null;
-          tags: string[];
-          text_content: string | null;
-          updated_at: string;
-          width: number | null;
-          workspace_id: string;
-        };
-        Insert: {
-          analysis?: Json | null;
-          analysis_error?: string | null;
-          analysis_started_at?: string | null;
-          analysis_status?: string;
-          bytes?: number | null;
-          created_at?: string;
-          created_by?: string | null;
-          frame_paths?: string[];
-          height?: number | null;
-          id?: string;
-          kind: string;
-          label?: string | null;
-          mime?: string | null;
-          source_url?: string | null;
-          storage_path?: string | null;
-          style_id?: string | null;
-          tags?: string[];
-          text_content?: string | null;
-          updated_at?: string;
-          width?: number | null;
-          workspace_id: string;
-        };
-        Update: {
-          analysis?: Json | null;
-          analysis_error?: string | null;
-          analysis_started_at?: string | null;
-          analysis_status?: string;
-          bytes?: number | null;
-          created_at?: string;
-          created_by?: string | null;
-          frame_paths?: string[];
-          height?: number | null;
-          id?: string;
-          kind?: string;
-          label?: string | null;
-          mime?: string | null;
-          source_url?: string | null;
-          storage_path?: string | null;
-          style_id?: string | null;
-          tags?: string[];
-          text_content?: string | null;
-          updated_at?: string;
-          width?: number | null;
-          workspace_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "brand_kit_assets_style_id_fkey";
-            columns: ["style_id"];
-            isOneToOne: false;
-            referencedRelation: "brand_styles";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "brand_kit_assets_workspace_id_fkey";
-            columns: ["workspace_id"];
-            isOneToOne: false;
-            referencedRelation: "workspaces";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       brand_scan_allowances: {
         Row: {
           account_id: string;
@@ -3424,68 +3324,6 @@ export type Database = {
             columns: ["account_id"];
             isOneToOne: false;
             referencedRelation: "billing_accounts";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      brand_styles: {
-        Row: {
-          applies_to: string[];
-          archived_at: string | null;
-          cover_asset_id: string | null;
-          created_at: string;
-          created_by: string | null;
-          description: string | null;
-          id: string;
-          is_default: boolean;
-          name: string;
-          spec: Json;
-          status: string;
-          updated_at: string;
-          updated_by: string | null;
-          version: number;
-          workspace_id: string;
-        };
-        Insert: {
-          applies_to?: string[];
-          archived_at?: string | null;
-          cover_asset_id?: string | null;
-          created_at?: string;
-          created_by?: string | null;
-          description?: string | null;
-          id?: string;
-          is_default?: boolean;
-          name: string;
-          spec?: Json;
-          status?: string;
-          updated_at?: string;
-          updated_by?: string | null;
-          version?: number;
-          workspace_id: string;
-        };
-        Update: {
-          applies_to?: string[];
-          archived_at?: string | null;
-          cover_asset_id?: string | null;
-          created_at?: string;
-          created_by?: string | null;
-          description?: string | null;
-          id?: string;
-          is_default?: boolean;
-          name?: string;
-          spec?: Json;
-          status?: string;
-          updated_at?: string;
-          updated_by?: string | null;
-          version?: number;
-          workspace_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "brand_styles_workspace_id_fkey";
-            columns: ["workspace_id"];
-            isOneToOne: false;
-            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -8504,7 +8342,6 @@ export type Database = {
           stage: string;
           stage_at: string;
           status: string;
-          style_id: string | null;
           title: string | null;
           type: string;
           updated_at: string;
@@ -8529,7 +8366,6 @@ export type Database = {
           stage?: string;
           stage_at?: string;
           status?: string;
-          style_id?: string | null;
           title?: string | null;
           type: string;
           updated_at?: string;
@@ -8554,7 +8390,6 @@ export type Database = {
           stage?: string;
           stage_at?: string;
           status?: string;
-          style_id?: string | null;
           title?: string | null;
           type?: string;
           updated_at?: string;
@@ -8566,13 +8401,6 @@ export type Database = {
             columns: ["parent_job_id"];
             isOneToOne: false;
             referencedRelation: "studio_jobs";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "studio_jobs_style_id_fkey";
-            columns: ["style_id"];
-            isOneToOne: false;
-            referencedRelation: "brand_styles";
             referencedColumns: ["id"];
           },
           {
@@ -9572,6 +9400,62 @@ export type Database = {
           },
         ];
       };
+      workspace_marketing_strategy: {
+        Row: {
+          built_from: Json;
+          confirmed_at: string | null;
+          confirmed_by: string | null;
+          created_at: string;
+          generated_at: string | null;
+          generations: number;
+          source_fingerprint: string | null;
+          status: string;
+          strategy: Json;
+          updated_at: string;
+          updated_by: string | null;
+          version: number;
+          workspace_id: string;
+        };
+        Insert: {
+          built_from?: Json;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          created_at?: string;
+          generated_at?: string | null;
+          generations?: number;
+          source_fingerprint?: string | null;
+          status?: string;
+          strategy?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+          workspace_id: string;
+        };
+        Update: {
+          built_from?: Json;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          created_at?: string;
+          generated_at?: string | null;
+          generations?: number;
+          source_fingerprint?: string | null;
+          status?: string;
+          strategy?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_marketing_strategy_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_members: {
         Row: {
           created_at: string;
@@ -10188,10 +10072,6 @@ export type Database = {
           p_reason: string;
         };
         Returns: Json;
-      };
-      set_default_brand_style: {
-        Args: { p_workspace_id: string; p_style_id: string };
-        Returns: undefined;
       };
       set_persona_once: {
         Args: { _persona: string };

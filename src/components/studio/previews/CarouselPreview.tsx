@@ -5,7 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
-import { ensureGoogleFonts } from "@/lib/brand-kit/fonts";
+import { ensureGoogleFonts } from "@/lib/brand-look/fonts";
 import { RATIOS, type AspectRatio } from "@/lib/studio/aspect";
 import { SlideArt } from "@/lib/studio/carousel/SlideArt";
 import {

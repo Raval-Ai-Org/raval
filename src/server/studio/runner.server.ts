@@ -35,14 +35,13 @@ import {
   type BrandDnaLite,
   type ImageStyleInput,
 } from "@/lib/post-image";
-import { loadResolvedStyle, type LoadedStyle } from "@/server/brand-kit/resolve.server";
-import { resolveStyle, styleAppliesTo } from "@/lib/brand-kit/resolve";
+import { loadBrandLook, type LoadedLook } from "@/server/brand-look/resolve.server";
 import {
   imageStyleInput,
   styleProtectedTerms,
   videoStyleBlock,
   writingStyleBlock,
-} from "@/lib/brand-kit/prompt";
+} from "@/lib/brand-look/prompt";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { canTransitionContent, isContentStatus, mergeMeta } from "@/lib/content-lifecycle";
 import {
@@ -85,7 +84,7 @@ import {
   safeDesign,
   safeTheme,
 } from "@/lib/studio/carousel/design";
-import { paletteFromDnaColors } from "@/lib/brand-kit/resolve";
+import { paletteFromDnaColors } from "@/lib/brand-look/resolve";
 import type { CarouselSpecOutput } from "@/lib/studio/jobs";
 import { linkGeneratedCarousel } from "./carousel-assets.server";
 import { linkGeneratedStory } from "./story-assets.server";
@@ -105,7 +104,7 @@ import { carouselSlidePrompt, storyFramePrompt } from "./visual-prompts.server";
 type Db = SupabaseClient;
 
 const JOB_COLS =
-  "id, workspace_id, type, status, stage, stage_at, title, input, output, error, provider_tasks, group_id, parent_job_id, content_item_ids, asset_ids, attempt, idempotency_key, style_id, created_at, updated_at, completed_at";
+  "id, workspace_id, type, status, stage, stage_at, title, input, output, error, provider_tasks, group_id, parent_job_id, content_item_ids, asset_ids, attempt, idempotency_key, created_at, updated_at, completed_at";
 
 const RENDER_TIMEOUT_MS = 10 * 60_000;
 const LEASE_MS = 90_000;
@@ -130,7 +129,6 @@ type ProviderTask = {
 type JobRow = StudioJob & {
   provider_tasks: ProviderTask[];
   idempotency_key: string;
-  style_id?: string | null;
 };
 
 export class StudioJobError extends Error {
@@ -635,25 +633,15 @@ async function markDraftsFailed(client: Db, workspaceId: string, ids: string[]) 
 /* ───────────────────────── style ───────────────────────── */
 
 /**
- * The Brand Kit Style this job follows, plus the server's Brand DNA. An
- * explicit pick always applies; the workspace default only applies to the
- * formats it lists. `resolved.styleId === null` means Brand DNA only. Never
- * throws: a style that can't be loaded means Brand DNA only, not a failed job.
+ * The brand's look (Brand DNA → Look & voice) plus the server's Brand DNA.
+ * Never throws: a look that can't be loaded means Brand DNA facts only, not a
+ * failed job.
  */
-async function loadJobStyle(
-  workspaceId: string,
-  type: string,
-  choice: CreateJobInput["styleId"],
-): Promise<LoadedStyle | null> {
+async function loadJobLook(workspaceId: string): Promise<LoadedLook | null> {
   try {
-    const loaded = await loadResolvedStyle(workspaceId, choice ?? null);
-    const explicit = !!choice && choice !== "none" && !loaded.fellBack;
-    if (loaded.resolved.styleId && !explicit && !styleAppliesTo(loaded.resolved, type)) {
-      return { ...loaded, referenceUrls: [], resolved: resolveStyle(loaded.dna as never, null) };
-    }
-    return loaded;
+    return await loadBrandLook(workspaceId);
   } catch (error) {
-    console.error("[studio] style load failed, using Brand DNA only", error);
+    console.error("[studio] look load failed, using Brand DNA only", error);
     return null;
   }
 }
@@ -702,7 +690,7 @@ function carouselSpec(args: {
     body: dnaFonts[1] ?? dnaFonts[0],
   };
   const design = pickCarouselDesign({
-    profileKey: `${job.workspace_id}:${ctx.style?.styleId ?? "brand"}`,
+    profileKey: `${job.workspace_id}:brand`,
     seed: input.idempotencyKey,
     previous: ctx.recent.filter((r) => r.type === "carousel" && r.design).map((r) => r.design),
     palette,
@@ -745,7 +733,7 @@ function storyLook(args: {
     body: dnaFonts[1] ?? dnaFonts[0],
   };
   const design = pickCarouselDesign({
-    profileKey: `${args.job.workspace_id}:${args.ctx.style?.styleId ?? "brand"}`,
+    profileKey: `${args.job.workspace_id}:brand`,
     seed: args.input.idempotencyKey,
     previous: args.ctx.recent.filter((r) => r.type === "story" && r.design).map((r) => r.design),
     palette,
@@ -872,7 +860,7 @@ async function startMedia(args: {
   output: StudioJobOutput;
   platforms: PlatformId[];
   referenceUrl?: string | null;
-  style?: LoadedStyle | null;
+  style?: LoadedLook | null;
 }): Promise<ProviderTask[]> {
   const { job, input, ctx, output, platforms } = args;
   const ratio = mediaRatio(job.type, input, platforms);
@@ -882,7 +870,7 @@ async function startMedia(args: {
   // workspace whose DNA hasn't been saved yet.
   const serverDna = args.style?.dna && Object.keys(args.style.dna).length ? args.style.dna : null;
   const brand = brandLite((serverDna ?? input.brand) as CreateJobInput["brand"]);
-  const styled = brand && args.style?.logoUrl ? { ...brand, logoUrl: args.style.logoUrl } : brand;
+  const styled = brand;
   const refineNote =
     input.refine && ["media", "all"].includes(input.refine.target)
       ? `Revision request: ${input.refine.instruction}`
@@ -917,7 +905,7 @@ async function startMedia(args: {
       durationSec: seconds,
       resolution: input.controls.videoResolution ?? "720P",
       audio: input.controls.audio ?? true,
-      imageUrls: args.style?.referenceUrls.slice(0, 1) ?? [],
+      imageUrls: [],
     });
     return [
       {
@@ -935,14 +923,8 @@ async function startMedia(args: {
 
   const size = IMAGE_SIZE_BY_RATIO[ratio];
   if (!size) throw new StudioJobError(400, `${RATIOS[ratio].label} isn't available for images.`);
-  const referenceAssets = args.referenceUrl
-    ? [args.referenceUrl]
-    : ctx.style
-      ? (args.style?.referenceUrls ?? []).slice(0, 4)
-      : [];
-  const seriesReferences = args.style?.referenceUrls.length
-    ? args.style.referenceUrls.slice(0, 4)
-    : referenceAssets;
+  const referenceAssets = args.referenceUrl ? [args.referenceUrl] : [];
+  const seriesReferences = referenceAssets;
   if (job.type === "carousel" && output.slides?.length) {
     return Promise.all(
       output.slides.map(async (slide, index) => {
@@ -954,7 +936,7 @@ async function startMedia(args: {
           brandName: ctx.brandName,
           brandContext: ctx.brandText,
           ratio,
-          style: ctx.style ? imageStyleInput(ctx.style, seriesReferences.length) : null,
+          style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
           novelty: noveltyNote,
         });
@@ -986,7 +968,7 @@ async function startMedia(args: {
           spec: output.story!.spec,
           brandName: ctx.brandName,
           brandContext: ctx.brandText,
-          style: ctx.style ? imageStyleInput(ctx.style, seriesReferences.length) : null,
+          style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
           novelty: noveltyNote,
         });
@@ -1027,9 +1009,7 @@ async function startMedia(args: {
     seed,
     variationKey,
     extra: [refineNote, noveltyNote].filter(Boolean).join("\n\n"),
-    style: ctx.style
-      ? imageStyleInput(ctx.style, args.referenceUrl ? 0 : referenceAssets.length)
-      : null,
+    style: ctx.style ? imageStyleInput(ctx.style) : null,
   });
   const started = await startImageTask({
     prompt,
@@ -1091,14 +1071,7 @@ export async function createStudioJob(args: {
       );
   }
 
-  // A revision or regenerate keeps the style its draft was made with.
-  if (input.styleId === undefined && parent) {
-    const parentStyle =
-      parent.style_id ?? (parent.input as { styleId?: string | null } | null)?.styleId;
-    if (parentStyle) input.styleId = parentStyle;
-  }
   const { brand: _brand, workspaceId: _ws, ...storedInput } = input;
-  const styleUuid = input.styleId && input.styleId !== "none" ? input.styleId : null;
   const insert = {
     workspace_id: workspaceId,
     created_by: args.userId,
@@ -1114,7 +1087,6 @@ export async function createStudioJob(args: {
     content_item_ids: parent?.content_item_ids ?? [],
     asset_ids: parent?.asset_ids ?? [],
     attempt: (parent?.attempt ?? 0) + 1,
-    ...(styleUuid ? { style_id: styleUuid } : {}),
   };
   const { data: inserted, error } = await client
     .from("studio_jobs")
@@ -1203,14 +1175,11 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   const controls = { ...input.controls, platforms };
 
   const base = await loadStudioContext(client, job.workspace_id, input.brand ?? null);
-  const style = await loadJobStyle(job.workspace_id, type, input.styleId);
-  if (style?.resolved.styleId && !job.style_id) {
-    await patchJob(client, job.id, { style_id: style.resolved.styleId });
-  }
+  const style = await loadJobLook(job.workspace_id);
   // Research is per-brief, so it cannot live in the 60s workspace context
   // cache. Most briefs skip it entirely and cost nothing.
   const ctx = await withLiveResearch(
-    { ...base, style: style?.resolved.styleId ? style.resolved : null },
+    { ...base, style: style?.look.customized ? style.look : null },
     input,
   );
 

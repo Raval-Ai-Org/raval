@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { Eye, EyeOff, Pause, Play, Send } from "@/components/icons";
 import { cn } from "@/lib/utils";
-import { ensureGoogleFonts } from "@/lib/brand-kit/fonts";
+import { ensureGoogleFonts } from "@/lib/brand-look/fonts";
 import {
   carouselTheme,
   pickCarouselDesign,

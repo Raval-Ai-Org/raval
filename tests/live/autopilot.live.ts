@@ -129,7 +129,6 @@ describeLive("Autopilot (live)", () => {
       timezone: "UTC",
       starts_on: today,
       ends_on: end,
-      style_id: null,
       credit_cap_per_week: 100,
       video_cap_per_week: 0,
       act_on_opportunities: false,

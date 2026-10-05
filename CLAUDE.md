@@ -94,27 +94,49 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
 - Live check: `tests/live/openrouter-models.live.ts` (video behind
   `VIDEO_LIVE_OPENROUTER=yes`).
 
-## Brand Kit and Styles
+## Brain (the four brains, the strategy, and the brand's look)
 
-Full reference: [docs/brand-kit.md](docs/brand-kit.md), decision record
-[ADR-0025](docs/adr/0025-brand-kit-styles.md).
+Full reference: [docs/brain.md](docs/brain.md), decision record
+[ADR-0032](docs/adr/0032-brain-strategy-and-one-look.md) (supersedes ADR-0025:
+Brand Styles and the Brand Kit are gone — never add them back).
 
-- A **Style** (`brand_styles`) is a named look and voice; the **Brand Kit** is
-  its library (`brand_kit_assets`: logos, fonts, elements, example posts and
-  videos, writing samples). Brand DNA stays the source of facts; a style
-  inherits colours, fonts, voice, logo and rules field by field.
-- **Generators get a style only through** `loadResolvedStyle` / `styleTextFor`
-  (`src/server/brand-kit/resolve.server.ts`), with the verified workspace id.
-  Choice: style id, `"none"` (Brand DNA only), or empty (the default, only for
-  the formats it lists). Never trust a browser style id without that check.
-- Pure core in `src/lib/brand-kit/` (`resolveStyle`, prompt blocks,
-  `mergeAnalyses`, `checkWritingConformance`, fonts); analysis uses vision
-  through the gateway's `images` option (`llmJson`), claimed by compare-and-set.
-  Analysis never overwrites a user-set field (`provenance`).
-- Uploads: signed upload URLs for server-chosen paths under
-  `workspace/<id>/assets/brand-kit/`, verified in `finishUpload`. No SVG.
-- Live check: `tests/live/brand-kit.live.ts` (paid part behind
-  `BRAND_KIT_LIVE_ANALYZE=yes`).
+- **One place.** Brand DNA, Audience, Competitors and Market live in Brain at
+  `/w/<id>/app/brain?s=<section>&t=<place>`; build links with `brainPath()`.
+  UI in `src/components/app/brain/` (`BrainShell`, `BrainHome`, `BrainMark`,
+  `BrainPulse`), opened by `open:brain`. The older `open:brand-dna`,
+  `open:audience`, `open:competitors` and `open:marketing-coach` events land on
+  the matching section. Add a new brain view there, never as another dialog,
+  route or sidebar entry.
+- **The overview is free.** `getBrainOverview` (`src/server/brain/`, pure half
+  `src/lib/brain/brain.ts`) only counts and lists rows that exist, with the
+  caller's own client. The Coach pill (`BrainPulse`) shows those updates and
+  must never start a briefing, a scan or anything paid.
+- **One marketing strategy per workspace** (`workspace_marketing_strategy`;
+  `src/lib/strategy/`, `src/server/strategy/`, RPC `src/server/fns/strategy.ts`,
+  UI `brain/strategy/`).
+  - The model proposes, `groundStrategy` decides: only tracked competitors, only
+    market sources Market Brain collected, only real audience groups. A person's
+    edit goes through the same function.
+  - **Only a confirmed strategy reaches a generator** (`strategyBlockFor`, added
+    in `loadStudioContext`, chat and the Coach briefing). A draft or a rebuild
+    waits for a person.
+  - Autopilot follows it: `suggestStrategy` proposes the confirmed one and
+    `syncProgramStrategy` updates a live program. The program's `strategy`
+    column is a copy; the workspace row is the source.
+  - Nothing rebuilds or spends by itself. The first strategy is included; a
+    rebuild is `strategy_rebuild` through `runMetered`.
+- **One look per brand, on Brand DNA** (`dna.look`, edited in Brand → Look &
+  voice). Pure core in `src/lib/brand-look/` (`parseLook`, `resolveLook`, prompt
+  blocks, `checkWritingConformance`, fonts).
+  - **Generators get the look only through** `loadBrandLook` / `lookTextFor`
+    (`src/server/brand-look/resolve.server.ts`), with the verified workspace id.
+    There is no style id anywhere; never add a picker or a second look.
+  - No look set means plain Brand DNA (`customized: false`, no style block).
+- `BrainHome`, `StrategyScreen` and `BrainPulseView` are presentational;
+  `/brain-lab` renders them with sample data in development
+  (`tests/integration/brain-lab.spec.ts`).
+- Live check: `tests/live/brain.live.ts` (model call behind
+  `STRATEGY_LIVE_AI=yes`).
 
 ## Sharing (team invites and the client portal)
 
@@ -296,10 +318,11 @@ worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents p
   worker; the outcome is read from the content item.
 - **It acts as a member.** `acting_user_id` is re-checked on every step; if
   that person is no longer an editor the program pauses with a reason.
-- **Set up once.** `suggestStrategy` (`strategy.server.ts`) proposes a brand
-  strategy and settings from Brand DNA; the confirmed strategy is stored on the
-  program and every weekly plan is written against it. Never ask the person to
-  restate goals per week or per post.
+- **Set up once.** `suggestStrategy` (`strategy.server.ts`) proposes the
+  workspace's confirmed marketing strategy (Brain → Strategy, ADR-0032) when
+  there is one, else a short one from Brand DNA, plus settings; it is stored on
+  the program and every weekly plan is written against it. Never ask the person
+  to restate goals per week or per post.
 - **Fully automatic mode** only approves by itself through `publishDecision()`
   (plain and image posts, no quality warning, no figure missing from Brand DNA,
   two a day at most). `FEATURE_FLAG_AUTOPILOT_FULL_ENABLED=false` removes the
@@ -347,8 +370,8 @@ leaves runs alone and generators get no audience block.
   (`audience_runs`, kinds `twins` / `pulse` / `tournament`), frozen real
   results (`audience_outcomes`) and calibration. Pure rules in
   `src/lib/audience/`; worker, store and ports in `src/server/audience/`; RPC
-  `src/server/fns/audience.ts`; UI `src/components/app/audience/` at
-  `/w/<id>/app/audience`.
+  `src/server/fns/audience.ts`; UI `src/components/app/audience/`, shown in
+  Brain → Audience (`brainPath(id, "audience")`).
 - **It never changes a piece.** Nothing in Audience writes to `content_items`.
   "Improve" calls the editor's own rewrite; "Use this version" becomes an
   unsaved edit. Never add a write to content from here.
@@ -404,8 +427,8 @@ Decision record [ADR-0022](docs/adr/0022-tavily-web-intelligence.md).
   `competitor_updates`) is canonical; `competitor_watches` and
   `competitor_intelligence_runs` hang off it by `competitor_id`. Engines in
   `src/server/competitors/` (discovery → profile → updates), RPC
-  `src/server/fns/competitors.ts`, UI `src/components/app/competitors/` at
-  `/w/<id>/app/competitors`.
+  `src/server/fns/competitors.ts`, UI `src/components/app/competitors/`, shown
+  in Brain → Competitors (`brainPath(id, "competitors")`).
   - **Grounding:** discovery may only classify companies a search really
     returned, and an update may only reference a supplied result. Never let a
     model introduce a company or an event of its own.
@@ -416,7 +439,7 @@ Decision record [ADR-0022](docs/adr/0022-tavily-web-intelligence.md).
   - Background work is leased (`claim_competitor_jobs`) and advanced by the
     **existing** `competitor-watch` cron hook — do not add a cron job.
 
-## Market Brain ("Market Updates" in Marketing Coach)
+## Market Brain (Brain → Market)
 
 Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
 
@@ -440,8 +463,8 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
 "market-brain"`) driven by `market-brain-scheduler.server.ts`, advanced by
   `runDueMarketBrainCollections()`.
 - UI: `MarketBrainPanel.tsx` + `MarketBrainInsights.tsx` +
-  `MarketBrainProgress.tsx`, embedded in `MarketingCoachPanel.tsx`'s "Market"
-  tab; routes `src/app/api/market/{trends,intelligence,latest}`.
+  `MarketBrainProgress.tsx`, shown in Brain → Market; routes
+  `src/app/api/market/{trends,intelligence,latest}`.
 
 ## Studio: carousels, trends and content memory
 

@@ -79,8 +79,21 @@ export const GET = defineRoute({
       .order("created_at", { ascending: false })
       .limit(500);
     const knownUrls = new Set(visible.map((asset) => asset.url));
+    const knownPaths = new Set(visible.map((asset) => asset.storagePath).filter(Boolean));
     const legacy = (contentRows ?? [])
-      .filter((row) => row.media_url && !knownUrls.has(row.media_url))
+      .filter((row) => {
+        const meta =
+          row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+            ? (row.meta as Record<string, unknown>)
+            : null;
+        return (
+          row.media_url &&
+          !knownUrls.has(row.media_url) &&
+          !knownPaths.has(
+            typeof meta?.asset_storage_path === "string" ? meta.asset_storage_path : null,
+          )
+        );
+      })
       .map((row) => ({
         id: row.id,
         type: row.kind === "video" ? "video" : "image",

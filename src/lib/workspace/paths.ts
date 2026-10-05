@@ -38,14 +38,19 @@ export function workspacePath(
   return `/w/${workspaceId}/app${clean ? `/${clean}` : ""}${qs}`;
 }
 
-export function brandKitPath(
+/**
+ * Brain (ADR-0032): the four brains and the strategy.
+ *   brainPath(id)                      → /w/<id>/app/brain
+ *   brainPath(id, "brand", "look")     → /w/<id>/app/brain?s=brand&t=look
+ */
+export function brainPath(
   workspaceId: string,
-  options?: { style?: string | null; section?: string | null; create?: boolean },
+  section?: string | null,
+  tab?: string | null,
 ): string {
-  return workspacePath(workspaceId, "brand-kit", {
-    style: options?.style,
-    section: options?.section,
-    create: options?.create ? 1 : undefined,
+  return workspacePath(workspaceId, "brain", {
+    s: section && section !== "home" ? section : undefined,
+    t: tab,
   });
 }
 

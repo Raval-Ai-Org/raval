@@ -1,14 +1,8 @@
-import type { Metadata } from "next";
-import { pageMetadata } from "@/lib/seo";
-import CompetitorsRoute from "@/components/app/CompetitorsRoute";
+import { redirect } from "next/navigation";
+import { brainPath, isWorkspaceId } from "@/lib/workspace/paths";
 
-export const metadata: Metadata = pageMetadata({
-  title: "Competitors · Mellox AI",
-  description: "Research competitors and track their latest updates.",
-  path: "/projects",
-  noindex: true,
-});
-
-export default function WorkspaceCompetitorsPage() {
-  return <CompetitorsRoute />;
+// Competitors lives in Brain now (ADR-0032); old links land on its section.
+export default async function Page({ params }: { params: Promise<{ workspaceId: string }> }) {
+  const { workspaceId } = await params;
+  redirect(isWorkspaceId(workspaceId) ? brainPath(workspaceId, "competitors") : "/projects");
 }

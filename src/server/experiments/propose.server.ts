@@ -47,16 +47,14 @@ function str(value: unknown, max = 600): string {
   return typeof value === "string" ? value.slice(0, max) : "";
 }
 
-/** The default Brand Kit Style's own voice, when it sets one (tone only; never facts). */
+/** The brand look's own voice, when it sets one (tone only; never facts). */
 async function defaultStyleVoice(
   workspaceId: string,
   dna: Record<string, unknown>,
 ): Promise<string> {
   try {
-    const { loadResolvedStyle } = await import("@/server/brand-kit/resolve.server");
-    const loaded = await loadResolvedStyle(workspaceId, null, { dna });
-    if (!loaded.resolved.styleId || loaded.resolved.fromDna.voice) return "";
-    return str(loaded.resolved.writing.voice, 400);
+    const { parseLook } = await import("@/lib/brand-look/spec");
+    return str(parseLook(dna.look).writing?.voice, 400);
   } catch {
     return "";
   }

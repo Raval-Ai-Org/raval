@@ -13,10 +13,13 @@ import type { StudioContext } from "@/lib/studio/prompts";
 import { recentPerformanceSignals } from "@/lib/studio/performance";
 import { openingLine } from "@/lib/studio/memory";
 import { audienceBlockFor } from "@/server/audience/context.server";
+import { strategyBlockFor } from "@/server/strategy/context.server";
 import { getSocialTrends } from "./social-trends.server";
 
 type WorkspaceSnapshot = Omit<StudioContext, "brandText" | "brandName" | "moments" | "today"> & {
   name: string;
+  /** Tracked competitors' positioning, as a ready prompt block ("" when none). */
+  rivals: string;
 };
 
 const TTL_MS = 60_000;
@@ -54,77 +57,90 @@ async function loadWorkspaceSnapshot(
   const now = new Date();
   const in14 = new Date(now.getTime() + 14 * 86_400_000).toISOString();
 
-  const [workspace, recent, upcoming, alerts, insights, market, publications] = await Promise.all([
-    settle(
-      db
-        .from("workspaces")
-        .select("name, industry, audience, website_url")
-        .eq("id", workspaceId)
-        .maybeSingle(),
-      { data: null, error: null } as never,
-      "workspace",
-    ),
-    settle(
-      db
-        .from("content_items")
-        .select("id, title, body, kind, channel, meta, created_at, status")
-        .eq("workspace_id", workspaceId)
-        .order("created_at", { ascending: false })
-        .limit(40),
-      { data: [], error: null } as never,
-      "recent content",
-    ),
-    settle(
-      db
-        .from("content_items")
-        .select("title, channel, scheduled_at")
-        .eq("workspace_id", workspaceId)
-        .eq("status", "scheduled")
-        .gte("scheduled_at", now.toISOString())
-        .lte("scheduled_at", in14)
-        .order("scheduled_at", { ascending: true })
-        .limit(15),
-      { data: [], error: null } as never,
-      "schedule",
-    ),
-    // competitor_updates is the researched feed (a launch, a price change, a
-    // repositioning), already filtered for significance. The legacy
-    // competitor_alerts table held raw page diffs, which made most of what
-    // reached a prompt noise.
-    settle(
-      db
-        .from("competitor_updates")
-        .select("title, summary, significance, detected_at")
-        .eq("workspace_id", workspaceId)
-        .order("detected_at", { ascending: false })
-        .limit(5),
-      { data: [], error: null } as never,
-      "competitor updates",
-    ),
-    settle(
-      db
-        .from("memory_insights")
-        .select("body, kind")
-        .eq("workspace_id", workspaceId)
-        .order("created_at", { ascending: false })
-        .limit(8),
-      { data: [], error: null } as never,
-      "insights",
-    ),
-    settle(getLatestMarketBrain(workspaceId), null, "market brain"),
-    settle(
-      db
-        .from("content_publications")
-        .select("content_item_id, platform, status, metrics")
-        .eq("workspace_id", workspaceId)
-        .eq("status", "published")
-        .gte("delivered_at", new Date(now.getTime() - 90 * 86_400_000).toISOString())
-        .order("delivered_at", { ascending: false })
-        .limit(100),
-      { data: [], error: null } as never,
-      "publication outcomes",
-    ),
-  ]);
+  const [workspace, recent, upcoming, alerts, insights, market, rivals, publications] =
+    await Promise.all([
+      settle(
+        db
+          .from("workspaces")
+          .select("name, industry, audience, website_url")
+          .eq("id", workspaceId)
+          .maybeSingle(),
+        { data: null, error: null } as never,
+        "workspace",
+      ),
+      settle(
+        db
+          .from("content_items")
+          .select("id, title, body, kind, channel, meta, created_at, status")
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: false })
+          .limit(40),
+        { data: [], error: null } as never,
+        "recent content",
+      ),
+      settle(
+        db
+          .from("content_items")
+          .select("title, channel, scheduled_at")
+          .eq("workspace_id", workspaceId)
+          .eq("status", "scheduled")
+          .gte("scheduled_at", now.toISOString())
+          .lte("scheduled_at", in14)
+          .order("scheduled_at", { ascending: true })
+          .limit(15),
+        { data: [], error: null } as never,
+        "schedule",
+      ),
+      // competitor_updates is the researched feed (a launch, a price change, a
+      // repositioning), already filtered for significance. The legacy
+      // competitor_alerts table held raw page diffs, which made most of what
+      // reached a prompt noise.
+      settle(
+        db
+          .from("competitor_updates")
+          .select("title, summary, significance, detected_at")
+          .eq("workspace_id", workspaceId)
+          .order("detected_at", { ascending: false })
+          .limit(5),
+        { data: [], error: null } as never,
+        "competitor updates",
+      ),
+      settle(
+        db
+          .from("memory_insights")
+          .select("body, kind")
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: false })
+          .limit(8),
+        { data: [], error: null } as never,
+        "insights",
+      ),
+      settle(getLatestMarketBrain(workspaceId), null, "market brain"),
+      // Who the brand is up against, as its own tracked list describes them.
+      settle(
+        db
+          .from("workspace_competitors")
+          .select("name, relationship, profile")
+          .eq("workspace_id", workspaceId)
+          .eq("status", "tracked")
+          .order("confidence", { ascending: false })
+          .limit(4),
+        { data: [], error: null } as never,
+        "competitors",
+      ),
+      settle(
+        db
+          .from("content_publications")
+          .select("content_item_id, platform, status, metrics")
+          .eq("workspace_id", workspaceId)
+          .eq("status", "published")
+          .gte("delivered_at", new Date(now.getTime() - 90 * 86_400_000).toISOString())
+          .order("delivered_at", { ascending: false })
+          .limit(100),
+        { data: [], error: null } as never,
+        "publication outcomes",
+      ),
+    ]);
 
   type Row = Record<string, unknown>;
   const ws = record((workspace as { data: unknown }).data);
@@ -133,6 +149,13 @@ async function loadWorkspaceSnapshot(
   const alertRows = ((alerts as { data: Row[] | null }).data ?? []) as Row[];
   const insightRows = ((insights as { data: Row[] | null }).data ?? []) as Row[];
   const publicationRows = ((publications as { data: Row[] | null }).data ?? []) as Row[];
+  const rivalLines = (((rivals as { data: Row[] | null }).data ?? []) as Row[])
+    .map((r) => {
+      const profile = record(r.profile);
+      const angle = str(profile.positioning) ?? str(profile.summary);
+      return str(r.name) && angle ? `- ${str(r.name)}: ${angle.slice(0, 200)}` : "";
+    })
+    .filter(Boolean);
 
   const intelligence = market?.intelligence ?? null;
 
@@ -213,6 +236,9 @@ async function loadWorkspaceSnapshot(
       .map((a) => [str(a.title), str(a.summary)].filter(Boolean).join(": ").slice(0, 240))
       .filter(Boolean),
     insights: insightRows.map((i) => (str(i.body) ?? "").slice(0, 240)).filter(Boolean),
+    rivals: rivalLines.length
+      ? `## Who you are up against (never name them in a post unless asked)\n${rivalLines.join("\n")}`
+      : "",
     performanceSignals: recentPerformanceSignals(
       recentRows.map((r) => ({
         id: str(r.id) ?? "",
@@ -240,13 +266,15 @@ export async function loadStudioContext(
   workspaceId: string,
   brand: Record<string, unknown> | null | undefined,
 ): Promise<StudioContext & { brand: Record<string, unknown> | null }> {
-  const [snapshot, stored, socialTrends, audience] = await Promise.all([
+  const [snapshot, stored, socialTrends, audience, strategy] = await Promise.all([
     loadWorkspaceSnapshot(db, workspaceId),
     settle(readBrandDna(db, workspaceId), null, "brand dna"),
     // The stored snapshot only; a job never searches for trends itself.
     getSocialTrends(),
     // Who the piece is for (ADR-0031). Empty when Audience is off or not set up.
     audienceBlockFor(workspaceId),
+    // The confirmed marketing strategy (ADR-0032). Empty until a person confirms one.
+    strategyBlockFor(workspaceId),
   ]);
   const storedDna = stored && Object.keys(stored.dna).length ? stored.dna : null;
   const dna = (storedDna ?? brand ?? null) as BrandCtxDna | null;
@@ -260,12 +288,15 @@ export async function loadStudioContext(
         .map((i) => `- ${i}`)
         .join("\n")}`
     : "";
-  const { name, ...rest } = snapshot;
+  const { name, rivals: _rivals, ...rest } = snapshot;
   return {
     ...rest,
     brand: dna as Record<string, unknown> | null,
     brandName: str(dna?.brandName) ?? name,
-    brandText: `${brandText}${insightsBlock}${audience ? `\n\n${audience}` : ""}`.trim(),
+    brandText: [brandText + insightsBlock, audience, snapshot.rivals, strategy]
+      .filter(Boolean)
+      .join("\n\n")
+      .trim(),
     today: new Date().toISOString().slice(0, 10),
     socialTrends,
     moments: upcomingMoments(new Date(), { limit: 4 }),

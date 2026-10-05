@@ -33,7 +33,6 @@ import { dsIconBtn } from "@/components/app/surface/buttons";
 import { cn } from "@/lib/utils";
 import { streamImage } from "@/lib/streamImage";
 import { persistGeneratedAsset } from "@/lib/persistent-assets";
-import { rememberedStyle } from "@/lib/studio/session-store";
 import {
   CALENDAR_CHANNELS,
   channelInfo,
@@ -230,8 +229,8 @@ export function EntryEditor({
           setPreview(dataUrl);
           if (isFinal) final = dataUrl;
         },
-        // The workspace's Brand Kit style, applied (and checked) on the server.
-        { brandStyle: rememberedStyle(workspaceId) || "default" },
+        // The brand's look (Brand DNA), applied on the server.
+        { brandStyle: "default" },
       );
       if (!final) throw new Error("No picture came back");
       await savePicture(final, "calendar-visual.png");

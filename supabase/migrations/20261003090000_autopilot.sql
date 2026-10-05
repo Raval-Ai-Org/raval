@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS public.autopilot_programs (
   timezone text NOT NULL DEFAULT 'UTC',
   starts_on date NOT NULL,
   ends_on date NOT NULL,
-  style_id uuid,
   credit_cap_per_week integer NOT NULL DEFAULT 150,
   video_cap_per_week integer NOT NULL DEFAULT 0,
   act_on_opportunities boolean NOT NULL DEFAULT false,
@@ -250,11 +249,6 @@ BEGIN
      WHERE id = (v_rec ->> 'action_id')::uuid AND workspace_id = v_ws) THEN
     RAISE EXCEPTION 'autopilot row workspace does not match its action' USING ERRCODE = '23514';
   END IF;
-  IF (v_rec ->> 'style_id') IS NOT NULL AND NOT EXISTS (
-    SELECT 1 FROM public.brand_styles
-     WHERE id = (v_rec ->> 'style_id')::uuid AND workspace_id = v_ws) THEN
-    RAISE EXCEPTION 'autopilot style is not in its workspace' USING ERRCODE = '23514';
-  END IF;
   RETURN NEW;
 END;
 $$;
@@ -263,7 +257,7 @@ REVOKE ALL ON FUNCTION private.autopilot_workspace_guard() FROM PUBLIC, anon, au
 
 DROP TRIGGER IF EXISTS autopilot_programs_workspace_guard ON public.autopilot_programs;
 CREATE TRIGGER autopilot_programs_workspace_guard
-  BEFORE INSERT OR UPDATE OF workspace_id, style_id ON public.autopilot_programs
+  BEFORE INSERT OR UPDATE OF workspace_id ON public.autopilot_programs
   FOR EACH ROW EXECUTE FUNCTION private.autopilot_workspace_guard();
 
 DROP TRIGGER IF EXISTS autopilot_actions_workspace_guard ON public.autopilot_actions;

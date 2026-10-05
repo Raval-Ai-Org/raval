@@ -183,7 +183,7 @@ describe("llmText / llmJson", () => {
     const s = scripted([{ content: "a logo" }]);
     restore = s.restore;
     await llmText({
-      route: "brand-kit/describe",
+      route: "file-extract",
       system: "s",
       user: "describe",
       images: [{ mediaType: "image/png", data: "iVBORw0KGgo=" }],

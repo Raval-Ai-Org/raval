@@ -187,12 +187,9 @@ export function outcomeFor(
       if (status === "failed") return { final: true, ok: false };
       return linkAgeMs > 24 * HOUR ? { final: true, ok: false } : { final: false };
     }
-    case "brand_voice": {
-      const status = String(row.analysis_status ?? "");
-      if (status === "done") return { final: true, ok: true };
-      if (status === "failed" || status === "none") return { final: true, ok: false };
-      return linkAgeMs > 24 * HOUR ? { final: true, ok: false } : { final: false };
-    }
+    // Brand Styles are gone (ADR-0032): a hold left open by one is released.
+    case "brand_voice":
+      return { final: true, ok: false };
     case "audience_run": {
       const status = String(row.status);
       if (status === "succeeded") return { final: true, ok: true };
@@ -219,11 +216,12 @@ async function jobRow(kind: AsyncChargeKind, refId: string) {
           .select("profile_status,updated_at")
           .eq("id", refId.split(":")[0]);
       case "brand_voice":
-        return admin.from("brand_kit_assets").select("analysis_status").eq("id", refId);
+        return null;
       case "audience_run":
         return admin.from("audience_runs").select("status").eq("id", refId);
     }
   })();
+  if (!q) return null;
   const { data, error } = await q.maybeSingle();
   if (error) throw new Error(`Could not read ${kind} ${refId}`);
   return (data as Record<string, unknown> | null) ?? null;

@@ -92,7 +92,7 @@ describe("task model registry", () => {
   });
 
   it("applies AI_MODEL_<ROUTE> and AI_EFFORT_<ROUTE> overrides", () => {
-    expect(routeEnvKey("brand-kit/analyze-visual")).toBe("BRAND_KIT_ANALYZE_VISUAL");
+    expect(routeEnvKey("geo.agent.investigate")).toBe("GEO_AGENT_INVESTIGATE");
     vi.stubEnv("AI_MODEL_BRAND_EXTRACT", " x/one , x/two ");
     vi.stubEnv("AI_EFFORT_BRAND_EXTRACT", "HIGH");
     expect(planFor("brand-extract")).toMatchObject({ models: ["x/one", "x/two"], effort: "high" });

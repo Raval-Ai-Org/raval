@@ -16,7 +16,6 @@ import {
 import { cn } from "@/lib/utils";
 import { planContentCalendar, type ContentItem } from "@/lib/content.functions";
 import { ServerFnError } from "@/lib/rpc-client";
-import { rememberedStyle } from "@/lib/studio/session-store";
 import {
   addDays,
   CALENDAR_CHANNELS,
@@ -50,7 +49,6 @@ type Prefs = {
 };
 
 const PREFS_KEY = (workspaceId: string) => `calendar:plan:${workspaceId}`;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Monday first, as the calendar is drawn.
 const WEEKDAYS = [
   { id: 1, label: "Mon" },
@@ -203,7 +201,6 @@ export function PlanPanel({
     if (!ready || loading) return;
     setLoading(true);
     try {
-      const style = rememberedStyle(workspaceId);
       const result = await planContentCalendar({
         data: {
           workspaceId,
@@ -217,7 +214,6 @@ export function PlanPanel({
           industry: prefs.industry,
           keyDates: prefs.keyDates,
           notes: prefs.notes.trim() || undefined,
-          styleId: style === "none" || (style && UUID_RE.test(style)) ? style : undefined,
         },
       });
       onPlanned(result.items, startDate);

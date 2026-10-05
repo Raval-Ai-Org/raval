@@ -169,12 +169,25 @@ export function NotionConnection({
   const openPreview = () =>
     void run(async () => setPreview(await previewNotionImport({ data: { workspaceId } })));
   const connected = status?.status === "active";
+  const needsAttention = status?.status === "error";
   const actions = (
     <>
       {!connected ? (
-        <Button size="sm" disabled={busy || !canEdit || !status?.configured} onClick={connect}>
-          Connect Notion
-        </Button>
+        <>
+          <Button size="sm" disabled={busy || !canEdit || !status?.configured} onClick={connect}>
+            {needsAttention ? "Reconnect Notion" : "Connect Notion"}
+          </Button>
+          {needsAttention && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || !canEdit}
+              onClick={() => setDisconnectOpen(true)}
+            >
+              Disconnect
+            </Button>
+          )}
+        </>
       ) : (
         <>
           <Button
@@ -231,12 +244,19 @@ export function NotionConnection({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {!connected ? (
-              <DropdownMenuItem
-                disabled={!canEdit || busy || !status?.configured}
-                onSelect={connect}
-              >
-                Connect Notion
-              </DropdownMenuItem>
+              <>
+                <DropdownMenuItem
+                  disabled={!canEdit || busy || !status?.configured}
+                  onSelect={connect}
+                >
+                  {needsAttention ? "Reconnect Notion" : "Connect Notion"}
+                </DropdownMenuItem>
+                {needsAttention && (
+                  <DropdownMenuItem onSelect={() => setDisconnectOpen(true)}>
+                    Disconnect
+                  </DropdownMenuItem>
+                )}
+              </>
             ) : (
               <>
                 <DropdownMenuItem

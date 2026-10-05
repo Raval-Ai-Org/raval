@@ -1,5 +1,6 @@
 "use client";
 
+import type { BrandLookSpec } from "@/lib/brand-look/spec";
 import { useEffect, useState } from "react";
 import { emitAppEvent } from "@/lib/app-events";
 import { buildDesignMd, saveDesignMd } from "@/lib/design-md";
@@ -131,6 +132,8 @@ export interface BrandDna {
   memoryUpdatedAt?: number;
   /** Newest chat message (ms) already sent for memory extraction, per conversation id or "workspace". */
   memorySyncedAt?: Record<string, number>;
+  /** How content should look and sound (Brain → Brand → Look & voice). */
+  look?: BrandLookSpec;
 }
 
 export const emptyCustomer: CustomerSignals = {

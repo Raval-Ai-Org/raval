@@ -7,13 +7,13 @@ import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import type { MarketingMoment } from "./moments";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
 import { templateDirective } from "./templates";
-import type { ResolvedStyle } from "@/lib/brand-kit/resolve";
+import type { BrandLook } from "@/lib/brand-look/resolve";
 import { slidePlanText, type CarouselStructure } from "./carousel/story";
 import { framePlanText, type StoryTheme } from "@/lib/stories/frames";
 import { consistencySection, memorySection, type HookStyle } from "./memory";
 import { playbookSection } from "./playbook";
 import { TRENDS_RULE, trendLines, type SocialTrends } from "./trends";
-import { styleBlockFor } from "@/lib/brand-kit/prompt";
+import { styleBlockFor } from "@/lib/brand-look/prompt";
 import type {
   StudioControls,
   StudioIntent,
@@ -65,10 +65,10 @@ export type StudioContext = {
    */
   liveResearch?: { summary: string; sources: { title: string; url: string }[] };
   /**
-   * The Brand Kit Style this job follows (src/lib/brand-kit/resolve.ts), loaded
+   * The brand's look this job follows (src/lib/brand-look/resolve.ts), loaded
    * on the server by the verified workspace id. Absent = Brand DNA only.
    */
-  style?: ResolvedStyle | null;
+  style?: BrandLook | null;
   /**
    * What is working on each platform this month, from the stored snapshot
    * (src/server/studio/social-trends.server.ts). Never searched per request.

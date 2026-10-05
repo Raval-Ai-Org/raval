@@ -80,7 +80,6 @@ export function settingsFromProgram(program: ProgramView): ProgramSettings {
     creditCapPerWeek: program.creditCapPerWeek,
     videoCapPerWeek: program.videoCapPerWeek,
     actOnOpportunities: program.actOnOpportunities,
-    styleId: program.styleId,
     strategy: program.strategy,
     automations: program.automations,
     stories: program.stories,
@@ -844,10 +843,7 @@ export function AutopilotSetup({
                 disabled={
                   busy ||
                   !settingsValid(s) ||
-                  (s.mode === "full" &&
-                    readiness.some(
-                      (item) => item.required && !item.ok && !(item.id === "style" && !!s.styleId),
-                    ))
+                  (s.mode === "full" && readiness.some((item) => item.required && !item.ok))
                 }
                 onClick={() => onStart(s)}
                 className={cn(dsPrimaryBtn, "h-12 px-7 text-[15px]")}

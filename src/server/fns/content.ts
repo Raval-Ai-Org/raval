@@ -442,10 +442,9 @@ export const regenerateContentItem = createServerFn({ method: "POST" })
           existing.workspace_id,
           null,
         );
-        const { styleTextFor } = await import("@/server/brand-kit/resolve.server");
-        const styleText = await styleTextFor(
+        const { lookTextFor } = await import("@/server/brand-look/resolve.server");
+        const styleText = await lookTextFor(
           existing.workspace_id,
-          null,
           existing.kind === "blog"
             ? "article"
             : existing.kind === "script"
@@ -529,7 +528,6 @@ const GenerateSchema = z.object({
   context: z.string().max(6000).optional(),
   websiteUrl: z.string().max(2048).optional().nullable(),
   /** Brand Kit Style: an id, "none", or absent for the workspace default. */
-  styleId: z.union([uuid, z.literal("none")]).nullish(),
 });
 
 export const generateContentBatch = createServerFn({ method: "POST" })
@@ -571,7 +569,7 @@ export const generateContentBatch = createServerFn({ method: "POST" })
           brandContext: studioContext.brandText || data.context,
           websiteUrl: studioContext.website || data.websiteUrl,
         });
-        const { styleTextFor } = await import("@/server/brand-kit/resolve.server");
+        const { lookTextFor } = await import("@/server/brand-look/resolve.server");
         const requestedKinds = new Set(data.formatPlan?.map((item) => item.kind) ?? ["post"]);
         const formats = [
           "social",
@@ -580,7 +578,7 @@ export const generateContentBatch = createServerFn({ method: "POST" })
         ];
         const styleBlocks = await Promise.all(
           formats.map(async (format) => {
-            const block = await styleTextFor(data.workspaceId, data.styleId, format);
+            const block = await lookTextFor(data.workspaceId, format);
             return block ? `### ${format}\n${block.replace(/^## /gm, "#### ")}` : "";
           }),
         );
@@ -723,7 +721,6 @@ const PlanSchema = z.object({
   keyDates: z.boolean().default(true),
   notes: z.string().max(1500).optional(),
   /** Brand Kit Style: an id, "none", or absent for the workspace default. */
-  styleId: z.union([uuid, z.literal("none")]).nullish(),
 });
 
 const PlanIdeasSchema = z.object({
@@ -789,8 +786,8 @@ export const planContentCalendar = createServerFn({ method: "POST" })
           data.workspaceId,
           null,
         );
-        const { styleTextFor } = await import("@/server/brand-kit/resolve.server");
-        const styleText = await styleTextFor(data.workspaceId, data.styleId, "social");
+        const { lookTextFor } = await import("@/server/brand-look/resolve.server");
+        const styleText = await lookTextFor(data.workspaceId, "social");
         const goal = PLAN_GOALS.find((g) => g.id === data.goal) ?? PLAN_GOALS[0];
         const industry = industryById(data.industry);
         const usedTopics = PLAN_TOPICS.filter((t) => data.topics.includes(t.id));

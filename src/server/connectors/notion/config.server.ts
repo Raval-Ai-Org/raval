@@ -17,7 +17,11 @@ export function notionConfig() {
   }
   if (
     uri.pathname !== "/api/integrations/notion/callback" ||
-    (uri.protocol !== "https:" && uri.hostname !== "localhost")
+    (uri.protocol !== "https:" && uri.hostname !== "localhost") ||
+    uri.username ||
+    uri.password ||
+    uri.search ||
+    uri.hash
   )
     throw new HttpError(503, "Notion callback URL is invalid.");
   return {

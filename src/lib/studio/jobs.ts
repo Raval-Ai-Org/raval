@@ -137,7 +137,6 @@ export const CreateJobSchema = z.object({
    * Brand Kit Style: a style id, "none" for Brand DNA only, or absent for the
    * workspace default. Checked on the server against the job's workspace.
    */
-  styleId: z.union([z.string().uuid(), z.literal("none")]).nullish(),
   parentJobId: z.string().uuid().optional(),
   refine: RefineSchema.optional(),
   /** Regenerate: same brief, a new take. */

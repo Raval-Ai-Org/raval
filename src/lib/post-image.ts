@@ -415,9 +415,9 @@ export function logoCorner(size: ImgSize): "top-left" | "bottom-right" {
   return size === "1024x1792" ? "top-left" : "bottom-right";
 }
 
-/** A Brand Kit Style applied to one image (see imageStyleInput in brand-kit/prompt). */
+/** The brand look applied to one image (see imageStyleInput in brand-look/prompt). */
 export type ImageStyleInput = {
-  name: string | null;
+  name?: string | null;
   /** The visual style block (visualStyleBlock). */
   block: string;
   /** Resolved palette, most important first — overrides Brand DNA colours. */

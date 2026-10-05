@@ -65,7 +65,6 @@ export const BriefSchema = z.object({
     .default({}),
   instructions: text(1000).default(""),
   /** Brand Kit Style: a style id, "none", or absent for the workspace default. */
-  styleId: z.union([z.string().uuid(), z.literal("none")]).nullish(),
 });
 export type Brief = z.infer<typeof BriefSchema>;
 

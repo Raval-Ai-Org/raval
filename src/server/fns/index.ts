@@ -4,8 +4,8 @@ import type { AnyServerFn } from "@/server/server-fn";
 import * as analytics from "./analytics";
 import * as audience from "./audience";
 import * as autopilot from "./autopilot";
+import * as brain from "./brain";
 import * as brandDna from "./brand-dna";
-import * as brandKit from "./brand-kit";
 import * as campaignGeneration from "./campaign-generation";
 import * as canva from "./canva";
 import * as coach from "./coach";
@@ -27,6 +27,7 @@ import * as notion from "./notion";
 import * as schedules from "./schedules";
 import * as sitePublishing from "./site-publishing";
 import * as stories from "./stories";
+import * as strategy from "./strategy";
 import * as trackedPrompts from "./tracked-prompts";
 import * as workspaces from "./workspaces";
 import * as webflow from "./webflow";
@@ -39,8 +40,8 @@ const MODULES: Record<string, Record<string, unknown>> = {
   audience,
   canva,
   autopilot,
+  brain,
   "brand-dna": brandDna,
-  "brand-kit": brandKit,
   "campaign-generation": campaignGeneration,
   coach,
   "competitor-intel": competitorIntel,
@@ -61,6 +62,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   schedules,
   "site-publishing": sitePublishing,
   stories,
+  strategy,
   "tracked-prompts": trackedPrompts,
   workspaces,
   webflow,

@@ -4084,6 +4084,7 @@ pre {
   --tone-script: 166 72% 55%;
   --tone-article: 198 92% 64%;
   --tone-ugc: 316 90% 70%;
+  --tone-upload: 186 78% 53%;
   --tone-story: 286 85% 74%;
 }
 .studio-tone-story {
@@ -4112,6 +4113,9 @@ pre {
 }
 .studio-tone-ugc {
   --tone: var(--tone-ugc);
+}
+.studio-tone-upload {
+  --tone: var(--tone-upload);
 }
 .studio-tone-video,
 .studio-tone-ugc,

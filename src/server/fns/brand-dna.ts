@@ -40,8 +40,8 @@ export const saveBrandDna = createServerFn({ method: "POST" })
     });
     const { invalidateStudioContext } = await import("@/server/studio/context.server");
     invalidateStudioContext(data.workspaceId);
-    // Styles inherit colours, fonts, voice and logo from Brand DNA.
-    const { invalidateStyleCache } = await import("@/server/brand-kit/resolve.server");
-    invalidateStyleCache(data.workspaceId);
+    // The look is resolved from Brand DNA.
+    const { invalidateLookCache } = await import("@/server/brand-look/resolve.server");
+    invalidateLookCache(data.workspaceId);
     return { workspaceId: data.workspaceId, version: stored.version, updatedAt: stored.updatedAt };
   });

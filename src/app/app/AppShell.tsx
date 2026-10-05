@@ -12,18 +12,18 @@ import { useServerFn } from "@/lib/use-server-fn";
 import { useQuery } from "@tanstack/react-query";
 import { getProofEngineStatus } from "@/lib/experiments.functions";
 import { getAutopilotStatus } from "@/lib/autopilot.functions";
-import { useAudienceEnabled } from "@/components/app/audience/hooks";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
-import { brandKitPath, conversationIdFromPath, workspacePath } from "@/lib/workspace/paths";
+import { brainPath, conversationIdFromPath, workspacePath } from "@/lib/workspace/paths";
+import { BrainIcon } from "@/components/app/brain/BrainMark";
+import { useBrainOverview, useBrainSeen } from "@/components/app/brain/use-brain";
+import type { BrainSection } from "@/lib/brain/brain";
 import {
   ArrowLeft,
   BarChart3,
   BookOpen,
   Bot,
-  Brain,
-  BrandKit,
   Calendar as CalendarIcon,
   ChevronDown,
   Link2,
@@ -33,7 +33,6 @@ import {
   Rocket,
   Share2,
   Sparkles,
-  Target,
   Trophy,
   Users,
   type LucideIcon,
@@ -91,13 +90,8 @@ const UgcStudioDialog = lazy(() =>
 const CreateLauncher = lazy(() =>
   import("@/components/studio/CreateLauncher").then((m) => ({ default: m.CreateLauncher })),
 );
-const CompetitorWatchButton = lazy(() =>
-  import("@/components/app/CompetitorWatchButton").then((m) => ({
-    default: m.CompetitorWatchButton,
-  })),
-);
-const MarketingCoachPanel = lazy(() =>
-  import("@/components/app/MarketingCoachPanel").then((m) => ({ default: m.MarketingCoachPanel })),
+const BrainPulse = lazy(() =>
+  import("@/components/app/brain/BrainPulse").then((m) => ({ default: m.BrainPulse })),
 );
 
 import { useStudioEntry } from "@/hooks/use-studio";
@@ -140,37 +134,15 @@ function AppShell() {
     staleTime: 10 * 60_000,
     retry: false,
   });
-  const audienceEnabled = useAudienceEnabled(workspaceId);
   const workspaceName = workspace.displayName;
   const workspaceWebsite = workspace.websiteUrl;
   const homeHref = workspacePath(workspaceId);
 
   const { dna: brandDna } = useBrandDna(workspaceId);
   const brandLogo = brandDna.logoUrl || brandDna.faviconUrl;
-  const brandContextForCoach = useMemo(() => {
-    const parts: string[] = [];
-    if (brandDna.brandName) parts.push(`Brand: ${brandDna.brandName}`);
-    if (brandDna.oneLiner) parts.push(`One-liner: ${brandDna.oneLiner}`);
-    if (brandDna.about) parts.push(`About: ${brandDna.about}`);
-    if (brandDna.industry) parts.push(`Industry: ${brandDna.industry}`);
-    if (brandDna.audience) parts.push(`Audience: ${brandDna.audience}`);
-    if (brandDna.voice) parts.push(`Voice: ${brandDna.voice}`);
-    if (brandDna.products) parts.push(`Products: ${brandDna.products}`);
-    if (brandDna.positioning) parts.push(`Positioning: ${brandDna.positioning}`);
-    if (brandDna.uniqueValueProp) parts.push(`UVP: ${brandDna.uniqueValueProp}`);
-    if (brandDna.competitors?.length) {
-      parts.push(
-        `Known competitors: ${brandDna.competitors
-          .map((c) => c.name)
-          .filter(Boolean)
-          .slice(0, 6)
-          .join(", ")}`,
-      );
-    }
-    if (brandDna.keywords?.length)
-      parts.push(`Keywords: ${brandDna.keywords.slice(0, 10).join(", ")}`);
-    return parts.join("\n").slice(0, 6000);
-  }, [brandDna]);
+  // What's new across the brains, for the sidebar entry's count.
+  const brainOverview = useBrainOverview(workspaceId);
+  const { total: brainNews } = useBrainSeen(workspaceId, brainOverview.data);
   // Subscribe to realtime updates for content_items + approvals so Studio and
   // analytics refresh instantly when chat/agents create or modify rows.
   useRealtimeContent(workspaceId);
@@ -303,40 +275,38 @@ function AppShell() {
     return () => removeAppEventListener("open:autopilot", onOpenAutopilot);
   }, [navigate, workspaceId]);
 
-  // Audience is a route too.
-  useEffect(() => {
-    const onOpenAudience = () => navigate({ to: workspacePath(workspaceId, "audience") });
-    addAppEventListener("open:audience", onOpenAudience);
-    return () => removeAppEventListener("open:audience", onOpenAudience);
-  }, [navigate, workspaceId]);
-
-  // Keep older chat and coach actions pointed at the Brand DNA section.
-  useEffect(() => {
-    const onOpenCompetitors = () => emitAppEvent("open:brand-dna", { tab: "competitors" });
-    addAppEventListener("open:competitors", onOpenCompetitors);
-    return () => removeAppEventListener("open:competitors", onOpenCompetitors);
-  }, []);
-
-  // Brand Kit is a route too. When it's already open, the panel handles the
-  // event itself (a style, a section, or the create flow) without navigating.
-  useEffect(() => {
-    const onOpenBrandKit = (
-      event: CustomEvent<{ styleId?: string; section?: string; create?: boolean } | null>,
-    ) => {
-      if (window.location.pathname.endsWith("/app/brand-kit")) return;
-      const d = event.detail ?? {};
-      navigate({
-        to: brandKitPath(workspaceId, {
-          style: d.styleId,
-          section: d.section,
-          create: d.create,
-        }),
-      });
+  // Brain (ADR-0032) holds the four brains and the strategy. Older buttons and
+  // chat actions still name the place they used to open; each lands on its
+  // section here.
+  const openBrain = useCallback(
+    (section?: BrainSection | null, tab?: string | null) => {
+      navigate({ to: brainPath(workspaceId, section, tab) });
       setNavOpen(false);
+    },
+    [navigate, workspaceId],
+  );
+  useEffect(() => {
+    const onBrain = (event: CustomEvent<{ section?: BrainSection; tab?: string } | null>) =>
+      openBrain(event.detail?.section, event.detail?.tab);
+    const onBrandDna = (event: CustomEvent<{ tab?: string } | null>) => {
+      const tab = event.detail?.tab;
+      if (tab === "competitors") openBrain("competitors");
+      else if (tab === "customers") openBrain("audience", "customers");
+      else openBrain("brand", tab);
     };
-    addAppEventListener("open:brand-kit", onOpenBrandKit);
-    return () => removeAppEventListener("open:brand-kit", onOpenBrandKit);
-  }, [navigate, workspaceId]);
+    const onAudience = () => openBrain("audience");
+    const onCompetitors = () => openBrain("competitors");
+    addAppEventListener("open:brain", onBrain);
+    addAppEventListener("open:brand-dna", onBrandDna);
+    addAppEventListener("open:audience", onAudience);
+    addAppEventListener("open:competitors", onCompetitors);
+    return () => {
+      removeAppEventListener("open:brain", onBrain);
+      removeAppEventListener("open:brand-dna", onBrandDna);
+      removeAppEventListener("open:audience", onAudience);
+      removeAppEventListener("open:competitors", onCompetitors);
+    };
+  }, [openBrain]);
 
   useEffect(() => {
     setChatOpen(false);
@@ -480,6 +450,12 @@ function AppShell() {
 
         {/* Workspace actions */}
         <SidebarSection label="Workspace">
+          {sidebarAction({
+            icon: BrainIcon,
+            label: "Brain",
+            hint: brainNews ? `${brainNews} new` : undefined,
+            onClick: () => openBrain(),
+          })}
           {autopilot?.enabled &&
             sidebarAction({
               icon: Bot,
@@ -536,25 +512,6 @@ function AppShell() {
             feature: "backlinks",
             onClick: () => navigate({ to: workspacePath(workspaceId, "backlinks") }),
           })}
-          {sidebarAction({
-            icon: Users,
-            label: "Competitors",
-            accent: "hsl(var(--brand-green))",
-            feature: "competitors",
-            onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
-          })}
-          {audienceEnabled &&
-            sidebarAction({
-              icon: Target,
-              label: "Audience",
-              hint: "Who it's for",
-              accent: "hsl(var(--brand-green))",
-              feature: "audience",
-              onClick: () => {
-                navigate({ to: workspacePath(workspaceId, "audience") });
-                setNavOpen(false);
-              },
-            })}
           {proofEngine?.enabled &&
             sidebarAction({
               icon: Trophy,
@@ -567,22 +524,6 @@ function AppShell() {
                 setNavOpen(false);
               },
             })}
-          {sidebarAction({
-            icon: Brain,
-            label: "Brand DNA",
-            accent: "hsl(var(--brand-blue))",
-            onClick: () => emitAppEvent("open:brand-dna"),
-          })}
-          {sidebarAction({
-            icon: BrandKit,
-            label: "Brand Kit",
-            hint: "Your styles",
-            accent: "hsl(var(--brand-blue))",
-            onClick: () => {
-              navigate({ to: brandKitPath(workspaceId) });
-              setNavOpen(false);
-            },
-          })}
           {sidebarAction({
             icon: CalendarIcon,
             label: "Schedule",
@@ -611,12 +552,7 @@ function AppShell() {
 
         <div className="flex flex-wrap items-center gap-2 px-2 py-2 lg:hidden">
           <Suspense fallback={null}>
-            <CompetitorWatchButton workspaceId={workspaceId} />
-            <MarketingCoachPanel
-              workspaceId={workspaceId}
-              brandContext={brandContextForCoach}
-              brandKeywords={brandDna.keywords}
-            />
+            <BrainPulse workspaceId={workspaceId} onOpenBrain={openBrain} />
           </Suspense>
           <WalletPill />
         </div>
@@ -699,6 +635,11 @@ function AppShell() {
 
               {[
                 {
+                  icon: BrainIcon,
+                  label: "Brain",
+                  onClick: () => openBrain(),
+                },
+                {
                   icon: Sparkles,
                   label: "AI Visibility",
                   onClick: () => emitAppEvent("open:ai-visibility"),
@@ -722,21 +663,6 @@ function AppShell() {
                       },
                     ]
                   : []),
-                {
-                  icon: Brain,
-                  label: "Brand DNA",
-                  onClick: () => emitAppEvent("open:brand-dna"),
-                },
-                {
-                  icon: Users,
-                  label: "Competitors",
-                  onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
-                },
-                {
-                  icon: BrandKit,
-                  label: "Brand Kit",
-                  onClick: () => navigate({ to: brandKitPath(workspaceId) }),
-                },
               ].map(({ icon: Icon, label, onClick }) => (
                 <Tooltip key={label}>
                   <TooltipTrigger asChild>
@@ -891,14 +817,7 @@ function AppShell() {
             <div className="flex shrink-0 items-center gap-1.5">
               <div className="hidden items-center gap-1.5 lg:flex">
                 <Suspense fallback={null}>
-                  <CompetitorWatchButton workspaceId={workspaceId} />
-                </Suspense>
-                <Suspense fallback={null}>
-                  <MarketingCoachPanel
-                    workspaceId={workspaceId}
-                    brandContext={brandContextForCoach}
-                    brandKeywords={brandDna.keywords}
-                  />
+                  <BrainPulse workspaceId={workspaceId} onOpenBrain={openBrain} />
                 </Suspense>
                 <WalletPill />
               </div>

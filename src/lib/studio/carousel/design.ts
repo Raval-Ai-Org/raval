@@ -10,7 +10,7 @@
 //
 // Pure and browser-safe: the preview and the server renderer both read it.
 import { contrastRatio, hexToRgb, normalizeHex, relLuminance } from "@/lib/color";
-import { catalogFont, nearestCatalogFont } from "@/lib/brand-kit/fonts";
+import { catalogFont, nearestCatalogFont } from "@/lib/brand-look/fonts";
 import type { CarouselSpecOutput } from "../jobs";
 import type { SlideRole } from "./story";
 

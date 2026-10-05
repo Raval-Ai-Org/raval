@@ -55,10 +55,9 @@ const gatherBrandContextStep = createStep({
     const { readBrandDna } = await import("@/server/workspaces/brand-dna.server");
     const stored = await readBrandDna(supabaseAdmin, inputData.workspaceId);
     const dna = stored?.dna ?? {};
-    // The workspace's default Style sets the voice when it has one.
-    const { loadResolvedStyle } = await import("@/server/brand-kit/resolve.server");
-    const style = await loadResolvedStyle(inputData.workspaceId, null, { dna }).catch(() => null);
-    const styleVoice = style?.resolved.styleId ? style.resolved.writing.voice : undefined;
+    // The brand look sets the voice when it has its own.
+    const { parseLook } = await import("@/lib/brand-look/spec");
+    const styleVoice = parseLook(dna.look).writing?.voice;
     const customer =
       dna.customer && typeof dna.customer === "object"
         ? (dna.customer as Record<string, unknown>)

@@ -96,7 +96,6 @@ export const ProgramSettingsSchema = z
     creditCapPerWeek: z.number().int().min(0).max(100_000),
     videoCapPerWeek: z.number().int().min(0).max(50).default(0),
     actOnOpportunities: z.boolean().default(false),
-    styleId: z.string().uuid().nullish(),
     strategy: StrategySchema.nullish(),
     automations: z.array(z.enum(AUTOMATIONS)).max(4).default(["geo_scan"]),
     /** Story Autopilot: daily Stories alongside (or instead of) feed posts. */
@@ -165,7 +164,6 @@ export type ProgramRow = {
   timezone: string;
   starts_on: string;
   ends_on: string;
-  style_id: string | null;
   credit_cap_per_week: number;
   video_cap_per_week: number;
   act_on_opportunities: boolean;
@@ -271,7 +269,6 @@ export type ProgramView = {
   timezone: string;
   startsOn: string;
   endsOn: string;
-  styleId: string | null;
   creditCapPerWeek: number;
   videoCapPerWeek: number;
   actOnOpportunities: boolean;

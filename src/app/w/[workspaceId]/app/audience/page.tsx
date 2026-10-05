@@ -1,17 +1,8 @@
-import type { Metadata } from "next";
-import { pageMetadata } from "@/lib/seo";
-import AudienceRoute from "@/components/app/AudienceRoute";
+import { redirect } from "next/navigation";
+import { brainPath, isWorkspaceId } from "@/lib/workspace/paths";
 
-export const metadata: Metadata = pageMetadata({
-  title: "Audience · Mellox AI",
-  description:
-    "Who your content is for, how they are likely to react before you post, and what really happened.",
-  path: "/projects",
-  noindex: true,
-});
-
-// AppShell (mounted by the parent layout) owns the viewport, so this route
-// renders its own layered surface over it.
-export default function WorkspaceAudiencePage() {
-  return <AudienceRoute />;
+// Audience lives in Brain now (ADR-0032); old links land on its section.
+export default async function Page({ params }: { params: Promise<{ workspaceId: string }> }) {
+  const { workspaceId } = await params;
+  redirect(isWorkspaceId(workspaceId) ? brainPath(workspaceId, "audience") : "/projects");
 }
