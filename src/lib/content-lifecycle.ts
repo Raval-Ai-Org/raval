@@ -55,7 +55,7 @@ export function mergeMeta(
 }
 
 export function hasMeaningfulContentChange(patch: Record<string, unknown>): boolean {
-  return ["title", "body", "hashtags", "channel", "media_url", "meta"].some(
+  return ["title", "body", "kind", "hashtags", "channel", "media_url", "meta"].some(
     (field) => field in patch,
   );
 }

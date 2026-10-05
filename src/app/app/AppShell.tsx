@@ -12,6 +12,7 @@ import { useServerFn } from "@/lib/use-server-fn";
 import { useQuery } from "@tanstack/react-query";
 import { getProofEngineStatus } from "@/lib/experiments.functions";
 import { getAutopilotStatus } from "@/lib/autopilot.functions";
+import { useAudienceEnabled } from "@/components/app/audience/hooks";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
@@ -32,6 +33,7 @@ import {
   Rocket,
   Share2,
   Sparkles,
+  Target,
   Trophy,
   Users,
   type LucideIcon,
@@ -138,6 +140,7 @@ function AppShell() {
     staleTime: 10 * 60_000,
     retry: false,
   });
+  const audienceEnabled = useAudienceEnabled(workspaceId);
   const workspaceName = workspace.displayName;
   const workspaceWebsite = workspace.websiteUrl;
   const homeHref = workspacePath(workspaceId);
@@ -298,6 +301,13 @@ function AppShell() {
     const onOpenAutopilot = () => navigate({ to: workspacePath(workspaceId, "autopilot") });
     addAppEventListener("open:autopilot", onOpenAutopilot);
     return () => removeAppEventListener("open:autopilot", onOpenAutopilot);
+  }, [navigate, workspaceId]);
+
+  // Audience is a route too.
+  useEffect(() => {
+    const onOpenAudience = () => navigate({ to: workspacePath(workspaceId, "audience") });
+    addAppEventListener("open:audience", onOpenAudience);
+    return () => removeAppEventListener("open:audience", onOpenAudience);
   }, [navigate, workspaceId]);
 
   // Keep older chat and coach actions pointed at the Brand DNA section.
@@ -533,6 +543,18 @@ function AppShell() {
             feature: "competitors",
             onClick: () => navigate({ to: workspacePath(workspaceId, "competitors") }),
           })}
+          {audienceEnabled &&
+            sidebarAction({
+              icon: Target,
+              label: "Audience",
+              hint: "Who it's for",
+              accent: "hsl(var(--brand-green))",
+              feature: "audience",
+              onClick: () => {
+                navigate({ to: workspacePath(workspaceId, "audience") });
+                setNavOpen(false);
+              },
+            })}
           {proofEngine?.enabled &&
             sidebarAction({
               icon: Trophy,

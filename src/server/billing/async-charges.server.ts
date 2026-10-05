@@ -22,7 +22,12 @@ import { captureMeter, releaseMeter } from "./meters.server";
 const admin = supabaseAdmin as unknown as SupabaseClient;
 
 export type AsyncChargeKind =
-  "geo_agent_run" | "fix_batch" | "competitor_intel" | "competitor_profile" | "brand_voice";
+  | "geo_agent_run"
+  | "fix_batch"
+  | "competitor_intel"
+  | "competitor_profile"
+  | "brand_voice"
+  | "audience_run";
 
 type Role = "owner" | "admin" | "editor" | "viewer";
 
@@ -188,6 +193,13 @@ export function outcomeFor(
       if (status === "failed" || status === "none") return { final: true, ok: false };
       return linkAgeMs > 24 * HOUR ? { final: true, ok: false } : { final: false };
     }
+    case "audience_run": {
+      const status = String(row.status);
+      if (status === "succeeded") return { final: true, ok: true };
+      if (status === "failed" || status === "cancelled") return { final: true, ok: false };
+      // Queued or running: the hold waits for the worker.
+      return linkAgeMs > 2 * HOUR ? { final: true, ok: false } : { final: false };
+    }
   }
 }
 
@@ -208,6 +220,8 @@ async function jobRow(kind: AsyncChargeKind, refId: string) {
           .eq("id", refId.split(":")[0]);
       case "brand_voice":
         return admin.from("brand_kit_assets").select("analysis_status").eq("id", refId);
+      case "audience_run":
+        return admin.from("audience_runs").select("status").eq("id", refId);
     }
   })();
   const { data, error } = await q.maybeSingle();

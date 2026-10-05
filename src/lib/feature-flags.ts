@@ -193,6 +193,33 @@ export function isMcpEnabled(workspaceId?: string): boolean {
   return !isFalsy((process.env.FEATURE_FLAG_MCP_ENABLED ?? "").trim().toLowerCase());
 }
 
+/**
+ * Audience (ADR-0031): audience groups, the Mellox Score, deeper checks and
+ * version comparisons. On unless set to "false"; `FEATURE_FLAG_AUDIENCE_ENABLED_WS_<id>`
+ * overrides it for one workspace. Off means the sidebar entry is hidden, RPCs
+ * answer 404, the worker skips the workspace and generators get no audience block.
+ */
+export function isAudienceEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_AUDIENCE_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_AUDIENCE_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * The quick score that follows a generation by itself. Separate so the one
+ * unrequested model call can be switched off without losing the feature.
+ */
+export function isAudienceAutoScoreEnabled(workspaceId?: string): boolean {
+  if (!isAudienceEnabled(workspaceId)) return false;
+  return !isFalsy(
+    (process.env.FEATURE_FLAG_AUDIENCE_AUTO_SCORE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+
 export function isProofEngineEnabled(workspaceId?: string): boolean {
   if (workspaceId) {
     const perWs = (process.env[`FEATURE_FLAG_PROOF_ENGINE_ENABLED_WS_${workspaceId}`] ?? "")

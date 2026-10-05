@@ -10,7 +10,15 @@ import {
   Layers,
   Lightbulb,
   RefreshCw,
+  Users,
 } from "@/components/icons";
+import { RunProgress, runIsActive, ScoreChip } from "@/components/app/audience/audience-ui";
+import {
+  useAudienceActions,
+  useAudienceEnabled,
+  useAudienceRun,
+} from "@/components/app/audience/hooks";
+import { CREDIT_ACTIONS } from "@/lib/billing/catalog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FORMATS, labelOf } from "@/lib/ugc/options";
@@ -72,7 +80,56 @@ export function applyHook(script: Script, hook: string): Script {
   };
 }
 
+/** What a simulated panel is shown for one idea: its opening line and what is said. */
+function conceptText(concept: Concept, hook: string): string {
+  return [
+    `Opening line: ${hook}`,
+    concept.angle ? `Idea: ${concept.angle}` : "",
+    ...concept.script.scenes.map((scene) => scene.dialogue).filter(Boolean),
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 3800);
+}
+
+/**
+ * Audience (ADR-0031): rank the ideas with a simulated panel before any video
+ * is paid for. Nothing here changes an idea; it only shows which one landed.
+ */
+function useConceptTest(
+  workspaceId: string | null,
+  concepts: Concept[],
+  hooks: Record<string, string>,
+) {
+  const enabled = useAudienceEnabled(workspaceId);
+  const actions = useAudienceActions(workspaceId ?? "");
+  const [runId, setRunId] = useState<string | null>(null);
+  const { data: run } = useAudienceRun(workspaceId, runId);
+  const start = () =>
+    actions.rank.mutate(
+      {
+        kind: "concept",
+        platform: "",
+        variants: concepts.slice(0, 5).map((concept) => ({
+          ref: concept.id,
+          label: concept.title.slice(0, 60) || "Idea",
+          title: concept.title.slice(0, 200),
+          body: conceptText(concept, hooks[concept.id] ?? concept.script.hook),
+        })),
+      },
+      { onSuccess: (started) => setRunId(started.id) },
+    );
+  return {
+    available: enabled && !!workspaceId && concepts.length >= 2,
+    starting: actions.rank.isPending,
+    run: run ?? null,
+    start,
+    stop: () => (run ? actions.cancel.mutate(run.id) : undefined),
+  };
+}
+
 export function ConceptsStep({
+  workspaceId = null,
   concepts,
   selectedConceptId,
   productImage,
@@ -81,6 +138,8 @@ export function ConceptsStep({
   onRegenerate,
   onChoose,
 }: {
+  /** Enables "Test with your audience" when Audience is on for this workspace. */
+  workspaceId?: string | null;
   concepts: Concept[];
   selectedConceptId: string | null;
   productImage?: string | null;
@@ -91,8 +150,13 @@ export function ConceptsStep({
 }) {
   const reduce = useReducedMotion();
   const [hooks, setHooks] = useState<Record<string, string>>({});
+  const test = useConceptTest(workspaceId, concepts, hooks);
 
   if (busy) return <ConceptsWriting />;
+
+  const testing = runIsActive(test.run) ? test.run : null;
+  const ranked = test.run?.tournament ?? null;
+  const resultFor = (id: string) => ranked?.variants.find((v) => v.ref === id) ?? null;
 
   return (
     <div className="space-y-5">
@@ -100,11 +164,41 @@ export function ConceptsStep({
         icon={Lightbulb}
         title="Pick an idea"
         action={
-          <Button variant="outline" size="sm" onClick={onRegenerate}>
-            <RefreshCw aria-hidden /> New ideas
-          </Button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {test.available && !testing ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={test.starting}
+                onClick={test.start}
+                title="A simulated panel of your audience ranks these ideas before you make a video"
+              >
+                <Users aria-hidden />
+                {ranked ? "Test again" : "Test with your audience"} ·{" "}
+                {CREDIT_ACTIONS.audience_tournament.credits} credits
+              </Button>
+            ) : null}
+            <Button variant="outline" size="sm" onClick={onRegenerate}>
+              <RefreshCw aria-hidden /> New ideas
+            </Button>
+          </div>
         }
       />
+
+      {testing ? (
+        <div className="ds-tile p-4">
+          <RunProgress run={testing} onCancel={test.stop} />
+        </div>
+      ) : test.run?.status === "failed" ? (
+        <p className="text-xs text-destructive">{test.run.error} Nothing was charged.</p>
+      ) : ranked ? (
+        <p className="text-[13px] leading-snug">
+          {ranked.summary}{" "}
+          <span className="text-muted-foreground">
+            Ranked by a simulated panel, not real customers.
+          </span>
+        </p>
+      ) : null}
 
       <motion.ul
         initial={reduce ? false : "hidden"}
@@ -119,6 +213,10 @@ export function ConceptsStep({
               selected={concept.id === selectedConceptId}
               hook={hooks[concept.id] ?? concept.script.hook}
               productImage={productImage ?? null}
+              score={resultFor(concept.id)?.overall ?? null}
+              topPick={
+                !!ranked && !ranked.tooClose && resultFor(concept.id)?.index === ranked.winnerIndex
+              }
               onHook={(h) => setHooks((s) => ({ ...s, [concept.id]: h }))}
               onChoose={(h) => onChoose(concept, h)}
             />
@@ -140,6 +238,8 @@ function ConceptCard({
   selected,
   hook,
   productImage,
+  score,
+  topPick,
   onHook,
   onChoose,
 }: {
@@ -147,6 +247,9 @@ function ConceptCard({
   selected: boolean;
   hook: string;
   productImage: string | null;
+  /** From an audience test of these ideas; null until one has run. */
+  score: number | null;
+  topPick: boolean;
   onHook: (hook: string) => void;
   onChoose: (hook: string) => void;
 }) {
@@ -220,7 +323,13 @@ function ConceptCard({
       </div>
 
       <div className="space-y-1 px-1">
-        <h4 className="text-sm font-semibold leading-snug">{concept.title}</h4>
+        <div className="flex items-start justify-between gap-2">
+          <h4 className="text-sm font-semibold leading-snug">{concept.title}</h4>
+          {score !== null ? <ScoreChip overall={score} /> : null}
+        </div>
+        {topPick ? (
+          <p className="text-[11.5px] font-medium text-primary">Your audience's top pick</p>
+        ) : null}
         {concept.angle ? (
           <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
             {concept.angle}

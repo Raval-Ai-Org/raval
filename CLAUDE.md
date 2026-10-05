@@ -333,6 +333,49 @@ worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents p
 - Live check: `tests/live/autopilot.live.ts` (paid step behind
   `AUTOPILOT_LIVE_GENERATE=yes`).
 
+## Audience
+
+Full reference: [docs/audience.md](docs/audience.md), decision record
+[ADR-0031](docs/adr/0031-audience-intelligence.md). Flag
+`FEATURE_FLAG_AUDIENCE_ENABLED` (per workspace:
+`FEATURE_FLAG_AUDIENCE_ENABLED_WS_<id>`), on unless `false`. When it's off the
+sidebar entry and editor sections are hidden, RPCs answer 404, the worker
+leaves runs alone and generators get no audience block.
+
+- Audience groups (`audience_twins`; "twin" in code, "group" in the UI), the
+  Mellox Score and deeper checks (`audience_predictions`), leased runs
+  (`audience_runs`, kinds `twins` / `pulse` / `tournament`), frozen real
+  results (`audience_outcomes`) and calibration. Pure rules in
+  `src/lib/audience/`; worker, store and ports in `src/server/audience/`; RPC
+  `src/server/fns/audience.ts`; UI `src/components/app/audience/` at
+  `/w/<id>/app/audience`.
+- **It never changes a piece.** Nothing in Audience writes to `content_items`.
+  "Improve" calls the editor's own rewrite; "Use this version" becomes an
+  unsaved edit. Never add a write to content from here.
+- **The model proposes, pure code decides** every number (`score.ts`,
+  `panel.ts`, `calibration.ts`). Model calls go only through `AudiencePorts`
+  (`simulate.server.ts`); group text and the piece are wrapped as untrusted.
+- **A score is for exact text and one audience** (`subject_hash`,
+  `twins_fingerprint`, `SCORE_VERSION`). The UI only shows a score that still
+  matches the saved row.
+- **Every statement keeps its source**; a guess is labelled a guess. A person's
+  statement is never overwritten, and a removed group is not brought back.
+- **Honest thresholds** (top of `calibration.ts`): 100 views, 7 days, 8 posts
+  to compare, 8 pairs before any correction, 2 posts per side for a pattern.
+  Never lower them to make the page look fuller. Simulated people are always
+  labelled as simulated.
+- **Cost is bounded:** the quick score is one economy call (included,
+  rate-limited); a check is at most 6 calls; a comparison at most 7. Prices are
+  only in the billing catalog. A repeat click joins the running run before any
+  charge.
+- Worker: advanced by the **existing** `run-schedules` hook (`runDueAudience`,
+  `collectOutcomesIfDue`) and `after()`; do not add a cron job. The engine is
+  tested against `store.memory.ts`; keep it store-agnostic.
+- `AudienceScreen` is presentational; `/audience-lab` renders it with sample
+  data in development (`tests/integration/audience-lab.spec.ts`).
+- Live check: `tests/live/audience.live.ts` (real model calls behind
+  `AUDIENCE_LIVE_AI=yes`).
+
 ## Web intelligence and Competitors
 
 Decision record [ADR-0022](docs/adr/0022-tavily-web-intelligence.md).

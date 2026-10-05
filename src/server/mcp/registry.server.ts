@@ -11,6 +11,7 @@ import { requireMcpWorkspace, type McpCaller } from "./access.server";
 import { McpError, toMcpError, type McpErrorBody } from "./errors.server";
 import { recordToolCall } from "./settings.server";
 import { asObject, cleanOutput, workspaceIdInput, type McpTool } from "./tool";
+import { audienceTools } from "./tools/audience";
 import { autopilotTools } from "./tools/autopilot";
 import { contentTools } from "./tools/content";
 import { geoTools } from "./tools/geo";
@@ -21,6 +22,7 @@ export const MCP_TOOLS: readonly McpTool[] = [
   ...workspaceTools,
   ...contentTools,
   ...autopilotTools,
+  ...audienceTools,
   ...intelligenceTools,
   ...geoTools,
 ];

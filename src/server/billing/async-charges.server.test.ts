@@ -62,6 +62,25 @@ describe("background job charges settle from the job's own status", () => {
     expect(outcomeFor("brand_voice", null, 2 * HOUR)).toMatchObject({ ok: false });
   });
 
+  it("charges an audience run only when it succeeded", () => {
+    expect(outcomeFor("audience_run", { status: "succeeded" }, 0)).toEqual({
+      final: true,
+      ok: true,
+    });
+    expect(outcomeFor("audience_run", { status: "failed" }, 0)).toEqual({ final: true, ok: false });
+    expect(outcomeFor("audience_run", { status: "cancelled" }, 0)).toEqual({
+      final: true,
+      ok: false,
+    });
+    // Waiting for the worker is not an outcome; a run stuck for hours is released.
+    expect(outcomeFor("audience_run", { status: "queued" }, 0)).toEqual({ final: false });
+    expect(outcomeFor("audience_run", { status: "running" }, HOUR)).toEqual({ final: false });
+    expect(outcomeFor("audience_run", { status: "running" }, 3 * HOUR)).toEqual({
+      final: true,
+      ok: false,
+    });
+  });
+
   it("waits for fresh profile research before charging a full refresh", () => {
     const linkedAt = "2026-10-01T12:00:00Z";
     expect(

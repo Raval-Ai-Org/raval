@@ -172,6 +172,35 @@ const CreateSchema = z.object({
   meta: z.record(z.string(), z.any()).optional(),
 });
 
+/** Connector imports enter through the same validation and draft insertion as Studio. */
+export async function createImportedContentItem(
+  supabase: import("@/integrations/supabase/client.user.server").UserSupabaseClient,
+  userId: string,
+  input: z.input<typeof CreateSchema>,
+) {
+  const data = CreateSchema.parse({ ...input, status: "draft" });
+  const { data: row, error } = await supabase
+    .from("content_items")
+    .insert({
+      workspace_id: data.workspaceId,
+      agent: data.agent,
+      kind: data.kind,
+      channel: data.channel ?? null,
+      title: data.title ?? null,
+      body: data.body ?? null,
+      hashtags: data.hashtags ?? [],
+      media_url: data.media_url ?? null,
+      status: "draft",
+      scheduled_at: data.scheduled_at ?? null,
+      meta: (data.meta ?? {}) as Json,
+      created_by: userId,
+    })
+    .select(CONTENT_COLS)
+    .single();
+  if (error || !row) throw new Error(error?.message ?? "Import failed");
+  return row as ContentItem;
+}
+
 export const createContentItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => CreateSchema.parse(data))
@@ -207,6 +236,7 @@ const UpdateSchema = z.object({
     .object({
       title: z.string().max(280).optional().nullable(),
       body: z.string().max(40000).optional().nullable(),
+      kind: KindEnum.optional(),
       hashtags: z.array(z.string().max(60)).max(30).optional(),
       channel: ChannelEnum.optional().nullable(),
       media_url: z.string().url().max(2048).optional().nullable(),
@@ -216,6 +246,44 @@ const UpdateSchema = z.object({
     })
     .refine((v) => Object.keys(v).length > 0, "Empty patch"),
 });
+
+/** Notion edits reuse content validation and lifecycle rules; imports never publish. */
+export async function updateImportedContentItem(
+  supabase: import("@/integrations/supabase/client.user.server").UserSupabaseClient,
+  workspaceId: string,
+  itemId: string,
+  input: {
+    title: string | null;
+    body: string | null;
+    channel: string | null;
+    kind: string;
+    media_url: string | null;
+    scheduled_at: string | null;
+  },
+) {
+  const parsed = UpdateSchema.parse({ id: itemId, patch: { ...input, status: "draft" } });
+  const { data: current, error: readError } = await supabase
+    .from("content_items")
+    .select("status")
+    .eq("workspace_id", workspaceId)
+    .eq("id", itemId)
+    .single();
+  if (readError || !current) throw new Error("Content item not found");
+  if (["scheduled", "publishing", "published"].includes(current.status))
+    throw new Error(
+      "Return scheduled or published content to draft in Mellox before importing Notion changes.",
+    );
+  assertContentTransition(current.status, "draft");
+  const { data, error } = await supabase
+    .from("content_items")
+    .update(parsed.patch)
+    .eq("workspace_id", workspaceId)
+    .eq("id", itemId)
+    .select(CONTENT_COLS)
+    .single();
+  if (error || !data) throw new Error("Could not update imported content");
+  return data as ContentItem;
+}
 
 export const updateContentItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

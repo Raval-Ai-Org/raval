@@ -176,6 +176,14 @@ const REGISTRY: Record<string, TaskPlan> = {
   "autopilot.opportunities": tier(ECONOMY, "low"),
   "competitor-intel": tier(WORKHORSE, "medium"),
 
+  // Audience (ADR-0031). Building the groups is rare and everything reads
+  // them; scoring and simulated answers are high volume, so they stay cheap.
+  "audience.twins": tier(PREMIUM, "low", { maxTokens: 6_000 }),
+  "audience.score": tier(ECONOMY, "low", { maxTokens: 1_200 }),
+  "audience.react": tier(ECONOMY, "low", { maxTokens: 2_400, temperature: 0.8 }),
+  "audience.synthesize": tier(WORKHORSE, "low", { maxTokens: 2_400 }),
+  "audience.variants": tier(WORKHORSE, "medium", { maxTokens: 3_000, temperature: 0.9 }),
+
   // GEO. Probes mirror real answer engines: each model in GEO_PROBE_MODELS is
   // asked separately (see geoProbeModels), never as a fallback chain.
   "geo.probe": { models: ["perplexity/sonar"] },
@@ -221,6 +229,7 @@ export const NON_MODEL_ROUTES: readonly string[] = [
   "competitors.advance",
   "market-brain.scheduled",
   "autopilot.run",
+  "audience.run",
   "ugc/renders:create",
   "ugc/projects:concepts",
   "market/trends",

@@ -32,6 +32,7 @@ const OFFER_ICON: Partial<Record<ChatToolCall["kind"], LucideIcon>> = {
   "open-visibility": Globe,
   "open-competitor": Radio,
   "open-coach": Sparkles,
+  "open-audience": Users,
 };
 
 const ACTION_ICON: Record<ChatAction["kind"], LucideIcon> = {

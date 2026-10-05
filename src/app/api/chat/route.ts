@@ -189,10 +189,13 @@ export const POST = defineRoute({
       const lastUser = [...turns].reverse().find((turn) => turn.role === "user")?.content ?? "";
       // Older turns are summarised (decisions, facts, open questions) instead of
       // clipped to first sentences; the newest 12 stay verbatim.
-      const [history, research, style] = await Promise.all([
+      const [history, research, style, audience] = await Promise.all([
         summarizeHistory(turns as never),
         researchBlock(lastUser),
         styleBlock(workspaceId, body.styleId),
+        // Who the brand talks to (ADR-0031), by the verified workspace id.
+        // Empty when Audience is off or not set up; never throws.
+        import("@/server/audience/context.server").then((m) => m.audienceBlockFor(workspaceId)),
       ]);
 
       // The picker id selects a route; the route's plan selects the model.
@@ -219,7 +222,7 @@ export const POST = defineRoute({
                 content: chatContextBlock(
                   wrapUntrusted(
                     "brand-dna",
-                    [identity, body.context].filter(Boolean).join("\n\n"),
+                    [identity, body.context, audience].filter(Boolean).join("\n\n"),
                     {
                       route: "chat",
                     },

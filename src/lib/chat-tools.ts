@@ -37,6 +37,7 @@ export type ChatToolKind =
   | "open-competitor"
   | "open-coach"
   | "open-analytics"
+  | "open-audience"
   | "save-memory"
   | "schedule";
 
@@ -65,6 +66,7 @@ const KNOWN_KINDS = new Set<ChatToolKind>([
   "open-competitor",
   "open-coach",
   "open-analytics",
+  "open-audience",
   "save-memory",
   "schedule",
 ]);
@@ -123,6 +125,8 @@ export function describeOffer(call: ChatToolCall): { label: string; hint?: strin
       return { label: "Open Brand DNA competitors" };
     case "open-coach":
       return { label: "Open Marketing Coach" };
+    case "open-audience":
+      return { label: "Open Audience" };
     case "open-analytics": {
       const tab = analyticsTabParam(call.params.tab);
       return { label: tab ? `Open Analytics · ${ANALYTICS_TAB_LABELS[tab]}` : "Open Analytics" };
@@ -262,6 +266,10 @@ export async function executeToolCall(
       const tab = analyticsTabParam(call.params.tab);
       emitAppEvent("open:analytics", tab ? { tab } : undefined);
       return { kind: call.kind, ok: true, label: "Opening Analytics" };
+    }
+    case "open-audience": {
+      emitAppEvent("open:audience");
+      return { kind: call.kind, ok: true, label: "Opening Audience" };
     }
     case "save-memory": {
       const title = (call.params.title || "Note").slice(0, 120);

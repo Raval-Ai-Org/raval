@@ -16,6 +16,11 @@ import {
   type CalendarEntry,
 } from "@/lib/calendar/model";
 import { ChannelBadge, ChannelIcon, clock, StatusChip } from "./shared";
+import { ScoreChip } from "@/components/app/audience/audience-ui";
+import { useAudienceScores } from "@/components/app/audience/hooks";
+import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -305,6 +310,12 @@ export function ListView({
   ...p
 }: ViewProps & { onRegenerate: (id: string) => void }) {
   const days = [...p.byDate.entries()];
+  // Audience scores that still match each saved post (none when Audience is off).
+  const workspaceId = useOptionalWorkspaceId();
+  const { data: scores } = useAudienceScores(
+    workspaceId,
+    days.flatMap(([, items]) => items.map((e) => e.id)).filter((id) => UUID_RE.test(id)),
+  );
   return (
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3 scrollbar-thin sm:p-4">
       {days.map(([date, items]) => {
@@ -338,6 +349,7 @@ export function ListView({
                         {e.topic ? ` · ${e.topic}` : ""}
                       </span>
                     </span>
+                    {scores?.[e.id] ? <ScoreChip overall={scores[e.id].overall} /> : null}
                     <StatusChip status={e.status} />
                   </button>
                   {!isLocked(e.status) && (

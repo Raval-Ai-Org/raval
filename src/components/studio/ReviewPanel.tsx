@@ -67,6 +67,8 @@ import { useStyleConformance } from "@/components/app/brand-kit/use-style-confor
 import { conformanceFixInstruction } from "@/lib/brand-kit/conformance";
 import { SocialPostPreview } from "./previews/SocialPostPreview";
 import { Burst, DrawCheck } from "./studio-ui";
+import { AudienceInspector, AudienceScoreChip } from "@/components/app/audience/AudienceInspector";
+import { useAudienceEnabled } from "@/components/app/audience/hooks";
 
 export type ReviewRow = {
   id: string;
@@ -568,6 +570,11 @@ export function ReviewPanel({
     variant?.body ?? draft.article?.markdown ?? null,
   );
   const retryMedia = () => refine("Render the visual again.", "media");
+  // Audience (ADR-0031): the score belongs to the saved row for this platform.
+  const audienceOn = useAudienceEnabled(fixtureRows ? null : session.workspaceId);
+  const audienceRow = rows.find((r) => r.meta?.platform === current) ?? rows[0] ?? null;
+  const showAudience =
+    audienceOn && !!audienceRow && session.type !== "article" && session.type !== "story";
   const partial = (draft.partial ?? []).filter(Boolean);
   const updateVariant = (body: string) =>
     edit({
@@ -1392,6 +1399,12 @@ export function ReviewPanel({
               <span className="inline-flex h-6 items-center rounded-full bg-surface-2 px-2.5 text-[11px] font-medium tabular-nums text-muted-foreground">
                 Version {job.attempt}
               </span>
+              {showAudience ? (
+                <AudienceScoreChip
+                  workspaceId={session.workspaceId}
+                  contentItemId={audienceRow.id}
+                />
+              ) : null}
               {draft.angle ? (
                 <span className="inline-flex h-6 items-center gap-1 rounded-full bg-primary-surface px-2.5 text-[11px] font-medium text-foreground ring-1 ring-primary-border">
                   <Sparkles className="size-3 text-primary" />
@@ -1539,6 +1552,30 @@ export function ReviewPanel({
               ))}
             </ul>
           </InspectorSection>
+
+          {showAudience ? (
+            <InspectorSection title="Audience">
+              <AudienceInspector
+                workspaceId={session.workspaceId}
+                contentItemId={audienceRow.id}
+                dirty={dirty}
+                locked={locked}
+                onImprove={(instruction) =>
+                  refine(instruction, multi && current ? current : "all", "audience")
+                }
+                onUseVersion={
+                  variant
+                    ? (body) => {
+                        // An unsaved edit: the normal Save and approval rules apply.
+                        updateVariant(body);
+                        setEditing(true);
+                        toast("Added as an edit", { description: "Save it to keep it." });
+                      }
+                    : undefined
+                }
+              />
+            </InspectorSection>
+          ) : null}
 
           {draft.article ? (
             <InspectorSection title="Search result">

@@ -111,6 +111,8 @@ export type AppEventMap = {
   "open:competitors": undefined;
   /** Navigates to Autopilot at /w/<id>/app/autopilot. Only ever fired by a button. */
   "open:autopilot": undefined;
+  /** Navigates to Audience at /w/<id>/app/audience. Only ever fired by a button. */
+  "open:audience": undefined;
   "open:content-calendar": undefined;
   "open:details": undefined;
   "open:marketing-coach": undefined;

@@ -1,0 +1,27 @@
+# Notion content calendar integration
+
+Notion is an optional manual planning surface. Mellox content remains in `content_items` and never requires Notion to function. No background sync or automatic publishing is added.
+
+The Notion mark in the connection card is from [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0).
+
+## Configuration
+
+Create a public Notion integration with read, insert, and update content capabilities. Set server-only `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET`, `NOTION_REDIRECT_URI`, and `NOTION_TOKEN_ENCRYPTION_KEY`. The encryption key is a base64-encoded 32-byte key, as with the Canva connector. Register `https://mellox.ai/api/integrations/notion/callback` in Notion and set it as the production `NOTION_REDIRECT_URI`. Use the corresponding localhost callback in development.
+
+## Architecture and permissions
+
+`src/server/fns/notion.ts` exposes workspace-checked RPCs. Reads require membership; connection and content mutations require editor or higher. The optional `GET /api/integrations/notion/connect?workspaceId=...` route requires a bearer session and editor role. The browser UI normally starts OAuth through the authenticated RPC and redirects to Notion. The callback exchanges the code server-side using a one-use, SHA-256-hashed state in `connector_install_states`. State binds the initiating user and workspace, expires after ten minutes, and is consumed atomically. The callback rechecks editor membership before writing.
+
+Safe workspace metadata uses `workspace_connections`. `notion_oauth_credentials` holds AES-256-GCM encrypted access tokens, destination selection, sync time, and an atomic operation lease; authenticated clients have no grants. The lease prevents concurrent exports or imports from racing to create duplicate records. `notion_content_mappings` holds page-to-item identity and sync hashes; it is also service-role only. Both new tables have RLS enabled. The migration is `supabase/migrations/20261009090000_notion_calendar.sql`. The access token never reaches the browser.
+
+The server client sends `Notion-Version: 2026-03-11` and uses data-source endpoints. Calls are paced to Notion's average request allowance, time out after 20 seconds each, and only GET/PATCH calls are retried. OAuth and page/database creates are single attempt. After an uncertain page create outcome, another export searches for its Mellox ID and workspace ID before creating a page. Provider error bodies are not logged or returned.
+
+## Destination and mapping
+
+Connect Notion in Settings → Accounts. Share a database or a parent page with the integration. Select an existing data source with the Mellox schema (`Name`, `Content`, `Mellox ID`, `Mellox Workspace ID`) or create a Mellox Content Calendar in a shared parent page. Notion's database ID and data source ID are stored separately. Exported fields are title, body, platform, status, content type, publish date, asset URL, Mellox item ID, and Mellox workspace ID. `content_items` does not have a canonical campaign field, so none is invented. Short body text lives in the Content property; long text is stored under a `Mellox Content` page heading so user notes outside that section are preserved. Dates retain their ISO instant.
+
+Export is an upsert by mapping or the Notion Mellox IDs. Import first shows a preview with valid, invalid, and linked rows, then confirms only the previewed page IDs. Imports use the canonical content validation and create drafts; title, body, platform, type, asset URL, and planning date are mapped back. Notion status never publishes or schedules a Mellox item. Existing linked items are updated only if Notion alone changed. Active scheduled, publishing, and published items become conflicts instead of being moved out of their lifecycle automatically; return one to draft in Mellox before keeping its Notion version. Scheduled dates stay calendar data; import does not create publication schedules. Sync compares normalized hashes of both versions against the last recorded hashes. Two-sided changes are conflicts, shown with Keep Mellox and Keep Notion actions. A disconnect removes the local credential and marks the safe connection revoked; content and mappings remain for later reconciliation. Notion has no token revocation call in this connector, so workspace administrators should revoke the integration in Notion if they need immediate provider-side invalidation.
+
+## Testing and troubleshooting
+
+Run `npm run db:verify`, `npm run db:types`, `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`. The Notion mapping, OAuth state, and database boundary tests use no live credentials. The browser journey mocks every Notion RPC but needs `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` for an editor account because the Next proxy validates the Mellox session server-side. Run it with `npx playwright test --project=integration tests/e2e/notion-connection.spec.ts` against the configured app server on port 8080. Live verification requires an actual public Notion integration, a Mellox editor session, and a shared test page; never test writes in an arbitrary user database. If a connection needs attention, reconnect. If a data source is not listed, share it with the Notion integration. If selection is rejected, create a Mellox calendar in a shared page or add the required properties to the existing data source.

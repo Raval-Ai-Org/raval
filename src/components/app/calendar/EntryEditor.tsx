@@ -43,6 +43,10 @@ import {
   type VersionSnapshot,
 } from "@/lib/calendar/model";
 import { ChannelBadge, StatusChip } from "./shared";
+import { AudienceInspector } from "@/components/app/audience/AudienceInspector";
+import { useAudienceEnabled } from "@/components/app/audience/hooks";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type EntryPatch = Partial<Pick<CalendarEntry, "title" | "caption" | "hashtags" | "channel">>;
 
@@ -129,6 +133,7 @@ export function EntryEditor({
 }) {
   const channel = channelInfo(entry.channel);
   const locked = isLocked(entry.status);
+  const audienceOn = useAudienceEnabled(workspaceId);
   const picture = entry.images[0];
   const [versions, setVersions] = useState<VersionSnapshot[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -386,6 +391,21 @@ export function EntryEditor({
               className="h-9 text-[12.5px]"
             />
           </Field>
+
+          {audienceOn && UUID_RE.test(entry.id) && (
+            <div>
+              <div className="ds-label mb-1.5">Audience</div>
+              <AudienceInspector
+                workspaceId={workspaceId}
+                contentItemId={entry.id}
+                locked={locked}
+                onUseVersion={(body) => {
+                  snapshot();
+                  onChange({ caption: body });
+                }}
+              />
+            </div>
+          )}
 
           <div>
             <div className="ds-label mb-1">Picture</div>

@@ -301,6 +301,7 @@ export type FeatureKey =
   | "client_portal"
   | "command_center"
   | "autopilot"
+  | "audience"
   | "white_label"
   | "sso_api";
 
@@ -425,6 +426,14 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     module: "Intelligence",
     label: "Market Brain",
     pitch: "A weekly read of your market from real, dated sources, turned into what to do next.",
+    minPlan: "starter",
+  },
+  audience: {
+    key: "audience",
+    module: "Intelligence",
+    label: "Audience",
+    pitch:
+      "See how your audience is likely to react before you post, and learn from what really happened.",
     minPlan: "starter",
   },
   analytics_insights: {
@@ -746,6 +755,23 @@ export const CREDIT_ACTIONS = {
     expectedCostUsd: 0.017,
     routes: ["analytics/insights"],
   },
+  // Audience: the quick score is included; the deeper checks are charged.
+  audience_pulse: {
+    credits: 6,
+    label: "Audience check",
+    unit: "per post",
+    feature: "audience",
+    expectedCostUsd: 0.012,
+    routes: ["audience.react", "audience.synthesize"],
+  },
+  audience_tournament: {
+    credits: 12,
+    label: "Compare versions",
+    unit: "per comparison",
+    feature: "audience",
+    expectedCostUsd: 0.024,
+    routes: ["audience.variants"],
+  },
   // AI visibility (beyond the plan's included scans and prompts)
   site_scan_per_100_pages: {
     credits: 35,
@@ -853,6 +879,10 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "autopilot.plan",
   "autopilot.strategy",
   "autopilot.opportunities",
+  // Audience groups and the quick score are part of the plan (rate-limited);
+  // only the deeper check and the comparison are charged.
+  "audience.twins",
+  "audience.score",
   "links-topical-fit",
   "links-relevance-pick",
   "links-profile",

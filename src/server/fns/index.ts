@@ -2,6 +2,7 @@ import "server-only";
 import type { AnyServerFn } from "@/server/server-fn";
 
 import * as analytics from "./analytics";
+import * as audience from "./audience";
 import * as autopilot from "./autopilot";
 import * as brandDna from "./brand-dna";
 import * as brandKit from "./brand-kit";
@@ -22,6 +23,7 @@ import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
 import * as links from "./links";
 import * as mcp from "./mcp";
+import * as notion from "./notion";
 import * as schedules from "./schedules";
 import * as sitePublishing from "./site-publishing";
 import * as stories from "./stories";
@@ -34,6 +36,7 @@ import * as wordpress from "./wordpress";
 // the client stubs in src/lib/*.functions.ts were generated with.
 const MODULES: Record<string, Record<string, unknown>> = {
   analytics,
+  audience,
   canva,
   autopilot,
   "brand-dna": brandDna,
@@ -54,6 +57,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   insights,
   links,
   mcp,
+  notion,
   schedules,
   "site-publishing": sitePublishing,
   stories,

@@ -69,7 +69,10 @@ export type RateLimitTier =
   | "brand-kit-upload"
   | "brand-kit-analyze"
   | "mcp-read"
-  | "mcp-write";
+  | "mcp-write"
+  | "audience-score"
+  | "audience-run"
+  | "audience-write";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -181,6 +184,14 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // anything that spends is also held to the tier of the work it starts.
   "mcp-read": { limit: 120, windowSeconds: 60, label: "assistant" },
   "mcp-write": { limit: 30, windowSeconds: 60, label: "assistant change" },
+  // Audience (ADR-0031). The quick score is one cheap model call and is not
+  // charged, so this is its only bound. It is also consumed per workspace by
+  // the score that follows a generation.
+  "audience-score": { limit: 90, windowSeconds: 3600, label: "audience score" },
+  // Deeper checks and comparisons: charged, and several model calls each.
+  "audience-run": { limit: 20, windowSeconds: 3600, label: "audience check" },
+  // Editing groups and rebuilding them from Brand DNA (a premium call).
+  "audience-write": { limit: 30, windowSeconds: 3600, label: "audience change" },
 };
 
 export type RateLimitResult = {

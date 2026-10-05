@@ -480,7 +480,12 @@ export const realPorts: AutopilotPorts = {
 
   plan: {
     async learnings(workspaceId) {
-      return summarizeLearnings(await measuredPieces(workspaceId));
+      const own = summarizeLearnings(await measuredPieces(workspaceId));
+      // What scored posts really did, measured by Audience (ADR-0031). Empty
+      // when that feature is off or has nothing measured yet.
+      const { audienceLearnings } = await import("@/server/audience/service.server");
+      const audience = await audienceLearnings(workspaceId).catch(() => [] as string[]);
+      return [...new Set([...own, ...audience])].slice(0, 5);
     },
 
     async storyHours(workspaceId, timeZone) {

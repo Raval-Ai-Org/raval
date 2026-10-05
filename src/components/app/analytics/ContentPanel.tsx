@@ -17,6 +17,7 @@ import {
 import { ArrowUpRight, FileText } from "@/components/icons";
 import { SocialPerformance } from "@/components/app/SocialPerformance";
 import { StoriesPerformance } from "./StoriesPerformance";
+import { PredictedVsActual } from "@/components/app/audience/PredictedVsActual";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { getAnalyticsSummary, type AnalyticsSummary } from "@/lib/analytics.functions";
@@ -182,6 +183,7 @@ export function ContentPanel() {
 
       <SocialPerformance workspaceId={workspaceId} days={days} />
       {workspaceId ? <StoriesPerformance workspaceId={workspaceId} days={days} /> : null}
+      {workspaceId ? <PredictedVsActual workspaceId={workspaceId} /> : null}
     </div>
   );
 }

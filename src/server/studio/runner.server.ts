@@ -10,7 +10,10 @@
 import { humanizeOutput } from "@/lib/studio/humanize";
 import { naturalizeVariants } from "@/lib/studio/naturalize.server";
 import "server-only";
+import { after } from "next/server";
 import sharp from "sharp";
+import { isAudienceAutoScoreEnabled } from "@/lib/feature-flags";
+import { getRequestScope } from "@/server/request-context";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { runStructuredPrompt, AiOutputError, AiGatewayError } from "@/lib/ai";
 import { BudgetExceededError, enforceBudget } from "@/server/ai/budget";
@@ -558,6 +561,28 @@ async function revealDrafts(client: Db, workspaceId: string, ids: string[], appr
       })
       .eq("id", row.id);
     if (error) console.warn("[studio] reveal failed", row.id, error.message);
+  }
+  scoreDraftsSoon(workspaceId, ids);
+}
+
+/**
+ * Audience (ADR-0031): a quick score for what was just written, after the
+ * response is sent. It reads the drafts and writes only its own table, so it
+ * can never change a job, a draft or the job's charge. Any failure just means
+ * there is no score yet.
+ */
+function scoreDraftsSoon(workspaceId: string, contentItemIds: string[]) {
+  if (!isAudienceAutoScoreEnabled(workspaceId)) return;
+  const userId = getRequestScope().userId ?? null;
+  const run = () =>
+    import("@/server/audience/service.server")
+      .then((m) => m.autoScore({ workspaceId, userId, contentItemIds }))
+      .catch(() => undefined);
+  try {
+    after(run);
+  } catch {
+    // No request to wait behind (a worker or a test): run it detached.
+    void run();
   }
 }
 

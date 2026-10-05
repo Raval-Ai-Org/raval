@@ -76,6 +76,7 @@ import {
 } from "@/lib/calendar/model";
 import { EntryEditor, type EntryPatch } from "./calendar/EntryEditor";
 import { ExportMenu } from "./calendar/ExportMenu";
+import { NotionConnection } from "./connectors/NotionConnection";
 import { PlanPanel } from "./calendar/PlanPanel";
 import { ChannelIcon } from "./calendar/shared";
 import {
@@ -632,6 +633,11 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
       headerAccessory={
         workspaceId ? (
           <>
+            <NotionConnection
+              workspaceId={workspaceId}
+              compact
+              contentIds={inRange.map((entry) => entry.id)}
+            />
             <ExportMenu
               shown={inRange}
               all={entries}

@@ -24,6 +24,7 @@ import {
 } from "@/components/app/surface/SurfaceLayout";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { CanvaConnection } from "@/components/app/connectors/CanvaConnection";
+import { NotionConnection } from "@/components/app/connectors/NotionConnection";
 import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
 import { WebflowConnector } from "@/components/app/connectors/WebflowConnector";
 import { WordPressConnector } from "@/components/app/connectors/WordPressConnector";
@@ -382,6 +383,7 @@ function SettingsDialog({
             <SurfacePage width="narrow">
               <SocialAccountsSection variant="settings" />
               <CanvaConnection />
+              {workspaceId && <NotionConnection workspaceId={workspaceId} />}
             </SurfacePage>
           )}
           {section === "analytics" && (

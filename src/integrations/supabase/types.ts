@@ -1302,6 +1302,405 @@ export type Database = {
           },
         ];
       };
+      audience_calibration: {
+        Row: {
+          bias: number;
+          content_type: string;
+          learned: Json;
+          mae: number;
+          n: number;
+          platform: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          bias?: number;
+          content_type: string;
+          learned?: Json;
+          mae?: number;
+          n?: number;
+          platform: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          bias?: number;
+          content_type?: string;
+          learned?: Json;
+          mae?: number;
+          n?: number;
+          platform?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audience_calibration_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      audience_outcomes: {
+        Row: {
+          actual: number | null;
+          content_item_id: string | null;
+          content_type: string;
+          delivered_at: string | null;
+          engagement: number;
+          horizon: string;
+          id: string;
+          measured_at: string;
+          metrics: Json;
+          platform: string;
+          predicted: number;
+          prediction_id: string;
+          title: string;
+          workspace_id: string;
+        };
+        Insert: {
+          actual?: number | null;
+          content_item_id?: string | null;
+          content_type?: string;
+          delivered_at?: string | null;
+          engagement: number;
+          horizon?: string;
+          id?: string;
+          measured_at?: string;
+          metrics?: Json;
+          platform?: string;
+          predicted: number;
+          prediction_id: string;
+          title?: string;
+          workspace_id: string;
+        };
+        Update: {
+          actual?: number | null;
+          content_item_id?: string | null;
+          content_type?: string;
+          delivered_at?: string | null;
+          engagement?: number;
+          horizon?: string;
+          id?: string;
+          measured_at?: string;
+          metrics?: Json;
+          platform?: string;
+          predicted?: number;
+          prediction_id?: string;
+          title?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audience_outcomes_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audience_outcomes_prediction_id_fkey";
+            columns: ["prediction_id"];
+            isOneToOne: false;
+            referencedRelation: "audience_predictions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audience_outcomes_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      audience_predictions: {
+        Row: {
+          calibrated: boolean;
+          content_item_id: string | null;
+          content_type: string;
+          created_at: string;
+          created_by: string | null;
+          depth: string;
+          dimensions: Json;
+          id: string;
+          overall: number;
+          platform: string;
+          result: Json;
+          run_id: string | null;
+          score_version: number;
+          subject: Json;
+          subject_hash: string;
+          twins_fingerprint: string;
+          variant_index: number | null;
+          workspace_id: string;
+        };
+        Insert: {
+          calibrated?: boolean;
+          content_item_id?: string | null;
+          content_type?: string;
+          created_at?: string;
+          created_by?: string | null;
+          depth: string;
+          dimensions?: Json;
+          id?: string;
+          overall: number;
+          platform?: string;
+          result?: Json;
+          run_id?: string | null;
+          score_version: number;
+          subject: Json;
+          subject_hash: string;
+          twins_fingerprint: string;
+          variant_index?: number | null;
+          workspace_id: string;
+        };
+        Update: {
+          calibrated?: boolean;
+          content_item_id?: string | null;
+          content_type?: string;
+          created_at?: string;
+          created_by?: string | null;
+          depth?: string;
+          dimensions?: Json;
+          id?: string;
+          overall?: number;
+          platform?: string;
+          result?: Json;
+          run_id?: string | null;
+          score_version?: number;
+          subject?: Json;
+          subject_hash?: string;
+          twins_fingerprint?: string;
+          variant_index?: number | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audience_predictions_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audience_predictions_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "audience_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audience_predictions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      audience_run_events: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          kind: string;
+          run_id: string;
+          summary: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          kind: string;
+          run_id: string;
+          summary: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          kind?: string;
+          run_id?: string;
+          summary?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audience_run_events_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "audience_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audience_run_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      audience_runs: {
+        Row: {
+          attempts: number;
+          cancel_requested: boolean;
+          content_item_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          finished_at: string | null;
+          id: string;
+          idempotency_key: string;
+          input: Json;
+          kind: string;
+          last_error: string | null;
+          lease_until: string | null;
+          locked_by: string | null;
+          next_attempt_at: string;
+          output: Json;
+          progress: Json;
+          stage: string;
+          state: Json;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attempts?: number;
+          cancel_requested?: boolean;
+          content_item_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          idempotency_key: string;
+          input?: Json;
+          kind: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          next_attempt_at?: string;
+          output?: Json;
+          progress?: Json;
+          stage?: string;
+          state?: Json;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempts?: number;
+          cancel_requested?: boolean;
+          content_item_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          input?: Json;
+          kind?: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          next_attempt_at?: string;
+          output?: Json;
+          progress?: Json;
+          stage?: string;
+          state?: Json;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audience_runs_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audience_runs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      audience_twins: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          kind: string;
+          name: string;
+          origin: string;
+          origin_ref: string | null;
+          profile: Json;
+          segment: string;
+          slug: string;
+          status: string;
+          summary: string;
+          updated_at: string;
+          updated_by: string | null;
+          version: number;
+          weight: number;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kind?: string;
+          name: string;
+          origin?: string;
+          origin_ref?: string | null;
+          profile?: Json;
+          segment?: string;
+          slug: string;
+          status?: string;
+          summary?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+          weight?: number;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kind?: string;
+          name?: string;
+          origin?: string;
+          origin_ref?: string | null;
+          profile?: Json;
+          segment?: string;
+          slug?: string;
+          status?: string;
+          summary?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+          weight?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audience_twins_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       audit_logs: {
         Row: {
           action: string;
@@ -1543,7 +1942,6 @@ export type Database = {
           act_on_opportunities: boolean;
           acting_user_id: string | null;
           automations: string[];
-          stories: Json;
           content_types: string[];
           created_at: string;
           created_by: string | null;
@@ -1561,6 +1959,7 @@ export type Database = {
           posts_per_week: number;
           starts_on: string;
           status: string;
+          stories: Json;
           strategy: Json;
           style_id: string | null;
           timezone: string;
@@ -1573,7 +1972,6 @@ export type Database = {
           act_on_opportunities?: boolean;
           acting_user_id?: string | null;
           automations?: string[];
-          stories?: Json;
           content_types?: string[];
           created_at?: string;
           created_by?: string | null;
@@ -1591,6 +1989,7 @@ export type Database = {
           posts_per_week?: number;
           starts_on: string;
           status?: string;
+          stories?: Json;
           strategy?: Json;
           style_id?: string | null;
           timezone?: string;
@@ -1603,7 +2002,6 @@ export type Database = {
           act_on_opportunities?: boolean;
           acting_user_id?: string | null;
           automations?: string[];
-          stories?: Json;
           content_types?: string[];
           created_at?: string;
           created_by?: string | null;
@@ -1621,6 +2019,7 @@ export type Database = {
           posts_per_week?: number;
           starts_on?: string;
           status?: string;
+          stories?: Json;
           strategy?: Json;
           style_id?: string | null;
           timezone?: string;
@@ -3091,6 +3490,294 @@ export type Database = {
           },
         ];
       };
+      canva_design_mappings: {
+        Row: {
+          asset_id: string | null;
+          canva_asset_ids: string[];
+          canva_design_id: string;
+          content_item_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          last_imported_at: string | null;
+          last_opened_at: string;
+          mode: string;
+          source_key: string;
+          title: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          asset_id?: string | null;
+          canva_asset_ids?: string[];
+          canva_design_id: string;
+          content_item_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_imported_at?: string | null;
+          last_opened_at?: string;
+          mode?: string;
+          source_key: string;
+          title?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          asset_id?: string | null;
+          canva_asset_ids?: string[];
+          canva_design_id?: string;
+          content_item_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_imported_at?: string | null;
+          last_opened_at?: string;
+          mode?: string;
+          source_key?: string;
+          title?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "canva_design_mappings_asset_id_fkey";
+            columns: ["asset_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "canva_design_mappings_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "canva_design_mappings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      canva_design_source_pages: {
+        Row: {
+          canva_asset_id: string | null;
+          mapping_id: string;
+          page_number: number;
+          source_asset_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          canva_asset_id?: string | null;
+          mapping_id: string;
+          page_number: number;
+          source_asset_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          canva_asset_id?: string | null;
+          mapping_id?: string;
+          page_number?: number;
+          source_asset_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "canva_design_source_pages_mapping_id_fkey";
+            columns: ["mapping_id"];
+            isOneToOne: false;
+            referencedRelation: "canva_design_mappings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "canva_design_source_pages_source_asset_id_fkey";
+            columns: ["source_asset_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "canva_design_source_pages_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      canva_fallback_slide_designs: {
+        Row: {
+          canva_design_id: string;
+          mapping_id: string;
+          page_number: number;
+          workspace_id: string;
+        };
+        Insert: {
+          canva_design_id: string;
+          mapping_id: string;
+          page_number: number;
+          workspace_id: string;
+        };
+        Update: {
+          canva_design_id?: string;
+          mapping_id?: string;
+          page_number?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "canva_fallback_slide_designs_mapping_id_fkey";
+            columns: ["mapping_id"];
+            isOneToOne: false;
+            referencedRelation: "canva_design_mappings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "canva_fallback_slide_designs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      canva_import_pages: {
+        Row: {
+          asset_id: string;
+          page_number: number;
+          version_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          asset_id: string;
+          page_number: number;
+          version_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          asset_id?: string;
+          page_number?: number;
+          version_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "canva_import_pages_asset_id_fkey";
+            columns: ["asset_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "canva_import_pages_version_id_fkey";
+            columns: ["version_id"];
+            isOneToOne: false;
+            referencedRelation: "canva_import_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "canva_import_pages_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      canva_import_versions: {
+        Row: {
+          id: string;
+          imported_at: string;
+          imported_by: string | null;
+          mapping_id: string;
+          selected_at: string | null;
+          version_number: number;
+          workspace_id: string;
+        };
+        Insert: {
+          id?: string;
+          imported_at?: string;
+          imported_by?: string | null;
+          mapping_id: string;
+          selected_at?: string | null;
+          version_number: number;
+          workspace_id: string;
+        };
+        Update: {
+          id?: string;
+          imported_at?: string;
+          imported_by?: string | null;
+          mapping_id?: string;
+          selected_at?: string | null;
+          version_number?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "canva_import_versions_mapping_id_fkey";
+            columns: ["mapping_id"];
+            isOneToOne: false;
+            referencedRelation: "canva_design_mappings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "canva_import_versions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      canva_oauth_credentials: {
+        Row: {
+          access_token_enc: string;
+          access_token_expires_at: string;
+          connection_id: string;
+          created_at: string;
+          refresh_token_enc: string;
+          scopes: string[];
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          access_token_enc: string;
+          access_token_expires_at: string;
+          connection_id: string;
+          created_at?: string;
+          refresh_token_enc: string;
+          scopes?: string[];
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          access_token_enc?: string;
+          access_token_expires_at?: string;
+          connection_id?: string;
+          created_at?: string;
+          refresh_token_enc?: string;
+          scopes?: string[];
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "canva_oauth_credentials_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: true;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "canva_oauth_credentials_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       chat_messages: {
         Row: {
           content: string;
@@ -3761,13 +4448,13 @@ export type Database = {
           delivered_at: string | null;
           error_category: string | null;
           error_code: string | null;
+          frames: Json | null;
           id: string;
           last_error: string | null;
           metrics: Json | null;
           metrics_synced_at: string | null;
-          platform: string;
           placement: string;
-          frames: Json | null;
+          platform: string;
           platform_post_id: string | null;
           platform_post_url: string | null;
           provider: string;
@@ -3785,13 +4472,13 @@ export type Database = {
           delivered_at?: string | null;
           error_category?: string | null;
           error_code?: string | null;
+          frames?: Json | null;
           id?: string;
           last_error?: string | null;
           metrics?: Json | null;
           metrics_synced_at?: string | null;
-          platform: string;
           placement?: string;
-          frames?: Json | null;
+          platform: string;
           platform_post_id?: string | null;
           platform_post_url?: string | null;
           provider?: string;
@@ -3809,13 +4496,13 @@ export type Database = {
           delivered_at?: string | null;
           error_category?: string | null;
           error_code?: string | null;
+          frames?: Json | null;
           id?: string;
           last_error?: string | null;
           metrics?: Json | null;
           metrics_synced_at?: string | null;
-          platform?: string;
           placement?: string;
-          frames?: Json | null;
+          platform?: string;
           platform_post_id?: string | null;
           platform_post_url?: string | null;
           provider?: string;
@@ -6855,6 +7542,135 @@ export type Database = {
           },
         ];
       };
+      notion_content_mappings: {
+        Row: {
+          content_item_id: string;
+          created_at: string;
+          id: string;
+          last_mellox_hash: string | null;
+          last_mellox_updated_at: string | null;
+          last_notion_edited_at: string | null;
+          last_notion_hash: string | null;
+          last_sync_direction: string | null;
+          last_sync_hash: string | null;
+          notion_data_source_id: string;
+          notion_page_id: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          content_item_id: string;
+          created_at?: string;
+          id?: string;
+          last_mellox_hash?: string | null;
+          last_mellox_updated_at?: string | null;
+          last_notion_edited_at?: string | null;
+          last_notion_hash?: string | null;
+          last_sync_direction?: string | null;
+          last_sync_hash?: string | null;
+          notion_data_source_id: string;
+          notion_page_id: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          content_item_id?: string;
+          created_at?: string;
+          id?: string;
+          last_mellox_hash?: string | null;
+          last_mellox_updated_at?: string | null;
+          last_notion_edited_at?: string | null;
+          last_notion_hash?: string | null;
+          last_sync_direction?: string | null;
+          last_sync_hash?: string | null;
+          notion_data_source_id?: string;
+          notion_page_id?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notion_content_mappings_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notion_content_mappings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notion_oauth_credentials: {
+        Row: {
+          access_token_enc: string;
+          bot_id: string | null;
+          connection_id: string;
+          created_at: string;
+          last_sync_at: string | null;
+          selected_data_source_id: string | null;
+          selected_database_id: string | null;
+          selected_destination_name: string | null;
+          selected_destination_url: string | null;
+          selected_parent_page_id: string | null;
+          sync_lock_owner: string | null;
+          sync_lock_until: string | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          access_token_enc: string;
+          bot_id?: string | null;
+          connection_id: string;
+          created_at?: string;
+          last_sync_at?: string | null;
+          selected_data_source_id?: string | null;
+          selected_database_id?: string | null;
+          selected_destination_name?: string | null;
+          selected_destination_url?: string | null;
+          selected_parent_page_id?: string | null;
+          sync_lock_owner?: string | null;
+          sync_lock_until?: string | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          access_token_enc?: string;
+          bot_id?: string | null;
+          connection_id?: string;
+          created_at?: string;
+          last_sync_at?: string | null;
+          selected_data_source_id?: string | null;
+          selected_database_id?: string | null;
+          selected_destination_name?: string | null;
+          selected_destination_url?: string | null;
+          selected_parent_page_id?: string | null;
+          sync_lock_owner?: string | null;
+          sync_lock_until?: string | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notion_oauth_credentials_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: true;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notion_oauth_credentials_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           avatar_url: string | null;
@@ -9224,6 +10040,10 @@ export type Database = {
       claim_analytics_sync_runs: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["analytics_sync_runs"]["Row"][];
+      };
+      claim_audience_runs: {
+        Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
+        Returns: Database["public"]["Tables"]["audience_runs"]["Row"][];
       };
       claim_autopilot_actions: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };

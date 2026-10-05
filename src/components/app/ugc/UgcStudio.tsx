@@ -710,6 +710,7 @@ function ProjectEditor({
               <ConceptsWriting />
             ) : (
               <ConceptsStep
+                workspaceId={workspaceId}
                 concepts={project.concepts}
                 selectedConceptId={project.selectedConceptId}
                 productImage={cover}

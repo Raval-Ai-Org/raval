@@ -12,6 +12,7 @@ import { upcomingMoments } from "@/lib/studio/moments";
 import type { StudioContext } from "@/lib/studio/prompts";
 import { recentPerformanceSignals } from "@/lib/studio/performance";
 import { openingLine } from "@/lib/studio/memory";
+import { audienceBlockFor } from "@/server/audience/context.server";
 import { getSocialTrends } from "./social-trends.server";
 
 type WorkspaceSnapshot = Omit<StudioContext, "brandText" | "brandName" | "moments" | "today"> & {
@@ -239,11 +240,13 @@ export async function loadStudioContext(
   workspaceId: string,
   brand: Record<string, unknown> | null | undefined,
 ): Promise<StudioContext & { brand: Record<string, unknown> | null }> {
-  const [snapshot, stored, socialTrends] = await Promise.all([
+  const [snapshot, stored, socialTrends, audience] = await Promise.all([
     loadWorkspaceSnapshot(db, workspaceId),
     settle(readBrandDna(db, workspaceId), null, "brand dna"),
     // The stored snapshot only; a job never searches for trends itself.
     getSocialTrends(),
+    // Who the piece is for (ADR-0031). Empty when Audience is off or not set up.
+    audienceBlockFor(workspaceId),
   ]);
   const storedDna = stored && Object.keys(stored.dna).length ? stored.dna : null;
   const dna = (storedDna ?? brand ?? null) as BrandCtxDna | null;
@@ -262,7 +265,7 @@ export async function loadStudioContext(
     ...rest,
     brand: dna as Record<string, unknown> | null,
     brandName: str(dna?.brandName) ?? name,
-    brandText: `${brandText}${insightsBlock}`.trim(),
+    brandText: `${brandText}${insightsBlock}${audience ? `\n\n${audience}` : ""}`.trim(),
     today: new Date().toISOString().slice(0, 10),
     socialTrends,
     moments: upcomingMoments(new Date(), { limit: 4 }),
