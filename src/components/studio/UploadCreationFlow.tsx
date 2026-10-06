@@ -67,10 +67,11 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
   const [captions, setCaptions] = useState<Partial<Record<PlatformId, string>>>({});
   const [busy, setBusy] = useState<"generate" | "save" | null>(null);
   const [saved, setSaved] = useState<Partial<Record<PlatformId, string>>>({});
-  const [groupId] = useState(() => crypto.randomUUID());
+  const [groupId, setGroupId] = useState(() => crypto.randomUUID());
   const [storedPath, setStoredPath] = useState<string | null>(null);
   const [storedUrl, setStoredUrl] = useState<string | null>(null);
   const [publishMode, setPublishMode] = useState<"publish" | "schedule" | null>(null);
+  const [distributed, setDistributed] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
   const selected = useMemo(
     () => platforms.filter((p) => available(kind ?? "text", p)),
@@ -89,6 +90,23 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
+
+  const startNew = () => {
+    setKind(null);
+    setFile(null);
+    setTitle("");
+    setDescription("");
+    setDirection("");
+    setCopyMode("write");
+    setPlatforms([]);
+    setCaptions({});
+    setSaved({});
+    setGroupId(crypto.randomUUID());
+    setStoredPath(null);
+    setStoredUrl(null);
+    setScheduleAt("");
+    setDistributed(false);
+  };
 
   const pickKind = (next: UploadKind) => {
     if (next === kind) return;
@@ -234,6 +252,7 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
           setSaved({ ...next });
         }
       }
+      let mediaIndexed = true;
       if (path && file) {
         const { error: assetError } = await supabase.from("assets").upsert(
           {
@@ -250,13 +269,15 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
           },
           { onConflict: "workspace_id,idempotency_key" },
         );
-        if (assetError) throw assetError;
+        mediaIndexed = !assetError;
       }
       setSaved(next);
-      emitAppEvent("assets:changed");
+      if (mediaIndexed) emitAppEvent("assets:changed");
       emitAppEvent("content:changed");
       toast.success("Saved to Library", {
-        description: "You can edit your captions or publish when ready.",
+        description: mediaIndexed
+          ? "You can edit your captions or publish when ready."
+          : "Your posts are saved. The media Library could not index this file; saving again will retry.",
       });
       return true;
     } catch (error) {
@@ -299,6 +320,8 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
             options,
           );
     emitAppEvent("content:changed");
+    if (result.results.some((item) => item.status === "publishing" || item.status === "already"))
+      setDistributed(true);
     return result;
   };
 
@@ -384,6 +407,15 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
                   </button>
                 ))}
               </div>
+              {Object.keys(saved).length > 0 ? (
+                <button
+                  type="button"
+                  onClick={startNew}
+                  className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  Start a new upload
+                </button>
+              ) : null}
               {kind !== "text" ? (
                 <label
                   className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-surface-2/40 px-5 py-6 text-center transition-colors hover:border-primary-border"
@@ -570,7 +602,13 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
           needsApproval
           scheduleAt={scheduleAt}
           onScheduleAtChange={setScheduleAt}
-          onClose={() => setPublishMode(null)}
+          onClose={() => {
+            setPublishMode(null);
+            if (distributed) {
+              onClose();
+              startNew();
+            }
+          }}
           onSubmit={submit}
           morePlatforms={[]}
           onAddPlatforms={() => undefined}
