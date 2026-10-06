@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useOptionalWorkspaceRole } from "@/components/workspace/WorkspaceProvider";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ConnectionCard } from "./ConnectionCard";
 import {
   Dialog,
   DialogContent,
@@ -57,7 +57,7 @@ function NotionMark({ compact = false }: { compact?: boolean }) {
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
-      className={cn("shrink-0 fill-current", compact ? "size-4" : "size-9")}
+      className={cn("shrink-0 fill-current", compact ? "size-4" : "size-6")}
     >
       <path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952L12.21 19s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.139c-.093-.514.28-.887.747-.933zM1.936 1.035l13.31-.98c1.634-.14 2.055-.047 3.082.7l4.249 2.986c.7.513.934.653.934 1.213v16.378c0 1.026-.373 1.634-1.68 1.726l-15.458.934c-.98.047-1.448-.093-1.962-.747l-3.129-4.06c-.56-.747-.793-1.306-.793-1.96V2.667c0-.839.374-1.54 1.447-1.632z" />
     </svg>
@@ -95,7 +95,8 @@ export function NotionConnection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [setup, setSetup] = useState(false);
-  const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [destinations, setDestinations] = useState<Destination[] | null>(null);
+  const [addTo, setAddTo] = useState<Destination | null>(null);
   const [parentId, setParentId] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [conflicts, setConflicts] = useState<Conflict[] | null>(null);
@@ -124,6 +125,8 @@ export function NotionConnection({
   }, [compact]);
   useEffect(() => {
     if (!setup) return;
+    setDestinations(null);
+    setAddTo(null);
     void listNotionDestinations({ data: { workspaceId } })
       .then(setDestinations)
       .catch((cause) => {
@@ -133,11 +136,8 @@ export function NotionConnection({
           /reconnect/i.test(cause.message)
         )
           setStatus((current) => (current ? { ...current, status: "error" } : current));
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Could not load shared Notion pages and data sources.",
-        );
+        setError(cause instanceof Error ? cause.message : "Could not load your Notion pages.");
+        setDestinations([]);
       });
   }, [setup, workspaceId]);
   const run = async (operation: () => Promise<unknown>, success?: string) => {
@@ -184,6 +184,8 @@ export function NotionConnection({
   const openPreview = () =>
     void run(async () => setPreview(await previewNotionImport({ data: { workspaceId } })));
   const connected = status?.status === "active";
+  const pages = (destinations ?? []).filter((d) => d.kind === "page");
+  const sources = (destinations ?? []).filter((d) => d.kind === "data_source");
   const needsAttention = status?.status === "error";
   const actions = (
     <>
@@ -316,63 +318,67 @@ export function NotionConnection({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
-        <section className="ds-tile p-4" aria-label="Notion connection">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <NotionMark />
-              <div>
-                <h3 className="font-semibold">Notion</h3>
-                <p className="text-xs text-muted-foreground">
-                  Sync your Mellox content calendar with Notion.
-                </p>
-              </div>
-            </div>
-            {!status ? (
-              <Skeleton className="h-8 w-28 rounded-full" />
-            ) : (
-              <span className="rounded-full bg-[var(--ds-well-bg)] px-3 py-1 text-xs">
-                {connected
-                  ? busy
-                    ? "Syncing"
-                    : result?.conflicts
-                      ? "Conflict"
-                      : result
-                        ? "Synced"
-                        : "Connected"
-                  : status.status === "error"
-                    ? "Needs attention"
-                    : "Disconnected"}
-              </span>
-            )}
-          </div>
-          {connected && (
-            <div className="mt-3 text-xs text-muted-foreground">
-              <p>{status.workspaceName}</p>
-              <p>{status.destinationName ?? "Choose a content calendar"}</p>
-              <p>{status.lastSyncAt ? relativeSyncTime(status.lastSyncAt) : "Never synced"}</p>
-            </div>
-          )}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {actions}
-            {connected && status.destinationUrl && (
-              <a
-                className={cn(dsGhostBtn, "px-3 text-xs")}
-                href={status.destinationUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open in Notion
-              </a>
-            )}
-          </div>
-          {!status?.configured && status && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {status.configurationMessage ?? "Notion needs server configuration."}
-            </p>
-          )}
-        </section>
+        <ConnectionCard
+          label="Notion connection"
+          logo={<NotionMark />}
+          name="Notion"
+          description="Keep your Mellox content calendar and a Notion database in step."
+          status={
+            status
+              ? connected
+                ? busy
+                  ? { tone: "connected", text: "Syncing" }
+                  : result?.conflicts
+                    ? { tone: "attention", text: "Needs a decision" }
+                    : !status.dataSourceId
+                      ? { tone: "attention", text: "Choose a database" }
+                      : { tone: "connected", text: "Connected" }
+                : needsAttention
+                  ? { tone: "attention", text: "Reconnect needed" }
+                  : { tone: "off", text: "Not connected" }
+              : error
+                ? { tone: "off", text: "Unavailable" }
+                : null
+          }
+          detail={
+            connected
+              ? [
+                  status.workspaceName,
+                  status.destinationName ?? "no database chosen yet",
+                  status.dataSourceId
+                    ? status.lastSyncAt
+                      ? relativeSyncTime(status.lastSyncAt).toLowerCase()
+                      : "never synced"
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : undefined
+          }
+          actions={
+            <>
+              {actions}
+              {connected && status.destinationUrl && (
+                <a
+                  className={cn(dsGhostBtn, "h-8 px-3 text-xs")}
+                  href={status.destinationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open in Notion
+                </a>
+              )}
+            </>
+          }
+          note={
+            status && !status.configured
+              ? (status.configurationMessage ?? "Notion is not set up on this server yet.")
+              : undefined
+          }
+          error={error}
+        />
       )}
-      {error && (
+      {compact && error && (
         <p role="alert" className="mt-2 text-sm text-destructive">
           {error}
         </p>
@@ -380,67 +386,150 @@ export function NotionConnection({
       <Dialog open={setup} onOpenChange={setSetup}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Choose a Notion calendar</DialogTitle>
+            <DialogTitle>Choose your Notion calendar</DialogTitle>
             <DialogDescription>
-              Select a shared data source, or create a new calendar inside a shared page.
+              Mellox keeps your posts in one Notion database. Make a new one, or use one you have.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-64 space-y-2 overflow-y-auto">
-            {destinations
-              .filter((d) => d.kind === "data_source")
-              .map((d) => (
+          {!destinations ? (
+            <div className="space-y-2" role="status" aria-busy="true">
+              <span className="ds-well block h-11 animate-pulse rounded-xl" />
+              <span className="ds-well block h-11 animate-pulse rounded-xl" />
+            </div>
+          ) : !destinations.length ? (
+            <div className="ds-well rounded-2xl p-4 text-sm">
+              <p className="font-medium">Mellox can’t see any Notion pages yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Notion asks which pages to share when you connect. Pick at least one page.
+              </p>
+              <Button size="sm" className="mt-3" disabled={busy} onClick={connect}>
+                Choose pages in Notion
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div>
+                <p className="ds-label">New calendar</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Mellox adds a “Mellox Content Calendar” database inside the page you pick.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <select
+                    aria-label="Page for the new calendar"
+                    className="ds-well min-h-9 min-w-0 flex-1 rounded-xl px-3 text-sm"
+                    value={parentId}
+                    onChange={(e) => setParentId(e.target.value)}
+                  >
+                    <option value="">Choose a page</option>
+                    {pages.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    size="sm"
+                    disabled={busy || !parentId}
+                    onClick={() =>
+                      void run(async () => {
+                        await createNotionDestination({
+                          data: { workspaceId, parentPageId: parentId },
+                        });
+                        setSetup(false);
+                      }, "Notion calendar created")
+                    }
+                  >
+                    Create calendar
+                  </Button>
+                </div>
+                {!pages.length && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    No pages are shared with Mellox yet.
+                  </p>
+                )}
+              </div>
+              {sources.length > 0 && (
+                <div>
+                  <p className="ds-label">Use a database you have</p>
+                  <div className="mt-2 max-h-56 space-y-2 overflow-y-auto">
+                    {sources.map((d) => {
+                      const fit = d.fit ?? "ready";
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          disabled={busy || fit === "unfit"}
+                          className="ds-tile ds-tile-hover flex w-full items-center justify-between gap-3 p-3 text-left text-sm disabled:opacity-60"
+                          onClick={() =>
+                            fit === "addable"
+                              ? setAddTo(d)
+                              : void run(async () => {
+                                  await selectNotionDestination({
+                                    data: { workspaceId, dataSourceId: d.id },
+                                  });
+                                  setSetup(false);
+                                }, "Notion calendar selected")
+                          }
+                        >
+                          <span className="min-w-0 truncate font-medium">{d.name}</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {fit === "ready"
+                              ? "Ready"
+                              : fit === "addable"
+                                ? "Needs Mellox columns"
+                                : "Needs a “Name” title column"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {addTo && (
+                    <div className="ds-well mt-2 rounded-2xl p-3 text-sm">
+                      <p>
+                        Add the Mellox columns to <strong>{addTo.name}</strong>? Your own columns
+                        and rows stay as they are.
+                      </p>
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          size="sm"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(async () => {
+                              await selectNotionDestination({
+                                data: { workspaceId, dataSourceId: addTo.id, addColumns: true },
+                              });
+                              setSetup(false);
+                            }, "Notion calendar selected")
+                          }
+                        >
+                          Add columns and use it
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setAddTo(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Don’t see it?{" "}
                 <button
-                  key={d.id}
                   type="button"
                   disabled={busy}
-                  className="ds-tile ds-tile-hover w-full p-3 text-left text-sm"
-                  onClick={() =>
-                    void run(async () => {
-                      await selectNotionDestination({ data: { workspaceId, dataSourceId: d.id } });
-                      setSetup(false);
-                    }, "Notion calendar selected")
-                  }
+                  onClick={connect}
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
                 >
-                  {d.name}
+                  Choose pages in Notion
                 </button>
-              ))}
-            {!destinations.some((d) => d.kind === "data_source") && (
-              <p className="text-sm text-muted-foreground">
-                No shared data sources found. Share a Notion database with Mellox first.
               </p>
-            )}
-          </div>
-          <label className="text-xs text-muted-foreground" htmlFor="notion-parent">
-            Create in a shared page
-          </label>
-          <select
-            id="notion-parent"
-            className="ds-well w-full rounded-xl p-2 text-sm"
-            value={parentId}
-            onChange={(e) => setParentId(e.target.value)}
-          >
-            <option value="">Choose a page</option>
-            {destinations
-              .filter((d) => d.kind === "page")
-              .map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-          </select>
-          <DialogFooter>
-            <Button
-              disabled={busy || !parentId}
-              onClick={() =>
-                void run(async () => {
-                  await createNotionDestination({ data: { workspaceId, parentPageId: parentId } });
-                  setSetup(false);
-                }, "Notion calendar created")
-              }
-            >
-              Create calendar
-            </Button>
-          </DialogFooter>
+            </div>
+          )}
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
         </DialogContent>
       </Dialog>
       <Dialog

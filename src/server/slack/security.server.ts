@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { readEncryptionKey } from "@/server/crypto/secret-box.server";
 
-export const SLACK_REDIRECT = "https://mellox.ai/api/integrations/slack/oauth/callback";
+export const SLACK_CALLBACK = "/api/integrations/slack/oauth/callback";
 export const SLACK_SCOPES =
   "app_mentions:read,assistant:write,chat:write,channels:read,commands,im:history";
 
@@ -17,6 +17,52 @@ export function slackConfig() {
     signingSecret,
     key: readEncryptionKey("SLACK_TOKEN_ENCRYPTION_KEY"),
   };
+}
+
+/**
+ * Where Slack sends a person back to. Slack only accepts HTTPS callbacks, and
+ * the state cookie lives on the origin that started the flow, so connecting
+ * works only when this server is the one Slack calls back.
+ */
+/** This deployment's own origin, from configuration and never from a request header. */
+export function slackAppOrigin(env: Record<string, string | undefined> = process.env) {
+  try {
+    return new URL(env.APP_URL?.trim() || "").origin;
+  } catch {
+    throw new Error("Slack is not set up on this server yet.");
+  }
+}
+
+export function slackOrigins(env: Record<string, string | undefined> = process.env) {
+  const app = new URL(slackAppOrigin(env));
+  let redirect: URL;
+  try {
+    redirect = new URL(env.SLACK_REDIRECT_URI?.trim() || SLACK_CALLBACK, app.origin);
+  } catch {
+    throw new Error("Slack is not set up on this server yet.");
+  }
+  if (redirect.pathname !== SLACK_CALLBACK || redirect.search || redirect.hash)
+    throw new Error("Slack is not set up on this server yet.");
+  if (redirect.protocol !== "https:" || redirect.origin !== app.origin)
+    throw new Error(
+      `Slack can only be connected on ${redirect.protocol === "https:" ? redirect.host : "the live site"}. Open Mellox there to connect.`,
+    );
+  return { appOrigin: app.origin, redirectUri: redirect.toString() };
+}
+
+/** Why Slack can't connect here, in words a person can act on; null when ready. */
+export function slackConnectIssue(): string | null {
+  try {
+    slackConfig();
+  } catch {
+    return "Slack is not set up on this server yet.";
+  }
+  try {
+    slackOrigins();
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "Slack is not set up on this server yet.";
+  }
 }
 
 export function sha256(value: string) {

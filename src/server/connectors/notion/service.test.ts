@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { encryptWithKey } from "@/server/crypto/secret-box.server";
-import { listNotionDestinations, notionStatus } from "./service.server";
+import { calendarFit, listNotionDestinations, notionStatus } from "./service.server";
 
 const { from, notionRequest } = vi.hoisted(() => ({ from: vi.fn(), notionRequest: vi.fn() }));
 vi.mock("@/integrations/supabase/client.server", () => ({
@@ -67,5 +67,25 @@ describe("Notion connection status", () => {
     await expect(notionStatus("workspace-id")).resolves.toMatchObject({ status: "error" });
     await expect(listNotionDestinations("workspace-id")).rejects.toMatchObject({ status: 409 });
     expect(notionRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("which Notion databases can hold the calendar", () => {
+  const ready = {
+    Name: { type: "title" },
+    Content: { type: "rich_text" },
+    "Mellox ID": { type: "rich_text" },
+    "Mellox Workspace ID": { type: "rich_text" },
+  };
+  it("is ready only with all four columns of the right type", () => {
+    expect(calendarFit(ready)).toBe("ready");
+  });
+  it("offers to add columns when they are simply missing", () => {
+    expect(calendarFit({ Name: { type: "title" }, About: { type: "rich_text" } })).toBe("addable");
+  });
+  it("never offers to change a column a person already made", () => {
+    expect(calendarFit({ ...ready, Content: { type: "select" } })).toBe("unfit");
+    expect(calendarFit({ Title: { type: "title" } })).toBe("unfit");
+    expect(calendarFit(null)).toBe("unfit");
   });
 });

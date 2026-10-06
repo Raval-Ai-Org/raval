@@ -5,12 +5,20 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { encryptWithKey } from "@/server/crypto/secret-box.server";
 import { roleAtLeast } from "@/server/api-auth";
 import { recordAudit } from "@/server/audit.server";
-import { SLACK_REDIRECT, SLACK_SCOPES, safeEqualHex, sha256, slackConfig } from "./security.server";
+import {
+  SLACK_CALLBACK,
+  SLACK_SCOPES,
+  safeEqualHex,
+  sha256,
+  slackConfig,
+  slackOrigins,
+} from "./security.server";
 
 export const SLACK_STATE_COOKIE = "mellox_slack_state";
 
 export async function startSlackOAuth(userId: string, workspaceId: string) {
   const { clientId } = slackConfig();
+  const { redirectUri } = slackOrigins();
   const state = randomBytes(48).toString("base64url");
   const { error } = await supabaseAdmin.from("connector_install_states").insert({
     provider: "slack",
@@ -24,13 +32,13 @@ export async function startSlackOAuth(userId: string, workspaceId: string) {
     httpOnly: true,
     secure: true,
     sameSite: "lax",
-    path: "/api/integrations/slack/oauth/callback",
+    path: SLACK_CALLBACK,
     maxAge: 600,
   });
   const url = new URL("https://slack.com/oauth/v2/authorize");
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("scope", SLACK_SCOPES);
-  url.searchParams.set("redirect_uri", SLACK_REDIRECT);
+  url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("state", state);
   return url.toString();
 }
@@ -73,7 +81,7 @@ export async function completeSlackOAuth(state: string, code: string) {
       client_id: config.clientId,
       client_secret: config.clientSecret,
       code,
-      redirect_uri: SLACK_REDIRECT,
+      redirect_uri: slackOrigins().redirectUri,
     }),
     signal: AbortSignal.timeout(8000),
     cache: "no-store",

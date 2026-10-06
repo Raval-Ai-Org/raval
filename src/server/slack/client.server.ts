@@ -68,3 +68,25 @@ export async function markSlackError(installationId: string, workspaceId: string
     .eq("id", installationId)
     .eq("workspace_id", workspaceId);
 }
+
+/** A Slack error code in words a person can act on. */
+export function slackErrorMessage(error: unknown): string {
+  const code = error instanceof SlackApiError ? error.code : "network_error";
+  if (["not_in_channel", "channel_not_found"].includes(code))
+    return "Mellox isn't in that channel yet. In Slack, open the channel and type /invite @Mellox.";
+  if (code === "is_archived") return "That channel is archived. Choose another one.";
+  if (
+    [
+      "invalid_auth",
+      "token_revoked",
+      "account_inactive",
+      "not_authed",
+      "reconnect_needed",
+    ].includes(code)
+  )
+    return "Slack needs to be connected again.";
+  if (code === "missing_scope")
+    return "Slack needs to be connected again so Mellox gets the right access.";
+  if (code === "rate_limited") return "Slack is busy. Try again in a minute.";
+  return "Slack didn't respond. Try again in a moment.";
+}

@@ -31,21 +31,43 @@ export function canvaConfig() {
       throw new HttpError(503, "Canva token encryption key is missing or invalid on this server.");
     throw error;
   }
-  const base = process.env.APP_URL?.replace(/\/$/, "");
+  return { clientId, clientSecret, ...keys, ...canvaOrigins() };
+}
+
+/**
+ * Canva accepts HTTPS callbacks, and for local development only
+ * `http://127.0.0.1:<port>` — never `localhost`. The session lives on the
+ * origin the person is using (APP_URL), so the callback hands back to it.
+ */
+export function canvaOrigins(appUrl = process.env.APP_URL) {
+  const base = appUrl?.trim();
   if (!base) throw new HttpError(503, "Canva callback URL is not configured on this server.");
-  let redirectUri: string;
+  let origin: URL;
   try {
-    const origin = new URL(base);
-    if (
-      origin.protocol !== "https:" &&
-      !(origin.protocol === "http:" && origin.hostname === "localhost")
-    )
-      throw new Error("Invalid Canva callback origin");
-    redirectUri = new URL(CANVA_CALLBACK, origin).toString();
+    origin = new URL(base);
   } catch {
     throw new HttpError(503, "APP_URL must be a valid HTTPS origin for Canva.");
   }
-  return { clientId, clientSecret, ...keys, redirectUri };
+  const local = origin.protocol === "http:" && /^(localhost|127\.0\.0\.1)$/.test(origin.hostname);
+  if (origin.protocol !== "https:" && !local)
+    throw new HttpError(503, "APP_URL must be a valid HTTPS origin for Canva.");
+  const callbackOrigin = local
+    ? `http://127.0.0.1${origin.port ? `:${origin.port}` : ""}`
+    : origin.origin;
+  return {
+    appOrigin: origin.origin,
+    redirectUri: new URL(CANVA_CALLBACK, callbackOrigin).toString(),
+  };
+}
+
+/** Why Canva can't connect here, in words a person can act on; null when ready. */
+export function canvaConfigurationMessage(): string | null {
+  try {
+    canvaConfig();
+    return null;
+  } catch (error) {
+    return error instanceof HttpError ? error.message : "Canva is not set up on this server.";
+  }
 }
 
 export function canvaConfigured() {

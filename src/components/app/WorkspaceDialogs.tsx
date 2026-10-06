@@ -395,9 +395,16 @@ function SettingsDialog({
           {section === "accounts" && (
             <SurfacePage width="narrow">
               <SocialAccountsSection variant="settings" />
-              <CanvaConnection />
-              {workspaceId && <NotionConnection workspaceId={workspaceId} />}
-              {workspaceId && <SlackConnection workspaceId={workspaceId} />}
+              {workspaceId && (
+                <>
+                  <GroupLabel>Apps</GroupLabel>
+                  <div className="space-y-3">
+                    <CanvaConnection />
+                    <NotionConnection workspaceId={workspaceId} />
+                    <SlackConnection workspaceId={workspaceId} />
+                  </div>
+                </>
+              )}
             </SurfacePage>
           )}
           {section === "analytics" && (

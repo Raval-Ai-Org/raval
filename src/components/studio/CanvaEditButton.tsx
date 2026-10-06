@@ -28,6 +28,7 @@ export function CanvaEditButton({
   const role = useOptionalWorkspaceRole();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const [mapping, setMapping] = useState<Awaited<ReturnType<typeof getCanvaEditState>> | null>(
     null,
   );
@@ -58,6 +59,7 @@ export function CanvaEditButton({
     setBusy(true);
     setAction("edit");
     setError(null);
+    setNote(null);
     try {
       const status = await getCanvaConnection({ data: { workspaceId } });
       if (status.status !== "active") {
@@ -73,7 +75,7 @@ export function CanvaEditButton({
       setSlideLinks(result.slideDesigns.slice(1));
       await refresh();
       if (result.mode === "flat_image")
-        setError(
+        setNote(
           result.slideCount > 1
             ? "Opened slide 1 in Canva. Open the other slides below; their text may not be individually editable."
             : "Opened in Canva. Original text inside the image may not be individually editable.",
@@ -96,7 +98,7 @@ export function CanvaEditButton({
         className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 text-xs font-medium text-foreground hover:bg-surface-3 disabled:opacity-50 ${className}`}
       >
         <Pencil className="size-3.5" aria-hidden />
-        {busy && action === "edit" ? "Preparing editable Canva design…" : "Edit with Canva"}
+        {busy && action === "edit" ? "Opening in Canva…" : "Edit with Canva"}
       </button>
       {slideLinks.length > 0 && (
         <span className="flex flex-wrap gap-1">
@@ -117,19 +119,20 @@ export function CanvaEditButton({
       {mapping?.mappingId && (
         <button
           type="button"
-          aria-label="Import Canva changes"
+          aria-label="Bring back from Canva"
           disabled={busy}
           onClick={async () => {
             setBusy(true);
             setAction("import");
             setError(null);
+            setNote(null);
             try {
               const imported = await importCanvaVersion({
                 data: { workspaceId, mappingId: mapping.mappingId! },
               });
               await refresh();
               emitAppEvent("assets:changed");
-              setError(`Canva version ${imported.versionNumber} imported. Original preserved.`);
+              setNote(`Canva version ${imported.versionNumber} saved. Your original is kept.`);
             } catch (e) {
               setError(e instanceof Error ? e.message : "Could not import Canva changes.");
             } finally {
@@ -139,7 +142,7 @@ export function CanvaEditButton({
           }}
           className="min-h-9 rounded-full border border-border bg-surface-2 px-3 text-xs font-medium text-foreground hover:bg-surface-3 disabled:opacity-50"
         >
-          {busy && action === "import" ? "Importing Canva changes…" : "Import Canva changes"}
+          {busy && action === "import" ? "Bringing it back…" : "Bring back from Canva"}
         </button>
       )}
       {mapping?.versionId && mapping.canSelect && (
@@ -151,11 +154,12 @@ export function CanvaEditButton({
             setBusy(true);
             setAction("select");
             setError(null);
+            setNote(null);
             try {
               await selectCanvaVersionAction({
                 data: { workspaceId, versionId: mapping.versionId! },
               });
-              setError(`Canva version ${mapping.versionNumber} selected for this content.`);
+              setNote(`This post now uses Canva version ${mapping.versionNumber}.`);
               emitAppEvent("content:changed");
               emitAppEvent("assets:changed");
             } catch (e) {
@@ -172,8 +176,13 @@ export function CanvaEditButton({
             : `Use Canva version ${mapping.versionNumber}`}
         </button>
       )}
-      {error && (
+      {note && (
         <span role="status" className="max-w-64 text-xs text-muted-foreground">
+          {note}
+        </span>
+      )}
+      {error && (
+        <span role="alert" className="max-w-64 text-xs text-destructive">
           {error}
         </span>
       )}

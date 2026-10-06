@@ -10,7 +10,12 @@ import { safeFetch } from "@/server/safe-fetch";
 import { mergeMeta } from "@/lib/content-lifecycle";
 import { recordAudit } from "@/server/audit.server";
 import { HttpError } from "@/server/http-error";
-import { canvaConfig, canvaConfigured, CANVA_SCOPES } from "./config.server";
+import {
+  canvaConfig,
+  canvaConfigured,
+  canvaConfigurationMessage,
+  CANVA_SCOPES,
+} from "./config.server";
 import { consumeCanvaState } from "./oauth.server";
 import {
   tokenGrant,
@@ -85,6 +90,7 @@ export async function canvaStatus(workspaceId: string) {
   }
   return {
     configured,
+    configurationMessage: configured ? null : canvaConfigurationMessage(),
     status,
     accountName: row?.account_login ?? null,
   };

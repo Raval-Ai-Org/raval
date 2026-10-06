@@ -16,7 +16,7 @@ describe("Slack Connections card", () => {
         workspaceId: "00000000-0000-4000-8000-000000000001",
       }),
     );
-    expect(html).toContain("Mellox for Slack");
+    expect(html).toContain("Slack connection");
     expect(html).toContain("Review content, get a daily brief");
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('role="status" aria-busy="true"');

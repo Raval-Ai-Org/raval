@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CANVA_SCOPES, canvaConfig, canvaMagicLayersEnabled } from "./config.server";
+import { CANVA_SCOPES, canvaConfig, canvaMagicLayersEnabled, canvaOrigins } from "./config.server";
 import {
   buildCanvaAuthorizeUrl,
   challengeFor,
@@ -40,6 +40,14 @@ describe("Canva connector boundary", () => {
     expect(() => canvaConfig()).toThrow("APP_URL must be a valid HTTPS origin");
     vi.stubEnv("APP_URL", "https://mellox.ai");
     expect(canvaConfig().redirectUri).toBe("https://mellox.ai/api/integrations/canva/callback");
+  });
+
+  it("calls back on 127.0.0.1 in development, because Canva refuses localhost", () => {
+    expect(canvaOrigins("http://localhost:8080")).toEqual({
+      appOrigin: "http://localhost:8080",
+      redirectUri: "http://127.0.0.1:8080/api/integrations/canva/callback",
+    });
+    expect(canvaOrigins("https://mellox.ai/").appOrigin).toBe("https://mellox.ai");
   });
 
   it("uses exactly the requested scopes and S256 PKCE", () => {

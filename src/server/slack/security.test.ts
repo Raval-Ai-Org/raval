@@ -2,7 +2,13 @@ import { createHmac, randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { decryptWithKey, encryptWithKey } from "@/server/crypto/secret-box.server";
 import { matchesSlackState } from "./oauth.server";
-import { safeEqualHex, sha256, slackText, verifySlackSignature } from "./security.server";
+import {
+  safeEqualHex,
+  sha256,
+  slackOrigins,
+  slackText,
+  verifySlackSignature,
+} from "./security.server";
 
 const secret = "signing-secret-for-test";
 function headers(body: string, timestamp: number) {
@@ -44,5 +50,26 @@ describe("Slack request security", () => {
   });
   it("escapes Slack text rather than interpreting content as markup", () => {
     expect(slackText("<@U123> & <script>")).toBe("&lt;@U123&gt; &amp; &lt;script&gt;");
+  });
+});
+
+describe("Slack callback origin", () => {
+  it("uses this deployment's own HTTPS origin", () => {
+    expect(slackOrigins({ APP_URL: "https://mellox.ai/" })).toEqual({
+      appOrigin: "https://mellox.ai",
+      redirectUri: "https://mellox.ai/api/integrations/slack/oauth/callback",
+    });
+  });
+  it("refuses to start where Slack could never call back", () => {
+    expect(() =>
+      slackOrigins({
+        APP_URL: "http://localhost:8080",
+        SLACK_REDIRECT_URI: "https://mellox.ai/api/integrations/slack/oauth/callback",
+      }),
+    ).toThrow("Slack can only be connected on mellox.ai");
+    expect(() => slackOrigins({ APP_URL: "http://localhost:8080" })).toThrow("the live site");
+    expect(() =>
+      slackOrigins({ APP_URL: "https://mellox.ai", SLACK_REDIRECT_URI: "https://mellox.ai/else" }),
+    ).toThrow("not set up");
   });
 });

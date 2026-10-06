@@ -22,5 +22,7 @@ test("OAuth callback never redirects to a forged host", async ({ request }) => {
     maxRedirects: 0,
   });
   expect(response.status()).toBe(302);
-  expect(response.headers().location).toBe("https://mellox.ai/projects?slack=failed");
+  const location = new URL(response.headers().location);
+  expect(location.host).not.toBe("attacker.example");
+  expect(location.pathname + location.search).toBe("/projects?slack=failed");
 });

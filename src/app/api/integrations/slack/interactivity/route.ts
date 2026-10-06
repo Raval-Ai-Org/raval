@@ -5,6 +5,7 @@ import {
 } from "@/server/slack/inbound.server";
 import { slackApi, slackToken } from "@/server/slack/client.server";
 import { slackConfig, verifySlackSignature } from "@/server/slack/security.server";
+import { kickSlackQueue, slackEphemeral } from "@/server/slack/kick.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export const dynamic = "force-dynamic";
@@ -32,17 +33,18 @@ export async function POST(request: Request) {
     return new Response("Invalid payload", { status: 400 });
   if (payload.type === "message_action" && payload.callback_id === "mellox_create") {
     const targets = (await listSlackUserTargets(teamId, userId)).slice(0, 50);
-    if (!targets.length)
-      return Response.json({
-        response_type: "ephemeral",
-        text: "Link your Slack user from Mellox Connections first. Select the client workspace there.",
-      });
+    if (!targets.length) {
+      await slackEphemeral(
+        payload.response_url,
+        "Link your Slack account first: in Mellox, open Settings → Slack → Get link code.",
+      );
+      return new Response("");
+    }
     const text = String(payload.message?.text ?? "").slice(0, 8000);
-    if (!text)
-      return Response.json({
-        response_type: "ephemeral",
-        text: "This message has no text to create from.",
-      });
+    if (!text) {
+      await slackEphemeral(payload.response_url, "This message has no text to create from.");
+      return new Response("");
+    }
     const refs: Array<{ id: string; name: string }> = [];
     for (const target of targets) {
       const { data: ref, error } = await table("slack_action_refs")
@@ -126,10 +128,8 @@ export async function POST(request: Request) {
       );
       return new Response("");
     } catch {
-      return Response.json({
-        response_type: "ephemeral",
-        text: "Could not open Mellox. Please try again.",
-      });
+      await slackEphemeral(payload.response_url, "Could not open Mellox. Please try again.");
+      return new Response("");
     }
   }
   const refId =
@@ -139,11 +139,13 @@ export async function POST(request: Request) {
       : payload.actions?.[0]?.value;
   if (typeof refId !== "string") return new Response("ok");
   const target = await resolveActionTarget(teamId, refId);
-  if (!target)
-    return Response.json({
-      response_type: "ephemeral",
-      text: "This action expired. Open Mellox for the latest version.",
-    });
+  if (!target) {
+    await slackEphemeral(
+      payload.response_url,
+      "This action expired. Open Mellox for the latest version.",
+    );
+    return new Response("");
+  }
   if (payload.type === "block_actions") {
     const { data: ref } = await table("slack_action_refs")
       .select("action")
@@ -183,10 +185,11 @@ export async function POST(request: Request) {
         );
         return new Response("");
       } catch {
-        return Response.json({
-          response_type: "ephemeral",
-          text: "Could not open the changes form. Please try again.",
-        });
+        await slackEphemeral(
+          payload.response_url,
+          "Could not open the changes form. Please try again.",
+        );
+        return new Response("");
       }
     }
   }
@@ -206,7 +209,8 @@ export async function POST(request: Request) {
     reason: typeof reason === "string" ? reason.slice(0, 1000) : undefined,
     message_ts: payload.message?.ts,
   });
-  return payload.type === "view_submission"
-    ? Response.json({ response_action: "clear" })
-    : Response.json({ response_type: "ephemeral", text: "Mellox is working on it…" });
+  kickSlackQueue();
+  if (payload.type === "view_submission") return Response.json({ response_action: "clear" });
+  await slackEphemeral(payload.response_url, "On it. I’ll reply here in a moment.");
+  return new Response("");
 }

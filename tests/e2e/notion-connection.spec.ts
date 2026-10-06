@@ -98,7 +98,7 @@ test("Settings connects, selects a calendar, imports, syncs, and disconnects", a
   await expect(card).toBeVisible({ timeout: 30000 });
   await expect(card.getByRole("button", { name: "Connect Notion" })).toBeEnabled();
   await card.getByRole("button", { name: "Connect Notion" }).click();
-  await expect(page.getByRole("dialog", { name: "Choose a Notion calendar" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Choose your Notion calendar" })).toBeVisible();
   await page.getByRole("button", { name: "Mellox Content Calendar" }).click();
   await expect(card.getByText("Editorial Workspace")).toBeVisible();
   await card.getByRole("button", { name: "Export to Notion" }).click();

@@ -307,6 +307,8 @@ export async function listNotionDestinations(workspaceId: string) {
     name: string;
     url: string | null;
     kind: "data_source" | "page";
+    /** Data sources only: whether it can hold the Mellox calendar as it is. */
+    fit: CalendarFit | null;
   }[] = [];
   let cursor: string | undefined;
   do {
@@ -329,6 +331,7 @@ export async function listNotionDestinations(workspaceId: string) {
                 .join("") || "Untitled page",
         url: item.url ?? null,
         kind: item.object,
+        fit: item.object === "data_source" ? calendarFit(item.properties) : null,
       });
     }
     cursor = page.has_more && typeof page.next_cursor === "string" ? page.next_cursor : undefined;
@@ -337,19 +340,54 @@ export async function listNotionDestinations(workspaceId: string) {
   } while (cursor);
   return results;
 }
-async function dataSource(token: string, id: string) {
-  const source = await notionRequest(token, `/data_sources/${encodeURIComponent(id)}`);
-  if (source.object !== "data_source") throw new HttpError(400, "Choose a Notion data source.");
-  const required: Record<string, string> = {
-    Name: "title",
-    Content: "rich_text",
-    "Mellox ID": "rich_text",
-    "Mellox Workspace ID": "rich_text",
-  };
-  if (Object.entries(required).some(([name, type]) => source.properties?.[name]?.type !== type))
+/** The columns of a Mellox calendar. The first four are the ones sync cannot work without. */
+const CALENDAR_PROPERTIES: Record<string, Record<string, object>> = {
+  Name: { title: {} },
+  Content: { rich_text: {} },
+  "Mellox ID": { rich_text: {} },
+  "Mellox Workspace ID": { rich_text: {} },
+  Platform: { select: {} },
+  Status: { select: {} },
+  "Publish Date": { date: {} },
+  "Content Type": { select: {} },
+  "Asset URL": { url: {} },
+  "Last Synced": { date: {} },
+};
+const REQUIRED_PROPERTIES = ["Name", "Content", "Mellox ID", "Mellox Workspace ID"];
+const typeOf = (name: string) => Object.keys(CALENDAR_PROPERTIES[name])[0];
+export type CalendarFit = "ready" | "addable" | "unfit";
+/**
+ * "addable": only missing columns stand in the way, and Mellox can add them.
+ * A column that exists with another type is never changed, so that is "unfit".
+ */
+export function calendarFit(properties: Record<string, any> | null | undefined): CalendarFit {
+  const has = (name: string) => properties?.[name]?.type === typeOf(name);
+  if (REQUIRED_PROPERTIES.every(has)) return "ready";
+  if (!has("Name")) return "unfit";
+  return REQUIRED_PROPERTIES.some((name) => properties?.[name] && !has(name)) ? "unfit" : "addable";
+}
+async function dataSource(token: string, id: string, addColumns = false) {
+  const path = `/data_sources/${encodeURIComponent(id)}`;
+  let source = await notionRequest(token, path);
+  if (source.object !== "data_source") throw new HttpError(400, "Choose a Notion database.");
+  const fit = calendarFit(source.properties);
+  if (fit === "addable" && addColumns) {
+    // Only columns that do not exist yet; nothing a person made is touched.
+    const missing = Object.fromEntries(
+      Object.entries(CALENDAR_PROPERTIES).filter(([name]) => !source.properties?.[name]),
+    );
+    await notionRequest(token, path, {
+      method: "PATCH",
+      body: JSON.stringify({ properties: missing }),
+    });
+    source = await notionRequest(token, path);
+  }
+  if (calendarFit(source.properties) !== "ready")
     throw new HttpError(
       400,
-      "This data source needs Name, Content, Mellox ID, and Mellox Workspace ID properties. Create a Mellox calendar in a shared page instead.",
+      fit === "addable"
+        ? "This database is missing the Mellox columns. Let Mellox add them, or create a new calendar."
+        : "This database can't hold the Mellox calendar. Create a new calendar in a page instead.",
     );
   return source;
 }
@@ -372,9 +410,10 @@ export async function selectNotionDestination(
   workspaceId: string,
   userId: string,
   dataSourceId: string,
+  addColumns = false,
 ) {
   const { conn, token } = await ready(workspaceId);
-  const source = await dataSource(token, dataSourceId);
+  const source = await dataSource(token, dataSourceId, addColumns);
   const databaseId = source.parent?.database_id ?? null;
   const name =
     (source.title ?? []).map((part: any) => part.plain_text ?? part.text?.content ?? "").join("") ||
@@ -412,20 +451,7 @@ export async function createNotionDestination(
     body: JSON.stringify({
       parent: { type: "page_id", page_id: parentPageId },
       title: [{ type: "text", text: { content: "Mellox Content Calendar" } }],
-      initial_data_source: {
-        properties: {
-          Name: { title: {} },
-          Content: { rich_text: {} },
-          Platform: { select: {} },
-          Status: { select: {} },
-          "Publish Date": { date: {} },
-          "Content Type": { select: {} },
-          "Mellox ID": { rich_text: {} },
-          "Mellox Workspace ID": { rich_text: {} },
-          "Asset URL": { url: {} },
-          "Last Synced": { date: {} },
-        },
-      },
+      initial_data_source: { properties: CALENDAR_PROPERTIES },
     }),
   });
   const details = created.data_sources?.length

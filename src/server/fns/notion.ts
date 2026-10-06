@@ -46,12 +46,19 @@ export const listNotionDestinations = createServerFn({ method: "POST" })
   });
 export const selectNotionDestination = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
-  .inputValidator((v) => workspace.extend({ dataSourceId: uuid }).parse(v))
+  .inputValidator((v) =>
+    workspace.extend({ dataSourceId: uuid, addColumns: z.boolean().optional() }).parse(v),
+  )
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "editor");
     const notion = await service();
     return notion.withNotionSyncLock(data.workspaceId, () =>
-      notion.selectNotionDestination(data.workspaceId, context.userId, data.dataSourceId),
+      notion.selectNotionDestination(
+        data.workspaceId,
+        context.userId,
+        data.dataSourceId,
+        data.addColumns === true,
+      ),
     );
   });
 export const createNotionDestination = createServerFn({ method: "POST" })

@@ -1,5 +1,6 @@
 import { resolveSlackTarget, enqueueSlackInbound } from "@/server/slack/inbound.server";
 import { slackConfig, verifySlackSignature } from "@/server/slack/security.server";
+import { hintUnlinkedSlackUser, kickSlackQueue } from "@/server/slack/kick.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +56,10 @@ export async function POST(request: Request) {
     slackUserId: event.user,
     code: link?.[1],
   });
-  if (!target) return new Response("ok");
+  if (!target) {
+    if (event.type === "message") hintUnlinkedSlackUser(body.team_id, event.channel);
+    return new Response("ok");
+  }
   await enqueueSlackInbound(target, `event:${body.event_id}`, "event", {
     type: event.type,
     channel: event.channel,
@@ -65,5 +69,6 @@ export async function POST(request: Request) {
     thread_ts: event.thread_ts,
     linked: !!link,
   });
+  kickSlackQueue();
   return new Response("ok");
 }

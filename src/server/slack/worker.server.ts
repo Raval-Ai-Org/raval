@@ -250,7 +250,7 @@ async function processEvent(row: Inbox) {
       row.installation_id,
       p.channel,
       `unlinked:${row.delivery_key}`,
-      "Link your Slack user from Mellox → Settings → Connections before using this workspace.",
+      "Link your Slack account first: in Mellox, open Settings → Slack → Get link code, then send me that line in a direct message.",
       undefined,
       thread,
     );
@@ -1003,6 +1003,13 @@ async function queueAlerts() {
   return queued;
 }
 
+/** Inbound work and replies only: what a Slack request needs done right away. */
+export async function runSlackQueue() {
+  const inbox = await runInbox();
+  const outbound = await runOutbound();
+  return { inbox, outbound };
+}
+
 export async function runSlackJobs() {
   let queued = 0;
   try {
@@ -1011,8 +1018,7 @@ export async function runSlackJobs() {
     // A transient intelligence or analytics failure must not delay inbound actions.
     console.error("[slack] alert scan failed");
   }
-  const inbox = await runInbox();
-  const outbound = await runOutbound();
+  const { inbox, outbound } = await runSlackQueue();
   await table("slack_threads")
     .delete()
     .lt("updated_at", new Date(Date.now() - 30 * 86400_000).toISOString());

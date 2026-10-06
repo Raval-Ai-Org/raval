@@ -8,8 +8,13 @@ import { rateLimitFor } from "@/server/rate-limit";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { recordAudit } from "@/server/audit.server";
 import { isSlackEnabled } from "@/lib/feature-flags";
-import { slackApi, slackToken, markSlackError } from "@/server/slack/client.server";
-import { sha256, slackConfig } from "@/server/slack/security.server";
+import {
+  slackApi,
+  slackToken,
+  markSlackError,
+  slackErrorMessage,
+} from "@/server/slack/client.server";
+import { sha256, slackConnectIssue } from "@/server/slack/security.server";
 import { startSlackOAuth } from "@/server/slack/oauth.server";
 import { HttpError } from "@/server/http-error";
 
@@ -68,16 +73,11 @@ export const getSlackConnection = createServerFn({ method: "POST" })
             .maybeSingle(),
         ])
       : [{ data: [] }, { data: null }, { data: null }, { data: null }];
+    const issue = slackConnectIssue();
     return {
       enabled: featureEnabled,
-      configured: (() => {
-        try {
-          slackConfig();
-          return true;
-        } catch {
-          return false;
-        }
-      })(),
+      configured: !issue,
+      configurationMessage: issue,
       connection: conn && {
         id: conn.id,
         teamName: conn.team_name,
@@ -134,12 +134,12 @@ export const listSlackChannels = createServerFn({ method: "POST" })
       return all;
     } catch (error) {
       await markSlackError(conn.id, data.workspaceId, error);
-      throw error;
+      throw new HttpError(503, slackErrorMessage(error));
     }
   });
 
 export const setSlackChannel = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .middleware([requireSupabaseAuth, rateLimitFor("connector")])
   .inputValidator((v) =>
     workspace
       .extend({
@@ -161,14 +161,17 @@ export const setSlackChannel = createServerFn({ method: "POST" })
         .delete()
         .eq("workspace_id", data.workspaceId)
         .eq("purpose", data.purpose);
-      return { ok: true };
+      return { ok: true, needsInvite: false, name: null };
     }
-    const token = await slackToken(conn.id, data.workspaceId);
-    const info = await slackApi<{ channel?: { id: string; name: string } }>(
-      token,
-      "conversations.info",
-      { channel: data.channelId },
-    );
+    let info: { channel?: { id: string; name: string; is_member?: boolean } };
+    try {
+      info = await slackApi(await slackToken(conn.id, data.workspaceId), "conversations.info", {
+        channel: data.channelId,
+      });
+    } catch (error) {
+      await markSlackError(conn.id, data.workspaceId, error);
+      throw new HttpError(503, slackErrorMessage(error));
+    }
     if (info.channel?.id !== data.channelId) throw new HttpError(400, "Channel is unavailable");
     const { error } = await table("slack_channel_mappings").upsert(
       {
@@ -189,7 +192,8 @@ export const setSlackChannel = createServerFn({ method: "POST" })
       entity: data.purpose,
       payload: { channelId: data.channelId },
     });
-    return { ok: true };
+    // Mellox can only post where it has been invited.
+    return { ok: true, needsInvite: info.channel.is_member === false, name: info.channel.name };
   });
 
 const prefsSchema = workspace.extend({
@@ -206,7 +210,7 @@ const prefsSchema = workspace.extend({
   }),
 });
 export const setSlackPreferences = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .middleware([requireSupabaseAuth, rateLimitFor("connector")])
   .inputValidator((v) => prefsSchema.parse(v))
   .handler(async ({ data, context }) => {
     enabled(data.workspaceId);
@@ -249,7 +253,7 @@ export const createSlackLinkCode = createServerFn({ method: "POST" })
   });
 
 export const sendSlackTest = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .middleware([requireSupabaseAuth, rateLimitFor("connector")])
   .inputValidator((v) =>
     workspace.extend({ purpose: z.enum(["approvals", "marketing", "intelligence"]) }).parse(v),
   )
@@ -267,7 +271,7 @@ export const sendSlackTest = createServerFn({ method: "POST" })
     try {
       await slackApi(await slackToken(conn.id, data.workspaceId), "chat.postMessage", {
         channel: (channel as { channel_id: string }).channel_id,
-        text: "Mellox is connected and ready for this workspace.",
+        text: "Mellox is connected. Updates for this brand will show up here.",
       });
       await table("slack_installations")
         .update({ last_outbound_at: new Date().toISOString(), last_error: null } as never)
@@ -275,7 +279,7 @@ export const sendSlackTest = createServerFn({ method: "POST" })
       return { ok: true };
     } catch (error) {
       await markSlackError(conn.id, data.workspaceId, error);
-      throw new HttpError(503, "Slack could not deliver the test message");
+      throw new HttpError(503, slackErrorMessage(error));
     }
   });
 
