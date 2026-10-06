@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { UserSupabaseClient } from "@/integrations/supabase/client.user.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { encryptWithKey, decryptWithKey } from "@/server/crypto/secret-box.server";
+import { encryptWithKey, decryptWithKeys } from "@/server/crypto/secret-box.server";
 import { recordAudit } from "@/server/audit.server";
 import { HttpError } from "@/server/http-error";
 import {
@@ -110,10 +110,10 @@ async function ready(workspaceId: string, destination = false) {
   const cred = await credential(workspaceId, conn.id);
   if (destination && !cred.selected_data_source_id)
     throw new HttpError(409, "Choose a Notion content calendar first.");
-  const { key } = notionConfig();
+  const { readKeys } = notionConfig();
   let token: string;
   try {
-    token = decryptWithKey(cred.access_token_enc, key);
+    token = decryptWithKeys(cred.access_token_enc, readKeys);
   } catch {
     throw new HttpError(409, "Notion credentials cannot be read. Reconnect Notion to continue.");
   }
@@ -179,20 +179,20 @@ export async function notionStatus(workspaceId: string) {
   const cred =
     conn?.status === "active" ? await credential(workspaceId, conn.id).catch(() => null) : null;
   let configurationMessage: string | null = null;
-  let key: Buffer | null = null;
+  let readKeys: Buffer[] | null = null;
   try {
-    key = notionConfig().key;
+    readKeys = notionConfig().readKeys;
   } catch (error) {
     configurationMessage =
       error instanceof HttpError ? error.message : "Notion server configuration is unavailable.";
   }
-  const configured = key !== null;
+  const configured = readKeys !== null;
   let status = conn?.status ?? "disconnected";
   if (status === "active" && !cred) status = "error";
   if (status === "active" && !configured) status = "error";
-  if (status === "active" && cred && key) {
+  if (status === "active" && cred && readKeys) {
     try {
-      decryptWithKey(cred.access_token_enc, key);
+      decryptWithKeys(cred.access_token_enc, readKeys);
     } catch {
       status = "error";
     }

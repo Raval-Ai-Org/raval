@@ -29,7 +29,10 @@ describe("Canva connector boundary", () => {
     vi.stubEnv("CANVA_CLIENT_ID", "client-id");
     vi.stubEnv("CANVA_CLIENT_SECRET", "client-secret");
     vi.stubEnv("CANVA_TOKEN_ENCRYPTION_KEY", "invalid");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "s".repeat(64));
     vi.stubEnv("APP_URL", "https://mellox.ai");
+    expect(canvaConfig().key).toHaveLength(32);
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
     expect(() => canvaConfig()).toThrow("Canva token encryption key is missing or invalid");
 
     vi.stubEnv("CANVA_TOKEN_ENCRYPTION_KEY", Buffer.alloc(32).toString("base64"));

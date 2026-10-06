@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { encryptWithKey, decryptWithKey } from "@/server/crypto/secret-box.server";
+import { encryptWithKey, decryptWithKeys } from "@/server/crypto/secret-box.server";
 import { safeReturnPath } from "@/server/connectors/return-url";
 import { HttpError } from "@/server/http-error";
 import { CANVA_SCOPES, canvaConfig } from "./config.server";
@@ -78,10 +78,10 @@ export async function consumeCanvaState(state: string, userId: string) {
     .maybeSingle();
   if (!row?.pkce_verifier_enc || !validCanvaStateRow(state, row, userId))
     throw new HttpError(400, "Canva connection expired. Start again.");
-  const { key } = canvaConfig();
+  const { readKeys } = canvaConfig();
   let verifier: string;
   try {
-    verifier = decryptWithKey(row.pkce_verifier_enc, key);
+    verifier = decryptWithKeys(row.pkce_verifier_enc, readKeys);
   } catch {
     throw new HttpError(409, "Canva connection state cannot be read. Start the connection again.");
   }

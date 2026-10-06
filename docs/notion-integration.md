@@ -6,9 +6,9 @@ The Notion mark in the connection card is from [Simple Icons](https://github.com
 
 ## Configuration
 
-Create a public Notion integration with read, insert, and update content capabilities. Set server-only `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET`, `NOTION_REDIRECT_URI`, and `NOTION_TOKEN_ENCRYPTION_KEY`. The encryption key is a base64-encoded 32-byte key, as with the Canva connector. Register `https://mellox.ai/api/integrations/notion/callback` in Notion and set it as the production `NOTION_REDIRECT_URI`. Use the corresponding localhost callback in development.
+Create a public Notion integration with read, insert, and update content capabilities. Set server-only `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET`, and `NOTION_REDIRECT_URI`. The app derives a provider-specific token encryption key from the required `SUPABASE_SERVICE_ROLE_KEY`; `NOTION_TOKEN_ENCRYPTION_KEY` is optional and remains available to read grants encrypted before this change. Register `https://mellox.ai/api/integrations/notion/callback` in Notion and set it as the production `NOTION_REDIRECT_URI`. Use the corresponding localhost callback in development.
 
-`NOTION_REDIRECT_URI` must use the same origin as `APP_URL`; a production deployment cannot point its Notion callback at localhost. Keep `NOTION_TOKEN_ENCRYPTION_KEY` stable across deployments so saved grants remain readable. The connection card reports which server setting is missing or invalid. After changing local `.env.local`, restart the app; set the same required variables separately on the production host.
+`NOTION_REDIRECT_URI` must use the same origin as `APP_URL`; a production deployment cannot point its Notion callback at localhost. Keep `SUPABASE_SERVICE_ROLE_KEY` stable across deployments so saved grants remain readable. If an older grant was encrypted with a dedicated key, keep that `NOTION_TOKEN_ENCRYPTION_KEY` available until the grant is replaced; otherwise reconnect Notion. The connection card reports which server setting is missing or invalid. After changing local `.env.local`, restart the app; set the same required variables separately on the production host.
 
 ## Architecture and permissions
 

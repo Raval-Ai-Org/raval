@@ -1,5 +1,5 @@
 import "server-only";
-import { readEncryptionKey, SecretKeyError } from "@/server/crypto/secret-box.server";
+import { connectorEncryptionKeys, SecretKeyError } from "@/server/crypto/secret-box.server";
 import { HttpError } from "@/server/http-error";
 
 export const CANVA_SCOPES = [
@@ -23,9 +23,9 @@ export function canvaConfig() {
   const clientSecret = process.env.CANVA_CLIENT_SECRET;
   if (!clientId || !clientSecret)
     throw new HttpError(503, "Canva client credentials are missing on this server.");
-  let key: Buffer;
+  let keys: ReturnType<typeof connectorEncryptionKeys>;
   try {
-    key = readEncryptionKey("CANVA_TOKEN_ENCRYPTION_KEY");
+    keys = connectorEncryptionKeys("CANVA_TOKEN_ENCRYPTION_KEY");
   } catch (error) {
     if (error instanceof SecretKeyError)
       throw new HttpError(503, "Canva token encryption key is missing or invalid on this server.");
@@ -45,7 +45,7 @@ export function canvaConfig() {
   } catch {
     throw new HttpError(503, "APP_URL must be a valid HTTPS origin for Canva.");
   }
-  return { clientId, clientSecret, key, redirectUri };
+  return { clientId, clientSecret, ...keys, redirectUri };
 }
 
 export function canvaConfigured() {

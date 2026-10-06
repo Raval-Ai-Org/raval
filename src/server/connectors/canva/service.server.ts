@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import sharp from "sharp";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { encryptWithKey, decryptWithKey } from "@/server/crypto/secret-box.server";
+import { encryptWithKey, decryptWithKeys } from "@/server/crypto/secret-box.server";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { ASSET_BUCKET, persistAsset } from "@/server/assets/persist.server";
 import { safeFetch } from "@/server/safe-fetch";
@@ -29,9 +29,9 @@ type Row = Record<string, unknown>;
 const db = supabaseAdmin as unknown as SupabaseClient;
 const refreshes = new Map<string, Promise<string>>();
 
-function decryptCanvaToken(payload: string, key: Buffer) {
+function decryptCanvaToken(payload: string, keys: readonly Buffer[]) {
   try {
-    return decryptWithKey(payload, key);
+    return decryptWithKeys(payload, keys);
   } catch {
     throw new HttpError(409, "Canva credentials cannot be read. Reconnect Canva to continue.");
   }
@@ -74,9 +74,9 @@ export async function canvaStatus(workspaceId: string) {
       if (!data) status = "error";
       else {
         try {
-          const { key } = canvaConfig();
-          decryptWithKey(data.access_token_enc, key);
-          decryptWithKey(data.refresh_token_enc, key);
+          const { readKeys } = canvaConfig();
+          decryptWithKeys(data.access_token_enc, readKeys);
+          decryptWithKeys(data.refresh_token_enc, readKeys);
         } catch {
           status = "error";
         }
@@ -180,14 +180,14 @@ async function freshToken(workspaceId: string) {
     throw new HttpError(409, "Reconnect Canva to continue.");
   const config = canvaConfig();
   if (Date.parse(data.access_token_expires_at) > Date.now() + 60_000)
-    return decryptCanvaToken(data.access_token_enc, config.key);
+    return decryptCanvaToken(data.access_token_enc, config.readKeys);
   const inFlight = refreshes.get(connected.id);
   if (inFlight) return inFlight;
   const refreshing = (async () => {
     try {
       const tokens = await tokenGrant({
         grant_type: "refresh_token",
-        refresh_token: decryptCanvaToken(data.refresh_token_enc, config.key),
+        refresh_token: decryptCanvaToken(data.refresh_token_enc, config.readKeys),
       });
       const { error } = await db
         .from("canva_oauth_credentials")
@@ -214,7 +214,7 @@ async function freshToken(workspaceId: string) {
         rotated?.access_token_enc &&
         Date.parse(rotated.access_token_expires_at) > Date.now() + 60_000
       ) {
-        return decryptCanvaToken(rotated.access_token_enc, config.key);
+        return decryptCanvaToken(rotated.access_token_enc, config.readKeys);
       }
       await db
         .from("workspace_connections")
@@ -247,7 +247,7 @@ export async function disconnectCanva(workspaceId: string, userId: string) {
     .eq("workspace_id", workspaceId);
   if (data?.refresh_token_enc) {
     try {
-      await revokeCanvaToken(decryptWithKey(data.refresh_token_enc, canvaConfig().key));
+      await revokeCanvaToken(decryptWithKeys(data.refresh_token_enc, canvaConfig().readKeys));
     } catch {
       /* local credentials removed */
     }
