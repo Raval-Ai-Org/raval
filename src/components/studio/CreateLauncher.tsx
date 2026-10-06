@@ -1,9 +1,8 @@
 "use client";
 
-// The one entry point for making something: pick what you're making (Video,
-// Picture, Text, Ads), then the format inside it. Standard formats open the
-// Studio composer on the description step; the creator video ad opens its own
-// studio.
+// The one entry point for making something: pick a category, then a format when
+// there is more than one choice. Standard formats open the Studio composer on
+// the description step; the creator video ad opens its own studio.
 import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import { PlanLock } from "@/components/app/billing/billing-ui";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
@@ -74,6 +73,9 @@ function optionsFor(group: StudioGroup): Option[] {
 const CARD =
   "group relative isolate cursor-pointer overflow-hidden rounded-2xl border border-border/80 bg-surface-3 text-left shadow-1 transition-[border-color,box-shadow,translate] duration-200 hover:-translate-y-0.5 hover:border-[hsl(var(--tone)/0.45)] hover:shadow-[0_18px_40px_-20px_hsl(var(--tone)/0.55)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--tone))]";
 
+const GROUP_CARD_LAYOUT =
+  "flex min-w-0 flex-row items-center gap-2.5 p-2.5 min-[320px]:min-h-[112px] min-[320px]:flex-col min-[320px]:items-stretch min-[320px]:gap-0 min-[320px]:p-3 max-[359px]:p-2 [@media(max-height:500px)]:min-h-0 [@media(max-height:500px)]:p-2";
+
 /** A soft wash of the card's colour that fades in on hover. */
 const GLOW = (
   <span
@@ -96,9 +98,6 @@ export function CreateLauncher() {
     return () => removeAppEventListener("open:create-launcher", onOpen);
   }, []);
 
-  const enter = (id: StudioGroup) => {
-    setGroupId(id);
-  };
   const back = () => {
     setGroupId(null);
   };
@@ -130,6 +129,15 @@ export function CreateLauncher() {
     setOpen(false);
   };
 
+  const enter = (id: StudioGroup) => {
+    const options = optionsFor(id);
+    if (options.length === 1) {
+      pick(options[0]);
+      return;
+    }
+    setGroupId(id);
+  };
+
   const group = STUDIO_GROUPS.find((g) => g.id === groupId) ?? null;
 
   return (
@@ -141,7 +149,7 @@ export function CreateLauncher() {
         Icon={group ? GROUP_ICON[group.id] : Sparkles}
         title={group ? group.label : "Create"}
         description={group ? "Choose a format" : "What would you like to make?"}
-        srDescription="Choose what to make, then pick a format."
+        srDescription="Choose what to make, then pick a format if there are multiple options."
         headerAccessory={
           group ? (
             <button
@@ -155,10 +163,10 @@ export function CreateLauncher() {
             </button>
           ) : null
         }
-        bodyClassName="overflow-x-hidden p-4 sm:p-5"
+        bodyClassName="overflow-x-hidden p-2 sm:p-4 [@media(max-height:500px)]:p-2"
       >
         {!group ? (
-          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 min-[320px]:grid-cols-2 [@media(max-height:500px)]:grid-cols-3">
             {STUDIO_GROUPS.map((g) => {
               const Icon = GROUP_ICON[g.id];
               const options = optionsFor(g.id);
@@ -169,24 +177,20 @@ export function CreateLauncher() {
                   key={g.id}
                   type="button"
                   onClick={() => enter(g.id)}
-                  className={cn(
-                    `studio-tone-${GROUP_TONE_TYPE[g.id]}`,
-                    CARD,
-                    "flex min-w-0 flex-row items-center gap-3 p-3 min-[360px]:min-h-36 min-[360px]:flex-col min-[360px]:items-stretch min-[360px]:gap-0 min-[360px]:p-4",
-                  )}
+                  className={cn(`studio-tone-${GROUP_TONE_TYPE[g.id]}`, CARD, GROUP_CARD_LAYOUT)}
                 >
                   {GLOW}
                   <span className="flex items-start justify-between">
-                    <span className="studio-glyph grid size-12 place-items-center rounded-2xl transition-transform duration-[--motion-duration-slow] ease-[--motion-ease-spring] group-hover:-rotate-6 group-hover:scale-110">
+                    <span className="studio-glyph grid size-10 place-items-center rounded-xl transition-transform duration-[--motion-duration-slow] ease-[--motion-ease-spring] group-hover:-rotate-6 group-hover:scale-110 max-[359px]:size-8 [@media(max-height:500px)]:size-8">
                       <Icon className="size-[22px]" />
                     </span>
-                    <ArrowRight className="hidden size-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 min-[360px]:block" />
+                    <ArrowRight className="hidden size-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 min-[320px]:block" />
                   </span>
-                  <span className="min-w-0 min-[360px]:mt-5">
-                    <span className="block text-[15px] font-semibold tracking-tight text-foreground">
+                  <span className="min-w-0 min-[320px]:mt-2 max-[359px]:mt-1 [@media(max-height:500px)]:mt-1">
+                    <span className="block text-[15px] font-semibold tracking-tight text-foreground max-[359px]:text-sm [@media(max-height:500px)]:text-sm">
                       {g.label}
                     </span>
-                    <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+                    <span className="mt-0.5 block text-xs leading-snug text-muted-foreground max-[359px]:text-[11px] max-[359px]:leading-tight [@media(max-height:500px)]:text-[11px] [@media(max-height:500px)]:leading-tight">
                       {summary}
                     </span>
                   </span>
@@ -199,24 +203,20 @@ export function CreateLauncher() {
                 setOpen(false);
                 setUploadOpen(true);
               }}
-              className={cn(
-                "studio-tone-upload",
-                CARD,
-                "flex min-w-0 flex-row items-center gap-3 p-3 min-[360px]:min-h-36 min-[360px]:flex-col min-[360px]:items-stretch min-[360px]:gap-0 min-[360px]:p-4",
-              )}
+              className={cn("studio-tone-upload", CARD, GROUP_CARD_LAYOUT)}
             >
               {GLOW}
               <span className="flex items-start justify-between">
-                <span className="studio-glyph grid size-12 place-items-center rounded-2xl transition-transform duration-[--motion-duration-slow] ease-[--motion-ease-spring] group-hover:-rotate-6 group-hover:scale-110">
+                <span className="studio-glyph grid size-10 place-items-center rounded-xl transition-transform duration-[--motion-duration-slow] ease-[--motion-ease-spring] group-hover:-rotate-6 group-hover:scale-110 max-[359px]:size-8 [@media(max-height:500px)]:size-8">
                   <Upload className="size-[22px]" />
                 </span>
-                <ArrowRight className="hidden size-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 min-[360px]:block" />
+                <ArrowRight className="hidden size-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 min-[320px]:block" />
               </span>
-              <span className="min-w-0 min-[360px]:mt-5">
-                <span className="block text-[15px] font-semibold tracking-tight text-foreground">
+              <span className="min-w-0 min-[320px]:mt-2 max-[359px]:mt-1 [@media(max-height:500px)]:mt-1">
+                <span className="block text-[15px] font-semibold tracking-tight text-foreground max-[359px]:text-sm [@media(max-height:500px)]:text-sm">
                   Upload
                 </span>
-                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground max-[359px]:text-[11px] max-[359px]:leading-tight [@media(max-height:500px)]:text-[11px] [@media(max-height:500px)]:leading-tight">
                   Add your own photo, video or post
                 </span>
               </span>

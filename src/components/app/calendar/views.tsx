@@ -1,11 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus, RefreshCw, Star, Story } from "@/components/icons";
+import {
+  Bot,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Star,
+  Story,
+} from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { dsIconBtn } from "@/components/app/surface/buttons";
 import { cn } from "@/lib/utils";
 import type { MarketingMoment } from "@/lib/studio/moments";
+import type { PlannedSlot } from "@/lib/calendar/autopilot";
 import {
   CALENDAR_CHANNELS,
   channelInfo,
@@ -23,14 +33,25 @@ import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const NO_SLOTS: PlannedSlot[] = [];
+const SLOT_STATE: Record<PlannedSlot["state"], string> = {
+  proposed: "Waiting for your OK",
+  planned: "Planned",
+  writing: "Being written",
+};
 
 export type ViewProps = {
   byDate: Map<string, CalendarEntry[]>;
+  /** Pieces Autopilot has planned but not written yet. Read-only. */
+  planned: Map<string, PlannedSlot[]>;
+  /** Posts on the calendar that Autopilot made. */
+  autopilotIds: Set<string>;
   moments: Map<string, MarketingMoment[]>;
   today: string;
   draggingId: string | null;
   busyIds: Set<string>;
   onPickEntry: (id: string) => void;
+  onPickPlanned: (slot: PlannedSlot) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
   onDropOnDay: (date: string) => void;
@@ -77,7 +98,7 @@ function MomentLine({ moments }: { moments: MarketingMoment[] }) {
   if (!moments.length) return null;
   return (
     <span
-      className="flex items-center gap-1 truncate text-[10px] font-medium text-primary"
+      className="flex min-w-0 items-center gap-1 truncate text-[10px] font-medium text-primary"
       title={moments.map((m) => m.name).join(", ")}
     >
       <Star className="h-2.5 w-2.5 shrink-0" />
@@ -86,34 +107,62 @@ function MomentLine({ moments }: { moments: MarketingMoment[] }) {
   );
 }
 
+/** The small mark that says "Autopilot made this". */
+function AutopilotMark({ className }: { className?: string }) {
+  return (
+    <Bot
+      aria-label="Autopilot"
+      className={cn("h-3 w-3 shrink-0 text-muted-foreground", className)}
+      strokeWidth={2.2}
+    />
+  );
+}
+
+const longDay = (d: Date) =>
+  d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+
 /* ───────────────────────────── month ───────────────────────────── */
+
+const MONTH_CHIPS = 3;
 
 export function MonthView({
   grid,
   month,
   selectedDate,
   onPickDate,
+  onAdd,
   ...p
 }: ViewProps & {
   grid: Date[];
   month: number;
   selectedDate: string | null;
   onPickDate: (date: string) => void;
+  onAdd: (date: string) => void;
 }) {
   const drop = useDayDrop(p.draggingId, p.onDropOnDay);
+  // A sixth week that belongs wholly to next month only makes every day smaller.
+  const days = grid[35].getMonth() === month ? grid : grid.slice(0, 35);
   return (
-    <div className="flex min-h-0 flex-1 flex-col p-3">
-      <div className="mb-1 grid grid-cols-7 gap-1 px-1">
+    <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-2">
+      <div className="mb-1.5 grid grid-cols-7 gap-1.5">
         {DOW.map((d) => (
-          <div key={d} className="ds-label text-center">
+          <div key={d} className="ds-label px-2">
             {d}
           </div>
         ))}
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-1">
-        {grid.map((d) => {
+      <div
+        className="grid min-h-0 flex-1 grid-cols-7 gap-1.5"
+        style={{ gridTemplateRows: `repeat(${days.length / 7}, minmax(0, 1fr))` }}
+      >
+        {days.map((d) => {
           const date = fmtYMD(d);
           const items = p.byDate.get(date) ?? [];
+          const slots = p.planned.get(date) ?? NO_SLOTS;
+          const total = items.length + slots.length;
+          const shownItems = items.slice(0, MONTH_CHIPS);
+          const shownSlots = slots.slice(0, MONTH_CHIPS - shownItems.length);
+          const more = total - shownItems.length - shownSlots.length;
           const inMonth = d.getMonth() === month;
           const isToday = date === p.today;
           return (
@@ -121,7 +170,7 @@ export function MonthView({
               key={date}
               role="button"
               tabIndex={0}
-              aria-label={`${d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}, ${items.length} ${items.length === 1 ? "post" : "posts"}`}
+              aria-label={`${longDay(d)}, ${total} ${total === 1 ? "post" : "posts"}`}
               onClick={() => onPickDate(date)}
               onKeyDown={(ev) => {
                 if (ev.target !== ev.currentTarget) return;
@@ -132,36 +181,42 @@ export function MonthView({
               }}
               {...drop.props(date)}
               className={cn(
-                "flex min-h-[76px] cursor-pointer flex-col gap-1 overflow-hidden rounded-xl border p-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/40",
+                "group @container relative flex min-h-[72px] min-w-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-2xl border p-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/40",
                 inMonth
-                  ? "border-[var(--ds-tile-border)] bg-[var(--ds-tile-bg)]"
-                  : "border-transparent bg-transparent text-muted-foreground/60",
-                "hover:border-foreground/25",
-                selectedDate === date && "border-primary/50",
+                  ? "border-[var(--ds-tile-border)] bg-[var(--ds-tile-bg)] hover:border-foreground/20"
+                  : "border-transparent text-muted-foreground/60 hover:bg-[var(--ds-well-bg)]",
+                selectedDate === date && "border-primary/60 hover:border-primary/60",
                 p.draggingId && "border-dashed",
                 drop.over === date && "border-solid border-primary bg-primary/10",
               )}
             >
-              <div className="flex items-center justify-between gap-1">
+              <div className="flex h-5 shrink-0 items-center gap-1">
                 <span
                   className={cn(
-                    "text-[11px] font-semibold tabular-nums",
-                    isToday &&
-                      "grid h-5 w-5 place-items-center rounded-full bg-primary text-primary-foreground",
+                    "grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1 text-[11px] font-semibold tabular-nums",
+                    isToday && "bg-primary text-primary-foreground",
                   )}
                 >
                   {d.getDate()}
                 </span>
-                {items.length > 3 && (
-                  <span className="text-[10px] font-medium text-muted-foreground">
-                    {items.length}
-                  </span>
-                )}
+                <MomentLine moments={p.moments.get(date) ?? []} />
+                <button
+                  type="button"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    onAdd(date);
+                  }}
+                  className="absolute right-1 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                  aria-label={`Add a post on ${longDay(d)}`}
+                  title="Add a post"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
               </div>
-              <MomentLine moments={p.moments.get(date) ?? []} />
               <div className="flex min-h-0 flex-col gap-0.5">
-                {items.slice(0, 3).map((e) => {
+                {shownItems.map((e) => {
                   const { color } = channelInfo(e.channel);
+                  const open = e.status === "draft" || e.status === "review";
                   return (
                     <button
                       key={e.id}
@@ -173,12 +228,16 @@ export function MonthView({
                       }}
                       title={`${clock(e.time)} · ${e.title}`}
                       className={cn(
-                        "flex items-center gap-1 rounded-md px-1 py-0.5 text-left text-[10.5px] font-medium text-foreground/90 hover:brightness-110",
+                        "flex h-[19px] shrink-0 items-center gap-1 rounded-md px-1 text-left text-[10.5px] font-medium text-foreground/90 transition hover:brightness-110",
                         !isLocked(e.status) && "cursor-grab active:cursor-grabbing",
                         p.draggingId === e.id && "opacity-50",
-                        (e.status === "draft" || e.status === "review") && "opacity-80",
                       )}
-                      style={{ background: `${color}26` }}
+                      // Not approved yet: an outline. Approved or out: filled.
+                      style={
+                        open
+                          ? { boxShadow: `inset 0 0 0 1px ${color}66` }
+                          : { background: `${color}2e` }
+                      }
                     >
                       {p.busyIds.has(e.id) ? (
                         <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin" />
@@ -187,29 +246,47 @@ export function MonthView({
                         <Story
                           aria-label="Story"
                           className="h-2.5 w-2.5 shrink-0"
-                          style={{
-                            color,
-                            opacity: e.status === "draft" || e.status === "review" ? 0.6 : 1,
-                          }}
+                          style={{ color }}
                         />
                       ) : (
-                        // A hollow dot is a post nobody has approved yet.
-                        <span
-                          className="h-1.5 w-1.5 shrink-0 rounded-full"
-                          style={
-                            e.status === "draft" || e.status === "review"
-                              ? { boxShadow: `inset 0 0 0 1px ${color}` }
-                              : { background: color }
-                          }
-                        />
+                        <span className="grid shrink-0 place-items-center">
+                          <ChannelIcon channel={e.channel} size={10} />
+                        </span>
                       )}
-                      <span className="truncate">{e.title}</span>
+                      <span className="min-w-0 flex-1 truncate">{e.title}</span>
+                      {e.status === "failed" ? (
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive"
+                          aria-label="Failed"
+                        />
+                      ) : p.autopilotIds.has(e.id) ? (
+                        <AutopilotMark className="hidden h-2.5 w-2.5 @[112px]:block" />
+                      ) : null}
                     </button>
                   );
                 })}
-                {items.length > 3 && (
-                  <span className="px-1 text-[10px] text-muted-foreground">
-                    +{items.length - 3} more
+                {shownSlots.map((slot) => (
+                  <button
+                    key={slot.id}
+                    type="button"
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      p.onPickPlanned(slot);
+                    }}
+                    title={`Autopilot · ${SLOT_STATE[slot.state]} · ${clock(slot.time)} · ${slot.title}`}
+                    className="flex h-[19px] shrink-0 items-center gap-1 rounded-md border border-dashed border-foreground/25 px-1 text-left text-[10.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {slot.state === "writing" ? (
+                      <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin" />
+                    ) : (
+                      <AutopilotMark className="h-2.5 w-2.5" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate">{slot.title}</span>
+                  </button>
+                ))}
+                {more > 0 && (
+                  <span className="px-1 text-[10px] font-medium text-muted-foreground">
+                    +{more} more
                   </span>
                 )}
               </div>
@@ -235,25 +312,25 @@ export function WeekView({
         {days.map((d, i) => {
           const date = fmtYMD(d);
           const items = p.byDate.get(date) ?? [];
+          const slots = p.planned.get(date) ?? NO_SLOTS;
           const isToday = date === p.today;
           return (
             <div
               key={date}
               {...drop.props(date)}
               className={cn(
-                "group flex min-h-[260px] flex-col gap-1.5 rounded-2xl border border-[var(--ds-tile-border)] bg-[var(--ds-tile-bg)] p-2 transition-colors",
+                "group flex min-h-[260px] min-w-0 flex-col gap-1.5 rounded-2xl border border-[var(--ds-tile-border)] bg-[var(--ds-tile-bg)] p-2 transition-colors",
                 p.draggingId && "border-dashed",
                 drop.over === date && "border-solid border-primary bg-primary/10",
               )}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-baseline gap-1.5">
+              <div className="flex h-6 items-center justify-between">
+                <div className="flex items-center gap-1.5">
                   <span className="ds-label">{DOW[i]}</span>
                   <span
                     className={cn(
-                      "text-[13px] font-semibold tabular-nums",
-                      isToday &&
-                        "grid h-6 w-6 place-items-center rounded-full bg-primary text-primary-foreground",
+                      "grid h-6 min-w-6 place-items-center rounded-full text-[13px] font-semibold tabular-nums",
+                      isToday && "bg-primary text-primary-foreground",
                     )}
                   >
                     {d.getDate()}
@@ -266,7 +343,7 @@ export function WeekView({
                     dsIconBtn,
                     "h-6 w-6 opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
                   )}
-                  aria-label={`Add a post on ${d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`}
+                  aria-label={`Add a post on ${longDay(d)}`}
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
@@ -279,20 +356,43 @@ export function WeekView({
                   {...dragProps(e, p)}
                   onClick={() => p.onPickEntry(e.id)}
                   className={cn(
-                    "rounded-xl border border-border bg-card p-2 text-left transition-colors hover:border-foreground/25",
+                    "min-w-0 rounded-xl border border-border bg-card p-2 text-left transition-colors hover:border-foreground/25",
                     !isLocked(e.status) && "cursor-grab active:cursor-grabbing",
                     p.draggingId === e.id && "opacity-50",
                   )}
                 >
                   <div className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
                     <ChannelIcon channel={e.channel} size={12} />
-                    <span className="tabular-nums">{clock(e.time)}</span>
+                    <span className="whitespace-nowrap tabular-nums">{clock(e.time)}</span>
                     {p.busyIds.has(e.id) && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {p.autopilotIds.has(e.id) && <AutopilotMark className="ml-auto" />}
                   </div>
                   <div className="mt-1 line-clamp-3 text-[12px] font-medium leading-snug">
                     {e.title}
                   </div>
                   <StatusChip status={e.status} className="mt-1.5 inline-block" />
+                </button>
+              ))}
+              {slots.map((slot) => (
+                <button
+                  key={slot.id}
+                  type="button"
+                  onClick={() => p.onPickPlanned(slot)}
+                  className="min-w-0 rounded-xl border border-dashed border-foreground/25 p-2 text-left text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <div className="flex items-center gap-1.5 text-[10.5px]">
+                    <ChannelIcon channel={slot.channel} size={12} />
+                    <span className="whitespace-nowrap tabular-nums">{clock(slot.time)}</span>
+                    {slot.state === "writing" ? (
+                      <Loader2 className="ml-auto h-3 w-3 animate-spin" />
+                    ) : (
+                      <AutopilotMark className="ml-auto" />
+                    )}
+                  </div>
+                  <div className="mt-1 line-clamp-3 text-[12px] font-medium leading-snug">
+                    {slot.title}
+                  </div>
+                  <div className="mt-1.5 text-[10.5px] font-medium">{SLOT_STATE[slot.state]}</div>
                 </button>
               ))}
             </div>
@@ -303,25 +403,56 @@ export function WeekView({
   );
 }
 
+/** A piece Autopilot has planned, as a row in a list. */
+function PlannedRow({ slot, onPick }: { slot: PlannedSlot; onPick: (slot: PlannedSlot) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(slot)}
+      className="flex w-full items-center gap-2.5 rounded-[var(--ds-radius-tile)] border border-dashed border-foreground/20 p-2.5 text-left transition-colors hover:border-foreground/35"
+    >
+      <ChannelBadge channel={slot.channel} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12.5px] font-medium">{slot.title}</span>
+        <span className="block truncate text-[11px] text-muted-foreground">
+          {clock(slot.time)} · {slot.format}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-[var(--ds-well-bg)] px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+        {slot.state === "writing" ? (
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+        ) : (
+          <AutopilotMark className="h-2.5 w-2.5" />
+        )}
+        {SLOT_STATE[slot.state]}
+      </span>
+    </button>
+  );
+}
+
 /* ───────────────────────────── list ───────────────────────────── */
 
 export function ListView({
   onRegenerate,
   ...p
 }: ViewProps & { onRegenerate: (id: string) => void }) {
-  const days = [...p.byDate.entries()];
+  const dates = [...new Set([...p.byDate.keys(), ...p.planned.keys()])].sort();
   // Audience scores that still match each saved post (none when Audience is off).
   const workspaceId = useOptionalWorkspaceId();
   const { data: scores } = useAudienceScores(
     workspaceId,
-    days.flatMap(([, items]) => items.map((e) => e.id)).filter((id) => UUID_RE.test(id)),
+    [...p.byDate.values()]
+      .flatMap((items) => items.map((e) => e.id))
+      .filter((id) => UUID_RE.test(id)),
   );
   return (
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3 scrollbar-thin sm:p-4">
-      {days.map(([date, items]) => {
+      {dates.map((date) => {
         const d = parseYMD(date);
+        const items = p.byDate.get(date) ?? [];
+        const slots = p.planned.get(date) ?? NO_SLOTS;
         return (
-          <section key={date}>
+          <div key={date}>
             <div className="mb-1.5 flex items-center gap-2 px-1">
               <h3 className={cn("text-[12.5px] font-semibold", date === p.today && "text-primary")}>
                 {d.toLocaleDateString(undefined, {
@@ -349,6 +480,7 @@ export function ListView({
                         {e.topic ? ` · ${e.topic}` : ""}
                       </span>
                     </span>
+                    {p.autopilotIds.has(e.id) && <AutopilotMark />}
                     {scores?.[e.id] ? <ScoreChip overall={scores[e.id].overall} /> : null}
                     <StatusChip status={e.status} />
                   </button>
@@ -370,8 +502,13 @@ export function ListView({
                   )}
                 </li>
               ))}
+              {slots.map((slot) => (
+                <li key={slot.id}>
+                  <PlannedRow slot={slot} onPick={p.onPickPlanned} />
+                </li>
+              ))}
             </ul>
-          </section>
+          </div>
         );
       })}
     </div>
@@ -382,31 +519,56 @@ export function ListView({
 
 export function DayPanel({
   date,
+  today,
   entries,
+  planned,
+  autopilotIds,
   moments,
   onPickEntry,
+  onPickPlanned,
+  onStep,
   onAdd,
 }: {
   date: string;
+  today: string;
   entries: CalendarEntry[];
+  planned: PlannedSlot[];
+  autopilotIds: Set<string>;
   moments: MarketingMoment[];
   onPickEntry: (id: string) => void;
+  onPickPlanned: (slot: PlannedSlot) => void;
+  onStep: (dir: 1 | -1) => void;
   onAdd: (date: string, title?: string) => void;
 }) {
   const d = parseYMD(date);
+  const total = entries.length + planned.length;
   return (
-    <section className="space-y-3 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[14px] font-semibold">
-          {d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
-        </h3>
-        <Button size="sm" variant="outline" onClick={() => onAdd(date)}>
-          <Plus /> Add post
-        </Button>
+    <div className="space-y-3 p-4">
+      <div className="flex items-center gap-1">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-[15px] font-semibold tracking-[-0.01em]">
+            {date === today ? "Today" : d.toLocaleDateString(undefined, { weekday: "long" })}
+          </h3>
+          <div className="truncate text-[11.5px] text-muted-foreground">
+            {d.toLocaleDateString(undefined, { month: "long", day: "numeric" })} ·{" "}
+            {total ? `${total} ${total === 1 ? "post" : "posts"}` : "Nothing planned"}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onStep(-1)}
+          className={dsIconBtn}
+          aria-label="Previous day"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={() => onStep(1)} className={dsIconBtn} aria-label="Next day">
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
 
       {moments.map((m) => (
-        <div key={m.id} className="rounded-xl bg-primary/10 p-3">
+        <div key={m.id} className="rounded-2xl bg-primary/10 p-3">
           <div className="flex items-center gap-1.5 text-[12.5px] font-semibold">
             <Star className="h-3.5 w-3.5 text-primary" /> {m.name}
           </div>
@@ -421,11 +583,7 @@ export function DayPanel({
         </div>
       ))}
 
-      {entries.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border p-4 text-center text-[12px] text-muted-foreground">
-          Nothing planned
-        </p>
-      ) : (
+      {total > 0 && (
         <ul className="space-y-1.5">
           {entries.map((e) => (
             <li key={e.id}>
@@ -437,17 +595,27 @@ export function DayPanel({
                 <ChannelBadge channel={e.channel} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[12.5px] font-medium">{e.title}</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
                     {clock(e.time)} · {e.format}
+                    {autopilotIds.has(e.id) && <AutopilotMark className="h-2.5 w-2.5" />}
                   </span>
                 </span>
                 <StatusChip status={e.status} />
               </button>
             </li>
           ))}
+          {planned.map((slot) => (
+            <li key={slot.id}>
+              <PlannedRow slot={slot} onPick={onPickPlanned} />
+            </li>
+          ))}
         </ul>
       )}
-    </section>
+
+      <Button variant="outline" onClick={() => onAdd(date)} className="w-full">
+        <Plus /> Add a post
+      </Button>
+    </div>
   );
 }
 

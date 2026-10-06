@@ -1,9 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CheckCircle, CircleAlert, ShieldCheck } from "lucide-react";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { cn } from "@/lib/utils";
+import { ConnectionLogo } from "./ConnectionCard";
 
 export type IntegrationHealthItem = {
   label: string;
@@ -11,39 +11,41 @@ export type IntegrationHealthItem = {
   state: "healthy" | "warning" | "error";
 };
 
+const DOT = {
+  healthy: "bg-success",
+  warning: "bg-warning",
+  error: "bg-destructive",
+} as const;
+
+/** Three or so checks, each a dot, a name and one word. */
 export function ConnectionHealth({ items }: { items: IntegrationHealthItem[] }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-      <div className="flex items-center gap-2 text-[12px] font-semibold">
-        <ShieldCheck className="size-3.5 text-success" aria-hidden />
-        Connection health
-      </div>
-      <ul className="mt-2 grid gap-2 sm:grid-cols-3">
-        {items.map((item) => {
-          const Icon = item.state === "healthy" ? CheckCircle : CircleAlert;
-          return (
-            <li key={item.label} className="flex min-w-0 items-start gap-2">
-              <Icon
-                className={cn(
-                  "mt-0.5 size-3.5 shrink-0",
-                  item.state === "healthy"
-                    ? "text-success"
-                    : item.state === "warning"
-                      ? "text-warning"
-                      : "text-destructive",
-                )}
-                aria-hidden
-              />
-              <span className="min-w-0">
-                <span className="block text-[11.5px] font-medium">{item.label}</span>
-                <span className="block truncate text-[10.5px] text-muted-foreground">
-                  {item.detail}
-                </span>
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+    <ul className="grid gap-2 sm:grid-cols-3" aria-label="Connection checks">
+      {items.map((item) => (
+        <li key={item.label} className="ds-well flex min-w-0 items-center gap-2.5 px-3 py-2.5">
+          <span className={cn("size-2 shrink-0 rounded-full", DOT[item.state])} aria-hidden />
+          <span className="min-w-0">
+            <span className="block truncate text-[12.5px] font-medium text-foreground">
+              {item.label}
+            </span>
+            <span className="block truncate text-[11.5px] text-muted-foreground">
+              {item.detail}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A row in a details window: a small label on the left, the value on the right. */
+export function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <span className="shrink-0 text-[12.5px] text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-right text-[13px] font-medium text-foreground">
+        {children}
+      </span>
     </div>
   );
 }
@@ -52,9 +54,10 @@ export function IntegrationDetails({
   open,
   onOpenChange,
   icon: Icon,
+  logo,
   provider,
   title,
-  description,
+  account,
   status,
   children,
   health,
@@ -63,9 +66,12 @@ export function IntegrationDetails({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   icon: React.ComponentType<{ className?: string }>;
+  /** The brand mark shown beside the account. */
+  logo: ReactNode;
   provider: string;
   title: string;
-  description: string;
+  /** Who is connected: an email, a user name or a site. */
+  account: ReactNode;
   status: ReactNode;
   children: ReactNode;
   health: IntegrationHealthItem[];
@@ -78,19 +84,24 @@ export function IntegrationDetails({
       size="md"
       Icon={Icon}
       title={title}
-      description={description}
       srDescription={`${provider} connection details`}
       bodyClassName="space-y-4 px-5 py-5 sm:px-6"
     >
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/60 px-3.5 py-3">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Status
-        </span>
+      <div className="ds-tile ds-enter flex items-center gap-3 p-4">
+        <ConnectionLogo>{logo}</ConnectionLogo>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[14px] font-semibold text-foreground">{account}</p>
+          <p className="text-[12px] text-muted-foreground">{provider}</p>
+        </div>
         {status}
       </div>
-      {children}
       <ConnectionHealth items={health} />
-      {footer && <div className="flex flex-wrap justify-end gap-2">{footer}</div>}
+      {children}
+      {footer && (
+        <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--ds-tile-border)] pt-4">
+          {footer}
+        </div>
+      )}
     </AppModalShell>
   );
 }

@@ -84,21 +84,18 @@ type Workspace = WorkspaceSummary;
 
 export type ClientStatus = Workspace["clientStatus"];
 
-const STATUS_META: Record<ClientStatus, { label: string; dot: string; chipText: string }> = {
-  active: {
-    label: "Active",
-    dot: "bg-emerald-500",
-    chipText: "text-emerald-600 dark:text-emerald-400",
-  },
-  onboarding: {
-    label: "Onboarding",
-    dot: "bg-amber-500",
-    chipText: "text-amber-600 dark:text-amber-400",
-  },
-  paused: { label: "Paused", dot: "bg-zinc-400", chipText: "text-muted-foreground" },
-};
+/** The tag on a project card, from what is actually going on in it. */
+function projectTag(w: Workspace): { label: string; dot: string } {
+  if (w.clientStatus === "paused") return { label: "Paused", dot: "bg-zinc-400" };
+  if (!w.onboarded) return { label: "Finish setup", dot: "bg-amber-500" };
+  if (w.failedCount) return { label: "Needs attention", dot: "bg-red-500" };
+  if (w.pendingApprovals) return { label: `${w.pendingApprovals} to approve`, dot: "bg-amber-500" };
+  if (w.scheduledCount) return { label: `${w.scheduledCount} scheduled`, dot: "bg-sky-500" };
+  if (w.publishedCount) return { label: "Live", dot: "bg-emerald-500" };
+  return { label: "Ready", dot: "bg-emerald-500" };
+}
 
-type StatusFilter = "all" | ClientStatus | "attention";
+type StatusFilter = "all" | "attention" | "setup" | "paused";
 
 /** Where opening a workspace lands: its app, or setup if never onboarded. */
 function openHref(w: Pick<Workspace, "id" | "onboarded">): string {
@@ -196,8 +193,8 @@ function ProjectsPage() {
     const q = query.trim().toLowerCase();
     return workspaces.filter((w) => {
       if (statusFilter === "attention" && w.health === "healthy") return false;
-      if (statusFilter !== "all" && statusFilter !== "attention" && w.clientStatus !== statusFilter)
-        return false;
+      if (statusFilter === "setup" && w.onboarded) return false;
+      if (statusFilter === "paused" && w.clientStatus !== "paused") return false;
       if (!q) return true;
       return [w.name, w.domain, w.websiteUrl, w.industry].some((v) => v?.toLowerCase().includes(q));
     });
@@ -230,7 +227,7 @@ function ProjectsPage() {
       toast.error("Couldn't update status");
       return;
     }
-    toast.success(`Marked ${STATUS_META[status].label.toLowerCase()}`);
+    toast.success(status === "paused" ? "Paused" : "Resumed");
   };
 
   if (sessionError) {
@@ -371,8 +368,7 @@ function ProjectsPage() {
                 >
                   <option value="all">All</option>
                   <option value="attention">Needs attention</option>
-                  <option value="active">Active</option>
-                  <option value="onboarding">Onboarding</option>
+                  <option value="setup">Finish setup</option>
                   <option value="paused">Paused</option>
                 </select>
               </div>
@@ -770,13 +766,16 @@ function ProjectCard({
             </div>
           )}
 
-          {/* Client status chip */}
-          <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-[10.5px] font-medium text-foreground/80 backdrop-blur">
-            <span
-              className={cn("h-1.5 w-1.5 rounded-full", STATUS_META[workspace.clientStatus].dot)}
-            />
-            {STATUS_META[workspace.clientStatus].label}
-          </span>
+          {/* Tag: what this project needs or is doing right now */}
+          {(() => {
+            const tag = projectTag(workspace);
+            return (
+              <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-[10.5px] font-medium text-foreground/80 backdrop-blur">
+                <span className={cn("h-1.5 w-1.5 rounded-full", tag.dot)} />
+                {tag.label}
+              </span>
+            );
+          })()}
           {workspace.duplicateOf && (
             <span
               className="absolute right-3 top-3 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-medium text-amber-700 backdrop-blur dark:text-amber-300"
@@ -854,18 +853,14 @@ function ProjectCard({
               <Pencil className="mr-2 h-3.5 w-3.5" /> Rename
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              Client status
-            </div>
-            {(Object.keys(STATUS_META) as ClientStatus[]).map((s) => (
-              <DropdownMenuItem key={s} onClick={() => onStatusChange(s)} className="text-[12.5px]">
-                <span className={cn("mr-2 h-2 w-2 rounded-full", STATUS_META[s].dot)} />
-                {STATUS_META[s].label}
-                {workspace.clientStatus === s && (
-                  <span className="ml-auto text-[10px] text-muted-foreground">current</span>
-                )}
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuItem
+              onClick={() =>
+                onStatusChange(workspace.clientStatus === "paused" ? "active" : "paused")
+              }
+            >
+              <Clock className="mr-2 h-3.5 w-3.5" />
+              {workspace.clientStatus === "paused" ? "Resume" : "Pause"}
+            </DropdownMenuItem>
             {onDelete && (
               <>
                 <DropdownMenuSeparator />
@@ -981,22 +976,12 @@ function PasteLinkBar({
 
   return (
     <div className="relative">
-      {/* Ambient glow behind the pill */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -inset-x-10 -inset-y-8 -z-10 rounded-[100%] opacity-70 blur-3xl"
-        style={{
-          background:
-            "radial-gradient(60% 60% at 50% 50%, hsl(var(--aura) / 0.18), transparent 70%)",
-        }}
-      />
-
       <form
         data-no-rhythm
         onSubmit={submit}
         className={cn(
           "group relative flex h-14 items-center gap-1.5 rounded-full border border-border/70 bg-card/95 pl-1.5 pr-1.5 shadow-[0_10px_28px_-18px_hsl(var(--foreground)/0.32),0_1px_0_hsl(var(--foreground)/0.04)_inset] backdrop-blur-xl",
-          "transition focus-within:border-primary-border focus-within:shadow-[0_12px_32px_-18px_hsl(var(--brand-green)/0.38),0_1px_0_hsl(var(--foreground)/0.05)_inset]",
+          "transition focus-within:border-primary-border",
         )}
       >
         <button

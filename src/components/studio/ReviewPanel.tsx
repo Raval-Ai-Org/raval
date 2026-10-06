@@ -936,15 +936,22 @@ export function ReviewPanel({
           </Button>
         </motion.div>
       ) : approvable && confirmDiscard ? (
-        <motion.div key="confirm" {...fadeSwap} className="flex w-full items-center gap-2">
-          <span className="mr-auto pl-1 text-sm text-foreground">Discard this {format.noun}?</span>
-          <Button variant="ghost" size="sm" onClick={() => setConfirmDiscard(false)}>
+        <motion.div key="confirm" {...fadeSwap} className="grid w-full min-w-0 grid-cols-2 gap-2">
+          <span className="col-span-2 pl-1 text-sm text-foreground">
+            Discard this {format.noun}?
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-w-0"
+            onClick={() => setConfirmDiscard(false)}
+          >
             Keep
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="text-danger"
+            className="min-w-0 text-danger"
             loading={busy === "discard"}
             onClick={() => void discard()}
           >
@@ -952,10 +959,15 @@ export function ReviewPanel({
           </Button>
         </motion.div>
       ) : approvable ? (
-        <motion.div key="approve" {...fadeSwap} className="flex w-full items-center gap-2">
+        <motion.div
+          key="approve"
+          {...fadeSwap}
+          className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2"
+        >
           <Button
             variant="ghost"
-            className="text-muted-foreground"
+            size="lg"
+            className="min-w-0 px-2 text-muted-foreground"
             onClick={() => setConfirmDiscard(true)}
             disabled={revising || busy !== null}
           >
@@ -964,6 +976,7 @@ export function ReviewPanel({
           <Button
             variant="outline"
             size="lg"
+            className="min-w-0 px-2"
             onClick={() => void approve()}
             disabled={revising || busy !== null || editing}
           >
@@ -971,7 +984,7 @@ export function ReviewPanel({
           </Button>
           {canShip ? (
             <Button
-              className="studio-cta flex-1"
+              className="studio-cta col-span-2 min-w-0"
               size="lg"
               onClick={() => setPublishMode("publish")}
               disabled={revising || busy !== null || editing}
@@ -981,10 +994,11 @@ export function ReviewPanel({
           ) : null}
         </motion.div>
       ) : canShip ? (
-        <motion.div key="ship" {...fadeSwap} className="grid w-full grid-cols-[auto_1fr] gap-2">
+        <motion.div key="ship" {...fadeSwap} className="grid w-full min-w-0 grid-cols-2 gap-2">
           <Button
             variant="outline"
             size="lg"
+            className="min-w-0 px-2"
             onClick={() => setPublishMode("schedule")}
             disabled={busy !== null || revising}
           >
@@ -993,7 +1007,7 @@ export function ReviewPanel({
           </Button>
           <Button
             size="lg"
-            className="studio-cta"
+            className="studio-cta min-w-0 px-2"
             onClick={() => setPublishMode("publish")}
             disabled={busy !== null || revising}
           >

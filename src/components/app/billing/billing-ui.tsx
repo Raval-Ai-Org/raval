@@ -7,7 +7,6 @@ import type { ReactNode } from "react";
 import { Check, Lock } from "@/components/icons";
 import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { PLANS, type BillingInterval, type PlanId } from "@/lib/billing/catalog";
-import { formatUsd, planPrice } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
 
 /** Monthly / Yearly switch. */
@@ -41,7 +40,7 @@ export function IntervalToggle({
           {option === "month" ? "Monthly" : "Yearly"}
           {option === "year" && (
             <span className="rounded-full bg-primary/15 px-1.5 text-[11px] font-semibold text-primary">
-              −17%
+              2 months free
             </span>
           )}
         </button>
@@ -84,69 +83,6 @@ export function UsageBar({
         />
       </div>
     </div>
-  );
-}
-
-/** One plan in the plans picker. */
-export function PlanCard({
-  plan,
-  interval,
-  current,
-  recommended,
-  dimmed,
-  action,
-  className,
-}: {
-  className?: string;
-  plan: PlanId;
-  interval: BillingInterval;
-  current?: boolean;
-  recommended?: boolean;
-  dimmed?: boolean;
-  action?: ReactNode;
-}) {
-  const def = PLANS[plan];
-  const price = planPrice(plan, interval);
-  const badge = current ? "Current plan" : recommended ? "Recommended" : def.badge;
-  return (
-    <article
-      className={cn(
-        "ds-tile relative flex flex-col p-5 transition-opacity",
-        recommended && "ring-2 ring-primary",
-        dimmed && "opacity-55",
-        className,
-      )}
-    >
-      {badge && (
-        <span
-          className={cn(
-            "absolute -top-2.5 left-4 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
-            current ? "bg-foreground text-background" : "bg-primary text-primary-foreground",
-          )}
-        >
-          {badge}
-        </span>
-      )}
-      <h4 className="text-[15px] font-semibold">{def.label}</h4>
-      <p className="mt-2 flex items-baseline gap-1">
-        <span className="text-[30px] font-semibold tracking-tight tabular-nums">
-          {formatUsd(Math.round(price.perMonth))}
-        </span>
-        <span className="text-[13px] text-muted-foreground">/ month</span>
-      </p>
-      <p className="h-4 text-[12px] text-muted-foreground">
-        {interval === "year" ? `${formatUsd(price.billed)} billed yearly` : "Billed monthly"}
-      </p>
-      <div className="mt-4">{action}</div>
-      <ul className="mt-5 space-y-2 text-[13px]">
-        {def.highlights.slice(0, 5).map((line) => (
-          <li key={line} className="flex gap-2">
-            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2.6} />
-            <span className="text-foreground/85">{line}</span>
-          </li>
-        ))}
-      </ul>
-    </article>
   );
 }
 

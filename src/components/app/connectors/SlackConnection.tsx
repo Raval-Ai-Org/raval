@@ -3,16 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useOptionalWorkspaceRole } from "@/components/workspace/WorkspaceProvider";
 import {
   getSlackConnection,
@@ -24,7 +14,10 @@ import {
   sendSlackTest,
   disconnectSlack,
 } from "@/lib/slack.functions";
-import { ConnectionCard } from "./ConnectionCard";
+import { Building2, Check, Clock, Copy, User } from "@/components/icons";
+import { SlackMark } from "@/components/brand/AppMarks";
+import { ConnectionCard, ConnectionFact } from "./ConnectionCard";
+import { DisconnectDialog } from "./DisconnectDialog";
 
 type State = Awaited<ReturnType<typeof getSlackConnection>>;
 type Purpose = "approvals" | "marketing" | "intelligence";
@@ -56,30 +49,7 @@ const defaults: Prefs = {
   brief_timezone: "UTC",
 };
 const field =
-  "min-h-9 rounded-xl border border-border bg-background px-3 text-[13px] text-foreground disabled:opacity-50";
-
-function SlackMark() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 54 54" className="size-7 shrink-0">
-      <path
-        fill="#36C5F0"
-        d="M19.7 3a4.7 4.7 0 1 0-9.4 0v12h9.4V3Zm0 16.7H7.7a4.7 4.7 0 0 0 0 9.4h12v-9.4Z"
-      />
-      <path
-        fill="#2EB67D"
-        d="M51 19.7a4.7 4.7 0 1 0 0-9.4H39v9.4h12Zm-16.7 0v-12a4.7 4.7 0 0 0-9.4 0v12h9.4Z"
-      />
-      <path
-        fill="#ECB22E"
-        d="M34.3 51a4.7 4.7 0 1 0 9.4 0V39h-9.4v12Zm0-16.7h12a4.7 4.7 0 0 0 0-9.4h-12v9.4Z"
-      />
-      <path
-        fill="#E01E5A"
-        d="M3 34.3a4.7 4.7 0 1 0 0 9.4h12v-9.4H3Zm16.7 0v12a4.7 4.7 0 0 0 9.4 0v-12h-9.4Z"
-      />
-    </svg>
-  );
-}
+  "ds-well min-h-9 rounded-full border-0 px-3.5 text-[13px] text-foreground transition-colors hover:bg-[var(--ds-well-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50";
 
 function timeZones(current: string) {
   let zones: string[] = [];
@@ -95,18 +65,26 @@ function Step({
   n,
   title,
   hint,
+  done,
   children,
-}: React.PropsWithChildren<{ n: number; title: string; hint: string }>) {
+}: React.PropsWithChildren<{ n: number; title: string; hint?: string; done?: boolean }>) {
   return (
-    <div>
-      <div className="flex items-baseline gap-2">
-        <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary/15 text-[11px] font-semibold text-foreground">
-          {n}
-        </span>
-        <h4 className="text-[13px] font-semibold text-foreground">{title}</h4>
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+      <span
+        className={
+          done
+            ? "grid size-6 place-items-center rounded-full bg-primary text-primary-foreground"
+            : "grid size-6 place-items-center rounded-full bg-primary/15 text-[12px] font-semibold text-foreground"
+        }
+        aria-hidden
+      >
+        {done ? <Check className="size-3.5" /> : n}
+      </span>
+      <div className="min-w-0">
+        <h4 className="text-[13.5px] font-semibold leading-6 text-foreground">{title}</h4>
+        {hint && <p className="text-[12px] leading-5 text-muted-foreground">{hint}</p>}
+        <div className="mt-3">{children}</div>
       </div>
-      <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{hint}</p>
-      <div className="mt-3">{children}</div>
     </div>
   );
 }
@@ -219,7 +197,7 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
         label="Slack connection"
         logo={<SlackMark />}
         name="Slack"
-        description="Review content, get a daily brief and ask Mellox about your brand, right in Slack."
+        description="Approvals, a daily brief and answers in Slack"
         status={
           state
             ? connected
@@ -231,22 +209,22 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
               ? { tone: "off", text: "Unavailable" }
               : null
         }
-        detail={
-          connected && conn
-            ? [
-                conn.teamName,
-                conn.connectedBy ? `connected by ${conn.connectedBy}` : null,
-                state.channels.length
-                  ? conn.lastOutboundAt
-                    ? `last message ${new Date(conn.lastOutboundAt).toLocaleDateString()}`
-                    : "nothing sent yet"
-                  : "choose a channel to start",
-              ]
-                .filter(Boolean)
-                .join(" · ")
-            : needsReconnect
-              ? "Slack stopped accepting this connection. Connect again to keep it running."
-              : undefined
+        facts={
+          connected && conn ? (
+            <>
+              {conn.teamName && <ConnectionFact icon={Building2}>{conn.teamName}</ConnectionFact>}
+              {conn.connectedBy && <ConnectionFact icon={User}>{conn.connectedBy}</ConnectionFact>}
+              {state.channels.length ? (
+                <ConnectionFact icon={Clock}>
+                  {conn.lastOutboundAt
+                    ? `Last message ${new Date(conn.lastOutboundAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+                    : "Nothing sent yet"}
+                </ConnectionFact>
+              ) : (
+                <ConnectionFact tone="warning">Choose a channel</ConnectionFact>
+              )}
+            </>
+          ) : undefined
         }
         actions={
           state?.enabled &&
@@ -256,8 +234,13 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
             </Button>
           ) : (
             canManage && (
-              <Button size="sm" disabled={!!busy || !state.configured} onClick={connect}>
-                {busy === "connect" ? "Opening Slack…" : conn ? "Reconnect" : "Connect Slack"}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!!busy || !state.configured}
+                onClick={connect}
+              >
+                {busy === "connect" ? "Opening…" : conn ? "Reconnect" : "Connect"}
               </Button>
             )
           ))
@@ -277,14 +260,15 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
           <div className="space-y-7">
             <Step
               n={1}
-              title="Choose where Mellox posts"
-              hint="Pick a channel for each kind of update. Leave one empty to skip it."
+              title="Where to post"
+              hint="One channel for each kind of update."
+              done={state.channels.length > 0}
             >
               <div className="space-y-2">
                 {mapping.map((m) => {
                   const current = mapped(m.purpose);
                   return (
-                    <div key={m.purpose} className="rounded-2xl bg-[var(--ds-well-bg)] px-4 py-3">
+                    <div key={m.purpose} className="ds-well px-4 py-3">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="text-[13px] font-medium">{m.title}</p>
@@ -362,7 +346,7 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
                 )}
               </p>
             </Step>
-            <Step n={2} title="Choose what to send" hint="Each update goes to its channel above.">
+            <Step n={2} title="What to send">
               <div className="divide-y divide-[var(--ds-tile-border)]">
                 {preferences.map(([key, label, description, purpose]) => {
                   const ready = !!mapped(purpose);
@@ -423,12 +407,13 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
             </Step>
             <Step
               n={3}
-              title="Link your own Slack account"
+              title="Link your Slack account"
               hint={
                 conn?.linked
-                  ? "You’re linked. Message Mellox in Slack, or use the buttons on a post, and it acts as you."
-                  : "Everyone does this once, so Mellox knows who is asking or approving."
+                  ? "Linked. In Slack, Mellox acts as you."
+                  : "Once per person, so Mellox knows who is asking."
               }
+              done={!!conn?.linked}
             >
               <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -446,19 +431,18 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
                 </Button>
                 {code && (
                   <>
-                    <code className="rounded-lg bg-[var(--ds-well-bg)] px-2.5 py-1.5 text-[12px]">
+                    <code className="ds-well rounded-full px-3 py-1.5 text-[12px]">
                       link {code}
                     </code>
                     <Button size="sm" variant="ghost" onClick={() => void copyCode()}>
-                      Copy
+                      <Copy className="size-3.5" /> Copy
                     </Button>
                   </>
                 )}
               </div>
               {code && (
                 <p className="mt-2 text-[12px] text-muted-foreground">
-                  In Slack, open a message to <strong>Mellox</strong> and send that line. It works
-                  for 10 minutes.
+                  Send this to <strong>Mellox</strong> in Slack within 10 minutes.
                 </p>
               )}
             </Step>
@@ -480,34 +464,22 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
           </div>
         )}
       </ConnectionCard>
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Disconnect Slack?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Mellox stops posting to Slack and stops answering there for this brand. Nothing in
-              Mellox or Slack is deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={!!busy}
-              onClick={() => {
-                setConfirmOpen(false);
-                setExpanded(false);
-                void run(
-                  "disconnect",
-                  () => disconnectSlack({ data: { workspaceId } }),
-                  "Slack disconnected",
-                );
-              }}
-            >
-              Disconnect
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DisconnectDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        name="Slack"
+        description="Mellox stops posting and answering in Slack. Nothing is deleted."
+        busy={!!busy}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          setExpanded(false);
+          void run(
+            "disconnect",
+            () => disconnectSlack({ data: { workspaceId } }),
+            "Slack disconnected",
+          );
+        }}
+      />
     </>
   );
 }

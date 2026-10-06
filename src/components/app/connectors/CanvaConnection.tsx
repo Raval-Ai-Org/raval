@@ -7,16 +7,6 @@ import {
 } from "@/components/workspace/WorkspaceProvider";
 import { Button } from "@/components/ui/button";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   getCanvaConnection,
   removeCanvaConnection,
   startCanvaConnect,
@@ -24,6 +14,7 @@ import {
 import { emitAppEvent } from "@/lib/app-events";
 import { CanvaMark } from "@/components/brand/CanvaMark";
 import { ConnectionCard } from "./ConnectionCard";
+import { DisconnectDialog } from "./DisconnectDialog";
 
 type Status = Awaited<ReturnType<typeof getCanvaConnection>>;
 
@@ -91,7 +82,7 @@ export function CanvaConnection() {
         label="Canva connection"
         logo={<CanvaMark />}
         name="Canva"
-        description="Open any Mellox image or carousel in Canva, edit it, then bring your version back."
+        description="Edit your images and carousels in Canva"
         status={
           status
             ? connected
@@ -102,13 +93,6 @@ export function CanvaConnection() {
             : error
               ? { tone: "off", text: "Unavailable" }
               : null
-        }
-        detail={
-          connected
-            ? "Use “Edit in Canva” on an image in Studio or your Library."
-            : needsAttention
-              ? "Canva stopped accepting this connection. Connect again to keep editing."
-              : undefined
         }
         actions={
           canEdit &&
@@ -121,10 +105,11 @@ export function CanvaConnection() {
             <>
               <Button
                 size="sm"
+                variant="outline"
                 disabled={busy || !status.configured}
                 onClick={() => void connect()}
               >
-                {busy ? "Opening Canva…" : needsAttention ? "Reconnect" : "Connect Canva"}
+                {busy ? "Opening…" : needsAttention ? "Reconnect" : "Connect"}
               </Button>
               {needsAttention && (
                 <Button
@@ -146,23 +131,14 @@ export function CanvaConnection() {
         }
         error={error}
       />
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Disconnect Canva?</AlertDialogTitle>
-            <AlertDialogDescription>
-              You won’t be able to edit in Canva or bring versions back until you connect again.
-              Designs already in Canva and versions already in Mellox stay where they are.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={busy} onClick={() => void disconnect()}>
-              Disconnect
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DisconnectDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        name="Canva"
+        description="Your designs in Canva and your versions in Mellox stay where they are."
+        busy={busy}
+        onConfirm={() => void disconnect()}
+      />
     </>
   );
 }

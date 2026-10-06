@@ -420,9 +420,7 @@ function SettingsDialog({
             >
               {workspaceId ? (
                 <div className="space-y-3">
-                  <Tile>
-                    <GitHubConnector workspaceId={workspaceId} />
-                  </Tile>
+                  <GitHubConnector workspaceId={workspaceId} />
                   <WebflowConnector workspaceId={workspaceId} />
                   <WordPressConnector workspaceId={workspaceId} />
                 </div>
@@ -432,11 +430,7 @@ function SettingsDialog({
             </SurfacePage>
           )}
           {section === "assistants" && (
-            <SurfacePage
-              title="AI assistants"
-              subtitle="Use Mellox from Claude, ChatGPT and other assistants"
-              width="narrow"
-            >
+            <SurfacePage title="AI assistants" width="narrow">
               {workspaceId ? <McpConnector workspaceId={workspaceId} /> : noWorkspace}
             </SurfacePage>
           )}

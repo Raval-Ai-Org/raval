@@ -1,14 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle, Globe, Loader2, RefreshCw, Trash } from "lucide-react";
 import { toast } from "sonner";
+import { Check, Globe, Mail, RefreshCw } from "@/components/icons";
 import { SiteLogo } from "@/components/brand/SiteLogos";
+import { SiteIcon } from "@/components/app/surface/SiteIcon";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { ConnectionHealth, IntegrationDetails } from "./IntegrationDetails";
+import {
+  ConnectionCard,
+  ConnectionFact,
+  ConnectionSkeleton,
+  ConnectionStatus,
+} from "./ConnectionCard";
+import { DisconnectDialog } from "./DisconnectDialog";
+import { IntegrationDetails } from "./IntegrationDetails";
 import {
   disconnectWebflow,
   getWebflowConnection,
@@ -17,14 +24,241 @@ import {
   startWebflowConnect,
 } from "@/lib/webflow.functions";
 
-type Connection = Awaited<ReturnType<typeof getWebflowConnection>>;
+export type WebflowConnection = Awaited<ReturnType<typeof getWebflowConnection>>;
+
+const WebflowIcon = ({ className }: { className?: string }) => (
+  <SiteLogo provider="webflow" size={16} className={className} />
+);
+
+/** The Webflow card and its details window. Presentational: it only calls back. */
+export function WebflowView({
+  connection,
+  busy,
+  onConnect,
+  onRefresh,
+  onSelect,
+  onDisconnect,
+}: {
+  connection: WebflowConnection;
+  busy: boolean;
+  onConnect: () => void;
+  onRefresh: () => void;
+  onSelect: (siteId: string) => void;
+  onDisconnect: () => void;
+}) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const logo = <SiteLogo provider="webflow" size={22} brand />;
+
+  if (!connection)
+    return (
+      <ConnectionCard
+        label="Webflow connection"
+        logo={logo}
+        name="Webflow"
+        description="Your Webflow pages and CMS"
+        status={{ tone: "off", text: "Not connected" }}
+        actions={
+          <Button size="sm" variant="outline" onClick={onConnect} loading={busy}>
+            Connect
+          </Button>
+        }
+      />
+    );
+
+  const active = connection.status === "active";
+  const site = connection.selectedSite;
+  return (
+    <>
+      <ConnectionCard
+        label="Webflow connection"
+        logo={logo}
+        name="Webflow"
+        description={site ? (site.domain ?? site.name) : "Choose the site Mellox works on"}
+        status={
+          !active
+            ? { tone: "attention", text: "Needs attention" }
+            : site
+              ? { tone: "connected", text: "Connected" }
+              : { tone: "attention", text: "Choose a site" }
+        }
+        facts={
+          <>
+            {connection.accountEmail && (
+              <ConnectionFact icon={Mail}>{connection.accountEmail}</ConnectionFact>
+            )}
+            {site && <ConnectionFact icon={Globe}>{site.name}</ConnectionFact>}
+          </>
+        }
+        actions={
+          <Button
+            size="sm"
+            variant={site ? "outline" : "default"}
+            onClick={() => setDetailsOpen(true)}
+          >
+            {site ? "Manage" : "Choose site"}
+          </Button>
+        }
+      />
+      <IntegrationDetails
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        icon={WebflowIcon}
+        logo={logo}
+        provider="Webflow"
+        title="Webflow"
+        account={connection.accountEmail ?? "Webflow account"}
+        status={
+          <ConnectionStatus
+            tone={active ? "connected" : "attention"}
+            text={active ? "Connected" : "Needs attention"}
+          />
+        }
+        health={[
+          {
+            label: "Sign-in",
+            detail: active ? "Working" : "Connect again",
+            state: active ? "healthy" : "error",
+          },
+          {
+            label: "Site",
+            detail: site ? "Chosen" : "Not chosen",
+            state: site ? "healthy" : "warning",
+          },
+          {
+            label: "Sites found",
+            detail: String(connection.sites.length),
+            state: connection.sites.length ? "healthy" : "warning",
+          },
+        ]}
+        footer={
+          <Button variant="ghost" onClick={() => setConfirmOpen(true)} disabled={busy}>
+            Disconnect
+          </Button>
+        }
+      >
+        {connection.sites.length === 0 ? (
+          <EmptyState
+            size="sm"
+            icon={Globe}
+            title="No sites found"
+            description="This Webflow account has no sites Mellox can see."
+            action={
+              <Button size="sm" variant="outline" onClick={onRefresh} loading={busy}>
+                Check again
+              </Button>
+            }
+          />
+        ) : (
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="ds-label">Your sites</p>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onRefresh}
+                disabled={busy}
+                aria-label="Refresh Webflow sites"
+              >
+                <RefreshCw className={cn("size-3.5", busy && "animate-spin")} /> Refresh
+              </Button>
+            </div>
+            <SiteList
+              sites={connection.sites.map((s) => ({
+                id: s.id,
+                name: s.name,
+                domain: s.domain ?? null,
+                selected: s.selected,
+              }))}
+              busy={busy}
+              onSelect={onSelect}
+            />
+          </div>
+        )}
+      </IntegrationDetails>
+      <DisconnectDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        name="Webflow"
+        busy={busy}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          setDetailsOpen(false);
+          onDisconnect();
+        }}
+      />
+    </>
+  );
+}
+
+/** A list of sites to pick one from, shared by Webflow and WordPress. */
+export function SiteList({
+  sites,
+  busy,
+  onSelect,
+}: {
+  sites: { id: string; name: string; domain: string | null; selected: boolean }[];
+  busy: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <ul className="space-y-2" role="radiogroup" aria-label="Sites">
+      {sites.map((site) => (
+        <li key={site.id}>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={site.selected}
+            disabled={busy || site.selected}
+            onClick={() => onSelect(site.id)}
+            className={cn(
+              "ds-tile flex w-full items-center gap-3 p-3 text-left transition-colors duration-200",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+              site.selected
+                ? "border-primary/50 bg-primary/[0.06]"
+                : "ds-tile-hover disabled:opacity-60",
+            )}
+          >
+            {site.domain ? (
+              <SiteIcon domain={site.domain.replace(/^https?:\/\//, "")} size={32} />
+            ) : (
+              <span className="grid size-8 shrink-0 place-items-center rounded-[30%] bg-[var(--ds-well-bg)] text-muted-foreground">
+                <Globe className="size-4" />
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-medium text-foreground">
+                {site.name}
+              </span>
+              {site.domain && (
+                <span className="block truncate text-[12px] text-muted-foreground">
+                  {site.domain.replace(/^https?:\/\//, "")}
+                </span>
+              )}
+            </span>
+            <span
+              className={cn(
+                "grid size-5 shrink-0 place-items-center rounded-full border transition-colors",
+                site.selected
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border",
+              )}
+              aria-hidden
+            >
+              {site.selected && <Check className="size-3" />}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function WebflowConnector({ workspaceId }: { workspaceId: string }) {
-  const [connection, setConnection] = useState<Connection | undefined>();
+  const [connection, setConnection] = useState<WebflowConnection | undefined>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,7 +319,7 @@ export function WebflowConnector({ workspaceId }: { workspaceId: string }) {
     }
   };
   const disconnect = async () => {
-    if (!connection || !window.confirm("Disconnect Webflow from this workspace?")) return;
+    if (!connection) return;
     setBusy(true);
     try {
       await disconnectWebflow({ data: { workspaceId, connectionId: connection.connectionId } });
@@ -98,201 +332,24 @@ export function WebflowConnector({ workspaceId }: { workspaceId: string }) {
     }
   };
 
-  if (loading) return <Skeleton className="h-32 w-full rounded-xl" />;
-  if (error)
+  if (loading) return <ConnectionSkeleton label="Loading Webflow" />;
+  if (error || connection === undefined)
     return (
       <ErrorState
         size="sm"
-        title="Webflow status unavailable"
-        detail={error}
+        title="Webflow didn't load"
+        detail={error ?? undefined}
         onRetry={() => void load()}
       />
     );
-  if (!connection)
-    return (
-      <article className="rounded-2xl border border-border/70 bg-card/50 p-4 shadow-sm transition-colors hover:border-primary/30">
-        <div className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-xl bg-[#146EF5] text-sm font-black text-white shadow-sm">
-            <SiteLogo provider="webflow" size={20} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="text-[14px] font-semibold">Webflow</p>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                Not connected
-              </span>
-            </div>
-            <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground">
-              Analyze pages, CMS content and AI-search visibility.
-            </p>
-          </div>
-          <Button size="sm" onClick={() => void connect()} disabled={busy}>
-            {busy && <Loader2 className="size-3.5 animate-spin" />}Connect Webflow
-          </Button>
-        </div>
-        <p className="mt-3 border-t border-border/60 pt-3 text-[11px] text-muted-foreground">
-          Mellox requests read-only access and never publishes changes to Webflow.
-        </p>
-      </article>
-    );
-
   return (
-    <>
-      <article className="rounded-2xl border border-border/70 bg-card/50 p-4 shadow-sm transition-colors hover:border-primary/30">
-        <div className="flex flex-wrap items-start gap-3">
-          <span className="grid size-10 place-items-center rounded-xl bg-[#146EF5] text-sm font-black text-white shadow-sm">
-            <SiteLogo provider="webflow" size={20} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="text-[14px] font-semibold">Webflow</p>
-              <span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success">
-                <CheckCircle className="mr-1 inline size-3" /> Connected
-              </span>
-            </div>
-            <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">
-              {connection.accountEmail}
-            </p>
-          </div>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" onClick={() => setDetailsOpen(true)}>
-              Manage
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => void refresh()}
-              disabled={busy}
-              aria-label="Refresh Webflow sites"
-            >
-              <RefreshCw className={cn("size-3.5", busy && "animate-spin")} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => void disconnect()}
-              loading={busy}
-              aria-label="Disconnect Webflow"
-            >
-              <Trash className="size-3.5 text-destructive" />
-            </Button>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-border/60 bg-background/50 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Website source
-            </p>
-            <p className="mt-1 truncate text-[13px] font-semibold">
-              {connection.selectedSite?.name ?? "No site selected"}
-            </p>
-            <p className="truncate text-[11px] text-muted-foreground">
-              {connection.selectedSite?.domain ?? "Choose a site for GEO"}
-            </p>
-          </div>
-          <ConnectionHealth
-            items={[
-              {
-                label: "OAuth",
-                detail: connection.status === "active" ? "Valid" : "Needs attention",
-                state: connection.status === "active" ? "healthy" : "error",
-              },
-              {
-                label: "Site access",
-                detail: connection.selectedSite ? "Available" : "Not selected",
-                state: connection.selectedSite ? "healthy" : "warning",
-              },
-              { label: "API", detail: "Connected", state: "healthy" },
-            ]}
-          />
-        </div>
-      </article>
-      <IntegrationDetails
-        open={detailsOpen}
-        onOpenChange={setDetailsOpen}
-        icon={Globe}
-        provider="Development & Website"
-        title="Webflow connection"
-        description="Choose the Webflow site Mellox uses for structured GEO and SEO context."
-        status={
-          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-success">
-            <CheckCircle className="size-3.5" /> Connected
-          </span>
-        }
-        health={[
-          { label: "OAuth", detail: "Valid", state: "healthy" },
-          {
-            label: "Site access",
-            detail: connection.selectedSite ? "Available" : "Choose a site",
-            state: connection.selectedSite ? "healthy" : "warning",
-          },
-          { label: "API", detail: "Connected", state: "healthy" },
-        ]}
-        footer={
-          <Button variant="ghost" onClick={() => void disconnect()} loading={busy}>
-            Disconnect
-          </Button>
-        }
-      >
-        <div className="space-y-3">
-          <div className="rounded-xl border border-border/70 bg-card/50 px-3.5 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Authorized account
-            </p>
-            <p className="mt-1 text-[13px] font-semibold">{connection.accountEmail}</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Read-only access to sites, pages and CMS data.
-            </p>
-          </div>
-          {connection.sites.length === 0 ? (
-            <EmptyState
-              size="sm"
-              icon={Globe}
-              title="No Webflow sites available"
-              description="Check that this account can access at least one Webflow site."
-            />
-          ) : (
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[12px] font-semibold">Choose a site</p>
-                <Button size="sm" variant="ghost" onClick={() => void refresh()} disabled={busy}>
-                  <RefreshCw className={cn("size-3.5", busy && "animate-spin")} /> Refresh
-                </Button>
-              </div>
-              <ul className="space-y-2">
-                {connection.sites.map((site) => (
-                  <li
-                    key={site.id}
-                    className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-medium">{site.name}</p>
-                      <p className="truncate text-[11px] text-muted-foreground">
-                        {site.domain ?? `Site ID ${site.id}`}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant={site.selected ? "secondary" : "outline"}
-                      onClick={() => void select(site.id)}
-                      disabled={site.selected}
-                      loading={busy}
-                    >
-                      {site.selected ? (
-                        <>
-                          <CheckCircle className="size-3.5" /> Linked
-                        </>
-                      ) : (
-                        "Connect site"
-                      )}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </IntegrationDetails>
-    </>
+    <WebflowView
+      connection={connection}
+      busy={busy}
+      onConnect={() => void connect()}
+      onRefresh={() => void refresh()}
+      onSelect={(id) => void select(id)}
+      onDisconnect={() => void disconnect()}
+    />
   );
 }

@@ -10,29 +10,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowRight,
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
   Filter,
   Plus,
-  Search,
   Sparkles,
   X,
 } from "@/components/icons";
 import { AppModalShell } from "@/components/app/AppModalShell";
-import { dsGhostBtn, dsIconBtn } from "@/components/app/surface/buttons";
+import { dsIconBtn } from "@/components/app/surface/buttons";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
+import { useNavigate } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
 import { cn } from "@/lib/utils";
 import {
@@ -49,8 +43,6 @@ import { cancelScheduled, getSdrStatus, scheduleContentItems } from "@/lib/sdr.f
 import { momentsBetween, type MarketingMoment } from "@/lib/studio/moments";
 import {
   addDays,
-  CALENDAR_CHANNELS,
-  CALENDAR_STATUSES,
   channelInfo,
   entriesBetween,
   entryFromContent,
@@ -66,19 +58,31 @@ import {
   NO_FILTER,
   parseYMD,
   startOfMonth,
-  STATUS_LABEL,
   toCalendarChannel,
   weekDays,
   type CalendarChannel,
   type CalendarEntry,
   type CalendarFilter,
-  type CalendarStatus,
 } from "@/lib/calendar/model";
+import {
+  autopilotItemIds,
+  autopilotSignature,
+  plannedSlots,
+  slotsByDate,
+  type PlannedSlot,
+} from "@/lib/calendar/autopilot";
+import type { ActionView } from "@/lib/autopilot/contracts";
+import { autopilotKeys, useAutopilotActions } from "./autopilot/hooks";
+import type { Section } from "./autopilot/AutopilotScreen";
+import { AutopilotOrb } from "./autopilot/composer/AutopilotDeck";
+import { autopilotPath } from "./autopilot/composer/useComposerAutopilot";
+import { AutopilotRail } from "./calendar/AutopilotRail";
+import { CalendarToolbar } from "./calendar/CalendarToolbar";
+import { useCalendarAutopilot } from "./calendar/use-calendar-autopilot";
 import { EntryEditor, type EntryPatch } from "./calendar/EntryEditor";
 import { ExportMenu } from "./calendar/ExportMenu";
 import { NotionConnection } from "./connectors/NotionConnection";
 import { PlanPanel } from "./calendar/PlanPanel";
-import { ChannelIcon } from "./calendar/shared";
 import {
   CalendarSkeleton,
   ChannelLanes,
@@ -103,7 +107,11 @@ function isBillingStop(e: unknown): boolean {
   return e instanceof ServerFnError && e.status === 402;
 }
 
+const NO_IDS: Set<string> = new Set();
+
 export function ContentCalendar({ workspaceId }: { workspaceId: string | null }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const listItems = useServerFn(listContentItems);
   const createItem = useServerFn(createContentItem);
   const updateItem = useServerFn(updateContentItem);
@@ -122,9 +130,12 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
-  const [rail, setRail] = useState<"plan" | "day">("plan");
-  const [showPlanSheet, setShowPlanSheet] = useState(false);
+  // Until someone picks a tab, the side panel shows what is most useful.
+  const [rail, setRail] = useState<"plan" | "day" | null>(null);
+  const [showSheet, setShowSheet] = useState(false);
+  const [manualPlan, setManualPlan] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
   const [publishPlatforms, setPublishPlatforms] = useState<Set<string>>(new Set());
 
   // Text edits wait here until they are saved; a reload must not undo them.
@@ -196,7 +207,30 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
     } finally {
       skipReload.current = false;
     }
-  }, []);
+    // Approving or moving a post changes what Autopilot does next.
+    void queryClient.invalidateQueries({ queryKey: autopilotKeys.all(workspaceId) });
+  }, [queryClient, workspaceId]);
+
+  /* ───────────────────────── autopilot ───────────────────────── */
+
+  const autopilot = useCalendarAutopilot(workspaceId, open);
+  const apActions = useAutopilotActions(workspaceId ?? "");
+  const apView = autopilot.view;
+  const autopilotIds = useMemo(() => (apView ? autopilotItemIds(apView) : NO_IDS), [apView]);
+
+  // Autopilot wrote, scheduled or sent something: read the posts again.
+  const signature = apView ? autopilotSignature(apView) : "";
+  const lastSignature = useRef("");
+  useEffect(() => {
+    if (!open) {
+      lastSignature.current = "";
+      return;
+    }
+    if (lastSignature.current && signature && lastSignature.current !== signature) {
+      void load(true);
+    }
+    lastSignature.current = signature;
+  }, [open, signature, load]);
 
   // Posts an older version of the calendar kept only in this browser: save
   // them to the workspace once, then forget the local copy.
@@ -249,10 +283,19 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 900px)");
-    const apply = () => setIsNarrow(mq.matches);
+    // Below this the side panel has no room and opens over the calendar instead.
+    const compact = window.matchMedia("(max-width: 1023px)");
+    const apply = () => {
+      setIsNarrow(mq.matches);
+      setIsCompact(compact.matches);
+    };
     apply();
     mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
+    compact.addEventListener("change", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      compact.removeEventListener("change", apply);
+    };
   }, []);
   const activeView: View = isNarrow ? "list" : view;
 
@@ -263,16 +306,15 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
       const days = weekDays(anchor);
       const from = days[0];
       const to = days[6];
-      const sameMonth = from.getMonth() === to.getMonth();
+      const short = (d: Date) =>
+        d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
       return {
         from: fmtYMD(from),
         to: fmtYMD(to),
-        label: `${from.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${to.toLocaleDateString(
-          undefined,
-          sameMonth
-            ? { day: "numeric", year: "numeric" }
-            : { month: "short", day: "numeric", year: "numeric" },
-        )}`,
+        // "Oct 5 – 11, 2026", or "Sep 28 – Oct 4, 2026" across two months.
+        label: `${short(from)} – ${
+          from.getMonth() === to.getMonth() ? to.getDate() : short(to)
+        }, ${to.getFullYear()}`,
         slug: `week-${fmtYMD(from)}`,
       };
     }
@@ -307,6 +349,30 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
 
   const selected = selectedId ? (entries.find((e) => e.id === selectedId) ?? null) : null;
   const scheduledCount = inRange.filter((e) => e.status === "scheduled").length;
+  const reviewCount = inRange.filter((e) => e.status === "review").length;
+
+  // What Autopilot has planned but not written yet. A status filter is about
+  // posts that exist, so it hides these.
+  const slots = useMemo(() => {
+    if (!apView || filter.status !== "all") return [];
+    const q = filter.query.trim().toLowerCase();
+    return plannedSlots(apView).filter(
+      (slot) =>
+        (filter.channel === "all" || slot.channel === filter.channel) &&
+        (filter.format !== "stories" || slot.format === "Story") &&
+        (filter.format !== "posts" || slot.format !== "Story") &&
+        (!q || slot.title.toLowerCase().includes(q)),
+    );
+  }, [apView, filter]);
+  const plannedByDate = useMemo(() => slotsByDate(slots), [slots]);
+  const slotsInRange = useMemo(
+    () => slots.filter((slot) => slot.date >= range.from && slot.date <= range.to),
+    [slots, range.from, range.to],
+  );
+  const slotsInRangeByDate = useMemo(() => slotsByDate(slotsInRange), [slotsInRange]);
+
+  const activeRail: "plan" | "day" =
+    rail ?? (apView ? "plan" : loading || entries.length ? "day" : "plan");
 
   const step = (dir: 1 | -1) =>
     setAnchor((d) =>
@@ -579,6 +645,48 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
   const pickDate = (date: string) => {
     setSelectedDate(date);
     setRail("day");
+    if (isCompact) setShowSheet(true);
+  };
+
+  const stepDay = (dir: 1 | -1) => {
+    const next = addDays(parseYMD(selectedDate ?? today), dir);
+    setSelectedDate(fmtYMD(next));
+    if (next.getMonth() !== anchor.getMonth() || next.getFullYear() !== anchor.getFullYear()) {
+      setAnchor(next);
+    }
+  };
+
+  const openPlan = () => {
+    setRail("plan");
+    if (isCompact) setShowSheet(true);
+  };
+
+  /** Autopilot has its own screen; the calendar steps aside for it. */
+  const openAutopilot = (section: Section) => {
+    if (!workspaceId) return;
+    setShowSheet(false);
+    setOpen(false);
+    navigate({ to: autopilotPath(workspaceId, section) });
+  };
+
+  /** Open a post from the side panel (which, on a small screen, is in the way). */
+  const openEntry = (id: string) => {
+    setShowSheet(false);
+    setSelectedId(id);
+  };
+
+  const showAction = (action: ActionView) => {
+    const id = action.contentItemIds.find((itemId) => entries.some((e) => e.id === itemId));
+    if (id) {
+      openEntry(id);
+      return;
+    }
+    if (!action.plannedFor) return;
+    const at = new Date(action.plannedFor);
+    if (Number.isNaN(at.getTime())) return;
+    setAnchor(at);
+    setSelectedDate(fmtYMD(at));
+    setRail("day");
   };
 
   const canSchedule = (entry: CalendarEntry) =>
@@ -590,7 +698,9 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
     today,
     draggingId,
     busyIds,
+    autopilotIds,
     onPickEntry: setSelectedId,
+    onPickPlanned: (slot: PlannedSlot) => pickDate(slot.date),
     onDragStart: setDraggingId,
     onDragEnd: () => setDraggingId(null),
     onDropOnDay: (date: string) => {
@@ -610,11 +720,102 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
         });
         setAnchor(parseYMD(startDate));
         setFilter(NO_FILTER);
-        setShowPlanSheet(false);
+        setShowSheet(false);
         announce();
       }}
     />
   ) : null;
+
+  const day = selectedDate ?? today;
+  const railBody =
+    activeRail === "day" ? (
+      <DayPanel
+        date={day}
+        today={today}
+        entries={byDate.get(day) ?? []}
+        planned={plannedByDate.get(day) ?? []}
+        autopilotIds={autopilotIds}
+        moments={momentsBetween(day, day)}
+        onPickEntry={openEntry}
+        onPickPlanned={() => setRail("plan")}
+        onStep={stepDay}
+        onAdd={(date, title) => void createPost(date, title)}
+      />
+    ) : apView ? (
+      <>
+        <AutopilotRail
+          view={apView}
+          busy={apActions.approvePlan.isPending || apActions.pause.isPending}
+          onApprovePlan={() => apActions.approvePlan.mutate()}
+          onPause={(paused) => apActions.pause.mutate(paused)}
+          onOpen={openAutopilot}
+          onPickAction={showAction}
+        />
+        <div className="border-t border-border">
+          <button
+            type="button"
+            aria-expanded={manualPlan}
+            onClick={() => setManualPlan((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 px-4 py-3 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
+          >
+            Add extra posts yourself
+            <ChevronDown
+              className={cn("h-4 w-4 transition-transform", manualPlan && "rotate-180")}
+            />
+          </button>
+          {manualPlan && planPanel}
+        </div>
+      </>
+    ) : (
+      <>
+        {planPanel}
+        {autopilot.available && (
+          <div className="border-t border-border p-4">
+            <button
+              type="button"
+              onClick={() => openAutopilot("home")}
+              className="ds-tile ds-tile-hover flex w-full items-center gap-3 p-3 text-left"
+            >
+              <AutopilotOrb state="off" size={32} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12.5px] font-semibold">Autopilot</span>
+                <span className="block truncate text-[11.5px] text-muted-foreground">
+                  Plans and writes every week for you
+                </span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </button>
+          </div>
+        )}
+      </>
+    );
+  const planLabel = apView ? "Autopilot" : "Plan";
+  const railTabs = (
+    <Tabs value={activeRail} onValueChange={(v) => setRail(v as "plan" | "day")}>
+      <TabsList className="h-8 w-full">
+        <TabsTrigger value="day" className="flex-1 text-[12px]">
+          Day
+        </TabsTrigger>
+        <TabsTrigger value="plan" className="flex-1 gap-1.5 text-[12px]">
+          {planLabel}
+          {apView && apView.approvals.length + (apView.proposed.length ? 1 : 0) > 0 && (
+            <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-label="Needs you" />
+          )}
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+
+  const nothingAtAll = entries.length === 0 && slots.length === 0;
+  const nothingInRange = inRange.length === 0 && slotsInRange.length === 0;
+  const summary = [
+    `${inRange.length} ${inRange.length === 1 ? "post" : "posts"}`,
+    scheduledCount ? `${scheduledCount} scheduled` : "",
+    reviewCount ? `${reviewCount} to review` : "",
+    apView ? (apView.program?.status === "paused" ? "Autopilot paused" : "Autopilot on") : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <AppModalShell
@@ -623,13 +824,7 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
       size="2xl"
       Icon={CalendarDays}
       title="Content Calendar"
-      description={
-        loading || !inRange.length
-          ? undefined
-          : `${inRange.length} ${inRange.length === 1 ? "post" : "posts"}${
-              scheduledCount ? ` · ${scheduledCount} scheduled` : ""
-            }`
-      }
+      description={loading || (!inRange.length && !apView) ? undefined : summary}
       headerAccessory={
         workspaceId ? (
           <>
@@ -644,8 +839,13 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
               shownLabel={range.label}
               shownSlug={range.slug}
             />
-            <Button size="sm" onClick={() => setShowPlanSheet(true)} className="lg:hidden">
-              <Sparkles /> Plan
+            <Button
+              size="sm"
+              onClick={openPlan}
+              className="max-sm:px-2.5 lg:hidden"
+              aria-label={planLabel}
+            >
+              <Sparkles /> <span className="hidden sm:inline">{planLabel}</span>
             </Button>
           </>
         ) : undefined
@@ -655,141 +855,23 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
       {!workspaceId ? (
         <EmptyState icon={CalendarDays} title="Open a brand to see its calendar" />
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[1fr_320px]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_320px]">
           {/* LEFT — the calendar */}
           <div className="relative flex min-h-0 min-w-0 flex-col overflow-hidden lg:border-r lg:border-border">
-            <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 sm:px-4">
-              <div className="flex items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => step(-1)}
-                  className={dsIconBtn}
-                  aria-label={activeView === "week" ? "Previous week" : "Previous month"}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <div
-                  className="min-w-[128px] text-center text-[13px] font-semibold"
-                  aria-live="polite"
-                >
-                  {range.label}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => step(1)}
-                  className={dsIconBtn}
-                  aria-label={activeView === "week" ? "Next week" : "Next month"}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAnchor(new Date())}
-                  className={cn(dsGhostBtn, "ml-1 h-8 px-3 text-[12px]")}
-                >
-                  Today
-                </button>
-              </div>
-
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                <label className="relative">
-                  <span className="sr-only">Search posts</span>
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    value={filter.query}
-                    onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
-                    placeholder="Search"
-                    className="h-8 w-28 rounded-full border border-border bg-[var(--ds-well-bg)] pl-8 pr-3 text-[12.5px] outline-none transition-[width] focus:w-44 focus:border-primary"
-                  />
-                </label>
-                <Select
-                  value={filter.channel}
-                  onValueChange={(v) =>
-                    setFilter((f) => ({ ...f, channel: v as CalendarFilter["channel"] }))
-                  }
-                >
-                  <SelectTrigger
-                    className="h-8 w-auto gap-1.5 rounded-full px-3 text-[12px]"
-                    aria-label="Channel"
-                  >
-                    <Filter className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All channels</SelectItem>
-                    {CALENDAR_CHANNELS.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        <span className="flex items-center gap-2">
-                          <ChannelIcon channel={c.id} size={14} />
-                          {c.label}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={filter.format ?? "all"}
-                  onValueChange={(v) =>
-                    setFilter((f) => ({ ...f, format: v as CalendarFilter["format"] }))
-                  }
-                >
-                  <SelectTrigger
-                    className="h-8 w-auto gap-1.5 rounded-full px-3 text-[12px]"
-                    aria-label="Posts or Stories"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Posts and Stories</SelectItem>
-                    <SelectItem value="posts">Posts only</SelectItem>
-                    <SelectItem value="stories">Stories only</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={filter.status}
-                  onValueChange={(v) =>
-                    setFilter((f) => ({ ...f, status: v as CalendarStatus | "all" }))
-                  }
-                >
-                  <SelectTrigger
-                    className="h-8 w-auto gap-1.5 rounded-full px-3 text-[12px]"
-                    aria-label="Status"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Any status</SelectItem>
-                    {CALENDAR_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {STATUS_LABEL[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!isNarrow && (
-                  <Tabs value={view} onValueChange={(v) => setView(v as View)}>
-                    <TabsList className="h-8">
-                      <TabsTrigger value="month" className="px-2.5 text-[12px]">
-                        Month
-                      </TabsTrigger>
-                      <TabsTrigger value="week" className="px-2.5 text-[12px]">
-                        Week
-                      </TabsTrigger>
-                      <TabsTrigger value="list" className="px-2.5 text-[12px]">
-                        List
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                )}
-                <button
-                  type="button"
-                  onClick={() => void createPost()}
-                  className={cn(dsGhostBtn, "h-8 px-3 text-[12px]")}
-                >
-                  <Plus className="h-3.5 w-3.5" /> New post
-                </button>
-              </div>
-            </div>
+            <CalendarToolbar
+              label={range.label}
+              view={activeView}
+              showViews={!isNarrow}
+              filter={filter}
+              onStep={step}
+              onToday={() => {
+                setAnchor(new Date());
+                setSelectedDate(today);
+              }}
+              onView={setView}
+              onFilter={setFilter}
+              onNewPost={() => void createPost(selectedDate ?? undefined)}
+            />
 
             {draggingId && (
               <ChannelLanes
@@ -806,13 +888,13 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
               <div className="grid flex-1 place-items-center">
                 <ErrorState title="Couldn't load your calendar" onRetry={() => void load()} />
               </div>
-            ) : entries.length === 0 ? (
+            ) : nothingAtAll ? (
               <div className="grid flex-1 place-items-center">
                 <EmptyState
                   icon={CalendarDays}
                   title="Your calendar is empty"
                   action={
-                    <Button onClick={() => setShowPlanSheet(true)} className="lg:hidden">
+                    <Button onClick={openPlan}>
                       <Sparkles /> Plan my posts
                     </Button>
                   }
@@ -827,19 +909,22 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
               <MonthView
                 {...viewProps}
                 byDate={byDate}
+                planned={plannedByDate}
                 grid={grid}
                 month={anchor.getMonth()}
-                selectedDate={selectedDate}
+                selectedDate={selectedDate ?? today}
                 onPickDate={pickDate}
+                onAdd={(date) => void createPost(date)}
               />
             ) : activeView === "week" ? (
               <WeekView
                 {...viewProps}
                 byDate={byDate}
+                planned={plannedByDate}
                 days={weekDays(anchor)}
                 onAdd={(date) => void createPost(date)}
               />
-            ) : inRange.length === 0 ? (
+            ) : nothingInRange ? (
               <div className="grid flex-1 place-items-center">
                 <EmptyState
                   icon={isFiltering(filter) ? Filter : CalendarDays}
@@ -857,62 +942,56 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
               <ListView
                 {...viewProps}
                 byDate={inRangeByDate}
+                planned={slotsInRangeByDate}
                 onRegenerate={(id) => void regenerate(id)}
               />
             )}
 
-            {/* Small screens: the planner slides up over the calendar. */}
+            {/* Smaller screens: the side panel slides up over the calendar. */}
             <AnimatePresence>
-              {showPlanSheet && (
+              {showSheet && isCompact && (
                 <motion.div
-                  initial={{ y: "100%" }}
-                  animate={{ y: 0 }}
-                  exit={{ y: "100%" }}
+                  key="sheet-backdrop"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowSheet(false)}
+                  className="absolute inset-0 z-30 bg-background/60 backdrop-blur-[2px]"
+                  aria-hidden
+                />
+              )}
+              {showSheet && isCompact && (
+                <motion.div
+                  key="sheet"
+                  initial={{ opacity: 0, x: 24 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 24 }}
                   transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute inset-0 z-30 flex flex-col overflow-y-auto bg-card lg:hidden"
+                  className="absolute inset-y-0 right-0 z-30 flex w-full flex-col overflow-y-auto bg-card sm:w-[340px] sm:border-l sm:border-border"
                 >
-                  <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card px-4 py-2">
-                    <span className="text-[13px] font-semibold">Plan my posts</span>
+                  <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-card px-4 py-2">
+                    <div className="min-w-0 flex-1">{railTabs}</div>
                     <button
                       type="button"
-                      onClick={() => setShowPlanSheet(false)}
+                      onClick={() => setShowSheet(false)}
                       className={dsIconBtn}
                       aria-label="Close"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                  {planPanel}
+                  {railBody}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* RIGHT — plan with Mellox, or the day that was picked */}
-          <div className="hidden min-h-0 flex-col overflow-y-auto scrollbar-thin lg:flex">
+          {/* RIGHT — the day that was picked, or the plan (Autopilot's, when it is on) */}
+          <div className="hidden min-h-0 min-w-0 flex-col overflow-y-auto scrollbar-thin lg:flex">
             <div className="sticky top-0 z-10 border-b border-border bg-background/90 px-4 py-2 backdrop-blur">
-              <Tabs value={rail} onValueChange={(v) => setRail(v as "plan" | "day")}>
-                <TabsList className="h-8 w-full">
-                  <TabsTrigger value="plan" className="flex-1 text-[12px]">
-                    Plan posts
-                  </TabsTrigger>
-                  <TabsTrigger value="day" className="flex-1 text-[12px]">
-                    Day
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+              {railTabs}
             </div>
-            {rail === "plan" ? (
-              planPanel
-            ) : (
-              <DayPanel
-                date={selectedDate ?? today}
-                entries={byDate.get(selectedDate ?? today) ?? []}
-                moments={momentsBetween(selectedDate ?? today, selectedDate ?? today)}
-                onPickEntry={setSelectedId}
-                onAdd={(date, title) => void createPost(date, title)}
-              />
-            )}
+            {!isCompact && railBody}
           </div>
         </div>
       )}

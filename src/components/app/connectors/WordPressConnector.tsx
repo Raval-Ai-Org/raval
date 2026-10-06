@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle, Loader2, RefreshCw, ShieldCheck, Trash } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
+import { Globe, RefreshCw, User } from "@/components/icons";
 import { SiteLogo } from "@/components/brand/SiteLogos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ErrorState } from "@/components/ui/empty-state";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
   disconnectWordPress,
@@ -17,24 +17,332 @@ import {
   selectWordPressSite,
   startWordPressOAuth,
 } from "@/lib/wordpress.functions";
-import { ConnectionHealth, IntegrationDetails } from "./IntegrationDetails";
+import {
+  ConnectionCard,
+  ConnectionFact,
+  ConnectionSkeleton,
+  ConnectionStatus,
+} from "./ConnectionCard";
+import { DisconnectDialog } from "./DisconnectDialog";
+import { IntegrationDetails } from "./IntegrationDetails";
+import { SiteList } from "./WebflowConnector";
 
-type Connection = Awaited<ReturnType<typeof getWordPressConnection>>;
+export type WordPressConnection = Awaited<ReturnType<typeof getWordPressConnection>>;
+export type WordPressLogin = { siteUrl: string; username: string; applicationPassword: string };
 
-const WordPressMark = ({ className }: { className?: string }) => (
-  <SiteLogo provider="wordpress" size={20} className={className} />
+const WordPressIcon = ({ className }: { className?: string }) => (
+  <SiteLogo provider="wordpress" size={16} className={className} />
 );
 
-export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
-  const [connection, setConnection] = useState<Connection | null | undefined>();
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [showSelfHosted, setShowSelfHosted] = useState(false);
+const bare = (url: string) => url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+
+/** The two ways in: WordPress.com sign-in, or a site you host yourself. */
+function ConnectChoices({
+  busy,
+  onConnectCom,
+  onConnectSelfHosted,
+}: {
+  busy: boolean;
+  onConnectCom: () => void;
+  onConnectSelfHosted: (login: WordPressLogin) => Promise<boolean>;
+}) {
+  const [kind, setKind] = useState<"com" | "self">("com");
   const [siteUrl, setSiteUrl] = useState("");
   const [username, setUsername] = useState("");
   const [applicationPassword, setApplicationPassword] = useState("");
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Where your site lives">
+        {(
+          [
+            { id: "com", title: "WordPress.com", hint: "Sign in" },
+            { id: "self", title: "My own hosting", hint: "Site address + password" },
+          ] as const
+        ).map((option) => {
+          const selected = kind === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => setKind(option.id)}
+              className={cn(
+                "rounded-[16px] border px-3.5 py-3 text-left transition-colors duration-200",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                selected
+                  ? "border-primary/50 bg-primary/[0.07]"
+                  : "border-[var(--ds-tile-border)] bg-[var(--ds-well-bg)] hover:bg-[var(--ds-well-bg-hover)]",
+              )}
+            >
+              <span className="block text-[13px] font-semibold text-foreground">
+                {option.title}
+              </span>
+              <span className="block truncate text-[12px] text-muted-foreground">
+                {option.hint}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        {kind === "com" ? (
+          <motion.div
+            key="com"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.18 }}
+          >
+            <Button className="w-full sm:w-auto" onClick={onConnectCom} loading={busy}>
+              Continue with WordPress.com
+            </Button>
+          </motion.div>
+        ) : (
+          <motion.form
+            data-no-rhythm
+            key="self"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.18 }}
+            className="grid gap-2 sm:grid-cols-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void onConnectSelfHosted({ siteUrl, username, applicationPassword }).then((ok) => {
+                if (ok) setApplicationPassword("");
+              });
+            }}
+          >
+            <Input
+              required
+              type="url"
+              placeholder="https://your-site.com"
+              aria-label="Site address"
+              className="sm:col-span-2"
+              value={siteUrl}
+              onChange={(e) => setSiteUrl(e.target.value)}
+            />
+            <Input
+              required
+              placeholder="Username"
+              aria-label="WordPress username"
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <Input
+              required
+              type="password"
+              placeholder="Application password"
+              aria-label="WordPress application password"
+              autoComplete="off"
+              value={applicationPassword}
+              onChange={(e) => setApplicationPassword(e.target.value)}
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
+              <a
+                href="https://wordpress.org/documentation/article/application-passwords/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[12px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Where do I get this password?
+                <span className="sr-only"> (opens in a new tab)</span>
+              </a>
+              <Button type="submit" loading={busy}>
+                Connect
+              </Button>
+            </div>
+          </motion.form>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** The WordPress card and its details window. Presentational: it only calls back. */
+export function WordPressView({
+  connection,
+  busy,
+  onConnectCom,
+  onConnectSelfHosted,
+  onRefresh,
+  onSelectSite,
+  onDisconnect,
+}: {
+  connection: WordPressConnection | null;
+  busy: boolean;
+  onConnectCom: () => void;
+  /** Resolves true when the site was verified and connected. */
+  onConnectSelfHosted: (login: WordPressLogin) => Promise<boolean>;
+  onRefresh: () => void;
+  onSelectSite: (siteId: string) => void;
+  onDisconnect: () => void;
+}) {
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const logo = <SiteLogo provider="wordpress" size={24} brand />;
+
+  if (!connection)
+    return (
+      <ConnectionCard
+        label="WordPress connection"
+        logo={logo}
+        name="WordPress"
+        description="Your WordPress pages and posts"
+        status={{ tone: "off", text: "Not connected" }}
+        actions={
+          <Button
+            size="sm"
+            variant={setupOpen ? "ghost" : "outline"}
+            onClick={() => setSetupOpen((v) => !v)}
+          >
+            {setupOpen ? "Close" : "Connect"}
+          </Button>
+        }
+      >
+        {setupOpen && (
+          <ConnectChoices
+            busy={busy}
+            onConnectCom={onConnectCom}
+            onConnectSelfHosted={onConnectSelfHosted}
+          />
+        )}
+      </ConnectionCard>
+    );
+
+  const active = connection.status === "active";
+  const site = connection.selectedSite ?? connection.sites?.[0] ?? null;
+  const siteUrl = site?.url || connection.siteUrl || "";
+  const siteName = site?.name || connection.siteName || "";
+  const account = connection.accountName || connection.username || "";
+  const viaCom = connection.authType === "wordpress_com_oauth";
+
+  return (
+    <>
+      <ConnectionCard
+        label="WordPress connection"
+        logo={logo}
+        name="WordPress"
+        description={siteUrl ? bare(siteUrl) : "Choose the site Mellox works on"}
+        status={
+          !active
+            ? { tone: "attention", text: "Needs attention" }
+            : siteUrl
+              ? { tone: "connected", text: "Connected" }
+              : { tone: "attention", text: "Choose a site" }
+        }
+        facts={
+          <>
+            {account && <ConnectionFact icon={User}>{account}</ConnectionFact>}
+            {siteName && <ConnectionFact icon={Globe}>{siteName}</ConnectionFact>}
+          </>
+        }
+        actions={
+          <Button size="sm" variant="outline" onClick={() => setDetailsOpen(true)}>
+            Manage
+          </Button>
+        }
+      />
+      <IntegrationDetails
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        icon={WordPressIcon}
+        logo={logo}
+        provider={viaCom ? "WordPress.com" : "WordPress"}
+        title="WordPress"
+        account={account || (siteUrl ? bare(siteUrl) : "WordPress account")}
+        status={
+          <ConnectionStatus
+            tone={active ? "connected" : "attention"}
+            text={active ? "Connected" : "Needs attention"}
+          />
+        }
+        health={[
+          {
+            label: "Sign-in",
+            detail: active ? "Working" : "Connect again",
+            state: active ? "healthy" : "error",
+          },
+          {
+            label: "Site",
+            detail: siteUrl ? "Chosen" : "Not chosen",
+            state: siteUrl ? "healthy" : "warning",
+          },
+          {
+            label: "Last checked",
+            detail: connection.lastVerifiedAt
+              ? new Date(connection.lastVerifiedAt).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                })
+              : "Not yet",
+            state: connection.lastVerifiedAt ? "healthy" : "warning",
+          },
+        ]}
+        footer={
+          <>
+            <Button variant="outline" onClick={onRefresh} loading={busy}>
+              <RefreshCw className="size-3.5" /> Check again
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirmOpen(true)} disabled={busy}>
+              Disconnect
+            </Button>
+          </>
+        }
+      >
+        {viaCom ? (
+          connection.sites.length === 0 ? (
+            <p className="ds-well px-4 py-3 text-[13px] text-muted-foreground">
+              This account has no WordPress.com sites.
+            </p>
+          ) : (
+            <div>
+              <p className="ds-label mb-2">Your sites</p>
+              <SiteList
+                sites={connection.sites.map((s) => ({
+                  id: s.siteId ?? s.id,
+                  name: s.name,
+                  domain: s.url ?? null,
+                  selected: s.selected,
+                }))}
+                busy={busy}
+                onSelect={onSelectSite}
+              />
+            </div>
+          )
+        ) : (
+          siteUrl && (
+            <div className="ds-well flex items-center gap-2.5 px-4 py-3 text-[13px]">
+              <Globe className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 truncate text-foreground">{bare(siteUrl)}</span>
+            </div>
+          )
+        )}
+      </IntegrationDetails>
+      <DisconnectDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        name="WordPress"
+        busy={busy}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          setDetailsOpen(false);
+          onDisconnect();
+        }}
+      />
+    </>
+  );
+}
+
+export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
+  const [connection, setConnection] = useState<WordPressConnection | null | undefined>();
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,22 +360,15 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
     void load();
   }, [load]);
 
-  const connect = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const connectSelfHosted = async (login: WordPressLogin) => {
     setBusy(true);
-    setError(null);
     try {
-      setConnection(
-        await connectWordPress({ data: { workspaceId, siteUrl, username, applicationPassword } }),
-      );
-      setApplicationPassword("");
-      setShowSelfHosted(false);
-      setDetailsOpen(true);
-      toast.success("WordPress connected and verified");
+      setConnection(await connectWordPress({ data: { workspaceId, ...login } }));
+      toast.success("WordPress connected");
+      return true;
     } catch (e) {
-      const message = e instanceof Error ? e.message : "WordPress could not be verified.";
-      setError(message);
-      toast.error(message);
+      toast.error(e instanceof Error ? e.message : "WordPress could not be verified.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -75,7 +376,6 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
 
   const connectOAuth = async () => {
     setBusy(true);
-    setError(null);
     try {
       const result = await startWordPressOAuth({
         data: {
@@ -86,10 +386,9 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
       });
       window.location.assign(result.url);
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "WordPress.com could not be reached. Please try again.";
-      setError(message);
-      toast.error(message);
+      toast.error(
+        e instanceof Error ? e.message : "WordPress.com could not be reached. Please try again.",
+      );
       setBusy(false);
     }
   };
@@ -98,7 +397,7 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
     setBusy(true);
     try {
       setConnection(await refreshWordPress({ data: { workspaceId } }));
-      toast.success("WordPress connection refreshed");
+      toast.success("WordPress checked");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "WordPress could not be refreshed.");
     } finally {
@@ -107,12 +406,11 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
   };
 
   const disconnect = async () => {
-    if (!connection || !window.confirm("Disconnect WordPress from this workspace?")) return;
+    if (!connection) return;
     setBusy(true);
     try {
       await disconnectWordPress({ data: { workspaceId, connectionId: connection.connectionId } });
       setConnection(null);
-      setDetailsOpen(false);
       toast.success("WordPress disconnected");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "WordPress could not be disconnected.");
@@ -130,7 +428,7 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
           data: { workspaceId, connectionId: connection.connectionId, siteId },
         }),
       );
-      toast.success("WordPress.com site selected");
+      toast.success("Site chosen");
     } catch (e) {
       toast.error(
         e instanceof Error ? e.message : "That WordPress.com site could not be selected.",
@@ -140,300 +438,25 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
     }
   };
 
-  const siteDisplay = connection?.selectedSite ?? connection?.sites?.[0] ?? null;
-  const selectedSiteUrl = siteDisplay?.url || connection?.siteUrl || "";
-
-  if (loading) return <Skeleton className="h-32 w-full rounded-xl" />;
+  if (loading) return <ConnectionSkeleton label="Loading WordPress" />;
   if (error)
     return (
       <ErrorState
         size="sm"
-        title="WordPress status unavailable"
+        title="WordPress didn't load"
         detail={error}
         onRetry={() => void load()}
       />
     );
-
-  if (!connection) {
-    return (
-      <article className="rounded-2xl border border-border/70 bg-card/50 p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-xl bg-[#21759b] text-sm font-black text-white">
-            <SiteLogo provider="wordpress" size={20} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="text-[14px] font-semibold">WordPress</p>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                Not connected
-              </span>
-            </div>
-            <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-              Connect your WordPress sites to Mellox.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          <div className="rounded-xl border border-border/70 bg-background/50 p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold">WordPress.com</p>
-                <p className="text-[11px] text-muted-foreground">Recommended</p>
-              </div>
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                Recommended
-              </span>
-            </div>
-            <p className="text-[11.5px] text-muted-foreground">
-              Connect securely with WordPress.com
-            </p>
-            <Button className="mt-3 w-full" onClick={() => void connectOAuth()} disabled={busy}>
-              {busy && <Loader2 className="mr-2 size-3.5 animate-spin" />}Connect WordPress.com
-            </Button>
-          </div>
-
-          <div className="rounded-xl border border-border/70 bg-background/50 p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold">Self-hosted WordPress</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Connect with Application Password
-                </p>
-              </div>
-              <ShieldCheck className="size-4 text-muted-foreground" />
-            </div>
-            {!showSelfHosted ? (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowSelfHosted(true)}
-                loading={busy}
-              >
-                Connect self-hosted WordPress
-              </Button>
-            ) : (
-              <form onSubmit={connect} className="space-y-3 pt-2">
-                <Input
-                  required
-                  type="url"
-                  placeholder="https://your-site.com"
-                  aria-label="WordPress site URL"
-                  value={siteUrl}
-                  onChange={(e) => setSiteUrl(e.target.value)}
-                />
-                <Input
-                  required
-                  placeholder="Username"
-                  aria-label="WordPress username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                />
-                <Input
-                  required
-                  type="password"
-                  placeholder="Application Password"
-                  aria-label="WordPress application password"
-                  value={applicationPassword}
-                  onChange={(e) => setApplicationPassword(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <Button type="button" variant="ghost" onClick={() => setShowSelfHosted(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="flex-1" disabled={busy}>
-                    {busy && <Loader2 className="mr-2 size-3.5 animate-spin" />}Connect self-hosted
-                  </Button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-
-        <p className="mt-3 border-t border-border/60 pt-3 text-[11px] text-muted-foreground">
-          Mellox never needs your normal WordPress password. For self-hosted sites, we use a
-          dedicated Application Password.
-        </p>
-      </article>
-    );
-  }
-
   return (
-    <>
-      <article className="rounded-2xl border border-border/70 bg-card/50 p-4 shadow-sm">
-        <div className="flex flex-wrap items-start gap-3">
-          <span className="grid size-10 place-items-center rounded-xl bg-[#21759b] text-sm font-black text-white">
-            <SiteLogo provider="wordpress" size={20} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="text-[14px] font-semibold">WordPress</p>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                  connection.status === "active"
-                    ? "bg-success/10 text-success"
-                    : "bg-destructive/10 text-destructive",
-                )}
-              >
-                {connection.status === "active" && <CheckCircle className="mr-1 inline size-3" />}
-                {connection.status === "active" ? "Connected" : "Needs attention"}
-              </span>
-            </div>
-            <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">
-              {selectedSiteUrl || connection.siteUrl || "Choose a WordPress site"}
-            </p>
-          </div>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" onClick={() => setDetailsOpen(true)}>
-              Manage
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => void refresh()}
-              disabled={busy}
-              aria-label="Refresh WordPress connection"
-            >
-              <RefreshCw className={cn("size-3.5", busy && "animate-spin")} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => void disconnect()}
-              loading={busy}
-              aria-label="Disconnect WordPress"
-            >
-              <Trash className="size-3.5 text-destructive" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-border/60 bg-background/50 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Site
-            </p>
-            <p className="mt-1 text-[13px] font-semibold">
-              {siteDisplay?.name || connection.siteName || "Choose a site"}
-            </p>
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-              {siteDisplay?.url || connection.siteUrl || "No site selected yet"}
-            </p>
-          </div>
-          <ConnectionHealth
-            items={[
-              {
-                label: "REST API",
-                detail: connection.status === "active" ? "Available" : "Needs attention",
-                state: connection.status === "active" ? "healthy" : "error",
-              },
-              {
-                label: "Account",
-                detail: connection.accountName || connection.username || "Connected",
-                state: "healthy",
-              },
-              { label: "GEO source", detail: "Available", state: "healthy" },
-            ]}
-          />
-        </div>
-      </article>
-
-      <IntegrationDetails
-        open={detailsOpen}
-        onOpenChange={setDetailsOpen}
-        icon={WordPressMark}
-        provider="Development & Website"
-        title="WordPress connection"
-        description="Choose the WordPress site Mellox should use for content management and GEO context."
-        status={
-          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-success">
-            <CheckCircle className="size-3.5" /> Connected
-          </span>
-        }
-        health={[
-          { label: "REST API", detail: "Verified", state: "healthy" },
-          { label: "Account", detail: connection.accountName || "Connected", state: "healthy" },
-          {
-            label: "GEO source",
-            detail: siteDisplay ? "Selected" : "Choose a site",
-            state: siteDisplay ? "healthy" : "warning",
-          },
-        ]}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => void refresh()} loading={busy}>
-              Refresh
-            </Button>
-            <Button variant="ghost" onClick={() => void disconnect()} loading={busy}>
-              Disconnect
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div className="rounded-xl border border-border/70 bg-card/50 px-3.5 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Account
-            </p>
-            <p className="mt-1 text-[13px] font-semibold">{connection.accountName}</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {connection.authType === "wordpress_com_oauth"
-                ? "Connected WordPress.com account"
-                : "Connected WordPress account"}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Last verified:{" "}
-              {connection.lastVerifiedAt
-                ? new Date(connection.lastVerifiedAt).toLocaleString()
-                : "Not yet"}
-            </p>
-          </div>
-
-          {connection.authType === "wordpress_com_oauth" && (
-            <div className="rounded-xl border border-border/70 bg-card/50 px-3.5 py-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[12px] font-semibold">Choose a WordPress.com site</p>
-                <Button size="sm" variant="ghost" onClick={() => void refresh()} disabled={busy}>
-                  <RefreshCw className={cn("size-3.5", busy && "animate-spin")} />
-                  Refresh
-                </Button>
-              </div>
-              {connection.sites.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground">
-                  No WordPress.com sites were returned for this account.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {connection.sites.map((site) => (
-                    <li
-                      key={site.id}
-                      className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-medium">{site.name}</p>
-                        <p className="truncate text-[11px] text-muted-foreground">{site.url}</p>
-                        <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-                          {site.status}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant={site.selected ? "secondary" : "outline"}
-                        onClick={() => void selectSite(site.siteId ?? site.id)}
-                        disabled={site.selected}
-                        loading={busy}
-                      >
-                        {site.selected ? "Selected" : "Select site"}
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
-      </IntegrationDetails>
-    </>
+    <WordPressView
+      connection={connection ?? null}
+      busy={busy}
+      onConnectCom={() => void connectOAuth()}
+      onConnectSelfHosted={connectSelfHosted}
+      onRefresh={() => void refresh()}
+      onSelectSite={(id) => void selectSite(id)}
+      onDisconnect={() => void disconnect()}
+    />
   );
 }

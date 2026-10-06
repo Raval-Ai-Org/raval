@@ -11,20 +11,29 @@ import { RepoOwnershipCard } from "./RepoOwnershipCard";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
+  Check,
   CheckCircle,
   Code,
   ExternalLink,
+  Eye,
   GitCommit,
   Github,
   Lock,
+  Plus,
   RefreshCw,
   Search,
   ShieldCheck,
   Spinner,
   Trash,
+  User,
 } from "@/components/icons";
+import { SiteLogo } from "@/components/brand/SiteLogos";
+import { dsIconBtn } from "@/components/app/surface/buttons";
+import { ConnectionCard, ConnectionFact, ConnectionSkeleton } from "./ConnectionCard";
+import { DisconnectDialog } from "./DisconnectDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,39 +57,6 @@ import type {
   RepositoryOption,
   SourceView,
 } from "@/lib/connectors/types";
-
-const PERMISSIONS = [
-  {
-    label: "Read repository metadata",
-    detail: "Names, branches and settings of repositories you choose.",
-    icon: ShieldCheck,
-  },
-  {
-    label: "Read repository contents",
-    detail: "Files that build your site — used to inspect SEO, GEO and AEO setup.",
-    icon: Code,
-  },
-  {
-    label: "Propose changes as pull requests",
-    detail:
-      "Only when you approve a specific AI Visibility fix: Mellox creates a mellox/ branch and a pull request you review and merge. It never pushes to or merges your branches.",
-    icon: GitCommit,
-  },
-  {
-    label: "Read CI checks (optional)",
-    detail:
-      "Checks and commit statuses on Mellox's pull requests, so you can see whether they pass.",
-    icon: CheckCircle,
-  },
-];
-
-const PERMISSION_LABEL: Record<string, string> = {
-  metadata: "Metadata",
-  contents: "Contents",
-  pull_requests: "Pull requests",
-  checks: "Checks",
-  statuses: "Commit statuses",
-};
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "never";
@@ -250,13 +226,13 @@ export function RepositoryPicker({
         <EmptyState
           size="sm"
           icon={Github}
-          title="No repositories shared with Mellox"
-          description="Choose which repositories Mellox can access in the installation settings on GitHub."
+          title="No repositories shared yet"
+          description="Choose which ones Mellox can see on GitHub."
           action={
             connection.manageUrl ? (
               <Button asChild size="sm" variant="outline">
                 <a href={connection.manageUrl} target="_blank" rel="noopener noreferrer">
-                  Configure on GitHub <ExternalLink className="h-3.5 w-3.5" />
+                  Open GitHub <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </Button>
             ) : undefined
@@ -264,7 +240,7 @@ export function RepositoryPicker({
         />
       ) : (
         <>
-          <ul className="max-h-72 divide-y divide-border/50 overflow-y-auto rounded-xl border border-border/60 bg-card/40">
+          <ul className="ds-well max-h-72 divide-y divide-[var(--ds-tile-border)] overflow-y-auto">
             {visible.map((repo) => {
               const selected = selectedIds.has(repo.id);
               return (
@@ -312,11 +288,8 @@ export function RepositoryPicker({
           </ul>
           <p className="text-[11px] text-muted-foreground">
             {meta?.truncated
-              ? `Showing the ${repos.length} most recent of ${meta.total} repositories.`
-              : `${repos.length} repositories available`}
-            {connection.repositorySelection === "selected"
-              ? " · limited to the repositories you shared on GitHub"
-              : ""}
+              ? `Showing ${repos.length} of ${meta.total}`
+              : `${repos.length} repositories`}
           </p>
         </>
       )}
@@ -378,87 +351,78 @@ function SourceCard({
     }
   };
 
+  const lost = source.status === "access_lost";
   return (
-    <li className="rounded-xl border border-border/70 bg-card/60 p-3">
-      <div className="flex flex-wrap items-start gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-secondary">
-          <Github className="h-4 w-4" />
+    <li className="ds-well p-3.5">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-background text-foreground ring-1 ring-[var(--ds-tile-border)]">
+          <Code className="size-4" />
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <div className="min-w-0 flex-1 basis-40">
+          <div className="flex min-w-0 items-center gap-1.5">
             {source.htmlUrl ? (
               <a
                 href={source.htmlUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="truncate text-[13px] font-semibold underline-offset-2 hover:underline"
+                className="truncate text-[13.5px] font-semibold underline-offset-2 hover:underline"
               >
                 {source.fullName}
               </a>
             ) : (
-              <span className="truncate text-[13px] font-semibold">{source.fullName}</span>
+              <span className="truncate text-[13.5px] font-semibold">{source.fullName}</span>
             )}
             {source.private && (
-              <StatusChip tone="muted">
-                <Lock className="h-3 w-3" /> Private
-              </StatusChip>
+              <Lock className="size-3 shrink-0 text-muted-foreground" aria-label="Private" />
             )}
-            {source.status === "access_lost" ? (
+            {lost && (
               <StatusChip tone="destructive">
                 <AlertTriangle className="h-3 w-3" /> Access lost
               </StatusChip>
-            ) : (
-              <StatusChip tone="success">Readable</StatusChip>
-            )}
-            {source.siteUrl && source.status !== "access_lost" && (
-              <StatusChip tone="success">
-                <CheckCircle className="h-3 w-3" /> Repository linked
-              </StatusChip>
             )}
           </div>
-          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-            Branch {source.branch ?? source.defaultBranch ?? "—"}
+          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+            {source.branch ?? source.defaultBranch ?? "—"}
             {source.siteUrl
-              ? ` · builds ${source.siteUrl.replace(/^https?:\/\//, "")}`
-              : " · not linked to a website"}
-            {` · checked ${timeAgo(source.lastSyncedAt)}`}
+              ? ` · ${source.siteUrl.replace(/^https?:\/\//, "")}`
+              : " · no website yet"}
+            {` · ${timeAgo(source.lastSyncedAt)}`}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
           <Button
             size="sm"
             variant="outline"
-            disabled={busy !== null || source.status === "access_lost"}
+            disabled={busy !== null || lost}
             loading={busy === "inspect"}
             onClick={() => void run("inspect")}
           >
-            <Code className="h-3.5 w-3.5" /> Inspect source
+            <Search className="h-3.5 w-3.5" /> Check code
           </Button>
           {canManage && (
-            <Button
-              size="sm"
-              variant="ghost"
+            <button
+              type="button"
+              className={dsIconBtn}
               aria-label={`Remove ${source.fullName}`}
               disabled={busy !== null}
               onClick={() => setConfirmRemove(true)}
             >
-              <Trash className="h-3.5 w-3.5" />
-            </Button>
+              <Trash className="h-4 w-4" />
+            </button>
           )}
         </div>
       </div>
 
-      {source.status === "access_lost" && (
-        <p className="mt-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
-          Mellox can no longer read this repository — it was removed from the installation, or
-          GitHub access was revoked. Re-share it on GitHub, then verify the connection.
+      {lost && (
+        <p className="mt-3 text-[12px] text-destructive">
+          Mellox can&apos;t read this repository any more. Share it again on GitHub.
         </p>
       )}
-      {source.lastError && source.status !== "access_lost" && (
-        <p className="mt-2 text-[12px] text-destructive">{source.lastError}</p>
+      {source.lastError && !lost && (
+        <p className="mt-3 text-[12px] text-destructive">{source.lastError}</p>
       )}
-      {source.siteUrl && source.status !== "access_lost" && (
-        <div className="mt-2">
+      {source.siteUrl && !lost && (
+        <div className="mt-3">
           <RepoOwnershipCard
             workspaceId={workspaceId}
             source={source}
@@ -470,106 +434,83 @@ function SourceCard({
         </div>
       )}
 
-      {confirmRemove && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-3 py-2 text-[12px]">
-          <span className="min-w-0 flex-1">
-            Stop using {source.fullName} in Mellox? Nothing changes on GitHub.
-          </span>
-          <Button size="sm" variant="ghost" onClick={() => setConfirmRemove(false)}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            loading={busy === "remove"}
-            onClick={() => void run("remove")}
-          >
-            Remove
-          </Button>
-        </div>
-      )}
-
       {canManage && (
         <form
-          className="mt-3 grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.6fr)_auto]"
+          data-no-rhythm
+          className="mt-3 grid items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.6fr)_auto]"
           onSubmit={(e) => {
             e.preventDefault();
             void run("save");
           }}
         >
-          <label className="min-w-0 space-y-1">
-            <span className="text-[11px] font-medium text-muted-foreground">
-              Website this repository builds
-            </span>
-            <Input
-              value={siteUrl}
-              onChange={(e) => setSiteUrl(e.target.value)}
-              placeholder="example.com"
-              className="h-8 text-[12.5px]"
-            />
-          </label>
-          <label className="min-w-0 space-y-1">
-            <span className="text-[11px] font-medium text-muted-foreground">Branch</span>
-            <Input
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              placeholder={source.defaultBranch ?? "main"}
-              className="h-8 text-[12.5px]"
-            />
-          </label>
-          <div className="flex items-end">
-            <Button
-              type="submit"
-              size="sm"
-              disabled={!dirty || busy !== null}
-              loading={busy === "save"}
-            >
-              Save
-            </Button>
-          </div>
+          <Input
+            value={siteUrl}
+            onChange={(e) => setSiteUrl(e.target.value)}
+            placeholder="Website (example.com)"
+            aria-label="Website this repository builds"
+            className="h-9 text-[13px]"
+          />
+          <Input
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            placeholder={`Branch (${source.defaultBranch ?? "main"})`}
+            aria-label="Branch"
+            className="h-9 text-[13px]"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!dirty || busy !== null}
+            loading={busy === "save"}
+          >
+            Save
+          </Button>
         </form>
       )}
 
       {inspection && (
-        <div className="mt-3 rounded-lg border border-border/60 bg-background/60 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[12px] font-semibold">Source inspection</p>
-            <p className="text-[11px] text-muted-foreground">
-              {inspection.branch}
-              {inspection.commitSha ? ` @ ${inspection.commitSha.slice(0, 7)}` : ""} ·{" "}
-              {timeAgo(inspection.inspectedAt)}
-            </p>
-          </div>
-          <dl className="mt-2 grid gap-1.5 text-[12px] sm:grid-cols-2">
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground">Framework</dt>
-              <dd className="font-medium" title={inspection.frameworkEvidence ?? undefined}>
-                {inspection.framework ?? "Not detected"}
+        <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            {
+              label: "Built with",
+              value: inspection.framework,
+              title: inspection.frameworkEvidence,
+            },
+            { label: "robots.txt", value: inspection.discoveryFiles.robots },
+            { label: "Sitemap", value: inspection.discoveryFiles.sitemap },
+            { label: "llms.txt", value: inspection.discoveryFiles.llms },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="min-w-0 rounded-[12px] bg-background px-3 py-2 ring-1 ring-[var(--ds-tile-border)]"
+              title={item.title ?? item.value ?? undefined}
+            >
+              <dt className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+                <span
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full",
+                    item.value ? "bg-success" : "bg-muted-foreground/40",
+                  )}
+                  aria-hidden
+                />
+                {item.label}
+              </dt>
+              <dd className="mt-0.5 truncate text-[12.5px] font-medium text-foreground">
+                {item.value ?? "Not found"}
               </dd>
             </div>
-            {(["robots", "sitemap", "llms"] as const).map((key) => (
-              <div key={key} className="flex min-w-0 gap-2">
-                <dt className="shrink-0 text-muted-foreground">
-                  {key === "llms" ? "llms.txt" : key === "robots" ? "robots" : "sitemap"}
-                </dt>
-                <dd
-                  className={cn(
-                    "min-w-0 truncate font-mono text-[11.5px]",
-                    !inspection.discoveryFiles[key] && "text-muted-foreground",
-                  )}
-                >
-                  {inspection.discoveryFiles[key] ?? "not in repository"}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            AI Visibility scores your live website. From a finding, “Fix this” uses this repository
-            to propose a pull request you approve; the finding is resolved only after a rescan of
-            the live site confirms it.
-          </p>
-        </div>
+          ))}
+        </dl>
       )}
+
+      <DisconnectDialog
+        open={confirmRemove}
+        onOpenChange={setConfirmRemove}
+        name={source.fullName}
+        description="Mellox stops using this repository. Nothing changes on GitHub."
+        busy={busy === "remove"}
+        onConfirm={() => void run("remove")}
+      />
     </li>
   );
 }
@@ -580,8 +521,6 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
   const [overview, setOverview] = useState<ConnectorsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -605,10 +544,7 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
   // overview above is re-read from the server; go straight to choosing a repository.
   useEffect(() => {
     const notice = takeGithubConnected(workspaceId);
-    if (notice) {
-      setJustConnected(notice.accounts);
-      setShowPicker(true);
-    }
+    if (notice) setJustConnected(notice.accounts);
   }, [workspaceId]);
 
   // Fallback for changes made elsewhere (another tab, GitHub's own settings).
@@ -647,7 +583,6 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
     try {
       await disconnectConnection({ data: { workspaceId, connectionId: connection.id } });
       toast.success(`Disconnected ${connection.accountLogin}`);
-      setConfirmDisconnect(null);
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't disconnect");
@@ -658,22 +593,54 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
 
   if (error && !overview)
     return (
-      <ErrorState
-        size="sm"
-        title="Integrations didn't load"
-        detail={error}
-        onRetry={() => void load()}
-      />
+      <ErrorState size="sm" title="GitHub didn't load" detail={error} onRetry={() => void load()} />
     );
-  if (!overview) {
-    return (
-      <div className="space-y-2" aria-label="Loading GitHub connection">
-        <Skeleton className="h-24 w-full rounded-xl" />
-        <Skeleton className="h-14 w-full rounded-xl" />
-      </div>
-    );
-  }
+  if (!overview) return <ConnectionSkeleton label="Loading GitHub" />;
 
+  return (
+    <GitHubView
+      workspaceId={workspaceId}
+      overview={overview}
+      onOverviewChange={(update) => setOverview((o) => (o ? update(o) : o))}
+      busy={busy}
+      installing={installing}
+      refreshing={refreshing}
+      justConnected={justConnected !== null}
+      onInstall={() => void install()}
+      onRefresh={() => void refresh()}
+      onVerify={(connection) => void verify(connection)}
+      onDisconnect={(connection) => void disconnect(connection)}
+    />
+  );
+}
+
+/** The GitHub card. Presentational apart from the repository rows it contains. */
+export function GitHubView({
+  workspaceId,
+  overview,
+  onOverviewChange,
+  busy,
+  installing,
+  refreshing,
+  justConnected = false,
+  onInstall,
+  onRefresh,
+  onVerify,
+  onDisconnect,
+}: {
+  workspaceId: string;
+  overview: ConnectorsOverview;
+  onOverviewChange: (update: (overview: ConnectorsOverview) => ConnectorsOverview) => void;
+  busy: string | null;
+  installing: boolean;
+  refreshing: boolean;
+  /** Just back from GitHub: open straight onto choosing a repository. */
+  justConnected?: boolean;
+  onInstall: () => void;
+  onRefresh: () => void;
+  onVerify: (connection: ConnectionView) => void;
+  onDisconnect: (connection: ConnectionView) => void;
+}) {
   const config = overview.configured.github;
   const connections = overview.connections.filter((c) => c.provider === "github");
   const live = connections.filter((c) => c.status !== "revoked");
@@ -681,374 +648,348 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
   const sources = overview.sources.filter((s) => s.provider === "github");
   const selectedIds = new Set(sources.map((s) => s.externalId));
   const canManage = overview.canManage;
+  const healthy = live.every((c) => c.status === "active");
+  const lost = sources.some((s) => s.status === "access_lost");
+
+  // Open by itself only while there is something to do: pick a repository.
+  const [open, setOpen] = useState(justConnected || (live.length > 0 && sources.length === 0));
+  const [showPicker, setShowPicker] = useState(justConnected);
+  const [confirmDisconnect, setConfirmDisconnect] = useState<ConnectionView | null>(null);
+  useEffect(() => {
+    if (!justConnected) return;
+    setOpen(true);
+    setShowPicker(true);
+  }, [justConnected]);
+
+  const logo = <SiteLogo provider="github" size={24} />;
+  const notReady = !config.ready
+    ? `GitHub isn't set up on this server yet. ${config.issues.slice(0, 2).join(" · ")}`
+    : undefined;
+
+  if (live.length === 0)
+    return (
+      <ConnectionCard
+        label="GitHub connection"
+        logo={logo}
+        name="GitHub"
+        description="The code behind your website"
+        status={{ tone: "off", text: "Not connected" }}
+        facts={
+          <>
+            <ConnectionFact icon={Eye}>Reads your site&apos;s code</ConnectionFact>
+            <ConnectionFact icon={GitCommit}>Suggests fixes you approve</ConnectionFact>
+            <ConnectionFact icon={Lock}>Never merges by itself</ConnectionFact>
+          </>
+        }
+        actions={
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onInstall}
+            disabled={!config.ready || !canManage}
+            loading={installing}
+          >
+            {past.length ? "Reconnect" : "Connect"}
+          </Button>
+        }
+        note={
+          notReady ??
+          (!canManage
+            ? "Ask an admin to connect GitHub."
+            : config.installVerification === "install_window"
+              ? "Development mode: installs are checked by timing."
+              : undefined)
+        }
+      />
+    );
 
   return (
-    <section aria-label="GitHub" className="space-y-3">
-      <div className="flex flex-wrap items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-foreground text-background">
-          <Github className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[14px] font-semibold">GitHub</h3>
-            {live.length ? (
-              <StatusChip tone="success">Connected</StatusChip>
-            ) : (
-              <StatusChip tone="muted">Not connected</StatusChip>
+    <>
+      <ConnectionCard
+        label="GitHub connection"
+        logo={logo}
+        name="GitHub"
+        description={
+          sources.length
+            ? sources.map((s) => s.fullName).join(", ")
+            : "Choose the repository that builds your website"
+        }
+        status={
+          !healthy || lost
+            ? { tone: "attention", text: "Needs attention" }
+            : sources.length
+              ? { tone: "connected", text: "Connected" }
+              : { tone: "attention", text: "Choose a repository" }
+        }
+        facts={
+          <>
+            {live.map((c) => (
+              <ConnectionFact key={c.id} icon={User}>
+                {c.accountLogin}
+              </ConnectionFact>
+            ))}
+            {sources.length > 0 && (
+              <ConnectionFact icon={Code}>
+                {sources.length === 1 ? "1 repository" : `${sources.length} repositories`}
+              </ConnectionFact>
             )}
+          </>
+        }
+        actions={
+          <>
+            <button
+              type="button"
+              className={dsIconBtn}
+              aria-label="Refresh GitHub status"
+              disabled={refreshing}
+              onClick={onRefresh}
+            >
+              <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+            </button>
             <Button
               size="sm"
-              variant="ghost"
-              className="ml-auto h-7 px-2 text-[11.5px]"
-              loading={refreshing}
-              onClick={() => void refresh()}
+              variant={open ? "ghost" : "outline"}
+              aria-expanded={open}
+              onClick={() => setOpen((v) => !v)}
             >
-              <RefreshCw className="h-3.5 w-3.5" /> Refresh status
+              {open ? "Close" : "Manage"}
             </Button>
-          </div>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
-            The code behind your website. Mellox suggests fixes as pull requests you approve.
-          </p>
-        </div>
-      </div>
+          </>
+        }
+        note={notReady}
+      >
+        {open && (
+          <div className="space-y-6">
+            {live.map((connection) => {
+              const health = connectionHealth(connection);
+              const mine = sources.filter((s) => s.connectionId === connection.id);
+              const canOpenPrs =
+                connection.permissions.contents === "write" &&
+                connection.permissions.pull_requests === "write";
+              return (
+                <div key={connection.id} className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {connection.accountAvatarUrl ? (
+                      <img
+                        src={connection.accountAvatarUrl}
+                        alt=""
+                        className="size-9 shrink-0 rounded-full ring-1 ring-[var(--ds-tile-border)]"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-[13px] font-semibold">
+                        {connection.accountLogin.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1 basis-40">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate text-[13.5px] font-semibold">
+                          {connection.accountLogin}
+                        </span>
+                        <StatusChip tone={health.tone}>{health.label}</StatusChip>
+                        {connection.verification === "oauth" && (
+                          <ShieldCheck
+                            className="size-3.5 text-success"
+                            aria-label="Verified owner"
+                          />
+                        )}
+                      </div>
+                      <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+                        {connection.repositorySelection === "all"
+                          ? "All repositories"
+                          : "Selected repositories"}{" "}
+                        · checked {timeAgo(connection.lastVerifiedAt)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className={dsIconBtn}
+                        aria-label={`Check access for ${connection.accountLogin}`}
+                        title="Check access"
+                        disabled={busy !== null}
+                        onClick={() => onVerify(connection)}
+                      >
+                        {busy === `verify:${connection.id}` ? (
+                          <Spinner className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                      </button>
+                      {connection.manageUrl && (
+                        <a
+                          className={dsIconBtn}
+                          href={connection.manageUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="Manage on GitHub (opens in a new tab)"
+                          title="Manage on GitHub"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      )}
+                      {canManage && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy !== null}
+                          onClick={() => setConfirmDisconnect(connection)}
+                        >
+                          Disconnect
+                        </Button>
+                      )}
+                    </div>
+                  </div>
 
-      {justConnected && live.length > 0 && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-xl border border-success/30 bg-success/5 px-3.5 py-2.5 text-[12.5px]"
-        >
-          <CheckCircle className="h-4 w-4 shrink-0 text-success" />
-          <span className="min-w-0 flex-1">
-            GitHub connected{justConnected.length ? ` — ${justConnected.join(", ")}` : ""}. Choose
-            the repository that builds your website below.
-          </span>
-          <Button size="sm" variant="ghost" onClick={() => setJustConnected(null)}>
-            Dismiss
-          </Button>
-        </div>
-      )}
-
-      {!config.ready && (
-        <div
-          className="rounded-xl border border-warning/30 bg-warning/5 px-3.5 py-3 text-[12px]"
-          role="status"
-        >
-          <p className="font-medium text-foreground">
-            GitHub isn&apos;t available on this server yet
-          </p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
-            {config.issues.slice(0, 4).map((issue) => (
-              <li key={issue}>{issue}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {live.length === 0 && (
-        <div className="rounded-xl border border-border/70 bg-card/50 p-3.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            What Mellox can access
-          </p>
-          <ul className="mt-2 space-y-2">
-            {PERMISSIONS.map(({ label, detail, icon: Icon }) => (
-              <li key={label} className="flex gap-2.5">
-                <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <div>
-                  <p className="text-[12.5px] font-medium">{label}</p>
-                  <p className="text-[11.5px] text-muted-foreground">{detail}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-[11.5px] text-muted-foreground">
-            You pick the account and repositories on GitHub, and can revoke access there any time.
-            Mellox never stores GitHub passwords or long-lived tokens.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              onClick={() => void install()}
-              disabled={!config.ready || !canManage}
-              loading={installing}
-            >
-              <Github className="h-4 w-4" /> Connect GitHub
-            </Button>
-            {installing && (
-              <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden /> Opening GitHub…
-              </span>
-            )}
-            {!canManage && (
-              <span className="text-[12px] text-muted-foreground">
-                Ask a workspace admin to connect GitHub.
-              </span>
-            )}
-          </div>
-          {config.installVerification === "install_window" && config.ready && (
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Development mode: installs are verified by timing. Configure GitHub OAuth for
-              production.
-            </p>
-          )}
-        </div>
-      )}
-
-      {live.map((connection) => {
-        const health = connectionHealth(connection);
-        return (
-          <div
-            key={connection.id}
-            className="space-y-3 rounded-xl border border-border/70 bg-card/50 p-3.5"
-          >
-            <div className="flex flex-wrap items-center gap-3">
-              {connection.accountAvatarUrl ? (
-                <img
-                  src={connection.accountAvatarUrl}
-                  alt=""
-                  className="h-9 w-9 shrink-0 rounded-full ring-1 ring-border"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary text-[13px] font-semibold">
-                  {connection.accountLogin.charAt(0).toUpperCase()}
-                </span>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="truncate text-[13.5px] font-semibold">
-                    {connection.accountLogin}
-                  </span>
-                  <StatusChip tone={health.tone}>{health.label}</StatusChip>
-                  {connection.verification === "oauth" && (
-                    <StatusChip tone="muted">
-                      <ShieldCheck className="h-3 w-3" /> Verified owner
-                    </StatusChip>
-                  )}
-                </div>
-                <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-                  {connection.accountType ?? "Account"} ·{" "}
-                  {connection.repositorySelection === "all"
-                    ? "all repositories"
-                    : "selected repositories"}{" "}
-                  · verified {timeAgo(connection.lastVerifiedAt)}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  loading={busy === `verify:${connection.id}`}
-                  disabled={busy !== null}
-                  onClick={() => void verify(connection)}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" /> Verify
-                </Button>
-                {connection.manageUrl && (
-                  <Button asChild size="sm" variant="ghost">
-                    <a href={connection.manageUrl} target="_blank" rel="noopener noreferrer">
-                      Manage on GitHub <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  </Button>
-                )}
-                {canManage && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy !== null}
-                    onClick={() => setConfirmDisconnect(connection.id)}
-                  >
-                    Disconnect
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
-              <span className="text-muted-foreground">Permissions:</span>
-              {Object.entries(connection.permissions)
-                .filter(([k]) => PERMISSION_LABEL[k])
-                .map(([k, v]) => (
-                  <StatusChip key={k} tone={v === "write" ? "warning" : "muted"}>
-                    {PERMISSION_LABEL[k]} · {v}
-                  </StatusChip>
-                ))}
-              {(!connection.permissions.checks || !connection.permissions.statuses) && (
-                <span className="text-muted-foreground">
-                  CI status on fix pull requests needs Checks and Commit statuses (read).
-                </span>
-              )}
-              {(connection.permissions.contents !== "write" ||
-                connection.permissions.pull_requests !== "write") && (
-                <span className="text-destructive">
-                  Fix pull requests need Contents and Pull requests (write).
-                </span>
-              )}
-            </div>
-
-            {connection.status === "suspended" && (
-              <p className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-[12px]">
-                The GitHub owner suspended this installation, so Mellox can&apos;t read
-                repositories. Unsuspend it on GitHub, then press Verify.
-              </p>
-            )}
-            {connection.status === "error" && connection.lastError && (
-              <p className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
-                {connection.lastError}
-                {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => void install()}
-                    className="ml-1.5 font-medium underline underline-offset-2"
-                  >
-                    Reconnect
-                  </button>
-                )}
-              </p>
-            )}
-
-            {confirmDisconnect === connection.id && (
-              <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2.5 text-[12px]">
-                <p className="font-medium">
-                  Disconnect {connection.accountLogin} from this workspace?
-                </p>
-                <p className="mt-0.5 text-muted-foreground">
-                  Mellox stops using its repositories immediately. The app stays installed on GitHub
-                  until you uninstall it there
-                  {connection.manageUrl ? " (Manage on GitHub)" : ""}.
-                </p>
-                <div className="mt-2 flex justify-end gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => setConfirmDisconnect(null)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    loading={busy === `disconnect:${connection.id}`}
-                    onClick={() => void disconnect(connection)}
-                  >
-                    Disconnect
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {connection.status === "active" && (
-              <div className="space-y-2 border-t border-border/60 pt-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[12px] font-semibold">Connected repositories</p>
-                  {canManage && (
-                    <Button
-                      size="sm"
-                      variant={showPicker ? "ghost" : "outline"}
-                      onClick={() => setShowPicker((v) => !v)}
-                    >
-                      {showPicker ? "Done" : "Add repository"}
-                    </Button>
-                  )}
-                </div>
-                {sources.filter((s) => s.connectionId === connection.id).length === 0 &&
-                  !showPicker && (
-                    <p className="rounded-lg border border-dashed border-border/80 px-3 py-3 text-center text-[12px] text-muted-foreground">
-                      No repository selected yet. Add the repository that builds your website.
+                  {!canOpenPrs && (
+                    <p className="flex items-start gap-2 text-[12px] text-destructive">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                      Mellox can&apos;t open pull requests here. Allow Contents and Pull requests on
+                      GitHub.
                     </p>
                   )}
-                <ul className="space-y-2">
-                  {sources
-                    .filter((s) => s.connectionId === connection.id)
-                    .map((source) => (
-                      <SourceCard
-                        key={source.id}
-                        workspaceId={workspaceId}
-                        source={source}
-                        canManage={canManage}
-                        onChange={(updated) =>
-                          setOverview((o) =>
-                            o
-                              ? {
-                                  ...o,
-                                  sources: o.sources.map((s) =>
-                                    s.id === updated.id ? updated : s,
-                                  ),
-                                }
-                              : o,
-                          )
-                        }
-                        onRemoved={(id) =>
-                          setOverview((o) =>
-                            o ? { ...o, sources: o.sources.filter((s) => s.id !== id) } : o,
-                          )
-                        }
-                      />
-                    ))}
-                </ul>
-                {showPicker && canManage && (
-                  <RepositoryPicker
-                    workspaceId={workspaceId}
-                    connection={connection}
-                    selectedIds={selectedIds}
-                    canManage={canManage}
-                    onSelected={(source) =>
-                      setOverview((o) =>
-                        o
-                          ? {
-                              ...o,
-                              sources: [...o.sources.filter((s) => s.id !== source.id), source],
+                  {connection.status === "suspended" && (
+                    <p className="flex items-start gap-2 text-[12px] text-warning">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                      Paused on GitHub. Turn it back on there, then check access.
+                    </p>
+                  )}
+                  {connection.status === "error" && connection.lastError && (
+                    <p className="flex items-start gap-2 text-[12px] text-destructive">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                      <span className="min-w-0">
+                        {connection.lastError}
+                        {canManage && (
+                          <button
+                            type="button"
+                            onClick={onInstall}
+                            className="ml-1.5 font-medium underline underline-offset-2"
+                          >
+                            Reconnect
+                          </button>
+                        )}
+                      </span>
+                    </p>
+                  )}
+
+                  {connection.status === "active" && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="ds-label">Repositories</p>
+                        {canManage && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setShowPicker((v) => !v)}
+                          >
+                            {showPicker ? (
+                              <>
+                                <Check className="h-3.5 w-3.5" /> Done
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-3.5 w-3.5" /> Add
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                      {mine.length === 0 && !showPicker && (
+                        <button
+                          type="button"
+                          disabled={!canManage}
+                          onClick={() => setShowPicker(true)}
+                          className="flex w-full items-center justify-center gap-2 rounded-[16px] border border-dashed border-[var(--ds-tile-border)] px-3 py-4 text-[13px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:pointer-events-none"
+                        >
+                          <Plus className="h-4 w-4" /> Add the repository that builds your website
+                        </button>
+                      )}
+                      <ul className="space-y-2">
+                        {mine.map((source) => (
+                          <SourceCard
+                            key={source.id}
+                            workspaceId={workspaceId}
+                            source={source}
+                            canManage={canManage}
+                            onChange={(updated) =>
+                              onOverviewChange((o) => ({
+                                ...o,
+                                sources: o.sources.map((s) => (s.id === updated.id ? updated : s)),
+                              }))
                             }
-                          : o,
-                      )
-                    }
-                  />
+                            onRemoved={(id) =>
+                              onOverviewChange((o) => ({
+                                ...o,
+                                sources: o.sources.filter((s) => s.id !== id),
+                              }))
+                            }
+                          />
+                        ))}
+                      </ul>
+                      <AnimatePresence initial={false}>
+                        {showPicker && canManage && (
+                          <motion.div
+                            key="picker"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                            className="overflow-hidden"
+                          >
+                            <RepositoryPicker
+                              workspaceId={workspaceId}
+                              connection={connection}
+                              selectedIds={selectedIds}
+                              canManage={canManage}
+                              onSelected={(source) =>
+                                onOverviewChange((o) => ({
+                                  ...o,
+                                  sources: [...o.sources.filter((s) => s.id !== source.id), source],
+                                }))
+                              }
+                            />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {(canManage && config.ready) || past.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 border-t border-[var(--ds-tile-border)] pt-4">
+                {canManage && config.ready && (
+                  <Button size="sm" variant="ghost" onClick={onInstall} loading={installing}>
+                    <Plus className="h-3.5 w-3.5" /> Add another account
+                  </Button>
                 )}
+                {past.map((connection) => (
+                  <ConnectionFact
+                    key={connection.id}
+                    title={`${connectionHealth(connection).label} ${timeAgo(connection.revokedAt)}`}
+                  >
+                    {connection.accountLogin} · removed
+                  </ConnectionFact>
+                ))}
               </div>
-            )}
+            ) : null}
           </div>
-        );
-      })}
-
-      {live.length > 0 && canManage && config.ready && (
-        <button
-          type="button"
-          onClick={() => void install()}
-          disabled={installing}
-          className="text-[12px] font-medium text-primary underline-offset-2 hover:underline disabled:opacity-60"
-        >
-          {installing ? (
-            <span className="inline-flex items-center gap-1.5">
-              <Spinner className="h-3 w-3 animate-spin" /> Waiting for GitHub…
-            </span>
-          ) : (
-            "Connect another GitHub account or organization"
-          )}
-        </button>
-      )}
-
-      {past.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Previously connected
-          </p>
-          {past.map((connection) => (
-            <div
-              key={connection.id}
-              className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 px-3 py-2 text-[12px]"
-            >
-              <span className="font-medium">{connection.accountLogin}</span>
-              <StatusChip tone="muted">{connectionHealth(connection).label}</StatusChip>
-              <span className="text-muted-foreground">{timeAgo(connection.revokedAt)}</span>
-              {canManage && config.ready && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="ml-auto"
-                  loading={installing}
-                  onClick={() => void install()}
-                >
-                  Reconnect
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+        )}
+      </ConnectionCard>
+      <DisconnectDialog
+        open={confirmDisconnect !== null}
+        onOpenChange={(v) => {
+          if (!v) setConfirmDisconnect(null);
+        }}
+        name={confirmDisconnect?.accountLogin ?? "GitHub"}
+        description="Mellox stops using its repositories. The app stays on GitHub until you remove it there."
+        busy={busy !== null}
+        onConfirm={() => {
+          if (confirmDisconnect) onDisconnect(confirmDisconnect);
+          setConfirmDisconnect(null);
+        }}
+      />
+    </>
   );
 }

@@ -8,9 +8,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AppModalShell } from "@/components/app/AppModalShell";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Loader2, Trash2 } from "@/components/icons";
+import { Loader2, Trash2 } from "@/components/icons";
 import { deleteWorkspace } from "@/lib/workspaces.functions";
 import { clearWorkspaceLocalData } from "@/lib/workspace/last-opened";
 import { WORKSPACES_HOME } from "@/lib/workspace/paths";
@@ -98,97 +98,99 @@ export function DeleteWorkspaceDialog({
   };
 
   return (
-    <AppModalShell
+    <DialogPrimitive.Root
       open={!!workspace}
       onOpenChange={(v) => {
         if (!deleting) onOpenChange(v);
       }}
-      size="sm"
-      Icon={Trash2}
-      title="Delete workspace"
-      description="This permanently deletes the workspace and everything in it."
-      disableClose={deleting}
     >
-      {workspace && (
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content
+          data-mellox-app
+          onOpenAutoFocus={(e) => {
             e.preventDefault();
-            void run();
+            inputRef.current?.focus();
           }}
+          className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-24px)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-border/70 bg-background p-6 shadow-2xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 sm:p-7"
         >
-          <div className="rounded-xl border border-border/70 bg-secondary/40 px-3.5 py-3">
-            <div className="text-[14px] font-semibold text-foreground">{workspace.name}</div>
-            <div className="text-[12.5px] text-muted-foreground">
-              {workspace.domain || workspace.websiteUrl || "No website"}
-            </div>
-          </div>
+          <DialogPrimitive.Description className="sr-only">
+            This permanently deletes the workspace and everything in it.
+          </DialogPrimitive.Description>
+          {workspace && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void run();
+              }}
+            >
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-destructive/10 text-destructive">
+                <Trash2 className="h-5 w-5" aria-hidden />
+              </div>
 
-          <div
-            role="alert"
-            className="flex gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 px-3.5 py-3 text-[13px] text-foreground"
-          >
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
-            <div>
-              <p className="font-medium">This can't be undone.</p>
-              <p className="mt-0.5 text-muted-foreground">
-                Your account and your other workspaces are not affected.
+              <DialogPrimitive.Title className="mt-4 text-[19px] font-semibold tracking-tight text-foreground">
+                Delete {workspace.name || workspace.domain || "this workspace"}?
+              </DialogPrimitive.Title>
+              <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">
+                This permanently removes the workspace and everything in it. It can't be undone.
+                Your account and other workspaces stay as they are.
               </p>
-            </div>
-          </div>
 
-          <div>
-            <p className="text-[12.5px] font-medium text-foreground">What will be deleted</p>
-            <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[12.5px] text-muted-foreground">
-              {DELETED_DATA.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </div>
+              <details className="group mt-4 rounded-2xl bg-secondary/50 px-4 py-3 text-[13px]">
+                <summary className="cursor-pointer list-none font-medium text-foreground marker:hidden">
+                  What gets deleted
+                  <span className="ml-1 text-muted-foreground group-open:hidden">· show</span>
+                </summary>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
+                  {DELETED_DATA.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </details>
 
-          <div className="space-y-1.5">
-            <label htmlFor="delete-workspace-confirm" className="text-[12.5px] text-foreground">
-              Type <span className="font-mono font-semibold">{DELETE_CONFIRMATION}</span> to confirm
-            </label>
-            <input
-              id="delete-workspace-confirm"
-              ref={inputRef}
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              disabled={deleting}
-              aria-invalid={typed.length > 0 && !confirmed}
-              className="h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
-            />
-          </div>
+              <div className="mt-5 space-y-1.5">
+                <label htmlFor="delete-workspace-confirm" className="text-[13px] text-foreground">
+                  Type <span className="font-mono font-semibold">{DELETE_CONFIRMATION}</span> to
+                  confirm
+                </label>
+                <input
+                  id="delete-workspace-confirm"
+                  ref={inputRef}
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  disabled={deleting}
+                  aria-invalid={typed.length > 0 && !confirmed}
+                  className="h-11 w-full rounded-xl border border-input bg-background px-3.5 font-mono text-[14px] outline-none transition focus-visible:border-destructive/60 focus-visible:ring-2 focus-visible:ring-destructive/25"
+                />
+              </div>
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="destructive"
-              disabled={!confirmed || deleting}
-              className="gap-1.5"
-            >
-              {deleting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              ) : (
-                <Trash2 className="h-3.5 w-3.5" aria-hidden />
-              )}
-              Delete workspace
-            </Button>
-          </div>
-        </form>
-      )}
-    </AppModalShell>
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => onOpenChange(false)}
+                  disabled={deleting}
+                  className="h-11 rounded-full px-5"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={!confirmed || deleting}
+                  className="h-11 gap-1.5 rounded-full px-5"
+                >
+                  {deleting && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+                  Delete workspace
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

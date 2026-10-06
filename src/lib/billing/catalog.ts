@@ -83,7 +83,14 @@ export type PlanDef = {
   /** Circuit breaker on ALL metered provider spend for the billing account (USD). Not the product allowance. */
   safety: { dailyUsd: number; monthlyUsd: number };
   support: string;
-  /** Marketing bullets for the plan cards (keep short). */
+  /** Who the plan is for: one short line on the upgrade screen. */
+  fit: string;
+  /**
+   * What the plan lets you do, for the upgrade screen (keep short and plain).
+   * Paid plans above Starter list only what they add to the plan below. The
+   * numbers (brands, credits, videos, seats) are shown from the fields above,
+   * so they are not repeated here. Only name a feature its `minPlan` allows.
+   */
   highlights: string[];
 };
 
@@ -114,12 +121,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
     rolloverMonthsAnnual: 0,
     safety: { dailyUsd: 1, monthlyUsd: 3 },
     support: "Community",
+    fit: "For trying Mellox",
     highlights: [
-      "1 brand, Brand DNA scan",
-      "5 prompts tracked weekly on ChatGPT and Gemini",
-      "1 site scan a month",
+      "1 brand with Brand DNA",
+      "5 questions tracked weekly on ChatGPT and Gemini",
+      "1 website scan a month",
       "100 credits to try Studio",
-      "Unlimited social posts (fair use)",
+      "Unlimited social posts",
     ],
   },
   starter: {
@@ -148,13 +156,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
     rolloverMonthsAnnual: 1,
     safety: { dailyUsd: 4, monthlyUsd: 30 },
     support: "Email",
+    fit: "For one brand getting started",
     highlights: [
-      "2,000 credits a month",
-      "4 UGC videos a month",
-      "30 Mellox Pro messages",
-      "25 prompts on 3 answer engines",
-      "Unlimited social posts on all networks",
-      "Weekly Market Brain and Monday Coach briefing",
+      "Posts, articles and video ads in your voice",
+      "See what ChatGPT and Gemini say about you",
+      "Test posts on your audience first",
+      "Competitors and market, checked weekly",
+      "Unlimited posting to every network",
     ],
   },
   growth: {
@@ -184,12 +192,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
     rolloverMonthsAnnual: 1,
     safety: { dailyUsd: 12, monthlyUsd: 91 },
     support: "Email, 24 h",
+    fit: "For growing brands and small teams",
     highlights: [
-      "3 brands, 5 seats",
-      "6,000 credits and 12 videos a month",
-      "1080p, Premium and Long-take video",
-      "One-click fixes on WordPress, Webflow and GitHub",
-      "Campaigns, approvals, client portal, backlinks",
+      "Autopilot writes and schedules your posts",
+      "One-click fixes for your website",
+      "Full-HD and premium video",
+      "Campaigns, approvals and a client portal",
+      "Backlinks on real, relevant sites",
     ],
   },
   agency: {
@@ -218,12 +227,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
     rolloverMonthsAnnual: 1,
     safety: { dailyUsd: 34, monthlyUsd: 269 },
     support: "Priority + onboarding call",
+    fit: "For agencies with client brands",
     highlights: [
-      "10 brands, unlimited seats",
-      "18,000 credits and 40 videos, pooled",
-      "GEO Engineer agent and Fix-all pull requests",
-      "Agency command center and white-label portal",
+      "Every client brand on one screen",
+      "Your logo and colours on client reports",
+      "Fix all website issues in one go",
       "Cinematic video",
+      "Priority support and an onboarding call",
     ],
   },
   scale: {
@@ -252,11 +262,11 @@ export const PLANS: Record<PlanId, PlanDef> = {
     rolloverMonthsAnnual: 1,
     safety: { dailyUsd: 96, monthlyUsd: 767 },
     support: "Dedicated manager",
+    fit: "For large teams",
     highlights: [
-      "30 brands, unlimited seats",
-      "50,000 credits and 100 videos, pooled",
-      "Dedicated manager and support SLA",
-      "Everything in Agency",
+      "A dedicated account manager",
+      "Support with a guaranteed response time",
+      "The highest limits on everything",
       "SSO and API access (coming soon)",
     ],
   },

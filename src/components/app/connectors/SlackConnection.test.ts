@@ -17,7 +17,7 @@ describe("Slack Connections card", () => {
       }),
     );
     expect(html).toContain("Slack connection");
-    expect(html).toContain("Review content, get a daily brief");
+    expect(html).toContain("Approvals, a daily brief");
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('role="status" aria-busy="true"');
   });

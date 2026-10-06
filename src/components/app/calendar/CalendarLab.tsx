@@ -10,6 +10,11 @@ import { emitAppEvent } from "@/lib/app-events";
 import { addDays, fmtYMD, localInstant } from "@/lib/calendar/model";
 import { buildPlanSlots, topicLabel, type PlanOptions } from "@/lib/calendar/planner";
 import type { ContentItem } from "@/lib/content.functions";
+import {
+  DEFAULT_STORY_SETTINGS,
+  type ActionView,
+  type AutopilotView,
+} from "@/lib/autopilot/contracts";
 
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -101,8 +106,129 @@ function seed(): ContentItem[] {
   ];
 }
 
-function installBackend(): () => void {
+/** `?autopilot=off` hides it, `?autopilot=paused` pauses it; on by default. */
+type LabAutopilot = "on" | "paused" | "off";
+
+function action(over: Partial<ActionView>): ActionView {
+  return {
+    id: uid(),
+    kind: "content",
+    status: "planned",
+    plannedFor: null,
+    platform: "instagram",
+    contentType: "social",
+    title: "",
+    brief: "",
+    reason: "",
+    opportunityId: null,
+    contentItemIds: [],
+    creditsCharged: 0,
+    approvedVia: null,
+    error: null,
+    metrics: null,
+    updatedAt: new Date().toISOString(),
+    ...over,
+  };
+}
+
+/** A running program: some pieces written (they are posts), some only planned. */
+function autopilotView(items: ContentItem[], mode: LabAutopilot): AutopilotView {
+  const at = (n: number, time: string) => localInstant(fmtYMD(addDays(new Date(), n)), time);
+  const written = (title: string) => items.find((i) => i.title === title)?.id;
+  const ids = (title: string) => {
+    const id = written(title);
+    return id ? [id] : [];
+  };
+  return {
+    enabled: true,
+    fullAvailable: true,
+    canEdit: true,
+    canManage: true,
+    program: {
+      id: uid(),
+      status: mode === "paused" ? "paused" : "running",
+      pauseReason: mode === "paused" ? "user" : null,
+      mode: "autopilot",
+      goal: "awareness",
+      goalNote: "",
+      platforms: ["instagram", "linkedin"],
+      contentTypes: ["social", "carousel"],
+      postsPerWeek: 4,
+      weekdays: [1, 2, 3, 4, 5],
+      timezone: "UTC",
+      startsOn: fmtYMD(addDays(new Date(), -7)),
+      endsOn: fmtYMD(addDays(new Date(), 21)),
+      creditCapPerWeek: 200,
+      videoCapPerWeek: 0,
+      actOnOpportunities: false,
+      strategy: null,
+      automations: ["geo_scan"],
+      stories: DEFAULT_STORY_SETTINGS,
+      week: 2,
+      totalWeeks: 4,
+    },
+    budget: { creditsUsed: 40, creditCap: 200, videosUsed: 0, videoCap: 0 },
+    proposed: [],
+    approvals: [
+      action({
+        status: "needs_approval",
+        plannedFor: at(3, "13:00"),
+        platform: "facebook",
+        title: "Meet Sam, our head roaster",
+        contentItemIds: ids("Meet Sam, our head roaster"),
+      }),
+    ],
+    upcoming: [
+      action({
+        status: "approved",
+        plannedFor: at(1, "08:30"),
+        platform: "linkedin",
+        title: "What we learned opening our second roastery",
+        contentItemIds: ids("What we learned opening our second roastery"),
+      }),
+      action({
+        status: "generating",
+        plannedFor: at(2, "17:00"),
+        platform: "instagram",
+        contentType: "carousel",
+        title: "Five signs your beans are stale",
+      }),
+      action({
+        status: "planned",
+        plannedFor: at(6, "09:00"),
+        platform: "linkedin",
+        title: "Why we pay growers above market price",
+      }),
+      action({
+        status: "planned",
+        plannedFor: at(8, "11:00"),
+        platform: "instagram",
+        contentType: "image",
+        title: "The new Peru single-origin, up close",
+      }),
+      action({
+        status: "planned",
+        plannedFor: at(9, "09:00"),
+        platform: "twitter",
+        title: "A quick brew tip for cold mornings",
+      }),
+    ],
+    finished: [],
+    failed: [],
+    opportunities: [],
+    events: [],
+    connectedPlatforms: ["instagram", "linkedin"],
+    readiness: [],
+    learnings: [],
+    tasks: [],
+    visibility: null,
+    stories: null,
+  };
+}
+
+function installBackend(mode: LabAutopilot): () => void {
   let items = seed();
+  let autopilot = mode;
   const original = window.fetch;
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
@@ -192,6 +318,26 @@ function installBackend(): () => void {
         }
       }
     }
+    if (path.startsWith("/api/rpc/autopilot/")) {
+      const live = autopilot !== "off";
+      switch (path.split("/").pop()) {
+        case "getAutopilotStatus":
+          return json({
+            result: {
+              enabled: true,
+              status: !live ? null : autopilot === "paused" ? "paused" : "running",
+              waiting: 1,
+            },
+          });
+        case "getAutopilot":
+          return json({ result: autopilotView(items, autopilot) });
+        case "setAutopilotPaused":
+          autopilot = data.paused ? "paused" : "on";
+          return json({ result: { ok: true } });
+        default:
+          return json({ result: { ok: true } });
+      }
+    }
     if (path === "/api/sdr/status") {
       return json({
         enabled: true,
@@ -229,7 +375,8 @@ export function CalendarLab() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const restore = installBackend();
+    const asked = new URLSearchParams(window.location.search).get("autopilot");
+    const restore = installBackend(asked === "off" || asked === "paused" ? asked : "on");
     setReady(true);
     return restore;
   }, []);
