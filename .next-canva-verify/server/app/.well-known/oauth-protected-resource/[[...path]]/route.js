@@ -1,0 +1,10 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/.well-known/oauth-protected-resource/[[...path]]/route.js")
+R.c("server/chunks/_1f_2rah._.js")
+R.c("server/chunks/_0cjb0s1._.js")
+R.c("server/chunks/[root-of-the-server]__10yw2-5._.js")
+R.c("server/chunks/node_modules_zod_v3_0pj4wge._.js")
+R.c("server/chunks/node_modules_@opentelemetry_api_build_esm_1q3t9bx._.js")
+R.c("server/chunks/[root-of-the-server]__02_2sm-._.js")
+R.c("server/chunks/1jng_app__well-known_oauth-protected-resource_[[___path]]_route_actions_0-tl611.js")
+R.m(525654)
+module.exports=R.m(525654).exports

@@ -1,0 +1,3 @@
+{
+  "/api/integrations/wordpress/callback/route": "app/api/integrations/wordpress/callback/route.js"
+}

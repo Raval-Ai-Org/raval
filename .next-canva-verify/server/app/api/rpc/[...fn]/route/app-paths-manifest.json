@@ -1,0 +1,3 @@
+{
+  "/api/rpc/[...fn]/route": "app/api/rpc/[...fn]/route.js"
+}

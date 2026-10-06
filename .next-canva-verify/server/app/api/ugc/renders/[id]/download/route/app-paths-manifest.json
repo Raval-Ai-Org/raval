@@ -1,0 +1,3 @@
+{
+  "/api/ugc/renders/[id]/download/route": "app/api/ugc/renders/[id]/download/route.js"
+}

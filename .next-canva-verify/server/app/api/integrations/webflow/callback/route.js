@@ -1,0 +1,10 @@
+var R=require("../../../../../chunks/[turbopack]_runtime.js")("server/app/api/integrations/webflow/callback/route.js")
+R.c("server/chunks/_08kltew._.js")
+R.c("server/chunks/node_modules_@opentelemetry_api_build_esm_1q3t9bx._.js")
+R.c("server/chunks/[root-of-the-server]__10yw2-5._.js")
+R.c("server/chunks/[root-of-the-server]__02_2sm-._.js")
+R.c("server/chunks/[root-of-the-server]__01hc75g._.js")
+R.c("server/chunks/node_modules_@supabase_supabase-js_dist_index_mjs_0u-n9p7._.js")
+R.c("server/chunks/1oeh_server_app_api_integrations_webflow_callback_route_actions_0_k5t7v.js")
+R.m(542803)
+module.exports=R.m(542803).exports

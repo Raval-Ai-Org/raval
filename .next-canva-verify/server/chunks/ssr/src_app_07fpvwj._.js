@@ -1,0 +1,3 @@
+module.exports=[42342,a=>{"use strict";a.s(["default",()=>b]);let b=(0,a.i(211857).registerClientReference)(function(){throw Error("Attempted to call the default export of [project]/src/app/app/AppShell.tsx from the server, but it's on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/src/app/app/AppShell.tsx","default")},200943,a=>{"use strict";var b=a.i(42342);a.n(b)},217332,a=>{"use strict";var b=a.i(907997),c=a.i(200943);a.s(["default",0,function({children:a}){return(0,b.jsxs)(b.Fragment,{children:[(0,b.jsx)(c.default,{}),a]})}])},532350,function(a){a.n(a.i(217332))}];
+
+//# sourceMappingURL=src_app_07fpvwj._.js.map

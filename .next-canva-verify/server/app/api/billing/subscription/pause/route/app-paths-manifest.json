@@ -1,0 +1,3 @@
+{
+  "/api/billing/subscription/pause/route": "app/api/billing/subscription/pause/route.js"
+}

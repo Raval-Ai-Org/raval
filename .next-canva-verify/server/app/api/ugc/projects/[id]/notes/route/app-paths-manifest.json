@@ -1,0 +1,3 @@
+{
+  "/api/ugc/projects/[id]/notes/route": "app/api/ugc/projects/[id]/notes/route.js"
+}

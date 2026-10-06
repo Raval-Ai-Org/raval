@@ -1,0 +1,3 @@
+module.exports=[512364,i=>{"use strict";var r=i.i(843780);function e(i){return!!i&&[process.env.BILLING_ADMIN_USER_IDS,process.env.MELLOX_ADMIN_USER_IDS].filter(Boolean).join(",").split(",").map(i=>i.trim()).filter(i=>/^[0-9a-f-]{36}$/i.test(i)).includes(String(i))}i.s(["isBillingAdmin",0,e,"requireBillingAdmin",0,function(i){if(!e(i))throw new r.HttpError(403,"Billing administrator access required.")}])}];
+
+//# sourceMappingURL=src_server_billing_admin_server_ts_1rjg-ii._.js.map

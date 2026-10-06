@@ -1,0 +1,3 @@
+{
+  "/api/public/hooks/stripe/route": "app/api/public/hooks/stripe/route.js"
+}

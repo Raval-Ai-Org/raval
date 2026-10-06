@@ -1,0 +1,3 @@
+module.exports=[273680,e=>{"use strict";let t;var r=e.i(224389),s=e.i(389967);let o=new Proxy({},{get:(e,o,a)=>(t||(t=function(){let e=process.env.SUPABASE_URL,t=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!e||!t){let r=[...e?[]:["SUPABASE_URL"],...t?[]:["SUPABASE_SERVICE_ROLE_KEY"]],s=`Missing Supabase environment variable(s): ${r.join(", ")}. Configure the variables for the Mellox AI deployment.`;throw console.error(`[Supabase] ${s}`),Error(s)}return(0,r.createClient)(e,t,{global:{fetch:(0,s.createSupabaseFetch)(t)},auth:{storage:void 0,persistSession:!1,autoRefreshToken:!1}})}()),Reflect.get(t,o,a))});e.s(["supabaseAdmin",0,o])}];
+
+//# sourceMappingURL=src_integrations_supabase_client_server_ts_1lq032c._.js.map

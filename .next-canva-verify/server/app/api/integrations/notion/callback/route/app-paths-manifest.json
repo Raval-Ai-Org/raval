@@ -1,0 +1,3 @@
+{
+  "/api/integrations/notion/callback/route": "app/api/integrations/notion/callback/route.js"
+}

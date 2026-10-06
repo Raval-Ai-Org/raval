@@ -1,0 +1,3 @@
+module.exports=[247041,t=>{"use strict";var e=t.i(273680);let r=/token|secret|private.?key|password|authorization/i;function o(t){let e={};for(let[a,i]of Object.entries(t))r.test(a)||(e[a]=i&&"object"==typeof i&&!Array.isArray(i)?o(i):i);return e}async function a(t){let{error:r}=await e.supabaseAdmin.from("audit_logs").insert({workspace_id:t.workspaceId,user_id:t.userId,action:t.action,entity:t.entity,payload:o(t.payload??{})});r&&console.error("[audit] not recorded",t.action,r.message)}t.s(["recordAudit",0,a,"scrubAuditPayload",0,o])}];
+
+//# sourceMappingURL=src_server_audit_server_ts_0v0sx1g._.js.map

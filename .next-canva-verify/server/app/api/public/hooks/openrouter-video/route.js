@@ -1,0 +1,11 @@
+var R=require("../../../../../chunks/[turbopack]_runtime.js")("server/app/api/public/hooks/openrouter-video/route.js")
+R.c("server/chunks/src_server_ugc_175ckre._.js")
+R.c("server/chunks/node_modules_@opentelemetry_api_build_esm_1q3t9bx._.js")
+R.c("server/chunks/[root-of-the-server]__0bs797r._.js")
+R.c("server/chunks/[root-of-the-server]__02_2sm-._.js")
+R.c("server/chunks/node_modules_next_1zdbrne._.js")
+R.c("server/chunks/node_modules_next_dist_11w3z5e._.js")
+R.c("server/chunks/[root-of-the-server]__0ku-b18._.js")
+R.c("server/chunks/1oeh_server_app_api_public_hooks_openrouter-video_route_actions_152b1im.js")
+R.m(89806)
+module.exports=R.m(89806).exports

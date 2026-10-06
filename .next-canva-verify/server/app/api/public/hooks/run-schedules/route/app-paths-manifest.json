@@ -1,0 +1,3 @@
+{
+  "/api/public/hooks/run-schedules/route": "app/api/public/hooks/run-schedules/route.js"
+}

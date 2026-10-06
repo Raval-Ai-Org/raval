@@ -1,0 +1,3 @@
+{
+  "/api/agents/findings/route": "app/api/agents/findings/route.js"
+}

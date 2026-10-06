@@ -1,0 +1,3 @@
+{
+  "/api/ugc/renders/[id]/cancel/route": "app/api/ugc/renders/[id]/cancel/route.js"
+}

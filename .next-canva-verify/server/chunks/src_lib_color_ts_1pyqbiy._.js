@@ -1,0 +1,3 @@
+module.exports=[839877,e=>{"use strict";function t(e){let t=e.replace("#","");return[parseInt(t.slice(0,2),16),parseInt(t.slice(2,4),16),parseInt(t.slice(4,6),16)]}function n(e){let[n,r,i]=t(e).map(e=>{let t=e/255;return t<=.03928?t/12.92:Math.pow((t+.055)/1.055,2.4)});return .2126*n+.7152*r+.0722*i}e.s(["contrastRatio",0,function(e,t){let[r,i]=[n(e),n(t)].sort((e,t)=>t-e);return(r+.05)/(i+.05)},"hexToRgb",0,t,"normalizeHex",0,function(e){if(!e)return null;let t=e.trim().replace(/^#/,"");return/^[0-9a-f]{3}$/i.test(t)?"#"+t.split("").map(e=>e+e).join("").toLowerCase():/^[0-9a-f]{6}$/i.test(t)?"#"+t.toLowerCase():null},"pickTextOn",0,function(e){return n(e)>.55?"#0A0A0A":"#FAFAF7"},"relLuminance",0,n])}];
+
+//# sourceMappingURL=src_lib_color_ts_1pyqbiy._.js.map
