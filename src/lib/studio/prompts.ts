@@ -28,6 +28,8 @@ export type StudioContext = {
   brandName: string;
   /** Serialized Brand DNA (serializeBrandContext). */
   brandText: string;
+  /** The same for a picture or a video: visual memory first, then Brand DNA. */
+  visualBrandText?: string;
   industry?: string | null;
   audience?: string | null;
   website?: string | null;

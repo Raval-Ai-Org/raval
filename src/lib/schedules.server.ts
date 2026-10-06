@@ -75,7 +75,10 @@ async function loadBrandContext(workspaceId: string): Promise<string> {
     if (brand.products) lines.push(`Products: ${list(brand.products)}`);
     if (brand.do) lines.push(`Do: ${list(brand.do)}`);
     if (brand.dont) lines.push(`Don't: ${list(brand.dont)}`);
-    return lines.join("\n");
+    // What the team told Mellox to remember (ADR-0033). "" when off or unset.
+    const { memoryBlockFor } = await import("@/server/memory/context.server");
+    const memory = await memoryBlockFor(workspaceId, "text");
+    return [memory, lines.join("\n")].filter(Boolean).join("\n\n");
   } catch {
     return "";
   }

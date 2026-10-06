@@ -13,6 +13,11 @@ vi.mock("@/integrations/supabase/client", () => {
 });
 
 vi.mock("@/lib/authed-fetch", () => ({ authedFetch: state.fetch }));
+// Memory is its own server call (ADR-0033); here it knows nothing and saves nothing.
+vi.mock("@/lib/memory.functions", () => ({
+  getMemory: async () => ({ memories: [] }),
+  proposeMemories: async () => ({ changes: [] }),
+}));
 
 import { CONTEXT_OVERLAP, nextWatermarks, selectNewTurns, syncMemoryFromChat } from "./memory-sync";
 

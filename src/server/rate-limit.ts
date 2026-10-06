@@ -70,7 +70,9 @@ export type RateLimitTier =
   | "mcp-write"
   | "audience-score"
   | "audience-run"
-  | "audience-write";
+  | "audience-write"
+  | "memory-write"
+  | "chat-action";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -184,6 +186,12 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   "audience-run": { limit: 20, windowSeconds: 3600, label: "audience check" },
   // Editing groups and rebuilding them from Brand DNA (a premium call).
   "audience-write": { limit: 30, windowSeconds: 3600, label: "audience change" },
+  // Memory (ADR-0033): adding, editing and removing what a brand remembers.
+  // Database work only; a person tidying a list makes a burst of these.
+  "memory-write": { limit: 60, windowSeconds: 60, label: "memory change" },
+  // A person clicking a button chat offered. The work it starts is held to
+  // its own tier and billing as well.
+  "chat-action": { limit: 30, windowSeconds: 60, label: "chat action" },
 };
 
 export type RateLimitResult = {

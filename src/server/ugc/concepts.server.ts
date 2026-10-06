@@ -42,6 +42,8 @@ export type ConceptContext = {
   durationSec: number;
   /** Brand Kit writing + video style for this project (styleBlockFor "ugc"). */
   styleText?: string;
+  /** What the team told Mellox to remember (memoryBlockFor). "" when none. */
+  memoryText?: string;
 };
 
 export type Completer = typeof llmText;
@@ -160,6 +162,7 @@ ${ctx.workspace.industry ? `- Industry: ${ctx.workspace.industry}` : ""}
 
 ${brandContext ? wrapUntrusted("brand dna", brandContext, { maxChars: 4000, route: "ugc.concepts" }) : "No Brand DNA saved."}
 ${ctx.styleText ? `\nBRAND STYLE (write the dialogue, hooks and post caption in this style; facts still come only from the product facts)\n${wrapUntrusted("brand style", ctx.styleText, { maxChars: 3000, route: "ugc.concepts" })}\n` : ""}
+${ctx.memoryText ? `\n${ctx.memoryText}\nFacts still come only from the product facts.\n` : ""}
 ${extra}`;
 }
 

@@ -809,7 +809,11 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
   });
   const body = buildRequestBody({
     plan,
-    messages: withPromptCache(trimMessages(opts.messages), primary, opts.cacheBreakpoint),
+    messages: withPromptCache(
+      trimMessages(opts.messages, opts.inputChars),
+      primary,
+      opts.cacheBreakpoint,
+    ),
     maxTokens,
     stream: true,
     temperature: opts.temperature ?? plan.temperature,

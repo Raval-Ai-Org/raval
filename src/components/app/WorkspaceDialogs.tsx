@@ -12,7 +12,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { renameWorkspace, getWorkspaceDetails } from "@/lib/workspaces.functions";
 import { Globe, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
-import { BarChart, Bot, Monitor, Moon, SlidersHorizontal, Sun, Users } from "@/components/icons";
+import {
+  BarChart,
+  Bot,
+  Brain,
+  Monitor,
+  Moon,
+  SlidersHorizontal,
+  Sun,
+  Users,
+} from "@/components/icons";
+import { MemoryPanel } from "@/components/app/memory/MemoryPanel";
+import { useMemoryAvailable } from "@/components/app/memory/use-memory";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import {
@@ -25,13 +36,15 @@ import {
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { CanvaConnection } from "@/components/app/connectors/CanvaConnection";
 import { NotionConnection } from "@/components/app/connectors/NotionConnection";
+import { SlackConnection } from "@/components/app/connectors/SlackConnection";
 import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
 import { WebflowConnector } from "@/components/app/connectors/WebflowConnector";
 import { WordPressConnector } from "@/components/app/connectors/WordPressConnector";
 import { GoogleConnectCard } from "@/components/app/analytics/GoogleConnectCard";
 import { McpConnector } from "@/components/app/connectors/McpConnector";
 
-type SettingsSection = "accounts" | "analytics" | "website" | "assistants" | "preferences";
+type SettingsSection =
+  "accounts" | "analytics" | "website" | "assistants" | "memory" | "preferences";
 
 /** The GitHub install returns to ?settings=connections, which means the website sources. */
 function sectionFromUrl(value: string | null): SettingsSection | null {
@@ -40,6 +53,7 @@ function sectionFromUrl(value: string | null): SettingsSection | null {
     value === "analytics" ||
     value === "website" ||
     value === "assistants" ||
+    value === "memory" ||
     value === "preferences"
     ? value
     : null;
@@ -318,6 +332,7 @@ const SETTINGS_NAV: SurfaceNavItem<SettingsSection>[] = [
   { id: "analytics", label: "Analytics", icon: BarChart },
   { id: "website", label: "Website", icon: Globe },
   { id: "assistants", label: "AI assistants", icon: Bot },
+  { id: "memory", label: "Memory", icon: Brain },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
 ];
 
@@ -343,6 +358,9 @@ function SettingsDialog({
   const [notifications, setNotifications] = useState(true);
   const [sounds, setSounds] = useState(true);
   const { preference, setPreference } = useTheme();
+  // The flag can switch Memory off; then its section isn't listed at all.
+  const memoryAvailable = useMemoryAvailable(open ? workspaceId : null);
+  const nav = memoryAvailable ? SETTINGS_NAV : SETTINGS_NAV.filter((item) => item.id !== "memory");
 
   useEffect(() => {
     if (!open) return;
@@ -372,18 +390,14 @@ function SettingsDialog({
       srDescription="Connected accounts, analytics, website sources and device preferences"
       bodyClassName="overflow-hidden"
     >
-      <SurfaceLayout
-        label="Settings"
-        items={SETTINGS_NAV}
-        value={section}
-        onChange={onSectionChange}
-      >
+      <SurfaceLayout label="Settings" items={nav} value={section} onChange={onSectionChange}>
         <div key={section} className="animate-in fade-in duration-300">
           {section === "accounts" && (
             <SurfacePage width="narrow">
               <SocialAccountsSection variant="settings" />
               <CanvaConnection />
               {workspaceId && <NotionConnection workspaceId={workspaceId} />}
+              {workspaceId && <SlackConnection workspaceId={workspaceId} />}
             </SurfacePage>
           )}
           {section === "analytics" && (
@@ -417,6 +431,23 @@ function SettingsDialog({
               width="narrow"
             >
               {workspaceId ? <McpConnector workspaceId={workspaceId} /> : noWorkspace}
+            </SurfacePage>
+          )}
+          {section === "memory" && (
+            <SurfacePage
+              title="Memory"
+              subtitle="What your team told Mellox to remember"
+              width="narrow"
+            >
+              {workspaceId && memoryAvailable ? (
+                <MemoryPanel workspaceId={workspaceId} />
+              ) : (
+                <p className="text-[13px] text-muted-foreground">
+                  {workspaceId
+                    ? "Memory isn't available for this workspace."
+                    : "Open a workspace to see its memory."}
+                </p>
+              )}
             </SurfacePage>
           )}
           {section === "preferences" && (

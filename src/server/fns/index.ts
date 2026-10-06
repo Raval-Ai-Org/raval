@@ -8,6 +8,7 @@ import * as brain from "./brain";
 import * as brandDna from "./brand-dna";
 import * as campaignGeneration from "./campaign-generation";
 import * as canva from "./canva";
+import * as chatActions from "./chat-actions";
 import * as coach from "./coach";
 import * as competitorIntel from "./competitor-intel";
 import * as competitors from "./competitors";
@@ -23,8 +24,10 @@ import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
 import * as links from "./links";
 import * as mcp from "./mcp";
+import * as memory from "./memory";
 import * as notion from "./notion";
 import * as schedules from "./schedules";
+import * as slack from "./slack";
 import * as sitePublishing from "./site-publishing";
 import * as stories from "./stories";
 import * as strategy from "./strategy";
@@ -43,6 +46,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   brain,
   "brand-dna": brandDna,
   "campaign-generation": campaignGeneration,
+  "chat-actions": chatActions,
   coach,
   "competitor-intel": competitorIntel,
   competitors,
@@ -58,8 +62,10 @@ const MODULES: Record<string, Record<string, unknown>> = {
   insights,
   links,
   mcp,
+  memory,
   notion,
   schedules,
+  slack,
   "site-publishing": sitePublishing,
   stories,
   strategy,

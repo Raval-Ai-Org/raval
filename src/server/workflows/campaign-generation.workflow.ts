@@ -24,6 +24,8 @@ const brandContextSchema = z.object({
   customerNeeds: z.string(),
   competitorContext: z.string(),
   marketContext: z.string(),
+  /** What the team told Mellox to remember (ADR-0033). */
+  memory: z.string().optional(),
 });
 
 const campaignBriefSchema = z.object({
@@ -69,8 +71,11 @@ const gatherBrandContextStep = createStep({
     const freshMarket =
       completedAt && Date.now() - new Date(completedAt).getTime() < 30 * 86_400_000;
     const intelligence = freshMarket ? market?.intelligence : null;
+    const { memoryBlockFor } = await import("@/server/memory/context.server");
+    const memory = await memoryBlockFor(inputData.workspaceId, "text", { maxChars: 1200 });
     return {
       brand: {
+        memory,
         brandName: asText(dna.brandName),
         oneLiner: asText(dna.oneLiner),
         about: asText(dna.about),

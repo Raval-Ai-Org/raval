@@ -267,13 +267,16 @@ async function workspaceBrand(db: UserSupabaseClient, workspaceId: string) {
 export async function projectContext(db: UserSupabaseClient, workspaceId: string, id: string) {
   const row = await loadProjectRow(db, workspaceId, id);
   const brief = BriefSchema.parse(row.brief ?? {});
-  const [{ data: ws }, brand, style] = await Promise.all([
+  const [{ data: ws }, brand, style, memoryText] = await Promise.all([
     db.from("workspaces").select("industry, audience").eq("id", workspaceId).maybeSingle(),
     workspaceBrand(db, workspaceId),
     projectLook(workspaceId),
+    // What the team told Mellox to remember (ADR-0033). "" when off or unset.
+    import("@/server/memory/context.server").then((m) => m.memoryBlockFor(workspaceId, "text")),
   ]);
   return {
     row,
+    memoryText,
     product: ProductSchema.parse(row.product ?? {}),
     brief,
     style,

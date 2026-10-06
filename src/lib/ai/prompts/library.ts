@@ -27,6 +27,8 @@ import {
   RULE_NATURAL_VOICE,
   RULE_NO_DUPES,
   RULE_NO_FLUFF,
+  ACTION_TAGS_WITH_TOOLS,
+  CHAT_TOOL_RULES,
   RULE_POST_LIMITS,
   RULE_SCOPE,
   RULE_UNTRUSTED_DATA,
@@ -42,7 +44,23 @@ import { assemble, system } from "./assemble";
 
 /* ============================== Chat =============================== */
 
-export function chatSystem(): string {
+export function chatSystem(opts: { tools?: boolean } = {}): string {
+  if (opts.tools) {
+    return system(
+      IDENTITY_CHAT,
+      RULE_SCOPE,
+      RULE_GROUNDING,
+      RULE_NATURAL_VOICE,
+      "Reason from the provided brand context, workspace signals, site content, and research snippets. Distinguish facts from assumptions, prioritize actionable recommendations, explain strategic reasoning clearly, and avoid generic advice.",
+      CHAT_TOOL_RULES,
+      "When you suggest content Mellox can make, offer it with open-studio and a specific brief instead of writing the whole piece in chat.",
+      RULE_UNTRUSTED_DATA,
+      FMT_CHAT,
+      PRODUCT_SURFACE,
+      ANALYTICS_RULES,
+      ACTION_TAGS_WITH_TOOLS,
+    );
+  }
   return system(
     IDENTITY_CHAT,
     RULE_SCOPE,

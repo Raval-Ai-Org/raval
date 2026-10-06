@@ -35,6 +35,7 @@ export const POST = defineRoute({
       workspace: ctx.workspace,
       durationSec: body.durationSec ?? 8,
       styleText: ctx.styleText || undefined,
+      memoryText: ctx.memoryText || undefined,
     };
     const metered = await runMetered(
       {

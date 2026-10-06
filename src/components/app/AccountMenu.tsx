@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sun, Moon, Settings, ChevronDown } from "@/components/brand/icons";
 import { LogOut, HelpCircle } from "@/components/ui/gemini-icons";
-import { Shield, Wallet } from "@/components/icons";
+import { Brain, Shield, Wallet } from "@/components/icons";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/hooks/use-theme";
@@ -145,6 +145,16 @@ export function AccountMenu({
           Settings
         </DropdownMenuItem>
         <DropdownMenuItem
+          onSelect={() => {
+            emitAppEvent("open:settings", { section: "memory" });
+            onClose?.();
+          }}
+          className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
+        >
+          <Brain className="h-4 w-4 text-muted-foreground" />
+          Memory
+        </DropdownMenuItem>
+        <DropdownMenuItem
           onSelect={(e) => {
             e.preventDefault();
             toggle();
@@ -251,6 +261,12 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <Settings className="h-4 w-4 text-muted-foreground" /> Settings
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => emitAppEvent("open:settings", { section: "memory" })}
+          className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
+        >
+          <Brain className="h-4 w-4 text-muted-foreground" /> Memory
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={(e) => {

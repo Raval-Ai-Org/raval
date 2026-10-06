@@ -98,6 +98,8 @@ import {
 import { cleanMentions } from "@/lib/stories/placement";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { studioOutputQualityIssue } from "@/lib/studio/quality";
+import { checkMemoryConformance } from "@/lib/memory/conformance";
+import { loadMemories } from "@/server/memory/context.server";
 import { reviewGeneratedImage } from "./image-review.server";
 import { carouselSlidePrompt, storyFramePrompt } from "./visual-prompts.server";
 
@@ -847,7 +849,7 @@ function videoPrompt(
     "Avoid generic AI video tells: morphing products, warped hands, drifting logos, incoherent cuts, impossible camera movement, simulated social UI, or stock footage aesthetics.",
     "Keep on-screen text to at most one short verified phrase; if it cannot be spelled perfectly, use no text. No gibberish, watermarks, invented claims, or other brands' logos.",
     ctx.style ? videoStyleBlock(ctx.style) : "",
-    ctx.brandText ? `Brand context:\n${ctx.brandText.slice(0, 1200)}` : "",
+    ctx.brandText ? `Brand context:\n${(ctx.visualBrandText ?? ctx.brandText).slice(0, 1200)}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -934,7 +936,7 @@ async function startMedia(args: {
           slides: output.slides!,
           spec: output.carousel,
           brandName: ctx.brandName,
-          brandContext: ctx.brandText,
+          brandContext: ctx.visualBrandText ?? ctx.brandText,
           ratio,
           style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
@@ -967,7 +969,7 @@ async function startMedia(args: {
           frames: output.story!.frames,
           spec: output.story!.spec,
           brandName: ctx.brandName,
-          brandContext: ctx.brandText,
+          brandContext: ctx.visualBrandText ?? ctx.brandText,
           style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
           novelty: noveltyNote,
@@ -1352,6 +1354,16 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         protectedTerms: ctx.style ? styleProtectedTerms(ctx.style) : undefined,
       }),
     };
+    // A caption that uses a word the team asked Mellox to avoid (ADR-0033)
+    // carries a warning: a person sees it, and fully automatic mode holds it.
+    const memories = await loadMemories(job.workspace_id);
+    const broken = (output.variants ?? []).flatMap((v) => checkMemoryConformance(v.body, memories));
+    if (broken.length) {
+      output = {
+        ...output,
+        warnings: [...new Set([...(output.warnings ?? []), ...broken.map((i) => i.message)])],
+      };
+    }
   }
   if (addPlatforms && parent?.output) {
     output = mergeAddedPlatforms(parent.output, output, platforms);

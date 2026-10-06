@@ -44,6 +44,8 @@ export type AppEventMap = {
   /** This person has looked at the Brain updates (every "new" count resets). */
   "brain:seen": { workspaceId: string; at: number };
   "notes:changed": { workspaceId: string };
+  /** The brand's memory changed (chat saved, updated or removed something). */
+  "memory:changed": { workspaceId: string };
   "assets:changed": undefined;
   "connections:changed": undefined;
   "post-image:cached": { postId: string; size?: string; removed?: boolean };
@@ -127,7 +129,14 @@ export type AppEventMap = {
   "open:schedule": undefined;
   /** Settings, optionally on a section (GitHub, Webflow and WordPress live under "website"). */
   "open:settings":
-    { section?: "accounts" | "analytics" | "website" | "assistants" | "preferences" } | undefined;
+    | {
+        section?: "accounts" | "analytics" | "website" | "assistants" | "memory" | "preferences";
+      }
+    | undefined;
+  /** Navigates to Backlinks at /w/<id>/app/backlinks. Only ever fired by a button. */
+  "open:backlinks": undefined;
+  /** Navigates to Experiments at /w/<id>/app/experiments. Only ever fired by a button. */
+  "open:experiments": undefined;
   "open:share": undefined;
   "open:studio": undefined;
   "open:tasks": undefined;

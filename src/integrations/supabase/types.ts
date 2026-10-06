@@ -3616,6 +3616,78 @@ export type Database = {
           },
         ];
       };
+      chat_actions: {
+        Row: {
+          args: Json;
+          conversation_id: string | null;
+          created_at: string;
+          destructive: boolean;
+          detail: string;
+          error: string | null;
+          id: string;
+          offered_to: string | null;
+          result: Json | null;
+          run_at: string | null;
+          run_by: string | null;
+          status: string;
+          title: string;
+          tool: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          args?: Json;
+          conversation_id?: string | null;
+          created_at?: string;
+          destructive?: boolean;
+          detail?: string;
+          error?: string | null;
+          id?: string;
+          offered_to?: string | null;
+          result?: Json | null;
+          run_at?: string | null;
+          run_by?: string | null;
+          status?: string;
+          title: string;
+          tool: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          args?: Json;
+          conversation_id?: string | null;
+          created_at?: string;
+          destructive?: boolean;
+          detail?: string;
+          error?: string | null;
+          id?: string;
+          offered_to?: string | null;
+          result?: Json | null;
+          run_at?: string | null;
+          run_by?: string | null;
+          status?: string;
+          title?: string;
+          tool?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_actions_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chat_actions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       chat_messages: {
         Row: {
           content: string;
@@ -8085,6 +8157,441 @@ export type Database = {
           },
         ];
       };
+      slack_action_refs: {
+        Row: {
+          action: string;
+          consumed_at: string | null;
+          content_item_id: string | null;
+          context: Json;
+          created_at: string;
+          expires_at: string;
+          id: string;
+          installation_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          action: string;
+          consumed_at?: string | null;
+          content_item_id?: string | null;
+          context?: Json;
+          created_at?: string;
+          expires_at: string;
+          id?: string;
+          installation_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          action?: string;
+          consumed_at?: string | null;
+          content_item_id?: string | null;
+          context?: Json;
+          created_at?: string;
+          expires_at?: string;
+          id?: string;
+          installation_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "slack_action_refs_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "slack_action_refs_installation_id_workspace_id_fkey";
+            columns: ["installation_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "slack_installations";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "slack_action_refs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      slack_channel_mappings: {
+        Row: {
+          channel_id: string;
+          channel_name: string;
+          created_at: string;
+          id: string;
+          installation_id: string;
+          purpose: string;
+          team_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          channel_id: string;
+          channel_name: string;
+          created_at?: string;
+          id?: string;
+          installation_id: string;
+          purpose: string;
+          team_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          channel_id?: string;
+          channel_name?: string;
+          created_at?: string;
+          id?: string;
+          installation_id?: string;
+          purpose?: string;
+          team_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "slack_channel_mappings_installation_id_team_id_fkey";
+            columns: ["installation_id", "team_id"];
+            isOneToOne: false;
+            referencedRelation: "slack_installations";
+            referencedColumns: ["id", "team_id"];
+          },
+          {
+            foreignKeyName: "slack_channel_mappings_installation_id_workspace_id_fkey";
+            columns: ["installation_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "slack_installations";
+            referencedColumns: ["id", "workspace_id"];
+          },
+        ];
+      };
+      slack_inbox: {
+        Row: {
+          attempts: number;
+          completed_at: string | null;
+          created_at: string;
+          delivery_key: string;
+          id: string;
+          installation_id: string;
+          kind: string;
+          last_error: string | null;
+          lease_until: string | null;
+          next_attempt_at: string;
+          payload: Json;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attempts?: number;
+          completed_at?: string | null;
+          created_at?: string;
+          delivery_key: string;
+          id?: string;
+          installation_id: string;
+          kind: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          next_attempt_at?: string;
+          payload: Json;
+          status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempts?: number;
+          completed_at?: string | null;
+          created_at?: string;
+          delivery_key?: string;
+          id?: string;
+          installation_id?: string;
+          kind?: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          next_attempt_at?: string;
+          payload?: Json;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "slack_inbox_installation_id_workspace_id_fkey";
+            columns: ["installation_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "slack_installations";
+            referencedColumns: ["id", "workspace_id"];
+          },
+        ];
+      };
+      slack_installations: {
+        Row: {
+          bot_token_enc: string;
+          bot_user_id: string;
+          connected_by: string | null;
+          created_at: string;
+          id: string;
+          last_error: string | null;
+          last_event_at: string | null;
+          last_outbound_at: string | null;
+          status: string;
+          team_id: string;
+          team_name: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          bot_token_enc: string;
+          bot_user_id: string;
+          connected_by?: string | null;
+          created_at?: string;
+          id?: string;
+          last_error?: string | null;
+          last_event_at?: string | null;
+          last_outbound_at?: string | null;
+          status?: string;
+          team_id: string;
+          team_name: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          bot_token_enc?: string;
+          bot_user_id?: string;
+          connected_by?: string | null;
+          created_at?: string;
+          id?: string;
+          last_error?: string | null;
+          last_event_at?: string | null;
+          last_outbound_at?: string | null;
+          status?: string;
+          team_id?: string;
+          team_name?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "slack_installations_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      slack_link_codes: {
+        Row: {
+          code_hash: string;
+          consumed_at: string | null;
+          expires_at: string;
+          id: string;
+          installation_id: string;
+          mellox_user_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          code_hash: string;
+          consumed_at?: string | null;
+          expires_at: string;
+          id?: string;
+          installation_id: string;
+          mellox_user_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          code_hash?: string;
+          consumed_at?: string | null;
+          expires_at?: string;
+          id?: string;
+          installation_id?: string;
+          mellox_user_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "slack_link_codes_installation_id_workspace_id_fkey";
+            columns: ["installation_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "slack_installations";
+            referencedColumns: ["id", "workspace_id"];
+          },
+        ];
+      };
+      slack_outbound: {
+        Row: {
+          attempts: number;
+          channel_id: string;
+          created_at: string;
+          dedupe_key: string;
+          id: string;
+          installation_id: string;
+          last_error: string | null;
+          lease_until: string | null;
+          next_attempt_at: string;
+          payload: Json;
+          sent_at: string | null;
+          slack_ts: string | null;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attempts?: number;
+          channel_id: string;
+          created_at?: string;
+          dedupe_key: string;
+          id?: string;
+          installation_id: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          next_attempt_at?: string;
+          payload: Json;
+          sent_at?: string | null;
+          slack_ts?: string | null;
+          status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempts?: number;
+          channel_id?: string;
+          created_at?: string;
+          dedupe_key?: string;
+          id?: string;
+          installation_id?: string;
+          last_error?: string | null;
+          lease_until?: string | null;
+          next_attempt_at?: string;
+          payload?: Json;
+          sent_at?: string | null;
+          slack_ts?: string | null;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "slack_outbound_installation_id_workspace_id_fkey";
+            columns: ["installation_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "slack_installations";
+            referencedColumns: ["id", "workspace_id"];
+          },
+        ];
+      };
+      slack_preferences: {
+        Row: {
+          approvals: boolean;
+          brief_hour: number;
+          brief_timezone: string;
+          competitor_alerts: boolean;
+          daily_brief: boolean;
+          geo_alerts: boolean;
+          market_alerts: boolean;
+          performance_alerts: boolean;
+          publishing_failures: boolean;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          approvals?: boolean;
+          brief_hour?: number;
+          brief_timezone?: string;
+          competitor_alerts?: boolean;
+          daily_brief?: boolean;
+          geo_alerts?: boolean;
+          market_alerts?: boolean;
+          performance_alerts?: boolean;
+          publishing_failures?: boolean;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          approvals?: boolean;
+          brief_hour?: number;
+          brief_timezone?: string;
+          competitor_alerts?: boolean;
+          daily_brief?: boolean;
+          geo_alerts?: boolean;
+          market_alerts?: boolean;
+          performance_alerts?: boolean;
+          publishing_failures?: boolean;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "slack_preferences_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      slack_threads: {
+        Row: {
+          channel_id: string;
+          installation_id: string;
+          messages: Json;
+          thread_ts: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          channel_id: string;
+          installation_id: string;
+          messages?: Json;
+          thread_ts: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          channel_id?: string;
+          installation_id?: string;
+          messages?: Json;
+          thread_ts?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "slack_threads_installation_id_workspace_id_fkey";
+            columns: ["installation_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "slack_installations";
+            referencedColumns: ["id", "workspace_id"];
+          },
+        ];
+      };
+      slack_user_links: {
+        Row: {
+          id: string;
+          installation_id: string;
+          linked_at: string;
+          mellox_user_id: string;
+          slack_user_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          id?: string;
+          installation_id: string;
+          linked_at?: string;
+          mellox_user_id: string;
+          slack_user_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          id?: string;
+          installation_id?: string;
+          linked_at?: string;
+          mellox_user_id?: string;
+          slack_user_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "slack_user_links_installation_id_workspace_id_fkey";
+            columns: ["installation_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "slack_installations";
+            referencedColumns: ["id", "workspace_id"];
+          },
+        ];
+      };
       social_accounts: {
         Row: {
           avatar_url: string | null;
@@ -9483,6 +9990,104 @@ export type Database = {
             foreignKeyName: "workspace_members_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_memories: {
+        Row: {
+          body: string;
+          conversation_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          expires_at: string | null;
+          fingerprint: string;
+          id: string;
+          kind: string;
+          source: string;
+          status: string;
+          topic: string;
+          updated_at: string;
+          updated_by: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          body: string;
+          conversation_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          expires_at?: string | null;
+          fingerprint: string;
+          id?: string;
+          kind?: string;
+          source?: string;
+          status?: string;
+          topic?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          body?: string;
+          conversation_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          expires_at?: string | null;
+          fingerprint?: string;
+          id?: string;
+          kind?: string;
+          source?: string;
+          status?: string;
+          topic?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_memories_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "workspace_memories_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_memory_settings: {
+        Row: {
+          created_at: string;
+          enabled: boolean;
+          updated_at: string;
+          updated_by: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          enabled?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          enabled?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_memory_settings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
             referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },

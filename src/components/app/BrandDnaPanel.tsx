@@ -55,6 +55,7 @@ import { authedFetch } from "@/lib/authed-fetch";
 import { buildDesignMd, downloadDesignMd } from "@/lib/design-md";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { emitAppEvent } from "@/lib/app-events";
 import { BrandDnaEditor } from "./BrandDnaEditor";
 
 function normalizeUrl(raw: string | null | undefined) {
@@ -1009,11 +1010,11 @@ function TileGrid({
         <Tile
           tileKey="notes"
           label="Notes"
-          ariaLabel={`Edit Notes (${dna.notes.length + dna.userInsights.length} items)`}
+          ariaLabel={`Edit Notes (${dna.notes.length} items)`}
           onClick={() => onOpen("notes")}
         >
           <CountPreview
-            count={dna.notes.length + dna.userInsights.length}
+            count={dna.notes.length}
             icon={FileText}
             label="notes & insights"
             empty="Capture what agents should remember"
@@ -3299,55 +3300,19 @@ function NotesTab({ dna, save }: { dna: BrandDna; save: (n: Partial<BrandDna>) =
 
   return (
     <section className="space-y-5">
-      {/* Auto-extracted user insights from chat */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground/80 inline-flex items-center gap-1.5">
-            <Brain className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]" /> Insights from chat
-            <span className="rounded bg-secondary/80 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground normal-case tracking-normal">
-              {dna.userInsights.length}
-            </span>
-          </div>
-          {dna.memoryUpdatedAt ? (
-            <span className="text-[10.5px] text-muted-foreground tabular-nums">
-              Synced {new Date(dna.memoryUpdatedAt).toLocaleString()}
-            </span>
-          ) : null}
+      {/* What chat remembers now lives in Memory (ADR-0033). */}
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2.5">
+        <div className="inline-flex min-w-0 items-center gap-2 text-[13px] text-foreground">
+          <Brain className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="truncate">What Mellox remembers from chat</span>
         </div>
-        {dna.userInsights.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border/60 bg-card/40 px-3 py-3 text-[12px] text-muted-foreground">
-            Durable user statements (preferences, decisions, brand facts) auto-saved from chat will
-            appear here. Hit "Sync from chat" below.
-          </div>
-        ) : (
-          <ul className="space-y-1.5">
-            {dna.userInsights.map((n) => (
-              <li
-                key={n.id}
-                className="group flex items-start gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2"
-              >
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--brand-green))]" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-medium text-foreground">{n.title}</div>
-                  {n.body ? (
-                    <div className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
-                      {n.body}
-                    </div>
-                  ) : null}
-                </div>
-                <button
-                  onClick={() =>
-                    save({ userInsights: dna.userInsights.filter((x) => x.id !== n.id) })
-                  }
-                  className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary/80 hover:text-foreground"
-                  aria-label="Remove insight"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => emitAppEvent("open:settings", { section: "memory" })}
+        >
+          Open memory
+        </Button>
       </div>
 
       {/* Manual notes */}

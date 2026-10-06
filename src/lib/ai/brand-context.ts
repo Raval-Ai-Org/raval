@@ -126,13 +126,9 @@ export function serializeBrandContext(
         [...new Set(dna.socials.map((social) => social.platform))].join(", "),
       );
 
-    if (dna.userInsights?.length) {
-      lines.push("");
-      lines.push("## Operator-stated insights (respect these)");
-      dna.userInsights
-        .slice(0, 10)
-        .forEach((n) => lines.push(`- ${n.title}: ${clip(n.body) ?? ""}`));
-    }
+    // What the team told Mellox to remember is no longer read from Brand DNA
+    // (`userInsights`): it lives in Memory and reaches a generator through
+    // memoryBlockFor (ADR-0033).
 
     if (dna.competitors?.length) {
       lines.push("");

@@ -146,7 +146,18 @@ export const POST = defineRoute({
               m.lookTextFor(attributedWorkspaceId, "social"),
             )
           : "";
+        // What the team told Mellox to remember (ADR-0033), same rule.
+        const memoryText = attributedWorkspaceId
+          ? await import("@/server/memory/context.server").then((m) =>
+              m.memoryBlockFor(attributedWorkspaceId, "text"),
+            )
+          : "";
         const user = assemble([
+          {
+            label: "What the team asked Mellox to remember (follow it)",
+            body: memoryText ? memoryText.replace(/^## .*\n/, "") : undefined,
+            maxChars: 2000,
+          },
           { label: "Brand context", body: body.context, maxChars: 4000 },
           {
             label: "Style (follow exactly; it overrides generic platform guidance)",

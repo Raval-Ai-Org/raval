@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
-import type { BrandDna, Competitor, MemoryNote, SignalEvidence } from "@/hooks/use-brand-dna";
+import type { BrandDna, Competitor, SignalEvidence } from "@/hooks/use-brand-dna";
+import type { MemoryChange } from "@/lib/memory/contracts";
 
 const uid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -81,7 +82,7 @@ export async function syncMemoryFromChat(
   dna: BrandDna,
   save: (next: Partial<BrandDna>) => void,
   conversationId?: string | null,
-): Promise<{ added: number; skipped?: string }> {
+): Promise<{ added: number; skipped?: string; memories?: MemoryChange[] }> {
   // Pull the NEWEST chat history (RLS-scoped). Ascending + limit used to return
   // the oldest 60 messages forever, re-extracting them and never the new ones.
   let historyQuery = supabase
@@ -127,7 +128,8 @@ export async function syncMemoryFromChat(
   const known = {
     brandName: dna.brandName || undefined,
     oneLiner: dna.oneLiner || undefined,
-    knownInsights: dna.userInsights.map((n) => `${n.title}: ${n.body}`),
+    // What Memory already holds, so the reader doesn't say it again in other words.
+    knownInsights: await knownMemoryTexts(workspaceId),
     knownCompetitors: dna.competitors.map((c) => c.name).filter(Boolean) as string[],
     knownTriggers: dna.customer.triggerSignals.map((s) => s.text),
     knownObjections: dna.customer.objectionSignals.map((s) => s.text),
@@ -150,21 +152,20 @@ export async function syncMemoryFromChat(
   let added = 0;
   const now = Date.now();
 
-  // Insights — dedup against existing titles/bodies.
-  const newInsights: MemoryNote[] = [];
-  for (const ins of out.insights ?? []) {
-    if (!ins.title?.trim() && !ins.body?.trim()) continue;
-    const blob = `${ins.title} ${ins.body}`;
-    if (dna.userInsights.some((n) => similar(`${n.title} ${n.body}`, blob))) continue;
-    newInsights.push({
-      id: uid(),
-      title: ins.title?.trim() || "Insight",
-      body: ins.body?.trim() || "",
-      createdAt: now,
-      source: "chat",
-    });
-    added++;
-  }
+  // Insights are proposals for Memory (ADR-0033). The server decides: nothing
+  // is saved twice, and a memory a person removed is not brought back.
+  const proposals = (out.insights ?? [])
+    .map((ins) => {
+      const title = ins.title?.trim() ?? "";
+      const body = ins.body?.trim() ?? "";
+      return !body ? title : !title || title === "Insight" ? body : `${title}: ${body}`;
+    })
+    .filter((text) => text.length >= 3)
+    .slice(0, 10);
+  const memories = proposals.length
+    ? await proposeToMemory(workspaceId, proposals, conversationId)
+    : [];
+  added += memories.length;
 
   // Competitors — dedup by name.
   const newCompetitors: Competitor[] = [];
@@ -231,7 +232,6 @@ export async function syncMemoryFromChat(
   }
 
   if (
-    newInsights.length === 0 &&
     newCompetitors.length === 0 &&
     newTriggers.length === 0 &&
     newObjections.length === 0 &&
@@ -239,12 +239,11 @@ export async function syncMemoryFromChat(
     Object.keys(brandPatch).length === 0
   ) {
     save({ ...synced, memoryUpdatedAt: now });
-    return { added: 0 };
+    return { added, memories };
   }
 
   save({
     ...brandPatch,
-    userInsights: [...newInsights, ...dna.userInsights].slice(0, 80),
     competitors: [...dna.competitors, ...newCompetitors],
     customer: {
       ...dna.customer,
@@ -260,11 +259,6 @@ export async function syncMemoryFromChat(
   // device availability + future LLM grounding. Failures are non-fatal.
   try {
     const items: { body: string; kind: string; sourceLabel?: string }[] = [
-      ...newInsights.map((n) => ({
-        body: n.title ? `${n.title}: ${n.body}` : n.body,
-        kind: "insight",
-        sourceLabel: "Chat",
-      })),
       ...newTriggers.map((t) => ({ body: t.text, kind: "trigger", sourceLabel: t.sourceLabel })),
       ...newObjections.map((o) => ({
         body: o.text,
@@ -287,5 +281,33 @@ export async function syncMemoryFromChat(
     /* noop */
   }
 
-  return { added };
+  return { added, memories };
+}
+
+async function knownMemoryTexts(workspaceId: string): Promise<string[]> {
+  try {
+    const { getMemory } = await import("@/lib/memory.functions");
+    const view = await getMemory({ data: { workspaceId } });
+    // Within the limits /api/memory-extract accepts.
+    return view.memories.slice(0, 50).map((m) => m.body.slice(0, 400));
+  } catch {
+    return [];
+  }
+}
+
+/** Never throws: a failed save just means nothing new was remembered. */
+async function proposeToMemory(
+  workspaceId: string,
+  texts: string[],
+  conversationId?: string | null,
+): Promise<MemoryChange[]> {
+  try {
+    const { proposeMemories } = await import("@/lib/memory.functions");
+    const { changes } = await proposeMemories({
+      data: { workspaceId, items: texts.map((text) => ({ text })), conversationId },
+    });
+    return changes;
+  } catch {
+    return [];
+  }
 }

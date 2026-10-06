@@ -3,7 +3,8 @@
 import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import { PlanLock } from "@/components/app/billing/billing-ui";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { matchCommands, type ChatCommand } from "@/lib/chat/commands";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
@@ -53,6 +54,8 @@ type Props = {
   cover?: React.ReactNode;
   /** Lights the box while Autopilot runs. */
   autopilot?: "on" | "paused" | "setup" | "off" | null;
+  /** A person picked something from the "/" menu. Without it the menu is off. */
+  onCommand?: (command: ChatCommand) => void;
 };
 
 export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatComposer(
@@ -73,10 +76,24 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
     toolbarSlot,
     cover,
     autopilot,
+    onCommand,
   },
   ref,
 ) {
   const covered = Boolean(cover);
+  // The "/" menu: every place in Mellox and a few common asks.
+  const commands = useMemo(() => (onCommand ? matchCommands(value) : []), [onCommand, value]);
+  const [picked, setPicked] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    setPicked(0);
+    setDismissed(false);
+  }, [value]);
+  const menuOpen = commands.length > 0 && !dismissed;
+  const pick = (command: ChatCommand) => {
+    onCommand?.(command);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
@@ -183,6 +200,24 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={(e) => {
+              if (menuOpen) {
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  const step = e.key === "ArrowDown" ? 1 : -1;
+                  setPicked((i) => (i + step + commands.length) % commands.length);
+                  return;
+                }
+                if ((e.key === "Enter" && !e.shiftKey) || e.key === "Tab") {
+                  e.preventDefault();
+                  pick(commands[picked] ?? commands[0]);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setDismissed(true);
+                  return;
+                }
+              }
               // Physical keyboards can send with Enter. On phones, Enter inserts a
               // line break; the visible Send button avoids accidental sends.
               const composing = (e.nativeEvent as KeyboardEvent).isComposing || e.keyCode === 229;
@@ -214,8 +249,52 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
             rows={1}
             aria-label="Message Mellox"
             aria-keyshortcuts="Enter Shift+Enter"
+            aria-controls={menuOpen ? "mx-command-menu" : undefined}
+            aria-activedescendant={menuOpen ? `mx-command-${commands[picked]?.id}` : undefined}
             className="mx-composer__input"
           />
+
+          {menuOpen ? (
+            <ul
+              id="mx-command-menu"
+              role="listbox"
+              aria-label="Shortcuts"
+              className="mx-2.5 mb-1.5 max-h-[264px] overflow-y-auto overscroll-contain rounded-2xl border border-border/60 bg-[var(--ds-well-bg)] p-1"
+            >
+              {commands.map((command, i) => (
+                <li
+                  key={command.id}
+                  id={`mx-command-${command.id}`}
+                  role="option"
+                  aria-selected={i === picked}
+                >
+                  <button
+                    type="button"
+                    // Keep the caret in the box while choosing.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseEnter={() => setPicked(i)}
+                    onClick={() => pick(command)}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors",
+                      i === picked ? "bg-foreground/[0.07]" : "hover:bg-foreground/[0.04]",
+                    )}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium text-foreground">
+                        {command.label}
+                      </span>
+                      <span className="block truncate text-[12px] text-muted-foreground">
+                        {command.hint}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground/80">
+                      {command.group}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2.5 pb-2.5 sm:flex-nowrap">
             <button
@@ -227,6 +306,23 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
             >
               <Plus className="size-[18px]" />
             </button>
+            {onCommand ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(value.startsWith("/") ? "" : "/");
+                  requestAnimationFrame(() => textareaRef.current?.focus());
+                }}
+                className="mx-icon-btn size-8 shrink-0"
+                aria-label="Shortcuts"
+                aria-expanded={menuOpen}
+                title="Shortcuts (type /)"
+              >
+                <span className="text-[15px] font-semibold leading-none" aria-hidden>
+                  /
+                </span>
+              </button>
+            ) : null}
             {toolbarSlot}
 
             <div className="ml-auto flex shrink-0 items-center gap-1.5">

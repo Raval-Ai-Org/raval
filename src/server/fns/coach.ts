@@ -358,9 +358,15 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
          * default: synthesizeCoachBriefing() is called directly, byte-for-byte
          * the same code path as before this extraction. */
         // The confirmed marketing strategy leads, so the day's advice serves the plan.
-        const strategyText = await import("@/server/strategy/context.server").then((m) =>
-          m.strategyBlockFor(data.workspaceId),
-        );
+        const [strategyText, memoryText] = await Promise.all([
+          import("@/server/strategy/context.server").then((m) =>
+            m.strategyBlockFor(data.workspaceId),
+          ),
+          // What the team told Mellox to remember (ADR-0033).
+          import("@/server/memory/context.server").then((m) =>
+            m.memoryBlockFor(data.workspaceId, "text", { maxChars: 1200 }),
+          ),
+        ]);
         const synthesisInput: CoachSynthesisInput = {
           today,
           dayName,
@@ -369,7 +375,8 @@ export const getCoachBriefing = createServerFn({ method: "POST" })
           model,
           deepStrategy,
           signals,
-          brandContext: [strategyText, data.brandContext].filter(Boolean).join("\n\n") || undefined,
+          brandContext:
+            [memoryText, strategyText, data.brandContext].filter(Boolean).join("\n\n") || undefined,
           siteText,
           siteMeta,
           compResults,

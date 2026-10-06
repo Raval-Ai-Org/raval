@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { defineRoute } from "@/server/route";
-import { CHAT_ROUTE_CHOICES, chatCompletionStream } from "@/lib/ai-gateway.server";
+import {
+  CHAT_ROUTE_CHOICES,
+  chatCompletionStream,
+  type ChatMessage,
+} from "@/lib/ai-gateway.server";
+import { isChatToolsEnabled } from "@/lib/feature-flags";
+import { chatReplyStream, type ChatRound } from "@/server/chat/stream.server";
+import { createChatTools } from "@/server/chat/tools.server";
 import { chatUnitsFor, creditsFor } from "@/lib/billing/catalog";
 import { getEntitlements } from "@/server/billing/entitlements.server";
 import { accountForWorkspace } from "@/server/billing/accounts.server";
@@ -34,7 +41,26 @@ const MessagesSchema = z.object({
    * model is told it works for comes from the database for this id.
    */
   workspaceId: z.string().uuid(),
+  /** The conversation this reply belongs to, so a memory or a button can point back to it. */
+  conversationId: z.string().uuid().nullable().optional(),
 });
+
+/**
+ * What the team told Mellox to remember (ADR-0033), read on the server for the
+ * verified workspace, with each memory's handle so the reply can update or
+ * remove one. Null when memory is off. Never throws.
+ */
+async function memoryBlock(workspaceId: string): Promise<string | null> {
+  try {
+    const { isMemoryOn, memoryBlockFor } = await import("@/server/memory/context.server");
+    if (!(await isMemoryOn(workspaceId))) return null;
+    const block = await memoryBlockFor(workspaceId, "chat", { withIds: true });
+    return block || "## Brand memory\n(Nothing saved yet.)";
+  } catch (error) {
+    console.error("[chat] memory load failed, answering without it", error);
+    return null;
+  }
+}
 
 /**
  * The workspace's writing style, loaded on the server by the verified
@@ -183,10 +209,11 @@ export const POST = defineRoute({
       const lastUser = [...turns].reverse().find((turn) => turn.role === "user")?.content ?? "";
       // Older turns are summarised (decisions, facts, open questions) instead of
       // clipped to first sentences; the newest 12 stay verbatim.
-      const [history, research, style, audience, strategy] = await Promise.all([
+      const [history, research, style, memory, audience, strategy] = await Promise.all([
         summarizeHistory(turns as never),
         researchBlock(lastUser),
         styleBlock(workspaceId),
+        memoryBlock(workspaceId),
         // Who the brand talks to (ADR-0031), by the verified workspace id.
         // Empty when Audience is off or not set up; never throws.
         import("@/server/audience/context.server").then((m) => m.audienceBlockFor(workspaceId)),
@@ -194,48 +221,76 @@ export const POST = defineRoute({
         import("@/server/strategy/context.server").then((m) => m.strategyBlockFor(workspaceId)),
       ]);
 
-      // The picker id selects a route; the route's plan selects the model.
-      const response = await runWithScope(
-        { billingAccountId: charge.accountId, billingChargeId: charge.chargeId ?? undefined },
-        () =>
-          chatCompletionStream({
-            stream: true,
-            route,
-            // Strategy/analysis turns on the premium model think harder (chat.pro).
-            escalate: route === "chat.pro" && isStrategyTurn(lastUser),
-            task: "chat",
-            // The identity prompt and brand context are the stable, cacheable prefix.
-            cacheBreakpoint: 1,
-            // A researched turn is about the world as it is today, so its answer must
-            // not be served from the shared completion cache to another question.
-            noCache: Boolean(research),
-            messages: [
-              { role: "system", content: chatSystem() },
-              // Brand DNA / workspace context is user-provided and partly scraped:
-              // chatContextBlock fences it as untrusted data, not instructions.
+      // Chat tools (ADR-0033): the reply can read this workspace's data, save
+      // to memory and prepare changes as buttons. Off: one plain reply, as before.
+      const tools = isChatToolsEnabled(workspaceId)
+        ? createChatTools(
+            {
+              userId,
+              workspaceId,
+              role,
+              supabase,
+              token: (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim(),
+              conversationId: body.conversationId ?? null,
+            },
+            { memory: memory !== null },
+          )
+        : null;
+
+      const messages: ChatMessage[] = [
+        { role: "system", content: chatSystem({ tools: tools !== null }) },
+        // Brand DNA / workspace context is user-provided and partly scraped:
+        // chatContextBlock fences it as untrusted data, not instructions.
+        {
+          role: "system",
+          content: chatContextBlock(
+            wrapUntrusted(
+              "brand-dna",
+              [identity, body.context, audience, strategy].filter(Boolean).join("\n\n"),
               {
-                role: "system",
-                content: chatContextBlock(
-                  wrapUntrusted(
-                    "brand-dna",
-                    [identity, body.context, audience, strategy].filter(Boolean).join("\n\n"),
-                    {
-                      route: "chat",
-                    },
-                  ),
-                ),
+                route: "chat",
               },
-              ...(style ? [{ role: "system" as const, content: style }] : []),
-              ...(research ? [{ role: "system" as const, content: research }] : []),
-              ...history,
-            ],
-          }),
-      );
+            ),
+          ),
+        },
+        // The team's own standing rules: followed, not fenced as outside data.
+        ...(memory ? [{ role: "system" as const, content: memory }] : []),
+        ...(style ? [{ role: "system" as const, content: style }] : []),
+        ...(research ? [{ role: "system" as const, content: research }] : []),
+        ...(history as ChatMessage[]),
+      ];
+
+      // The picker id selects a route; the route's plan selects the model.
+      // Every round of one reply is metered against the same charge.
+      const round: ChatRound = (roundMessages, opts) =>
+        runWithScope(
+          { billingAccountId: charge.accountId, billingChargeId: charge.chargeId ?? undefined },
+          () =>
+            chatCompletionStream({
+              stream: true,
+              route,
+              // Strategy/analysis turns on the premium model think harder (chat.pro).
+              escalate: route === "chat.pro" && isStrategyTurn(lastUser),
+              task: "chat",
+              // The identity prompt and brand context are the stable, cacheable prefix.
+              cacheBreakpoint: 1,
+              // A researched turn is about the world as it is today, so its answer must
+              // not be served from the shared completion cache to another question.
+              noCache: Boolean(research),
+              messages: roundMessages,
+              tools: opts.tools,
+              inputChars: opts.inputChars,
+            }),
+        );
+      const response = await round(messages, { tools: tools?.specs });
       if (!response.body) {
         await charge.release();
         return response;
       }
-      const reader = response.body.getReader();
+      const replyBody = tools
+        ? chatReplyStream({ first: response, messages, round, tools })
+        : response.body;
+      const reader = replyBody.getReader();
       let upstreamDone = false;
       const settled = new ReadableStream<Uint8Array>({
         async pull(controller) {

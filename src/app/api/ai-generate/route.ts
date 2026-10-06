@@ -84,9 +84,21 @@ export const POST = defineRoute({
             )
           : "";
 
+        // What the team told Mellox to remember (ADR-0033), read on the server
+        // for the verified workspace only.
+        const memoryText = attributedWorkspaceId
+          ? await import("@/server/memory/context.server").then((m) =>
+              m.memoryBlockFor(attributedWorkspaceId, "text"),
+            )
+          : "";
         const user =
           assemble([
             { label: "Request", body: body.prompt },
+            {
+              label: "What the team asked Mellox to remember (follow it)",
+              body: memoryText ? memoryText.replace(/^## .*\n/, "") : undefined,
+              maxChars: 2000,
+            },
             { label: "Context", body: body.context, maxChars: 3800 },
             { label: "Target URL", body: body.url },
             {

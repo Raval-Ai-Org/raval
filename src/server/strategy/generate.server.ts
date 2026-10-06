@@ -41,9 +41,15 @@ function section(title: string, body: string): string {
   return body.trim() ? `## ${title}\n${body.trim()}` : "";
 }
 
-export function buildStrategyUser(sources: StrategySources, note?: string): string {
+export function buildStrategyUser(
+  sources: StrategySources,
+  note?: string,
+  memory?: string,
+): string {
   const { text, facts } = sources;
   return [
+    // Already a headed block (src/lib/memory/block.ts); "" when there is none.
+    memory?.trim() ?? "",
     section("Brand", text.brand || "(nothing saved yet)"),
     section("Audience groups", text.audience),
     section(
@@ -78,13 +84,15 @@ export async function generateStrategy(args: {
   sources: StrategySources;
   note?: string;
 }): Promise<MarketingStrategy | null> {
+  const { memoryBlockFor } = await import("@/server/memory/context.server");
+  const memory = await memoryBlockFor(args.workspaceId, "text", { maxChars: 1200 });
   const out = await runWithScope(
     { workspaceId: args.workspaceId, userId: args.userId, route: STRATEGY_ROUTE },
     () =>
       llmJson<Record<string, unknown>>({
         route: STRATEGY_ROUTE,
         system: SYSTEM,
-        user: buildStrategyUser(args.sources, args.note),
+        user: buildStrategyUser(args.sources, args.note, memory),
         maxTokens: 12_000,
         outputSchema: STRATEGY_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
         timeoutMs: 90_000,

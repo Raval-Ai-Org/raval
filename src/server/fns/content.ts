@@ -227,6 +227,45 @@ export const createContentItem = createServerFn({ method: "POST" })
     return row as ContentItem;
   });
 
+/** Shared server-side review transition for verified connector actors.
+ * The caller must re-check current membership before using a service client.
+ * Conditional status protects against two Slack buttons racing each other. */
+export async function reviewContentFromConnector(
+  db: import("@/integrations/supabase/client.user.server").UserSupabaseClient,
+  workspaceId: string,
+  itemId: string,
+  decision: "approve" | "reject" | "changes",
+  reason?: string,
+) {
+  const { data: current, error: readError } = await db
+    .from("content_items")
+    .select("id,status,meta")
+    .eq("workspace_id", workspaceId)
+    .eq("id", itemId)
+    .maybeSingle();
+  if (readError || !current) throw new HttpError(404, "Content is no longer available");
+  const target = decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "draft";
+  if (current.status === target) return target;
+  if (current.status !== "pending")
+    throw new HttpError(409, "This content is no longer waiting for review");
+  assertContentTransition(current.status, target);
+  const note =
+    decision === "changes" && reason?.trim()
+      ? {
+          meta: mergeMeta(current.meta, { review_note: reason.trim().slice(0, 1000) }) as Json,
+        }
+      : {};
+  const { data, error } = await db
+    .from("content_items")
+    .update({ status: target, ...note })
+    .eq("workspace_id", workspaceId)
+    .eq("id", itemId)
+    .eq("status", "pending")
+    .select("id");
+  if (error || !data?.length) throw new HttpError(409, "This content was already reviewed");
+  return target;
+}
+
 /* ------------------------------------------------------------ */
 /* Update                                                        */
 /* ------------------------------------------------------------ */
@@ -414,100 +453,118 @@ const BatchSchema = z.object({
 /* ------------------------------------------------------------ */
 /* Regenerate copy on an existing item                           */
 /* ------------------------------------------------------------ */
+/** The same metered rewrite path is used by Mellox and verified Slack actors. */
+export async function regenerateContentForConnector(args: {
+  db: import("@/integrations/supabase/client.user.server").UserSupabaseClient;
+  workspaceId: string;
+  itemId: string;
+  userId: string;
+  role: import("@/server/api-auth").WorkspaceRole;
+  idempotencyKey: string;
+}) {
+  const { db, workspaceId, itemId, userId, role, idempotencyKey } = args;
+  const { data: existing, error: readErr } = await db
+    .from("content_items")
+    .select(CONTENT_COLS)
+    .eq("workspace_id", workspaceId)
+    .eq("id", itemId)
+    .single();
+  if (readErr || !existing) throw new Error("Item not found");
+  const { runMetered } = await import("@/server/billing/metered.server");
+  const { result } = await runMetered(
+    {
+      workspaceId,
+      userId,
+      role,
+      action: "post_regenerate",
+      idempotencyKey,
+      route: "content.regenerate",
+    },
+    async () => {
+      const studioContext = await loadStudioContext(db as never, workspaceId, null);
+      const { lookTextFor } = await import("@/server/brand-look/resolve.server");
+      const styleText = await lookTextFor(
+        workspaceId,
+        existing.kind === "blog"
+          ? "article"
+          : existing.kind === "script"
+            ? "script"
+            : existing.kind === "image"
+              ? "image"
+              : "social",
+      );
+      const { system, user } = regeneratePrompt({
+        channel: existing.channel,
+        kind: existing.kind,
+        title: existing.title ?? "",
+        body: existing.body ?? "",
+      });
+      let parsed: z.infer<typeof RegeneratedSchema> | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const candidate = await runStructuredPrompt({
+          route: "content.regenerate",
+          system: `${system}\nKeep the user's original facts and offer. Give a useful, fresh angle for their audience; never invent proof or market claims.`,
+          user: `${user}\n\n## Brand and customer context\n${studioContext.brandText}\n\n## Brand writing style\n${styleText || "Follow Brand DNA voice."}\n\n## Recent topics to avoid\n${studioContext.recent
+            .slice(0, 10)
+            .map((item) => `- ${item.title}: ${item.excerpt ?? ""}`)
+            .join(
+              "\n",
+            )}\n${attempt ? "The last rewrite was too similar. Change the hook and structure while preserving verified facts." : ""}`,
+          schema: RegeneratedSchema,
+          maxTokens: existing.kind === "blog" ? 3500 : 1200,
+          temperature: 0.7,
+          regenerate: true,
+        });
+        if (!isNearDuplicateCopy(candidate.body, existing.body ?? "")) {
+          parsed = candidate;
+          break;
+        }
+      }
+      if (!parsed)
+        throw new AiOutputError(
+          "The rewrite repeated the existing draft. Try a more specific direction.",
+        );
+      const { data: row, error } = await db
+        .from("content_items")
+        .update({
+          title: parsed.title ?? existing.title,
+          body: parsed.body,
+          hashtags: Array.isArray(parsed.hashtags)
+            ? parsed.hashtags.slice(0, 30)
+            : existing.hashtags,
+        })
+        .eq("workspace_id", workspaceId)
+        .eq("id", itemId)
+        .eq("status", existing.status)
+        .select(CONTENT_COLS)
+        .single();
+      if (error || !row) throw new Error(error?.message ?? "Content changed while regenerating");
+      invalidateStudioContext(workspaceId);
+      return row as ContentItem;
+    },
+  );
+  return result;
+}
+
 export const regenerateContentItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("generate")])
   .inputValidator((data) => z.object({ id: uuid }).parse(data))
   .handler(async ({ data, context }) => {
-    const { data: existing, error: readErr } = await context.supabase
+    const { data: existing } = await context.supabase
       .from("content_items")
-      .select(CONTENT_COLS)
+      .select("workspace_id")
       .eq("id", data.id)
-      .single();
-    if (readErr || !existing) throw new Error("Item not found");
-
+      .maybeSingle();
+    if (!existing) throw new Error("Item not found");
     const role = await requireWorkspaceRole(context, existing.workspace_id, "editor");
-    const { runMetered } = await import("@/server/billing/metered.server");
-    const { result } = await runMetered(
-      {
-        workspaceId: existing.workspace_id,
-        userId: context.userId,
-        role,
-        action: "post_regenerate",
-        idempotencyKey: crypto.randomUUID(),
-        route: "content.regenerate",
-      },
-      async () => {
-        const studioContext = await loadStudioContext(
-          context.supabase as never,
-          existing.workspace_id,
-          null,
-        );
-        const { lookTextFor } = await import("@/server/brand-look/resolve.server");
-        const styleText = await lookTextFor(
-          existing.workspace_id,
-          existing.kind === "blog"
-            ? "article"
-            : existing.kind === "script"
-              ? "script"
-              : existing.kind === "image"
-                ? "image"
-                : "social",
-        );
-
-        const { system, user } = regeneratePrompt({
-          channel: existing.channel,
-          kind: existing.kind,
-          title: existing.title ?? "",
-          body: existing.body ?? "",
-        });
-
-        // A failed regeneration throws (AiOutputError → 502). It used to return
-        // the OLD text as if it had been regenerated, and the cache made pressing
-        // "regenerate" return identical copy for 30 minutes.
-        let parsed: z.infer<typeof RegeneratedSchema> | null = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
-          const candidate = await runStructuredPrompt({
-            route: "content.regenerate",
-            system: `${system}\nKeep the user's original facts and offer. Give a useful, fresh angle for their audience; never invent proof or market claims.`,
-            user: `${user}\n\n## Brand and customer context\n${studioContext.brandText}\n\n## Brand Kit writing style\n${styleText || "Follow Brand DNA voice."}\n\n## Recent topics to avoid\n${studioContext.recent
-              .slice(0, 10)
-              .map((item) => `- ${item.title}: ${item.excerpt ?? ""}`)
-              .join(
-                "\n",
-              )}\n${attempt ? "\nThe last rewrite was too similar. Change the hook, structure, and practical takeaway while preserving verified facts." : ""}`,
-            schema: RegeneratedSchema,
-            maxTokens: existing.kind === "blog" ? 3500 : 1200,
-            temperature: 0.7,
-            regenerate: true,
-          });
-          if (!isNearDuplicateCopy(candidate.body, existing.body ?? "")) {
-            parsed = candidate;
-            break;
-          }
-        }
-        if (!parsed)
-          throw new AiOutputError(
-            "The rewrite repeated the existing draft. Try a more specific direction.",
-          );
-
-        const { data: row, error } = await context.supabase
-          .from("content_items")
-          .update({
-            title: parsed.title ?? existing.title,
-            body: parsed.body,
-            hashtags: Array.isArray(parsed.hashtags)
-              ? parsed.hashtags.slice(0, 30)
-              : existing.hashtags,
-          })
-          .eq("id", data.id)
-          .select(CONTENT_COLS)
-          .single();
-        if (error || !row) throw new Error(error?.message ?? "Update failed");
-        invalidateStudioContext(existing.workspace_id);
-        return row as ContentItem;
-      },
-    );
-    return result;
+    return regenerateContentForConnector({
+      db: context.supabase,
+      workspaceId: existing.workspace_id,
+      itemId: data.id,
+      userId: context.userId,
+      role,
+      idempotencyKey: crypto.randomUUID(),
+    });
   });
 
 /* ------------------------------------------------------------ */

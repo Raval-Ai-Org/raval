@@ -38,6 +38,7 @@ export const POST = defineRoute({
       brand: ctx.brand,
       workspace: ctx.workspace,
       current: body.current,
+      memoryText: ctx.memoryText || undefined,
     });
   },
 });

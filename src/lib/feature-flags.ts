@@ -8,6 +8,12 @@ const ENV_FEATURE_SDR = "FEATURE_FLAG_SDR_ENABLED";
 const isTruthy = (v: string) => v === "true" || v === "1" || v === "yes";
 const isFalsy = (v: string) => v === "false" || v === "0" || v === "no";
 
+/** Slack rolls out by explicit opt-in, globally or for a single workspace. */
+export function isSlackEnabled(workspaceId: string): boolean {
+  const local = process.env[`FEATURE_FLAG_SLACK_ENABLED_WS_${workspaceId}`];
+  return isTruthy((local ?? process.env.FEATURE_FLAG_SLACK_ENABLED ?? "").trim().toLowerCase());
+}
+
 /** Legacy configuration reader; SocialAPI is retired as a distribution provider. */
 export function isSocialApiConfigured(): boolean {
   if (!process.env.SOCIALAPI_API_KEY) return false;
@@ -218,6 +224,37 @@ export function isAudienceAutoScoreEnabled(workspaceId?: string): boolean {
   return !isFalsy(
     (process.env.FEATURE_FLAG_AUDIENCE_AUTO_SCORE_ENABLED ?? "").trim().toLowerCase(),
   );
+}
+
+/**
+ * Memory (ADR-0033): what a brand's team told Mellox to remember. On unless
+ * set to "false"; `FEATURE_FLAG_MEMORY_ENABLED_WS_<id>` overrides it for one
+ * workspace. Off means the Settings section and account-menu entry are hidden,
+ * RPCs answer 404, chat saves nothing and generators get no memory block.
+ */
+export function isMemoryEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_MEMORY_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_MEMORY_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Chat tools (ADR-0033): chat reads the workspace's own data to answer and
+ * offers changes as buttons. On unless set to "false"; off falls back to a
+ * plain reply with no tools.
+ */
+export function isChatToolsEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_CHAT_TOOLS_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_CHAT_TOOLS_ENABLED ?? "").trim().toLowerCase());
 }
 
 export function isProofEngineEnabled(workspaceId?: string): boolean {

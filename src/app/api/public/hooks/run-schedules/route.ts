@@ -39,6 +39,13 @@ export const POST = defineCronRoute({
       } catch (error) {
         console.error("[audience] outcome collection failed", error);
       }
+      // Memory: temporary memories that have ended (one indexed delete).
+      try {
+        const { purgeExpiredMemories } = await import("@/server/memory/service.server");
+        await purgeExpiredMemories();
+      } catch (error) {
+        console.error("[memory] clearing ended memories failed", error);
+      }
     });
     const [scheduled, marketBrain, autopilot, audience] = await Promise.all([
       runDueScheduledJobs({ max: 25 }),

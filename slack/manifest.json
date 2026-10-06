@@ -1,0 +1,60 @@
+{
+  "_metadata": { "major_version": 2 },
+  "display_information": {
+    "name": "Mellox",
+    "description": "Your marketing command center in Slack",
+    "long_description": "Review content, get a daily marketing brief, follow important changes, and ask Mellox about your brand from Slack.",
+    "background_color": "#17261c"
+  },
+  "features": {
+    "bot_user": { "display_name": "mellox", "always_online": false },
+    "app_home": {
+      "home_tab_enabled": false,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
+    "agent_view": {
+      "agent_description": "Ask Mellox about your marketing, content, competitors, performance, and next actions.",
+      "suggested_prompts": [
+        { "title": "Today's focus", "message": "What should we focus on today?" },
+        { "title": "Marketing brief", "message": "Give me today's marketing brief" },
+        { "title": "Approvals", "message": "Show posts waiting for approval" },
+        { "title": "Competitors", "message": "What changed with our competitors?" }
+      ]
+    },
+    "shortcuts": [
+      {
+        "name": "Create with Mellox",
+        "type": "message",
+        "callback_id": "mellox_create",
+        "description": "Turn a message into marketing content in Mellox"
+      }
+    ]
+  },
+  "oauth_config": {
+    "redirect_urls": ["https://mellox.ai/api/integrations/slack/oauth/callback"],
+    "scopes": {
+      "bot": [
+        "app_mentions:read",
+        "assistant:write",
+        "chat:write",
+        "channels:read",
+        "commands",
+        "im:history"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://mellox.ai/api/integrations/slack/events",
+      "bot_events": ["app_mention", "message.im", "app_home_opened", "app_uninstalled"]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://mellox.ai/api/integrations/slack/interactivity"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

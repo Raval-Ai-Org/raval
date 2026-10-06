@@ -267,8 +267,17 @@ function AppShell() {
   // Its full screen is a route; buttons elsewhere open it with this event.
   useEffect(() => {
     const onOpenAutopilot = () => navigate({ to: workspacePath(workspaceId, "autopilot") });
+    // Chat's buttons and the "/" menu reach these two routes the same way.
+    const onOpenBacklinks = () => navigate({ to: workspacePath(workspaceId, "backlinks") });
+    const onOpenExperiments = () => navigate({ to: workspacePath(workspaceId, "experiments") });
     addAppEventListener("open:autopilot", onOpenAutopilot);
-    return () => removeAppEventListener("open:autopilot", onOpenAutopilot);
+    addAppEventListener("open:backlinks", onOpenBacklinks);
+    addAppEventListener("open:experiments", onOpenExperiments);
+    return () => {
+      removeAppEventListener("open:autopilot", onOpenAutopilot);
+      removeAppEventListener("open:backlinks", onOpenBacklinks);
+      removeAppEventListener("open:experiments", onOpenExperiments);
+    };
   }, [navigate, workspaceId]);
 
   // Brain (ADR-0032) holds the four brains and the strategy. Older buttons and

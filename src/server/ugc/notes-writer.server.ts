@@ -32,6 +32,8 @@ export async function writeCreativeNotes(args: {
   brand: Record<string, unknown>;
   workspace: { industry?: string | null; audience?: string | null };
   current?: string;
+  /** What the team told Mellox to remember (memoryBlockFor). */
+  memoryText?: string;
 }): Promise<{ notes: string }> {
   const { product, brief } = args;
   const current = (args.current ?? "").trim();
@@ -109,6 +111,7 @@ export async function writeCreativeNotes(args: {
         .filter(Boolean)
         .join("\n"),
     },
+    { label: "What the team asked Mellox to remember", body: args.memoryText ?? "" },
     { label: "Creative direction for this one", body: sparks.map((s) => `- ${s}`).join("\n") },
     {
       label: "Current notes (keep what they ask for)",

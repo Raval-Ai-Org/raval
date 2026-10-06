@@ -60,6 +60,17 @@ import { AssistantMessage, ErrorMessage, NoticeMessage, UserMessage } from "./ch
 import { ChatOffers } from "./chat/ChatOffers";
 import { StudioTaskCard, type StudioTaskPayload } from "./chat/StudioTaskCard";
 import { ThinkingIndicator } from "./chat/ThinkingIndicator";
+import { ReplyExtras, ToolActivity } from "./chat/ReplyExtras";
+import {
+  hasExtras,
+  parseReplyExtras,
+  type ChatActionView,
+  type ChatReplyExtras,
+  type ChatStreamEvent,
+  type ChatToolActivity,
+} from "@/lib/chat/events";
+import { findPlace } from "@/lib/chat/places";
+import type { MemoryChange } from "@/lib/memory/contracts";
 
 type MsgKind = "text" | "clarify" | "actions" | "notice" | "error" | "studio" | "upgrade";
 
@@ -70,6 +81,8 @@ type Msg = {
   content: string;
   status?: "sending" | "streaming" | "completed" | "failed" | "cancelled";
   payload?: any;
+  /** What a reply carries beside its words: memory changes, buttons (stored on `metadata`). */
+  extras?: ChatReplyExtras;
   /** Created in this session (animates in); history rows appear without motion. */
   live?: boolean;
 };
@@ -92,7 +105,14 @@ function fromRow(row: any): Msg | null {
     };
   }
   if (row.kind !== "text") return null;
-  return { id: row.id, role: row.role, kind: "text", content: row.content ?? "" };
+  const extras = row.role === "assistant" ? parseReplyExtras(row.metadata) : {};
+  return {
+    id: row.id,
+    role: row.role,
+    kind: "text",
+    content: row.content ?? "",
+    ...(hasExtras(extras) ? { extras } : {}),
+  };
 }
 
 function isDesktop() {
@@ -257,19 +277,113 @@ export function ChatPanel({
   const skipNextHistoryLoadRef = useRef(false);
   const { dna, save: saveDna } = useBrandDna(workspaceId);
   const dnaRef = useRef(dna);
-  // Used by an APPROVED "save to memory" suggestion from a chat reply.
+  // Used by an APPROVED "save to memory" suggestion from a chat reply (the
+  // path without chat tools). It lands in the brand's memory (ADR-0033).
   const saveMemoryNote = async (title: string, body: string) => {
-    const note = {
-      id: crypto.randomUUID(),
-      title,
-      body,
-      createdAt: Date.now(),
-      source: "chat" as const,
-    };
-    const current = dnaRef.current;
-    await saveDna({ userInsights: [...(current.userInsights ?? []), note] });
+    const { addMemory } = await import("@/lib/memory.functions");
+    const text = !body.trim() ? title : !title.trim() ? body : `${title}: ${body}`;
+    await addMemory({ data: { workspaceId, body: text.slice(0, 500), hours: null } });
+    emitAppEvent("memory:changed", { workspaceId });
   };
+  // What the reply being written is looking at right now ("Looking at your posts").
+  const [activity, setActivity] = useState<ChatToolActivity | null>(null);
   const messagesRef = useRef<Msg[]>([]);
+
+  /* ───────────── what a reply carries beside its words ───────────── */
+
+  /** Change one reply's extras here and on its stored row (best effort). */
+  const updateExtras = (
+    messageId: string,
+    change: (extras: ChatReplyExtras) => ChatReplyExtras,
+  ) => {
+    const current = messagesRef.current.find((m) => m.id === messageId);
+    const next = change(current?.extras ?? {});
+    setMessages((m) => m.map((x) => (x.id === messageId ? { ...x, extras: next } : x)));
+    void supabase
+      .from("chat_messages")
+      .update({ metadata: next as never })
+      .eq("workspace_id", workspaceId)
+      .eq("id", messageId)
+      .then(() => undefined);
+  };
+
+  const setAction = (messageId: string, action: ChatActionView) =>
+    updateExtras(messageId, (extras) => ({
+      ...extras,
+      actions: (extras.actions ?? []).map((a) => (a.id === action.id ? action : a)),
+    }));
+
+  /** After a reload: ask the server where each button really stands. */
+  const refreshActionStates = async (rows: Msg[]) => {
+    const open = rows.flatMap((m) =>
+      (m.extras?.actions ?? [])
+        .filter((a) => a.state === "offered" || a.state === "running")
+        .map((a) => a.id),
+    );
+    if (!open.length) return;
+    try {
+      const { getChatActions } = await import("@/lib/chat-actions.functions");
+      const fresh = await getChatActions({ data: { workspaceId, ids: open.slice(0, 50) } });
+      const byId = new Map(fresh.map((a) => [a.id, a]));
+      setMessages((m) =>
+        m.map((x) =>
+          x.extras?.actions?.some((a) => byId.has(a.id))
+            ? {
+                ...x,
+                extras: {
+                  ...x.extras,
+                  actions: x.extras.actions.map((a) => byId.get(a.id) ?? a),
+                },
+              }
+            : x,
+        ),
+      );
+    } catch {
+      /* the stored state stays; a click still answers correctly */
+    }
+  };
+
+  const replyHandlers = (messageId: string) => ({
+    manageMemory: () => emitAppEvent("open:settings", { section: "memory" }),
+    undoMemory: async (change: MemoryChange) => {
+      try {
+        const { removeMemory, restoreMemory } = await import("@/lib/memory.functions");
+        const data = { workspaceId, id: change.id };
+        if (change.op === "removed") await restoreMemory({ data });
+        else await removeMemory({ data });
+        emitAppEvent("memory:changed", { workspaceId });
+        return true;
+      } catch (error) {
+        toast.error((error as Error)?.message || "Couldn't undo that. Try again.");
+        return false;
+      }
+    },
+    // A person clicked a button Mellox prepared. It runs once, as them.
+    runAction: (action: ChatActionView) => {
+      setAction(messageId, { ...action, state: "running", note: undefined });
+      void (async () => {
+        try {
+          const { runChatAction } = await import("@/lib/chat-actions.functions");
+          const result = await runChatAction({ data: { workspaceId, actionId: action.id } });
+          setAction(messageId, result);
+          if (result.state === "done") {
+            emitAppEvent("content:changed");
+            emitAppEvent("billing:changed");
+          }
+        } catch (error) {
+          setAction(messageId, {
+            ...action,
+            state: "failed",
+            note: (error as Error)?.message || "That didn't work. Ask again to retry.",
+          });
+        }
+      })();
+    },
+    openPlace: (offer: { place: string }) => {
+      const place = findPlace(offer.place);
+      if (place) emitAppEvent(place.event, place.detail as never);
+    },
+  });
   useEffect(() => {
     dnaRef.current = dna;
   }, [dna]);
@@ -292,10 +406,19 @@ export function ChatPanel({
       const { syncMemoryFromChat } = await import("@/lib/memory-sync");
       const res = await syncMemoryFromChat(workspaceId, current, saveDna, conversationRef.current);
       lastSyncedLiveCountRef.current = liveCount;
-      if (res.added > 0) {
-        toast.success(
-          `Remembered ${res.added} new thing${res.added > 1 ? "s" : ""} about your brand`,
-        );
+      // What it noticed shows as a note under the latest reply, with Undo.
+      const noticed = res.memories ?? [];
+      if (noticed.length) {
+        emitAppEvent("memory:changed", { workspaceId });
+        setMessages((m) => {
+          const at = m.map((x) => x.role === "assistant" && x.kind === "text").lastIndexOf(true);
+          if (at < 0) return m;
+          return m.map((x, i) =>
+            i === at
+              ? { ...x, extras: { ...x.extras, memory: [...(x.extras?.memory ?? []), ...noticed] } }
+              : x,
+          );
+        });
       }
     } catch (e) {
       console.warn("memory sync failed", e);
@@ -402,6 +525,7 @@ export function ChatPanel({
             const rows = data.map(fromRow).filter((m): m is Msg => m !== null);
             setMessages((current) => (current.length === 0 ? rows : current));
             requestAnimationFrame(() => scrollToLatest("auto"));
+            void refreshActionStates(rows);
           }
         })();
       }
@@ -671,20 +795,8 @@ export function ChatPanel({
       "typography",
     ]);
 
-    // Persistent user insights — high value; keep baseScore so they always compete
-    if (dna.userInsights?.length) {
-      const body = dna.userInsights
-        .slice(0, 10)
-        .map((n) => `- ${n.title}: ${n.body}`)
-        .join("\n");
-      push(
-        "insights",
-        "Operator insights (respect these)",
-        body,
-        ["insight", "insights", "remember", "noted", "preference", "rule", "policy"],
-        { baseScore: 2, maxChars: 800 },
-      );
-    }
+    // What the team told Mellox to remember is added on the server from the
+    // brand's memory (ADR-0033), not from this browser.
 
     // Competitors
     if (dna.competitors?.length) {
@@ -1099,6 +1211,7 @@ export function ChatPanel({
           context: smartCtx,
           modelId,
           workspaceId: streamWorkspaceId,
+          conversationId: streamConversationId,
         }),
         signal: controller.signal,
         workspaceId: streamWorkspaceId,
@@ -1163,6 +1276,8 @@ export function ChatPanel({
       let buf = "";
       let acc = "";
       let truncated = false;
+      // Memory changes and buttons the server sends alongside the words.
+      const extras: ChatReplyExtras = {};
       const aId = crypto.randomUUID();
       setMessages((m) => [
         ...m,
@@ -1186,8 +1301,14 @@ export function ChatPanel({
           if (json === "[DONE]") break;
           try {
             const parsed = JSON.parse(json);
-            // Server marker: the reply hit the output ceiling (meterSseStream).
-            if (parsed?.mellox?.truncated) truncated = true;
+            // Server markers: the reply hit the output ceiling (meterSseStream),
+            // is reading the workspace, or changed memory / prepared buttons.
+            const mark = parsed?.mellox as ChatStreamEvent | undefined;
+            if (mark?.truncated) truncated = true;
+            if (mark?.tool) setActivity(mark.tool.state === "start" ? mark.tool : null);
+            if (mark?.memory || mark?.actions || mark?.offers) {
+              Object.assign(extras, parseReplyExtras({ ...extras, ...mark }));
+            }
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) {
               acc += delta;
@@ -1220,9 +1341,17 @@ export function ChatPanel({
       } catch (e) {
         console.warn("tool parse failed", e);
       }
+      const carried = hasExtras(extras);
       setMessages((m) =>
-        m.map((x) => (x.id === aId ? { ...x, content: acc, status: "completed" } : x)),
+        m.map((x) =>
+          x.id === aId
+            ? { ...x, content: acc, status: "completed", ...(carried ? { extras } : {}) }
+            : x,
+        ),
       );
+      if (extras.memory?.length) {
+        emitAppEvent("memory:changed", { workspaceId: streamWorkspaceId });
+      }
       if (offers.length || suggestions.length || detectedActions.length) {
         const payload: ActionsPayload = { offers, suggestions, actions: detectedActions };
         setMessages((m) => [
@@ -1238,7 +1367,7 @@ export function ChatPanel({
         ]);
       }
 
-      if (streamConversationId && acc.trim()) {
+      if (streamConversationId && (acc.trim() || carried)) {
         await supabase.from("chat_messages").insert({
           id: aId,
           workspace_id: streamWorkspaceId,
@@ -1248,6 +1377,7 @@ export function ChatPanel({
           kind: "text",
           content: acc,
           status: "completed",
+          ...(carried ? { metadata: extras as never } : {}),
         });
         emitAppEvent("chat:conversation-changed");
       }
@@ -1284,6 +1414,7 @@ export function ChatPanel({
     } finally {
       abortRef.current = null;
       setStreaming(false);
+      setActivity(null);
       setMessages((m) =>
         m.map((x) => (x.status === "streaming" ? { ...x, status: "completed" as const } : x)),
       );
@@ -1525,7 +1656,14 @@ export function ChatPanel({
                     onRetry={
                       i === lastTextIdx && !streaming ? () => void regenerateLatest() : undefined
                     }
-                  />
+                  >
+                    {m.status === "streaming" && activity ? (
+                      <ToolActivity activity={activity} />
+                    ) : null}
+                    {hasExtras(m.extras) ? (
+                      <ReplyExtras extras={m.extras!} handlers={replyHandlers(m.id)} />
+                    ) : null}
+                  </AssistantMessage>
                 );
               })}
 
@@ -1533,7 +1671,7 @@ export function ChatPanel({
                 {waitingForWords ? (
                   <ThinkingIndicator
                     key="thinking"
-                    label={clarifying ? "Reading your message" : undefined}
+                    label={clarifying ? "Reading your message" : activity?.label}
                   />
                 ) : null}
               </AnimatePresence>
@@ -1593,6 +1731,14 @@ export function ChatPanel({
             toolbarSlot={autopilot.toolbarSlot}
             cover={autopilot.cover}
             autopilot={autopilot.signal}
+            // The "/" menu: a person's own pick, so it may open a place or ask.
+            onCommand={(command) => {
+              if (command.run.type === "prefill") return setInput(command.run.text);
+              setInput("");
+              if (command.run.type === "send") return void send(command.run.text);
+              const place = findPlace(command.run.place);
+              if (place) emitAppEvent(place.event, place.detail as never);
+            }}
           />
         </motion.div>
 

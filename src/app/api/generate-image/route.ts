@@ -42,7 +42,14 @@ async function styled(
   prompt: string,
   references: string[],
 ): Promise<{ prompt: string; references: string[] }> {
-  if (!workspaceId || choice === "none") return { prompt, references };
+  if (!workspaceId) return { prompt, references };
+  // What the team told Mellox to remember about pictures (ADR-0033) applies
+  // whether or not a look is set. Never throws: "" when off or unset.
+  const memory = await import("@/server/memory/context.server")
+    .then((m) => m.memoryBlockFor(workspaceId, "image"))
+    .catch(() => "");
+  if (memory) prompt = `${prompt}\n\n${memory}`.slice(0, 9500);
+  if (choice === "none") return { prompt, references };
   try {
     const [{ loadBrandLook }, { imageStyleInput }, { restyleImagePrompt }] = await Promise.all([
       import("@/server/brand-look/resolve.server"),

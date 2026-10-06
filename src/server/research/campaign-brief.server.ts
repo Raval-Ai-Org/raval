@@ -18,6 +18,8 @@ export type BrandContext = {
   customerNeeds?: string;
   competitorContext?: string;
   marketContext?: string;
+  /** What the team told Mellox to remember (memoryBlockFor). */
+  memory?: string;
 };
 
 export type CampaignBrief = {
@@ -54,7 +56,7 @@ RECENT MARKET SIGNALS (ideas, not verified brand claims): ${brand.marketContext 
 
   const user = `CAMPAIGN GOAL: ${goal}
 CHANNELS: ${channels.join(", ") || "general"}
-
+${brand.memory ? `\n${brand.memory}\n` : ""}
 BRAND CONTEXT:
 ${wrapUntrusted("stored-brand-dna", brandBlock, { route: "campaign-generation" })}
 

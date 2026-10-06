@@ -146,6 +146,66 @@ Brand Styles and the Brand Kit are gone — never add them back).
 - Live check: `tests/live/brain.live.ts` (model call behind
   `STRATEGY_LIVE_AI=yes`).
 
+## Memory and chat tools
+
+Full reference: [docs/memory.md](docs/memory.md), decision record
+[ADR-0033](docs/adr/0033-memory-and-chat-tools.md). Flags
+`FEATURE_FLAG_MEMORY_ENABLED` and `FEATURE_FLAG_CHAT_TOOLS_ENABLED` (each with
+`_WS_<id>`), on unless `false`. Memory off: the Settings section and
+account-menu entry are hidden, RPCs answer 404, chat saves nothing and
+generators get no memory block. Chat tools off: chat is one plain reply.
+
+- **One memory per brand** (`workspace_memories`, shared by the workspace's
+  members; "use memory" switch in `workspace_memory_settings`). Pure rules in
+  `src/lib/memory/`; server in `src/server/memory/`; RPC
+  `src/server/fns/memory.ts`; UI `src/components/app/memory/`, shown in
+  Settings → Memory and Account menu → Memory. `BrandDna.userInsights` is the
+  old store: never read or write it again.
+- **The model proposes, pure code decides.** Every change from chat or the
+  background reader goes through `applyMemoryOps` (`decide.ts`): no duplicates,
+  no secrets or private details, 200 per brand, and a memory a person removed
+  is never brought back by the background reader. Never write the table from a
+  model's output any other way.
+- **Temporary memories end by themselves** (`expires_at`, an hour to a week;
+  `context` is always temporary). They are deleted by the **existing**
+  `run-schedules` hook; do not add a cron job.
+- **Generators get memory only through** `memoryBlockFor(workspaceId, surface)`
+  (`src/server/memory/context.server.ts`), with the verified workspace id. It
+  goes near the top of the prompt and is **not** fenced as untrusted data (it
+  is the team's own rules); a memory that reads like an attempt to steer the
+  model is refused at write time instead. A new generator must call it.
+- **Chat saves by itself and says so.** `remember` / `update_memory` / `forget`
+  run in the reply, and the reply carries a "Memory updated" note with Undo and
+  Manage. Never bring back an approval step or a pop-up for saving.
+- **Chat reads by itself; a change is always a button**
+  (`src/server/chat/tools.server.ts`). Reads are the allow-list
+  `CHAT_READ_TOOLS` (every one `write: false`; a test enforces it). Anything in
+  `CHAT_ACTION_TOOLS` is never run for the model: the request is stored in
+  `chat_actions` and shown as a button.
+  - A click runs it once, as the person who clicked
+    (`src/server/chat/actions.server.ts`): arguments come from the stored row,
+    the role is checked again, `offered → running` is a compare-and-set, and a
+    failed button stays failed.
+  - Tools are the MCP tools (`src/server/mcp/tools/`) called through the
+    bridge, so plan, credits and approval rules apply as in the app. Chat does
+    not use `runTool` or the workspace's MCP switch.
+  - Not offered from chat, on purpose: workspaces, starting or stopping
+    Autopilot, rewriting Brand DNA, website fixes, billing, team and roles,
+    connecting accounts, buying backlinks.
+- **A reply is rounds without replay** (`src/server/chat/stream.server.ts`):
+  tool results are added as reference data and the next round starts fresh.
+  The model's tool-call turn is never sent back, so this is not `llmToolLoop`
+  and carries no reasoning. At most three tool rounds and eight tool calls; the
+  last round has no tools.
+- **Places and the "/" menu:** `src/lib/chat/places.ts` is the one list of
+  places chat can open (`open_in_mellox`, the "/" menu in `ChatComposer`). Add
+  a place there. Opening is always a person's click.
+- What a reply carried (memory changes, buttons, place offers) is stored on the
+  assistant message's `metadata` (`src/lib/chat/events.ts`).
+- `MemoryScreen` and `ReplyExtras` are presentational; `/memory-lab` renders
+  them with sample data in development (`tests/integration/memory-lab.spec.ts`).
+- Live check: `tests/live/memory.live.ts`.
+
 ## Sharing (team invites and the client portal)
 
 - **Team invites:** `src/server/fns/workspaces.ts` + `ShareDialog.tsx`.
