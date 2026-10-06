@@ -73,6 +73,7 @@ export async function canvaRequest(token: string, path: string, init: RequestIni
         : "Canva is busy. Try again shortly.",
     );
   }
+  if (res.status === 404) throw new HttpError(404, "This Canva design no longer exists.");
   if (!res.ok) throw new HttpError(502, "Canva could not complete this action.");
   return res.json().catch(() => {
     throw new HttpError(502, "Canva returned an invalid response.");
@@ -174,20 +175,6 @@ export class CanvaJobError extends HttpError {
   }
 }
 
-export async function hasMagicLayersCapability(token: string) {
-  try {
-    const result = (await canvaRequest(token, "/users/me/capabilities")) as {
-      capabilities?: string[];
-    };
-    return (
-      Array.isArray(result.capabilities) && result.capabilities.includes("image_to_design_imports")
-    );
-  } catch (error) {
-    if (error instanceof HttpError && (error.status === 403 || error.status === 409)) return false;
-    throw error;
-  }
-}
-
 export async function imageToDesign(token: string, assetId: string, title: string) {
   const started = (await canvaRequest(token, "/image-to-design-imports", {
     method: "POST",
@@ -229,12 +216,23 @@ export async function importPptx(token: string, bytes: Buffer, title: string) {
   };
 }
 
-export async function exportPngPages(token: string, designId: string) {
+export async function exportPngPages(
+  token: string,
+  designId: string,
+  options: { pages?: number[] } = {},
+) {
   if (!/^[\w-]+$/.test(designId)) throw new HttpError(400, "Invalid Canva design.");
   const started = (await canvaRequest(token, "/exports", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ design_id: designId, format: { type: "png", as_single_image: false } }),
+    body: JSON.stringify({
+      design_id: designId,
+      format: {
+        type: "png",
+        as_single_image: false,
+        ...(options.pages ? { pages: options.pages } : {}),
+      },
+    }),
   })) as Job;
   const job = await pollJob(token, "/exports", started, "export");
   if (
@@ -246,7 +244,12 @@ export async function exportPngPages(token: string, designId: string) {
   return job.urls;
 }
 
-/** Public Create Design always remains the usable flow when Preview is unavailable. */
+/**
+ * One image as a Canva design. Canva's own conversion (Magic Layers) turns the
+ * picture into text and elements a person can change; when it can't, the
+ * picture is placed whole. The conversion is tried directly: asking Canva
+ * whether the account may use it needs a scope this app does not request.
+ */
 export async function createSingleImageDesign(
   token: string,
   args: { assetId: string; title: string; width: number; height: number },
@@ -254,13 +257,11 @@ export async function createSingleImageDesign(
 ) {
   if (magicEnabled) {
     try {
-      if (await hasMagicLayersCapability(token)) {
-        const result = await imageToDesign(token, args.assetId, args.title);
-        return { ...result, mode: "magic_layers" as const };
-      }
+      const result = await imageToDesign(token, args.assetId, args.title);
+      return { ...result, mode: "magic_layers" as const };
     } catch (error) {
       if (error instanceof HttpError && error.status === 409) throw error;
-      // Preview access, AI quota, rate limit, conversion and temporary provider errors.
+      // No access to the conversion, AI quota, rate limit or a failed job.
     }
   }
   const result = await createDesign(token, args);

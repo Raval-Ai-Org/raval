@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Pencil } from "@/components/icons";
+import { toast } from "sonner";
 import { emitAppEvent } from "@/lib/app-events";
 import {
   useOptionalWorkspaceId,
@@ -11,181 +11,164 @@ import {
   getCanvaConnection,
   getCanvaEditState,
   importCanvaVersion,
+  restoreCanvaOriginalAction,
   startCanvaConnect,
-  selectCanvaVersionAction,
 } from "@/lib/canva.functions";
+import { CanvaPanel, type CanvaPanelProps } from "./CanvaPanel";
 
+type EditState = Awaited<ReturnType<typeof getCanvaEditState>>;
+type Opened = Awaited<ReturnType<typeof createCanvaEdit>>;
+
+/**
+ * One control for Canva: open the picture there as an editable design, bring
+ * the edit back onto the post, or go back to the original.
+ */
 export function CanvaEditButton({
   assetId,
   contentId,
-  className = "",
+  variant = "button",
+  onChanged,
+  className,
 }: {
   assetId?: string;
   contentId?: string;
+  variant?: CanvaPanelProps["variant"];
+  /** The post's picture changed (brought back, or the original restored). */
+  onChanged?: () => void;
   className?: string;
 }) {
   const workspaceId = useOptionalWorkspaceId();
   const role = useOptionalWorkspaceRole();
-  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<CanvaPanelProps["busy"]>(null);
   const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  const [mapping, setMapping] = useState<Awaited<ReturnType<typeof getCanvaEditState>> | null>(
-    null,
-  );
-  const [action, setAction] = useState<"edit" | "import" | "select" | null>(null);
-  const [slideLinks, setSlideLinks] = useState<Array<{ page: number; editUrl: string }>>([]);
+  const [state, setState] = useState<EditState | null>(null);
+  const [opened, setOpened] = useState<Opened | null>(null);
+
   const refresh = useCallback(async () => {
     if (!workspaceId || (!assetId && !contentId)) return;
     try {
-      setMapping(await getCanvaEditState({ data: { workspaceId, assetId, contentId } }));
+      setState(await getCanvaEditState({ data: { workspaceId, assetId, contentId } }));
     } catch {
-      /* The edit action remains usable if status cannot be loaded. */
+      /* Opening in Canva still works if the state can't be read. */
     }
   }, [workspaceId, assetId, contentId]);
+
   useEffect(() => {
+    setOpened(null);
     void refresh();
+  }, [refresh]);
+  // Coming back from the Canva tab is when the state is most likely stale.
+  useEffect(() => {
+    if (!open) return;
     window.addEventListener("focus", refresh);
     return () => window.removeEventListener("focus", refresh);
-  }, [refresh]);
+  }, [open, refresh]);
+
   if (!workspaceId || role === "viewer" || (!assetId && !contentId)) return null;
-  const open = async () => {
-    // Reserve the tab in the user gesture; browsers may block one opened after network work.
-    const editor = window.open("about:blank", "_blank");
-    if (!editor) {
-      setError("Allow popups for Mellox and try again.");
-      return;
-    }
-    editor.opener = null;
-    setBusy(true);
-    setAction("edit");
+
+  const fail = (cause: unknown, fallback: string) =>
+    setError(cause instanceof Error && cause.message ? cause.message : fallback);
+
+  const openInCanva = async () => {
+    // A design that already exists opens fast, so its tab is reserved inside
+    // the click (browsers block a tab opened after network work). A new one
+    // takes a while to make; the link appears in the panel when it is ready.
+    const tab = state?.mappingId ? window.open("about:blank", "_blank") : null;
+    if (tab) tab.opener = null;
+    setBusy("open");
     setError(null);
-    setNote(null);
     try {
-      const status = await getCanvaConnection({ data: { workspaceId } });
-      if (status.status !== "active") {
-        editor?.close();
+      const connection = await getCanvaConnection({ data: { workspaceId } });
+      if (connection.status !== "active") {
+        tab?.close();
         const returnPath = window.location.pathname + window.location.search;
         const { url } = await startCanvaConnect({ data: { workspaceId, returnPath } });
         window.location.assign(url);
         return;
       }
       const result = await createCanvaEdit({ data: { workspaceId, assetId, contentId } });
-      if (editor) editor.location.replace(result.editUrl);
-      else window.open(result.editUrl, "_blank", "noopener,noreferrer");
-      setSlideLinks(result.slideDesigns.slice(1));
+      if (tab && !tab.closed) tab.location.replace(result.editUrl);
+      setOpened(result);
       await refresh();
-      if (result.mode === "flat_image")
-        setNote(
-          result.slideCount > 1
-            ? "Opened slide 1 in Canva. Open the other slides below; their text may not be individually editable."
-            : "Opened in Canva. Original text inside the image may not be individually editable.",
-        );
-    } catch (e) {
-      editor?.close();
-      setError(e instanceof Error ? e.message : "Could not open Canva.");
+    } catch (cause) {
+      tab?.close();
+      fail(cause, "Could not open Canva.");
     } finally {
-      setBusy(false);
-      setAction(null);
+      setBusy(null);
     }
   };
+
+  const changed = () => {
+    emitAppEvent("assets:changed");
+    emitAppEvent("content:changed");
+    onChanged?.();
+  };
+
+  const bringBack = async () => {
+    if (!state?.mappingId) return;
+    setBusy("back");
+    setError(null);
+    try {
+      const result = await importCanvaVersion({
+        data: { workspaceId, mappingId: state.mappingId },
+      });
+      changed();
+      await refresh();
+      if (result.applied) {
+        toast.success("Your Canva edit is on the post", {
+          description: "The original is kept. You can switch back any time.",
+        });
+        setOpen(false);
+      } else {
+        toast.success("Saved to your Library", {
+          description: result.locked
+            ? "This post is already scheduled or published, so it wasn't changed."
+            : undefined,
+        });
+      }
+    } catch (cause) {
+      fail(cause, "Could not bring back your Canva edit.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const restoreOriginal = async () => {
+    if (!state?.mappingId) return;
+    setBusy("restore");
+    setError(null);
+    try {
+      await restoreCanvaOriginalAction({ data: { workspaceId, mappingId: state.mappingId } });
+      changed();
+      await refresh();
+      toast.success("Back to the original");
+    } catch (cause) {
+      fail(cause, "Could not switch back to the original.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
-    <span className="inline-flex flex-col items-start gap-1">
-      <button
-        type="button"
-        aria-label="Edit with Canva"
-        disabled={busy}
-        onClick={() => void open()}
-        className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 text-xs font-medium text-foreground hover:bg-surface-3 disabled:opacity-50 ${className}`}
-      >
-        <Pencil className="size-3.5" aria-hidden />
-        {busy && action === "edit" ? "Opening in Canva…" : "Edit with Canva"}
-      </button>
-      {slideLinks.length > 0 && (
-        <span className="flex flex-wrap gap-1">
-          {slideLinks.map((slide) => (
-            <a
-              key={slide.page}
-              href={slide.editUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Edit slide ${slide.page} in Canva`}
-              className="rounded-full border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground"
-            >
-              Slide {slide.page}
-            </a>
-          ))}
-        </span>
-      )}
-      {mapping?.mappingId && (
-        <button
-          type="button"
-          aria-label="Bring back from Canva"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            setAction("import");
-            setError(null);
-            setNote(null);
-            try {
-              const imported = await importCanvaVersion({
-                data: { workspaceId, mappingId: mapping.mappingId! },
-              });
-              await refresh();
-              emitAppEvent("assets:changed");
-              setNote(`Canva version ${imported.versionNumber} saved. Your original is kept.`);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : "Could not import Canva changes.");
-            } finally {
-              setBusy(false);
-              setAction(null);
-            }
-          }}
-          className="min-h-9 rounded-full border border-border bg-surface-2 px-3 text-xs font-medium text-foreground hover:bg-surface-3 disabled:opacity-50"
-        >
-          {busy && action === "import" ? "Bringing it back…" : "Bring back from Canva"}
-        </button>
-      )}
-      {mapping?.versionId && mapping.canSelect && (
-        <button
-          type="button"
-          aria-label={`Use Canva version ${mapping.versionNumber}`}
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            setAction("select");
-            setError(null);
-            setNote(null);
-            try {
-              await selectCanvaVersionAction({
-                data: { workspaceId, versionId: mapping.versionId! },
-              });
-              setNote(`This post now uses Canva version ${mapping.versionNumber}.`);
-              emitAppEvent("content:changed");
-              emitAppEvent("assets:changed");
-            } catch (e) {
-              setError(e instanceof Error ? e.message : "Could not select Canva version.");
-            } finally {
-              setBusy(false);
-              setAction(null);
-            }
-          }}
-          className="min-h-9 rounded-full border border-border bg-surface-2 px-3 text-xs font-medium text-foreground hover:bg-surface-3 disabled:opacity-50"
-        >
-          {busy && action === "select"
-            ? "Selecting…"
-            : `Use Canva version ${mapping.versionNumber}`}
-        </button>
-      )}
-      {note && (
-        <span role="status" className="max-w-64 text-xs text-muted-foreground">
-          {note}
-        </span>
-      )}
-      {error && (
-        <span role="alert" className="max-w-64 text-xs text-destructive">
-          {error}
-        </span>
-      )}
-    </span>
+    <CanvaPanel
+      variant={variant}
+      className={className}
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setError(null);
+      }}
+      mode={opened?.mode ?? state?.mode ?? null}
+      slideCount={opened?.slideCount ?? state?.slideCount ?? 0}
+      hasDesign={!!state?.mappingId}
+      usingCanva={!!state?.usingCanva}
+      opened={opened ? { editUrl: opened.editUrl, slides: opened.slideDesigns } : null}
+      busy={busy}
+      error={error}
+      onOpen={() => void openInCanva()}
+      onBringBack={() => void bringBack()}
+      onUseOriginal={() => void restoreOriginal()}
+    />
   );
 }

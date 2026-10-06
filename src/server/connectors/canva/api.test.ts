@@ -10,7 +10,6 @@ import {
   canvaRequest,
   createDesign,
   uploadImage,
-  hasMagicLayersCapability,
   imageToDesign,
   importPptx,
   exportPngPages,
@@ -62,8 +61,8 @@ describe("Canva connector boundary", () => {
     expect(hashState("state")).toHaveLength(64);
   });
 
-  it("keeps Preview Magic Layers disabled unless explicitly enabled", () => {
-    expect(canvaMagicLayersEnabled(undefined)).toBe(false);
+  it("makes pictures editable unless explicitly turned off", () => {
+    expect(canvaMagicLayersEnabled(undefined)).toBe(true);
     expect(canvaMagicLayersEnabled("false")).toBe(false);
     expect(canvaMagicLayersEnabled("true")).toBe(true);
   });
@@ -187,10 +186,8 @@ describe("Canva connector boundary", () => {
     });
   });
 
-  it("detects Magic Layers capability and creates an editable design from a Canva asset", async () => {
+  it("creates an editable design from a Canva asset", async () => {
     const fetcher = vi.mocked(fetch);
-    fetcher.mockResolvedValueOnce(Response.json({ capabilities: ["image_to_design_imports"] }));
-    expect(await hasMagicLayersCapability("token")).toBe(true);
     fetcher.mockResolvedValueOnce(
       Response.json({
         job: {
@@ -203,7 +200,7 @@ describe("Canva connector boundary", () => {
       }),
     );
     await expect(imageToDesign("token", "A1", "Title")).resolves.toMatchObject({ id: "D1" });
-    const call = fetcher.mock.calls[1];
+    const call = fetcher.mock.calls[0];
     expect(call[0]).toBe("https://api.canva.com/rest/v1/image-to-design-imports");
     expect(JSON.parse((call[1] as RequestInit).body as string).image).toEqual({ asset_id: "A1" });
   });
@@ -235,10 +232,8 @@ describe("Canva connector boundary", () => {
     }
   });
 
-  it("returns false for an unavailable capability and normalizes AI quota failure", async () => {
+  it("normalizes AI quota failure", async () => {
     const fetcher = vi.mocked(fetch);
-    fetcher.mockResolvedValueOnce(Response.json({ capabilities: [] }));
-    expect(await hasMagicLayersCapability("token")).toBe(false);
     fetcher.mockResolvedValueOnce(
       Response.json({
         job: { id: "job1", status: "failed", error: { code: "credit_quota_exceeded" } },
@@ -278,7 +273,6 @@ describe("Canva connector boundary", () => {
 
   it("falls back after a Magic Layers quota response", async () => {
     const fetcher = vi.mocked(fetch);
-    fetcher.mockResolvedValueOnce(Response.json({ capabilities: ["image_to_design_imports"] }));
     fetcher.mockResolvedValueOnce(
       Response.json({ code: "credit_quota_exceeded" }, { status: 429 }),
     );
@@ -304,7 +298,6 @@ describe("Canva connector boundary", () => {
     );
     expect(result).toMatchObject({ id: "D2", mode: "flat_image" });
     expect(fetcher.mock.calls.map((call) => call[0])).toEqual([
-      "https://api.canva.com/rest/v1/users/me/capabilities",
       "https://api.canva.com/rest/v1/image-to-design-imports",
       "https://api.canva.com/rest/v1/designs",
     ]);
@@ -312,7 +305,6 @@ describe("Canva connector boundary", () => {
 
   it("records Magic Layers mode when conversion succeeds", async () => {
     const fetcher = vi.mocked(fetch);
-    fetcher.mockResolvedValueOnce(Response.json({ capabilities: ["image_to_design_imports"] }));
     fetcher.mockResolvedValueOnce(
       Response.json({
         job: {
@@ -336,7 +328,7 @@ describe("Canva connector boundary", () => {
         true,
       ),
     ).resolves.toMatchObject({ id: "D3", mode: "magic_layers" });
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("imports one ordered multi-page PPTX design", async () => {

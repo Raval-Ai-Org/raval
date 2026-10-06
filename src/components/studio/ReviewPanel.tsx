@@ -50,6 +50,7 @@ import {
   generate,
   openComposer,
   patchJobOutput,
+  refreshSessionJob,
   updateSession,
   type StudioSession,
 } from "@/lib/studio/session-store";
@@ -675,6 +676,18 @@ export function ReviewPanel({
   })();
 
   const hasMedia = !!media && media.status !== "failed";
+  // One Canva control per post: a carousel opens all its slides, anything
+  // else its one picture.
+  const canvaSource =
+    fixtureRows || dirty
+      ? null
+      : session.type === "carousel"
+        ? rows[0]?.meta?.asset_storage_paths
+          ? { contentId: rows[0].id }
+          : null
+        : media?.status === "ready" && media.kind === "image" && media.assetId
+          ? { assetId: media.assetId, contentId: rows[0]?.id }
+          : null;
   const mediaReady = media?.status === "ready" && !!media.url;
   const firstScheduled = rows.find((r) => r.scheduled_at)?.scheduled_at;
   const words = draft.article?.markdown.split(/\s+/).filter(Boolean).length ?? 0;
@@ -1145,9 +1158,6 @@ export function ReviewPanel({
                       filename={`mellox-${media!.kind}-${new Date().toISOString().slice(0, 10)}`}
                       compact
                     />
-                    {media?.kind === "image" && media.assetId && !fixtureRows ? (
-                      <CanvaEditButton assetId={media.assetId} />
-                    ) : null}
                     <button
                       type="button"
                       className={TOOL_ICON}
@@ -1159,11 +1169,12 @@ export function ReviewPanel({
                     </button>
                   </>
                 ) : null}
-                {session.type === "carousel" &&
-                !dirty &&
-                rows[0]?.meta?.asset_storage_paths &&
-                !fixtureRows ? (
-                  <CanvaEditButton contentId={rows[0].id} />
+                {canvaSource ? (
+                  <CanvaEditButton
+                    variant="tool"
+                    {...canvaSource}
+                    onChanged={() => void refreshSessionJob(session.id)}
+                  />
                 ) : null}
               </motion.div>
             ) : null}

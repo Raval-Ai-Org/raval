@@ -11,10 +11,11 @@ export const CANVA_SCOPES = [
 ] as const;
 export const CANVA_CALLBACK = "/api/integrations/canva/callback";
 
+/** Turning a picture into editable text and elements. On unless set to `false`. */
 export function canvaMagicLayersEnabled(
   value = process.env.FEATURE_FLAG_CANVA_MAGIC_LAYERS_ENABLED,
 ) {
-  return value === "true";
+  return value !== "false";
 }
 
 export function canvaConfig() {

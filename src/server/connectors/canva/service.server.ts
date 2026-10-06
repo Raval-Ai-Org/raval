@@ -14,6 +14,7 @@ import {
   canvaConfig,
   canvaConfigured,
   canvaConfigurationMessage,
+  canvaMagicLayersEnabled,
   CANVA_SCOPES,
 } from "./config.server";
 import { consumeCanvaState } from "./oauth.server";
@@ -21,7 +22,6 @@ import {
   tokenGrant,
   revokeCanvaToken,
   uploadImage,
-  createDesign,
   getDesignEditUrl,
   createSingleImageDesign,
   importPptx,
@@ -171,7 +171,7 @@ export async function completeCanvaOAuth(args: {
   return { workspaceId: txn.workspaceId, returnPath: txn.returnPath };
 }
 
-async function freshToken(workspaceId: string) {
+export async function canvaAccessToken(workspaceId: string) {
   const connected = await connection(workspaceId);
   if (!connected || connected.status !== "active")
     throw new HttpError(409, "Connect Canva to edit this image.");
@@ -266,6 +266,37 @@ export async function disconnectCanva(workspaceId: string, userId: string) {
   });
 }
 
+type Mode = "magic_layers" | "flat_image" | "design_import";
+type Page = { id: string; storage_path: string };
+type Mapping = {
+  id: string;
+  canva_design_id: string;
+  mode: Mode;
+  content_item_id: string | null;
+  asset_id: string | null;
+  source_key: string;
+};
+const MAPPING_COLS = "id, canva_design_id, mode, content_item_id, asset_id, source_key";
+/** Bumped when designs are built differently, so an older flat design is not reused. */
+const SOURCE_VERSION = "editable-2";
+const LOCKED = ["scheduled", "publishing", "published", "partial_failed"];
+
+/** Canva limits each person's requests per minute, so work goes a few at a time. */
+async function inBatches<T, R>(
+  items: T[],
+  size: number,
+  run: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += size)
+    out.push(...(await Promise.all(items.slice(i, i + size).map((item, j) => run(item, i + j)))));
+  return out;
+}
+
+function record(value: unknown): Row {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Row) : {};
+}
+
 async function sourceImages(workspaceId: string, source: { assetId?: string; contentId?: string }) {
   if (source.assetId) {
     const { data } = await db
@@ -277,23 +308,33 @@ async function sourceImages(workspaceId: string, source: { assetId?: string; con
       .maybeSingle();
     if (!data || data.asset_type !== "image" || data.status !== "ready" || !data.storage_path)
       throw new HttpError(404, "Image is unavailable.");
+    let contentId = (data.content_item_id as string | null) ?? null;
+    if (source.contentId) {
+      const { data: item } = await db
+        .from("content_items")
+        .select("id")
+        .eq("id", source.contentId)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+      if (item) contentId = item.id as string;
+    }
     return {
       ids: [data.id as string],
       paths: [data.storage_path as string],
       title: data.filename as string,
-      contentId: (data.content_item_id as string | null) ?? null,
+      contentId,
       meta: {} as Row,
     };
   }
   if (!source.contentId) throw new HttpError(400, "An asset or content item is required.");
   const { data: item } = await db
     .from("content_items")
-    .select("id, title, meta, media_type, kind, workspace_id")
+    .select("id, title, meta, kind, workspace_id")
     .eq("id", source.contentId)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (!item) throw new HttpError(404, "Content is unavailable.");
-  const meta = (item.meta && typeof item.meta === "object" ? item.meta : {}) as Row;
+  const meta = record(item.meta);
   let paths: unknown[];
   if (item.kind === "carousel" || meta.studio_type === "carousel") {
     const { ensureCarouselMedia } = await import("@/server/studio/carousel-assets.server");
@@ -305,11 +346,15 @@ async function sourceImages(workspaceId: string, source: { assetId?: string; con
     });
     if (!current) throw new HttpError(404, "Carousel slides are unavailable.");
     paths = current;
+  } else if (Array.isArray(meta.asset_storage_paths) && meta.asset_storage_paths.length > 1) {
+    // A Story: every frame, in order.
+    paths = meta.asset_storage_paths;
   } else {
     paths = [meta.asset_storage_path];
   }
   if (
     !paths.length ||
+    paths.length > 30 ||
     paths.some((p) => typeof p !== "string" || !isWorkspaceStoragePath(p, workspaceId))
   )
     throw new HttpError(404, "Stored slide images are unavailable.");
@@ -331,6 +376,92 @@ async function sourceImages(workspaceId: string, source: { assetId?: string; con
   };
 }
 
+/**
+ * The Canva design an image belongs to: the one it was brought back from, or
+ * the newest one made from it. Looking it up by the image (not by the post)
+ * means a post that got a new picture never offers the old picture's design.
+ */
+async function mappingForAsset(workspaceId: string, assetId: string) {
+  const { data: page } = await db
+    .from("canva_import_pages")
+    .select("version_id")
+    .eq("workspace_id", workspaceId)
+    .eq("asset_id", assetId)
+    .limit(1)
+    .maybeSingle();
+  if (page) {
+    const { data: version } = await db
+      .from("canva_import_versions")
+      .select("id, mapping_id, version_number")
+      .eq("id", page.version_id)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (version) {
+      const { data: mapping } = await db
+        .from("canva_design_mappings")
+        .select(MAPPING_COLS)
+        .eq("id", version.mapping_id)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+      if (mapping)
+        return {
+          mapping: mapping as Mapping,
+          version: { id: version.id as string, number: version.version_number as number },
+        };
+    }
+  }
+  const { data: pages } = await db
+    .from("canva_design_source_pages")
+    .select("mapping_id")
+    .eq("workspace_id", workspaceId)
+    .eq("source_asset_id", assetId);
+  if (!pages?.length) return null;
+  const { data: mapping } = await db
+    .from("canva_design_mappings")
+    .select(MAPPING_COLS)
+    .eq("workspace_id", workspaceId)
+    .in(
+      "id",
+      pages.map((p) => p.mapping_id),
+    )
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return mapping ? { mapping: mapping as Mapping, version: null } : null;
+}
+
+async function slideDesignRows(workspaceId: string, mappingId: string) {
+  const { data } = await db
+    .from("canva_fallback_slide_designs")
+    .select("page_number, canva_design_id")
+    .eq("mapping_id", mappingId)
+    .eq("workspace_id", workspaceId)
+    .order("page_number", { ascending: true });
+  return (data ?? []) as Array<{ page_number: number; canva_design_id: string }>;
+}
+
+async function openExisting(workspaceId: string, token: string, mapping: Mapping, pages: number) {
+  const editUrl = await getDesignEditUrl(token, mapping.canva_design_id);
+  const rows = await slideDesignRows(workspaceId, mapping.id);
+  const slideDesigns = await inBatches(rows, 3, async (row) => ({
+    page: row.page_number,
+    editUrl: row.page_number === 1 ? editUrl : await getDesignEditUrl(token, row.canva_design_id),
+  }));
+  await db
+    .from("canva_design_mappings")
+    .update({ last_opened_at: new Date().toISOString() })
+    .eq("id", mapping.id)
+    .eq("workspace_id", workspaceId);
+  return {
+    mappingId: mapping.id,
+    editUrl,
+    designId: mapping.canva_design_id,
+    slideCount: pages,
+    mode: mapping.mode,
+    slideDesigns,
+  };
+}
+
 async function createOrOpenCanvaEdit(args: {
   workspaceId: string;
   userId: string;
@@ -338,53 +469,30 @@ async function createOrOpenCanvaEdit(args: {
   contentId?: string;
 }) {
   const source = await sourceImages(args.workspaceId, args);
-  const token = await freshToken(args.workspaceId);
+  const token = await canvaAccessToken(args.workspaceId);
   const grant = await connection(args.workspaceId);
   if (!grant) throw new HttpError(409, "Reconnect Canva to continue.");
   const sourceKey = createHash("sha256")
-    .update(JSON.stringify([args.assetId, args.contentId, source.paths, grant.updated_at]))
+    .update(JSON.stringify([SOURCE_VERSION, source.paths, grant.updated_at]))
     .digest("hex");
-  const { data: existing } = await db
-    .from("canva_design_mappings")
-    .select("id, canva_design_id, mode")
-    .eq("workspace_id", args.workspaceId)
-    .eq("source_key", sourceKey)
-    .maybeSingle();
-  if (existing) {
-    const editUrl = await getDesignEditUrl(token, existing.canva_design_id);
-    const { data: fallbackRows } = await db
-      .from("canva_fallback_slide_designs")
-      .select("page_number, canva_design_id")
-      .eq("mapping_id", existing.id)
-      .eq("workspace_id", args.workspaceId)
-      .order("page_number", { ascending: true });
-    const slideDesigns = fallbackRows?.length
-      ? await Promise.all(
-          fallbackRows.map(async (row) => ({
-            page: row.page_number as number,
-            editUrl:
-              row.page_number === 1 ? editUrl : await getDesignEditUrl(token, row.canva_design_id),
-          })),
-        )
-      : [];
-    await db
-      .from("canva_design_mappings")
-      .update({ last_opened_at: new Date().toISOString() })
-      .eq("id", existing.id);
-    return {
-      editUrl,
-      designId: existing.canva_design_id,
-      slideCount: source.paths.length,
-      multiPage: existing.mode === "design_import",
-      mode: existing.mode as "magic_layers" | "flat_image" | "design_import",
-      slideDesigns,
-    };
+  const found = await mappingForAsset(args.workspaceId, source.ids[0]);
+  // An image brought back from Canva reopens the design it came from.
+  if (found && (found.version || found.mapping.source_key === sourceKey)) {
+    try {
+      return await openExisting(args.workspaceId, token, found.mapping, source.paths.length);
+    } catch (error) {
+      if (!(error instanceof HttpError && error.status === 404)) throw error;
+      // Deleted in Canva: set it aside and make a new design below.
+      await db
+        .from("canva_design_mappings")
+        .update({ source_key: `${found.mapping.source_key}:gone:${found.mapping.id}` })
+        .eq("id", found.mapping.id)
+        .eq("workspace_id", args.workspaceId);
+    }
   }
-  const uploaded: string[] = [];
   let dimensions: { width: number; height: number } | null = null;
-  for (const [i, path] of source.paths.entries()) {
-    if (!isWorkspaceStoragePath(path, args.workspaceId))
-      throw new HttpError(403, "Invalid asset path.");
+  const files: Buffer[] = [];
+  for (const path of source.paths) {
     const { data, error } = await db.storage.from(ASSET_BUCKET).download(path);
     if (error || !data) throw new HttpError(404, "A stored image is unavailable.");
     const bytes = Buffer.from(await data.arrayBuffer());
@@ -401,12 +509,14 @@ async function createOrOpenCanvaEdit(args: {
       info.width * info.height > 25_000_000
     )
       throw new HttpError(422, "Image dimensions are not supported by Canva.");
-    if (dimensions && (dimensions.width !== info.width || dimensions.height !== info.height))
-      throw new HttpError(422, "Carousel slides must have matching dimensions.");
-    dimensions = { width: info.width, height: info.height };
-    uploaded.push(await uploadImage(token, bytes, `Mellox slide ${i + 1}`));
+    dimensions ??= { width: info.width, height: info.height };
+    files.push(bytes);
   }
   if (!dimensions) throw new HttpError(404, "No images to edit.");
+  const size = dimensions;
+  const uploaded = await inBatches(files, 3, (bytes, i) =>
+    uploadImage(token, bytes, `Mellox slide ${i + 1}`),
+  );
   const { data: workspace } = await db
     .from("workspaces")
     .select("name")
@@ -414,50 +524,63 @@ async function createOrOpenCanvaEdit(args: {
     .maybeSingle();
   const title = `Mellox - ${workspace?.name ?? "Brand"} - ${source.title}`;
   let design: { id: string; editUrl: string } | undefined;
-  let mode: "magic_layers" | "flat_image" | "design_import" = "flat_image";
-  let multiPage = false;
+  let mode: Mode = "flat_image";
   let slideDesigns: Array<{ page: number; editUrl: string; id: string }> = [];
-  if (source.paths.length > 1) {
-    const stored = source.meta.carousel as Record<string, unknown> | undefined;
-    const slides = source.meta.slides;
-    if (stored && Array.isArray(slides)) {
-      try {
-        const coverPath = stored.cover_path;
-        let coverArt: Buffer | null = null;
-        if (typeof coverPath === "string" && isWorkspaceStoragePath(coverPath, args.workspaceId)) {
-          const { data: cover } = await db.storage.from(ASSET_BUCKET).download(coverPath);
-          if (cover) coverArt = Buffer.from(await cover.arrayBuffer());
-        }
-        const pptx = await buildCarouselPptx(slides, stored as never, coverArt);
-        const imported = await importPptx(token, pptx, title);
-        if (imported.pageCount != null && imported.pageCount !== source.paths.length)
-          throw new HttpError(502, "Canva imported an unexpected number of slides.");
-        design = imported;
-        mode = "design_import";
-        multiPage = true;
-      } catch {
-        // The public Create Design flow remains available if presentation import fails.
+  const stored = record(source.meta.carousel);
+  const slides = source.meta.slides;
+  // Each picture is converted by Canva into text and elements, so what opens
+  // there looks like what was approved. Only when that is unavailable is a
+  // carousel Mellox drew itself rebuilt from its words as one presentation:
+  // editable, but a plainer layout.
+  const rebuild = async () => {
+    if (
+      source.paths.length < 2 ||
+      stored.render_mode === "model" ||
+      !stored.theme ||
+      !Array.isArray(slides)
+    )
+      return null;
+    try {
+      const coverPath = stored.cover_path;
+      let coverArt: Buffer | null = null;
+      if (typeof coverPath === "string" && isWorkspaceStoragePath(coverPath, args.workspaceId)) {
+        const { data: cover } = await db.storage.from(ASSET_BUCKET).download(coverPath);
+        if (cover) coverArt = Buffer.from(await cover.arrayBuffer());
       }
+      const pptx = await buildCarouselPptx(slides, stored as never, coverArt);
+      const imported = await importPptx(token, pptx, title);
+      return imported.pageCount === source.paths.length ? imported : null;
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 409) throw error;
+      return null;
     }
-  } else {
-    const single = await createSingleImageDesign(token, {
-      assetId: uploaded[0],
-      ...dimensions,
-      title,
-    });
-    design = single;
-    mode = single.mode;
+  };
+  const convert = canvaMagicLayersEnabled();
+  if (!convert) {
+    design = (await rebuild()) ?? undefined;
+    if (design) mode = "design_import";
   }
-  design ??= await createDesign(token, { assetId: uploaded[0], ...dimensions, title });
-  if (source.paths.length > 1 && !multiPage) {
-    slideDesigns = [{ page: 1, editUrl: design.editUrl, id: design.id }];
-    for (let index = 1; index < uploaded.length; index++) {
-      const slide = await createDesign(token, {
-        assetId: uploaded[index],
-        ...dimensions,
-        title: `${title} - slide ${index + 1}`,
-      });
-      slideDesigns.push({ page: index + 1, editUrl: slide.editUrl, id: slide.id });
+  if (!design) {
+    const pages = await inBatches(uploaded, 3, (assetId, i) =>
+      createSingleImageDesign(
+        token,
+        { assetId, ...size, title: uploaded.length > 1 ? `${title} - slide ${i + 1}` : title },
+        convert,
+      ),
+    );
+    const rebuilt = pages.some((page) => page.mode === "magic_layers") ? null : await rebuild();
+    if (rebuilt) {
+      design = rebuilt;
+      mode = "design_import";
+    } else {
+      design = pages[0];
+      if (pages.some((page) => page.mode === "magic_layers")) mode = "magic_layers";
+      if (pages.length > 1)
+        slideDesigns = pages.map((page, i) => ({
+          page: i + 1,
+          editUrl: page.editUrl,
+          id: page.id,
+        }));
     }
   }
   const { data: mapping, error: mappingError } = await db
@@ -503,13 +626,13 @@ async function createOrOpenCanvaEdit(args: {
     userId: args.userId,
     action: "connector.canva.design_created",
     entity: "connector",
-    payload: { designId: design.id, slideCount: uploaded.length },
+    payload: { designId: design.id, slideCount: uploaded.length, mode },
   });
   return {
+    mappingId: mapping.id as string,
     editUrl: design.editUrl,
     designId: design.id,
     slideCount: uploaded.length,
-    multiPage,
     mode,
     slideDesigns: slideDesigns.map(({ page, editUrl }) => ({ page, editUrl })),
   };
@@ -536,68 +659,226 @@ export async function editInCanva(args: {
   }
 }
 
+/** The image a post or asset shows right now. */
+async function currentAssetId(
+  workspaceId: string,
+  source: { assetId?: string; contentId?: string },
+): Promise<string | null> {
+  if (source.assetId) return source.assetId;
+  if (!source.contentId) return null;
+  const { data: item } = await db
+    .from("content_items")
+    .select("meta")
+    .eq("id", source.contentId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  const meta = record(item?.meta);
+  if (typeof meta.asset_id === "string") return meta.asset_id;
+  if (typeof meta.asset_storage_path !== "string") return null;
+  const { data: asset } = await db
+    .from("assets")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("storage_path", meta.asset_storage_path)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
+  return (asset?.id as string | undefined) ?? null;
+}
+
 export async function canvaEditState(
   workspaceId: string,
   source: { assetId?: string; contentId?: string },
 ) {
-  const query = db
-    .from("canva_design_mappings")
-    .select("id, mode, content_item_id, canva_design_id")
-    .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: false })
-    .limit(1);
-  const { data: mapping } = await (
-    source.contentId
-      ? query.eq("content_item_id", source.contentId)
-      : query.eq("asset_id", source.assetId ?? "")
-  ).maybeSingle();
-  if (!mapping) return { mappingId: null, mode: null, versionId: null, versionNumber: null };
-  const { data: version } = await db
-    .from("canva_import_versions")
-    .select("id, version_number")
-    .eq("mapping_id", mapping.id)
-    .eq("workspace_id", workspaceId)
-    .order("version_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const assetId = await currentAssetId(workspaceId, source);
+  const found = assetId ? await mappingForAsset(workspaceId, assetId) : null;
+  if (!found)
+    return {
+      mappingId: null,
+      mode: null,
+      slideCount: 0,
+      usingCanva: false,
+      versionNumber: null,
+    };
+  const slides = await slideDesignRows(workspaceId, found.mapping.id);
   return {
-    mappingId: mapping.id as string,
-    mode: mapping.mode as string,
-    versionId: (version?.id as string | undefined) ?? null,
-    versionNumber: (version?.version_number as number | undefined) ?? null,
-    canSelect: !!mapping.content_item_id,
+    mappingId: found.mapping.id as string | null,
+    mode: found.mapping.mode as Mode | null,
+    slideCount: slides.length || 1,
+    /** The post is showing an edit brought back from Canva. */
+    usingCanva: !!found.version,
+    versionNumber: found.version?.number ?? null,
   };
 }
 
+/**
+ * Point every post that shows this design's picture at `pages` (a brought-back
+ * edit, or the originals), and the Studio job with it so the preview follows.
+ * Scheduled and published posts are left alone; an approved one goes back to
+ * draft, because what was approved is no longer what would go out.
+ */
+async function pointPostsAt(args: {
+  workspaceId: string;
+  mapping: Pick<Mapping, "id" | "content_item_id">;
+  pages: Page[];
+  versionId: string | null;
+}) {
+  const { workspaceId, mapping, pages } = args;
+  const { data: sources } = await db
+    .from("canva_design_source_pages")
+    .select("page_number, source_asset_id")
+    .eq("mapping_id", mapping.id)
+    .eq("workspace_id", workspaceId);
+  const { data: versions } = await db
+    .from("canva_import_versions")
+    .select("id")
+    .eq("mapping_id", mapping.id)
+    .eq("workspace_id", workspaceId);
+  const { data: imported } = versions?.length
+    ? await db
+        .from("canva_import_pages")
+        .select("page_number, asset_id")
+        .eq("workspace_id", workspaceId)
+        .in(
+          "version_id",
+          versions.map((v) => v.id),
+        )
+    : { data: [] };
+  // Every image that has ever stood for page n of this design.
+  const pageOf = new Map<string, number>();
+  for (const row of sources ?? [])
+    if (row.source_asset_id) pageOf.set(row.source_asset_id, row.page_number);
+  for (const row of imported ?? []) pageOf.set(row.asset_id, row.page_number);
+  const ids = [...pageOf.keys()];
+  if (!ids.length) return { applied: 0, locked: 0 };
+  const { data: known } = await db
+    .from("assets")
+    .select("id, storage_path")
+    .eq("workspace_id", workspaceId)
+    .in("id", ids);
+  const byId = new Map<string, Page>();
+  const byPath = new Map<string, Page>();
+  for (const [id, page] of pageOf) {
+    const target = pages[page - 1];
+    if (!target) continue;
+    byId.set(id, target);
+    const path = known?.find((a) => a.id === id)?.storage_path;
+    if (typeof path === "string") byPath.set(path, target);
+  }
+
+  type PostRow = { id: string; status: string; meta: unknown };
+  const { data: byAsset } = await db
+    .from("content_items")
+    .select("id, status, meta")
+    .eq("workspace_id", workspaceId)
+    .in("meta->>asset_id", ids);
+  const rows = [...((byAsset ?? []) as PostRow[])];
+  if (mapping.content_item_id && !rows.some((r) => r.id === mapping.content_item_id)) {
+    const { data: own } = await db
+      .from("content_items")
+      .select("id, status, meta")
+      .eq("id", mapping.content_item_id)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (own) rows.push(own as PostRow);
+  }
+
+  let applied = 0;
+  let locked = 0;
+  const changed: string[] = [];
+  for (const row of rows) {
+    const meta = record(row.meta);
+    const first =
+      (typeof meta.asset_id === "string" ? byId.get(meta.asset_id) : undefined) ??
+      (typeof meta.asset_storage_path === "string"
+        ? byPath.get(meta.asset_storage_path)
+        : undefined);
+    // The post has a different picture now; this design is not about it.
+    if (!first) continue;
+    if (LOCKED.includes(row.status)) {
+      locked++;
+      continue;
+    }
+    const patch: Record<string, unknown> = {
+      asset_id: first.id,
+      asset_storage_path: first.storage_path,
+      asset_status: "ready",
+      media_type: "image",
+      canva_selected_version_id: args.versionId,
+    };
+    if (Array.isArray(meta.asset_storage_paths)) {
+      const next = meta.asset_storage_paths.map((p) =>
+        typeof p === "string" ? byPath.get(p)?.storage_path : undefined,
+      );
+      if (next.some((p) => !p)) continue;
+      patch.asset_storage_paths = next;
+    }
+    const { error } = await db
+      .from("content_items")
+      .update({
+        meta: mergeMeta(meta, patch),
+        media_url: null,
+        status: ["approved", "pending"].includes(row.status) ? "draft" : row.status,
+      })
+      .eq("id", row.id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new HttpError(500, "Could not update the post with the Canva edit.");
+    applied++;
+    changed.push(row.id);
+  }
+
+  if (changed.length) {
+    const { data: jobs } = await db
+      .from("studio_jobs")
+      .select("id, output")
+      .eq("workspace_id", workspaceId)
+      .overlaps("content_item_ids", changed);
+    for (const job of (jobs ?? []) as Array<{ id: string; output: unknown }>) {
+      const output = record(job.output);
+      if (!Array.isArray(output.media)) continue;
+      let moved = false;
+      const media = (output.media as Row[]).map((entry) => {
+        const target =
+          (typeof entry.assetId === "string" ? byId.get(entry.assetId) : undefined) ??
+          (typeof entry.storagePath === "string" ? byPath.get(entry.storagePath) : undefined);
+        if (!target || target.id === entry.assetId) return entry;
+        moved = true;
+        return { ...entry, url: undefined, assetId: target.id, storagePath: target.storage_path };
+      });
+      if (moved)
+        await db
+          .from("studio_jobs")
+          .update({ output: { ...output, media } })
+          .eq("id", job.id)
+          .eq("workspace_id", workspaceId);
+    }
+  }
+  return { applied, locked };
+}
+
+async function loadMapping(workspaceId: string, mappingId: string) {
+  const { data } = await db
+    .from("canva_design_mappings")
+    .select(MAPPING_COLS)
+    .eq("id", mappingId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (!data) throw new HttpError(404, "Canva design is unavailable.");
+  return data as Mapping;
+}
+
+/**
+ * Bring the Canva edit back: export it, keep it as a new version beside the
+ * original, and make the post use it. One step for the person.
+ */
 export async function importCanvaChanges(args: {
   workspaceId: string;
   userId: string;
   mappingId: string;
 }) {
-  const { data: mapping } = await db
-    .from("canva_design_mappings")
-    .select("id, canva_design_id, content_item_id, asset_id")
-    .eq("id", args.mappingId)
-    .eq("workspace_id", args.workspaceId)
-    .maybeSingle();
-  if (!mapping) throw new HttpError(404, "Canva design is unavailable.");
-  const token = await freshToken(args.workspaceId);
-  const { data: fallback } = await db
-    .from("canva_fallback_slide_designs")
-    .select("page_number, canva_design_id")
-    .eq("mapping_id", mapping.id)
-    .eq("workspace_id", args.workspaceId)
-    .order("page_number", { ascending: true });
-  const urls = fallback?.length
-    ? await Promise.all(
-        fallback.map(async (slide) => {
-          const pages = await exportPngPages(token, slide.canva_design_id);
-          if (pages.length !== 1)
-            throw new HttpError(422, "A Canva slide export has an unexpected page count.");
-          return pages[0];
-        }),
-      )
-    : await exportPngPages(token, mapping.canva_design_id);
+  const mapping = await loadMapping(args.workspaceId, args.mappingId);
+  const token = await canvaAccessToken(args.workspaceId);
+  const slides = await slideDesignRows(args.workspaceId, mapping.id);
   const { data: sources } = await db
     .from("canva_design_source_pages")
     .select("page_number, source_asset_id")
@@ -605,14 +886,27 @@ export async function importCanvaChanges(args: {
     .eq("workspace_id", args.workspaceId)
     .order("page_number", { ascending: true });
   const expected = sources?.length || 1;
+  let urls: string[];
+  if (slides.length) {
+    // One design per slide: the first page of each is the slide.
+    urls = await inBatches(slides, 3, async (slide) => {
+      const pages = await exportPngPages(token, slide.canva_design_id, { pages: [1] });
+      if (pages.length !== 1)
+        throw new HttpError(422, `Canva could not export slide ${slide.page_number}.`);
+      return pages[0];
+    });
+  } else if (expected === 1) {
+    urls = await exportPngPages(token, mapping.canva_design_id, { pages: [1] });
+  } else {
+    urls = await exportPngPages(token, mapping.canva_design_id);
+  }
   if (urls.length !== expected || urls.length > 30)
     throw new HttpError(
       422,
-      "Canva returned an unexpected number of pages. The original remains unchanged.",
+      `The Canva design has ${urls.length} pages and this post has ${expected}. Make them match in Canva, then bring it back again.`,
     );
   // Validate and download the entire export before persisting any version rows.
-  const pages: Buffer[] = [];
-  for (const url of urls) {
+  const pages = await inBatches(urls, 3, async (url) => {
     if (!validCanvaDownloadUrl(url))
       throw new HttpError(502, "Canva returned an unsafe download link.");
     let bytes: Buffer;
@@ -640,8 +934,25 @@ export async function importCanvaChanges(args: {
       info.width * info.height > 25_000_000
     )
       throw new HttpError(422, "Canva returned an invalid image.");
-    pages.push(bytes);
-  }
+    // Social networks take JPEG everywhere; a see-through design stays PNG.
+    const opaque = await sharp(bytes)
+      .stats()
+      .then((stats) => stats.isOpaque)
+      .catch(() => false);
+    // An imported presentation is 960 wide in Canva; slides go out at 1080.
+    // (Canva refuses to export larger on a free plan, so it is done here.)
+    const sized =
+      mapping.mode === "design_import" && info.width < 1080
+        ? await sharp(bytes).resize({ width: 1080 }).png().toBuffer()
+        : bytes;
+    return opaque
+      ? {
+          bytes: await sharp(sized).jpeg({ quality: 92, mozjpeg: true }).toBuffer(),
+          mime: "image/jpeg",
+          ext: "jpg",
+        }
+      : { bytes: sized, mime: "image/png", ext: "png" };
+  });
   const { data: last } = await db
     .from("canva_import_versions")
     .select("version_number")
@@ -651,22 +962,22 @@ export async function importCanvaChanges(args: {
     .maybeSingle();
   const nextNumber = (last?.version_number ?? 0) + 1;
   const versionId = crypto.randomUUID();
-  const saved: Array<{ id: string; storage_path: string }> = [];
+  const saved: Page[] = [];
   try {
-    for (const [index, bytes] of pages.entries()) {
+    for (const [index, page] of pages.entries()) {
       const parentAssetId =
         sources?.[index]?.source_asset_id ?? (index === 0 ? mapping.asset_id : null);
       const result = await persistAsset({
         workspaceId: args.workspaceId,
         idempotencyKey: `canva:${versionId}:${index + 1}`,
-        dataUrl: `data:image/png;base64,${bytes.toString("base64")}`,
+        dataUrl: `data:${page.mime};base64,${page.bytes.toString("base64")}`,
         assetType: "image",
         provider: "canva",
         parentAssetId,
-        filename: `canva-version-${nextNumber}-page-${index + 1}.png`,
+        filename: `canva-version-${nextNumber}-page-${index + 1}.${page.ext}`,
         metadata: {
           source: "canva",
-          canva_design_id: mapping.canva_design_id,
+          canva_design_id: slides[index]?.canva_design_id ?? mapping.canva_design_id,
           parent_asset_id: parentAssetId,
           parent_content_id: mapping.content_item_id,
           imported_at: new Date().toISOString(),
@@ -718,24 +1029,56 @@ export async function importCanvaChanges(args: {
     }
     throw error;
   }
+  const { applied, locked } = await pointPostsAt({
+    workspaceId: args.workspaceId,
+    mapping,
+    pages: saved,
+    versionId,
+  });
+  const now = new Date().toISOString();
   await db
     .from("canva_design_mappings")
-    .update({ last_imported_at: new Date().toISOString() })
+    .update({ last_imported_at: now })
     .eq("id", mapping.id)
     .eq("workspace_id", args.workspaceId);
+  if (applied)
+    await db
+      .from("canva_import_versions")
+      .update({ selected_at: now })
+      .eq("id", versionId)
+      .eq("workspace_id", args.workspaceId);
   await recordAudit({
     workspaceId: args.workspaceId,
     userId: args.userId,
     action: "connector.canva.version_imported",
     entity: "connector",
-    payload: { mappingId: mapping.id, versionId, pageCount: saved.length },
+    payload: { mappingId: mapping.id, versionId, pageCount: saved.length, applied },
   });
-  return {
-    versionId,
-    versionNumber: nextNumber,
-    pageCount: saved.length,
-    canSelect: !!mapping.content_item_id,
-  };
+  return { versionId, versionNumber: nextNumber, pageCount: saved.length, applied, locked };
+}
+
+async function readyPages(workspaceId: string, ids: Array<string | null>): Promise<Page[]> {
+  const wanted = ids.filter((id): id is string => !!id);
+  if (!wanted.length || wanted.length !== ids.length)
+    throw new HttpError(404, "That version is no longer available.");
+  const { data: assets } = await db
+    .from("assets")
+    .select("id, storage_path, status")
+    .eq("workspace_id", workspaceId)
+    .in("id", wanted)
+    .is("deleted_at", null);
+  return wanted.map((id) => {
+    const asset = assets?.find((a) => a.id === id);
+    if (!asset || asset.status !== "ready" || !asset.storage_path)
+      throw new HttpError(404, "That version is no longer available.");
+    return { id, storage_path: asset.storage_path as string };
+  });
+}
+
+function outcome(result: { applied: number; locked: number }) {
+  if (!result.applied && result.locked)
+    throw new HttpError(409, "Scheduled or published content cannot be changed here.");
+  return result;
 }
 
 export async function selectCanvaVersion(args: {
@@ -745,67 +1088,25 @@ export async function selectCanvaVersion(args: {
 }) {
   const { data: version } = await db
     .from("canva_import_versions")
-    .select("id, mapping_id, selected_at")
+    .select("id, mapping_id")
     .eq("id", args.versionId)
     .eq("workspace_id", args.workspaceId)
     .maybeSingle();
   if (!version) throw new HttpError(404, "Canva version is unavailable.");
-  const { data: mapping } = await db
-    .from("canva_design_mappings")
-    .select("content_item_id")
-    .eq("id", version.mapping_id)
-    .eq("workspace_id", args.workspaceId)
-    .maybeSingle();
-  if (!mapping?.content_item_id)
-    throw new HttpError(422, "This asset has no content item to update.");
-  const { data: item } = await db
-    .from("content_items")
-    .select("id, status, kind, meta")
-    .eq("id", mapping.content_item_id)
-    .eq("workspace_id", args.workspaceId)
-    .maybeSingle();
-  if (!item) throw new HttpError(404, "Content is unavailable.");
-  if (["scheduled", "publishing", "published"].includes(item.status))
-    throw new HttpError(409, "Scheduled or published content cannot be changed here.");
+  const mapping = await loadMapping(args.workspaceId, version.mapping_id);
   const { data: pageRows } = await db
     .from("canva_import_pages")
     .select("page_number, asset_id")
     .eq("version_id", version.id)
     .eq("workspace_id", args.workspaceId)
     .order("page_number", { ascending: true });
-  if (!pageRows?.length) throw new HttpError(404, "Canva version has no pages.");
-  const { data: assets } = await db
-    .from("assets")
-    .select("id, storage_path, status")
-    .eq("workspace_id", args.workspaceId)
-    .in(
-      "id",
-      pageRows.map((p) => p.asset_id),
-    )
-    .is("deleted_at", null);
-  const ordered = pageRows.map((page) => assets?.find((a) => a.id === page.asset_id));
-  if (ordered.some((asset) => !asset || asset.status !== "ready" || !asset.storage_path))
-    throw new HttpError(404, "A Canva version page is unavailable.");
-  const paths = ordered.map((asset) => asset!.storage_path as string);
-  const meta = item.meta as Record<string, unknown> | null;
-  const patch: Record<string, unknown> = {
-    asset_id: pageRows[0].asset_id,
-    asset_storage_path: paths[0],
-    asset_status: "ready",
-    media_type: "image",
-    canva_selected_version_id: version.id,
-  };
-  if (paths.length > 1) patch.asset_storage_paths = paths;
-  const { error } = await db
-    .from("content_items")
-    .update({
-      meta: mergeMeta(meta, patch),
-      media_url: null,
-      status: ["approved", "pending"].includes(item.status) ? "draft" : item.status,
-    })
-    .eq("id", item.id)
-    .eq("workspace_id", args.workspaceId);
-  if (error) throw new HttpError(500, "Could not select Canva version.");
+  const pages = await readyPages(
+    args.workspaceId,
+    (pageRows ?? []).map((p) => p.asset_id as string),
+  );
+  const result = outcome(
+    await pointPostsAt({ workspaceId: args.workspaceId, mapping, pages, versionId: version.id }),
+  );
   await db
     .from("canva_import_versions")
     .update({ selected_at: new Date().toISOString() })
@@ -816,7 +1117,37 @@ export async function selectCanvaVersion(args: {
     userId: args.userId,
     action: "connector.canva.version_selected",
     entity: "connector",
-    payload: { versionId: version.id, contentId: item.id },
+    payload: { versionId: version.id, applied: result.applied },
   });
-  return { selected: true };
+  return { selected: true, ...result };
+}
+
+/** Put the picture Mellox made back on the post. The Canva edits stay in the Library. */
+export async function restoreCanvaOriginal(args: {
+  workspaceId: string;
+  userId: string;
+  mappingId: string;
+}) {
+  const mapping = await loadMapping(args.workspaceId, args.mappingId);
+  const { data: sources } = await db
+    .from("canva_design_source_pages")
+    .select("page_number, source_asset_id")
+    .eq("mapping_id", mapping.id)
+    .eq("workspace_id", args.workspaceId)
+    .order("page_number", { ascending: true });
+  const pages = await readyPages(
+    args.workspaceId,
+    (sources ?? []).map((s) => s.source_asset_id as string | null),
+  );
+  const result = outcome(
+    await pointPostsAt({ workspaceId: args.workspaceId, mapping, pages, versionId: null }),
+  );
+  await recordAudit({
+    workspaceId: args.workspaceId,
+    userId: args.userId,
+    action: "connector.canva.original_restored",
+    entity: "connector",
+    payload: { mappingId: mapping.id, applied: result.applied },
+  });
+  return { restored: true, ...result };
 }

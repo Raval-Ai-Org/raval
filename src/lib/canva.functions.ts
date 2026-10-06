@@ -21,3 +21,6 @@ export const importCanvaVersion = serverFn<typeof Canva.importCanvaVersion>(
 export const selectCanvaVersionAction = serverFn<typeof Canva.selectCanvaVersionAction>(
   "canva/selectCanvaVersionAction",
 );
+export const restoreCanvaOriginalAction = serverFn<typeof Canva.restoreCanvaOriginalAction>(
+  "canva/restoreCanvaOriginalAction",
+);

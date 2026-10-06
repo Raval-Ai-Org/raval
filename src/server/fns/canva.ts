@@ -107,3 +107,12 @@ export const selectCanvaVersionAction = createServerFn({ method: "POST" })
     const { selectCanvaVersion } = await import("@/server/connectors/canva/service.server");
     return selectCanvaVersion({ ...data, userId: context.userId });
   });
+
+export const restoreCanvaOriginalAction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .inputValidator((value) => workspace.extend({ mappingId: uuid }).parse(value))
+  .handler(async ({ data, context }) => {
+    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    const { restoreCanvaOriginal } = await import("@/server/connectors/canva/service.server");
+    return restoreCanvaOriginal({ ...data, userId: context.userId });
+  });

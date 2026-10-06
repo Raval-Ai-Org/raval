@@ -22,37 +22,10 @@ import {
   startCanvaConnect,
 } from "@/lib/canva.functions";
 import { emitAppEvent } from "@/lib/app-events";
+import { CanvaMark } from "@/components/brand/CanvaMark";
 import { ConnectionCard } from "./ConnectionCard";
 
 type Status = Awaited<ReturnType<typeof getCanvaConnection>>;
-
-function CanvaMark() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 32 32" className="size-7 shrink-0">
-      <defs>
-        <linearGradient
-          id="canva-mark"
-          x1="4"
-          y1="28"
-          x2="28"
-          y2="4"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#7D2AE7" />
-          <stop offset="1" stopColor="#00C4CC" />
-        </linearGradient>
-      </defs>
-      <circle cx="16" cy="16" r="14" fill="url(#canva-mark)" />
-      <path
-        fill="none"
-        stroke="#fff"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        d="M20.6 12.4a5.4 5.4 0 1 0 0 7.2"
-      />
-    </svg>
-  );
-}
 
 export function CanvaConnection() {
   const workspaceId = useOptionalWorkspaceId();
@@ -132,7 +105,7 @@ export function CanvaConnection() {
         }
         detail={
           connected
-            ? "Use “Edit with Canva” on an image in Studio or your Library."
+            ? "Use “Edit in Canva” on an image in Studio or your Library."
             : needsAttention
               ? "Canva stopped accepting this connection. Connect again to keep editing."
               : undefined
