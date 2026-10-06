@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { readEncryptionKey } from "@/server/crypto/secret-box.server";
+import { connectorEncryptionKeys } from "@/server/crypto/secret-box.server";
 
 export const SLACK_CALLBACK = "/api/integrations/slack/oauth/callback";
 export const SLACK_SCOPES =
@@ -10,12 +10,19 @@ export function slackConfig() {
   const clientId = process.env.SLACK_CLIENT_ID;
   const clientSecret = process.env.SLACK_CLIENT_SECRET;
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
-  if (!clientId || !clientSecret || !signingSecret) throw new Error("Slack is not configured");
+  const missing = [
+    !clientId && "SLACK_CLIENT_ID",
+    !clientSecret && "SLACK_CLIENT_SECRET",
+    !signingSecret && "SLACK_SIGNING_SECRET",
+  ].filter(Boolean);
+  if (!clientId || !clientSecret || !signingSecret)
+    throw new Error(`Slack is not set up on this server yet (missing ${missing.join(", ")}).`);
+  // Same rule as Canva and Notion: a dedicated key is optional, never required.
   return {
     clientId,
     clientSecret,
     signingSecret,
-    key: readEncryptionKey("SLACK_TOKEN_ENCRYPTION_KEY"),
+    ...connectorEncryptionKeys("SLACK_TOKEN_ENCRYPTION_KEY"),
   };
 }
 
@@ -54,8 +61,10 @@ export function slackOrigins(env: Record<string, string | undefined> = process.e
 export function slackConnectIssue(): string | null {
   try {
     slackConfig();
-  } catch {
-    return "Slack is not set up on this server yet.";
+  } catch (error) {
+    return error instanceof Error && error.message.startsWith("Slack is not set up")
+      ? error.message
+      : "Slack is not set up on this server yet.";
   }
   try {
     slackOrigins();

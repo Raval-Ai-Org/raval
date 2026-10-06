@@ -11,16 +11,29 @@ export function CanvaCallback() {
   const search = useSearchParams();
   const started = useRef(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [detail, setDetail] = useState("");
   useEffect(() => {
     if (started.current) return;
     started.current = true;
     const state = search.get("state") ?? "";
     const code = search.get("code") ?? "";
-    if (search.get("error") || !state || !code) {
+    const reason = search.get("error");
+    if (reason || !state || !code) {
       setFailure(
-        search.get("error") === "access_denied"
+        reason === "access_denied"
           ? "You closed Canva before allowing access, so nothing was connected."
-          : "Canva didn’t finish connecting. Please try again.",
+          : reason === "invalid_scope"
+            ? "Canva refused the access Mellox asked for. The Canva integration needs every permission Mellox uses switched on."
+            : "Canva didn’t finish connecting. Please try again.",
+      );
+      // What Canva itself said, so whoever runs this server can fix it.
+      const said = [reason, search.get("error_description")].filter(Boolean).join(": ");
+      setDetail(
+        said
+          ? `Canva said: ${said.slice(0, 240)}`
+          : !code
+            ? "Canva came back without a sign-in code."
+            : "",
       );
       return;
     }
@@ -55,6 +68,11 @@ export function CanvaCallback() {
           <>
             <h1 className="text-[17px] font-semibold">Canva isn’t connected</h1>
             <p className="mt-2 text-[13px] leading-5 text-muted-foreground">{failure}</p>
+            {detail && (
+              <p className="mt-3 break-words rounded-xl bg-muted px-3 py-2 text-[12px] text-muted-foreground">
+                {detail}
+              </p>
+            )}
             <Button className="mt-5" onClick={() => window.location.replace("/projects")}>
               Back to Mellox
             </Button>

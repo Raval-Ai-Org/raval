@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { decryptWithKey } from "@/server/crypto/secret-box.server";
+import { decryptWithKeys } from "@/server/crypto/secret-box.server";
 import { slackConfig } from "./security.server";
 
 export class SlackApiError extends Error {
@@ -50,7 +50,14 @@ export async function slackToken(installationId: string, workspaceId: string) {
     .maybeSingle();
   if (error || !data || (data as { status: string }).status !== "active")
     throw new SlackApiError("reconnect_needed");
-  return decryptWithKey((data as { bot_token_enc: string }).bot_token_enc, slackConfig().key);
+  try {
+    return decryptWithKeys(
+      (data as { bot_token_enc: string }).bot_token_enc,
+      slackConfig().readKeys,
+    );
+  } catch {
+    throw new SlackApiError("reconnect_needed");
+  }
 }
 
 export async function markSlackError(installationId: string, workspaceId: string, error: unknown) {
