@@ -1,5 +1,5 @@
 import "server-only";
-import { readEncryptionKey } from "@/server/crypto/secret-box.server";
+import { readEncryptionKey, SecretKeyError } from "@/server/crypto/secret-box.server";
 import { HttpError } from "@/server/http-error";
 
 export const NOTION_VERSION = "2026-03-11";
@@ -24,11 +24,30 @@ export function notionConfig() {
     uri.hash
   )
     throw new HttpError(503, "Notion callback URL is invalid.");
+  const appUrl = process.env.APP_URL;
+  if (appUrl) {
+    let appOrigin: string;
+    try {
+      appOrigin = new URL(appUrl).origin;
+    } catch {
+      throw new HttpError(503, "APP_URL is invalid for the Notion callback.");
+    }
+    if (uri.origin !== appOrigin)
+      throw new HttpError(503, "Notion callback URL must use the APP_URL origin.");
+  }
+  let key: Buffer;
+  try {
+    key = readEncryptionKey("NOTION_TOKEN_ENCRYPTION_KEY");
+  } catch (error) {
+    if (error instanceof SecretKeyError)
+      throw new HttpError(503, "Notion token encryption key is missing or invalid on this server.");
+    throw error;
+  }
   return {
     clientId,
     clientSecret,
     redirectUri: uri.toString(),
-    key: readEncryptionKey("NOTION_TOKEN_ENCRYPTION_KEY"),
+    key,
   };
 }
 export function notionConfigured() {

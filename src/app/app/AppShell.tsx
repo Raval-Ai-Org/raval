@@ -11,7 +11,9 @@ ensureGeoRunCapture();
 import { useServerFn } from "@/lib/use-server-fn";
 import { useQuery } from "@tanstack/react-query";
 import { getProofEngineStatus } from "@/lib/experiments.functions";
-import { getAutopilotStatus } from "@/lib/autopilot.functions";
+import { useAutopilotStatus } from "@/components/app/autopilot/hooks";
+import { AutopilotBeacon } from "@/components/app/autopilot/composer/AutopilotDeck";
+import { autopilotPath } from "@/components/app/autopilot/composer/useComposerAutopilot";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
@@ -23,7 +25,6 @@ import {
   ArrowLeft,
   BarChart3,
   BookOpen,
-  Bot,
   Calendar as CalendarIcon,
   ChevronDown,
   Link2,
@@ -127,13 +128,7 @@ function AppShell() {
     staleTime: 10 * 60_000,
     retry: false,
   });
-  const autopilotStatus = useServerFn(getAutopilotStatus);
-  const { data: autopilot } = useQuery({
-    queryKey: ["autopilot", workspaceId, "status"],
-    queryFn: () => autopilotStatus({ data: { workspaceId } }),
-    staleTime: 10 * 60_000,
-    retry: false,
-  });
+  const { data: autopilot } = useAutopilotStatus(workspaceId);
   const workspaceName = workspace.displayName;
   const workspaceWebsite = workspace.websiteUrl;
   const homeHref = workspacePath(workspaceId);
@@ -268,7 +263,8 @@ function AppShell() {
     };
   }, []);
 
-  // Autopilot is a route; buttons elsewhere open it with this event.
+  // Autopilot is switched on in the chat message box and has no sidebar entry.
+  // Its full screen is a route; buttons elsewhere open it with this event.
   useEffect(() => {
     const onOpenAutopilot = () => navigate({ to: workspacePath(workspaceId, "autopilot") });
     addAppEventListener("open:autopilot", onOpenAutopilot);
@@ -456,25 +452,6 @@ function AppShell() {
             hint: brainNews ? `${brainNews} new` : undefined,
             onClick: () => openBrain(),
           })}
-          {autopilot?.enabled &&
-            sidebarAction({
-              icon: Bot,
-              label: "Autopilot",
-              hint:
-                autopilot.status === "running"
-                  ? autopilot.waiting
-                    ? `${autopilot.waiting} to approve`
-                    : "On"
-                  : autopilot.status === "paused"
-                    ? "Paused"
-                    : "Set up once",
-              accent: "hsl(var(--brand-green))",
-              feature: "autopilot",
-              onClick: () => {
-                navigate({ to: workspacePath(workspaceId, "autopilot") });
-                setNavOpen(false);
-              },
-            })}
           {sidebarAction({
             icon: BarChart3,
             label: "Analytics",
@@ -654,15 +631,6 @@ function AppShell() {
                   label: "Calendar",
                   onClick: () => emitAppEvent("open:content-calendar"),
                 },
-                ...(autopilot?.enabled
-                  ? [
-                      {
-                        icon: Bot,
-                        label: "Autopilot",
-                        onClick: () => navigate({ to: workspacePath(workspaceId, "autopilot") }),
-                      },
-                    ]
-                  : []),
               ].map(({ icon: Icon, label, onClick }) => (
                 <Tooltip key={label}>
                   <TooltipTrigger asChild>
@@ -815,6 +783,19 @@ function AppShell() {
 
             {/* Studio toggle + Publish share one flex container to lock spacing */}
             <div className="flex shrink-0 items-center gap-1.5">
+              {/* While Autopilot runs (or is paused) it shows here on every screen. */}
+              {autopilot?.enabled &&
+                (autopilot.status === "running" || autopilot.status === "paused") && (
+                  <AutopilotBeacon
+                    state={autopilot.status === "running" ? "on" : "paused"}
+                    waiting={autopilot.waiting}
+                    onClick={() =>
+                      navigate({
+                        to: autopilotPath(workspaceId, autopilot.waiting ? "approvals" : "home"),
+                      })
+                    }
+                  />
+                )}
               <div className="hidden items-center gap-1.5 lg:flex">
                 <Suspense fallback={null}>
                   <BrainPulse workspaceId={workspaceId} onOpenBrain={openBrain} />

@@ -34,7 +34,7 @@ for (const vp of VIEWPORTS) {
         await expect(frame.getByText(row, { exact: true })).toBeVisible();
       }
       await frame.getByRole("button", { name: /How often/ }).click();
-      await frame.getByRole("button", { name: "Every day" }).click();
+      await frame.getByRole("button", { name: "Every day", exact: true }).click();
       await frame.getByRole("button", { name: "Turn on Autopilot" }).click();
       await expect(page.getByTestId("lab-last")).toContainText('"postsPerWeek":7');
       const overflow = await page.evaluate(
@@ -74,6 +74,51 @@ for (const vp of VIEWPORTS) {
       );
       await frame.getByRole("button", { name: "Create post" }).first().click();
       await expect(page.getByTestId("lab-last")).toContainText('"decision":"create"');
+    });
+
+    test("the message box: a switch when off, the whole box when on", async ({ page }) => {
+      await page.goto("/autopilot-lab?scene=box", { waitUntil: "domcontentloaded" });
+      const box = page.getByTestId("box");
+      // Off: the box is for typing, with one switch in its toolbar.
+      const toggle = box.getByRole("switch", { name: "Turn on Autopilot" });
+      await expect(toggle).toBeVisible({ timeout: 30_000 });
+      await expect(box.getByRole("textbox", { name: "Message Mellox" })).toBeVisible();
+
+      // Flipping it shows what Mellox proposes, in the box, with one button.
+      await toggle.click();
+      await expect(box.getByText("5 a week")).toBeVisible();
+      await expect(box.getByRole("textbox")).toHaveCount(0);
+      await box.getByRole("button", { name: "Turn on", exact: true }).click();
+      await expect(page.getByTestId("lab-last")).toContainText('start [{"mode":"full"');
+
+      // On: the box is covered, the top bar says so too.
+      await expect(box.getByText("Autopilot is on")).toBeVisible();
+      await expect(box.getByRole("list", { name: "Where your posts are" })).toBeVisible();
+      await expect(box.getByRole("list", { name: "Next 7 days" })).toBeVisible();
+      await expect(
+        page.getByTestId("box-topbar").getByRole("button", { name: /Autopilot is on/ }),
+      ).toBeVisible();
+      await box.getByRole("button", { name: "Approve" }).click();
+      await expect(page.getByTestId("lab-last")).toContainText('open ["approvals"]');
+
+      // The switch pauses it; the box stays covered and says so.
+      await box.getByRole("switch", { name: "Pause Autopilot" }).click();
+      await expect(box.getByText("Autopilot is paused")).toBeVisible();
+      await box.getByRole("switch", { name: "Turn Autopilot back on" }).click();
+      await expect(box.getByText("Autopilot is on")).toBeVisible();
+
+      // Writing is always one tap away, and the box stays lit while it runs.
+      await box.getByRole("button", { name: "Write" }).click();
+      const input = box.getByRole("textbox", { name: "Message Mellox" });
+      await expect(input).toBeFocused();
+      await expect(box.locator(".mx-composer")).toHaveAttribute("data-autopilot", "on");
+      await box.getByRole("switch", { name: "Autopilot is on. Show it." }).click();
+      await expect(box.getByText("Autopilot is on")).toBeVisible();
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(1);
     });
   });
 }

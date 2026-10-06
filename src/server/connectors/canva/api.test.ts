@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CANVA_SCOPES, canvaMagicLayersEnabled } from "./config.server";
+import { CANVA_SCOPES, canvaConfig, canvaMagicLayersEnabled } from "./config.server";
 import {
   buildCanvaAuthorizeUrl,
   challengeFor,
@@ -20,7 +20,24 @@ import { safeCanvaReturn } from "@/lib/canva-return";
 
 describe("Canva connector boundary", () => {
   beforeEach(() => vi.stubGlobal("fetch", vi.fn()));
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("explains server configuration errors instead of returning an unknown failure", () => {
+    vi.stubEnv("CANVA_CLIENT_ID", "client-id");
+    vi.stubEnv("CANVA_CLIENT_SECRET", "client-secret");
+    vi.stubEnv("CANVA_TOKEN_ENCRYPTION_KEY", "invalid");
+    vi.stubEnv("APP_URL", "https://mellox.ai");
+    expect(() => canvaConfig()).toThrow("Canva token encryption key is missing or invalid");
+
+    vi.stubEnv("CANVA_TOKEN_ENCRYPTION_KEY", Buffer.alloc(32).toString("base64"));
+    vi.stubEnv("APP_URL", "http://mellox.ai");
+    expect(() => canvaConfig()).toThrow("APP_URL must be a valid HTTPS origin");
+    vi.stubEnv("APP_URL", "https://mellox.ai");
+    expect(canvaConfig().redirectUri).toBe("https://mellox.ai/api/integrations/canva/callback");
+  });
 
   it("uses exactly the requested scopes and S256 PKCE", () => {
     expect(CANVA_SCOPES).toEqual([

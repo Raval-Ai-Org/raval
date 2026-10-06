@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { emitAppEvent } from "@/lib/app-events";
+import { ServerFnError } from "@/lib/rpc-client";
 import { cn } from "@/lib/utils";
 import { dsGhostBtn } from "@/components/app/surface/buttons";
 import { Settings2 } from "@/components/ui/gemini-icons";
@@ -104,8 +105,8 @@ export function NotionConnection({
     try {
       setStatus(await getNotionConnection({ data: { workspaceId } }));
       setError(null);
-    } catch {
-      setError("Could not load Notion connection.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load Notion connection.");
     }
   }, [workspaceId]);
   useEffect(() => {
@@ -125,7 +126,19 @@ export function NotionConnection({
     if (!setup) return;
     void listNotionDestinations({ data: { workspaceId } })
       .then(setDestinations)
-      .catch(() => setError("Could not load shared Notion pages and data sources."));
+      .catch((cause) => {
+        if (
+          cause instanceof ServerFnError &&
+          cause.status === 409 &&
+          /reconnect/i.test(cause.message)
+        )
+          setStatus((current) => (current ? { ...current, status: "error" } : current));
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Could not load shared Notion pages and data sources.",
+        );
+      });
   }, [setup, workspaceId]);
   const run = async (operation: () => Promise<unknown>, success?: string) => {
     setBusy(true);
@@ -138,6 +151,8 @@ export function NotionConnection({
       return value;
     } catch (e) {
       const message = e instanceof Error ? e.message : "Notion could not complete this action.";
+      if (e instanceof ServerFnError && e.status === 409 && /reconnect/i.test(message))
+        setStatus((current) => (current ? { ...current, status: "error" } : current));
       setError(message);
       toast.error(message);
       return null;
@@ -251,6 +266,11 @@ export function NotionConnection({
                 >
                   {needsAttention ? "Reconnect Notion" : "Connect Notion"}
                 </DropdownMenuItem>
+                {status && !status.configured && (
+                  <DropdownMenuItem disabled>
+                    {status.configurationMessage ?? "Notion needs server configuration."}
+                  </DropdownMenuItem>
+                )}
                 {needsAttention && (
                   <DropdownMenuItem onSelect={() => setDisconnectOpen(true)}>
                     Disconnect
@@ -346,7 +366,9 @@ export function NotionConnection({
             )}
           </div>
           {!status?.configured && status && (
-            <p className="mt-2 text-xs text-muted-foreground">Notion needs server configuration.</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {status.configurationMessage ?? "Notion needs server configuration."}
+            </p>
           )}
         </section>
       )}

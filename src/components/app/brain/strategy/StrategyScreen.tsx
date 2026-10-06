@@ -85,7 +85,7 @@ function Block({
   index?: number;
 }) {
   return (
-    <motion.section
+    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.05 + index * 0.05, ease: EASE }}
@@ -96,7 +96,7 @@ function Block({
         <h4 className="ds-label">{title}</h4>
       </header>
       {children}
-    </motion.section>
+    </motion.div>
   );
 }
 
@@ -320,9 +320,7 @@ function Empty({ view, handlers }: { view: StrategyView; handlers: StrategyHandl
         <BrainIcon size={32} />
       </span>
       <h3 className="mt-4 text-[22px] font-semibold tracking-tight">Your marketing strategy</h3>
-      <p className="mt-1 text-[13.5px] text-muted-foreground">
-        One plan from all four brains. Mellox follows it in everything it makes.
-      </p>
+      <p className="mt-1 text-[13.5px] text-muted-foreground">One plan from all four brains.</p>
       <div className="mt-6">
         <BrainsRow available={view.available} onOpen={handlers.openBrain} />
       </div>
@@ -411,11 +409,11 @@ export function StrategyScreen({
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {isDraft ? (
           <span className="rounded-full bg-warning/15 px-2.5 py-1 text-[12px] font-medium text-warning">
-            Draft — not in use yet
+            Draft
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-1 text-[12px] font-medium">
-            <Check className="h-3.5 w-3.5 text-primary" /> Mellox follows this
+            <Check className="h-3.5 w-3.5 text-primary" /> In use
           </span>
         )}
         <span className="flex items-center gap-1.5" title="Built from">
@@ -490,9 +488,7 @@ export function StrategyScreen({
             <div className="ds-well mb-4 flex flex-wrap items-center gap-3 rounded-[16px] px-4 py-3">
               <RefreshCw className="h-4 w-4 text-primary" />
               <span className="min-w-0 flex-1 text-[13px] font-medium">
-                {view.stale
-                  ? "Your brains changed since this was written."
-                  : "Write it again from your brains?"}
+                {view.stale ? "Your brains changed." : "Write it again?"}
               </span>
               <CostChip action="strategy_rebuild" />
               <button
@@ -518,11 +514,11 @@ export function StrategyScreen({
       </AnimatePresence>
 
       {/* ── positioning ── */}
-      <motion.section
+      <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: EASE }}
-        className="ds-tile ds-glow relative overflow-hidden p-5 sm:p-7"
+        className="ds-tile relative overflow-hidden p-5 ring-1 ring-primary/20 sm:p-7"
       >
         <div className="flex items-center gap-2">
           <BrainMark brain="brand" size={16} />
@@ -576,7 +572,7 @@ export function StrategyScreen({
             ))}
           </div>
         )}
-      </motion.section>
+      </motion.div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         {/* ── goal ── */}
@@ -702,9 +698,6 @@ export function StrategyScreen({
                     />
                   </div>
                 )}
-                {a.why && !editing && (
-                  <div className="mt-1.5 text-[12px] text-muted-foreground">{a.why}</div>
-                )}
               </div>
             ))}
           </div>
@@ -824,11 +817,6 @@ export function StrategyScreen({
                       />
                     )}
                   </div>
-                  {c.theirAngle && !editing && (
-                    <div className="mt-1 text-[12px] text-muted-foreground">
-                      They say: {c.theirAngle}
-                    </div>
-                  )}
                   <div className="mt-1.5 text-[13px] font-medium leading-snug">
                     <T
                       value={c.ourEdge}

@@ -24,6 +24,7 @@ import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { workspaceStoragePrefix } from "@/lib/workspace/storage-path";
 import { publishContentItems, scheduleContentItems } from "@/lib/sdr.functions";
 import { StudioPublishFlow } from "./StudioPublishFlow";
+import { ChipButton, FieldLabel, Segmented } from "./studio-ui";
 
 type UploadKind = "photo" | "video" | "text";
 type CopyMode = "write" | "generate" | "both";
@@ -46,7 +47,22 @@ const MAX_BYTES: Record<Exclude<UploadKind, "text">, number> = {
   video: 50 * 1024 * 1024,
 };
 const FIELD =
-  "w-full rounded-xl border border-border bg-surface-2/50 px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary";
+  "w-full rounded-lg border border-input bg-surface-3 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55";
+const KINDS = [
+  {
+    id: "photo",
+    label: "Photo",
+    copy: "Add an image and write or generate captions.",
+    Icon: ImageIcon,
+  },
+  {
+    id: "video",
+    label: "Video",
+    copy: "Bring a clip and tailor its post for each channel.",
+    Icon: Video,
+  },
+  { id: "text", label: "Text post", copy: "Write and publish without media.", Icon: MessageSquare },
+] as const;
 
 function available(kind: UploadKind, platform: PlatformId) {
   if (kind === "video") return true;
@@ -73,6 +89,7 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
   const [publishMode, setPublishMode] = useState<"publish" | "schedule" | null>(null);
   const [distributed, setDistributed] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
+  const [dragging, setDragging] = useState(false);
   const selected = useMemo(
     () => platforms.filter((p) => available(kind ?? "text", p)),
     [kind, platforms],
@@ -340,38 +357,21 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
         }
         bodyClassName="max-h-[min(78dvh,760px)] overflow-y-auto p-4 sm:p-6"
       >
-        <div className="space-y-5 studio-tone-upload">
+        <div className="space-y-6 studio-tone-upload">
           {!kind ? (
             <div className="grid gap-3 sm:grid-cols-3">
-              {(
-                [
-                  {
-                    id: "photo",
-                    label: "Photo",
-                    copy: "Add an image and write or generate captions.",
-                    Icon: ImageIcon,
-                  },
-                  {
-                    id: "video",
-                    label: "Video",
-                    copy: "Bring a clip and tailor its post for each channel.",
-                    Icon: Video,
-                  },
-                  {
-                    id: "text",
-                    label: "Text post",
-                    copy: "Write and publish without media.",
-                    Icon: MessageSquare,
-                  },
-                ] as const
-              ).map(({ id, label, copy, Icon }) => (
+              {KINDS.map(({ id, label, copy, Icon }) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => pickKind(id)}
-                  className="group rounded-2xl border border-border bg-surface-3 p-4 text-left shadow-1 transition-[border-color,transform] hover:-translate-y-0.5 hover:border-[hsl(var(--tone)/0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="group relative isolate overflow-hidden rounded-2xl border border-border/80 bg-surface-3 p-4 text-left shadow-1 transition-[border-color,box-shadow,translate] duration-200 hover:-translate-y-0.5 hover:border-[hsl(var(--tone)/0.45)] hover:shadow-[0_18px_40px_-20px_hsl(var(--tone)/0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--tone))]"
                 >
-                  <span className="studio-glyph mb-5 grid size-11 place-items-center rounded-xl">
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(120%_80%_at_0%_0%,hsl(var(--tone)/0.14),transparent_60%)] opacity-0 transition-opacity duration-[--motion-duration-slow] group-hover:opacity-100"
+                  />
+                  <span className="studio-glyph mb-5 grid size-11 place-items-center rounded-xl transition-transform duration-[--motion-duration-slow] ease-[--motion-ease-spring] group-hover:-rotate-6 group-hover:scale-110">
                     <Icon className="size-5" />
                   </span>
                   <span className="block text-sm font-semibold">{label}</span>
@@ -383,158 +383,156 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
             </div>
           ) : (
             <>
-              <div className="flex flex-wrap gap-2" aria-label="Upload type">
-                {(
-                  [
-                    { id: "photo", label: "Photo" },
-                    { id: "video", label: "Video" },
-                    { id: "text", label: "Text post" },
-                  ] as const
-                ).map((option) => (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Segmented
+                  label="Upload type"
+                  value={kind}
+                  onChange={pickKind}
+                  options={KINDS.map((option) => ({ value: option.id, label: option.label }))}
+                />
+                {Object.keys(saved).length > 0 ? (
                   <button
-                    key={option.id}
                     type="button"
-                    aria-pressed={kind === option.id}
-                    onClick={() => pickKind(option.id)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-xs font-medium",
-                      kind === option.id
-                        ? "bg-primary-surface text-primary ring-1 ring-primary-border"
-                        : "bg-surface-2 text-muted-foreground hover:text-foreground",
-                    )}
+                    onClick={startNew}
+                    className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                   >
-                    {option.label}
+                    Start a new upload
                   </button>
-                ))}
+                ) : null}
               </div>
-              {Object.keys(saved).length > 0 ? (
-                <button
-                  type="button"
-                  onClick={startNew}
-                  className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                >
-                  Start a new upload
-                </button>
-              ) : null}
+
               {kind !== "text" ? (
-                <label
-                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-surface-2/40 px-5 py-6 text-center transition-colors hover:border-primary-border"
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    chooseFile(event.dataTransfer.files[0]);
-                  }}
-                >
-                  <input
-                    type="file"
-                    accept={ACCEPT[kind]}
-                    className="sr-only"
-                    onChange={(event) => chooseFile(event.target.files?.[0])}
-                  />
-                  {preview ? (
-                    kind === "photo" ? (
-                      <img
-                        src={preview}
-                        alt="Selected upload"
-                        className="max-h-44 rounded-xl object-contain"
-                      />
+                <div>
+                  <FieldLabel
+                    hint={
+                      kind === "photo"
+                        ? "JPG, PNG or WebP · up to 20 MB"
+                        : "MP4, MOV or WebM · up to 50 MB"
+                    }
+                  >
+                    {kind === "photo" ? "Photo" : "Video"}
+                  </FieldLabel>
+                  <label
+                    className={cn(
+                      "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed px-5 py-6 text-center transition-colors focus-within:ring-2 focus-within:ring-ring/55",
+                      dragging
+                        ? "border-primary bg-primary-surface"
+                        : "border-border bg-surface-3 hover:border-primary-border",
+                    )}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDragging(true);
+                    }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      setDragging(false);
+                      chooseFile(event.dataTransfer.files[0]);
+                    }}
+                  >
+                    <input
+                      key={`${kind}-${file ? file.name : "empty"}`}
+                      type="file"
+                      accept={ACCEPT[kind]}
+                      className="sr-only"
+                      onChange={(event) => chooseFile(event.target.files?.[0])}
+                    />
+                    {preview ? (
+                      kind === "photo" ? (
+                        <img
+                          src={preview}
+                          alt="Selected upload"
+                          className="max-h-48 rounded-xl object-contain"
+                        />
+                      ) : (
+                        <video src={preview} controls className="max-h-48 rounded-xl" />
+                      )
                     ) : (
-                      <video src={preview} controls className="max-h-44 rounded-xl" />
-                    )
-                  ) : (
-                    <Upload className="size-7 text-[var(--tone-ink)]" />
-                  )}
-                  <span className="text-sm font-medium">
-                    {file ? file.name : `Choose a ${kind}`}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {kind === "photo"
-                      ? "JPG, PNG or WebP · up to 20 MB"
-                      : "MP4, MOV or WebM · up to 50 MB"}
-                  </span>
-                </label>
+                      <span className="studio-glyph grid size-11 place-items-center rounded-xl">
+                        <Upload className="size-5" />
+                      </span>
+                    )}
+                    <span className="max-w-full truncate text-sm font-medium">
+                      {file ? file.name : `Drop a ${kind} here or click to choose`}
+                    </span>
+                    {file ? (
+                      <span className="text-xs text-muted-foreground">
+                        {(file.size / 1024 / 1024).toFixed(1)} MB · click to replace
+                      </span>
+                    ) : null}
+                  </label>
+                </div>
               ) : null}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1.5 text-xs font-medium">
-                  Title{" "}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <FieldLabel htmlFor="upload-title" hint="Optional">
+                    Title
+                  </FieldLabel>
                   <input
+                    id="upload-title"
                     className={FIELD}
                     value={title}
                     maxLength={280}
                     onChange={(event) => setTitle(event.target.value)}
                     placeholder="Give this post a name"
                   />
-                </label>
-                <label className="space-y-1.5 text-xs font-medium">
-                  What is it about?{" "}
+                </div>
+                <div>
+                  <FieldLabel htmlFor="upload-about" hint="Optional">
+                    What is it about?
+                  </FieldLabel>
                   <input
+                    id="upload-about"
                     className={FIELD}
                     value={description}
                     maxLength={2000}
                     onChange={(event) => setDescription(event.target.value)}
-                    placeholder="Context for captions (optional)"
+                    placeholder="Context for captions"
                   />
-                </label>
+                </div>
               </div>
-              <section data-no-rhythm className="space-y-2">
-                <h3 className="ui-eyebrow">Publish to</h3>
-                <div className="flex flex-wrap gap-2">
-                  {CHANNELS.map((platform) => (
-                    <button
-                      key={platform}
-                      type="button"
-                      disabled={!available(kind, platform)}
-                      aria-pressed={selected.includes(platform)}
-                      onClick={() =>
-                        setPlatforms((current) =>
-                          current.includes(platform)
-                            ? current.filter((p) => p !== platform)
-                            : [...current, platform],
-                        )
-                      }
-                      className={cn(
-                        "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                        selected.includes(platform)
-                          ? "border-primary-border bg-primary-surface text-primary"
-                          : "border-border bg-surface-2 text-foreground hover:border-border-strong",
-                      )}
-                    >
-                      {PLATFORMS[platform].label}
-                    </button>
-                  ))}
+
+              <section data-no-rhythm>
+                <FieldLabel hint="Only channels that fit this content">Platforms</FieldLabel>
+                <div className="flex flex-wrap gap-1.5">
+                  {CHANNELS.map((platform) => {
+                    const Icon = PLATFORMS[platform].icon;
+                    return (
+                      <ChipButton
+                        key={platform}
+                        disabled={!available(kind, platform)}
+                        selected={selected.includes(platform)}
+                        onClick={() =>
+                          setPlatforms((current) =>
+                            current.includes(platform)
+                              ? current.filter((p) => p !== platform)
+                              : [...current, platform],
+                          )
+                        }
+                      >
+                        <Icon className="size-3.5" />
+                        {PLATFORMS[platform].label}
+                      </ChipButton>
+                    );
+                  })}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Only channels that support this content type are available.
-                </p>
               </section>
+
               <section data-no-rhythm className="space-y-3">
-                <h3 className="ui-eyebrow">Captions</h3>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {(
-                    [
-                      { id: "write", label: "Write myself" },
-                      { id: "generate", label: "Generate for me" },
-                      { id: "both", label: "Write + improve" },
-                    ] as const
-                  ).map((choice) => (
-                    <button
-                      key={choice.id}
-                      type="button"
-                      aria-pressed={copyMode === choice.id}
-                      onClick={() => setCopyMode(choice.id)}
-                      className={cn(
-                        "rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-colors",
-                        copyMode === choice.id
-                          ? "border-primary-border bg-primary-surface text-primary"
-                          : "border-border bg-surface-2 hover:border-border-strong",
-                      )}
-                    >
-                      {choice.label}
-                    </button>
-                  ))}
-                </div>
+                <FieldLabel>Captions</FieldLabel>
+                <Segmented
+                  label="Caption mode"
+                  value={copyMode}
+                  onChange={setCopyMode}
+                  options={[
+                    { value: "write", label: "Write myself" },
+                    { value: "generate", label: "Generate for me" },
+                    { value: "both", label: "Write + improve" },
+                  ]}
+                />
                 {copyMode !== "write" ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2 rounded-xl border border-border bg-surface-3 p-3.5">
                     <textarea
                       className={cn(FIELD, "min-h-20 resize-y")}
                       value={direction}
@@ -547,34 +545,64 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
                       disabled={!selected.length || !!busy}
                       onClick={() => void generate()}
                     >
-                      <Sparkles className="mr-2 size-4" />
+                      {busy === "generate" ? (
+                        <Spinner className="mr-2 size-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 size-4" />
+                      )}
                       {busy === "generate"
                         ? "Writing…"
                         : copyMode === "both"
                           ? "Improve captions"
                           : "Generate captions"}
                     </Button>
+                    {!selected.length ? (
+                      <p className="text-xs text-muted-foreground">
+                        Choose a platform first so captions fit it.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
-                {selected.map((platform) => (
-                  <label key={platform} className="block space-y-1.5 text-xs font-medium">
-                    {PLATFORMS[platform].label}
-                    <textarea
-                      className={cn(FIELD, "min-h-24 resize-y")}
-                      value={captions[platform] ?? ""}
-                      maxLength={4000}
-                      onChange={(event) =>
-                        setCaptions((current) => ({ ...current, [platform]: event.target.value }))
-                      }
-                      placeholder={`Write your ${PLATFORMS[platform].label} caption`}
-                    />
-                  </label>
-                ))}
+                {selected.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-border px-3.5 py-4 text-center text-xs text-muted-foreground">
+                    Pick a platform above to write its caption.
+                  </p>
+                ) : null}
+                {selected.map((platform) => {
+                  const Icon = PLATFORMS[platform].icon;
+                  return (
+                    <div key={platform}>
+                      <FieldLabel
+                        htmlFor={`upload-caption-${platform}`}
+                        hint={`${(captions[platform] ?? "").length}/4000`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icon className="size-3.5" />
+                          {PLATFORMS[platform].label}
+                        </span>
+                      </FieldLabel>
+                      <textarea
+                        id={`upload-caption-${platform}`}
+                        className={cn(FIELD, "min-h-24 resize-y")}
+                        value={captions[platform] ?? ""}
+                        maxLength={4000}
+                        onChange={(event) =>
+                          setCaptions((current) => ({
+                            ...current,
+                            [platform]: event.target.value,
+                          }))
+                        }
+                        placeholder={`Write your ${PLATFORMS[platform].label} caption`}
+                      />
+                    </div>
+                  );
+                })}
               </section>
-              <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
-                <Button variant="outline" disabled={!!busy} onClick={() => void save()}>
-                  {busy === "save" ? <Spinner className="mr-2 size-4 animate-spin" /> : null}Save
-                  draft
+
+              <div className="sticky -bottom-4 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border/60 bg-surface-3 px-4 py-3 sm:-bottom-6 sm:-mx-6 sm:px-6">
+                <Button variant="ghost" disabled={!!busy} onClick={() => void save()}>
+                  {busy === "save" ? <Spinner className="mr-2 size-4 animate-spin" /> : null}
+                  Save draft
                 </Button>
                 <Button
                   variant="outline"

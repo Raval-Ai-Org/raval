@@ -1,5 +1,5 @@
 import "server-only";
-import { readEncryptionKey } from "@/server/crypto/secret-box.server";
+import { readEncryptionKey, SecretKeyError } from "@/server/crypto/secret-box.server";
 import { HttpError } from "@/server/http-error";
 
 export const CANVA_SCOPES = [
@@ -21,12 +21,30 @@ export function canvaMagicLayersEnabled(
 export function canvaConfig() {
   const clientId = process.env.CANVA_CLIENT_ID;
   const clientSecret = process.env.CANVA_CLIENT_SECRET;
-  const key = readEncryptionKey("CANVA_TOKEN_ENCRYPTION_KEY");
   if (!clientId || !clientSecret)
-    throw new HttpError(503, "Canva is not configured on this server.");
+    throw new HttpError(503, "Canva client credentials are missing on this server.");
+  let key: Buffer;
+  try {
+    key = readEncryptionKey("CANVA_TOKEN_ENCRYPTION_KEY");
+  } catch (error) {
+    if (error instanceof SecretKeyError)
+      throw new HttpError(503, "Canva token encryption key is missing or invalid on this server.");
+    throw error;
+  }
   const base = process.env.APP_URL?.replace(/\/$/, "");
-  if (!base) throw new HttpError(503, "Canva callback URL is not configured.");
-  const redirectUri = new URL(CANVA_CALLBACK, base).toString();
+  if (!base) throw new HttpError(503, "Canva callback URL is not configured on this server.");
+  let redirectUri: string;
+  try {
+    const origin = new URL(base);
+    if (
+      origin.protocol !== "https:" &&
+      !(origin.protocol === "http:" && origin.hostname === "localhost")
+    )
+      throw new Error("Invalid Canva callback origin");
+    redirectUri = new URL(CANVA_CALLBACK, origin).toString();
+  } catch {
+    throw new HttpError(503, "APP_URL must be a valid HTTPS origin for Canva.");
+  }
   return { clientId, clientSecret, key, redirectUri };
 }
 

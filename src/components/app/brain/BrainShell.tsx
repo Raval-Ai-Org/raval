@@ -5,11 +5,11 @@
 // the section itself. Each brain keeps its own inner navigation, so there is
 // never a rail inside a rail. The section comes from the URL (?s=…), which is
 // what makes every part of Brain linkable from elsewhere in Mellox.
-import { Suspense, lazy, useEffect, useMemo, type ComponentType } from "react";
+import { Suspense, lazy, useEffect, useMemo } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { ArrowLeft, FileText, Home, Lock, Target } from "@/components/icons";
+import { ArrowLeft, Home, Lock } from "@/components/icons";
 import { openFeatureUpgrade } from "@/components/app/FeatureGate";
-import { SurfaceLayout, SurfacePage } from "@/components/app/surface/SurfaceLayout";
+import { SurfacePage } from "@/components/app/surface/SurfaceLayout";
 import { dsFocus, dsGhostBtn } from "@/components/app/surface/buttons";
 import { ErrorState } from "@/components/ui/empty-state";
 import { PageLoader } from "@/components/ui/page-loader";
@@ -44,9 +44,7 @@ const StrategyPanel = lazy(() =>
   import("./strategy/StrategyPanel").then((m) => ({ default: m.StrategyPanel })),
 );
 const TodayBrief = lazy(() => import("./home/TodayBrief").then((m) => ({ default: m.TodayBrief })));
-const NotesTabBody = lazy(() =>
-  import("@/components/app/NotesPanel").then((m) => ({ default: m.NotesTabBody })),
-);
+const NotesBoard = lazy(() => import("./home/NotesBoard").then((m) => ({ default: m.NotesBoard })));
 
 /** The plan feature that gates a brain, where one does. */
 const BRAIN_FEATURE: Partial<Record<BrainId, FeatureKey>> = {
@@ -57,6 +55,11 @@ const BRAIN_FEATURE: Partial<Record<BrainId, FeatureKey>> = {
 
 const HOME_TABS = ["overview", "today", "notes"] as const;
 type HomeTab = (typeof HOME_TABS)[number];
+const HOME_LABELS: Record<HomeTab, string> = {
+  overview: "Overview",
+  today: "Today",
+  notes: "Notes",
+};
 
 /** A few lines of Brand DNA for the day's plan (the server reads the full DNA itself). */
 function coachContext(dna: BrandDna): string {
@@ -137,7 +140,7 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
         <div
           role="tablist"
           aria-label="Brain"
-          className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/50 px-2 py-2 [scrollbar-width:none] sm:px-4 [&::-webkit-scrollbar]:hidden"
+          className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/50 px-2 py-2 [scrollbar-width:none] sm:justify-center sm:px-4 [&::-webkit-scrollbar]:hidden"
         >
           {tabs.map((t, i) => {
             const active = t.id === section;
@@ -215,62 +218,80 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
           >
             <Suspense fallback={<PageLoader />}>
               {section === "home" && (
-                <SurfaceLayout<HomeTab>
-                  label="Home"
-                  value={homeTab}
-                  onChange={(id) => onNavigate("home", id === "overview" ? null : id)}
-                  items={[
-                    { id: "overview", label: "Overview", icon: Home },
-                    {
-                      id: "today",
-                      label: "Today",
-                      icon: Target as ComponentType<{ className?: string }>,
-                    },
-                    { id: "notes", label: "Notes", icon: FileText },
-                  ]}
-                >
-                  {homeTab === "overview" &&
-                    (overview.isLoading ? (
-                      <div className="mx-auto max-w-[1100px] space-y-3 p-6">
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                          {BRAINS.map((b) => (
-                            <Skeleton
-                              key={b}
-                              className="h-[152px] rounded-[var(--ds-radius-tile)]"
-                            />
-                          ))}
+                <div className="flex h-full flex-col">
+                  <div className="flex shrink-0 justify-center px-4 pt-4">
+                    <div
+                      role="tablist"
+                      aria-label="Home"
+                      className="ds-well inline-flex gap-0.5 rounded-full p-1"
+                    >
+                      {HOME_TABS.map((id) => {
+                        const active = id === homeTab;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            role="tab"
+                            aria-selected={active}
+                            onClick={() => onNavigate("home", id === "overview" ? null : id)}
+                            className={cn(
+                              "h-8 min-w-[92px] rounded-full px-4 text-[13px] font-medium transition-all duration-200",
+                              active
+                                ? "bg-[var(--ds-tile-bg)] text-foreground shadow-sm ring-1 ring-primary/30"
+                                : "text-muted-foreground hover:text-foreground",
+                              dsFocus,
+                            )}
+                          >
+                            {HOME_LABELS[id]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+                    {homeTab === "overview" &&
+                      (overview.isLoading ? (
+                        <div className="mx-auto max-w-[1040px] space-y-3 px-4 pt-5 sm:px-6">
+                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {BRAINS.map((b) => (
+                              <Skeleton
+                                key={b}
+                                className="h-[150px] rounded-[var(--ds-radius-tile)]"
+                              />
+                            ))}
+                          </div>
+                          <Skeleton className="h-28 w-full rounded-[var(--ds-radius-tile)]" />
                         </div>
-                        <Skeleton className="h-28 w-full rounded-[var(--ds-radius-tile)]" />
-                      </div>
-                    ) : overview.error || !overview.data ? (
-                      <SurfacePage>
-                        <ErrorState
-                          title="We couldn't load your brain"
-                          detail={
-                            overview.error instanceof Error ? overview.error.message : undefined
-                          }
-                          onRetry={() => void overview.refetch()}
+                      ) : overview.error || !overview.data ? (
+                        <SurfacePage>
+                          <ErrorState
+                            title="We couldn't load your brain"
+                            detail={
+                              overview.error instanceof Error ? overview.error.message : undefined
+                            }
+                            onRetry={() => void overview.refetch()}
+                          />
+                        </SurfacePage>
+                      ) : (
+                        <BrainHome
+                          overview={overview.data}
+                          news={news}
+                          locked={locked}
+                          onOpen={open}
                         />
-                      </SurfacePage>
-                    ) : (
-                      <BrainHome
-                        overview={overview.data}
-                        news={news}
-                        locked={locked}
-                        onOpen={open}
-                      />
-                    ))}
-                  {homeTab === "today" && (
-                    <SurfacePage title="Today" width="narrow">
-                      <TodayBrief workspaceId={workspaceId} brandContext={coachContext(dna)} />
-                    </SurfacePage>
-                  )}
-                  {homeTab === "notes" && (
-                    <SurfacePage title="Notes" width="narrow">
-                      <NotesTabBody workspaceId={workspaceId} />
-                    </SurfacePage>
-                  )}
-                </SurfaceLayout>
+                      ))}
+                    {homeTab === "today" && (
+                      <div className="mx-auto w-full max-w-[760px] px-4 pb-10 pt-5 sm:px-6">
+                        <TodayBrief workspaceId={workspaceId} brandContext={coachContext(dna)} />
+                      </div>
+                    )}
+                    {homeTab === "notes" && (
+                      <div className="mx-auto w-full max-w-[1040px] px-4 pb-10 pt-5 sm:px-6">
+                        <NotesBoard workspaceId={workspaceId} />
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {section === "brand" && <BrandDnaSurface workspaceId={workspaceId} tile={tab} />}

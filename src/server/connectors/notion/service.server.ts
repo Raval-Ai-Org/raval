@@ -11,7 +11,7 @@ import {
   updateImportedContentItem,
   type ContentItem,
 } from "@/server/fns/content";
-import { notionConfig, notionConfigured } from "./config.server";
+import { notionConfig } from "./config.server";
 import { exchangeNotionCode, notionPages, notionRequest, type NotionObject } from "./client.server";
 import { consumeNotionState } from "./oauth.server";
 import {
@@ -99,7 +99,9 @@ async function credential(workspaceId: string, connectionId: string): Promise<Cr
     .eq("workspace_id", workspaceId)
     .eq("connection_id", connectionId)
     .maybeSingle();
-  if (error || !data) throw new HttpError(409, "Reconnect Notion to continue.");
+  if (error)
+    throw new HttpError(503, "Notion credentials are unavailable. Check the database migration.");
+  if (!data) throw new HttpError(409, "Reconnect Notion to continue.");
   return data as Credential;
 }
 async function ready(workspaceId: string, destination = false) {
@@ -108,7 +110,14 @@ async function ready(workspaceId: string, destination = false) {
   const cred = await credential(workspaceId, conn.id);
   if (destination && !cred.selected_data_source_id)
     throw new HttpError(409, "Choose a Notion content calendar first.");
-  return { conn, cred, token: decryptWithKey(cred.access_token_enc, notionConfig().key) };
+  const { key } = notionConfig();
+  let token: string;
+  try {
+    token = decryptWithKey(cred.access_token_enc, key);
+  } catch {
+    throw new HttpError(409, "Notion credentials cannot be read. Reconnect Notion to continue.");
+  }
+  return { conn, cred, token };
 }
 /** A database lease makes create/reconcile operations exclusive across app instances. */
 export async function withNotionSyncLock<T>(
@@ -169,35 +178,28 @@ export async function notionStatus(workspaceId: string) {
   const conn = await connection(workspaceId);
   const cred =
     conn?.status === "active" ? await credential(workspaceId, conn.id).catch(() => null) : null;
-  const configured = notionConfigured();
+  let configurationMessage: string | null = null;
+  let key: Buffer | null = null;
+  try {
+    key = notionConfig().key;
+  } catch (error) {
+    configurationMessage =
+      error instanceof HttpError ? error.message : "Notion server configuration is unavailable.";
+  }
+  const configured = key !== null;
   let status = conn?.status ?? "disconnected";
   if (status === "active" && !cred) status = "error";
   if (status === "active" && !configured) status = "error";
-  if (status === "active" && cred && configured) {
-    let token: string;
+  if (status === "active" && cred && key) {
     try {
-      token = decryptWithKey(cred.access_token_enc, notionConfig().key);
+      decryptWithKey(cred.access_token_enc, key);
     } catch {
       status = "error";
-      token = "";
     }
-    if (token)
-      try {
-        await notionRequest(token, "/users/me");
-      } catch (error) {
-        if (error instanceof HttpError && error.status === 409) {
-          const { error: updateError } = await db
-            .from("workspace_connections")
-            .update({ status: "error", last_error: "Reconnect Notion to continue." })
-            .eq("workspace_id", workspaceId)
-            .eq("id", conn!.id);
-          if (updateError) throw new HttpError(500, "Could not update Notion connection status.");
-          status = "error";
-        }
-      }
   }
   return {
     configured,
+    configurationMessage,
     status,
     workspaceName: conn?.account_login ?? null,
     destinationName: cred?.selected_destination_name ?? null,

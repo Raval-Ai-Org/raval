@@ -39,7 +39,7 @@ for (const vp of VIEWPORTS) {
           timeout: 30_000,
         });
       }
-      await expect(frame.getByText("Mellox follows this")).toBeVisible();
+      await expect(frame.getByText("In use")).toBeVisible();
       await expect(frame.getByText("Rising: cafés cutting waste")).toBeVisible();
       await frame.getByRole("button", { name: /^Competitors:/ }).click();
       await expect(page.getByTestId("lab-last")).toHaveText("open:competitors");
@@ -49,10 +49,10 @@ for (const vp of VIEWPORTS) {
     test("an empty brain says what to do first", async ({ page }) => {
       await openScene(page, "home-empty");
       const frame = page.getByTestId("brain-lab-frame");
-      await expect(frame.getByText("Add your website to build Brand DNA")).toBeVisible({
+      await expect(frame.getByText("Add your website")).toBeVisible({
         timeout: 30_000,
       });
-      await expect(frame.getByText("On the Growth plan")).toBeVisible();
+      await expect(frame.getByText("Growth plan")).toBeVisible();
       await frame.getByRole("button", { name: "Create" }).click();
       await expect(page.getByTestId("lab-last")).toHaveText("open:strategy");
     });
@@ -60,8 +60,8 @@ for (const vp of VIEWPORTS) {
     test("a draft strategy can be edited and confirmed", async ({ page }) => {
       await openScene(page, "strategy-draft");
       const frame = page.getByTestId("brain-lab-frame");
-      await expect(frame.getByText("Draft — not in use yet")).toBeVisible({ timeout: 30_000 });
-      await expect(frame.getByText("Your brains changed since this was written.")).toBeVisible();
+      await expect(frame.getByText("Draft", { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(frame.getByText("Your brains changed.")).toBeVisible();
       await expect(frame.getByText("vs Bean Bros")).toBeVisible();
       await frame.getByRole("button", { name: "Edit" }).click();
       await frame.getByRole("button", { name: "Remove Café stories" }).click();

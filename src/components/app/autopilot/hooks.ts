@@ -6,6 +6,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { emitAppEvent } from "@/lib/app-events";
+import { useNavigate } from "@/lib/navigation";
+import { workspacePath } from "@/lib/workspace/paths";
 import type { OpportunityFormat, ProgramSettings } from "@/lib/autopilot/contracts";
 import type { PlatformId } from "@/lib/social-platforms";
 import {
@@ -14,6 +16,7 @@ import {
   decideOpportunity,
   getAgencyAutopilot,
   getAutopilot,
+  getAutopilotStatus,
   retryAutopilotAction,
   setAutopilotPaused,
   startAutopilot,
@@ -38,9 +41,10 @@ function message(error: unknown, fallback: string): string {
  * Autopilot moves by itself, so the view refetches while anything is being
  * made or sent, and stops the moment nothing is.
  */
-export function useAutopilot(workspaceId: string) {
+export function useAutopilot(workspaceId: string, enabled = true) {
   return useQuery({
     queryKey: autopilotKeys.view(workspaceId),
+    enabled,
     staleTime: 10_000,
     queryFn: () => getAutopilot({ data: { workspaceId } }),
     refetchInterval: (query) => {
@@ -55,6 +59,32 @@ export function useAutopilot(workspaceId: string) {
       return busy ? 5_000 : fresh ? 8_000 : false;
     },
   });
+}
+
+/** Just on / paused / not set up, and how many things wait for a person. */
+export function useAutopilotStatus(workspaceId: string) {
+  return useQuery({
+    queryKey: autopilotKeys.status(workspaceId),
+    staleTime: 60_000,
+    retry: false,
+    queryFn: () => getAutopilotStatus({ data: { workspaceId } }),
+    refetchInterval: (query) => (query.state.data?.status === "running" ? 60_000 : false),
+  });
+}
+
+export type AutopilotPlace = "accounts" | "brand" | "style" | "website" | "visibility" | "calendar";
+
+/** Each of these lives elsewhere in Mellox; Autopilot only sends people there. */
+export function useAutopilotOpen(workspaceId: string) {
+  const navigate = useNavigate();
+  return (target: AutopilotPlace) => {
+    if (target === "calendar") navigate({ to: workspacePath(workspaceId, "", { calendar: 1 }) });
+    else if (target === "accounts") emitAppEvent("open:settings", { section: "accounts" });
+    else if (target === "website") emitAppEvent("open:settings", { section: "website" });
+    else if (target === "brand") emitAppEvent("open:brand-dna");
+    else if (target === "style") emitAppEvent("open:brand-dna", { tab: "look" });
+    else emitAppEvent("open:ai-visibility");
+  };
 }
 
 /** What Mellox proposes for this brand. Asked once, kept while the setup is open. */

@@ -29,8 +29,16 @@ type Row = Record<string, unknown>;
 const db = supabaseAdmin as unknown as SupabaseClient;
 const refreshes = new Map<string, Promise<string>>();
 
+function decryptCanvaToken(payload: string, key: Buffer) {
+  try {
+    return decryptWithKey(payload, key);
+  } catch {
+    throw new HttpError(409, "Canva credentials cannot be read. Reconnect Canva to continue.");
+  }
+}
+
 async function connection(workspaceId: string) {
-  const { data } = await db
+  const { data, error } = await db
     .from("workspace_connections")
     .select("id, status, account_login, updated_at")
     .eq("workspace_id", workspaceId)
@@ -39,14 +47,45 @@ async function connection(workspaceId: string) {
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (error)
+    throw new HttpError(503, "Canva connections are unavailable. Check the database migration.");
   return data as { id: string; status: string; account_login: string; updated_at: string } | null;
 }
 
 export async function canvaStatus(workspaceId: string) {
   const row = await connection(workspaceId);
+  const configured = canvaConfigured();
+  let status = row?.status ?? "disconnected";
+  if (status === "active") {
+    if (!configured) {
+      status = "error";
+    } else {
+      const { data, error } = await db
+        .from("canva_oauth_credentials")
+        .select("access_token_enc, refresh_token_enc")
+        .eq("connection_id", row!.id)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+      if (error)
+        throw new HttpError(
+          503,
+          "Canva credentials are unavailable. Check the database migration.",
+        );
+      if (!data) status = "error";
+      else {
+        try {
+          const { key } = canvaConfig();
+          decryptWithKey(data.access_token_enc, key);
+          decryptWithKey(data.refresh_token_enc, key);
+        } catch {
+          status = "error";
+        }
+      }
+    }
+  }
   return {
-    configured: canvaConfigured(),
-    status: row?.status ?? "disconnected",
+    configured,
+    status,
     accountName: row?.account_login ?? null,
   };
 }
@@ -130,23 +169,25 @@ async function freshToken(workspaceId: string) {
   const connected = await connection(workspaceId);
   if (!connected || connected.status !== "active")
     throw new HttpError(409, "Connect Canva to edit this image.");
-  const { data } = await db
+  const { data, error: credentialsError } = await db
     .from("canva_oauth_credentials")
     .select("workspace_id, access_token_enc, refresh_token_enc, access_token_expires_at")
     .eq("connection_id", connected.id)
     .maybeSingle();
+  if (credentialsError)
+    throw new HttpError(503, "Canva credentials are unavailable. Check the database migration.");
   if (!data || data.workspace_id !== workspaceId)
     throw new HttpError(409, "Reconnect Canva to continue.");
   const config = canvaConfig();
   if (Date.parse(data.access_token_expires_at) > Date.now() + 60_000)
-    return decryptWithKey(data.access_token_enc, config.key);
+    return decryptCanvaToken(data.access_token_enc, config.key);
   const inFlight = refreshes.get(connected.id);
   if (inFlight) return inFlight;
   const refreshing = (async () => {
     try {
       const tokens = await tokenGrant({
         grant_type: "refresh_token",
-        refresh_token: decryptWithKey(data.refresh_token_enc, config.key),
+        refresh_token: decryptCanvaToken(data.refresh_token_enc, config.key),
       });
       const { error } = await db
         .from("canva_oauth_credentials")
@@ -160,7 +201,8 @@ async function freshToken(workspaceId: string) {
         .eq("workspace_id", workspaceId);
       if (error) throw new HttpError(500, "Could not refresh Canva connection.");
       return tokens.access_token;
-    } catch {
+    } catch (error) {
+      if (error instanceof HttpError && error.status !== 409) throw error;
       // Another server instance may already have consumed Canva's one-use refresh token.
       const { data: rotated } = await db
         .from("canva_oauth_credentials")
@@ -172,7 +214,7 @@ async function freshToken(workspaceId: string) {
         rotated?.access_token_enc &&
         Date.parse(rotated.access_token_expires_at) > Date.now() + 60_000
       ) {
-        return decryptWithKey(rotated.access_token_enc, config.key);
+        return decryptCanvaToken(rotated.access_token_enc, config.key);
       }
       await db
         .from("workspace_connections")

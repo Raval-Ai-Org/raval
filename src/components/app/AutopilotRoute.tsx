@@ -3,7 +3,7 @@
 // Autopilot (ADR-0028) is a real route rendered as the shared modal surface
 // over AppShell, like Experiments and Backlinks.
 import { Suspense, lazy } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Bot } from "@/components/icons";
 import { PageLoader } from "@/components/ui/page-loader";
@@ -16,8 +16,13 @@ const AutopilotPanel = lazy(() =>
   })),
 );
 
+const SECTIONS = ["home", "approvals", "ideas", "activity", "settings"] as const;
+
 export default function AutopilotRoute() {
   const router = useRouter();
+  // The message box and the top bar link straight to a section with ?s=.
+  const wanted = useSearchParams().get("s");
+  const section = SECTIONS.find((s) => s === wanted);
   const workspaceId = useOptionalWorkspaceId();
   return (
     <AppModalShell
@@ -31,7 +36,11 @@ export default function AutopilotRoute() {
       bodyClassName="overflow-hidden"
     >
       <Suspense fallback={<PageLoader />}>
-        {workspaceId ? <AutopilotPanel workspaceId={workspaceId} /> : <PageLoader />}
+        {workspaceId ? (
+          <AutopilotPanel workspaceId={workspaceId} initialSection={section} />
+        ) : (
+          <PageLoader />
+        )}
       </Suspense>
     </AppModalShell>
   );

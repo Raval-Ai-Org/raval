@@ -54,6 +54,7 @@ import {
 } from "@/lib/studio/session-store";
 import { cn } from "@/lib/utils";
 import { ChatComposer, CHAT_MODELS, type ChatComposerHandle } from "./chat/ChatComposer";
+import { useComposerAutopilot } from "./autopilot/composer/useComposerAutopilot";
 import { ChatGreeting, ChatStarters, type Starter } from "./chat/ChatEmptyState";
 import { AssistantMessage, ErrorMessage, NoticeMessage, UserMessage } from "./chat/ChatMessages";
 import { ChatOffers } from "./chat/ChatOffers";
@@ -1388,6 +1389,14 @@ export function ChatPanel({
       ? "How can Mellox help today?"
       : "Reply to Mellox…";
 
+  // Autopilot lives in the message box: a switch when it's off, the whole box
+  // when it's on. Typing hands the box straight back.
+  const onAutopilotType = useCallback((char?: string) => {
+    if (char) setInput((v) => v + char);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }, []);
+  const autopilot = useComposerAutopilot({ workspaceId, hero: empty, onType: onAutopilotType });
+
   const layoutTransition = reducedMotion
     ? { duration: 0 }
     : { type: "spring" as const, stiffness: 260, damping: 32, mass: 0.9 };
@@ -1581,6 +1590,9 @@ export function ChatPanel({
             modelId={modelId}
             onModelChange={changeModel}
             placeholder={placeholder}
+            toolbarSlot={autopilot.toolbarSlot}
+            cover={autopilot.cover}
+            autopilot={autopilot.signal}
           />
         </motion.div>
 

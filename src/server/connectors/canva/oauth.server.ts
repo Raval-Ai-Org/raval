@@ -78,7 +78,13 @@ export async function consumeCanvaState(state: string, userId: string) {
     .maybeSingle();
   if (!row?.pkce_verifier_enc || !validCanvaStateRow(state, row, userId))
     throw new HttpError(400, "Canva connection expired. Start again.");
-  const verifier = decryptWithKey(row.pkce_verifier_enc, canvaConfig().key);
+  const { key } = canvaConfig();
+  let verifier: string;
+  try {
+    verifier = decryptWithKey(row.pkce_verifier_enc, key);
+  } catch {
+    throw new HttpError(409, "Canva connection state cannot be read. Start the connection again.");
+  }
   const { data: consumed, error } = await supabaseAdmin
     .from("connector_install_states")
     .update({ consumed_at: new Date().toISOString(), pkce_verifier_enc: null })

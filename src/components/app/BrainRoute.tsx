@@ -28,7 +28,6 @@ function Inner() {
         if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
       title="Brain"
-      description="Everything Mellox knows, and the plan it follows"
       Icon={BrainIcon}
       size="2xl"
       bodyClassName="overflow-hidden"

@@ -24,8 +24,8 @@ export function CanvaConnection() {
     if (!workspaceId) return;
     try {
       setStatus(await getCanvaConnection({ data: { workspaceId } }));
-    } catch {
-      setError("Could not load Canva connection.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load Canva connection.");
     }
   }, [workspaceId]);
   useEffect(() => {
@@ -42,7 +42,7 @@ export function CanvaConnection() {
             {connected
               ? `Connected${status.accountName && status.accountName !== "Canva" ? ` as ${status.accountName}` : ""}`
               : status?.status === "error"
-                ? "Connection expired · reconnect to edit"
+                ? "Connection needs attention · reconnect to edit"
                 : "Not connected"}
           </p>
           <p className="mt-1 max-w-md text-xs text-muted-foreground">
@@ -64,8 +64,10 @@ export function CanvaConnection() {
                     await removeCanvaConnection({ data: { workspaceId } });
                     await refresh();
                     emitAppEvent("connections:changed");
-                  } catch {
-                    setError("Could not disconnect Canva.");
+                  } catch (cause) {
+                    setError(
+                      cause instanceof Error ? cause.message : "Could not disconnect Canva.",
+                    );
                   } finally {
                     setBusy(false);
                   }
@@ -88,8 +90,10 @@ export function CanvaConnection() {
                       },
                     });
                     window.location.assign(url);
-                  } catch {
-                    setError("Could not start Canva connection.");
+                  } catch (cause) {
+                    setError(
+                      cause instanceof Error ? cause.message : "Could not start Canva connection.",
+                    );
                     setBusy(false);
                   }
                 }}

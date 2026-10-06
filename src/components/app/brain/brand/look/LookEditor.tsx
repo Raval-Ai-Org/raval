@@ -75,13 +75,13 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="ds-tile space-y-4 p-4 sm:p-5">
+    <div className="ds-tile space-y-4 p-4 sm:p-5">
       <header className="flex items-center justify-between gap-3">
         <h4 className="text-[14px] font-semibold tracking-tight text-foreground">{title}</h4>
         {aside}
       </header>
       {children}
-    </section>
+    </div>
   );
 }
 

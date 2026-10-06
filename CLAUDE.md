@@ -132,6 +132,14 @@ Brand Styles and the Brand Kit are gone — never add them back).
     (`src/server/brand-look/resolve.server.ts`), with the verified workspace id.
     There is no style id anywhere; never add a picker or a second look.
   - No look set means plain Brand DNA (`customized: false`, no style block).
+- **One scan fills three brains.** A Brand DNA scan (`BrandDnaSurface`) then
+  builds the audience groups (`buildAudience`) and looks for competitors
+  (`bootstrapCompetitors`) from what it found; `ScanSteps` shows the three
+  steps. A plan or flag that doesn't allow one skips it quietly. Never make a
+  person scan Audience separately after a Brand scan.
+- **Layout:** blocks inside Brain are `<div>`s, not sibling `<section>`s — the
+  global rhythm rule in `styles.css` adds a 48px gap between sibling sections
+  and breaks grids. Notes are `brain/home/NotesBoard.tsx`.
 - `BrainHome`, `StrategyScreen` and `BrainPulseView` are presentational;
   `/brain-lab` renders them with sample data in development
   (`tests/integration/brain-lab.spec.ts`).
@@ -290,7 +298,7 @@ sidebar entry is hidden, RPCs answer 404, and the worker pauses that workspace.
 Full reference: [docs/autopilot.md](docs/autopilot.md), decision record
 [ADR-0028](docs/adr/0028-autopilot.md). Flag `FEATURE_FLAG_AUTOPILOT_ENABLED`
 (per workspace: `FEATURE_FLAG_AUTOPILOT_ENABLED_WS_<id>`), on unless set to
-`false`. When it's off the sidebar entry is hidden, RPCs answer 404, and the
+`false`. When it's off the message-box switch is hidden, RPCs answer 404, and the
 worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents pause it too.
 
 - One engine for every workspace: a program (`autopilot_programs`), leased
@@ -333,6 +341,13 @@ worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents p
 - The UI is one presentational component (`AutopilotScreen`) fed by
   `AutopilotPanel`; `/autopilot-lab` renders it with sample data in development
   for visual checks (`tests/integration/autopilot-lab.spec.ts`).
+- **It lives in the chat message box, not the sidebar** (`autopilot/composer/`:
+  presentational `AutopilotDeck`, wired by `useComposerAutopilot`). Off, it is
+  one switch in the box's toolbar; on, the deck covers the box in a new chat
+  and the top bar shows `AutopilotBeacon`. Typing always hands the box back.
+  The full view loads only while the deck shows and the proposal is asked for
+  only after a person flips the switch. Never add a sidebar entry back; link to
+  the full screen with `autopilotPath(id, section)`.
 - **More than posts.** A program's `automations` become weekly `task` actions
   that start work in another Mellox system through `ports.tasks.run` (today:
   `geo_scan` → `createScan`). A task only starts the work; that system keeps

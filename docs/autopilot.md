@@ -37,7 +37,7 @@ Who approves:
 Email needs `RESEND_API_KEY` and `BILLING_EMAIL_FROM`; without them the notice
 is skipped and the posts simply wait in the app.
 
-Off means: no sidebar entry, RPCs answer 404, the worker skips the workspace.
+Off means: no switch in the message box, RPCs answer 404, the worker skips the workspace.
 `AGENTS_DISABLED=true` or a workspace's "pause agents" switch pauses it as well.
 
 No cron job to add. The existing `mellox-run-schedules` job (every minute)
@@ -53,7 +53,8 @@ advances it.
 | Calls into Studio, content, publisher, Market Brain, the model | `ports.server.ts` |
 | What a person can do, and the cron entry | `service.server.ts` |
 | RPC | `src/server/fns/autopilot.ts`, stubs `src/lib/autopilot.functions.ts` |
-| Workspace UI | `src/components/app/autopilot/` at `/w/<id>/app/autopilot` |
+| Workspace UI | `src/components/app/autopilot/` at `/w/<id>/app/autopilot` (`?s=<section>`) |
+| In the chat message box | `src/components/app/autopilot/composer/` (`AutopilotDeck`, `useComposerAutopilot`) |
 | Agency view | `src/components/app/command-center/AutopilotView.tsx` at `/agency?view=autopilot` |
 | Migrations | `20261003090000_autopilot.sql`, `20261003090100_autopilot_rpcs.sql` |
 
@@ -116,8 +117,24 @@ npx vitest run src/lib/autopilot src/server/autopilot tests/db/autopilot.test.ts
 npx vitest run --config vitest.live.config.ts tests/live/autopilot.live.ts
 ```
 
+## Where people find it
+
+Autopilot has no sidebar entry. It lives in the chat message box:
+
+- **Off:** one switch in the box's toolbar. Flipping it shows what Mellox
+  proposes, in the box, with one "Turn on" button ("Adjust" opens the full setup).
+- **On:** the box lights up and the deck covers it in a new chat: where every
+  post is, the next seven days, credits used, what waits for a person, and a
+  switch that pauses it. "Write" (or just typing) hands the box back; the box
+  stays lit and the toolbar switch brings the deck back.
+- **Everywhere else:** a small live sign in the top bar while it runs or is
+  paused, which opens the full screen (at "To approve" when something waits).
+
+The full view is loaded only while the deck shows, and the proposal is asked
+for only after a person flips the switch, so opening chat starts nothing.
+
 To look at the screens without signing in, run the dev server and open
-`/autopilot-lab` (development only); `tests/integration/autopilot-lab.spec.ts`
+`/autopilot-lab` (development only; `?scene=box` is the message box); `tests/integration/autopilot-lab.spec.ts`
 checks them at desktop and phone width.
 
 The live check uses the real database and deletes what it creates. Paid steps

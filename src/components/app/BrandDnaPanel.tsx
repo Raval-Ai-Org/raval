@@ -5,6 +5,11 @@ import { mergeExtractionIntoDna } from "@/lib/brand-dna-merge";
 import { bootstrapCompetitors } from "@/lib/competitors.functions";
 import { flushBrandDnaFor } from "@/hooks/use-brand-dna";
 import { competitorKeys } from "@/components/app/competitors/hooks";
+import { audienceKeys } from "@/components/app/audience/hooks";
+import { brainKeys } from "@/components/app/brain/use-brain";
+import { ScanSteps, type ScanStep } from "@/components/app/brain/brand/ScanSteps";
+import { buildAudience, getAudience } from "@/lib/audience.functions";
+import { isActiveRun } from "@/lib/audience/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -101,6 +106,10 @@ export function BrandDnaSurface({
   const [websiteUrl, setWebsiteUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [lastError, setLastError] = useState<string | null>(null);
+  // One scan fills three brains: Brand first, then Audience and Competitors
+  // from what it found, so nobody has to scan each one by hand.
+  const [audienceStep, setAudienceStep] = useState<ScanStep>("idle");
+  const [competitorStep, setCompetitorStep] = useState<ScanStep>("idle");
   const [urlInput, setUrlInput] = useState("");
   const [activeTile, setActiveTile] = useState<TileKey | null>(null);
   const [progress, setProgress] = useState<{
@@ -269,29 +278,61 @@ export function BrandDnaSurface({
       replace(merged);
 
       setStatus("ok");
-      toast.success("Brand DNA synced", {
-        description: `${stats.pages} pages • ${stats.competitors} competitors • ${stats.newInsights} insights`,
-      });
-      if (workspaceId) {
-        void (async () => {
-          try {
-            await flushBrandDnaFor(workspaceId);
-            await bootstrapCompetitors({ data: { workspaceId } });
-            await queryClient.invalidateQueries({ queryKey: competitorKeys.all(workspaceId) });
-          } catch (researchError) {
-            console.warn(
-              "[competitors] automatic research after Brand DNA scan failed",
-              researchError,
-            );
-          }
-        })();
-      }
+      if (!silent) toast.success("Brand updated", { description: `${stats.pages} pages read` });
+      if (workspaceId) void fillOtherBrains(workspaceId);
     } catch (e: any) {
       const msg = e?.message ?? "Try again later";
       setStatus("error");
       setLastError(msg);
       if (!silent) toast.error("Couldn't sync", { description: msg });
     }
+  };
+
+  /**
+   * After a Brand scan: build the audience groups and look for competitors
+   * from the fresh Brand DNA. Both are the same included work their own pages
+   * start; a plan or flag that doesn't allow one simply skips it.
+   */
+  const fillOtherBrains = async (ws: string) => {
+    setAudienceStep("running");
+    setCompetitorStep("running");
+    try {
+      await flushBrandDnaFor(ws);
+    } catch {
+      // The save is retried by the hook; the brains below read the stored copy.
+    }
+    const refreshHome = () => queryClient.invalidateQueries({ queryKey: brainKeys.overview(ws) });
+
+    const audience = (async () => {
+      try {
+        await buildAudience({ data: { workspaceId: ws, key: crypto.randomUUID() } });
+        // Groups are written by a short background run; wait for it to finish.
+        for (let i = 0; i < 40; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          const view = await getAudience({ data: { workspaceId: ws } });
+          if (!view.building || !isActiveRun(view.building.status)) break;
+        }
+        await queryClient.invalidateQueries({ queryKey: audienceKeys.all(ws) });
+        setAudienceStep("done");
+      } catch (audienceError) {
+        console.warn("[audience] build after Brand DNA scan skipped", audienceError);
+        setAudienceStep("skipped");
+      }
+    })();
+
+    const competitors = (async () => {
+      try {
+        await bootstrapCompetitors({ data: { workspaceId: ws } });
+        await queryClient.invalidateQueries({ queryKey: competitorKeys.all(ws) });
+        setCompetitorStep("done");
+      } catch (researchError) {
+        console.warn("[competitors] research after Brand DNA scan skipped", researchError);
+        setCompetitorStep("skipped");
+      }
+    })();
+
+    await Promise.allSettled([audience, competitors]);
+    void refreshHome();
   };
 
   useEffect(() => {
@@ -328,22 +369,11 @@ export function BrandDnaSurface({
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back
           </button>
         ) : (
-          <div className="flex items-center gap-2.5">
-            <span
-              className="grid h-8 w-8 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20"
-              aria-hidden="true"
-            >
-              <Brain className="h-4 w-4" />
-            </span>
-            <div className="flex flex-col leading-tight">
-              <span className="text-[15px] font-semibold tracking-tight text-foreground">
-                Brand DNA
-              </span>
-              <span className="hidden text-[11.5px] text-muted-foreground sm:block">
-                What Mellox knows about you
-              </span>
-            </div>
-          </div>
+          <ScanSteps
+            brand={status === "loading" ? "running" : dna.extractedAt ? "done" : "idle"}
+            audience={audienceStep}
+            competitors={competitorStep}
+          />
         )}
         <div className="ml-auto flex items-center gap-2">
           <StatusPill status={status} extractedAt={dna.extractedAt} progress={progress} />
@@ -353,7 +383,7 @@ export function BrandDnaSurface({
             onClick={() => runFetch()}
             disabled={status === "loading" || !connectedUrl}
             className="h-8 rounded-full px-3 text-[12px] focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand-green))]"
-            title="Re-sync from your website"
+            title="Scan your website: Brand, Audience and Competitors"
             aria-label={
               status === "loading" ? "Re-syncing from your website" : "Re-sync from your website"
             }
@@ -363,7 +393,7 @@ export function BrandDnaSurface({
             ) : (
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
             )}
-            <span className="hidden sm:inline">Re-sync</span>
+            <span className="hidden sm:inline">Scan</span>
           </Button>
         </div>
         {status === "loading" && (

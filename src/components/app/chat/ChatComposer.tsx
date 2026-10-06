@@ -47,8 +47,12 @@ type Props = {
   onModelChange: (id: string) => void;
   placeholder: string;
   hero?: boolean;
-  /** Extra control next to "Add files" (the Brand Kit style picker). */
+  /** Extra control next to "Add files" (the Autopilot switch). */
   toolbarSlot?: React.ReactNode;
+  /** Shown in place of the text box and its toolbar (Autopilot, while it is on). */
+  cover?: React.ReactNode;
+  /** Lights the box while Autopilot runs. */
+  autopilot?: "on" | "paused" | "setup" | "off" | null;
 };
 
 export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatComposer(
@@ -67,9 +71,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
     placeholder,
     hero,
     toolbarSlot,
+    cover,
+    autopilot,
   },
   ref,
 ) {
+  const covered = Boolean(cover);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
@@ -85,7 +92,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
     const max = hero ? 260 : 220;
     ta.style.height = `${Math.min(ta.scrollHeight, max)}px`;
     ta.style.overflowY = ta.scrollHeight > max ? "auto" : "hidden";
-  }, [value, hero]);
+  }, [value, hero, covered]);
 
   const model = CHAT_MODELS.find((m) => m.id === modelId) ?? CHAT_MODELS[0];
   const billing = useEntitlements();
@@ -99,6 +106,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
     <div
       ref={shellRef}
       className={cn("mx-composer group/composer", hero && "mx-composer--hero")}
+      data-autopilot={autopilot && autopilot !== "off" ? autopilot : undefined}
+      data-covered={covered ? "" : undefined}
       onDragEnter={(e) => {
         if (!e.dataTransfer?.types?.includes("Files")) return;
         e.preventDefault();
@@ -136,150 +145,173 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
         }}
       />
 
-      <AnimatePresence initial={false}>
-        {attachments.length > 0 ? (
-          <motion.div
-            key="attachments"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden"
-          >
-            <div className="flex flex-wrap gap-2 px-3 pt-3">
-              <AnimatePresence initial={false}>
-                {attachments.map((a) => (
-                  <AttachmentChip key={a.id} a={a} onRemove={() => onRemoveAttachment(a.id)} />
-                ))}
-              </AnimatePresence>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          // Physical keyboards can send with Enter. On phones, Enter inserts a
-          // line break; the visible Send button avoids accidental sends.
-          const composing = (e.nativeEvent as KeyboardEvent).isComposing || e.keyCode === 229;
-          if (
-            e.key === "Enter" &&
-            !e.shiftKey &&
-            !e.ctrlKey &&
-            !e.metaKey &&
-            !e.altKey &&
-            !composing &&
-            !window.matchMedia("(max-width: 767px)").matches
-          ) {
-            e.preventDefault();
-            if (!streaming) onSend();
-          }
-          if (e.key === "Escape" && streaming) {
-            e.preventDefault();
-            onStop();
-          }
-        }}
-        onPaste={(e) => {
-          const files = Array.from(e.clipboardData?.files ?? []);
-          if (files.length) {
-            e.preventDefault();
-            onAddFiles(files);
-          }
-        }}
-        placeholder={placeholder}
-        rows={1}
-        aria-label="Message Mellox"
-        aria-keyshortcuts="Enter Shift+Enter"
-        className="mx-composer__input"
-      />
-
-      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2.5 pb-2.5 sm:flex-nowrap">
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="mx-icon-btn size-8 shrink-0"
-          aria-label="Add files"
-          title="Add files (PDF, Word, Excel, images, text)"
+      {covered ? (
+        <motion.div
+          key="cover"
+          initial={{ opacity: 0, scale: 0.985 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+          className="rounded-[inherit]"
         >
-          <Plus className="size-[18px]" />
-        </button>
-        {toolbarSlot}
+          {cover}
+        </motion.div>
+      ) : (
+        <ComposerBody>
+          <AnimatePresence initial={false}>
+            {attachments.length > 0 ? (
+              <motion.div
+                key="attachments"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-wrap gap-2 px-3 pt-3">
+                  <AnimatePresence initial={false}>
+                    {attachments.map((a) => (
+                      <AttachmentChip key={a.id} a={a} onRemove={() => onRemoveAttachment(a.id)} />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button type="button" className="mx-model-btn" aria-label={`Model: ${model.label}`}>
-                <span className="sm:hidden">{model.shortLabel}</span>
-                <span className="hidden sm:inline">{model.label}</span>
-                <ChevronDown className="size-3.5 opacity-60 transition-transform group-data-[state=open]:rotate-180" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} className="w-56 p-1.5">
-              {CHAT_MODELS.map((m) => {
-                // Pro is a paid plan feature with a monthly message allowance.
-                const pro = m.id === "mellox-pro";
-                const lock = pro && proGrant && !proGrant.allowed ? proGrant.requiredPlan : null;
-                return (
-                  <DropdownMenuItem
-                    key={m.id}
-                    onSelect={() => (lock ? openFeatureUpgrade("pro_chat") : onModelChange(m.id))}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2"
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              // Physical keyboards can send with Enter. On phones, Enter inserts a
+              // line break; the visible Send button avoids accidental sends.
+              const composing = (e.nativeEvent as KeyboardEvent).isComposing || e.keyCode === 229;
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey &&
+                !e.ctrlKey &&
+                !e.metaKey &&
+                !e.altKey &&
+                !composing &&
+                !window.matchMedia("(max-width: 767px)").matches
+              ) {
+                e.preventDefault();
+                if (!streaming) onSend();
+              }
+              if (e.key === "Escape" && streaming) {
+                e.preventDefault();
+                onStop();
+              }
+            }}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData?.files ?? []);
+              if (files.length) {
+                e.preventDefault();
+                onAddFiles(files);
+              }
+            }}
+            placeholder={placeholder}
+            rows={1}
+            aria-label="Message Mellox"
+            aria-keyshortcuts="Enter Shift+Enter"
+            className="mx-composer__input"
+          />
+
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2.5 pb-2.5 sm:flex-nowrap">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mx-icon-btn size-8 shrink-0"
+              aria-label="Add files"
+              title="Add files (PDF, Word, Excel, images, text)"
+            >
+              <Plus className="size-[18px]" />
+            </button>
+            {toolbarSlot}
+
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="mx-model-btn"
+                    aria-label={`Model: ${model.label}`}
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-medium">{m.label}</div>
-                      <div className="text-[11.5px] text-muted-foreground">
-                        {pro && !lock && proLeft !== null ? `${m.hint} · ${proLeft} left` : m.hint}
-                      </div>
-                    </div>
-                    {lock ? (
-                      <PlanLock plan={lock} />
-                    ) : m.id === model.id ? (
-                      <Check className="size-4 text-primary" />
-                    ) : null}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                    <span className="sm:hidden">{model.shortLabel}</span>
+                    <span className="hidden sm:inline">{model.label}</span>
+                    <ChevronDown className="size-3.5 opacity-60 transition-transform group-data-[state=open]:rotate-180" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={8} className="w-56 p-1.5">
+                  {CHAT_MODELS.map((m) => {
+                    // Pro is a paid plan feature with a monthly message allowance.
+                    const pro = m.id === "mellox-pro";
+                    const lock =
+                      pro && proGrant && !proGrant.allowed ? proGrant.requiredPlan : null;
+                    return (
+                      <DropdownMenuItem
+                        key={m.id}
+                        onSelect={() =>
+                          lock ? openFeatureUpgrade("pro_chat") : onModelChange(m.id)
+                        }
+                        className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-medium">{m.label}</div>
+                          <div className="text-[11.5px] text-muted-foreground">
+                            {pro && !lock && proLeft !== null
+                              ? `${m.hint} · ${proLeft} left`
+                              : m.hint}
+                          </div>
+                        </div>
+                        {lock ? (
+                          <PlanLock plan={lock} />
+                        ) : m.id === model.id ? (
+                          <Check className="size-4 text-primary" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-          <motion.button
-            type="button"
-            onClick={() => (streaming ? onStop() : onSend())}
-            disabled={!streaming && !canSend}
-            aria-label={streaming ? "Stop" : "Send"}
-            title={streaming ? "Stop (Esc)" : "Send (Enter)"}
-            whileTap={{ scale: 0.9 }}
-            className={cn("mx-send", streaming && "is-streaming", canSend && "is-ready")}
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              {streaming ? (
-                <motion.span
-                  key="stop"
-                  initial={{ scale: 0.4, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.4, opacity: 0 }}
-                  transition={{ duration: 0.16 }}
-                  className="block size-2.5 rounded-[3px] bg-current"
-                />
-              ) : (
-                <motion.span
-                  key="send"
-                  initial={{ y: 6, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -6, opacity: 0 }}
-                  transition={{ duration: 0.16 }}
-                  className="grid place-items-center"
-                >
-                  <ArrowUp className="size-[18px]" strokeWidth={2.4} />
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </motion.button>
-        </div>
-      </div>
+              <motion.button
+                type="button"
+                onClick={() => (streaming ? onStop() : onSend())}
+                disabled={!streaming && !canSend}
+                aria-label={streaming ? "Stop" : "Send"}
+                title={streaming ? "Stop (Esc)" : "Send (Enter)"}
+                whileTap={{ scale: 0.9 }}
+                className={cn("mx-send", streaming && "is-streaming", canSend && "is-ready")}
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  {streaming ? (
+                    <motion.span
+                      key="stop"
+                      initial={{ scale: 0.4, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.4, opacity: 0 }}
+                      transition={{ duration: 0.16 }}
+                      className="block size-2.5 rounded-[3px] bg-current"
+                    />
+                  ) : (
+                    <motion.span
+                      key="send"
+                      initial={{ y: 6, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -6, opacity: 0 }}
+                      transition={{ duration: 0.16 }}
+                      className="grid place-items-center"
+                    >
+                      <ArrowUp className="size-[18px]" strokeWidth={2.4} />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            </div>
+          </div>
+        </ComposerBody>
+      )}
 
       <div className="mx-composer__drop" aria-hidden>
         <Paperclip className="size-4" />
@@ -288,6 +320,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
     </div>
   );
 });
+
+/** The text box and its toolbar, fading in when the box is handed back. */
+function ComposerBody({ children }: { children: React.ReactNode }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      className="flex flex-col"
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 function AttachmentChip({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
   const Icon =

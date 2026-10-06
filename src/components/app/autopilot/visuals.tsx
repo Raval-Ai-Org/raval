@@ -29,7 +29,7 @@ export const rise = (i: number) => ({
   transition: { duration: 0.32, delay: Math.min(i, 6) * 0.05, ease: [0.16, 1, 0.3, 1] as const },
 });
 
-const STAGES = [
+export const STAGES = [
   { id: "plan", label: "Planned", icon: CalendarClock, statuses: ["proposed", "planned"] },
   { id: "write", label: "Writing", icon: Pencil, statuses: ["generating"] },
   { id: "approve", label: "To approve", icon: ListChecks, statuses: ["needs_approval"] },
@@ -37,15 +37,39 @@ const STAGES = [
   { id: "post", label: "Posted", icon: CheckCircle2, statuses: ["published", "measured", "done"] },
 ] as const;
 
+/** How many pieces sit at each stage, in STAGES order. */
+export function stageCounts(view: AutopilotView): number[] {
+  const all = [...view.proposed, ...view.approvals, ...view.upcoming, ...view.finished];
+  return STAGES.map(
+    (stage) => all.filter((a) => (stage.statuses as readonly string[]).includes(a.status)).length,
+  );
+}
+
+/** The next seven days, starting today, with the pieces planned on each. */
+export function weekDays(view: Pick<AutopilotView, "proposed" | "approvals" | "upcoming">) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const all = [...view.proposed, ...view.approvals, ...view.upcoming];
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const next = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i + 1);
+    return {
+      day,
+      actions: all.filter((a) => {
+        const t = a.plannedFor ? Date.parse(a.plannedFor) : NaN;
+        return t >= day.getTime() && t < next.getTime();
+      }),
+    };
+  });
+}
+
 /** Where every piece is right now: plan → write → approve → schedule → post. */
 export function Pipeline({ view, onApprove }: { view: AutopilotView; onApprove: () => void }) {
-  const all = [...view.proposed, ...view.approvals, ...view.upcoming, ...view.finished];
+  const counts = stageCounts(view);
   return (
     <ol className="grid grid-cols-5 gap-1.5 sm:gap-2" aria-label="Where your posts are">
       {STAGES.map((stage, i) => {
-        const count = all.filter((a) =>
-          (stage.statuses as readonly string[]).includes(a.status),
-        ).length;
+        const count = counts[i];
         const live = stage.id === "write" && count > 0;
         const needsYou = stage.id === "approve" && count > 0;
         const Icon = stage.icon;
@@ -98,7 +122,7 @@ export function Pipeline({ view, onApprove }: { view: AutopilotView; onApprove: 
   );
 }
 
-const TONE_DOT = {
+export const TONE_DOT = {
   neutral: "bg-muted-foreground/40",
   active: "bg-primary",
   attention: "bg-warning",
@@ -108,22 +132,11 @@ const TONE_DOT = {
 
 /** The next seven days, one dot per piece. */
 export function WeekStrip({ view }: { view: AutopilotView }) {
-  const days = useMemo(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const all = [...view.proposed, ...view.approvals, ...view.upcoming];
-    return Array.from({ length: 7 }, (_, i) => {
-      const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-      const next = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i + 1);
-      return {
-        day,
-        actions: all.filter((a) => {
-          const t = a.plannedFor ? Date.parse(a.plannedFor) : NaN;
-          return t >= day.getTime() && t < next.getTime();
-        }),
-      };
-    });
-  }, [view.proposed, view.approvals, view.upcoming]);
+  const { proposed, approvals, upcoming } = view;
+  const days = useMemo(
+    () => weekDays({ proposed, approvals, upcoming }),
+    [proposed, approvals, upcoming],
+  );
 
   return (
     <Tile className="px-2 py-3 sm:px-3 sm:py-4">

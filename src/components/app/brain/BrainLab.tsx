@@ -10,7 +10,9 @@ import { cn } from "@/lib/utils";
 import { BrainHome } from "./BrainHome";
 import { BrainIcon, BrainMark } from "./BrainMark";
 import { BrainPulseView } from "./BrainPulse";
+import { ScanSteps } from "./brand/ScanSteps";
 import { LookEditor } from "./brand/look/LookEditor";
+import { NotesBoard } from "./home/NotesBoard";
 import { StrategyScreen, type StrategyHandlers } from "./strategy/StrategyScreen";
 
 const HOUR = 3_600_000;
@@ -187,7 +189,7 @@ const overview: BrainOverview = {
     {
       id: "competitors",
       brain: "competitors",
-      label: "Pick who to track (2 suggested)",
+      label: "Pick competitors (2)",
       cta: "Pick",
     },
   ],
@@ -232,10 +234,10 @@ const emptyOverview: BrainOverview = {
   strategy: { status: null, stale: false, updatedAt: null, pillars: [], headline: "" },
   updates: [],
   needs: [
-    { id: "brand", brain: "brand", label: "Add your website to build Brand DNA", cta: "Open" },
-    { id: "audience", brain: "audience", label: "Build your audience groups", cta: "Build" },
-    { id: "competitors", brain: "competitors", label: "Find your competitors", cta: "Find" },
-    { id: "market", brain: "market", label: "Check what's moving in your market", cta: "Check" },
+    { id: "brand", brain: "brand", label: "Add your website", cta: "Open" },
+    { id: "audience", brain: "audience", label: "Build audience groups", cta: "Build" },
+    { id: "competitors", brain: "competitors", label: "Find competitors", cta: "Find" },
+    { id: "market", brain: "market", label: "Check your market", cta: "Check" },
   ],
   generatedAt: new Date().toISOString(),
 };
@@ -268,6 +270,8 @@ const SCENES = [
   "strategy-writing",
   "pulse",
   "look",
+  "notes",
+  "scan",
   "marks",
 ] as const;
 type Scene = (typeof SCENES)[number];
@@ -381,6 +385,19 @@ export function BrainLab() {
         {scene === "look" && (
           <div className="mx-auto max-w-[1100px] p-4 sm:p-7">
             <LookEditor dna={dna} save={(patch) => setDna((d) => ({ ...d, ...patch }))} />
+          </div>
+        )}
+        {scene === "notes" && (
+          <div className="mx-auto max-w-[1040px] px-4 pt-5 sm:px-6">
+            <NotesBoard workspaceId="00000000-0000-4000-8000-0000000000ab" />
+          </div>
+        )}
+        {scene === "scan" && (
+          <div className="space-y-4 p-6">
+            <ScanSteps brand="running" audience="idle" competitors="idle" />
+            <ScanSteps brand="done" audience="running" competitors="running" />
+            <ScanSteps brand="done" audience="done" competitors="done" />
+            <ScanSteps brand="done" audience="skipped" competitors="done" />
           </div>
         )}
         {scene === "marks" && (

@@ -1,8 +1,8 @@
 // notes-store.ts — per-workspace sticky notes, persisted in localStorage.
 //
-// NotesPanel owns the interactive editing; other surfaces (the client portal's
+// NotesBoard (Brain → Home → Notes) owns the interactive editing; other surfaces (the client portal's
 // "Save to Memory") add notes through `appendNote`, which writes storage
-// directly — so the note is kept even when no NotesPanel is mounted — and then
+// directly — so the note is kept even when no board is mounted — and then
 // emits `notes:changed` so a mounted panel re-reads.
 import { emitAppEvent } from "@/lib/app-events";
 
@@ -34,7 +34,7 @@ export function readNotes(wsId: string): Note[] {
   }
 }
 
-/** Persist without notifying — NotesPanel calls this on every edit. */
+/** Persist without notifying — NotesBoard calls this on every edit. */
 export function writeNotes(wsId: string, notes: Note[]): void {
   try {
     localStorage.setItem(notesKey(wsId), JSON.stringify(notes));

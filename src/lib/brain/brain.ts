@@ -161,17 +161,17 @@ export function readiness(input: {
     needs.push({
       id: "brand",
       brain: "brand",
-      label: input.hasWebsite ? "Finish your Brand DNA" : "Add your website to build Brand DNA",
+      label: input.hasWebsite ? "Finish Brand DNA" : "Add your website",
       cta: "Open",
     });
   } else if (!input.lookSet) {
-    needs.push({ id: "look", brain: "brand", label: "Choose your look and voice", cta: "Choose" });
+    needs.push({ id: "look", brain: "brand", label: "Pick your look", cta: "Pick" });
   }
   if (input.audienceEnabled && !input.groups) {
     needs.push({
       id: "audience",
       brain: "audience",
-      label: "Build your audience groups",
+      label: "Build audience groups",
       cta: "Build",
     });
   }
@@ -179,9 +179,7 @@ export function readiness(input: {
     needs.push({
       id: "competitors",
       brain: "competitors",
-      label: input.suggested
-        ? `Pick who to track (${input.suggested} suggested)`
-        : "Find your competitors",
+      label: input.suggested ? `Pick competitors (${input.suggested})` : "Find competitors",
       cta: input.suggested ? "Pick" : "Find",
     });
   }
@@ -189,7 +187,7 @@ export function readiness(input: {
     needs.push({
       id: "market",
       brain: "market",
-      label: "Check what's moving in your market",
+      label: "Check your market",
       cta: "Check",
     });
   }
@@ -198,21 +196,21 @@ export function readiness(input: {
       needs.push({
         id: "strategy",
         brain: "strategy",
-        label: "Get your marketing strategy",
+        label: "Create your strategy",
         cta: "Create",
       });
     } else if (input.strategy === "draft") {
       needs.push({
         id: "strategy",
         brain: "strategy",
-        label: "Review and confirm your strategy",
+        label: "Review your strategy",
         cta: "Review",
       });
     } else if (input.strategyStale) {
       needs.push({
         id: "strategy",
         brain: "strategy",
-        label: "Your brains changed — refresh the strategy",
+        label: "Refresh your strategy",
         cta: "Open",
       });
     }

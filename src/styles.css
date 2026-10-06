@@ -5597,3 +5597,658 @@ pre {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* =========================================================
+   Autopilot in the chat message box
+   (src/components/app/autopilot/composer/*)
+   Off: one switch in the toolbar. On: the box lights up and
+   the deck covers it. Motion says "running"; stillness says
+   "paused".
+   ========================================================= */
+@property --ap-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes ap-angle {
+  to {
+    --ap-angle: 360deg;
+  }
+}
+@keyframes ap-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ap-dash {
+  to {
+    background-position: 14px 0;
+  }
+}
+@keyframes ap-sweep {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+@keyframes ap-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+@keyframes ap-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+@keyframes ap-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+@keyframes ap-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@layer components {
+  /* ── The box itself ── */
+  .mx-composer[data-covered] {
+    cursor: default;
+  }
+  .mx-composer[data-autopilot="on"] {
+    border-color: hsl(var(--primary) / 0.4);
+    box-shadow:
+      0 0 0 3px hsl(var(--primary) / 0.1),
+      0 18px 48px -22px hsl(var(--primary) / 0.55);
+  }
+  .mx-composer[data-autopilot="paused"] {
+    border-color: hsl(var(--warning) / 0.45);
+  }
+  /* A light that travels round the edge while Autopilot runs. */
+  .mx-composer[data-autopilot="on"]::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: conic-gradient(
+      from var(--ap-angle),
+      transparent 0 62%,
+      hsl(var(--primary)) 84%,
+      transparent 100%
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: ap-angle 5s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── Toolbar switch ── */
+  .ap-toggle {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 0.45rem;
+    height: 2rem;
+    padding: 0 0.65rem 0 0.45rem;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    color: hsl(var(--muted-foreground));
+    transition:
+      background-color 0.18s ease,
+      color 0.18s ease;
+  }
+  .ap-toggle:hover {
+    background: hsl(var(--foreground) / 0.07);
+    color: hsl(var(--foreground));
+  }
+  .ap-toggle:focus-visible,
+  .ap-switch:focus-visible,
+  .ap-btn:focus-visible,
+  .ap-start:focus-visible,
+  .ap-beacon:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  .ap-toggle__track {
+    position: relative;
+    width: 1.75rem;
+    height: 1rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: hsl(var(--foreground) / 0.18);
+    transition: background-color 0.25s ease;
+  }
+  .ap-toggle__thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: calc(1rem - 4px);
+    height: calc(1rem - 4px);
+    border-radius: 999px;
+    background: hsl(var(--background));
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.25);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ap-toggle[data-state="on"] {
+    background: hsl(var(--primary) / 0.12);
+    color: hsl(var(--foreground));
+  }
+  .ap-toggle[data-state="on"] .ap-toggle__track {
+    background: hsl(var(--primary));
+  }
+  .ap-toggle[data-state="on"] .ap-toggle__thumb {
+    transform: translateX(0.75rem);
+  }
+  .ap-toggle[data-state="paused"] .ap-toggle__track {
+    background: hsl(var(--warning) / 0.55);
+  }
+  @media (max-width: 767px) {
+    [data-mellox-app] .ap-toggle,
+    [data-mellox-app] .ap-btn,
+    [data-mellox-app] .ap-start {
+      min-height: 2.75rem;
+    }
+  }
+
+  /* ── The big switch on the deck ── */
+  .ap-switch {
+    position: relative;
+    width: 3rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: hsl(var(--foreground) / 0.16);
+    transition:
+      background-color 0.25s ease,
+      box-shadow 0.25s ease;
+  }
+  .ap-switch:disabled {
+    opacity: 0.6;
+  }
+  .ap-switch__thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: calc(1.75rem - 6px);
+    height: calc(1.75rem - 6px);
+    border-radius: 999px;
+    background: hsl(var(--background));
+    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.3);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ap-switch[aria-checked="true"] {
+    background: hsl(var(--primary));
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0.16);
+  }
+  .ap-switch[aria-checked="true"] .ap-switch__thumb {
+    transform: translateX(1.25rem);
+  }
+
+  /* ── The mark ── */
+  .ap-orb {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    border-radius: 999px;
+  }
+  .ap-orb__core {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 64%;
+    height: 64%;
+    border-radius: 999px;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 0 16px -2px hsl(var(--primary) / 0.75);
+  }
+  .ap-orb__ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: conic-gradient(transparent 0 50%, hsl(var(--primary)) 100%);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
+    mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
+    animation: ap-turn 2.6s linear infinite;
+  }
+  .ap-orb__ring--outer {
+    inset: -5px;
+    opacity: 0.4;
+    animation-duration: 7s;
+    animation-direction: reverse;
+  }
+  .ap-orb[data-state="arming"] .ap-orb__ring {
+    animation-duration: 1.1s;
+  }
+  .ap-orb[data-state="arming"] .ap-orb__core {
+    animation: ap-breathe 1.4s ease-in-out infinite;
+  }
+  .ap-orb[data-state="paused"] .ap-orb__core {
+    background: hsl(var(--warning));
+    box-shadow: none;
+  }
+  .ap-orb[data-state="paused"] .ap-orb__ring {
+    animation: none;
+    background: hsl(var(--warning) / 0.45);
+  }
+  .ap-orb[data-state="off"] .ap-orb__core {
+    background: hsl(var(--foreground) / 0.1);
+    color: hsl(var(--muted-foreground));
+    box-shadow: none;
+  }
+  .ap-orb[data-state="off"] .ap-orb__ring {
+    animation: none;
+    background: hsl(var(--foreground) / 0.12);
+  }
+  .ap-orb[data-state="paused"] .ap-orb__ring--outer,
+  .ap-orb[data-state="off"] .ap-orb__ring--outer {
+    display: none;
+  }
+
+  /* ── The deck ── */
+  .ap-deck {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    gap: 0.95rem;
+    padding: 1rem 1.1rem 0.75rem;
+    border-radius: inherit;
+    overflow: hidden;
+  }
+  .ap-deck__glow {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(110% 90% at 0% 0%, hsl(var(--primary) / 0.16), transparent 62%),
+      radial-gradient(80% 80% at 100% 100%, hsl(var(--primary) / 0.07), transparent 60%);
+    transition: opacity 0.4s ease;
+  }
+  .ap-deck[data-state="paused"] .ap-deck__glow {
+    background: radial-gradient(110% 90% at 0% 0%, hsl(var(--warning) / 0.1), transparent 62%);
+  }
+  .ap-deck[data-state="setup"] .ap-deck__glow {
+    opacity: 0.6;
+  }
+  .ap-deck__scan {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: -1;
+    width: 34%;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.09), transparent);
+    animation: ap-sweep 5.5s linear infinite;
+  }
+  .ap-deck__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0 -0.35rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid hsl(var(--border) / 0.6);
+  }
+
+  .ap-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 2rem;
+    padding: 0 0.7rem;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    color: hsl(var(--muted-foreground));
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease,
+      transform 0.15s ease;
+  }
+  .ap-btn[data-icon-only] {
+    padding: 0 0.5rem;
+    min-width: 2rem;
+    justify-content: center;
+  }
+  .ap-btn:hover:not(:disabled) {
+    background: hsl(var(--foreground) / 0.07);
+    color: hsl(var(--foreground));
+  }
+  .ap-btn:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+  .ap-btn[data-tone="primary"] {
+    background: hsl(var(--foreground) / 0.07);
+    color: hsl(var(--foreground));
+  }
+  .ap-btn[data-tone="primary"]:hover {
+    background: hsl(var(--foreground) / 0.12);
+  }
+  .ap-btn[data-tone="warn"] {
+    background: hsl(var(--warning) / 0.12);
+    color: hsl(var(--foreground));
+  }
+  .ap-btn[data-tone="warn"] > svg {
+    color: hsl(var(--warning));
+  }
+  .ap-btn[data-tone="bad"] {
+    color: hsl(var(--destructive));
+  }
+  .ap-start {
+    display: inline-flex;
+    align-items: center;
+    height: 2.25rem;
+    padding: 0 1.1rem;
+    border-radius: 999px;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    font-size: 13.5px;
+    font-weight: 600;
+    box-shadow: 0 8px 22px -10px hsl(var(--primary) / 0.8);
+    transition:
+      filter 0.15s ease,
+      transform 0.15s ease;
+  }
+  .ap-start:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+  .ap-start:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .ap-start:disabled {
+    opacity: 0.5;
+    box-shadow: none;
+  }
+  .ap-badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: hsl(var(--foreground) / 0.1);
+    color: hsl(var(--foreground));
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .ap-badge[data-tone="warn"] {
+    background: hsl(var(--warning));
+    color: hsl(var(--background));
+  }
+  .ap-badge[data-tone="bad"] {
+    background: hsl(var(--destructive));
+    color: hsl(var(--background));
+  }
+  .ap-fact {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 1.75rem;
+    padding: 0 0.65rem;
+    border-radius: 999px;
+    background: hsl(var(--foreground) / 0.06);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: hsl(var(--foreground) / 0.85);
+  }
+  .ap-skeleton {
+    border-radius: 0.9rem;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--foreground) / 0.05) 25%,
+      hsl(var(--primary) / 0.14) 50%,
+      hsl(var(--foreground) / 0.05) 75%
+    );
+    background-size: 200% 100%;
+    animation: ap-shimmer 1.6s linear infinite;
+  }
+  .ap-dots {
+    display: inline-flex;
+    gap: 3px;
+    margin-left: 0.35rem;
+    vertical-align: middle;
+  }
+  .ap-dots > span {
+    width: 3px;
+    height: 3px;
+    border-radius: 999px;
+    background: currentColor;
+    animation: ap-dot 1.2s ease-in-out infinite;
+  }
+  .ap-dots > span:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .ap-dots > span:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  /* ── Plan → write → approve → schedule → post ── */
+  .ap-flow {
+    --ap-node: 2.25rem;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .ap-flow__step {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .ap-flow__step + .ap-flow__step::before {
+    content: "";
+    position: absolute;
+    top: calc(var(--ap-node) / 2 - 1px);
+    right: calc(50% + var(--ap-node) / 2 + 4px);
+    width: calc(100% - var(--ap-node) - 8px);
+    height: 2px;
+    border-radius: 2px;
+    background: hsl(var(--border));
+  }
+  .ap-flow[data-live] .ap-flow__step + .ap-flow__step::before {
+    background: repeating-linear-gradient(
+      90deg,
+      hsl(var(--primary) / 0.75) 0 7px,
+      transparent 7px 14px
+    );
+    background-size: 14px 100%;
+    animation: ap-dash 0.9s linear infinite;
+  }
+  .ap-flow__node {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: var(--ap-node);
+    height: var(--ap-node);
+    border-radius: 999px;
+    background: hsl(var(--foreground) / 0.06);
+    color: hsl(var(--muted-foreground));
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+  .ap-flow__step[data-has] .ap-flow__node {
+    background: hsl(var(--primary) / 0.14);
+    color: hsl(var(--primary));
+  }
+  .ap-flow__step[data-warn] .ap-flow__node {
+    background: hsl(var(--warning) / 0.16);
+    color: hsl(var(--warning));
+  }
+  .ap-flow__step[data-busy] .ap-flow__node::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 1.5px solid hsl(var(--primary));
+    animation: ap-ping 1.6s ease-out infinite;
+  }
+  .ap-flow__count {
+    position: absolute;
+    top: -0.3rem;
+    right: -0.4rem;
+    display: grid;
+    place-items: center;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 0.25rem;
+    border-radius: 999px;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    font-size: 10.5px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    box-shadow: 0 0 0 2px var(--mx-box-bg, hsl(var(--card)));
+  }
+  .ap-flow__step[data-warn] .ap-flow__count {
+    background: hsl(var(--warning));
+    color: hsl(var(--background));
+  }
+  .ap-flow__label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* ── Next 7 days ── */
+  .ap-week {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.3rem;
+  }
+  .ap-week__day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .ap-week__letter {
+    font-size: 10px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground) / 0.8);
+  }
+  .ap-week__cell {
+    display: flex;
+    width: 100%;
+    height: 1.4rem;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 0.5rem;
+    background: hsl(var(--foreground) / 0.045);
+  }
+  .ap-week__day[data-today] .ap-week__cell {
+    box-shadow: inset 0 0 0 1.5px hsl(var(--primary) / 0.7);
+  }
+  .ap-week__day[data-today] .ap-week__letter {
+    color: hsl(var(--foreground));
+  }
+  .ap-budget {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.45rem;
+    height: 1.4rem;
+    font-size: 11px;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  .ap-budget__bar {
+    position: relative;
+    width: 3.25rem;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: hsl(var(--foreground) / 0.1);
+  }
+  .ap-budget__fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: inherit;
+    background: hsl(var(--primary));
+  }
+
+  /* ── Top bar sign ── */
+  .ap-beacon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.4rem;
+    height: 2rem;
+    padding: 0 0.6rem 0 0.3rem;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--primary) / 0.35);
+    background: hsl(var(--primary) / 0.08);
+    font-size: 12px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    transition: background-color 0.18s ease;
+  }
+  .ap-beacon:hover {
+    background: hsl(var(--primary) / 0.16);
+  }
+  .ap-beacon[data-state="paused"] {
+    border-color: hsl(var(--warning) / 0.4);
+    background: hsl(var(--warning) / 0.08);
+  }
+  .ap-beacon .ap-orb__ring--outer {
+    display: none;
+  }
+}
+
+/* Stillness is fine: every state above also reads without motion. */
+@media (prefers-reduced-motion: reduce) {
+  .mx-composer[data-autopilot="on"]::before,
+  .ap-orb__ring,
+  .ap-orb__core,
+  .ap-deck__scan,
+  .ap-skeleton,
+  .ap-dots > span,
+  .ap-flow[data-live] .ap-flow__step + .ap-flow__step::before,
+  .ap-flow__step[data-busy] .ap-flow__node::after {
+    animation: none !important;
+  }
+  .ap-deck__scan,
+  .ap-flow__step[data-busy] .ap-flow__node::after {
+    display: none;
+  }
+}
