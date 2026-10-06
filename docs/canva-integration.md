@@ -4,7 +4,7 @@ Settings → Connections stores one Canva grant per Mellox workspace. OAuth uses
 
 For a deployed instance, set `APP_URL` to its public HTTPS origin and register that exact origin plus `/api/integrations/canva/callback` in Canva. Keep `SUPABASE_SERVICE_ROLE_KEY` stable across deployments so saved grants remain readable. If an older grant was encrypted with a dedicated key, keep that `CANVA_TOKEN_ENCRYPTION_KEY` available until the grant is replaced; otherwise reconnect Canva. Deploy the Canva Supabase migrations separately from the web build, and check the connection status in Settings before using “Edit with Canva.”
 
-Scopes: `asset:read asset:write design:content:read design:content:write design:meta:read profile:read`. The last scope is required by [Canva's capability endpoint](https://www.canva.dev/docs/apps/rest-apis/reference/users/get-user-capabilities/) and existing grants must reconnect to use capability detection.
+Scopes: `asset:read asset:write design:content:read design:content:write design:meta:read`. The authorization URL sends these five scopes as one space-separated value.
 
 `canva_oauth_credentials` is service-role only and stores AES-256-GCM encrypted access and refresh tokens. The server gateway refreshes tokens and normalizes errors. The browser receives only connection status, mapping identifiers, mode, and a validated Canva editor URL. Disconnect deletes usable local credentials and attempts revocation. Audit records connection, disconnection, design creation, import and selection without credentials.
 

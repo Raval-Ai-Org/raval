@@ -57,7 +57,6 @@ describe("Canva connector boundary", () => {
       "design:content:read",
       "design:content:write",
       "design:meta:read",
-      "profile:read",
     ]);
     expect(challengeFor("verifier")).toBe("iMnq5o6zALKXGivsnlom_0F5_WYda32GHkxlV7mq7hQ");
     expect(hashState("state")).toHaveLength(64);
@@ -70,21 +69,25 @@ describe("Canva connector boundary", () => {
   });
 
   it("builds the exact callback without exposing the client secret or verifier", () => {
-    const url = new URL(
-      buildCanvaAuthorizeUrl(
-        {
-          clientId: "client-id",
-          redirectUri: "http://localhost:8080/api/integrations/canva/callback",
-        },
-        "opaque-state",
-        "opaque-verifier",
-      ),
+    const authorizeUrl = buildCanvaAuthorizeUrl(
+      {
+        clientId: "client-id",
+        redirectUri: "http://localhost:8080/api/integrations/canva/callback",
+      },
+      "opaque-state",
+      "opaque-verifier",
     );
+    const url = new URL(authorizeUrl);
     expect(url.origin + url.pathname).toBe("https://www.canva.com/api/oauth/authorize");
     expect(url.searchParams.get("redirect_uri")).toBe(
       "http://localhost:8080/api/integrations/canva/callback",
     );
-    expect(url.searchParams.get("scope")).toBe(CANVA_SCOPES.join(" "));
+    const expectedScopes =
+      "asset:read asset:write design:content:read design:content:write design:meta:read";
+    expect(url.searchParams.getAll("scope")).toEqual([expectedScopes]);
+    expect(authorizeUrl.match(/[?&]scope=([^&]*)/g)).toEqual([
+      `&scope=${encodeURIComponent(expectedScopes).replaceAll("%20", "+")}`,
+    ]);
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.get("code_verifier")).toBeNull();
     expect(url.searchParams.get("client_secret")).toBeNull();

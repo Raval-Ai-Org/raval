@@ -8,7 +8,6 @@ export const CANVA_SCOPES = [
   "design:content:read",
   "design:content:write",
   "design:meta:read",
-  "profile:read", // GET /users/me/capabilities for Preview availability.
 ] as const;
 export const CANVA_CALLBACK = "/api/integrations/canva/callback";
 
