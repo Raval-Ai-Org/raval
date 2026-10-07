@@ -14,7 +14,7 @@
 // run waits on a person or finishes.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   AlertTriangle,
   Bot,

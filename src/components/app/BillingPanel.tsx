@@ -4,13 +4,14 @@
 // shell: it holds Plan & billing, the upgrade screen, and the bridge that turns
 // a server "402" into a toast with a button (never an automatic pop-up).
 
-import { useEffect } from "react";
-import { toast } from "sonner";
+import { useEffect, useRef } from "react";
+import { toast } from "@/lib/toast";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
-import { isBillingMessage } from "@/lib/billing/present";
+import { asPlan, freeNudge, isBillingMessage } from "@/lib/billing/present";
+import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { BillingCenter } from "./billing/BillingCenter";
 import { UpgradeDialog } from "./billing/UpgradeDialog";
-import { upgradeCopy } from "./billing/UpgradePrompt";
+import { plansFrom, upgradeCopy } from "./billing/UpgradePrompt";
 
 export { WalletPill } from "./billing/WalletPill";
 
@@ -34,13 +35,16 @@ function filterBillingErrorToasts() {
 }
 
 function BlockedToasts() {
+  const { data } = useEntitlements();
+  const plan = useRef(data ? asPlan(data.entitledPlan) : undefined);
+  plan.current = data ? asPlan(data.entitledPlan) : undefined;
   useEffect(() => {
     filterBillingErrorToasts();
     return onAppEvent("billing:blocked", (event) => {
       const block = event.detail;
       if (!block) return;
       emitAppEvent("billing:changed");
-      const copy = upgradeCopy(block);
+      const copy = upgradeCopy(block, plan.current);
       toast(copy.title, {
         id: `billing-${block.code}-${block.feature ?? block.meter ?? block.limit ?? ""}`,
         description: copy.text || undefined,
@@ -56,6 +60,44 @@ function BlockedToasts() {
       });
     });
   }, []);
+  return null;
+}
+
+/**
+ * On Free, tell the owner once per visit when the one-time credits are low,
+ * gone or about to end. A toast with a button: the upgrade screen still opens
+ * only when they click.
+ */
+function FreeNudges() {
+  const { data } = useEntitlements();
+  const free = Boolean(data?.isOwner) && asPlan(data?.entitledPlan) === "free";
+  const credits = data?.meters.credits.available;
+  const nextExpiry = data?.meters.credits.nextExpiry ?? null;
+  useEffect(() => {
+    if (!free || typeof credits !== "number") return;
+    const nudge = freeNudge({ credits, nextExpiry });
+    if (!nudge) return;
+    const key = `mellox:free-nudge:${nudge.id}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, "1");
+    } catch {
+      return;
+    }
+    toast(nudge.title, {
+      id: key,
+      description: `${nudge.text} ${plansFrom()}`,
+      action: {
+        label: "See plans",
+        onClick: () =>
+          emitAppEvent(
+            "open:upgrade",
+            nudge.id === "empty" ? { code: "insufficient_balance", meter: "credits" } : undefined,
+          ),
+      },
+      duration: 12_000,
+    });
+  }, [free, credits, nextExpiry]);
   return null;
 }
 
@@ -85,6 +127,7 @@ export function BillingPanel() {
       <BillingCenter />
       <UpgradeDialog />
       <BlockedToasts />
+      <FreeNudges />
     </>
   );
 }

@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -172,6 +172,18 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
   useEffect(() => {
     const onOpen = () => setOpen(true);
     addAppEventListener("open:content-calendar", onOpen);
+    // A link with ?calendar=1 opens it. This component loads lazily, so it reads
+    // the link itself rather than relying on an event sent before it was mounted.
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("calendar") === "1") {
+        setOpen(true);
+        url.searchParams.delete("calendar");
+        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+      }
+    } catch {
+      /* no window or bad URL: stay closed */
+    }
     return () => removeAppEventListener("open:content-calendar", onOpen);
   }, []);
 

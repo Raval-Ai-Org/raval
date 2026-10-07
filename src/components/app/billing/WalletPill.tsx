@@ -2,7 +2,8 @@
 
 // Top bar: credits left (click → Plan & billing) and, for owners on Free, an
 // Upgrade button. The number turns amber when under 20% of the month's
-// allowance and red when empty.
+// allowance and red when empty. On Free the pill says the credits are the free
+// ones, and the Upgrade button glows once they run low.
 
 import { Bolt, Crown } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
@@ -23,6 +24,8 @@ export function WalletPill({ className }: { className?: string }) {
       : allowance > 0 && credits / allowance <= 0.2
         ? "text-warning"
         : "text-foreground";
+  const free = plan === "free";
+  const low = tone !== "text-foreground";
   return (
     <div className={cn("inline-flex items-center gap-1.5", className)}>
       <button
@@ -34,12 +37,26 @@ export function WalletPill({ className }: { className?: string }) {
       >
         <Bolt className="h-3.5 w-3.5 text-primary" aria-hidden />
         <span className={tone}>{formatNumber(credits)}</span>
+        {free && (
+          <span className="hidden text-muted-foreground lg:inline">
+            {credits === 1 ? "free credit" : "free credits"}
+          </span>
+        )}
       </button>
-      {data.isOwner && plan === "free" && (
+      {data.isOwner && free && (
         <button
           type="button"
-          onClick={() => emitAppEvent("open:upgrade", undefined)}
-          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[12.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          onClick={() =>
+            emitAppEvent(
+              "open:upgrade",
+              credits <= 0 ? { code: "insufficient_balance", meter: "credits" } : undefined,
+            )
+          }
+          className={cn(
+            "inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[12.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90",
+            low &&
+              "shadow-[0_0_0_3px_hsl(var(--primary)/0.22),0_8px_22px_-8px_hsl(var(--primary)/0.9)]",
+          )}
         >
           <Crown className="h-3.5 w-3.5" aria-hidden />
           Upgrade

@@ -7,6 +7,8 @@ import {
   FEATURES,
   PLAN_ORDER,
   PLANS,
+  SIGNUP_GRANT,
+  SOFT_LIMIT_RATIO,
   VIDEO_UNITS_PER_VC,
   annualMonthlyUsd,
   planRank,
@@ -230,6 +232,45 @@ export function suggestedPlan(block: BillingBlock | null, current: PlanId): Paid
     return planForMeter(current, block.meter, block.needed ?? 0) ?? nextPlan(current);
   }
   return nextPlan(current);
+}
+
+export type FreeNudge = { id: "empty" | "low" | "ending"; title: string; text: string };
+
+/**
+ * What to tell someone on Free about their one-time credits, if anything:
+ * they're gone, nearly gone, or about to end. Every figure is the real one.
+ */
+export function freeNudge(args: {
+  credits: number;
+  /** When the earliest credits end (ISO), if they do. */
+  nextExpiry: string | null;
+  now?: Date;
+}): FreeNudge | null {
+  const monthly = formatNumber(PLANS.starter.allowances.credits);
+  if (args.credits <= 0) {
+    return {
+      id: "empty",
+      title: "You've used your free credits",
+      text: `A plan gives you ${monthly} credits every month.`,
+    };
+  }
+  if (args.credits <= SIGNUP_GRANT.credits * (1 - SOFT_LIMIT_RATIO)) {
+    return {
+      id: "low",
+      title: `${formatNumber(args.credits)} free ${args.credits === 1 ? "credit" : "credits"} left`,
+      text: `A plan gives you ${monthly} every month.`,
+    };
+  }
+  const ends = args.nextExpiry ? Date.parse(args.nextExpiry) : NaN;
+  const days = Math.ceil((ends - (args.now ?? new Date()).getTime()) / 86_400_000);
+  if (Number.isFinite(days) && days >= 0 && days <= 5) {
+    return {
+      id: "ending",
+      title: days <= 1 ? "Your free credits end tomorrow" : `Your free credits end in ${days} days`,
+      text: `Use them now, or get ${monthly} every month with a plan.`,
+    };
+  }
+  return null;
 }
 
 /** Plain words for a ledger row ("Premium article", "Monthly allowance"). */

@@ -6,7 +6,7 @@
 // disabled with a plain explanation rather than leading someone into a checkout
 // that cannot complete.
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import { ArrowUpRight, Spinner } from "@/components/icons";
 import { authedFetch } from "@/lib/authed-fetch";

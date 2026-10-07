@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Globe, RefreshCw, User } from "@/components/icons";
 import { SiteLogo } from "@/components/brand/SiteLogos";
 import { Button } from "@/components/ui/button";

@@ -45,15 +45,20 @@ export function StudioDock() {
   const activeId = useStudioStore((s) => s.activeId);
   // Only this workspace's work: another brand's drafts never dock here.
   const workspaceId = useOptionalWorkspaceId();
-  const visible = sessions
-    // Chat-started work is followed in the chat card and the Studio rail, so it
-    // doesn't also float over the page.
-    .filter((s) => s.workspaceId === workspaceId && s.id !== activeId && s.origin !== "chat")
-    .slice(0, 4);
+  // Studio open: the composer already shows its own progress, so the dock
+  // stays out of the way. It appears only once Studio is closed.
+  const studioOpen = sessions.some((s) => s.id === activeId && s.workspaceId === workspaceId);
+  const visible = studioOpen
+    ? []
+    : sessions
+        // Chat-started work is followed in the chat card and the Studio rail, so it
+        // doesn't also float over the page.
+        .filter((s) => s.workspaceId === workspaceId && s.origin !== "chat")
+        .slice(0, 4);
 
   return (
     <div
-      className="pointer-events-none fixed bottom-4 right-4 z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2 pb-[env(safe-area-inset-bottom)]"
+      className="pointer-events-none fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 md:bottom-4 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2 md:pb-[env(safe-area-inset-bottom)]"
       aria-label="Minimized Studio work"
     >
       <AnimatePresence initial={false}>

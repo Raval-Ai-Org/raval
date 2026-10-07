@@ -19,7 +19,7 @@ import {
   Wand2,
   type LucideIcon,
 } from "@/components/icons";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { describeOffer, type ChatToolCall, type ChatToolResult } from "@/lib/chat-tools";
 import { runChatAction, type ChatAction } from "@/lib/chat-actions";

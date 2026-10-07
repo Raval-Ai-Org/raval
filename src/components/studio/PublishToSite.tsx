@@ -6,7 +6,7 @@
 // (src/server/articles/publish.server.ts); nothing is sent before the button.
 
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   AlertTriangle,
   CalendarClock,

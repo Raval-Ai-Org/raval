@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/brand/Logo";
 import { pageHead } from "@/lib/seo";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 function ResetPasswordPage() {
   const navigate = useNavigate();

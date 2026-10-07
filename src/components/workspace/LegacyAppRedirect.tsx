@@ -9,7 +9,7 @@
 //   - anything else          → /projects, where the user picks one
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { acceptWorkspaceInvite } from "@/lib/workspaces.functions";
 import {

@@ -16,7 +16,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { getWorkspaceDetails } from "@/lib/workspaces.functions";
 import { ServerFnError } from "@/lib/rpc-client";
 import { emitAppEvent } from "@/lib/app-events";

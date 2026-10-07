@@ -6,13 +6,29 @@
 
 import { Bolt, Crown, Lock, Users } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
-import { FEATURES, PLANS } from "@/lib/billing/catalog";
-import { asFeature, asPlan, type BillingBlock } from "@/lib/billing/present";
+import { FEATURES, PLANS, type PlanId } from "@/lib/billing/catalog";
+import {
+  asFeature,
+  asPlan,
+  formatNumber,
+  formatUsd,
+  planPrice,
+  type BillingBlock,
+} from "@/lib/billing/present";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { cn } from "@/lib/utils";
 import { GhostButton, PrimaryButton } from "./billing-ui";
 
-export function upgradeCopy(block: BillingBlock): {
+/** "Plans start at $41 a month": the lowest price the upgrade screen shows. */
+export function plansFrom(): string {
+  return `Plans start at ${formatUsd(Math.round(planPrice("starter", "year").perMonth))} a month.`;
+}
+
+export function upgradeCopy(
+  block: BillingBlock,
+  /** The person's plan, when known: Free gets the plan pitch, not the pack one. */
+  current?: PlanId,
+): {
   title: string;
   text: string;
   action: string | null;
@@ -22,6 +38,14 @@ export function upgradeCopy(block: BillingBlock): {
   const plan = PLANS[asPlan(block.requiredPlan)];
   switch (block.code) {
     case "insufficient_balance":
+      if (current === "free" && block.meter !== "video" && block.meter !== "pro_messages") {
+        return {
+          title: "You've used your free credits",
+          text: `Get ${formatNumber(PLANS.starter.allowances.credits)} credits every month. ${plansFrom()}`,
+          action: "See plans",
+          Icon: Bolt,
+        };
+      }
       return {
         title:
           block.meter === "video"
@@ -35,9 +59,11 @@ export function upgradeCopy(block: BillingBlock): {
       };
     case "upgrade_required":
       return {
-        title: `Available on the ${plan.label} plan`,
-        text: feature ? `Upgrade to use ${FEATURES[feature].label}.` : "Upgrade to use it.",
-        action: "Upgrade",
+        title: feature
+          ? `${FEATURES[feature].label} is on the ${plan.label} plan`
+          : `Available on the ${plan.label} plan`,
+        text: feature ? FEATURES[feature].pitch : "Upgrade to use it.",
+        action: "See plans",
         Icon: Lock,
       };
     case "limit_reached":
@@ -76,7 +102,7 @@ export function UpgradePrompt({
   className?: string;
 }) {
   const { data } = useEntitlements();
-  const copy = upgradeCopy(block);
+  const copy = upgradeCopy(block, data ? asPlan(data.entitledPlan) : undefined);
   const owner = data?.isOwner ?? true;
   const Icon = copy.Icon;
   return (

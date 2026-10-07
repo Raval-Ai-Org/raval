@@ -7,7 +7,7 @@
 // Connections and AI Visibility's "Connect GitHub" step.
 import { inWorkspace } from "@/lib/workspace/paths";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { startGithubInstall } from "@/lib/connectors.functions";
 
 export const CONNECTIONS_RETURN_PATH = "/app?settings=connections";

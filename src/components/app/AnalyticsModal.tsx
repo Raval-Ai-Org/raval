@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { BarChart3, RefreshCw } from "@/components/icons";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { AnalyticsContent } from "@/components/app/AnalyticsContent";

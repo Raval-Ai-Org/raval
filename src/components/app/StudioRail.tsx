@@ -6,7 +6,7 @@ import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   AlertTriangle,
   ArrowRight,

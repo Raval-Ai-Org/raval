@@ -25,6 +25,7 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?set in .env}
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?set in .env}
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?set in .env}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:?set in .env}
     image: mellox-app:${APP_IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env

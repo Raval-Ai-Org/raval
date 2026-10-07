@@ -3,7 +3,7 @@
 // the chat panel + LiveActivityStream + sonner toasts all subscribe.
 
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export type ActivityKind =
   | "agent.toggle"

@@ -107,6 +107,7 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
 import { BillingPanel, WalletPill } from "@/components/app/BillingPanel";
+import { FreeSidebarCard } from "@/components/app/billing/FreePlanPushes";
 import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import { PlanLock } from "@/components/app/billing/billing-ui";
 import { PLANS, type FeatureKey } from "@/lib/billing/catalog";
@@ -316,18 +317,6 @@ function AppShell() {
   useEffect(() => {
     setChatOpen(false);
   }, [path]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (new URL(window.location.href).searchParams.get("calendar") !== "1") return;
-    const timer = window.setTimeout(() => {
-      emitAppEvent("open:content-calendar");
-      const url = new URL(window.location.href);
-      url.searchParams.delete("calendar");
-      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
 
   const sidebarAction = (opts: {
     icon: LucideIcon;
@@ -542,6 +531,8 @@ function AppShell() {
           </Suspense>
           <WalletPill />
         </div>
+
+        <FreeSidebarCard className="mx-1 mt-2" />
 
         <div className="mt-2 border-t border-border/50 pt-2">
           <AccountMenu

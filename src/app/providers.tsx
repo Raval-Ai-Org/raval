@@ -2,9 +2,12 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
+import Script from "next/script";
 import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/hooks/use-theme";
+
+const clarityId = process.env.NEXT_PUBLIC_CLARITY_ID;
 
 function makeQueryClient() {
   return new QueryClient({
@@ -95,6 +98,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
+        {clarityId ? (
+          <Script
+            id="microsoft-clarity"
+            src={`https://www.clarity.ms/tag/${clarityId}`}
+            strategy="afterInteractive"
+          />
+        ) : null}
         <RouteProgress />
         <main id="main-content">{children}</main>
         <Toaster />

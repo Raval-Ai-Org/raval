@@ -45,6 +45,15 @@ const OFFERS: ChatToolCall[] = [
   { kind: "open-visibility", params: {}, raw: "" },
 ];
 
+const LAB_BRAND = {
+  brandName: "Acme Coffee",
+  products: "Cold brew subscription",
+  audienceTags: ["busy office teams"],
+  competitors: [{ name: "Bean Box" }],
+  socials: [{ platform: "instagram" }],
+  websiteUrl: "https://acme.example",
+};
+
 export function ChatLab() {
   const [messages, setMessages] = useState<LabMsg[]>([]);
   const [input, setInput] = useState("");
@@ -234,7 +243,7 @@ export function ChatLab() {
           >
             {empty ? (
               <ChatStarters
-                reducedMotion={false}
+                source={LAB_BRAND}
                 onPick={(s) => (s.prompt ? reply(s.prompt) : setInput(s.prefill ?? ""))}
               />
             ) : (

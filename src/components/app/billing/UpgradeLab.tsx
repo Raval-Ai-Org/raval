@@ -4,7 +4,14 @@
 // Nothing here talks to a server. Pick a scene with ?scene=<name>.
 import { useEffect, useState } from "react";
 import type { BillingInterval, PlanId } from "@/lib/billing/catalog";
-import { asPlan, nextPlan, suggestedPlan, type BillingBlock } from "@/lib/billing/present";
+import {
+  asPlan,
+  freeNudge,
+  nextPlan,
+  suggestedPlan,
+  type BillingBlock,
+} from "@/lib/billing/present";
+import { FreeCreditStripView, FreeSidebarCardView, LockedFeaturesView } from "./FreePlanPushes";
 import { UpgradeWindow, type UpgradeChoice, type UpgradeView } from "./UpgradeScreen";
 
 const SCENES = [
@@ -12,11 +19,13 @@ const SCENES = [
   "feature",
   "limit",
   "credits",
+  "empty",
   "member",
   "paid",
   "confirm",
   "sent",
   "loading",
+  "pushes",
 ] as const;
 type Scene = (typeof SCENES)[number];
 
@@ -24,6 +33,8 @@ const BLOCKS: Partial<Record<Scene, BillingBlock>> = {
   feature: { code: "upgrade_required", feature: "autopilot", requiredPlan: "growth" },
   limit: { code: "limit_reached", limit: "competitors", used: 3, max: 3 },
   credits: { code: "insufficient_balance", meter: "credits", needed: 140, available: 35 },
+  // Free and out of credits: the real window shows plans first.
+  empty: { code: "insufficient_balance", meter: "credits", needed: 12, available: 0 },
 };
 
 const CHOICE: UpgradeChoice = {
@@ -66,7 +77,40 @@ export function UpgradeLab() {
       data-last={last}
       className="min-h-dvh bg-background"
     >
-      {scene && (
+      {scene === "pushes" && (
+        <div className="mx-auto flex max-w-[720px] flex-col gap-6 p-6">
+          {[64, 16, 0].map((credits) => {
+            const nudge = freeNudge({ credits, nextExpiry: null });
+            return (
+              <div key={credits} className="flex flex-wrap items-start gap-4">
+                <FreeSidebarCardView
+                  credits={credits}
+                  nudge={nudge}
+                  className="w-[248px]"
+                  onUpgrade={() => setLast(`upgrade:${credits}`)}
+                />
+                {nudge && (
+                  <FreeCreditStripView
+                    nudge={nudge}
+                    onUpgrade={() => setLast(`plans:${credits}`)}
+                    onDismiss={() => setLast("dismiss")}
+                  />
+                )}
+              </div>
+            );
+          })}
+          <LockedFeaturesView
+            locked={[
+              { feature: "autopilot", plan: "growth" },
+              { feature: "ugc", plan: "starter" },
+              { feature: "audience", plan: "starter" },
+              { feature: "competitors", plan: "starter" },
+            ]}
+            onPick={(feature) => setLast(`feature:${feature}`)}
+          />
+        </div>
+      )}
+      {scene && scene !== "pushes" && (
         <UpgradeWindow
           open
           onOpenChange={() => setLast("close")}
@@ -93,7 +137,7 @@ export function UpgradeLab() {
                   canBuy: scene !== "member",
                   busy: null,
                   askSent: last.startsWith("ask:"),
-                  balance: 35,
+                  balance: scene === "empty" ? 0 : 35,
                   showVideoPacks: current !== "free",
                   onChoose: (item) => {
                     setLast(`choose:${item.kind}:${item.key}:${item.price}`);

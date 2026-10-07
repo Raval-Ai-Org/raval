@@ -2,7 +2,7 @@
 
 // Insights — what changed (deterministic, computed from your data) and what
 // it means (AI, generated only when the changes are new, then cached).
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";

@@ -5,7 +5,7 @@
 // all on a switch and one brand's audience can never render under another.
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { emitAppEvent } from "@/lib/app-events";
 import {
   isActiveRun,

@@ -36,7 +36,7 @@ import {
   runScheduledJobNow,
   type ScheduledJob,
 } from "@/lib/schedules.functions";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 // Segment style — borderless inner button used inside the unified Status Cluster.

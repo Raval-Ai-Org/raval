@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Check, Globe, Mail, RefreshCw } from "@/components/icons";
 import { SiteLogo } from "@/components/brand/SiteLogos";
 import { SiteIcon } from "@/components/app/surface/SiteIcon";

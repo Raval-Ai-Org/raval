@@ -102,6 +102,7 @@ import { checkMemoryConformance } from "@/lib/memory/conformance";
 import { loadMemories } from "@/server/memory/context.server";
 import { reviewGeneratedImage } from "./image-review.server";
 import { carouselSlidePrompt, storyFramePrompt } from "./visual-prompts.server";
+import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
 
 type Db = SupabaseClient;
 
@@ -161,18 +162,22 @@ function classify(error: unknown): JobErrorInfo {
   }
   if (error instanceof UpstreamError || error instanceof AiGatewayError) {
     const status = (error as { status?: number }).status ?? 502;
+    console.warn("[studio] provider error", status, error.message);
     return {
       category: status === 429 ? "rate_limit" : status === 503 ? "configuration" : "provider",
-      message: error.message,
+      message: messageForStatus(status),
       retryable: status !== 400 && status !== 422 && status !== 503,
     };
   }
   if (error instanceof StudioJobError) {
-    return { category: "request", message: error.message, retryable: false };
+    return { category: "request", message: userSafeMessage(error.message), retryable: false };
   }
   return {
     category: "unknown",
-    message: error instanceof Error ? error.message : "Generation failed",
+    message:
+      error instanceof Error
+        ? userSafeMessage(error.message, "Generation failed. Please try again.")
+        : "Generation failed. Please try again.",
     retryable: true,
   };
 }
@@ -1918,7 +1923,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         status: "failed",
         error: {
           category: "provider",
-          message: failed[0].error ?? "The render failed.",
+          message: userSafeMessage(failed[0].error, "The render failed. Please try again."),
           retryable: true,
         },
         completed_at: new Date().toISOString(),

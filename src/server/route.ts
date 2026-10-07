@@ -36,6 +36,7 @@ import { HttpError } from "./http-error";
 import { BillingError } from "./billing/errors";
 import { SsrfBlockedError } from "./safe-fetch";
 import { UpstreamError } from "./upstream";
+import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
 
 type Schema<T> = ZodType<T, ZodTypeDef, unknown>;
 
@@ -105,8 +106,16 @@ export function knownErrorResponse(error: unknown): Response | null {
     res.headers.set("X-Usage-Limit", error.kind);
     return res;
   }
-  if (error instanceof UpstreamError) return jsonError(error.status, error.message);
-  if (error instanceof HttpError) return jsonError(error.status, error.message);
+  if (error instanceof UpstreamError) {
+    // Provider text (balances, keys, model names) stays in the log, never the response.
+    console.warn(
+      `[upstream] ${error.provider} ${error.status} ${error.code ?? ""}: ${error.message}`,
+    );
+    return jsonError(error.status, messageForStatus(error.status));
+  }
+  if (error instanceof HttpError) {
+    return jsonError(error.status, userSafeMessage(error.message, messageForStatus(error.status)));
+  }
   if (error instanceof SsrfBlockedError) return jsonError(400, "URL is not allowed");
   if (error instanceof ZodError) return jsonError(400, "Invalid request");
   if (error instanceof Error && /^Unauthorized/i.test(error.message)) {

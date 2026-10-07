@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { ChevronDown, Loader2, Minus, Plus, Sparkles } from "@/components/icons";
 import { dsIconBtn } from "@/components/app/surface/buttons";
 import { Button } from "@/components/ui/button";

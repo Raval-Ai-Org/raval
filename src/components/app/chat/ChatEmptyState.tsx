@@ -1,46 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  ArrowUpRight,
   CalendarDays,
   Globe,
-  Image as ImageIcon,
   Radio,
+  Users,
   Wand2,
+  X,
   type LucideIcon,
 } from "@/components/icons";
 import { Logo } from "@/components/brand/Logo";
+import {
+  buildStarters,
+  starterFacts,
+  type StarterGroupId,
+  type StarterSource,
+} from "@/lib/chat/starters";
 
 export type Starter = {
-  label: string;
-  icon: LucideIcon;
   /** Sent as-is. */
   prompt?: string;
   /** Put in the message box for the user to finish. */
   prefill?: string;
 };
 
-export const STARTERS: Starter[] = [
-  { label: "Write a post", icon: Wand2, prefill: "Create a LinkedIn post about " },
-  { label: "Make an image", icon: ImageIcon, prefill: "Create an Instagram image of " },
-  {
-    label: "Plan my month",
-    icon: CalendarDays,
-    prompt: "Build a 30-day marketing plan for my business with the highest-impact actions.",
-  },
-  {
-    label: "Check AI search",
-    icon: Globe,
-    prompt:
-      "How visible is my brand in AI search like ChatGPT, Gemini and Perplexity, and what should I fix first?",
-  },
-  {
-    label: "Study competitors",
-    icon: Radio,
-    prompt: "Analyze my competitors and tell me where we can win.",
-  },
-];
+const GROUP_ICON: Record<StarterGroupId, LucideIcon> = {
+  create: Wand2,
+  plan: CalendarDays,
+  found: Globe,
+  competitors: Radio,
+  audience: Users,
+};
 
 function greetingFor(hour: number) {
   if (hour < 5) return "Working late";
@@ -91,34 +84,93 @@ export function ChatGreeting({
   );
 }
 
+// Topics under the message box. A topic opens a short list of things to ask,
+// written from the brand's own details (no request is made to show them).
 export function ChatStarters({
+  source,
   onPick,
-  reducedMotion,
 }: {
+  source: StarterSource;
   onPick: (s: Starter) => void;
-  reducedMotion: boolean;
 }) {
+  const [open, setOpen] = useState<StarterGroupId | null>(null);
+  // Read on click, so server and client render the same markup.
+  const [day, setDay] = useState(0);
+  const groups = useMemo(() => buildStarters(starterFacts(source), day), [source, day]);
+  const listRef = useRef<HTMLUListElement>(null);
+  const group = groups.find((g) => g.id === open);
+
+  useEffect(() => {
+    if (open) listRef.current?.querySelector("button")?.focus({ preventScroll: true });
+  }, [open]);
+
+  if (group) {
+    const Icon = GROUP_ICON[group.id];
+    return (
+      <div
+        className="mx-ideas"
+        role="group"
+        aria-label={`${group.label} ideas`}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setOpen(null);
+        }}
+      >
+        <div className="mx-ideas__head">
+          <Icon className="size-4 text-primary" />
+          <span>{group.label}</span>
+          <button
+            type="button"
+            className="mx-ideas__close"
+            aria-label="Back to all topics"
+            onClick={() => setOpen(null)}
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <ul ref={listRef}>
+          {group.ideas.map((idea) => (
+            <li key={idea.text}>
+              <button
+                type="button"
+                className="mx-idea group"
+                onClick={() => {
+                  setOpen(null);
+                  onPick(idea.run === "send" ? { prompt: idea.text } : { prefill: idea.text });
+                }}
+              >
+                <span className="min-w-0 flex-1">
+                  {idea.run === "send" ? idea.text : `${idea.text.trimEnd()}…`}
+                </span>
+                <ArrowUpRight className="size-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-60 group-focus-visible:opacity-60" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="grid w-full max-w-[420px] grid-cols-2 gap-2 px-2 sm:flex sm:max-w-none sm:flex-wrap sm:justify-center"
+      className="mx-starters grid w-full max-w-[420px] grid-cols-2 gap-2 px-2 sm:flex sm:max-w-none sm:flex-wrap sm:justify-center"
+      role="group"
       aria-label="Ideas to start with"
     >
-      {STARTERS.map((s, i) => {
-        const Icon = s.icon;
+      {groups.map((g) => {
+        const Icon = GROUP_ICON[g.id];
         return (
-          <motion.button
-            key={s.label}
+          <button
+            key={g.id}
             type="button"
-            initial={reducedMotion ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.18 + i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            whileTap={{ scale: 0.96 }}
-            onClick={() => onPick(s)}
+            onClick={() => {
+              setDay(Math.floor(Date.now() / 86_400_000));
+              setOpen(g.id);
+            }}
             className="mx-starter group min-w-0 justify-center last:col-span-2 sm:last:col-auto"
           >
             <Icon className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />
-            {s.label}
-          </motion.button>
+            {g.label}
+          </button>
         );
       })}
     </div>

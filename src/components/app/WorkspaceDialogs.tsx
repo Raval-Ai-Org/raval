@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { renameWorkspace, getWorkspaceDetails } from "@/lib/workspaces.functions";
 import { Globe, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
 import {

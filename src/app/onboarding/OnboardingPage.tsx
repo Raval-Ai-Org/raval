@@ -3,7 +3,7 @@
 import { Spinner } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Logo } from "@/components/brand/Logo";
 import { BrandReveal, type BrandEdits } from "@/components/onboarding/BrandReveal";
 import { SCAN_PHASES, advancePhase } from "@/components/onboarding/phases";

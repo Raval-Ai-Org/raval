@@ -71,7 +71,7 @@ import {
   HelpCircle,
   UserPlus,
 } from "@/components/ui/gemini-icons";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { BillingPanel, WalletPill } from "@/components/app/BillingPanel";
 import { FeatureGate, openFeatureUpgrade, useFeatureLocked } from "@/components/app/FeatureGate";
 import { emitAppEvent } from "@/lib/app-events";

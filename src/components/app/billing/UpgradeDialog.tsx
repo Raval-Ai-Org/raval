@@ -23,8 +23,15 @@ export function UpgradeDialog() {
   const [pending, setPending] = useState<UpgradeChoice | null>(null);
   const [contact, setContact] = useState("");
   const [sent, setSent] = useState<UpgradeChoice | null>(null);
+  const [packsAsked, setPacksAsked] = useState(false);
   const { data } = useEntitlements({ enabled: open });
   const actions = useBillingActions(data);
+  const current = asPlan(data?.entitledPlan);
+  // On Free, running out of credits is a reason to pick a plan (credits every
+  // month), not to buy a one-time pack. Packs stay one tab away.
+  const freeAndEmpty =
+    current === "free" && block?.code === "insufficient_balance" && block.meter !== "video";
+  const shownView = freeAndEmpty && !packsAsked ? "plans" : view;
 
   useEffect(
     () =>
@@ -34,12 +41,12 @@ export function UpgradeDialog() {
         setView(next?.code === "insufficient_balance" ? "credits" : "plans");
         setPending(null);
         setSent(null);
+        setPacksAsked(false);
         setOpen(true);
       }),
     [],
   );
 
-  const current = asPlan(data?.entitledPlan);
   // A reason (locked feature, limit, empty balance) picks the plan that fixes
   // it; a plain "Upgrade" recommends the most popular plan.
   const recommended = block
@@ -88,8 +95,11 @@ export function UpgradeDialog() {
               current,
               block,
               recommended,
-              view,
-              onViewChange: setView,
+              view: shownView,
+              onViewChange: (next) => {
+                setPacksAsked(next === "credits");
+                setView(next);
+              },
               interval,
               onIntervalChange: setBillingInterval,
               canBuy: Boolean(data.isOwner),

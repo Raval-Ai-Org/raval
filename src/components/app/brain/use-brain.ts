@@ -5,7 +5,7 @@
 // on a switch and one brand's brain can never render under another.
 import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
 import { getBrainOverview } from "@/lib/brain.functions";
 import { newsSince, type BrainOverview } from "@/lib/brain/brain";

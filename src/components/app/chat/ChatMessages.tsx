@@ -3,7 +3,7 @@
 import { memo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Check, Copy, Paperclip, Pencil, RefreshCw } from "@/components/icons";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { ChatMessageContent } from "@/components/app/ChatMessageContent";
 import { cn } from "@/lib/utils";
 import { MelloxPulse } from "./ThinkingIndicator";

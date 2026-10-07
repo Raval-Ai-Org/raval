@@ -22,6 +22,12 @@ Required at production startup: `APP_URL`, `SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
 `OPENROUTER_API_KEY`, and `CRON_SECRET` (at least 16 characters).
 
+`NEXT_PUBLIC_CLARITY_ID` is the public Microsoft Clarity project ID and is
+required when building the production Docker image. Set it in Railway Variables
+as a build-time variable (or in `.env` for the VPS Compose build). Next.js
+inlines it into the browser bundle, so changing it requires a new image build
+and deploy; a runtime-only value is too late.
+
 `NEXT_PUBLIC_APP_URL` is optional in the server schema. Set it to the same
 canonical origin as `APP_URL` and pass it as a Docker build argument when
 building the production image so generated public URLs use the deployed domain.
@@ -74,8 +80,11 @@ Then enable the scheduler: [supabase/ENABLE-CRON-JOBS.sql](../supabase/ENABLE-CR
 
 ## 3a. Railway
 
-1. Service variables: everything from §1. Mark `NEXT_PUBLIC_*` as available at
-   build time (Railway passes them as the Dockerfile `ARG`s).
+1. Service variables: everything from §1, including `NEXT_PUBLIC_CLARITY_ID`.
+   Mark `NEXT_PUBLIC_*` as available at build time. The root Dockerfile declares
+   each one as a builder-stage `ARG` and exports it to `ENV` before
+   `npm run build`; the Clarity build verifier fails if the ID or emitted
+   production CSP/bundle is missing.
 2. Health check path: `/api/health` (liveness). Point uptime monitoring at
    `/api/health/ready` (Supabase, Redis, cron heartbeats; 503 when degraded).
 3. Deploy. Check the boot log for `[env]` lines.
@@ -119,3 +128,5 @@ Permissions-Policy, COOP and (production) HSTS on every response, and
 `Cache-Control: no-store` on `/api/*`. The CSP allows inline scripts rather
 than using per-request nonces — nonces would force every page to render
 dynamically; see [ADR-0008](adr/0008-ai-metering-budgets-guardrails.md).
+Clarity's `www.clarity.ms`, load-balanced `a.clarity.ms`–`z.clarity.ms`, and
+`c.bing.com` hosts are permitted only in `script-src`/`connect-src` as required.

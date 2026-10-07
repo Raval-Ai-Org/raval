@@ -5,7 +5,7 @@
 // ("request") they send a request that Mellox activates from /admin.
 
 import { useCallback, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { emitAppEvent } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";

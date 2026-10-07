@@ -13,7 +13,7 @@ import { BASE_URL } from "@/lib/seo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthShell, authRow } from "@/components/auth/AuthShell";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 function GoogleMark() {
   return (

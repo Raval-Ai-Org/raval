@@ -9,7 +9,7 @@
 // flight. Empty state = the item was never distributed.
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { RotateCw } from "lucide-react";
 import { ExternalLink, Loader2 } from "@/components/icons";
 import { BrandLogo } from "@/components/brand/BrandLogo";

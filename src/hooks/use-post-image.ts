@@ -2,7 +2,7 @@
 
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   buildImagePrompt,
   getCachedImage,

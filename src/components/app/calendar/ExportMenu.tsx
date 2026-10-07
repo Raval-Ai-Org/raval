@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { CalendarDays, Copy, Download, FileSpreadsheet, FileText } from "@/components/icons";
 import {
   DropdownMenu,

@@ -9,7 +9,7 @@
 //                after a rescan of the live page confirms it.
 
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { AlertTriangle, CheckCircle, Spinner, Wand } from "@/components/icons";
 import { SITE_PLATFORM_LABEL } from "@/components/brand/SiteLogos";
 import { Button } from "@/components/ui/button";

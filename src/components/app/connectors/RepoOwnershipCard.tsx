@@ -6,7 +6,7 @@
 // being fixed; this card only explains and triggers that check.
 
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { AlertTriangle, CheckCircle, RefreshCw, ShieldCheck, XCircle } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { attestSourceOwnership, verifySourceOwnership } from "@/lib/connectors.functions";

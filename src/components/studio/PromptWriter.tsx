@@ -6,7 +6,7 @@
 // click brings something new.
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { RefreshCw, Sparkles, Wand2 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";

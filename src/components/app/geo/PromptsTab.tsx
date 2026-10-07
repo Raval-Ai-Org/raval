@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Tile, GroupLabel } from "@/components/app/surface/SurfaceLayout";
 import { CostChip } from "@/components/app/CostChip";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";

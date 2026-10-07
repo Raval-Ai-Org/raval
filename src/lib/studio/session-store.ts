@@ -7,8 +7,9 @@
 // minimized dock, and rail all read from here, so minimizing or closing the
 // composer never loses work.
 import { useSyncExternalStore } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { emitAppEvent } from "@/lib/app-events";
+import { userSafeMessage } from "@/lib/user-errors";
 import { getActiveWorkspaceId } from "@/lib/authed-fetch";
 import type { PlatformId } from "@/lib/social-platforms";
 import { recommendedRatio } from "./aspect";
@@ -448,7 +449,10 @@ export async function openJob(jobId: string, workspaceId?: string | null): Promi
       lastGood: job.status === "succeeded" ? job : null,
       pendingKey: null,
       pendingKind: null,
-      error: job.status === "failed" ? (job.error?.message ?? "Generation failed") : null,
+      error:
+        job.status === "failed"
+          ? userSafeMessage(job.error?.message, "Generation failed. Please try again.")
+          : null,
       window: "open",
       createdAt: now,
       updatedAt: now,
@@ -682,7 +686,10 @@ async function submit(
     });
     applyJob(id, job, { fromCreate: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Generation failed";
+    const message = userSafeMessage(
+      error instanceof Error ? error.message : null,
+      "Generation failed. Please try again.",
+    );
     const current = getSession(id);
     if (!current || current.pendingKey !== key) return;
     const billing =
@@ -720,7 +727,7 @@ function applyJob(sessionId: string, job: StudioJob, opts: { fromCreate?: boolea
     patch.error = null;
   } else if (job.status === "failed") {
     patch.step = s.lastGood ? "review" : "intent";
-    patch.error = job.error?.message ?? "Generation failed";
+    patch.error = userSafeMessage(job.error?.message, "Generation failed. Please try again.");
   } else if (job.status === "cancelled") {
     patch.step = s.lastGood ? "review" : "intent";
   }
@@ -729,19 +736,9 @@ function applyJob(sessionId: string, job: StudioJob, opts: { fromCreate?: boolea
 
   if (wasActive && !active) {
     emitAppEvent("content:changed");
-    const format = STUDIO_FORMATS[job.type];
-    const minimized = getSession(sessionId)?.window === "minimized";
-    if (job.status === "succeeded" && minimized) {
-      toast.success(`Your ${format.noun} is ready`, {
-        description: "It's waiting in Needs Approval.",
-        action: { label: "Review", onClick: () => focusSession(sessionId) },
-      });
-    } else if (job.status === "failed" && minimized) {
-      toast.error(`Your ${format.noun} couldn't be finished`, {
-        description: job.error?.message,
-        action: { label: "Open", onClick: () => focusSession(sessionId) },
-      });
-    }
+    // No toast here: the dock card (Studio closed), the composer and the rail
+    // already show that a creation finished or failed. A second notice would
+    // only duplicate them.
   }
 }
 

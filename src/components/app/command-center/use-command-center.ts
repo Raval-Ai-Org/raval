@@ -7,7 +7,7 @@
 // server functions, the distribution API, and audited logs.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useInvalidateWorkspaces, useWorkspaces } from "@/hooks/use-workspaces";
 import { useServerFn } from "@/lib/use-server-fn";

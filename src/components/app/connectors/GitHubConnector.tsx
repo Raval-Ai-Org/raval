@@ -10,7 +10,7 @@ import { RepoOwnershipCard } from "./RepoOwnershipCard";
 // reaches this component, and "Connected" is only ever read from the server.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,

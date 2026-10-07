@@ -6,7 +6,7 @@
 // server for that workspace. Nothing here reaches across clients.
 import { useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { AlertTriangle, Bot, Inbox, Lightbulb, Pause, Play } from "@/components/icons";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";

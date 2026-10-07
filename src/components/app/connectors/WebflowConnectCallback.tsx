@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle, Globe, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { completeWebflowConnect, selectWebflowSite } from "@/lib/webflow.functions";
 import { inWorkspace, workspacePath } from "@/lib/workspace/paths";

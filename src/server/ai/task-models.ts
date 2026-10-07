@@ -125,6 +125,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.story": tier(WORKHORSE, "medium"),
   "studio.script": tier(WORKHORSE, "medium"),
   "studio.ad": tier(WORKHORSE, "medium"),
+  "studio.upload-captions": tier(WORKHORSE, "medium"),
   "studio.captions": tier(WORKHORSE, "medium"),
   "studio.naturalize": tier(WORKHORSE, "low"),
   "studio.ideas": tier(WORKHORSE, "low", { temperature: 0.9 }),

@@ -21,7 +21,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
 

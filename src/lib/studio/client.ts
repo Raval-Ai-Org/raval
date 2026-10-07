@@ -3,6 +3,7 @@
 // Browser client for the Studio API. Every call goes through authedFetch so
 // the session token and workspace attribution travel with it.
 import { authedFetch, type AuthedFetchInit } from "@/lib/authed-fetch";
+import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
 import type { StudioType } from "./formats";
 import type { StudioIdea } from "./ideas";
 import type { CreateJobInput, GoalId, StudioControls, StudioJob } from "./jobs";
@@ -44,8 +45,12 @@ async function call<T>(path: string, init?: AuthedFetchInit): Promise<T> {
           ? String((raw as { message: string }).message)
           : response.status === 429
             ? "You've hit the generation limit for now. Try again in a little while."
-            : `Request failed (${response.status})`;
-    throw new StudioApiError(response.status, message, json);
+            : messageForStatus(response.status);
+    throw new StudioApiError(
+      response.status,
+      userSafeMessage(message, messageForStatus(response.status)),
+      json,
+    );
   }
   return json as T;
 }

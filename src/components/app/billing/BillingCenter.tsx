@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { ErrorState } from "@/components/ui/empty-state";
@@ -33,6 +33,7 @@ import {
 import { useEntitlements, type BillingView } from "@/lib/billing/use-entitlements";
 import { cn } from "@/lib/utils";
 import { GhostButton, PrimaryButton, UsageBar } from "./billing-ui";
+import { LockedFeatures } from "./FreePlanPushes";
 
 async function getJson<T>(path: string, workspaceId?: string | null): Promise<T> {
   const response = await authedFetch(path, workspaceId ? { workspaceId } : undefined);
@@ -402,6 +403,8 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
           ))}
         </section>
       )}
+
+      <LockedFeatures onBeforeOpen={onDone} />
 
       <RecentActivity />
 

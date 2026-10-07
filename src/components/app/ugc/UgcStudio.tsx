@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { ArrowLeft, ArrowRight, Globe, Lightbulb, Plus, Trash2, Video } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";

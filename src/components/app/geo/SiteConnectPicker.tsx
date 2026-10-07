@@ -6,7 +6,7 @@
 // they were. All states come from getSiteConnections.
 
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Check } from "lucide-react";
 import { SiteLogo, SITE_PLATFORM_LABEL } from "@/components/brand/SiteLogos";
 import { Button } from "@/components/ui/button";

@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { motion, type Variants } from "framer-motion";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   ArrowLeft,
   ArrowRight,

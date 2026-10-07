@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Check, Story, Video, X } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { emitAppEvent } from "@/lib/app-events";

@@ -12,7 +12,7 @@
 // finding is shown as resolved only after a verification scan confirms it.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   AlertTriangle,
   ArrowLeft,

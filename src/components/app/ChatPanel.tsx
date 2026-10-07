@@ -19,7 +19,7 @@ import { authedFetch } from "@/lib/authed-fetch";
 import { useNavigate } from "@/lib/navigation";
 import { workspacePath } from "@/lib/workspace/paths";
 import { ArrowDown } from "@/components/icons";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   classify as classifyAttachment,
   extractAttachment,
@@ -54,6 +54,7 @@ import {
 } from "@/lib/studio/session-store";
 import { cn } from "@/lib/utils";
 import { ChatComposer, CHAT_MODELS, type ChatComposerHandle } from "./chat/ChatComposer";
+import { FreeCreditStrip } from "./billing/FreePlanPushes";
 import { useComposerAutopilot } from "./autopilot/composer/useComposerAutopilot";
 import { ChatGreeting, ChatStarters, type Starter } from "./chat/ChatEmptyState";
 import { AssistantMessage, ErrorMessage, NoticeMessage, UserMessage } from "./chat/ChatMessages";
@@ -1713,6 +1714,7 @@ export function ChatPanel({
           </AnimatePresence>
           {!empty ? <div className="mx-composer-fade" aria-hidden /> : null}
           {mobileAccessory ? <div className="mb-2">{mobileAccessory}</div> : null}
+          <FreeCreditStrip className="mb-2" />
           <ChatComposer
             ref={composerRef}
             hero={empty}
@@ -1752,7 +1754,7 @@ export function ChatPanel({
           )}
         >
           {empty ? (
-            <ChatStarters onPick={pickStarter} reducedMotion={reducedMotion} />
+            <ChatStarters source={dna} onPick={pickStarter} />
           ) : (
             <p className="text-center text-[11.5px] text-muted-foreground/80">
               Mellox can make mistakes. Check important details.

@@ -53,7 +53,7 @@ import { BrandLogo, type BrandKey } from "@/components/brand/BrandLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { buildDesignMd, downloadDesignMd } from "@/lib/design-md";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { emitAppEvent } from "@/lib/app-events";
 import { BrandDnaEditor } from "./BrandDnaEditor";

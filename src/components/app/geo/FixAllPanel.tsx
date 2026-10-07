@@ -6,7 +6,7 @@
 // after the post-merge rescan confirms its own check passes.
 
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   AlertTriangle,
   ArrowLeft,

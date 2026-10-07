@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Check, PenLine, X } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { ease } from "@/lib/motion";

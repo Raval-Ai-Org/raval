@@ -4,7 +4,7 @@
 // assistants to work in this workspace, and shows what they did. The screen
 // itself is McpScreen; this file only loads and saves.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getMcpSettings, listMcpActivity, updateMcpSettings } from "@/lib/mcp.functions";

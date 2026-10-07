@@ -34,7 +34,7 @@ import { useAgentTasks } from "@/hooks/use-agent-tasks";
 import { useAgentRuntime } from "@/hooks/use-agent-runtime";
 import { useAgentToggles } from "@/hooks/use-agent-toggles";
 import { deriveMood } from "@/lib/agent-mood";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 const CADENCES = ["Live", "Hourly", "Daily", "Weekly"] as const;

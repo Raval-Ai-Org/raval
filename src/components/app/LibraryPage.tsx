@@ -3,7 +3,7 @@
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   ArrowLeft,
   CalendarClock,

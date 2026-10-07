@@ -8,9 +8,27 @@ import {
   nextPlan,
   planForLimit,
   planForMeter,
+  freeNudge,
   planPrice,
   suggestedPlan,
 } from "./present";
+
+describe("free plan nudges", () => {
+  const now = new Date("2026-10-07T00:00:00Z");
+  it("says nothing while there is plenty left", () => {
+    expect(freeNudge({ credits: 80, nextExpiry: "2026-11-01T00:00:00Z", now })).toBeNull();
+    expect(freeNudge({ credits: 80, nextExpiry: null, now })).toBeNull();
+  });
+  it("speaks up when credits are low, gone or about to end", () => {
+    expect(freeNudge({ credits: 16, nextExpiry: null, now })?.title).toBe("16 free credits left");
+    expect(freeNudge({ credits: 1, nextExpiry: null, now })?.title).toBe("1 free credit left");
+    expect(freeNudge({ credits: 0, nextExpiry: null, now })?.id).toBe("empty");
+    expect(freeNudge({ credits: 80, nextExpiry: "2026-10-10T00:00:00Z", now })?.title).toBe(
+      "Your free credits end in 3 days",
+    );
+    expect(freeNudge({ credits: 80, nextExpiry: "2026-10-01T00:00:00Z", now })).toBeNull();
+  });
+});
 
 describe("billing presentation helpers", () => {
   it("formats video units as videos", () => {
