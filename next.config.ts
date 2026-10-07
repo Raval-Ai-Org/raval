@@ -74,13 +74,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
-  ...(isDev
-    ? {
-        experimental: {
-          webpackMemoryOptimizations: true,
-        },
-      }
-    : {}),
+  experimental: {
+    // framer-motion is imported by ~100 components and isn't on Next's default
+    // list; this loads only the modules each file uses.
+    optimizePackageImports: ["framer-motion"],
+    ...(isDev ? { webpackMemoryOptimizations: true } : {}),
+  },
   // A second dev server (e.g. a verification run next to your own) can build
   // into its own directory instead of fighting over .next.
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),

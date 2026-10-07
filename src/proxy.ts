@@ -30,9 +30,17 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verified locally against the project's signing keys (cached), like
+  // verifyBearer in src/server/api-auth.ts. getUser() here was a network call
+  // to Supabase on every navigation and prefetch. This only decides redirects;
+  // routes and server functions still check access themselves.
+  let user = false;
+  try {
+    const { data } = await supabase.auth.getClaims();
+    user = Boolean(data?.claims?.sub);
+  } catch {
+    // An undecodable cookie is the same as no session.
+  }
   const pathname = request.nextUrl.pathname;
   const isRoot = pathname === "/";
   const isAuthPage = pathname === "/login" || pathname === "/signup";

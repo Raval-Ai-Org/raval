@@ -1,3 +1,0 @@
-module.exports=[124782,e=>{"use strict";var r=e.i(273680),t=e.i(536916);let i=r.supabaseAdmin;async function a(e,r){let a=r.trim().toUpperCase();if(!/^[A-Z0-9]{6,20}$/.test(a))return!1;let{data:n}=await i.from("billing_accounts").select("id,owner_user_id").eq("referral_code",a).maybeSingle();if(!n||n.owner_user_id===e)return!1;let d=await (0,t.ensureAccount)(e);if(Date.now()-new Date(d.created_at).getTime()>6048e5)return!1;let{error:u}=await i.from("referrals").insert({referrer_account_id:n.id,referred_account_id:d.id});return!u&&(await i.from("billing_accounts").update({referred_by_account_id:n.id}).eq("id",d.id).is("referred_by_account_id",null),!0)}e.s(["attributeReferral",0,a])}];
-
-//# sourceMappingURL=src_server_billing_referrals_server_ts_1qvw00v._.js.map

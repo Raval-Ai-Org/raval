@@ -1,3 +1,0 @@
-module.exports=[334171,i=>{"use strict";var t=i.i(843780),e=i.i(773856),n=i.i(976552),l=i.i(744755);async function a(i){if(!await (0,n.billingSchemaReady)()){if("on"!==(0,l.globalBillingMode)())return null;throw new t.HttpError(503,"Plan & billing is being set up. Please try again later.")}return(0,e.getEntitlements)(i)}i.s(["optionalWorkspaceEntitlements",0,a])}];
-
-//# sourceMappingURL=src_server_billing_readiness_server_ts_1fas1hl._.js.map

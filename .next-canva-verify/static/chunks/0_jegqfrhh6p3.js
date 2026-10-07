@@ -1,1 +1,0 @@
-(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,948066,a=>{"use strict";var n=a.i(894900);let e=(0,n.serverFn)("brand-dna/getBrandDna"),r=(0,n.serverFn)("brand-dna/saveBrandDna");a.s(["getBrandDna",0,e,"saveBrandDna",0,r])}]);

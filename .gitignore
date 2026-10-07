@@ -11,6 +11,8 @@ node_modules
 .next
 .next-notion-local
 .next-verify
+.next-*/
+.tmp-run/
 .next-proof
 .next-build
 .next-proofbuild

@@ -1,1 +1,0 @@
-(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,686865,s=>{"use strict";var e=s.i(894900);(0,e.serverFn)("insights/getGeoTrend"),(0,e.serverFn)("insights/refreshSuggestions");let r=(0,e.serverFn)("insights/upsertMemoryInsights");(0,e.serverFn)("insights/listMemoryInsights"),s.s(["upsertMemoryInsights",0,r])}]);
