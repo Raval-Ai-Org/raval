@@ -364,6 +364,27 @@ export const approveFixBatch = createServerFn({ method: "POST" })
     return svc.approveFixBatch(ctx, data);
   });
 
+// Merging puts the change live on the website, so it is an admin's click.
+export const mergeFixBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, batchId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    const ctx = await fixContext(context, data.workspaceId);
+    if (!ctx.canManage) throw new ForbiddenError("Admin role required");
+    const svc = await import("@/server/geo/fixes/batch.server");
+    return svc.mergeFixBatch(ctx, data);
+  });
+
+export const mergeFixProposal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, proposalId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    const ctx = await fixContext(context, data.workspaceId);
+    if (!ctx.canManage) throw new ForbiddenError("Admin role required");
+    const svc = await import("@/server/geo/fixes/service.server");
+    return svc.mergeProposal(ctx, data);
+  });
+
 export const discardFixBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
   .inputValidator((data) =>
@@ -376,6 +397,15 @@ export const discardFixBatch = createServerFn({ method: "POST" })
     requireEditor(ctx);
     const svc = await import("@/server/geo/fixes/batch.server");
     return svc.discardFixBatch(ctx, data);
+  });
+
+// Before and after the first live fix, from stored scans and prompt checks. Starts nothing.
+export const getFixImpact = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ workspaceId: uuid, scanId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    const svc = await import("@/server/geo/fixes/impact.server");
+    return svc.getFixImpact(await fixContext(context, data.workspaceId), data.scanId);
   });
 
 export const listFixActivity = createServerFn({ method: "POST" })

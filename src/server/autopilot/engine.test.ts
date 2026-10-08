@@ -33,6 +33,8 @@ type World = {
   scheduleReason: string | null;
   learnings: string[];
   tasksRun: string[];
+  sentToSite: string[];
+  blog: boolean;
 };
 
 function world(): World {
@@ -53,6 +55,8 @@ function world(): World {
     scheduleReason: null as string | null,
     learnings: [] as string[],
     tasksRun: [] as string[],
+    sentToSite: [] as string[],
+    blog: true,
   } as World;
   w.store = createMemoryAutopilotStore(() => w.clock);
   let n = 0;
@@ -142,6 +146,14 @@ function world(): World {
       run: async (name) => {
         w.tasksRun.push(name);
         return { status: "done", summary: "Started the scan." };
+      },
+    },
+    site: {
+      publishArticle: async ({ contentItemId }) => {
+        if (!w.blog) return { status: "skipped", summary: "No blog is set up:" };
+        // The real publisher keeps one publication per article.
+        if (!w.sentToSite.includes(contentItemId)) w.sentToSite.push(contentItemId);
+        return { status: "sent", summary: "Sent to example.com:" };
       },
     },
     scan: {
@@ -730,5 +742,151 @@ describe("Story Autopilot", () => {
     // One a day was chosen: the second waits for a person.
     expect(auto).toHaveLength(1);
     expect([first, second].filter((a) => status(a.id).status === "needs_approval")).toHaveLength(1);
+  });
+});
+
+describe("more than posts", () => {
+  const plan = async (p: ProgramRow) => {
+    await w.store.insertActions([
+      { workspace_id: WS, program_id: p.id, kind: "plan", dedupe_key: `plan:${p.id}:1`, cycle: 1 },
+    ]);
+    await sweep(w);
+  };
+  const measured = async (p: ProgramRow, title: string, views: number) =>
+    piece(w, p, {
+      status: "measured",
+      title,
+      result: { metrics: { views } },
+      dedupe_key: `content:done:${title}`,
+    });
+
+  it("only weekly jobs become steps, and the summary waits for the week to end", async () => {
+    const p = await program(w, {
+      automations: ["geo_scan", "repurpose", "publish_articles", "weekly_report"],
+    });
+    await plan(p);
+    const tasks = w.store.actions.filter((a) => a.kind === "task");
+    expect(tasks.map((t) => t.content_type).sort()).toEqual([
+      "geo_scan",
+      "repurpose",
+      "weekly_report",
+    ]);
+    const report = tasks.find((t) => t.content_type === "weekly_report")!;
+    expect(report.next_attempt_at).toBe("2026-10-12T08:00:00.000Z");
+
+    tick(w, 2);
+    await sweep(w);
+    await sweep(w);
+    expect(w.tasksRun).toEqual(["geo_scan"]);
+    expect(report.status).toBe("planned");
+
+    w.clock = new Date("2026-10-12T08:01:00Z");
+    await sweep(w);
+    await sweep(w);
+    expect(w.tasksRun).toContain("weekly_report");
+    expect(report.status).toBe("done");
+  });
+
+  it("reuses the best post once, in another format, as an ordinary planned piece", async () => {
+    const p = await program(w, {
+      automations: ["repurpose"],
+      content_types: ["social", "carousel"],
+    });
+    await measured(p, "Churn warning signs", 2400);
+    await measured(p, "Hiring your first marketer", 300);
+    await measured(p, "Cold outreach openers", 180);
+    await plan(p);
+    tick(w, 2);
+    await sweep(w);
+    await sweep(w);
+
+    const reused = w.store.actions.filter((a) => a.dedupe_key.startsWith("repurpose:"));
+    expect(reused).toHaveLength(1);
+    expect(reused[0].content_type).toBe("carousel");
+    expect(reused[0].title).toContain("Churn warning signs");
+    expect(reused[0].brief).toContain("Do not invent figures");
+    // It is made and waits for a person like any other piece.
+    expect(["planned", "generating", "needs_approval"]).toContain(reused[0].status);
+    expect(w.scheduled).toHaveLength(0);
+
+    // Next week the same post is not reused again; the next best is.
+    await w.store.insertActions([
+      {
+        workspace_id: WS,
+        program_id: p.id,
+        kind: "task",
+        dedupe_key: `task:${p.id}:2:repurpose`,
+        cycle: 2,
+        content_type: "repurpose",
+      },
+    ]);
+    tick(w, 2);
+    await sweep(w);
+    await sweep(w);
+    const again = w.store.actions.filter((a) => a.dedupe_key.startsWith("repurpose:"));
+    expect(again).toHaveLength(2);
+    expect(again[1].title).toContain("Hiring your first marketer");
+  });
+
+  it("reuses nothing until there are results to go on", async () => {
+    const p = await program(w, {
+      automations: ["repurpose"],
+      content_types: ["social", "carousel"],
+    });
+    await measured(p, "Churn warning signs", 2400);
+    await plan(p);
+    tick(w, 2);
+    await sweep(w);
+    await sweep(w);
+    expect(w.store.actions.some((a) => a.dedupe_key.startsWith("repurpose:"))).toBe(false);
+    const task = w.store.actions.find((a) => a.content_type === "repurpose")!;
+    expect(task.status).toBe("skipped");
+    // A quiet skip: nothing is written to the history.
+    expect(w.store.events.some((e) => e.kind === "task_skipped")).toBe(false);
+  });
+
+  it("sends an approved article to the blog once, and only when told to", async () => {
+    const off = await program(w);
+    const kept = await piece(w, off, { content_type: "article", platform: null });
+    await sweep(w);
+    w.content.get(kept.content_item_ids[0])!.status = "approved";
+    tick(w, 5);
+    await sweep(w);
+    await sweep(w);
+    expect(kept.status).toBe("done");
+    expect(w.sentToSite).toHaveLength(0);
+
+    await w.store.updateProgram(off.id, { automations: ["publish_articles"] });
+    const p = (await w.store.getProgram(off.id))!;
+    const action = await piece(w, p, { content_type: "article", platform: null });
+    await sweep(w);
+    // Not approved yet: nothing leaves.
+    tick(w, 5);
+    await sweep(w);
+    expect(w.sentToSite).toHaveLength(0);
+
+    w.content.get(action.content_item_ids[0])!.status = "approved";
+    tick(w, 5);
+    await sweep(w);
+    await sweep(w);
+    await sweep(w);
+    expect(action.status).toBe("done");
+    expect(w.sentToSite).toEqual(action.content_item_ids);
+    expect(w.store.events.some((e) => e.kind === "article_sent")).toBe(true);
+    expect(w.scheduled).toHaveLength(0);
+  });
+
+  it("keeps the article and says why when there is no blog to send it to", async () => {
+    w.blog = false;
+    const p = await program(w, { automations: ["publish_articles"] });
+    const action = await piece(w, p, { content_type: "article", platform: null });
+    await sweep(w);
+    w.content.get(action.content_item_ids[0])!.status = "approved";
+    tick(w, 5);
+    await sweep(w);
+    await sweep(w);
+    expect(action.status).toBe("done");
+    expect(action.result.site).toBe("skipped");
+    expect(w.store.events.some((e) => e.summary.includes("No blog is set up"))).toBe(true);
   });
 });

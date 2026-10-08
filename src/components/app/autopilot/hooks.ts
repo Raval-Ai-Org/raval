@@ -72,7 +72,8 @@ export function useAutopilotStatus(workspaceId: string) {
   });
 }
 
-export type AutopilotPlace = "accounts" | "brand" | "style" | "website" | "visibility" | "calendar";
+export type AutopilotPlace =
+  "accounts" | "brand" | "style" | "website" | "blog" | "visibility" | "calendar";
 
 /** Each of these lives elsewhere in Mellox; Autopilot only sends people there. */
 export function useAutopilotOpen(workspaceId: string) {
@@ -80,7 +81,8 @@ export function useAutopilotOpen(workspaceId: string) {
   return (target: AutopilotPlace) => {
     if (target === "calendar") navigate({ to: workspacePath(workspaceId, "", { calendar: 1 }) });
     else if (target === "accounts") emitAppEvent("open:settings", { section: "accounts" });
-    else if (target === "website") emitAppEvent("open:settings", { section: "website" });
+    else if (target === "website" || target === "blog")
+      emitAppEvent("open:settings", { section: "website" });
     else if (target === "brand") emitAppEvent("open:brand-dna");
     else if (target === "style") emitAppEvent("open:brand-dna", { tab: "look" });
     else emitAppEvent("open:ai-visibility");

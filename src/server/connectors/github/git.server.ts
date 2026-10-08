@@ -4,10 +4,13 @@
 // installation token never leaves that module.
 //
 // Safety invariants, enforced here and not only by callers:
-//   • writes only create refs under mellox/ — a base branch is never updated
+//   • writes only create refs under mellox/ — a base branch is never pushed to
 //   • every written path passes checkRepoPath (no CI, config, lockfiles, env)
 //   • file sizes are capped on read and write; binary files are refused
-//   • nothing is merged: the result is always a reviewable pull request
+//   • the result is always a reviewable pull request. Mellox merges one only
+//     when a person presses "Merge" (mergeMelloxPullRequest): its own
+//     mellox/ pull request, at the exact commit Mellox made, through GitHub's
+//     merge endpoint so branch protection and required checks still apply
 import "server-only";
 import { createHash } from "node:crypto";
 import type { ChecksSummary } from "@/lib/geo/fix-contracts";
@@ -32,7 +35,8 @@ export class GitOperationError extends Error {
       | "binary"
       | "branch_exists"
       | "base_moved"
-      | "protected",
+      | "protected"
+      | "not_mergeable",
   ) {
     super(message);
     this.name = "GitOperationError";
@@ -606,6 +610,75 @@ export async function closePullRequest(installationId: string, repo: string, num
     },
   );
   return pr ? toPullInfo(pr) : null;
+}
+
+/**
+ * Merge a pull request Mellox opened, because a person asked for it. Refuses
+ * anything that isn't an open mellox/ pull request still at `headSha` (the
+ * commit Mellox made and the person approved). GitHub does the merge, so its
+ * branch protection, required reviews and required checks all still decide.
+ * Never retried blindly: an unclear outcome is settled by reading the pull
+ * request again.
+ */
+export async function mergeMelloxPullRequest(args: {
+  installationId: string;
+  repo: string;
+  number: number;
+  headSha: string;
+}): Promise<PullRequestInfo> {
+  const path = `${repoPath(args.repo)}/pulls/${args.number}`;
+  const current = await installationRequest<PullResponse>(args.installationId, path, {
+    notFoundIsAccessError: true,
+  });
+  if (!current) throw new GitOperationError("The pull request wasn't found", "not_found");
+  const pr = toPullInfo(current);
+  if (pr.state === "merged") return pr;
+  if (pr.state !== "open")
+    throw new GitOperationError("This pull request is closed.", "not_mergeable");
+  if (!isMelloxBranch(pr.headRef))
+    throw new GitOperationError("Mellox only merges its own pull requests", "invalid");
+  if (pr.headSha.toLowerCase() !== args.headSha.toLowerCase())
+    throw new GitOperationError(
+      "The pull request changed on GitHub after you approved it. Review and merge it there.",
+      "base_moved",
+    );
+  if (pr.draft)
+    throw new GitOperationError("This pull request is still a draft on GitHub.", "not_mergeable");
+  if (pr.mergeable === false)
+    throw new GitOperationError(
+      "This pull request conflicts with newer changes. Run the fix again.",
+      "not_mergeable",
+    );
+
+  // A repository may allow only some merge styles; a refusal is 405.
+  let refusal = "";
+  for (const method of ["squash", "merge", "rebase"] as const) {
+    try {
+      await installationRequest(args.installationId, `${path}/merge`, {
+        method: "PUT",
+        body: { sha: pr.headSha, merge_method: method },
+        notFoundIsAccessError: true,
+      });
+      refusal = "";
+      break;
+    } catch (error) {
+      if (error instanceof GitHubAccessError) throw error;
+      // A dropped connection leaves the outcome unknown: read it back below.
+      if (!(error instanceof GitHubRequestError)) break;
+      refusal = error.githubMessage;
+      if (!/merge method|not allowed|squash|rebase/i.test(refusal)) break;
+    }
+  }
+  const after = await getPullRequest(args.installationId, args.repo, args.number);
+  if (after?.state === "merged") return after;
+  throw new GitOperationError(
+    /protected|required|review|status check/i.test(refusal)
+      ? "GitHub's rules for this branch need a review or passing checks first. Merge it on GitHub."
+      : refusal
+        ? `GitHub didn't merge it: ${refusal.slice(0, 200)}`
+        : "GitHub didn't merge it. Try again, or merge it on GitHub.",
+    "not_mergeable",
+  );
 }
 
 /** Delete a Mellox-created branch (never any other ref). */

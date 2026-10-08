@@ -27,6 +27,8 @@ import { buildAutopilotAttention, needsYou, rowState, sortAgencyRows } from "./s
 import { addDaysYmd, ymdInZone, zonedInstant } from "./time";
 import { underperformers } from "@/lib/studio/performance";
 import { summarizeLearnings } from "./learn";
+import { pickRepurpose, repurposeBrief } from "./repurpose";
+import { weeklyReport } from "./report";
 
 const NOW = new Date("2026-10-05T08:00:00Z");
 
@@ -504,5 +506,109 @@ describe("underperformers", () => {
     expect(
       underperformers(content, [pub(0, 5), pub(1, 40), pub(2, 50), pub(3, 60), pub(4, 45)]),
     ).toEqual([]);
+  });
+});
+
+describe("reuse what worked", () => {
+  const pieces = [
+    {
+      id: "a",
+      title: "Churn warning signs",
+      platform: "linkedin",
+      contentType: "social",
+      views: 900,
+    },
+    {
+      id: "b",
+      title: "Hiring a marketer",
+      platform: "linkedin",
+      contentType: "carousel",
+      views: 400,
+    },
+    { id: "c", title: "Cold openers", platform: "instagram", contentType: "social", views: 150 },
+  ];
+  const base = {
+    pieces,
+    contentTypes: ["social", "carousel"],
+    platforms: ["linkedin", "instagram"],
+    used: new Set<string>(),
+  };
+
+  it("picks the best post and a different format on the same account", () => {
+    const pick = pickRepurpose(base)!;
+    expect(pick.source.id).toBe("a");
+    expect(pick.type).toBe("carousel");
+    expect(pick.platform).toBe("linkedin");
+    expect(repurposeBrief(pick).reason).toContain("900");
+  });
+
+  it("moves on to the next best once a post was reused", () => {
+    const pick = pickRepurpose({ ...base, used: new Set(["a"]) })!;
+    expect(pick.source.id).toBe("b");
+    expect(pick.type).toBe("social");
+  });
+
+  it("needs three measured posts, enough views and another format", () => {
+    expect(pickRepurpose({ ...base, pieces: pieces.slice(0, 2) })).toBeNull();
+    expect(pickRepurpose({ ...base, pieces: pieces.map((p) => ({ ...p, views: 40 })) })).toBeNull();
+    expect(
+      pickRepurpose({
+        ...base,
+        contentTypes: ["social"],
+        pieces: [pieces[0], pieces[2], pieces[2]],
+      }),
+    ).toBeNull();
+    // A video or an article is never made this way.
+    expect(
+      pickRepurpose({
+        ...base,
+        contentTypes: ["social", "video", "article"],
+        pieces: [pieces[0], pieces[2], pieces[2]],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("weekly summary", () => {
+  const empty = {
+    brand: "Beanhaus",
+    posted: [],
+    waiting: 0,
+    ideas: 0,
+    failed: 0,
+    comingUp: 0,
+    visibilityScore: null,
+    learnings: [],
+  };
+
+  it("says nothing when there is nothing to say", () => {
+    expect(weeklyReport(empty)).toBeNull();
+    expect(weeklyReport({ ...empty, visibilityScore: 80 })).toBeNull();
+  });
+
+  it("reports only numbers it was given", () => {
+    const report = weeklyReport({
+      ...empty,
+      posted: [
+        { title: "Churn warning signs", views: 900 },
+        { title: "Cold openers", views: 100 },
+      ],
+      waiting: 2,
+      comingUp: 4,
+      visibilityScore: 72,
+    })!;
+    expect(report.subject).toBe("Your week on Autopilot: 2 posts out");
+    expect(report.text).toContain("seen 1,000 times");
+    expect(report.text).toContain('Best: "Churn warning signs" (900 views).');
+    expect(report.text).toContain("2 posts waiting for your OK");
+    expect(report.text).toContain("72 out of 100");
+    expect(report.text).not.toContain("idea");
+  });
+
+  it("still writes when nothing went out but something waits", () => {
+    const report = weeklyReport({ ...empty, waiting: 1 })!;
+    expect(report.subject).toBe("Your week on Autopilot");
+    expect(report.text).toContain("Nothing went out for Beanhaus");
+    expect(report.text).toContain("1 post waiting for your OK");
   });
 });

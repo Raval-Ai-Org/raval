@@ -2,8 +2,9 @@ import { test, expect } from "@playwright/test";
 
 /**
  * Autopilot screens, rendered with sample data at /autopilot-lab (dev only, no
- * sign-in). Checks the one-screen setup, the home screen, approving a post and
- * acting on an idea, at desktop and phone width.
+ * sign-in). Checks the one-screen setup, the home screen (what needs you, the
+ * week, every job it runs), approving a post and acting on an idea, at desktop
+ * and phone width.
  */
 
 const VIEWPORTS = [
@@ -35,6 +36,15 @@ for (const vp of VIEWPORTS) {
       }
       await frame.getByRole("button", { name: /How often/ }).click();
       await frame.getByRole("button", { name: "Every day", exact: true }).click();
+      // Everything beyond posts is one row of switches.
+      await frame.getByRole("button", { name: /^Also/ }).click();
+      for (const job of ["AI visibility check", "Reuse what worked", "Weekly summary email"]) {
+        await expect(frame.getByRole("switch", { name: job })).toBeChecked();
+      }
+      const toSite = frame.getByRole("switch", { name: "Articles to your website" });
+      await expect(toSite).not.toBeChecked();
+      await toSite.click();
+      await expect(toSite).toBeChecked();
       await frame.getByRole("button", { name: "Turn on Autopilot" }).click();
       await expect(page.getByTestId("lab-last")).toContainText('"postsPerWeek":7');
       const overflow = await page.evaluate(
@@ -52,11 +62,26 @@ for (const vp of VIEWPORTS) {
       await expect(frame.getByText("Connect your social accounts")).toBeVisible();
       await frame.getByRole("button", { name: "Connect", exact: true }).click();
       await expect(page.getByTestId("lab-last")).toContainText('open ["accounts"]');
-      // The pipeline, the weekly AI visibility check and what was learned are on the page.
+      // The pipeline, the week day by day and what was learned are on the page.
       await expect(frame.getByRole("list", { name: "Where your posts are" })).toBeVisible();
-      await expect(frame.getByText("AI visibility", { exact: true })).toBeVisible();
+      const week = frame.getByRole("list", { name: "Next 7 days" });
+      await expect(week.getByText("Three questions to ask your roaster")).toBeVisible();
       await expect(frame.getByText(/reaches about 2.4× more people/)).toBeVisible();
+      // Every job Autopilot runs, with where it stands and where it leads.
+      const jobs = frame.getByRole("list", { name: "What Autopilot runs" });
+      await expect(jobs.getByText("AI visibility", { exact: true })).toBeVisible();
+      await expect(jobs.getByText("sent to beanhaus.example")).toBeVisible();
+      await expect(jobs.getByText(/Best post reused/)).toBeVisible();
+      await expect(jobs.getByText(/^Sent .* ago$/)).toBeVisible();
+      await jobs.getByRole("button", { name: /AI visibility/ }).click();
+      await expect(page.getByTestId("lab-last")).toContainText('open ["visibility"]');
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(1);
       await frame.getByRole("button", { name: "Review" }).click();
+      // The score Mellox already gave this exact text is on the card.
+      await expect(frame.getByText("Mellox Score")).toBeVisible();
       await frame.getByRole("button", { name: "Approve", exact: true }).click();
       await expect(page.getByTestId("lab-last")).toContainText("decide");
       await expect(page.getByTestId("lab-last")).toContainText('"approve"');
@@ -95,6 +120,7 @@ for (const vp of VIEWPORTS) {
       await expect(box.getByText("Autopilot is on")).toBeVisible();
       await expect(box.getByRole("list", { name: "Where your posts are" })).toBeVisible();
       await expect(box.getByRole("list", { name: "Next 7 days" })).toBeVisible();
+      await expect(box.getByTestId("deck-also")).toContainText("AI visibility 72");
       await expect(
         page.getByTestId("box-topbar").getByRole("button", { name: /Autopilot is on/ }),
       ).toBeVisible();

@@ -42,7 +42,7 @@ import {
   startAgentRun,
   submitAgentInputs,
 } from "@/lib/geo-agent.functions";
-import { approveFixProposal, undoCmsFix } from "@/lib/geo-fixes.functions";
+import { approveFixProposal, mergeFixProposal, undoCmsFix } from "@/lib/geo-fixes.functions";
 import type { AssistedStepView, CmsChangeView, SiteProviderId } from "@/lib/geo/fix-contracts";
 import {
   AGENT_TERMINAL_STATUSES,
@@ -621,7 +621,10 @@ export function AgentPanel({
   onChanged,
   provider = "github",
   setup,
+  canMerge = false,
 }: {
+  /** Admins can merge the pull request from here; everyone else merges on GitHub. */
+  canMerge?: boolean;
   /** Shown instead of the start button while the site isn't ready (connect, repository, check). */
   setup?: React.ReactNode;
   workspaceId: string;
@@ -638,8 +641,9 @@ export function AgentPanel({
 }) {
   const [state, setState] = useState<RunState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"start" | "cancel" | "retry" | "undo" | null>(null);
+  const [busy, setBusy] = useState<"start" | "cancel" | "retry" | "undo" | "merge" | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmMerge, setConfirmMerge] = useState(false);
   const [refusal, setRefusal] = useState<{
     reason: string;
     manualSteps?: string[];
@@ -727,6 +731,21 @@ export function AgentPanel({
       toast.error(errMsg(e, "Couldn't cancel"));
     } finally {
       setBusy(null);
+    }
+  };
+  const merge = async () => {
+    if (!run?.proposal) return;
+    setBusy("merge");
+    try {
+      await mergeFixProposal({ data: { workspaceId, proposalId: run.proposal.id } });
+      toast.success("Merged. Mellox checks your live site next.");
+      await load();
+      onChanged();
+    } catch (e) {
+      toast.error(errMsg(e, "Couldn't merge"));
+    } finally {
+      setBusy(null);
+      setConfirmMerge(false);
     }
   };
   const undo = async () => {
@@ -979,11 +998,37 @@ export function AgentPanel({
               CI status unavailable ({run.proposal.checks.reason})
             </span>
           ) : null}
-          {run.status === "pr_open" && (
-            <span className="text-[11.5px] text-muted-foreground">
-              Merge it on GitHub when you're ready — Mellox re-scans the live site after the deploy.
-            </span>
-          )}
+          {run.status === "pr_open" &&
+            (confirmMerge ? (
+              <span className="ml-auto flex flex-wrap items-center gap-2">
+                <span className="text-[12px]">Put this live on your website?</span>
+                <Button size="sm" loading={busy === "merge"} onClick={() => void merge()}>
+                  Yes, merge
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy !== null}
+                  onClick={() => setConfirmMerge(false)}
+                >
+                  Not yet
+                </Button>
+              </span>
+            ) : canMerge &&
+              !(run.proposal.checks?.available && run.proposal.checks.state === "failure") ? (
+              <Button
+                size="sm"
+                className="ml-auto"
+                disabled={busy !== null}
+                onClick={() => setConfirmMerge(true)}
+              >
+                Merge now
+              </Button>
+            ) : (
+              <span className="text-[11.5px] text-muted-foreground">
+                {canMerge ? "A check failed. Look at it on GitHub." : "An admin can merge it."}
+              </span>
+            ))}
         </div>
       )}
       {run.assisted.length > 0 && <AssistedSteps steps={run.assisted} />}

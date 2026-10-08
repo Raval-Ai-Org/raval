@@ -45,6 +45,11 @@ export const getFixBatch = serverFn<typeof Handlers.getFixBatch>("geo-fixes/getF
 export const approveFixBatch = serverFn<typeof Handlers.approveFixBatch>(
   "geo-fixes/approveFixBatch",
 );
+export const getFixImpact = serverFn<typeof Handlers.getFixImpact>("geo-fixes/getFixImpact");
+export const mergeFixBatch = serverFn<typeof Handlers.mergeFixBatch>("geo-fixes/mergeFixBatch");
+export const mergeFixProposal = serverFn<typeof Handlers.mergeFixProposal>(
+  "geo-fixes/mergeFixProposal",
+);
 export const discardFixBatch = serverFn<typeof Handlers.discardFixBatch>(
   "geo-fixes/discardFixBatch",
 );

@@ -7,10 +7,10 @@ import { lookReady, resolveLook } from "@/lib/brand-look/resolve";
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import {
-  AUTOMATIONS,
   AUTOPILOT_TYPES,
-  type Automation,
+  isAutomation,
   type ReadinessItem,
+  type WeekNumbers,
   OPPORTUNITY_FORMATS,
   StrategySchema,
   type ActionRow,
@@ -32,7 +32,7 @@ import { addDaysYmd, isValidTimeZone, ymdInZone } from "@/lib/autopilot/time";
 import { readStorySettings, storyTimes } from "@/lib/stories/schedule";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { signAssetPath } from "@/server/assets/persist.server";
-import { isAutopilotEnabled, isFullAutopilotEnabled } from "@/lib/feature-flags";
+import { isAudienceEnabled, isAutopilotEnabled, isFullAutopilotEnabled } from "@/lib/feature-flags";
 import type { PlatformId } from "@/lib/social-platforms";
 import { recordAudit } from "@/server/audit.server";
 import { roleAtLeast, type WorkspaceRole } from "@/server/api-auth";
@@ -242,9 +242,7 @@ function presentProgram(row: ProgramRow, now: Date): ProgramView {
     videoCapPerWeek: row.video_cap_per_week,
     actOnOpportunities: row.act_on_opportunities,
     strategy: parseStrategy(row.strategy),
-    automations: (row.automations ?? []).filter((a): a is Automation =>
-      (AUTOMATIONS as readonly string[]).includes(a),
-    ),
+    automations: (row.automations ?? []).filter(isAutomation),
     stories: readStorySettings(row.stories),
     week: Math.min(total, Math.max(1, weekOf(row, ymdInZone(now, row.timezone)))),
     totalWeeks: total,
@@ -313,6 +311,7 @@ async function readiness(
   workspaceId: string,
   program: ProgramRow | null,
   connected: string[],
+  site: { host: string } | null,
 ): Promise<ReadinessItem[]> {
   const [{ data: ws }, { data: dna }] = await Promise.all([
     admin.from("workspaces").select("website_url").eq("id", workspaceId).maybeSingle(),
@@ -372,7 +371,70 @@ async function readiness(
         : "Needed for the AI visibility check.",
       cta: "Add",
     },
+    // Asked for only when the program was told to send articles to the site.
+    ...(program?.automations.includes("publish_articles")
+      ? [
+          {
+            id: "blog" as const,
+            ok: Boolean(site),
+            required: false,
+            label: site ? "Blog connected" : "Connect your blog",
+            detail: site
+              ? `Approved articles go to ${site.host}`
+              : "Until then, articles wait in your content.",
+            cta: "Connect",
+          },
+        ]
+      : []),
   ];
+}
+
+/** The blog approved articles go to: one the article publisher already found. */
+async function connectedBlog(workspaceId: string): Promise<{ host: string } | null> {
+  const { data } = await admin
+    .from("site_blog_settings")
+    .select("host")
+    .eq("workspace_id", workspaceId)
+    .in("status", ["detected", "created"])
+    .order("detected_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const host = (data as { host?: string } | null)?.host;
+  return host ? { host } : null;
+}
+
+/** The Mellox Score each waiting piece already has (Audience). Reads only. */
+async function scoresFor(caller: Caller, contentItemIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!contentItemIds.length || !isAudienceEnabled(caller.workspaceId)) return out;
+  try {
+    const { getScores } = await import("@/server/audience/service.server");
+    for (const [id, score] of Object.entries(await getScores(caller, contentItemIds))) {
+      out.set(id, score.overall);
+    }
+  } catch (error) {
+    console.error("[autopilot] could not read scores", error);
+  }
+  return out;
+}
+
+/** What went out in the last seven days. */
+function weekNumbers(actions: ActionRow[], now: Date): WeekNumbers {
+  const from = now.getTime() - 7 * DAY;
+  const out = actions.filter(
+    (a) =>
+      (a.status === "published" || a.status === "measured") &&
+      a.planned_for !== null &&
+      Date.parse(a.planned_for) >= from,
+  );
+  return {
+    posted: out.length,
+    views: out.reduce(
+      (sum, a) => sum + (Number((a.result?.metrics as Record<string, unknown>)?.views) || 0),
+      0,
+    ),
+    auto: out.filter((a) => a.approved_via === "auto").length,
+  };
 }
 
 /** Full automation needs a real identity, set once for the workspace. */
@@ -405,11 +467,13 @@ function latestLearnings(actions: ActionRow[]): string[] {
   return Array.isArray(list) ? list.filter((l): l is string => typeof l === "string") : [];
 }
 
+/** The latest run of each recurring job; one that ran wins over one still to come. */
 function latestTasks(actions: ActionRow[]): ActionView[] {
   const seen = new Set<string>();
+  const ran = (a: ActionRow) => (a.status === "planned" ? 0 : 1);
   return actions
     .filter((a) => a.kind === "task")
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .sort((a, b) => ran(b) - ran(a) || b.updated_at.localeCompare(a.updated_at))
     .filter((a) => {
       const key = a.content_type ?? "";
       if (seen.has(key)) return false;
@@ -493,7 +557,7 @@ export async function getAutopilotBadge(workspaceId: string) {
 export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
   const { workspaceId, role } = caller;
   const now = new Date();
-  const [program, all, opportunities, events, connected] = await Promise.all([
+  const [program, all, opportunities, events, connected, site] = await Promise.all([
     store.liveProgram(workspaceId),
     store.listActions(workspaceId, {
       since: new Date(now.getTime() - 45 * DAY).toISOString(),
@@ -502,6 +566,7 @@ export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
     store.listOpportunities(workspaceId, { statuses: ["new"], limit: 20 }),
     store.listEvents(workspaceId, 60),
     connectedPlatforms(workspaceId).catch(() => [] as string[]),
+    connectedBlog(workspaceId).catch(() => null),
   ]);
 
   const actions = all.filter((a) => a.kind === "content");
@@ -511,6 +576,10 @@ export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
     waiting.flatMap((a) => a.content_item_ids.slice(0, 1)),
   ).catch(() => []);
   const previewById = new Map(previews.map((p) => [p.id, p]));
+  const scores = await scoresFor(
+    caller,
+    previews.map((p) => p.id),
+  );
 
   let budget: AutopilotView["budget"] = null;
   if (program) {
@@ -550,6 +619,7 @@ export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
                   item.media_url && /^https?:\/\//.test(item.media_url) ? item.media_url : null,
                 channel: item.channel,
                 frames: await storyFrameUrls(workspaceId, item),
+                score: scores.get(item.id) ?? null,
               }
             : null,
         };
@@ -565,7 +635,9 @@ export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
     events: events.map(presentEvent),
     connectedPlatforms: connected as PlatformId[],
     stories: program ? storySummary(program, actions, now) : null,
-    readiness: await readiness(workspaceId, program, connected),
+    readiness: await readiness(workspaceId, program, connected, site),
+    site,
+    week: weekNumbers(actions, now),
     learnings: latestLearnings(all),
     tasks: latestTasks(all),
     visibility: await latestVisibility(workspaceId),

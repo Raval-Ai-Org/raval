@@ -137,6 +137,54 @@ export function Chip({
   );
 }
 
+/** One thing Autopilot does, with the switch that turns it on or off. */
+export function SwitchRow({
+  on,
+  onChange,
+  label,
+  detail,
+  note,
+  disabled,
+}: {
+  on: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  detail?: ReactNode;
+  /** A second line that only matters while it is on. */
+  note?: ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => onChange(!on)}
+        className={cn(
+          "relative mt-0.5 h-[22px] w-[38px] shrink-0 rounded-full transition-colors duration-200",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50",
+          on ? "bg-primary" : "bg-[var(--ds-well-bg-hover)] ring-1 ring-inset ring-border/70",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute left-[3px] top-[3px] h-4 w-4 rounded-full shadow-sm transition-transform duration-200",
+            on ? "translate-x-4 bg-primary-foreground" : "bg-foreground/60",
+          )}
+        />
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13.5px] font-medium">{label}</p>
+        {detail && <p className="text-[12.5px] leading-snug text-muted-foreground">{detail}</p>}
+        {on && note && <p className="mt-1 text-[12.5px] leading-snug text-warning">{note}</p>}
+      </div>
+    </div>
+  );
+}
+
 /** One line of an action list: when, what, where it stands. */
 export function ActionLine({
   action,

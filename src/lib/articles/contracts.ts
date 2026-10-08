@@ -69,6 +69,10 @@ export type PublishPreview = {
   gate: { ok: boolean; checks: GateCheck[] };
   /** Whether Mellox writes the article's structured data, or the site's theme/template does. */
   structuredData: "mellox" | "site";
+  /** The article isn't approved yet. The Publish button approves it first. */
+  needsApproval: boolean;
+  /** Something other than approval stops publishing (see `reason`). */
+  blocked: boolean;
   canPublish: boolean;
   reason: string | null;
   publication: PublicationView | null;

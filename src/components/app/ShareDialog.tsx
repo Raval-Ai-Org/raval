@@ -2,7 +2,7 @@
 
 import { workspacePath } from "@/lib/workspace/paths";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Slot } from "@radix-ui/react-slot";
@@ -60,6 +60,9 @@ type Invite = {
   created_at: string;
 };
 
+const INVITE_PAGE_SIZE = 10;
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message : undefined);
+
 const initials = (n?: string | null, e?: string | null) => {
   const s = (n ?? e ?? "U").trim();
   const parts = s.split(/[\s@.]+/).filter(Boolean);
@@ -111,9 +114,24 @@ export function ShareDialog({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "editor" | "viewer">("editor");
   const [members, setMembers] = useState<Member[]>([]);
+  const [memberPage, setMemberPage] = useState(1);
+  const [memberTotal, setMemberTotal] = useState(0);
+  const [memberPageSize, setMemberPageSize] = useState(10);
+  const refreshId = useRef(0);
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [invitePage, setInvitePage] = useState(1);
+  const [inviteTotal, setInviteTotal] = useState(0);
+  const [invitesLoading, setInvitesLoading] = useState(false);
+  const [invitesError, setInvitesError] = useState<string | null>(null);
+  const inviteRefreshId = useRef(0);
   const [inviting, setInviting] = useState(false);
+  const invitingRef = useRef(false);
+  const [pendingInviteId, setPendingInviteId] = useState<string | null>(null);
+  const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
+  const pendingInviteRef = useRef<string | null>(null);
+  const pendingMemberRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [lastInvite, setLastInvite] = useState<{ email: string; link: string } | null>(null);
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
@@ -124,23 +142,62 @@ export function ShareDialog({
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
   const workspaceLink = workspaceId ? `${baseUrl}${workspacePath(workspaceId)}` : "";
 
-  const refresh = async () => {
+  const refreshInvites = async (page = invitePage) => {
     if (!workspaceId) return;
-    setLoading(true);
+    const requestId = ++inviteRefreshId.current;
+    setInvitesLoading(true);
+    setInvitesError(null);
+    setInvites([]);
     try {
-      const [{ data: sess }, mres, ires, wres] = await Promise.all([
+      const { data, count, error } = await supabase
+        .from("workspace_invites")
+        .select("id, email, role, token, accepted_at, created_at", { count: "exact" })
+        .eq("workspace_id", workspaceId)
+        .is("accepted_at", null)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range((page - 1) * INVITE_PAGE_SIZE, page * INVITE_PAGE_SIZE - 1);
+      if (requestId !== inviteRefreshId.current) return;
+      if (error) throw error;
+      const total = count ?? 0;
+      const lastPage = Math.max(1, Math.ceil(total / INVITE_PAGE_SIZE));
+      if (page > lastPage) {
+        void refreshInvites(lastPage);
+        return;
+      }
+      setInvites((data as Invite[]) ?? []);
+      setInviteTotal(total);
+      setInvitePage(page);
+    } catch (e: unknown) {
+      if (requestId === inviteRefreshId.current) {
+        setInvitesError(errorMessage(e) ?? "Please try again.");
+        toast.error("Could not load invites", { description: errorMessage(e) });
+      }
+    } finally {
+      if (requestId === inviteRefreshId.current) setInvitesLoading(false);
+    }
+  };
+
+  const refresh = async (page = memberPage) => {
+    if (!workspaceId) return;
+    const requestId = ++refreshId.current;
+    setLoading(true);
+    setMembersError(null);
+    setMembers([]);
+    try {
+      const [{ data: sess }, mres, wres] = await Promise.all([
         supabase.auth.getUser(),
-        getWorkspaceMemberProfilesFn({ data: { workspaceId } }),
-        supabase
-          .from("workspace_invites")
-          .select("id, email, role, token, accepted_at, created_at")
-          .eq("workspace_id", workspaceId)
-          .is("accepted_at", null)
-          .order("created_at", { ascending: false }),
+        getWorkspaceMemberProfilesFn({ data: { workspaceId, page } }),
         supabase.from("workspaces").select("owner_id, name").eq("id", workspaceId).maybeSingle(),
       ]);
+      if (requestId !== refreshId.current) return;
+      const lastPage = Math.max(1, Math.ceil(mres.total / mres.pageSize));
+      if (page > lastPage) {
+        void refresh(lastPage);
+        return;
+      }
       const me = sess.user;
-      const rows: Member[] = (mres ?? []).map((m: any) => ({
+      const rows: Member[] = mres.members.map((m) => ({
         user_id: m.user_id,
         role: m.role,
         name: m.name,
@@ -149,37 +206,54 @@ export function ShareDialog({
         email: m.email ?? (m.user_id === me?.id ? (me?.email ?? null) : null),
         isYou: m.user_id === me?.id,
       }));
-      rows.sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : 0));
       setMembers(rows);
-      setInvites((ires.data as Invite[]) ?? []);
+      setMemberPage(page);
+      setMemberTotal(mres.total);
+      setMemberPageSize(mres.pageSize);
       setIsOwner(!!me && wres.data?.owner_id === me.id);
       setWorkspaceName(wres.data?.name ?? null);
-      setCanManageInvites(
-        !!me && rows.some((row) => row.user_id === me.id && ["owner", "admin"].includes(row.role)),
-      );
-    } catch (e: any) {
-      toast.error("Could not load members", { description: e?.message });
+      setCanManageInvites(["owner", "admin"].includes(mres.currentRole));
+    } catch (e: unknown) {
+      if (requestId === refreshId.current) {
+        setMembersError(errorMessage(e) ?? "Please try again.");
+        toast.error("Could not load members", { description: errorMessage(e) });
+      }
     } finally {
-      setLoading(false);
+      if (requestId === refreshId.current) setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (open) refresh();
+    if (open) {
+      setMemberPage(1);
+      setMemberTotal(0);
+      setMembers([]);
+      setMembersError(null);
+      setInvitePage(1);
+      setInviteTotal(0);
+      setInvites([]);
+      setInvitesError(null);
+      setIsOwner(false);
+      setCanManageInvites(false);
+      setLastInvite(null);
+      void refresh(1);
+      void refreshInvites(1);
+    } else {
+      refreshId.current++;
+      inviteRefreshId.current++;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, workspaceId]);
 
   const invite = async () => {
+    if (invitingRef.current) return;
     const trimmed = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       toast.error("Enter a valid email address");
       return;
     }
     if (!workspaceId) return;
-    if (members.some((m) => (m.email ?? "").toLowerCase() === trimmed)) {
-      toast.info("Already a member", { description: `${trimmed} is already in this workspace.` });
-      return;
-    }
+    invitingRef.current = true;
     setInviting(true);
     try {
       const data = await createWorkspaceInvite({ data: { workspaceId, email: trimmed, role } });
@@ -196,52 +270,63 @@ export function ShareDialog({
         });
       }
       setEmail("");
-      refresh();
-    } catch (e: any) {
-      toast.error("Could not create invite", { description: e?.message });
+      void refreshInvites(1);
+    } catch (e: unknown) {
+      toast.error("Could not create invite", { description: errorMessage(e) });
     } finally {
+      invitingRef.current = false;
       setInviting(false);
     }
   };
 
   const revoke = async (id: string) => {
-    const prev = invites;
-    setInvites((xs) => xs.filter((x) => x.id !== id));
+    if (!workspaceId || pendingInviteRef.current) return;
+    pendingInviteRef.current = id;
+    setPendingInviteId(id);
     try {
-      await revokeWorkspaceInvite({ data: { workspaceId: workspaceId!, inviteId: id } });
-    } catch {
-      setInvites(prev);
-      return toast.error("Could not cancel invite");
+      await revokeWorkspaceInvite({ data: { workspaceId, inviteId: id } });
+      if (lastInvite && invites.find((x) => x.id === id)?.email === lastInvite.email) {
+        setLastInvite(null);
+      }
+      toast.success("Invite cancelled", { description: "That link no longer works." });
+      void refreshInvites(invites.length === 1 && invitePage > 1 ? invitePage - 1 : invitePage);
+    } catch (e: unknown) {
+      toast.error("Could not cancel invite", { description: errorMessage(e) });
+    } finally {
+      pendingInviteRef.current = null;
+      setPendingInviteId(null);
     }
-    if (lastInvite && prev.find((x) => x.id === id)?.email === lastInvite.email) {
-      setLastInvite(null);
-    }
-    toast.success("Invite cancelled", { description: "That link no longer works." });
   };
 
   const removeMember = async (userId: string) => {
-    if (!workspaceId) return;
-    const prev = members;
-    setMembers((xs) => xs.filter((m) => m.user_id !== userId));
+    if (!workspaceId || pendingMemberRef.current) return;
+    pendingMemberRef.current = userId;
+    setPendingMemberId(userId);
     try {
       await removeWorkspaceMember({ data: { workspaceId, userId } });
-    } catch {
-      setMembers(prev);
-      return toast.error("Could not remove member");
+      toast.success("Member removed");
+      void refresh(members.length === 1 && memberPage > 1 ? memberPage - 1 : memberPage);
+    } catch (e: unknown) {
+      toast.error("Could not remove member", { description: errorMessage(e) });
+    } finally {
+      pendingMemberRef.current = null;
+      setPendingMemberId(null);
     }
-    toast.success("Member removed");
   };
 
   const changeRole = async (userId: string, nextRole: "admin" | "editor" | "viewer") => {
-    if (!workspaceId) return;
-    const previous = members;
-    setMembers((rows) => rows.map((m) => (m.user_id === userId ? { ...m, role: nextRole } : m)));
+    if (!workspaceId || pendingMemberRef.current) return;
+    pendingMemberRef.current = userId;
+    setPendingMemberId(userId);
     try {
       await updateWorkspaceMemberRole({ data: { workspaceId, userId, role: nextRole } });
+      setMembers((rows) => rows.map((m) => (m.user_id === userId ? { ...m, role: nextRole } : m)));
       toast.success("Role updated");
-    } catch (e: any) {
-      setMembers(previous);
-      toast.error("Could not change role", { description: e?.message });
+    } catch (e: unknown) {
+      toast.error("Could not change role", { description: errorMessage(e) });
+    } finally {
+      pendingMemberRef.current = null;
+      setPendingMemberId(null);
     }
   };
 
@@ -257,7 +342,7 @@ export function ShareDialog({
 
   return (
     <>
-      <Slot onClick={() => setOpen(true)}>{children as any}</Slot>
+      <Slot onClick={() => setOpen(true)}>{children}</Slot>
       <AppModalShell
         open={open}
         onOpenChange={setOpen}
@@ -295,7 +380,7 @@ export function ShareDialog({
               </div>
               <Select
                 value={role}
-                onValueChange={(v) => setRole(v as any)}
+                onValueChange={(v) => setRole(v as "admin" | "editor" | "viewer")}
                 disabled={!canManageInvites || inviting}
               >
                 <SelectTrigger
@@ -434,13 +519,31 @@ export function ShareDialog({
               <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 <Users className="h-3 w-3" /> People with access
                 <span className="rounded-full bg-secondary px-1.5 py-px text-[10px] font-medium normal-case tracking-normal text-foreground/70">
-                  {members.length}
+                  {memberTotal}
                 </span>
               </div>
               {loading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
             </div>
 
             <div className="max-h-[260px] space-y-0.5 overflow-y-auto pr-1 scrollbar-thin">
+              {loading && members.length === 0 && (
+                <div className="px-2 py-4 text-center text-[11.5px] text-muted-foreground">
+                  Loading members…
+                </div>
+              )}
+              {membersError && (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 px-2 py-2 text-[11px] text-muted-foreground">
+                  <span>Could not load members: {membersError}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px]"
+                    onClick={() => void refresh(memberPage)}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
               {members.map((m) => {
                 const RoleIcon = roleIcon(m.role);
                 return (
@@ -470,6 +573,7 @@ export function ShareDialog({
                     {isOwner && !m.isYou && m.role !== "owner" ? (
                       <Select
                         value={m.role}
+                        disabled={!!pendingMemberId || loading}
                         onValueChange={(value) =>
                           changeRole(m.user_id, value as "admin" | "editor" | "viewer")
                         }
@@ -495,25 +599,48 @@ export function ShareDialog({
                     {isOwner && !m.isYou && m.role !== "owner" && (
                       <button
                         onClick={() => removeMember(m.user_id)}
+                        disabled={!!pendingMemberId || loading}
                         className="opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
                         title="Remove member"
                         aria-label={`Remove ${m.name ?? m.email ?? "member"}`}
                       >
-                        <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                        {pendingMemberId === m.user_id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                        ) : (
+                          <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                        )}
                       </button>
                     )}
                   </div>
                 );
               })}
 
-              {invites.length > 0 && (
+              {(inviteTotal > 0 || invitesLoading || invitesError) && (
                 <div className="mt-2 border-t border-dashed border-border/60 pt-2">
                   <div className="mb-1 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Pending invites
                     <span className="rounded-full bg-secondary px-1.5 py-px text-[10px] font-medium normal-case tracking-normal text-foreground/70">
-                      {invites.length}
+                      {inviteTotal}
                     </span>
                   </div>
+                  {invitesLoading && (
+                    <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+                      Loading invites…
+                    </div>
+                  )}
+                  {invitesError && (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 px-2 py-2 text-[11px] text-muted-foreground">
+                      <span>Could not load invites: {invitesError}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-[11px]"
+                        onClick={() => void refreshInvites(invitePage)}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  )}
                   {invites.map((inv) => {
                     const link = inviteLink(baseUrl, inv.token);
                     return (
@@ -560,24 +687,107 @@ export function ShareDialog({
                         {canManageInvites && (
                           <button
                             onClick={() => revoke(inv.id)}
+                            disabled={!!pendingInviteId || invitesLoading}
                             title="Cancel invite"
                             aria-label={`Cancel invite for ${inv.email}`}
                           >
-                            <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                            {pendingInviteId === inv.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            ) : (
+                              <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                            )}
                           </button>
                         )}
                       </div>
                     );
                   })}
+                  {inviteTotal > INVITE_PAGE_SIZE && (
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-2 pt-1 text-[11px] text-muted-foreground">
+                      <span aria-live="polite">
+                        Invites {Math.min((invitePage - 1) * INVITE_PAGE_SIZE + 1, inviteTotal)}–
+                        {Math.min(invitePage * INVITE_PAGE_SIZE, inviteTotal)} of {inviteTotal}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2.5 text-[11px]"
+                          disabled={
+                            invitesLoading || inviting || !!pendingInviteId || invitePage <= 1
+                          }
+                          onClick={() => void refreshInvites(invitePage - 1)}
+                        >
+                          Previous
+                        </Button>
+                        <span>
+                          Page {invitePage} of {Math.ceil(inviteTotal / INVITE_PAGE_SIZE)}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2.5 text-[11px]"
+                          disabled={
+                            invitesLoading ||
+                            inviting ||
+                            !!pendingInviteId ||
+                            invitePage >= Math.ceil(inviteTotal / INVITE_PAGE_SIZE)
+                          }
+                          onClick={() => void refreshInvites(invitePage + 1)}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {!loading && members.length === 0 && invites.length === 0 && (
-                <div className="rounded-lg border border-dashed border-border/60 px-3 py-6 text-center text-[11.5px] text-muted-foreground">
-                  No teammates yet — invite your first collaborator above.
-                </div>
-              )}
+              {!loading &&
+                !invitesLoading &&
+                !membersError &&
+                !invitesError &&
+                memberTotal === 0 &&
+                inviteTotal === 0 && (
+                  <div className="rounded-lg border border-dashed border-border/60 px-3 py-6 text-center text-[11.5px] text-muted-foreground">
+                    No teammates yet — invite your first collaborator above.
+                  </div>
+                )}
             </div>
+            {memberTotal > memberPageSize && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3 text-[11px] text-muted-foreground">
+                <span aria-live="polite">
+                  {Math.min((memberPage - 1) * memberPageSize + 1, memberTotal)}–
+                  {Math.min(memberPage * memberPageSize, memberTotal)} of {memberTotal}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2.5 text-[11px]"
+                    disabled={loading || !!pendingMemberId || memberPage <= 1}
+                    onClick={() => void refresh(memberPage - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span>
+                    Page {memberPage} of {Math.ceil(memberTotal / memberPageSize)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2.5 text-[11px]"
+                    disabled={
+                      loading ||
+                      !!pendingMemberId ||
+                      memberPage >= Math.ceil(memberTotal / memberPageSize)
+                    }
+                    onClick={() => void refresh(memberPage + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </AppModalShell>

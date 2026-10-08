@@ -1,7 +1,6 @@
 "use client";
-// The pictures on the Autopilot home screen: where every piece is, the next
-// seven days, the AI visibility score, and the log as a timeline.
-import { useMemo } from "react";
+// Shared pictures of the Autopilot surface: where every piece is, the days
+// ahead, and the log as a timeline.
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
@@ -18,9 +17,7 @@ import {
   Pencil,
   TrendingUp,
 } from "@/components/icons";
-import { Tile } from "@/components/app/surface/SurfaceLayout";
 import type { AutopilotView } from "@/lib/autopilot/contracts";
-import { statusTone } from "@/lib/autopilot/state";
 import { timeAgo } from "./autopilot-ui";
 
 export const rise = (i: number) => ({
@@ -63,7 +60,11 @@ export function weekDays(view: Pick<AutopilotView, "proposed" | "approvals" | "u
   });
 }
 
-/** Where every piece is right now: plan → write → approve → schedule → post. */
+/**
+ * Where every piece is right now: plan → write → approve → schedule → post.
+ * One line, a count and a bar per stage; the stage that waits for a person is
+ * the only one that can be pressed.
+ */
 export function Pipeline({ view, onApprove }: { view: AutopilotView; onApprove: () => void }) {
   const counts = stageCounts(view);
   return (
@@ -72,50 +73,51 @@ export function Pipeline({ view, onApprove }: { view: AutopilotView; onApprove: 
         const count = counts[i];
         const live = stage.id === "write" && count > 0;
         const needsYou = stage.id === "approve" && count > 0;
-        const Icon = stage.icon;
         const body = (
           <>
             <span
               className={cn(
-                "relative grid h-9 w-9 place-items-center rounded-full",
-                needsYou
-                  ? "bg-warning/15 text-warning"
-                  : count
-                    ? "bg-primary/12 text-primary"
-                    : "bg-[var(--ds-well-bg)] text-muted-foreground",
+                "relative block h-1 overflow-hidden rounded-full",
+                needsYou ? "bg-warning" : count ? "bg-primary" : "bg-[var(--ds-well-bg-hover)]",
               )}
             >
-              <Icon className="h-4 w-4" />
               {live && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70 motion-reduce:hidden" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
-                </span>
+                <span className="absolute inset-0 animate-pulse bg-background/50 motion-reduce:hidden" />
               )}
             </span>
-            <span className="mt-2 text-[20px] font-semibold leading-none tabular-nums">
+            <span
+              className={cn(
+                "mt-2.5 block text-[22px] font-semibold leading-none tabular-nums",
+                !count && "text-muted-foreground/50",
+              )}
+            >
               {count}
             </span>
-            <span className="mt-1 max-w-full truncate text-[11.5px] text-muted-foreground">
+            <span
+              className={cn(
+                "mt-1 block truncate text-[11.5px]",
+                needsYou ? "font-semibold text-warning" : "text-muted-foreground",
+              )}
+            >
               {stage.label}
             </span>
           </>
         );
         return (
-          <motion.li key={stage.id} {...rise(i)} className="min-w-0">
+          <li key={stage.id} className="min-w-0">
             {needsYou ? (
               <button
                 type="button"
                 onClick={onApprove}
                 aria-label={`${count} to approve`}
-                className="ds-tile ds-tile-hover flex w-full flex-col items-center px-1 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="block w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-4 focus-visible:ring-offset-background"
               >
                 {body}
               </button>
             ) : (
-              <div className="ds-tile flex flex-col items-center px-1 py-3">{body}</div>
+              body
             )}
-          </motion.li>
+          </li>
         );
       })}
     </ol>
@@ -130,53 +132,11 @@ export const TONE_DOT = {
   bad: "bg-destructive",
 } as const;
 
-/** The next seven days, one dot per piece. */
-export function WeekStrip({ view }: { view: AutopilotView }) {
-  const { proposed, approvals, upcoming } = view;
-  const days = useMemo(
-    () => weekDays({ proposed, approvals, upcoming }),
-    [proposed, approvals, upcoming],
-  );
-
-  return (
-    <Tile className="px-2 py-3 sm:px-3 sm:py-4">
-      <ol className="grid grid-cols-7">
-        {days.map(({ day, actions }, i) => (
-          <li
-            key={day.toISOString()}
-            className="flex flex-col items-center gap-1.5"
-            title={actions.map((a) => a.title).join(" · ") || undefined}
-          >
-            <span className="text-[11px] font-medium text-muted-foreground">
-              {day.toLocaleDateString(undefined, { weekday: "short" })}
-            </span>
-            <span
-              className={cn(
-                "grid h-8 w-8 place-items-center rounded-full text-[13px] font-semibold tabular-nums",
-                i === 0 ? "bg-primary text-primary-foreground" : "text-foreground",
-              )}
-            >
-              {day.getDate()}
-            </span>
-            <span className="flex h-2 items-center gap-1" aria-label={`${actions.length} planned`}>
-              {actions.slice(0, 4).map((a) => (
-                <span
-                  key={a.id}
-                  className={cn("h-1.5 w-1.5 rounded-full", TONE_DOT[statusTone(a.status)])}
-                />
-              ))}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </Tile>
-  );
-}
-
 function eventIcon(kind: string) {
   if (kind.includes("failed") || kind.includes("missed")) return AlertTriangle;
   if (kind.startsWith("plan")) return CalendarClock;
   if (kind.startsWith("task")) return Eye;
+  if (kind === "article_sent") return CheckCircle2;
   if (kind.startsWith("opportunit")) return Lightbulb;
   if (kind.startsWith("program")) return Bot;
   if (kind === "piece_ready") return Pencil;
@@ -219,34 +179,5 @@ export function Timeline({ events }: { events: AutopilotView["events"] }) {
         );
       })}
     </ol>
-  );
-}
-
-export function ScoreRing({ score }: { score: number | null }) {
-  const value = Math.max(0, Math.min(100, score ?? 0));
-  const r = 20;
-  const c = 2 * Math.PI * r;
-  return (
-    <span className="relative grid h-14 w-14 shrink-0 place-items-center">
-      <svg viewBox="0 0 48 48" className="h-14 w-14 -rotate-90" aria-hidden>
-        <circle cx="24" cy="24" r={r} fill="none" strokeWidth="4" className="stroke-border/70" />
-        <motion.circle
-          cx="24"
-          cy="24"
-          r={r}
-          fill="none"
-          strokeWidth="4"
-          strokeLinecap="round"
-          className={
-            value >= 80 ? "stroke-success" : value >= 60 ? "stroke-primary" : "stroke-warning"
-          }
-          strokeDasharray={c}
-          initial={{ strokeDashoffset: c }}
-          animate={{ strokeDashoffset: c - (c * value) / 100 }}
-          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-        />
-      </svg>
-      <span className="absolute text-[14px] font-semibold tabular-nums">{score ?? "–"}</span>
-    </span>
   );
 }

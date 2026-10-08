@@ -222,6 +222,8 @@ function autopilotView(items: ContentItem[], mode: LabAutopilot): AutopilotView 
     learnings: [],
     tasks: [],
     visibility: null,
+    site: null,
+    week: { posted: 0, views: 0, auto: 0 },
     stories: null,
   };
 }

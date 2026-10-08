@@ -269,6 +269,19 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
   per-finding verification. Batch member proposals are approved only via their batch.
   **Only a verification scan resolves a finding** (`verify.server.ts`); never set
   `geo_finding_states.state = 'resolved'` anywhere else (RLS refuses browsers).
+- **Merging a fix is a person's click, never automatic.** "Merge now"
+  (`mergeFixBatch` / `mergeProposal` → `mergeMelloxPullRequest` in
+  `git.server.ts`) is admin-only, merges only Mellox's own open `mellox/` pull
+  request at the exact approved commit, and goes through GitHub's merge
+  endpoint so branch protection and required checks still decide. It is
+  audited, and the finding still resolves only after the rescan. This is for
+  GEO fixes only: Experiments and blog setup still never merge.
+- **"Since your fixes went live"** (`src/lib/geo/fix-impact.ts`, pure;
+  `fixes/impact.server.ts`; `geo/FixImpactCard.tsx` on Overview) compares the
+  score and tracked-prompt mentions before and after the first live fix, from
+  stored rows only. It starts no scan or check, never compares across score
+  versions, and shows no rate from fewer than `MIN_CHECKS` answers per side.
+- "Fix all" and the GEO Engineer are on Growth and up (`geo_agent` in the catalog).
 - Browser rendering is a fallback for empty client-side shells only
   (`render.server.ts`, flag `FEATURE_FLAG_GEO_RENDERING_ENABLED`); every browser
   request is fulfilled through the SSRF-guarded fetcher.
@@ -340,6 +353,13 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
     - The state is `site_blog_settings.status` (`missing → creating → detected`)
       with the branch and pull request in `setup`. The branch name is stored
       before the commit; the claim is a compare-and-set. Mellox never merges.
+    - **One Publish button** (`PublishToSite.publish`, also pressed by the
+      review panel's main button through `publishSignal`): approve if needed →
+      add the blog if the site has none → send the article. An article sent
+      while the blog is still `creating` waits (`approved`, attempts reset) and
+      goes out when the blog is detected. A change to an existing
+      `site_blog_settings` row goes through `saveBlogSettings` without a
+      provider (an update, not an upsert).
   - Live checks: `tests/live/article-publish.live.ts`, `tests/live/geo-cms-fix.live.ts`
     (writes gated behind `SITES_LIVE_WRITE=yes`),
     `tests/live/article-blog-setup.live.ts` (model call behind
@@ -423,9 +443,12 @@ worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents p
   and never loosen a check to make more posts go out.
 - When posts wait for a person, `notifyWaiting` emails the acting member at
   most once a day (Resend, via `src/server/notify/email.server.ts`).
-- The UI is one presentational component (`AutopilotScreen`) fed by
-  `AutopilotPanel`; `/autopilot-lab` renders it with sample data in development
-  for visual checks (`tests/integration/autopilot-lab.spec.ts`).
+- The UI is one presentational component (`AutopilotScreen`, home page in
+  `AutopilotHome.tsx`) fed by `AutopilotPanel`; `/autopilot-lab` renders it
+  with sample data in development for visual checks
+  (`tests/integration/autopilot-lab.spec.ts`). Home lays out by container
+  width (`@container`), and uses the CSS `ds-enter` fade, not staggered
+  JavaScript animation, so nothing is ever left half-drawn.
 - **It lives in the chat message box, not the sidebar** (`autopilot/composer/`:
   presentational `AutopilotDeck`, wired by `useComposerAutopilot`). Off, it is
   one switch in the box's toolbar; on, the deck covers the box in a new chat
@@ -433,11 +456,23 @@ worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents p
   The full view loads only while the deck shows and the proposal is asked for
   only after a person flips the switch. Never add a sidebar entry back; link to
   the full screen with `autopilotPath(id, section)`.
-- **More than posts.** A program's `automations` become weekly `task` actions
-  that start work in another Mellox system through `ports.tasks.run` (today:
-  `geo_scan` → `createScan`). A task only starts the work; that system keeps
-  its own rules (only a verification scan resolves a GEO finding). Add a new
-  automation there, never as a second implementation inside Autopilot.
+- **More than posts.** A program's `automations` (`AUTOMATIONS` in
+  `contracts.ts`) are the extra jobs, each a switch under Settings → Also:
+  - `geo_scan`, `repurpose` and `weekly_report` (`WEEKLY_AUTOMATIONS`) become
+    weekly `task` actions. `geo_scan` → `createScan` and `weekly_report` → one
+    email built by the pure `weeklyReport` go through `ports.tasks.run`.
+  - `repurpose` ("Reuse what worked") is decided by the pure `pickRepurpose`
+    (three measured posts, 100 views, never a video or an article) and only
+    adds an ordinary planned piece, once per source post
+    (`dedupe_key: repurpose:<actionId>`).
+  - `publish_articles` is not a weekly step: an article a **person** approved
+    is handed to the existing publisher through `ports.site.publishArticle`
+    (`approvePublication`), once. Autopilot never adds a blog, and an article
+    is never approved by itself.
+  - A task only starts the work; that system keeps its own rules (only a
+    verification scan resolves a GEO finding). Add a new automation there and
+    a row in `jobsFor` (`autopilot/jobs.tsx`), never as a second
+    implementation inside Autopilot.
 - **Adaptive.** `summarizeLearnings` (`src/lib/autopilot/learn.ts`, pure) turns
   the workspace's own measured posts into a few sentences that go into the
   next plan prompt and onto the home screen. No pattern is claimed from fewer
@@ -705,8 +740,9 @@ record [ADR-0011](docs/adr/0011-github-app-website-connector.md).
   through `present.ts`. Only `api.server.ts` talks to `api.github.com`.
 - Role checks use `requireWorkspaceRole` (throws `ForbiddenError` → 403).
 - Repository writes go only through `git.server.ts`: new `mellox/` branches,
-  paths checked by `paths.ts`, exact-content approval, a PR — never a push to or
-  merge of a base branch. Every write is audited (`src/server/audit.server.ts`).
+  paths checked by `paths.ts`, exact-content approval, a PR — never a push to a
+  base branch. The one merge path is an admin pressing "Merge now" on a GEO fix
+  (see AI Visibility). Every write is audited (`src/server/audit.server.ts`).
 
 ## MCP server (AI assistants)
 

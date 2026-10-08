@@ -3,28 +3,21 @@
 // Autopilot — everything a person sees, drawn from one view object and a set
 // of handlers. It holds no data of its own, so the real panel and the dev-only
 // lab page render exactly the same screen.
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { motion, MotionConfig } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
-  AlertTriangle,
   Bot,
   Check,
   ExternalLink,
-  Eye,
   History,
   Lightbulb,
   ListChecks,
-  Pause,
-  Play,
   RotateCcw,
   Settings,
-  Story,
-  TrendingUp,
-  X,
 } from "@/components/icons";
 import { EmptyState } from "@/components/ui/empty-state";
-import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
+import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import {
   GroupLabel,
   SurfaceLayout,
@@ -40,20 +33,18 @@ import {
   type ProgramSettings,
 } from "@/lib/autopilot/contracts";
 import { AUTO_ACT_SCORE } from "@/lib/autopilot/opportunities";
-import { pauseReasonText } from "@/lib/autopilot/status";
 import type { PlatformId } from "@/lib/social-platforms";
+import { Home, ProposedPlan } from "./AutopilotHome";
 import {
   AutopilotSetup,
   SettingRows,
   settingsFromProgram,
   settingsValid,
-  StrategyCard,
   type SuggestionState,
 } from "./AutopilotSetup";
 import {
   ActionLine,
   Chip,
-  Dot,
   KIND_LABEL,
   pieceLabel,
   StatusPill,
@@ -61,9 +52,10 @@ import {
   whenLabel,
 } from "./autopilot-ui";
 import { Readiness } from "./Readiness";
-import { Pipeline, rise, ScoreRing, Timeline, WeekStrip } from "./visuals";
+import { rise, Timeline } from "./visuals";
 
-export type OpenTarget = "accounts" | "brand" | "style" | "website" | "visibility" | "calendar";
+export type OpenTarget =
+  "accounts" | "brand" | "style" | "website" | "blog" | "visibility" | "calendar";
 
 export type AutopilotHandlers = {
   start: (settings: ProgramSettings) => void;
@@ -132,6 +124,7 @@ export function AutopilotScreen({
           onStart={handlers.start}
           readiness={view.readiness}
           onOpen={handlers.open}
+          blogHost={view.site?.host}
         />
       </div>
     );
@@ -156,291 +149,6 @@ export function AutopilotScreen({
         {section === "settings" && <SettingsPage view={view} handlers={handlers} />}
       </SurfaceLayout>
     </MotionConfig>
-  );
-}
-
-/* ───────────────────────── home ───────────────────────── */
-
-function More({ onClick, children }: { onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
-    >
-      {children}
-    </button>
-  );
-}
-
-function Home({
-  view,
-  handlers,
-  onSection,
-}: {
-  view: AutopilotView;
-  handlers: AutopilotHandlers;
-  onSection: (s: Section) => void;
-}) {
-  const program = view.program!;
-  const paused = program.status === "paused";
-  const next = view.upcoming.find((a) => a.plannedFor && Date.parse(a.plannedFor) > Date.now());
-  const waiting = view.approvals.length;
-  const planning =
-    !paused && !view.upcoming.length && !view.proposed.length && !view.approvals.length;
-  const scanTask = view.tasks.find((t) => t.contentType === "geo_scan");
-  const scans = program.automations.includes("geo_scan");
-  const soon = [...view.approvals, ...view.upcoming]
-    .sort((a, b) => (a.plannedFor ?? "").localeCompare(b.plannedFor ?? ""))
-    .slice(0, 4);
-
-  return (
-    <SurfacePage width="narrow">
-      <motion.div {...rise(0)}>
-        <Tile>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="flex items-center gap-2.5 text-[22px] font-semibold leading-tight tracking-tight">
-                <Dot tone={paused ? "attention" : "active"} pulse={!paused} />
-                {paused ? "Autopilot is paused" : "Autopilot is on"}
-              </p>
-              <p className="mt-1.5 text-[13.5px] text-muted-foreground">
-                {paused
-                  ? `${pauseReasonText(program.pauseReason)}.`
-                  : next
-                    ? `Next: ${whenLabel(next.plannedFor)} · ${pieceLabel(next)}`
-                    : planning
-                      ? "Writing your first plan…"
-                      : "Nothing scheduled right now."}
-              </p>
-            </div>
-            {view.canEdit && (
-              <button
-                type="button"
-                disabled={handlers.busy}
-                onClick={() => handlers.pause(!paused)}
-                className={cn(paused ? dsPrimaryBtn : dsGhostBtn, "h-10 px-5 text-[13.5px]")}
-              >
-                {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                {paused ? "Resume" : "Pause"}
-              </button>
-            )}
-          </div>
-        </Tile>
-      </motion.div>
-
-      {/* Anything that stops real work comes first, with the button that fixes it. */}
-      {view.readiness.some((r) => !r.ok) && (
-        <motion.div {...rise(1)} className="mt-3">
-          <Readiness items={view.readiness} onOpen={handlers.open} onlyMissing />
-        </motion.div>
-      )}
-
-      {view.proposed.length > 0 && (
-        <div className="mt-3">
-          <ProposedPlan view={view} handlers={handlers} />
-        </div>
-      )}
-
-      {waiting > 0 && (
-        <motion.div {...rise(1)} className="mt-3">
-          <Tile className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-warning/12 text-warning">
-                <ListChecks className="h-5 w-5" />
-              </span>
-              <p className="text-[15px] font-semibold">
-                {waiting} {waiting === 1 ? "post needs" : "posts need"} your OK
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onSection("approvals")}
-              className={cn(dsPrimaryBtn, "h-10 px-5 text-[13.5px]")}
-            >
-              Review
-            </button>
-          </Tile>
-        </motion.div>
-      )}
-
-      {view.failed.length > 0 && (
-        <Tile className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-destructive/12 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-            </span>
-            <p className="text-[14px] font-medium">
-              {view.failed.length} {view.failed.length === 1 ? "step" : "steps"} didn&apos;t work
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onSection("activity")}
-            className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
-          >
-            See why
-          </button>
-        </Tile>
-      )}
-
-      <GroupLabel>Right now</GroupLabel>
-      <Pipeline view={view} onApprove={() => onSection("approvals")} />
-
-      <GroupLabel action={<More onClick={() => handlers.open("calendar")}>Open calendar</More>}>
-        Next 7 days
-      </GroupLabel>
-      <WeekStrip view={view} />
-      {soon.length > 0 && (
-        <Tile className="mt-2 py-1 sm:py-1">
-          <ul className="divide-y divide-border/50">
-            {soon.map((a) => (
-              <ActionLine key={a.id} action={a} />
-            ))}
-          </ul>
-        </Tile>
-      )}
-
-      <GroupLabel>Also on Autopilot</GroupLabel>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {view.stories?.enabled && (
-          <button
-            type="button"
-            onClick={() => onSection(view.stories?.waiting ? "approvals" : "settings")}
-            className="ds-tile ds-tile-hover flex items-center gap-3.5 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
-              <Story className="h-5 w-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[14px] font-semibold">Daily Stories</span>
-              <span className="block truncate text-[12.5px] text-muted-foreground">
-                {view.stories.waiting
-                  ? `${view.stories.waiting} waiting for your OK`
-                  : view.stories.times.length
-                    ? `Around ${view.stories.times.join(", ")}${view.stories.timing === "learned" ? " · your best times" : ""}`
-                    : "Planned with next week"}
-              </span>
-            </span>
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => handlers.open("visibility")}
-          className="ds-tile ds-tile-hover flex items-center gap-3.5 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        >
-          <ScoreRing score={view.visibility?.score ?? null} />
-          <span className="min-w-0">
-            <span className="block text-[14px] font-semibold">AI visibility</span>
-            <span className="block truncate text-[12.5px] text-muted-foreground">
-              {!scans
-                ? "Weekly check is off"
-                : scanTask?.status === "skipped"
-                  ? "Add your website to start"
-                  : view.visibility?.scannedAt
-                    ? `Checked ${timeAgo(view.visibility.scannedAt)} · weekly`
-                    : "First check is running"}
-            </span>
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onSection("ideas")}
-          className="ds-tile ds-tile-hover flex items-center gap-3.5 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        >
-          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
-            <Eye className="h-5 w-5" />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-[14px] font-semibold">Market and competitors</span>
-            <span className="block truncate text-[12.5px] text-muted-foreground">
-              {view.opportunities.length
-                ? `${view.opportunities.length} ${view.opportunities.length === 1 ? "idea" : "ideas"} found`
-                : "Watching. Nothing new."}
-            </span>
-          </span>
-        </button>
-      </div>
-
-      {view.learnings.length > 0 && (
-        <>
-          <GroupLabel>What Mellox learned</GroupLabel>
-          <Tile>
-            <ul className="space-y-2.5">
-              {view.learnings.map((line) => (
-                <li key={line} className="flex items-start gap-2.5 text-[13.5px] leading-snug">
-                  <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  {line}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-[12px] text-muted-foreground">Used in next week&apos;s plan.</p>
-          </Tile>
-        </>
-      )}
-
-      {view.events.length > 0 && (
-        <>
-          <GroupLabel action={<More onClick={() => onSection("activity")}>See all</More>}>
-            Latest
-          </GroupLabel>
-          <Tile>
-            <Timeline events={view.events.slice(0, 4)} />
-          </Tile>
-        </>
-      )}
-
-      {program.strategy && (
-        <>
-          <GroupLabel>Strategy</GroupLabel>
-          <StrategyCard strategy={program.strategy} compact />
-        </>
-      )}
-    </SurfacePage>
-  );
-}
-
-function ProposedPlan({ view, handlers }: { view: AutopilotView; handlers: AutopilotHandlers }) {
-  return (
-    <Tile>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[15px] font-semibold">Your plan is ready</p>
-        {view.canEdit && (
-          <button
-            type="button"
-            disabled={handlers.busy}
-            onClick={handlers.approvePlan}
-            className={cn(dsPrimaryBtn, "h-10 px-5 text-[13.5px]")}
-          >
-            <Check className="h-4 w-4" />
-            Approve plan
-          </button>
-        )}
-      </div>
-      <ul className="mt-3 divide-y divide-border/50">
-        {view.proposed.map((a) => (
-          <li key={a.id} className="flex items-start gap-3 py-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[13.5px] font-medium">{a.title}</p>
-              <p className="mt-0.5 text-[12px] text-muted-foreground">
-                {pieceLabel(a)} · {whenLabel(a.plannedFor)}
-              </p>
-            </div>
-            {view.canEdit && (
-              <button
-                type="button"
-                aria-label={`Remove ${a.title}`}
-                disabled={handlers.busy}
-                onClick={() => handlers.decide(a.id, "skip")}
-                className={dsIconBtn}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-    </Tile>
   );
 }
 
@@ -472,8 +180,21 @@ function Approvals({ view, handlers }: { view: AutopilotView; handlers: Autopilo
                     {a.preview?.title || a.title}
                   </h4>
                 </div>
-                <span className="shrink-0 rounded-full bg-[var(--ds-well-bg)] px-2.5 py-1 text-[11.5px] font-medium text-muted-foreground">
-                  {whenLabel(a.plannedFor)}
+                <span className="flex shrink-0 flex-col items-end gap-1.5">
+                  <span className="rounded-full bg-[var(--ds-well-bg)] px-2.5 py-1 text-[11.5px] font-medium text-muted-foreground">
+                    {whenLabel(a.plannedFor)}
+                  </span>
+                  {typeof a.preview?.score === "number" && (
+                    <span
+                      className="text-[11.5px] text-muted-foreground"
+                      title="How your audience groups are likely to take this exact text"
+                    >
+                      Mellox Score{" "}
+                      <span className="text-[13px] font-semibold tabular-nums text-foreground">
+                        {a.preview.score}
+                      </span>
+                    </span>
+                  )}
                 </span>
               </div>
               {a.preview?.frames?.length ? (
@@ -500,6 +221,14 @@ function Approvals({ view, handlers }: { view: AutopilotView; handlers: Autopilo
                   {a.reason}
                 </p>
               )}
+              {a.contentType === "article" &&
+                view.program?.automations.includes("publish_articles") && (
+                  <p className="mt-2 text-[12.5px] text-muted-foreground">
+                    {view.site
+                      ? `Approving sends it to ${view.site.host}.`
+                      : "No blog is connected, so it stays in your content when approved."}
+                  </p>
+                )}
               {view.canEdit && (
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <button
@@ -761,6 +490,7 @@ function SettingsPage({ view, handlers }: { view: AutopilotView; handlers: Autop
           onChange={setS}
           connected={view.connectedPlatforms}
           fullAvailable={view.fullAvailable}
+          blogHost={view.site?.host}
         />
       </div>
       <p className="mt-3 text-[12.5px] text-muted-foreground">

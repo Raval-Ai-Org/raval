@@ -14,6 +14,8 @@ import "server-only";
 //             WordPress: a post (+ SEO description and, with the Mellox GEO
 //             plugin, the article's JSON-LD). Webflow: a live CMS item.
 //             GitHub: a post file on a new mellox/post- branch + pull request.
+//             An article approved while the site's blog is still being added
+//             waits, and goes out when the blog's pull request is merged.
 //   verify    fetch the live URL (safeFetch) and check title, body, indexability
 //             and structured data (lib/articles/verify.ts). Only this marks a
 //             publication verified.
@@ -317,6 +319,8 @@ export async function previewPublication(
       article: empty,
       gate,
       structuredData: "site",
+      needsApproval: false,
+      blocked: true,
       canPublish: false,
       reason: "Add your website to this workspace first.",
       publication: null,
@@ -335,6 +339,8 @@ export async function previewPublication(
       article: empty,
       gate,
       structuredData: "site",
+      needsApproval: false,
+      blocked: true,
       canPublish: false,
       reason:
         resolution.problems[0] ??
@@ -346,11 +352,16 @@ export async function previewPublication(
     force: args.recheckBlog,
   });
   const url = existing?.url ?? predictedUrl(blog, host, article.slug);
+  // An article that waited for the blog goes out the moment the blog is seen live.
+  if (existing?.status === "approved" && !existing.scheduled_for && blogReady(blog))
+    kickPublication(existing.id);
+  // A blog being added to a repository: the article may be approved now and waits for it.
+  const blogComing = blog.provider === "github" && blog.status === "creating";
+  const needsApproval = !["approved", "scheduled", "published"].includes(item.status);
   let reason: string | null = null;
   if (!ctx.canPropose) reason = "An editor can publish articles.";
-  else if (!["approved", "scheduled", "published"].includes(item.status))
-    reason = "Approve the article first.";
-  else if (!blogReady(blog)) reason = blog.status_detail ?? "Set up a blog on your site first.";
+  else if (!blogReady(blog) && !blogComing)
+    reason = blog.status_detail ?? "Set up a blog on your site first.";
   else if (!gate.ok) reason = "Fix the checks below before publishing.";
   else if (resolution.placeholder)
     reason = `${host} shows visitors a “coming soon” page. Launch the site first so the article can be seen.`;
@@ -367,8 +378,10 @@ export async function previewPublication(
     article: { ...empty, url },
     gate,
     structuredData: writesStructuredData(binding, blog) ? "mellox" : "site",
-    canPublish: reason === null,
-    reason,
+    needsApproval,
+    blocked: reason !== null,
+    canPublish: reason === null && !needsApproval,
+    reason: reason ?? (needsApproval ? "Approve the article first." : null),
     publication: existing ? publicationView(existing) : null,
   };
 }
@@ -385,6 +398,7 @@ export async function approvePublication(
     throw new HttpError(409, preview.reason ?? "This article can't be published yet.");
   const item = await loadItem(ctx.workspaceId, args.contentItemId);
   const article = toArticle(item, args.slug);
+  const waitsForBlog = preview.blog?.status === "creating";
   const scheduledFor =
     args.scheduledFor && new Date(args.scheduledFor).getTime() > Date.now() + 60_000
       ? new Date(args.scheduledFor).toISOString()
@@ -397,7 +411,11 @@ export async function approvePublication(
     slug: article.slug,
     title: article.title.slice(0, 300),
     status: "approved",
-    status_detail: scheduledFor ? "Scheduled" : "Approved: publishing now",
+    status_detail: scheduledFor
+      ? "Scheduled"
+      : waitsForBlog
+        ? "Goes out as soon as your blog is live"
+        : "Publishing now",
     scheduled_for: scheduledFor,
     payload_hash: articleHash(article),
     approved_by: ctx.userId,
@@ -691,6 +709,9 @@ async function publishGithub(p: PublicationRow, a: PublishableArticle, blog: Blo
       }),
     );
   }
+  // A run interrupted after the pull request was opened finds it again.
+  const opened = p.pr_number ? await git.getPullRequest(installationId, repo, p.pr_number) : null;
+  if (opened) return { url, pr: opened };
   const pr = await withAccess(connection, p.approved_by, () =>
     git.createPullRequest({
       installationId,
@@ -706,7 +727,6 @@ async function publishGithub(p: PublicationRow, a: PublishableArticle, blog: Blo
 }
 
 async function publishOne(p: PublicationRow) {
-  await update(p.id, { status: "publishing", status_detail: "Publishing to your site" });
   const item = await loadItem(p.workspace_id, p.content_item_id);
   const article = toArticle(item, p.slug);
   if (p.payload_hash && articleHash(article) !== p.payload_hash)
@@ -719,17 +739,30 @@ async function publishOne(p: PublicationRow) {
     throw new NeedsAttention(
       `Mellox can no longer confirm that your ${p.provider} account builds ${p.host}.`,
     );
-  const blog = await loadBlogSettings(p.workspace_id, p.host);
+  let blog = await loadBlogSettings(p.workspace_id, p.host);
+  // The site's blog is still being added: follow its pull request and wait.
+  if (blog?.status === "creating") blog = await ensureBlogSettings(p.workspace_id, p.host, binding);
+  if (blog?.status === "creating") {
+    await update(p.id, {
+      status: "approved",
+      status_detail: "Goes out as soon as your blog is live",
+      attempts: 0,
+      next_attempt_at: new Date(Date.now() + 45_000).toISOString(),
+      lease_until: null,
+    });
+    return;
+  }
   if (!blog || !blogReady(blog))
     throw new NeedsAttention("Your site's blog isn't set up any more.");
+  await update(p.id, { status: "publishing", status_detail: "Publishing to your site" });
 
   if (p.provider === "github") {
     const { pr } = await publishGithub(p, article, blog);
     await update(p.id, {
       status: "pr_open",
-      status_detail: `Pull request #${pr.number} is open. Merge it to publish.`,
+      status_detail: `Your post is ready. Merge pull request #${pr.number} on GitHub to put it live.`,
       attempts: 0,
-      next_attempt_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+      next_attempt_at: new Date(Date.now() + 60_000).toISOString(),
       lease_until: null,
       last_error: null,
     });
@@ -874,8 +907,8 @@ async function applyPullRequestState(p: PublicationRow, state: "open" | "closed"
       status_detail: "Merged. Checking the live page after the deploy",
       published_at: new Date().toISOString(),
       attempts: 0,
-      // Give the site a few minutes to build and deploy.
-      next_attempt_at: new Date(Date.now() + 3 * 60_000).toISOString(),
+      // Give the site a moment to build and deploy.
+      next_attempt_at: new Date(Date.now() + 60_000).toISOString(),
       lease_until: null,
     });
     await db
@@ -889,7 +922,7 @@ async function applyPullRequestState(p: PublicationRow, state: "open" | "closed"
       status_detail: "The pull request was closed without merging.",
     });
   } else {
-    await update(p.id, { next_attempt_at: new Date(Date.now() + 5 * 60_000).toISOString() });
+    await update(p.id, { next_attempt_at: new Date(Date.now() + 60_000).toISOString() });
   }
 }
 

@@ -5,6 +5,9 @@
 //   plan → proposed pieces (Assist) → nothing is made before the plan is approved
 //   the worker claim (leases once, skips what isn't due)
 //   opportunities (one row per fingerprint) → pieces (one set per opportunity)
+//   work beyond posts: only weekly jobs are queued; "reuse what worked" reads
+//   real rows and makes nothing without results; the view reads the blog, the
+//   week's numbers and the scores
 //   history is append-only on the real database
 //   the RPC endpoint refuses an anonymous caller (when a dev server answers at
 //   AUTOPILOT_LIVE_BASE_URL, default http://localhost:8081)
@@ -134,6 +137,7 @@ describeLive("Autopilot (live)", () => {
       act_on_opportunities: false,
       acting_user_id: ownerId,
       created_by: ownerId,
+      automations: ["geo_scan", "repurpose", "publish_articles", "weekly_report"],
     });
     programId = program.id;
 
@@ -178,14 +182,51 @@ describeLive("Autopilot (live)", () => {
     expect(events.some((e) => e.kind === "plan_ready" && e.program_id === programId)).toBe(true);
 
     // The week's other work is queued once, and the view says what still needs connecting.
+    // Sending articles to the website is not a weekly step, so it queues nothing.
     const tasks = mine.filter((a) => a.kind === "task");
-    expect(tasks.map((t) => t.content_type)).toEqual(["geo_scan"]);
+    expect(tasks.map((t) => t.content_type).sort()).toEqual([
+      "geo_scan",
+      "repurpose",
+      "weekly_report",
+    ]);
+    // The summary is for the week, so it is not due until the week is over.
+    const report = tasks.find((t) => t.content_type === "weekly_report")!;
+    expect(Date.parse(report.next_attempt_at)).toBeGreaterThan(Date.now() + 5 * 86_400_000);
+
+    // "Reuse what worked" reads this workspace's measured posts from the real
+    // table. Whatever it finds, it only ever adds a planned piece: nothing is
+    // made, and in Assist nothing can be made before the plan is approved.
+    const reuse = tasks.find((t) => t.content_type === "repurpose")!;
+    const ran = await engine.runSweep(store, ports, { worker: WORKER, onlyId: reuse.id, max: 1 });
+    expect(ran.failed).toBe(0);
+    const reused = (await store.listActions(workspaceId, { limit: 200 })).filter(
+      (a) => a.program_id === programId && a.dedupe_key.startsWith("repurpose:"),
+    );
+    expect(reused.length).toBeLessThanOrEqual(1);
+    expect(reused.every((a) => a.status === "proposed" && !a.studio_job_id)).toBe(true);
+    expect((await store.getAction(workspaceId, reuse.id))?.status).toMatch(/^(done|skipped)$/);
     const { getAutopilotView } = await import("@/server/autopilot/service.server");
     const view = await getAutopilotView({ workspaceId, userId: ownerId, role: "owner" });
     expect(view.program?.id).toBe(programId);
-    expect(view.readiness.map((r) => r.id).sort()).toEqual(["accounts", "brand", "website"]);
-    expect(view.proposed.length).toBe(pieces.length);
-    expect(view.tasks).toHaveLength(1);
+    expect(view.readiness.map((r) => r.id).sort()).toEqual([
+      "accounts",
+      "blog",
+      "brand",
+      "style",
+      "website",
+    ]);
+    expect(view.proposed.length).toBe(pieces.length + reused.length);
+    expect(view.tasks.map((t) => t.contentType).sort()).toEqual([
+      "geo_scan",
+      "repurpose",
+      "weekly_report",
+    ]);
+    // Read from real rows: the blog articles would go to (if one is connected)
+    // and the last seven days.
+    expect(view.site === null || view.site.host.length > 0).toBe(true);
+    expect(view.readiness.find((r) => r.id === "blog")?.ok).toBe(view.site !== null);
+    expect(view.week.posted).toBeGreaterThanOrEqual(0);
+    expect(view.week.views).toBeGreaterThanOrEqual(0);
 
     // Planning the same week again adds no second set of pieces.
     const again = await store.insertActions(

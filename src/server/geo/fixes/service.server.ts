@@ -36,6 +36,7 @@ import {
 import { getGitHubConfigCheck } from "@/server/connectors/github/config.server";
 import {
   closePullRequest,
+  mergeMelloxPullRequest,
   commitToNewBranch,
   contentHash,
   createPullRequest,
@@ -1488,6 +1489,56 @@ export async function markProposalsAccessLost(connectionIds: string[]) {
     .in("connection_id", connectionIds)
     .in("status", ["generating", "draft", "applying", "pr_open"]);
   return data?.length ?? 0;
+}
+
+/* ───────────────────────── merge (a person's click) ───────────────────────── */
+
+/**
+ * Merge one fix's pull request from Mellox. Admins only, and only the exact
+ * commit that was approved. The finding still resolves only after the rescan.
+ */
+export async function mergeProposal(
+  ctx: FixContext,
+  args: { proposalId: string },
+): Promise<FixProposalView> {
+  if (!ctx.canManage) throw new FixWorkflowError("Only an admin can merge from Mellox.", 403);
+  const row = await loadProposal(ctx, args.proposalId);
+  if (row.batch_id)
+    throw new FixWorkflowError(
+      "This fix is part of a “Fix all” pull request. Merge it from “Fix all”.",
+      409,
+    );
+  if (row.status !== "pr_open" || !row.pr_number || !row.repo_full_name || !row.commit_sha)
+    throw new FixWorkflowError("There's no open pull request to merge.", 409);
+  const { connection } = await loadSourceWithConnection(ctx, row.source_id!);
+  const pr = await withAccess(connection, ctx.userId, () =>
+    mergeMelloxPullRequest({
+      installationId: connection.external_account_id,
+      repo: row.repo_full_name!,
+      number: row.pr_number!,
+      headSha: row.commit_sha!,
+    }),
+  ).catch((error) => {
+    throw new FixWorkflowError(describeGitError(error), 409);
+  });
+  await recordAudit({
+    workspaceId: ctx.workspaceId,
+    userId: ctx.userId,
+    action: "geo.fix.merged_from_mellox",
+    entity: "geo_fix_proposal",
+    payload: {
+      proposalId: row.id,
+      pr: row.pr_number,
+      repository: row.repo_full_name,
+      baseBranch: row.base_branch,
+      commit: row.commit_sha,
+    },
+  });
+  // GitHub's webhook may have recorded the merge already: act on the fresh row.
+  const fresh = await loadProposal(ctx, args.proposalId);
+  const updated = await applyPullRequestState(fresh, pr, "sync");
+  if (updated.agent_run_id) await syncAgentRun(updated.id).catch(() => undefined);
+  return proposalView(updated);
 }
 
 /* ───────────────────────── discard ───────────────────────── */

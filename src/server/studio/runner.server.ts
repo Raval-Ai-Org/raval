@@ -32,9 +32,11 @@ import { linkAssetToContent, persistAsset, signAssetPath } from "@/server/assets
 import { mergeAddedPlatforms } from "@/lib/studio/add-platforms";
 import {
   buildImagePromptDetailed,
+  logoCorner,
   type BrandDnaLite,
   type ImageStyleInput,
 } from "@/lib/post-image";
+import { overlayBrandLogo, type LogoCorner } from "@/server/studio/logo-overlay.server";
 import { loadBrandLook, type LoadedLook } from "@/server/brand-look/resolve.server";
 import {
   imageStyleInput,
@@ -125,6 +127,8 @@ type ProviderTask = {
   ratio: AspectRatio;
   prompt: string;
   referenceAssets?: string[];
+  /** The workspace's real logo, drawn on by code once the image is finished. */
+  logo?: { url: string; corner: LogoCorner };
   reviewAttempts?: number;
   startedAt: number;
   state: "pending" | "done" | "failed";
@@ -1024,6 +1028,11 @@ async function startMedia(args: {
     size: size as ImageSize,
     referenceAssets,
   });
+  // Same rule the prompt was built with: it told the model to leave this
+  // corner clean because the real logo goes there.
+  const look = ctx.style ? imageStyleInput(ctx.style) : null;
+  const logoUrl = look?.useLogo === false ? null : styled?.logoUrl?.trim() || null;
+  const builderSize = ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024";
   return [
     {
       slot: "main",
@@ -1031,6 +1040,9 @@ async function startMedia(args: {
       ratio,
       prompt,
       referenceAssets,
+      ...(logoUrl
+        ? { logo: { url: logoUrl, corner: look?.logoCorner ?? logoCorner(builderSize) } }
+        : {}),
       startedAt: Date.now(),
       state: "pending",
       ...started,
@@ -1854,10 +1866,14 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         warnings.push(...imageReview.issues.map((issue) => `Visual review: ${issue}`));
       if (task.kind === "image" && !imageReview)
         warnings.push("Visual review was unavailable. Check this artwork before publishing.");
+      const savedImage =
+        finalImage && task.kind === "image" && task.logo
+          ? await overlayBrandLogo(finalImage, task.logo.url, task.logo.corner)
+          : finalImage;
       const persisted = await persistAsset({
         workspaceId: row.workspace_id,
         idempotencyKey: `studio:${row.id}:${task.slot}:${task.taskId}`,
-        ...(finalImage ? { dataUrl: finalImage } : { sourceUrl: check.url }),
+        ...(savedImage ? { dataUrl: savedImage } : { sourceUrl: check.url }),
         contentItemIds: row.content_item_ids,
         assetType: task.kind,
         filename: `mellox-${row.type}-${task.ratio.replace(":", "x")}-${row.id.slice(0, 8)}`,

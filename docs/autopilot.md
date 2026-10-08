@@ -11,10 +11,10 @@ of it across clients in the Command Center.
 
 Autopilot is on by default.
 
-| Variable | Effect |
-|---|---|
-| `FEATURE_FLAG_AUTOPILOT_ENABLED=false` | Off for every workspace |
-| `FEATURE_FLAG_AUTOPILOT_ENABLED_WS_<workspace id>=false` | Off (or `true`: on) for one workspace |
+| Variable                                                  | Effect                                                    |
+| --------------------------------------------------------- | --------------------------------------------------------- |
+| `FEATURE_FLAG_AUTOPILOT_ENABLED=false`                    | Off for every workspace                                   |
+| `FEATURE_FLAG_AUTOPILOT_ENABLED_WS_<workspace id>=false`  | Off (or `true`: on) for one workspace                     |
 | `FEATURE_FLAG_AUTOPILOT_FULL_ENABLED=false` / `…_WS_<id>` | Removes "Fully automatic"; every post then needs approval |
 
 ## Setting it up (once)
@@ -45,18 +45,18 @@ advances it.
 
 ## Where things live
 
-| Part | Path |
-|---|---|
-| Pure rules (slots, limits, plan check, approval rule, scoring) | `src/lib/autopilot/` |
-| Worker (`runSweep`), store and port interfaces | `src/server/autopilot/engine.ts` |
-| Postgres store / in-memory store for tests | `store.server.ts` / `store.memory.ts` |
-| Calls into Studio, content, publisher, Market Brain, the model | `ports.server.ts` |
-| What a person can do, and the cron entry | `service.server.ts` |
-| RPC | `src/server/fns/autopilot.ts`, stubs `src/lib/autopilot.functions.ts` |
-| Workspace UI | `src/components/app/autopilot/` at `/w/<id>/app/autopilot` (`?s=<section>`) |
-| In the chat message box | `src/components/app/autopilot/composer/` (`AutopilotDeck`, `useComposerAutopilot`) |
-| Agency view | `src/components/app/command-center/AutopilotView.tsx` at `/agency?view=autopilot` |
-| Migrations | `20261003090000_autopilot.sql`, `20261003090100_autopilot_rpcs.sql` |
+| Part                                                           | Path                                                                               |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Pure rules (slots, limits, plan check, approval rule, scoring) | `src/lib/autopilot/`                                                               |
+| Worker (`runSweep`), store and port interfaces                 | `src/server/autopilot/engine.ts`                                                   |
+| Postgres store / in-memory store for tests                     | `store.server.ts` / `store.memory.ts`                                              |
+| Calls into Studio, content, publisher, Market Brain, the model | `ports.server.ts`                                                                  |
+| What a person can do, and the cron entry                       | `service.server.ts`                                                                |
+| RPC                                                            | `src/server/fns/autopilot.ts`, stubs `src/lib/autopilot.functions.ts`              |
+| Workspace UI                                                   | `src/components/app/autopilot/` at `/w/<id>/app/autopilot` (`?s=<section>`)        |
+| In the chat message box                                        | `src/components/app/autopilot/composer/` (`AutopilotDeck`, `useComposerAutopilot`) |
+| Agency view                                                    | `src/components/app/command-center/AutopilotView.tsx` at `/agency?view=autopilot`  |
+| Migrations                                                     | `20261003090000_autopilot.sql`, `20261003090100_autopilot_rpcs.sql`                |
 
 ## How a piece moves
 
@@ -74,14 +74,53 @@ surface, the content calendar or the Command Center review queue all count.
 
 ## More than posts
 
+Each of these is a switch under **Settings → Also** (and in setup). The home
+screen lists every one under "What Autopilot runs", on or off, with where it
+stands.
+
 - **AI visibility check** (on by default): once a week Autopilot starts a full
   site scan through the existing GEO scanner. The score shows on Home; when it
   is under 85 an idea appears that opens AI Visibility, where fixes are
   proposed, approved and verified exactly as before.
+- **Reuse what worked** (on by default): once a week the best measured post
+  that has not been reused comes back in another format the program allows
+  (carousel, image post or plain post, never a video or an article). It needs
+  three measured posts and at least 100 views on the one it picks; until then
+  it does nothing. The new piece is an ordinary planned piece: same price, same
+  weekly limits, same approval.
+- **Articles to your website** (off by default): when a person approves an
+  Autopilot article, it is handed to the existing article publisher
+  (`approvePublication`), which checks the site, the blog and the article and
+  only then sends it (a pull request on GitHub; a post on WordPress or
+  Webflow). No blog connected: the article stays in the content library and
+  the history says why. Autopilot never adds a blog and never approves an
+  article by itself.
+- **Weekly summary email** (on by default): the morning after each week ends,
+  one email to the member the program acts for: what went out, views so far,
+  the best post, what waits for them and what is coming. Read from stored
+  rows; nothing is generated or charged. Needs the same email settings as the
+  approval notice; an empty week sends nothing.
 - **Market and competitors**: always watched through the existing sweeps; what
   matters becomes an idea.
 - **Learning**: every measured post feeds a short "What Mellox learned" list
   (best post, stronger platform, stronger format) that the next weekly plan uses.
+- **Mellox Score**: a piece waiting for approval shows the score Audience
+  already gave that exact text. Autopilot only reads it.
+
+Adding one: put its name in `AUTOMATIONS` (`src/lib/autopilot/contracts.ts`,
+and in `WEEKLY_AUTOMATIONS` if it is a step of its own each week), start the
+work through `ports.tasks.run` or a port of its own, and add a row to
+`jobsFor` (`src/components/app/autopilot/jobs.tsx`).
+
+## The screens
+
+- **Home** answers three things in order: what needs you (one list, each row
+  with its button), the next seven days post by post, and what Autopilot runs.
+  Beside them: the last seven days in numbers and the credits used this week.
+- **To approve** shows each piece with its text or Story frames, why it was
+  made, its Mellox Score and, for an article, where approving sends it.
+- The layout follows the width of the window it is in (container queries), so
+  it is two columns in the full window and one on a phone.
 
 ## What it asks you to connect
 
@@ -123,9 +162,9 @@ Autopilot has no sidebar entry. It lives in the chat message box:
 
 - **Off:** one switch in the box's toolbar. Flipping it shows what Mellox
   proposes, in the box, with one "Turn on" button ("Adjust" opens the full setup).
-- **On:** the box lights up and the deck covers it in a new chat: where every
-  post is, the next seven days, credits used, what waits for a person, and a
-  switch that pauses it. "Write" (or just typing) hands the box back; the box
+- **On:** the box takes a lime edge and the deck covers it in a new chat: where
+  every post is, the next seven days, credits used, what else is running, what
+  waits for a person, and a switch that pauses it. "Write" (or just typing) hands the box back; the box
   stays lit and the toolbar switch brings the deck back.
 - **Everywhere else:** a small live sign in the top bar while it runs or is
   paused, which opens the full screen (at "To approve" when something waits).

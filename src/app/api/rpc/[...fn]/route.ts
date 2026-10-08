@@ -1,6 +1,7 @@
 import { resolveServerFn } from "@/server/fns";
 import { getRequestScope, runWithRequest, setRequestScope } from "@/server/request-context";
 import { knownErrorResponse } from "@/server/route";
+import { readJsonBody, RequestBodyTooLargeError } from "@/server/request-body";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +34,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ fn: string
 
   let data: unknown = null;
   try {
-    const body = await request.text();
-    data = body ? (JSON.parse(body)?.data ?? null) : null;
-  } catch {
+    data = ((await readJsonBody(request)) as { data?: unknown } | null)?.data ?? null;
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) return json(413, { error: error.message });
     return json(400, { error: "Invalid request body" });
   }
 

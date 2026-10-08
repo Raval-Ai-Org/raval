@@ -2,7 +2,8 @@
 
 // Autopilot inside the chat message box. Off, it is one small switch in the
 // box's toolbar. On, it takes over the whole box: what is planned, what is
-// being made and what waits for a person, with the controls in reach.
+// being made, what waits for a person and what else is running, with the
+// controls in reach.
 //
 // Everything here is drawn from one view object and a set of handlers, so the
 // app (useComposerAutopilot) and the dev-only lab render the same thing.
@@ -36,6 +37,7 @@ import { PLATFORMS } from "@/lib/social-platforms";
 import { settingsValid, weeklyEstimate, type SuggestionState } from "../AutopilotSetup";
 import type { Section } from "../AutopilotScreen";
 import { pieceLabel, whenLabel } from "../autopilot-ui";
+import { jobsFor } from "../jobs";
 import { STAGES, stageCounts, TONE_DOT, weekDays } from "../visuals";
 
 export type AutopilotSignal = "off" | "on" | "paused";
@@ -45,7 +47,7 @@ const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
 /* ───────────────────────── small parts ───────────────────────── */
 
-/** The mark that says "Autopilot": turning rings when it runs, still when it doesn't. */
+/** The mark that says "Autopilot": lime when it runs, amber when paused, grey when off. */
 export function AutopilotOrb({
   state,
   size = 40,
@@ -56,7 +58,6 @@ export function AutopilotOrb({
   return (
     <span className="ap-orb" data-state={state} style={{ width: size, height: size }} aria-hidden>
       <span className="ap-orb__ring" />
-      <span className="ap-orb__ring ap-orb__ring--outer" />
       <span className="ap-orb__core">
         <Bot style={{ width: size * 0.34, height: size * 0.34 }} strokeWidth={2.2} />
       </span>
@@ -217,35 +218,56 @@ function DeckButton({
 
 /* ───────────────────────── the pictures ───────────────────────── */
 
-/** Plan → write → approve → schedule → post, as one moving line. */
-function Flow({ view, live }: { view: AutopilotView; live: boolean }) {
+/** Plan → write → approve → schedule → post: a count and a bar per stage. */
+function Flow({ view }: { view: AutopilotView }) {
   const counts = stageCounts(view);
   return (
-    <ol className="ap-flow" data-live={live ? "" : undefined} aria-label="Where your posts are">
+    <ol className="grid grid-cols-5 gap-1.5 sm:gap-2" aria-label="Where your posts are">
       {STAGES.map((stage, i) => {
         const count = counts[i];
-        const Icon = stage.icon;
+        const warn = stage.id === "approve" && count > 0;
         return (
-          <motion.li
-            key={stage.id}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.34, delay: 0.06 + i * 0.05, ease: EASE }}
-            className="ap-flow__step"
-            data-has={count > 0 ? "" : undefined}
-            data-warn={stage.id === "approve" && count > 0 ? "" : undefined}
-            data-busy={stage.id === "write" && count > 0 && live ? "" : undefined}
-            aria-label={`${stage.label}: ${count}`}
-          >
-            <span className="ap-flow__node">
-              <Icon className="size-4" />
-              {count > 0 && <span className="ap-flow__count">{count}</span>}
+          <li key={stage.id} className="min-w-0" aria-label={`${stage.label}: ${count}`}>
+            <span
+              className={cn(
+                "block h-[3px] rounded-full",
+                warn ? "bg-warning" : count ? "bg-primary" : "bg-foreground/10",
+              )}
+            />
+            <span className="mt-1.5 flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-1.5">
+              <span
+                className={cn(
+                  "text-[15px] font-semibold leading-none tabular-nums",
+                  !count && "text-muted-foreground/50",
+                )}
+              >
+                {count}
+              </span>
+              <span
+                className={cn(
+                  "truncate text-[11px]",
+                  warn ? "font-semibold text-warning" : "text-muted-foreground",
+                )}
+              >
+                {stage.label}
+              </span>
             </span>
-            <span className="ap-flow__label">{stage.label}</span>
-          </motion.li>
+          </li>
         );
       })}
     </ol>
+  );
+}
+
+/** What else is running beyond the posts, in one quiet line. */
+function AlsoRunning({ view }: { view: AutopilotView }) {
+  const jobs = jobsFor(view).filter((j) => j.on && j.id !== "posts");
+  if (!jobs.length) return null;
+  return (
+    <p className="truncate text-[12px] text-muted-foreground" data-testid="deck-also">
+      <span className="text-foreground/70">Also running:</span>{" "}
+      {jobs.map((j) => (j.figure ? `${j.short} ${j.figure}` : j.short)).join(" · ")}
+    </p>
   );
 }
 
@@ -347,7 +369,6 @@ export function AutopilotDeck({
   if (!view) {
     return (
       <div className="ap-deck" data-state="setup" aria-busy={!failed}>
-        <span className="ap-deck__glow" aria-hidden />
         <div className="flex items-center gap-3">
           <AutopilotOrb state={failed ? "off" : "arming"} />
           <p className="min-w-0 flex-1 text-[15px] font-semibold tracking-tight">
@@ -385,9 +406,6 @@ function LiveDeck({ view, handlers }: { view: AutopilotView; handlers: DeckHandl
 
   return (
     <div className="ap-deck" data-state={paused ? "paused" : "on"}>
-      <span className="ap-deck__glow" aria-hidden />
-      {!paused && <span className="ap-deck__scan" aria-hidden />}
-
       <div className="flex items-center gap-3">
         <AutopilotOrb state={paused ? "paused" : "on"} />
         <div className="min-w-0 flex-1">
@@ -424,12 +442,14 @@ function LiveDeck({ view, handlers }: { view: AutopilotView; handlers: DeckHandl
         )}
       </div>
 
-      <Flow view={view} live={!paused} />
+      <Flow view={view} />
 
       <div className="flex items-end gap-4">
         <Week view={view} />
         <Budget view={view} />
       </div>
+
+      <AlsoRunning view={view} />
 
       <div className="ap-deck__bar">
         <DeckButton icon={Type} onClick={handlers.write}>
@@ -497,7 +517,6 @@ function SetupDeck({
 
   return (
     <div className="ap-deck" data-state="setup">
-      <span className="ap-deck__glow" aria-hidden />
       <div className="flex items-center gap-3">
         <AutopilotOrb state={s ? "off" : "arming"} />
         <div className="min-w-0 flex-1">

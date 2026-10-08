@@ -69,15 +69,41 @@ export const AUTOPILOT_GOALS = [
 ] as const;
 export type AutopilotGoal = (typeof AUTOPILOT_GOALS)[number];
 
-/** Recurring work Autopilot starts through other Mellox systems. */
-export const AUTOMATIONS = ["geo_scan"] as const;
+/**
+ * Work beyond the weekly posts. Each one starts or uses a Mellox system that
+ * already exists and keeps that system's own rules.
+ */
+export const AUTOMATIONS = ["geo_scan", "repurpose", "publish_articles", "weekly_report"] as const;
 export type Automation = (typeof AUTOMATIONS)[number];
+
+/** The ones that run as a step of their own every week. */
+export const WEEKLY_AUTOMATIONS: readonly Automation[] = ["geo_scan", "repurpose", "weekly_report"];
+
+/** What a new program runs. Sending to a website is always a person's choice. */
+export const DEFAULT_AUTOMATIONS: Automation[] = ["geo_scan", "repurpose", "weekly_report"];
+
 export const AUTOMATION_INFO: Record<Automation, { label: string; detail: string }> = {
   geo_scan: {
     label: "AI visibility check",
     detail: "Scans your site every week and lines up fixes.",
   },
+  repurpose: {
+    label: "Reuse what worked",
+    detail: "Each week your best post comes back in a new format.",
+  },
+  publish_articles: {
+    label: "Articles to your website",
+    detail: "An article you approve is sent to your blog.",
+  },
+  weekly_report: {
+    label: "Weekly summary email",
+    detail: "What went out, how it did and what needs you.",
+  },
 };
+
+export function isAutomation(value: unknown): value is Automation {
+  return typeof value === "string" && (AUTOMATIONS as readonly string[]).includes(value);
+}
 
 export const DURATION_WEEKS = [2, 4, 8, 12] as const;
 
@@ -97,7 +123,7 @@ export const ProgramSettingsSchema = z
     videoCapPerWeek: z.number().int().min(0).max(50).default(0),
     actOnOpportunities: z.boolean().default(false),
     strategy: StrategySchema.nullish(),
-    automations: z.array(z.enum(AUTOMATIONS)).max(4).default(["geo_scan"]),
+    automations: z.array(z.enum(AUTOMATIONS)).max(8).default(["geo_scan"]),
     /** Story Autopilot: daily Stories alongside (or instead of) feed posts. */
     stories: StorySettingsSchema.default(DEFAULT_STORY_SETTINGS),
   })
@@ -130,7 +156,7 @@ export type OpportunityKind =
 
 /** Something Autopilot needs before it can do its job, and where to fix it. */
 export type ReadinessItem = {
-  id: "brand" | "style" | "accounts" | "website";
+  id: "brand" | "style" | "accounts" | "website" | "blog";
   ok: boolean;
   label: string;
   detail: string;
@@ -288,6 +314,8 @@ export type ActionPreview = {
   channel: string | null;
   /** A Story's drawn frames, in order (signed URLs). */
   frames?: string[];
+  /** The Mellox Score for this exact text (Audience), when there is one. */
+  score?: number | null;
 };
 
 export type ActionView = {
@@ -335,6 +363,15 @@ export type EventView = {
   createdAt: string;
 };
 
+export type WeekNumbers = {
+  /** Pieces that went out. */
+  posted: number;
+  /** Views counted so far on those pieces. */
+  views: number;
+  /** How many of them went out without a person (Fully automatic). */
+  auto: number;
+};
+
 export type AutopilotBudget = {
   creditsUsed: number;
   creditCap: number;
@@ -364,6 +401,10 @@ export type AutopilotView = {
   /** Recurring non-post work: latest run of each. */
   tasks: ActionView[];
   visibility: { score: number | null; scannedAt: string | null } | null;
+  /** The blog approved articles go to, when one is set up. */
+  site: { host: string } | null;
+  /** The last seven days in numbers. */
+  week: WeekNumbers;
   /** Story Autopilot at a glance: what's coming and when it goes out. */
   stories: {
     enabled: boolean;

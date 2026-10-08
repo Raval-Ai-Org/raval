@@ -31,6 +31,7 @@ import {
 } from "@/lib/geo/types";
 import { Tile } from "../surface/SurfaceLayout";
 import { FixDrawer } from "./FixDrawer";
+import { FixImpactCard } from "./FixImpactCard";
 import { useScanFindings } from "./use-scan-findings";
 import {
   CATEGORY_ICON,
@@ -512,7 +513,10 @@ export function OverviewTab({
   sparkValues,
   brandName,
   onOpenFindings,
+  onOpenPrompts,
 }: {
+  /** Open the tracked questions (Prompts tab). */
+  onOpenPrompts?: () => void;
   workspaceId: string;
   scan: GeoScanView;
   previousScore: number | null;
@@ -666,6 +670,9 @@ export function OverviewTab({
           </ul>
         </Tile>
       </div>
+
+      {/* What changed since fixes went live (nothing until one is live) */}
+      <FixImpactCard workspaceId={workspaceId} scanId={scan.id} onOpenPrompts={onOpenPrompts} />
 
       {/* Scored areas */}
       <div>

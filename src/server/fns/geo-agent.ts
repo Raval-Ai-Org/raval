@@ -47,7 +47,7 @@ export const startAgentRun = createServerFn({ method: "POST" })
     const ctx = await agentContext(context, data.workspaceId);
     requireEditor(ctx);
     // Every agent run needs one-click fixes (Growth). A repository run is the
-    // GEO Engineer (Agency, 800 credits): its hold is taken right before the
+    // GEO Engineer (Growth and up, 800 credits): its hold is taken right before the
     // run starts and settled when the run has a reviewed fix (or fails).
     // WordPress / Webflow runs are charged when their change is applied.
     await requireBillingFeature({

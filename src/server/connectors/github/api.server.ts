@@ -116,7 +116,7 @@ export function forgetInstallationToken(installationId: string): void {
 }
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   /** Map a 404 to GitHubAccessError("not_found") instead of returning null. */
   notFoundIsAccessError?: boolean;
@@ -201,7 +201,9 @@ async function toError(res: Response): Promise<Error> {
       "GitHub couldn't find that installation or repository.",
     );
   }
-  if (res.status === 409 || res.status === 422) return new GitHubRequestError(res.status, message);
+  // 405 is GitHub refusing a merge (branch rules, conflicts, merge style).
+  if (res.status === 405 || res.status === 409 || res.status === 422)
+    return new GitHubRequestError(res.status, message);
   return new UpstreamError(
     res.status >= 500 ? 502 : 400,
     `GitHub request failed (${res.status}).`,

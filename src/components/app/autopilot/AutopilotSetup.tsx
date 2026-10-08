@@ -29,7 +29,7 @@ import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import { STORY_THEMES, type StoryThemeId } from "@/lib/stories/frames";
 import { STORY_PLATFORMS } from "@/lib/stories/placement";
 import { storyTimes, toMinutes, type StorySettings } from "@/lib/stories/schedule";
-import { Chip } from "./autopilot-ui";
+import { Chip, SwitchRow } from "./autopilot-ui";
 import { Readiness } from "./Readiness";
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -246,11 +246,14 @@ export function SettingRows({
   onChange,
   connected,
   fullAvailable,
+  blogHost,
 }: {
   s: ProgramSettings;
   onChange: (next: ProgramSettings) => void;
   connected: PlatformId[];
   fullAvailable: boolean;
+  /** The blog approved articles can go to, when one is connected. */
+  blogHost?: string | null;
 }) {
   const [open, setOpen] = useState<RowId | null>(null);
   const toggleRow = (id: RowId) => setOpen((cur) => (cur === id ? null : id));
@@ -489,23 +492,14 @@ export function SettingRows({
               find in your Brand DNA. We email you when something waits.
             </Hint>
           )}
-          <label className="flex cursor-pointer items-start gap-3 pt-1">
-            <input
-              type="checkbox"
-              checked={s.actOnOpportunities}
-              onChange={(e) => set("actOnOpportunities", e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
+          <div className="pt-1">
+            <SwitchRow
+              on={s.actOnOpportunities}
+              onChange={(on) => set("actOnOpportunities", on)}
+              label="Respond to what's happening"
+              detail="When a competitor move or trend clearly matters, Mellox adds a post about it. Up to two a week."
             />
-            <span>
-              <span className="block text-[13.5px] font-medium">
-                Respond to what&apos;s happening
-              </span>
-              <span className="block text-[12.5px] text-muted-foreground">
-                When a competitor move or trend clearly matters, Mellox adds a post about it. Up to
-                two a week.
-              </span>
-            </span>
-          </label>
+          </div>
         </Row>
 
         <Row
@@ -515,27 +509,38 @@ export function SettingRows({
           label="Also"
           value={
             s.automations.length
-              ? s.automations.map((a) => AUTOMATION_INFO[a].label).join(", ")
+              ? AUTOMATIONS.filter((a) => s.automations.includes(a))
+                  .map((a) => AUTOMATION_INFO[a].label)
+                  .join(", ")
               : "Posts only"
           }
         >
-          {AUTOMATIONS.map((a) => (
-            <label key={a} className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                checked={s.automations.includes(a)}
+          <div className="space-y-3.5">
+            {AUTOMATIONS.map((a) => (
+              <SwitchRow
+                key={a}
+                on={s.automations.includes(a)}
                 onChange={() => set("automations", toggle(s.automations, a))}
-                className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
+                label={AUTOMATION_INFO[a].label}
+                detail={AUTOMATION_INFO[a].detail}
+                note={
+                  a === "publish_articles"
+                    ? !s.contentTypes.includes("article")
+                      ? "Add Article under What, or there is nothing to send."
+                      : !blogHost
+                        ? "No blog is connected yet. Articles stay in your content until one is."
+                        : undefined
+                    : undefined
+                }
               />
-              <span>
-                <span className="block text-[13.5px] font-medium">{AUTOMATION_INFO[a].label}</span>
-                <span className="block text-[12.5px] text-muted-foreground">
-                  {AUTOMATION_INFO[a].detail}
-                </span>
-              </span>
-            </label>
-          ))}
-          <Hint>Market and competitor watching is always on and feeds your ideas.</Hint>
+            ))}
+          </div>
+          <Hint>
+            {blogHost && s.automations.includes("publish_articles")
+              ? `Articles go to ${blogHost} only after you approve them. `
+              : ""}
+            Market and competitor watching is always on and feeds your ideas.
+          </Hint>
         </Row>
 
         <Row
@@ -603,21 +608,12 @@ function StoriesSettings({
     "ds-well h-10 rounded-full border-0 px-4 text-[14px] font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
   return (
     <>
-      <label className="flex cursor-pointer items-start gap-3">
-        <input
-          type="checkbox"
-          checked={st.enabled}
-          onChange={(e) => set("enabled", e.target.checked)}
-          className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
-        />
-        <span>
-          <span className="block text-[13.5px] font-medium">Post Stories every day</span>
-          <span className="block text-[12.5px] text-muted-foreground">
-            Short Instagram and Facebook Stories in your brand look, made the day before so you can
-            check them.
-          </span>
-        </span>
-      </label>
+      <SwitchRow
+        on={st.enabled}
+        onChange={(on) => set("enabled", on)}
+        label="Post Stories every day"
+        detail="Short Instagram and Facebook Stories in your brand look, made the day before so you can check them."
+      />
 
       {st.enabled && (
         <>
@@ -730,20 +726,12 @@ function StoriesSettings({
             ))}
           </div>
 
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={st.smartTiming}
-              onChange={(e) => set("smartTiming", e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
-            />
-            <span>
-              <span className="block text-[13.5px] font-medium">Pick the best times for me</span>
-              <span className="block text-[12.5px] text-muted-foreground">
-                Once your Stories have numbers, Mellox moves them to the hours they were seen most.
-              </span>
-            </span>
-          </label>
+          <SwitchRow
+            on={st.smartTiming}
+            onChange={(on) => set("smartTiming", on)}
+            label="Pick the best times for me"
+            detail="Once your Stories have numbers, Mellox moves them to the hours they were seen most."
+          />
           <Hint>
             Stories can&apos;t carry link, poll or music stickers when an app posts them. Mellox
             writes &quot;link in bio&quot; and asks for replies instead.
@@ -770,6 +758,7 @@ export function AutopilotSetup({
   onStart,
   readiness,
   onOpen,
+  blogHost,
 }: {
   suggestion: SuggestionState;
   connected: PlatformId[];
@@ -778,6 +767,7 @@ export function AutopilotSetup({
   onStart: (settings: ProgramSettings) => void;
   readiness: ReadinessItem[];
   onOpen: (target: ReadinessItem["id"]) => void;
+  blogHost?: string | null;
 }) {
   const [s, setS] = useState<ProgramSettings | null>(suggestion.data?.settings ?? null);
   useEffect(() => {
@@ -836,6 +826,7 @@ export function AutopilotSetup({
               onChange={setS}
               connected={connected}
               fullAvailable={fullAvailable}
+              blogHost={blogHost}
             />
             <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
               <button

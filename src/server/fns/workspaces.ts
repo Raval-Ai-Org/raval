@@ -21,6 +21,24 @@ const renameWorkspaceSchema = z.object({
   name: z.string().trim().min(1).max(120),
 });
 const memberMutationSchema = z.object({ workspaceId: uuidSchema, userId: uuidSchema });
+const memberPageSchema = z.object({
+  workspaceId: uuidSchema,
+  page: z.number().int().min(1).max(100000),
+});
+const MEMBER_PAGE_SIZE = 10;
+const memberPageResultSchema = z.object({
+  members: z.array(
+    z.object({
+      user_id: uuidSchema,
+      role: z.string(),
+      joined_at: z.string(),
+      name: z.string().nullable(),
+      avatar_url: z.string().nullable(),
+      email: z.string().nullable(),
+    }),
+  ),
+  total: z.number().int().nonnegative(),
+});
 const memberRoleSchema = memberMutationSchema.extend({
   role: z.enum(["admin", "editor", "viewer"]),
 });
@@ -33,18 +51,15 @@ const inviteIdSchema = z.object({ workspaceId: uuidSchema, inviteId: uuidSchema 
 
 const ROLE_RANK: Record<string, number> = { viewer: 1, editor: 2, admin: 3, owner: 4 };
 
-/** Sign-in emails for the given users (service role; callers check membership first). */
-async function memberEmails(userIds: string[]): Promise<Map<string, string>> {
+/** Auth email lookup is service-only and backed by an indexed database function. */
+async function authUserIdForEmail(email: string): Promise<string | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const out = new Map<string, string>();
-  const found = await Promise.all(
-    userIds.map(async (id) => {
-      const { data } = await supabaseAdmin.auth.admin.getUserById(id);
-      return [id, data?.user?.email ?? null] as const;
-    }),
+  const { data, error } = await supabaseAdmin.rpc(
+    "auth_user_id_for_email" as never,
+    { p_email: email } as never,
   );
-  for (const [id, email] of found) if (email) out.set(id, email.toLowerCase());
-  return out;
+  if (error) throw new Error("Could not check workspace membership");
+  return data ? String(data) : null;
 }
 
 export const renameWorkspace = createServerFn({ method: "POST" })
@@ -316,52 +331,36 @@ export const acceptWorkspaceInvite = createServerFn({ method: "POST" })
 
 export const getWorkspaceMemberProfiles = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) => z.object({ workspaceId: uuidSchema }).parse(data))
+  .inputValidator((data) => memberPageSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: membership, error: membershipError } = await supabaseAdmin
       .from("workspace_members")
-      .select("id")
+      .select("role")
       .eq("workspace_id", data.workspaceId)
       .eq("user_id", context.userId)
       .maybeSingle();
 
     if (membershipError || !membership) throw new Error("Not allowed");
 
-    const { data: members, error: membersError } = await supabaseAdmin
-      .from("workspace_members")
-      .select("user_id, role, created_at")
-      .eq("workspace_id", data.workspaceId)
-      .order("created_at", { ascending: true });
-
-    if (membersError) throw new Error("Could not load members");
-
-    const userIds = (members ?? []).map((member) => member.user_id);
-    const [{ data: profiles, error: profilesError }, emails] = await Promise.all([
-      userIds.length
-        ? supabaseAdmin.from("profiles").select("id, name, avatar_url").in("id", userIds)
-        : Promise.resolve({ data: [], error: null }),
-      memberEmails(userIds),
-    ]);
-
-    if (profilesError) throw new Error("Could not load member profiles");
-
-    const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-
-    return (members ?? []).map((member) => ({
-      ...(() => {
-        const profile = profileById.get(member.user_id);
-        return {
-          name: profile?.name ?? null,
-          avatar_url: profile?.avatar_url ?? null,
-        };
-      })(),
-      user_id: member.user_id,
-      email: emails.get(member.user_id) ?? null,
-      role: String(member.role),
-      joined_at: member.created_at,
-    }));
+    const { data: pageData, error: pageError } = await supabaseAdmin.rpc(
+      "workspace_members_page" as never,
+      {
+        p_workspace: data.workspaceId,
+        p_offset: (data.page - 1) * MEMBER_PAGE_SIZE,
+        p_limit: MEMBER_PAGE_SIZE,
+      } as never,
+    );
+    if (pageError) throw new Error("Could not load members");
+    const page = memberPageResultSchema.parse(pageData);
+    return {
+      members: page.members,
+      total: page.total,
+      page: data.page,
+      pageSize: MEMBER_PAGE_SIZE,
+      currentRole: String(membership.role),
+    };
   });
 
 export const createWorkspaceInvite = createServerFn({ method: "POST" })
@@ -378,39 +377,33 @@ export const createWorkspaceInvite = createServerFn({ method: "POST" })
       userId: context.userId,
       role: "admin",
     });
+    const inviteeId = await authUserIdForEmail(email);
     if (entitlements?.enforcement === "on") {
       const { BrandFrozenError } = await import("@/server/billing/errors");
       if (entitlements.frozen) throw new BrandFrozenError();
       if (data.role !== "viewer" && entitlements.limits.seats !== null) {
         const { assertWithinLimit } = await import("@/server/billing/limits.server");
-        const { data: brands, error: brandsError } = await supabaseAdmin
-          .from("workspaces")
-          .select("id")
-          .eq("billing_account_id", entitlements.accountId);
-        if (brandsError) throw new Error("Could not check billing seats");
-        const ids = (brands ?? []).map((brand) => brand.id);
-        const { data: seated, error: seatsError } = ids.length
-          ? await supabaseAdmin
-              .from("workspace_members")
-              .select("user_id,role")
-              .in("workspace_id", ids)
-              .in("role", ["owner", "admin", "editor"])
-          : { data: [], error: null };
-        if (seatsError) throw new Error("Could not check billing seats");
-        const seatEmails = await memberEmails([
-          entitlements.ownerUserId,
-          ...new Set((seated ?? []).map((seat) => seat.user_id)),
-        ]);
-        if (![...seatEmails.values()].includes(email)) assertWithinLimit(entitlements, "seats");
+        if (inviteeId !== entitlements.ownerUserId) {
+          const { data: alreadySeated, error: seatsError } = inviteeId
+            ? await supabaseAdmin.rpc(
+                "account_has_billable_member" as never,
+                { p_account: entitlements.accountId, p_user: inviteeId } as never,
+              )
+            : { data: false, error: null };
+          if (seatsError) throw new Error("Could not check billing seats");
+          if (!alreadySeated) assertWithinLimit(entitlements, "seats");
+        }
       }
     }
-    const { data: members } = await supabaseAdmin
-      .from("workspace_members")
-      .select("user_id")
-      .eq("workspace_id", data.workspaceId);
-    const emails = await memberEmails((members ?? []).map((m) => m.user_id));
-    if ([...emails.values()].includes(email)) {
-      throw new HttpError(409, `${email} is already in this workspace`);
+    if (inviteeId) {
+      const { data: existing, error: existingError } = await supabaseAdmin
+        .from("workspace_members")
+        .select("user_id")
+        .eq("workspace_id", data.workspaceId)
+        .eq("user_id", inviteeId)
+        .maybeSingle();
+      if (existingError) throw new Error("Could not check workspace membership");
+      if (existing) throw new HttpError(409, `${email} is already in this workspace`);
     }
 
     // Inviting the same email again issues a fresh link: the old one stops

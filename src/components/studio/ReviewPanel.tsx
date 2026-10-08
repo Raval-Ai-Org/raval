@@ -234,6 +234,8 @@ export function ReviewPanel({
   const [custom, setCustom] = useState("");
   const [scheduleAt, setScheduleAt] = useState(defaultScheduleTime);
   const [publishMode, setPublishMode] = useState<"publish" | "schedule" | null>(null);
+  // Articles: each press of the main Publish button presses PublishToSite's own.
+  const [sitePublish, setSitePublish] = useState(0);
   const [expandChoices, setExpandChoices] = useState<PlatformId[]>([]);
   const [showExpand, setShowExpand] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -311,6 +313,8 @@ export function ReviewPanel({
   const readyToSend = deliverable.filter((row) =>
     ["draft", "pending", "approved"].includes(row.status),
   );
+  // An article goes to the workspace's own website (PublishToSite), not to social accounts.
+  const articleRow = session.type === "article" && !fixtureRows ? (rows[0] ?? null) : null;
   const shippableType = SHIPPABLE_TYPES.includes(session.type);
   const canShip = distributionReady && readyToSend.length > 0 && shippableType;
   const publishDestinations = readyToSend
@@ -991,6 +995,15 @@ export function ReviewPanel({
             >
               <Send /> Review & publish
             </Button>
+          ) : articleRow ? (
+            <Button
+              className="studio-cta col-span-2 min-w-0"
+              size="lg"
+              onClick={() => setSitePublish((n) => n + 1)}
+              disabled={revising || busy !== null || editing}
+            >
+              <Send /> Publish to your site
+            </Button>
           ) : null}
         </motion.div>
       ) : canShip ? (
@@ -1017,11 +1030,25 @@ export function ReviewPanel({
         </motion.div>
       ) : (
         <motion.div key="use" {...fadeSwap} className="grid w-full grid-cols-2 gap-2">
-          <Button variant={mediaReady ? "outline" : "default"} size="lg" onClick={copyText}>
+          <Button
+            variant={mediaReady || articleRow ? "outline" : "default"}
+            size="lg"
+            onClick={copyText}
+          >
             <Copy />
             Copy {session.type === "article" ? "article" : "text"}
           </Button>
-          {mediaReady ? (
+          {articleRow ? (
+            <Button
+              size="lg"
+              className="studio-cta min-w-0 px-2"
+              onClick={() => setSitePublish((n) => n + 1)}
+              disabled={busy !== null || revising}
+            >
+              <Send />
+              Publish
+            </Button>
+          ) : mediaReady ? (
             <DownloadAssetButton
               url={media!.url}
               filename={`mellox-${media!.kind}-${new Date().toISOString().slice(0, 10)}`}
@@ -1457,9 +1484,14 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          {session.type === "article" && rows[0] && !approvable && !fixtureRows ? (
+          {articleRow ? (
             <InspectorSection title="Your website">
-              <PublishToSite workspaceId={session.workspaceId} contentItemId={rows[0].id} />
+              <PublishToSite
+                workspaceId={session.workspaceId}
+                contentItemId={articleRow.id}
+                onApprove={() => approve()}
+                publishSignal={sitePublish}
+              />
             </InspectorSection>
           ) : null}
 

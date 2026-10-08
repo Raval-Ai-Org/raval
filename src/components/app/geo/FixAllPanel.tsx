@@ -42,6 +42,7 @@ import {
   getSiteConnections,
   getVerification,
   listFixBranches,
+  mergeFixBatch,
 } from "@/lib/geo-fixes.functions";
 import { cn } from "@/lib/utils";
 import {
@@ -81,18 +82,23 @@ const PROPOSAL_LABEL: Record<string, string> = {
 function BatchReview({
   workspaceId,
   batch,
+  canMerge,
   onChange,
   onRestart,
 }: {
+  /** Admins can merge the pull request from here; everyone else merges on GitHub. */
+  canMerge: boolean;
   workspaceId: string;
   batch: FixBatchView;
   onChange: (b: FixBatchView) => void;
   onRestart: () => void;
 }) {
-  const [busy, setBusy] = useState<"approve" | "discard" | "sync" | "close" | null>(null);
+  const [busy, setBusy] = useState<"approve" | "discard" | "sync" | "close" | "merge" | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmMerge, setConfirmMerge] = useState(false);
   const b = batch;
   const included = b.items.filter((i) => i.status === "generated");
+  const checksFailed = !!b.checks?.available && b.checks.state === "failure";
   const excluded = b.items.filter((i) => i.status !== "generated");
 
   useVisibleInterval(
@@ -114,7 +120,7 @@ function BatchReview({
     [b.id, b.status],
   );
 
-  const act = async (kind: "approve" | "discard" | "sync" | "close") => {
+  const act = async (kind: "approve" | "discard" | "sync" | "close" | "merge") => {
     setBusy(kind);
     try {
       if (kind === "approve") {
@@ -124,6 +130,9 @@ function BatchReview({
           }),
         );
         toast.success("Pull request opened");
+      } else if (kind === "merge") {
+        onChange(await mergeFixBatch({ data: { workspaceId, batchId: b.id } }));
+        toast.success("Merged. Mellox checks your live site next.");
       } else if (kind === "sync") {
         onChange(await getFixBatch({ data: { workspaceId, batchId: b.id, sync: true } }));
       } else {
@@ -140,6 +149,7 @@ function BatchReview({
     } finally {
       setBusy(null);
       setConfirmClose(false);
+      setConfirmMerge(false);
     }
   };
 
@@ -284,16 +294,62 @@ function BatchReview({
             <CheckCircle className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1 basis-[200px]">
-            <p className="text-[14px] font-semibold">Pull request opened</p>
+            <p className="text-[14px] font-semibold">
+              {confirmMerge ? `Merge into ${b.baseBranch}?` : "Pull request opened"}
+            </p>
             <p className="text-[12px] text-muted-foreground">
-              Merge it on GitHub. Mellox then checks each page on your live site.
+              {confirmMerge
+                ? "This puts the fixes live on your website."
+                : checksFailed
+                  ? "A check failed on GitHub. Look at it there before merging."
+                  : canMerge
+                    ? "Merge it here or on GitHub. Mellox then checks your live site."
+                    : "An admin can merge it. Mellox then checks your live site."}
             </p>
           </div>
-          <Button asChild>
-            <a href={b.pr.url} target="_blank" rel="noopener noreferrer">
-              Review on GitHub <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {confirmMerge ? (
+              <>
+                <Button loading={busy === "merge"} onClick={() => void act("merge")}>
+                  Yes, merge
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={busy !== null}
+                  onClick={() => setConfirmMerge(false)}
+                >
+                  Not yet
+                </Button>
+              </>
+            ) : (
+              <>
+                {canMerge && !checksFailed && (
+                  <Button disabled={busy !== null} onClick={() => setConfirmMerge(true)}>
+                    <GitCommit className="h-4 w-4" /> Merge now
+                  </Button>
+                )}
+                <Button asChild variant={canMerge && !checksFailed ? "outline" : "default"}>
+                  <a href={b.pr.url} target="_blank" rel="noopener noreferrer">
+                    Review on GitHub <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(b.status === "merged" || b.status === "verifying") && (
+        <div className="ds-enter flex items-center gap-3 rounded-2xl border border-primary/25 bg-card p-4">
+          <Spinner className="h-4 w-4 shrink-0 animate-spin text-primary" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <p className="text-[13px] font-medium">Merged. Checking your live site</p>
+            <p className="text-[12px] text-muted-foreground">
+              Each issue is marked fixed only when its page passes. This can take a few minutes
+              after your site deploys.
+            </p>
+            <div role="progressbar" className="ds-sheen h-1 rounded-full bg-primary/25" />
+          </div>
         </div>
       )}
 
@@ -732,6 +788,7 @@ export function FixAllPanel({
         <BatchReview
           workspaceId={workspaceId}
           batch={batch}
+          canMerge={preflight.setup.canManageConnections}
           onChange={(b) => {
             setBatch(b);
             if (["completed", "discarded"].includes(b.status)) onChanged();

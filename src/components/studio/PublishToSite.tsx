@@ -5,7 +5,7 @@
 // whether the live page really carries it. Every state comes from the server
 // (src/server/articles/publish.server.ts); nothing is sent before the button.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/lib/toast";
 import {
   AlertTriangle,
@@ -44,7 +44,7 @@ const STATUS: Record<
 > = {
   approved: { label: "Waiting to publish", tone: "busy" },
   publishing: { label: "Publishing", tone: "busy" },
-  pr_open: { label: "Pull request open", tone: "busy" },
+  pr_open: { label: "Ready. Merge it to go live", tone: "busy" },
   published: { label: "Published", tone: "busy" },
   verifying: { label: "Checking the live page", tone: "busy" },
   verified: { label: "Live on your site", tone: "ok" },
@@ -178,9 +178,15 @@ function PublicationCard({
 export function PublishToSite({
   workspaceId,
   contentItemId,
+  onApprove,
+  publishSignal = 0,
 }: {
   workspaceId: string;
   contentItemId: string;
+  /** Approve the article (it isn't yet); resolves false when that didn't work. */
+  onApprove?: () => Promise<boolean>;
+  /** Goes up by one each time the panel's main Publish button is pressed. */
+  publishSignal?: number;
 }) {
   const [preview, setPreview] = useState<PublishPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -199,8 +205,10 @@ export function PublishToSite({
         });
         setPreview(next);
         setError(null);
+        return next;
       } catch (e) {
         setError(errMsg(e, "Couldn't check your website"));
+        return null;
       }
     },
     [workspaceId, contentItemId, host, slug],
@@ -236,31 +244,43 @@ export function PublishToSite({
     [publication?.id, publication?.status, active],
   );
 
-  if (error && !preview) return <ErrorState size="sm" detail={error} onRetry={() => void load()} />;
-  if (!preview) return <Skeleton className="h-28 w-full rounded-xl" />;
+  /** Mellox can add the missing blog itself as part of publishing (repository-built sites). */
+  const canAddBlog = (p: PublishPreview) =>
+    p.site?.provider === "github" &&
+    !!p.blog?.canCreate &&
+    (p.blog.status === "missing" || p.blog.status === "failed");
 
-  const platform = preview.site ? PLATFORM[preview.site.provider] : null;
-  const blog = preview.blog;
-
+  // Approve if needed → add the blog if the site has none → send the article.
   const publish = async () => {
+    if (!preview || busy !== null) return;
     setBusy("publish");
     try {
+      let current = preview;
+      if (current.needsApproval) {
+        if (!onApprove || !(await onApprove())) return;
+        current = (await load()) ?? current;
+      }
+      if (current.host && canAddBlog(current)) {
+        await setupSiteBlog({ data: { workspaceId, action: "create", host: current.host } });
+        current = (await load()) ?? current;
+      }
+      if (!current.canPublish) {
+        toast.error(current.reason ?? "This article can't be published yet");
+        return;
+      }
+      const waits = current.blog?.status === "creating";
       const p = await publishArticle({
         data: {
           workspaceId,
           contentItemId,
-          host: preview.host ?? undefined,
-          slug: preview.article.slug,
+          host: current.host ?? undefined,
+          slug: current.article.slug,
           scheduledFor: scheduling ? new Date(scheduleAt).toISOString() : null,
         },
       });
-      setPreview({ ...preview, publication: p, canPublish: false });
+      setPreview({ ...current, publication: p, canPublish: false, blocked: true });
       toast.success(
-        scheduling
-          ? "Scheduled"
-          : preview.site?.provider === "github"
-            ? "Opening a pull request"
-            : `Publishing to ${platform}`,
+        scheduling ? "Scheduled" : waits ? "Goes out as soon as your blog is live" : "Publishing",
       );
     } catch (e) {
       toast.error(errMsg(e, "Couldn't publish"));
@@ -269,6 +289,24 @@ export function PublishToSite({
       setBusy(null);
     }
   };
+
+  // The panel's main Publish button: press this one once the site has been checked.
+  const handledSignal = useRef(publishSignal);
+  const publishRef = useRef(publish);
+  publishRef.current = publish;
+  const loaded = !!preview;
+  useEffect(() => {
+    if (!loaded || publishSignal === handledSignal.current) return;
+    handledSignal.current = publishSignal;
+    void publishRef.current();
+  }, [publishSignal, loaded]);
+
+  if (error && !preview) return <ErrorState size="sm" detail={error} onRetry={() => void load()} />;
+  if (!preview) return <Skeleton className="h-28 w-full rounded-xl" />;
+
+  const platform = preview.site ? PLATFORM[preview.site.provider] : null;
+  const blog = preview.blog;
+  const publishable = preview.canPublish || !preview.blocked || canAddBlog(preview);
 
   const setupBlog = async (action: "create" | "ready") => {
     if (!preview.host) return;
@@ -472,7 +510,7 @@ export function PublishToSite({
                 : "Your site's template decides the page's structured data."}
           </p>
 
-          {preview.reason ? (
+          {preview.reason && (preview.blocked || !onApprove) && !canAddBlog(preview) ? (
             <p
               className={cn(
                 "text-xs leading-relaxed",
@@ -504,19 +542,19 @@ export function PublishToSite({
             <Button
               className="w-full"
               loading={busy === "publish"}
-              disabled={!preview.canPublish || busy !== null}
+              disabled={!publishable || (preview.needsApproval && !onApprove) || busy !== null}
               onClick={() => void publish()}
             >
               {scheduling ? <CalendarClock className="size-4" /> : <Send className="size-4" />}
-              {scheduling
-                ? "Schedule"
-                : preview.site.provider === "github"
-                  ? "Open a pull request"
-                  : `Publish to ${platform}`}
+              {scheduling ? "Schedule" : "Publish"}
             </Button>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               {preview.site.provider === "github"
-                ? "Adds the post on a new branch for you to review and merge. Mellox then checks the live page."
+                ? canAddBlog(preview)
+                  ? "Your site has no blog yet. Mellox builds one that matches your design, then sends your article. You merge each one on GitHub."
+                  : blog?.status === "creating"
+                    ? "Your article goes out as soon as your blog is live."
+                    : "Adds the post to your site for you to merge on GitHub. Mellox then checks the live page."
                 : preview.site.provider === "webflow"
                   ? "Adds the post to your Webflow blog and makes it live. Mellox then checks the live page."
                   : "Publishes the post on WordPress. Mellox then checks the live page."}

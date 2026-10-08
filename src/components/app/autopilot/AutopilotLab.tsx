@@ -47,7 +47,7 @@ const settings: ProgramSettings = {
   goal: "leads",
   goalNote: "",
   platforms: ["linkedin", "instagram"],
-  contentTypes: ["social"],
+  contentTypes: ["social", "carousel", "article"],
   postsPerWeek: 5,
   weekdays: [1, 2, 3, 4, 5],
   timezone: "Europe/London",
@@ -56,7 +56,7 @@ const settings: ProgramSettings = {
   videoCapPerWeek: 0,
   actOnOpportunities: true,
   strategy,
-  automations: ["geo_scan"],
+  automations: ["geo_scan", "repurpose", "weekly_report"],
   stories: STORIES,
 };
 
@@ -93,7 +93,7 @@ const running: AutopilotView = {
     goal: "leads",
     goalNote: "",
     platforms: ["linkedin", "instagram"],
-    contentTypes: ["social"],
+    contentTypes: ["social", "carousel", "article"],
     postsPerWeek: 5,
     weekdays: [1, 2, 3, 4, 5],
     timezone: "Europe/London",
@@ -103,7 +103,7 @@ const running: AutopilotView = {
     videoCapPerWeek: 0,
     actOnOpportunities: true,
     strategy,
-    automations: ["geo_scan"],
+    automations: ["geo_scan", "repurpose", "publish_articles", "weekly_report"],
     stories: STORIES,
     week: 2,
     totalWeeks: 52,
@@ -123,6 +123,7 @@ const running: AutopilotView = {
         body: "Most roasters will tell you consistency is everything.\n\nWe agree. Which is why one night last spring we threw out a whole batch and started again.\n\nHere is what we changed, and why your flat whites taste the way they do now.",
         mediaUrl: null,
         channel: "linkedin",
+        score: 78,
       },
     }),
   ],
@@ -139,6 +140,19 @@ const running: AutopilotView = {
       title: "What a subscription really saves a 40-cover café",
     }),
     action({ status: "generating", plannedFor: at(52), title: "Milk temperature, in one picture" }),
+    action({
+      status: "planned",
+      plannedFor: at(58),
+      contentType: "carousel",
+      title: "Why your grinder matters more than your machine (new format)",
+    }),
+    action({
+      status: "planned",
+      plannedFor: at(100),
+      platform: null,
+      contentType: "article",
+      title: "How to choose a coffee subscription for a small café",
+    }),
     action({
       status: "planned",
       plannedFor: at(76),
@@ -259,8 +273,26 @@ const running: AutopilotView = {
     'Best so far: "Why your grinder matters more than your machine" (1,840 views).',
     "LinkedIn reaches about 2.4× more people than Instagram.",
   ],
-  tasks: [action({ kind: "task", status: "done", contentType: "geo_scan", platform: null })],
+  tasks: [
+    action({ kind: "task", status: "done", contentType: "geo_scan", platform: null }),
+    action({
+      kind: "task",
+      status: "done",
+      contentType: "repurpose",
+      platform: null,
+      updatedAt: at(-30),
+    }),
+    action({
+      kind: "task",
+      status: "done",
+      contentType: "weekly_report",
+      platform: null,
+      updatedAt: at(-52),
+    }),
+  ],
   visibility: { score: 72, scannedAt: at(-30) },
+  site: { host: "beanhaus.example" },
+  week: { posted: 4, views: 5210, auto: 3 },
   stories: { enabled: true, times: ["12:30"], timing: "common", upcoming: 6, waiting: 0 },
 };
 
@@ -285,6 +317,8 @@ const notStarted: AutopilotView = {
   finished: [],
   opportunities: [],
   events: [],
+  tasks: [],
+  week: { posted: 0, views: 0, auto: 0 },
   readiness: running.readiness.map((r) => ({ ...r, ok: true })),
 };
 const pausedView: AutopilotView = {

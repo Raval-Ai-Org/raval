@@ -877,6 +877,7 @@ export function FindingDetail({
             canPropose={availability?.canPropose ?? false}
             provider={availability?.provider ?? "github"}
             ready={availability?.requirement === "ready"}
+            canMerge={availability?.canManageConnections ?? false}
             notReadyReason={
               availability && availability.requirement !== "ready" ? availability.reason : null
             }

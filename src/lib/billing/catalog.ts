@@ -168,7 +168,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
   growth: {
     id: "growth",
     label: "Growth",
-    tagline: "Up to 3 brands, premium video and one-click fixes.",
+    tagline: "Up to 3 brands, premium video and website fixes done for you.",
     badge: "Most popular",
     priceMonthlyUsd: 149,
     priceAnnualUsd: 1_490,
@@ -195,7 +195,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     fit: "For growing brands and small teams",
     highlights: [
       "Autopilot writes and schedules your posts",
-      "One-click fixes for your website",
+      "Fix all website issues in one go",
       "Full-HD and premium video",
       "Campaigns, approvals and a client portal",
       "Backlinks on real, relevant sites",
@@ -204,7 +204,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
   agency: {
     id: "agency",
     label: "Agency",
-    tagline: "10 client brands, white-label and the GEO Engineer.",
+    tagline: "10 client brands, white-label and one screen for all of them.",
     priceMonthlyUsd: 449,
     priceAnnualUsd: 4_490,
     brands: 10,
@@ -415,7 +415,7 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     label: "GEO Engineer and Fix all",
     pitch:
       "An agent that reads your repo and ships multi-file fixes, plus one pull request for every finding.",
-    minPlan: "agency",
+    minPlan: "growth",
   },
   experiments: {
     key: "experiments",

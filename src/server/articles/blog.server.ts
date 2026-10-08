@@ -88,6 +88,20 @@ export async function saveBlogSettings(
   host: string,
   patch: Partial<BlogSettingsRow>,
 ) {
+  // A change to a row that exists (no provider given) is an update: an upsert
+  // would be refused for the missing provider before it ever found the row.
+  if (!patch.provider) {
+    const { data, error } = await db
+      .from("site_blog_settings")
+      .update({ ...patch, detected_at: new Date().toISOString() })
+      .eq("workspace_id", workspaceId)
+      .eq("host", host)
+      .select(COLS)
+      .maybeSingle();
+    if (error || !data)
+      throw new HttpError(500, `Couldn't save blog settings: ${error?.message ?? "not found"}`);
+    return data as BlogSettingsRow;
+  }
   const { data, error } = await db
     .from("site_blog_settings")
     .upsert(

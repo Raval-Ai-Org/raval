@@ -10,6 +10,7 @@
 //   plan      one per week: dated slots (pure) + what to write (model) → content actions
 //   content   planned → generating → needs_approval → approved → scheduled → published → measured
 //   scan      turn already-collected market and competitor signals into opportunities
+//   task      weekly work beyond posts: start a scan, reuse the best post, send the summary
 //
 // Rules the code below enforces:
 //   * A piece is only ever scheduled when its content item reads `approved`
@@ -19,6 +20,7 @@
 import "server-only";
 import {
   PUBLISHABLE_TYPES,
+  WEEKLY_AUTOMATIONS,
   type ActionRow,
   type ActionStatus,
   type EventRow,
@@ -54,6 +56,7 @@ import {
   type CycleSlot,
   type PlanProposal,
 } from "@/lib/autopilot/policy";
+import { pickRepurpose, repurposeBrief } from "@/lib/autopilot/repurpose";
 import { canTransition } from "@/lib/autopilot/state";
 import { STORY_MEASURE_AFTER_MS, readStorySettings, type HourScore } from "@/lib/stories/schedule";
 import { isStoryPlatform } from "@/lib/stories/placement";
@@ -305,7 +308,21 @@ export interface AutopilotPorts {
     run(
       name: string,
       args: { workspaceId: string; userId: string; actionId: string },
-    ): Promise<{ status: "done" | "skipped"; summary: string }>;
+    ): Promise<{ status: "done" | "skipped"; summary: string; quiet?: boolean }>;
+  };
+
+  /** The workspace's own website, through the existing article publisher. */
+  site: {
+    /**
+     * Send one approved article to the blog. "skipped" when there is no blog
+     * to send it to; an article already on its way is "sent", never sent twice.
+     */
+    publishArticle(args: {
+      workspaceId: string;
+      userId: string;
+      role: WorkspaceRole;
+      contentItemId: string;
+    }): Promise<{ status: "sent" | "skipped"; summary: string }>;
   };
 
   scan: {
@@ -639,17 +656,23 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
 
   // This week's recurring work beyond posts (for example the AI visibility check).
   await store.insertActions(
-    program.automations.map((name) => ({
-      workspace_id: program.workspace_id,
-      program_id: program.id,
-      kind: "task" as const,
-      status: "planned" as const,
-      dedupe_key: `task:${program.id}:${cycle}:${name}`,
-      cycle,
-      content_type: name,
-      title: TASK_TITLE[name] ?? name,
-      next_attempt_at: now.toISOString(),
-    })),
+    program.automations
+      .filter((name) => (WEEKLY_AUTOMATIONS as readonly string[]).includes(name))
+      .map((name) => ({
+        workspace_id: program.workspace_id,
+        program_id: program.id,
+        kind: "task" as const,
+        status: "planned" as const,
+        dedupe_key: `task:${program.id}:${cycle}:${name}`,
+        cycle,
+        content_type: name,
+        title: TASK_TITLE[name] ?? name,
+        // The summary is about the week, so it goes out the morning after it ends.
+        next_attempt_at:
+          name === "weekly_report"
+            ? zonedInstant(addDaysYmd(start, 7), "08:00", program.timezone).toISOString()
+            : now.toISOString(),
+      })),
   );
 
   // Next week's plan, two days before that week starts.
@@ -698,15 +721,105 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
 
 const TASK_TITLE: Record<string, string> = {
   geo_scan: "Check AI visibility",
+  repurpose: "Reuse the best post",
+  weekly_report: "Send the weekly summary",
 };
 
-async function runTask(ctx: Ctx, action: ActionRow, actor: Actor): Promise<void> {
-  const now = ctx.ports.now();
-  const out = await ctx.ports.tasks.run(action.content_type ?? "", {
-    workspaceId: action.workspace_id,
-    userId: actor.userId,
-    actionId: action.id,
+type TaskOutcome = { status: "done" | "skipped"; summary: string; quiet?: boolean };
+
+/**
+ * "Reuse what worked": the best measured post comes back in another format.
+ * It only adds a planned piece; that piece is made, checked, approved and
+ * counted against the weekly limits like any other.
+ */
+async function repurposeBest(
+  ctx: Ctx,
+  action: ActionRow,
+  program: ProgramRow,
+): Promise<TaskOutcome> {
+  const { store, ports } = ctx;
+  const now = ports.now();
+  const measured = await store.listActions(program.workspace_id, {
+    statuses: ["measured"],
+    kind: "content",
+    since: inMs(now, -60 * 24 * HOUR),
+    limit: 100,
   });
+  const pieces = measured.map((a) => ({
+    id: a.id,
+    title: a.title,
+    platform: a.platform,
+    contentType: a.content_type,
+    views: Number((a.result.metrics as Record<string, unknown> | undefined)?.views) || 0,
+  }));
+  const date = addDaysYmd(ymdInZone(now, program.timezone), 3);
+  if (date > program.ends_on) {
+    return { status: "skipped", summary: "Autopilot ends before a reused post could go out." };
+  }
+  const plannedFor = zonedInstant(date, "11:00", program.timezone).toISOString();
+  const used = new Set<string>();
+  // A post reused in an earlier week is refused by its dedupe key; try the next best.
+  for (let i = 0; i < 5; i++) {
+    const pick = pickRepurpose({
+      pieces,
+      contentTypes: program.content_types,
+      platforms: program.platforms,
+      used,
+    });
+    if (!pick) break;
+    const { brief, reason } = repurposeBrief(pick);
+    const [made] = await store.insertActions([
+      {
+        workspace_id: program.workspace_id,
+        program_id: program.id,
+        kind: "content",
+        status: program.mode === "assist" ? "proposed" : "planned",
+        dedupe_key: `repurpose:${pick.source.id}`,
+        cycle: Math.max(1, action.cycle),
+        planned_for: plannedFor,
+        platform: pick.platform,
+        content_type: pick.type,
+        title: `${pick.source.title} (new format)`.slice(0, 200),
+        brief,
+        reason,
+        goal: program.goal,
+        next_attempt_at: generateAt(plannedFor, now, pick.type).toISOString(),
+        result: { repurposed_from: pick.source.id },
+      },
+    ]);
+    if (made) {
+      return {
+        status: "done",
+        summary: `Reusing your best post as a ${describePiece(made)}: ${pick.source.title}`,
+      };
+    }
+    used.add(pick.source.id);
+  }
+  return {
+    status: "skipped",
+    summary: "Nothing to reuse yet. Mellox needs a few posts with results first.",
+    quiet: true,
+  };
+}
+
+async function runTask(
+  ctx: Ctx,
+  action: ActionRow,
+  program: ProgramRow | null,
+  actor: Actor,
+): Promise<void> {
+  const now = ctx.ports.now();
+  const name = action.content_type ?? "";
+  const out: TaskOutcome =
+    name === "repurpose"
+      ? program
+        ? await repurposeBest(ctx, action, program)
+        : { status: "skipped", summary: "Autopilot is not running.", quiet: true }
+      : await ctx.ports.tasks.run(name, {
+          workspaceId: action.workspace_id,
+          userId: actor.userId,
+          actionId: action.id,
+        });
   await finish(
     ctx,
     action,
@@ -715,11 +828,15 @@ async function runTask(ctx: Ctx, action: ActionRow, actor: Actor): Promise<void>
       finished_at: now.toISOString(),
       last_error: out.status === "skipped" ? out.summary.slice(0, 480) : null,
     },
-    {
-      kind: out.status === "done" ? "task_done" : "task_skipped",
-      summary: out.summary.slice(0, 480),
-    },
+    out.quiet
+      ? null
+      : {
+          kind: out.status === "done" ? "task_done" : "task_skipped",
+          summary: out.summary.slice(0, 480),
+        },
   );
+  // The summary email is the last step of a program's final week.
+  await maybeComplete(ctx, program);
 }
 
 /* ───────────────────────── scan ───────────────────────── */
@@ -1205,14 +1322,42 @@ async function scheduleApproved(
     return;
   }
   if (!PUBLISHABLE_TYPES.includes(action.content_type as StudioType)) {
+    // An approved article goes to the blog when the program was told to send
+    // them. The article publisher decides whether it can; it is asked once.
+    let sent: { status: "sent" | "skipped"; summary: string } | null = null;
+    if (
+      action.content_type === "article" &&
+      program?.automations.includes("publish_articles") &&
+      items.every((i) => i.status === "approved")
+    ) {
+      try {
+        sent = await ports.site.publishArticle({
+          workspaceId: action.workspace_id,
+          userId: actor.userId,
+          role: actor.role,
+          contentItemId: items[0].id,
+        });
+      } catch (error) {
+        sent = {
+          status: "skipped",
+          summary: `Your article is ready, but it couldn't be sent to your website (${message(error)}):`,
+        };
+      }
+    }
     await finish(
       ctx,
       action,
       "done",
-      { finished_at: now.toISOString() },
       {
-        kind: "piece_done",
-        summary: `Your ${describePiece(action)} is ready: ${action.title}`.slice(0, 480),
+        finished_at: now.toISOString(),
+        ...(sent ? { result: { ...action.result, site: sent.status } } : {}),
+      },
+      {
+        kind: sent?.status === "sent" ? "article_sent" : "piece_done",
+        summary: (sent
+          ? `${sent.summary} ${action.title}`
+          : `Your ${describePiece(action)} is ready: ${action.title}`
+        ).slice(0, 480),
       },
     );
     await maybeComplete(ctx, program);
@@ -1416,7 +1561,7 @@ export async function advance(ctx: Ctx, action: ActionRow): Promise<void> {
   }
 
   if (action.kind === "plan") return runPlan(ctx, action, program!);
-  if (action.kind === "task") return runTask(ctx, action, actor);
+  if (action.kind === "task") return runTask(ctx, action, program, actor);
 
   switch (action.status) {
     case "planned":

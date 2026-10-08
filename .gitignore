@@ -55,3 +55,7 @@ playwright-report
 .dev.vars
 
 .next-e2e
+
+# Local backend SQLite data
+/mellox.db
+/mellox.db-*

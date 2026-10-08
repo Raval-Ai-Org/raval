@@ -359,7 +359,7 @@ async function build(
   );
   await saveBlogSettings(ctx.workspaceId, host, {
     status: "creating",
-    status_detail: `Pull request #${pr.number} adds the blog. Merge it on GitHub, then publish your article.`,
+    status_detail: `Your blog is ready. Merge pull request #${pr.number} on GitHub to put it live.`,
     source_id: binding.sourceId,
     setup: { ...setup, branch: headBranch, prNumber: pr.number, prUrl: pr.url },
   });

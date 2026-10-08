@@ -353,12 +353,12 @@ async function api(actor: Actor, path: string, data: unknown) {
     ).resolves.toBe(workspaceId);
 
     // Members are listed with their emails, and can't be invited twice.
-    const profiles = await rpc<Array<{ user_id: string; email: string | null }>>(
+    const profiles = await rpc<{ members: Array<{ user_id: string; email: string | null }> }>(
       owner,
       "workspaces/getWorkspaceMemberProfiles",
-      { workspaceId },
+      { workspaceId, page: 1 },
     );
-    expect(profiles.find((p) => p.user_id === teammate.id)?.email).toBe(teammate.email);
+    expect(profiles.members.find((p) => p.user_id === teammate.id)?.email).toBe(teammate.email);
     await expect(
       rpc(owner, "workspaces/createWorkspaceInvite", {
         workspaceId,
@@ -412,5 +412,49 @@ async function api(actor: Actor, path: string, data: unknown) {
     await expect(
       rpc(outsider, "workspaces/acceptWorkspaceInvite", { token: forSomeoneElse.token }),
     ).rejects.toThrow(/403.*This invite is for someone-else/);
+  }, 180_000);
+
+  it("paginates workspace members without losing access to later pages", async () => {
+    const extraUsers: string[] = [];
+    for (let i = 0; i < 11; i++) {
+      const created = await admin.auth.admin.createUser({
+        email: `client-portal-page-${randomUUID().slice(0, 8)}@example.com`,
+        email_confirm: true,
+      });
+      if (created.error || !created.data.user) throw new Error(created.error?.message);
+      users.push(created.data.user.id);
+      extraUsers.push(created.data.user.id);
+    }
+    const inserted = await admin.from("workspace_members").insert(
+      extraUsers.map((userId) => ({
+        workspace_id: workspaceId,
+        user_id: userId,
+        role: "viewer",
+      })),
+    );
+    if (inserted.error) throw new Error(inserted.error.message);
+
+    type Page = {
+      members: Array<{ user_id: string }>;
+      total: number;
+      pageSize: number;
+      currentRole: string;
+    };
+    const first = await rpc<Page>(owner, "workspaces/getWorkspaceMemberProfiles", {
+      workspaceId,
+      page: 1,
+    });
+    const second = await rpc<Page>(owner, "workspaces/getWorkspaceMemberProfiles", {
+      workspaceId,
+      page: 2,
+    });
+    expect(first.pageSize).toBe(10);
+    expect(first.members).toHaveLength(10);
+    expect(first.total).toBe(second.total);
+    expect(second.members.length).toBeGreaterThan(0);
+    expect(first.currentRole).toBe("owner");
+    const listed = new Set([...first.members, ...second.members].map((m) => m.user_id));
+    expect(listed.size).toBe(first.members.length + second.members.length);
+    expect(extraUsers.every((id) => listed.has(id))).toBe(true);
   }, 180_000);
 });

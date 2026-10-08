@@ -890,7 +890,7 @@ function AppShell() {
                 <PublishDialog workspaceId={workspaceId}>
                   <span data-publish-trigger className="hidden" aria-hidden />
                 </PublishDialog>
-                <ShareDialog workspaceId={workspaceId}>
+                <ShareDialog key={workspaceId ?? "no-workspace"} workspaceId={workspaceId}>
                   <span data-share-trigger className="hidden" aria-hidden />
                 </ShareDialog>
                 <ClientPortalDialog workspaceId={workspaceId} />

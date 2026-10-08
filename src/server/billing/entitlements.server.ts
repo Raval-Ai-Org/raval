@@ -234,7 +234,7 @@ export async function getEntitlements(args: {
   }
   const workspace = args.workspaceId ? await accountForWorkspace(args.workspaceId) : null;
   const account = workspace?.account ?? (await accountForUser(args.userId));
-  const [items, spaces, wallet, expiring] = await Promise.all([
+  const [items, spaces, wallet, expiring, seatCount] = await Promise.all([
     admin
       .from("billing_subscription_items")
       .select("catalog_key,quantity")
@@ -253,18 +253,11 @@ export async function getEntitlements(args: {
       .gt("remaining", 0)
       .gte("expires_at", new Date().toISOString())
       .order("expires_at", { ascending: true }),
+    admin.rpc("account_billable_seat_count" as never, { p_account: account.id } as never),
   ]);
-  if (items.error || spaces.error || wallet.error || expiring.error)
+  if (items.error || spaces.error || wallet.error || expiring.error || seatCount.error)
     throw new Error("Could not load billing entitlements.");
   const workspaceIds = (spaces.data ?? []).map((row) => String(row.id));
-  const members = workspaceIds.length
-    ? await admin.from("workspace_members").select("user_id,role").in("workspace_id", workspaceIds)
-    : { data: [], error: null };
-  if (members.error) throw new Error("Could not load billing seats.");
-  const seats = new Set<string>([account.owner_user_id]);
-  for (const member of members.data ?? []) {
-    if (member.role !== "viewer") seats.add(String(member.user_id));
-  }
   const monthStart = new Date();
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);
@@ -346,7 +339,7 @@ export async function getEntitlements(args: {
     addons: (items.data ?? []) as Addon[],
     usage: {
       brands: workspaceIds.length,
-      seats: seats.size,
+      seats: Number(seatCount.data ?? 0),
       postsThisMonth: (posts.data ?? []).reduce(
         (sum, row) => sum + Math.max(1, Number(row.targets ?? 1)),
         0,

@@ -50,15 +50,15 @@ Autopilot adds a program (the settings), a leased action row per step, an
 append-only history and an opportunities table. It adds **no generator, no
 publisher, no approval store, no queue service and no cron job**.
 
-| Need | What is used |
-|---|---|
+| Need         | What is used                                                                                 |
+| ------------ | -------------------------------------------------------------------------------------------- |
 | Make a piece | `createStudioJob`, through `createBilledStudioJob` (the Studio route uses the same function) |
-| Approve | `content_items.status` — the only approval there is |
-| Schedule | `scheduleForWorkspace` (the `/api/sdr/schedule` route uses the same function) |
-| Advance work | the existing 1-minute `run-schedules` hook, plus `after()` for a click |
-| Research | what Market Brain and the competitor sweeps already collected |
-| Brand facts | `loadStudioContext` → Brand DNA by the verified workspace id |
-| Kill switch | `AGENTS_DISABLED` and `workspace_agent_settings.agents_paused` |
+| Approve      | `content_items.status` — the only approval there is                                          |
+| Schedule     | `scheduleForWorkspace` (the `/api/sdr/schedule` route uses the same function)                |
+| Advance work | the existing 1-minute `run-schedules` hook, plus `after()` for a click                       |
+| Research     | what Market Brain and the competitor sweeps already collected                                |
+| Brand facts  | `loadStudioContext` → Brand DNA by the verified workspace id                                 |
+| Kill switch  | `AGENTS_DISABLED` and `workspace_agent_settings.agents_paused`                               |
 
 ### 2. Data model
 
@@ -172,6 +172,36 @@ approve in the existing review queue), each role-checked for that workspace.
 - The view carries `readiness` (accounts, Brand DNA, website) so the UI can ask
   for what is missing instead of failing later.
 
+### 10. Three more jobs (added 2026-10-08)
+
+The owner asked for Autopilot to do more of what Mellox offers. Three jobs
+were added, each a switch, each using a system that already exists:
+
+- **Reuse what worked** (`repurpose`, weekly, on by default). The pure
+  `pickRepurpose` chooses the best measured post that has not been reused and
+  a different cheap format; the runner inserts one planned content action
+  (`repurpose:<source action id>`). It needs three measured posts and 100
+  views, so it stays silent on a new account. The piece then follows the
+  ordinary path: price, weekly limits, checks and approval are unchanged.
+- **Articles to your website** (`publish_articles`, off by default). Not a
+  weekly step. When an article's content item reads `approved`, the runner
+  calls `ports.site.publishArticle`, which is `approvePublication` from the
+  article publishing flow. That flow still decides whether the article can go
+  (verified site, a blog, the GEO gate) and still only opens a pull request on
+  GitHub. A publication that already exists is left alone, so a retry never
+  sends twice. This replaces the earlier "out of scope" line below for this one
+  case only; an article is still never approved without a person.
+- **Weekly summary email** (`weekly_report`, weekly, on by default). Due the
+  morning after the week ends. `weeklyReport` (pure) turns stored counts into
+  a few lines; an empty week sends nothing. A duplicate after a crash is
+  possible and accepted: it is an email, not a post.
+
+Considered and left out: competitor discovery (a charged action; discovery
+must not track or spend by itself, ADR-0022), strategy rebuilds (nothing
+rebuilds by itself, ADR-0032), buying backlinks, starting experiments and
+applying website fixes (each has its own approval that Autopilot must not
+stand in for).
+
 ## Decisions made with the product owner
 
 The product owner left the design decisions to the implementation. The ones
@@ -181,7 +211,8 @@ most likely to be revisited: the plan tier (Growth), who may start a program
 ## Out of scope
 
 - Paid ads, video scripts and UGC video ads (hands-on in Studio).
-- Publishing an article to a website (the existing article publishing flow).
+- Publishing an article to a website by any path of Autopilot's own (it hands
+  an approved article to the existing article publishing flow; see 10).
 - Automatic retry of a failed post.
 - Client-portal approval as a publishing gate.
 

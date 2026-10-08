@@ -8,6 +8,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { llmJson } from "@/lib/ai-gateway.server";
 import {
   AUTOPILOT_GOALS,
+  DEFAULT_AUTOMATIONS,
   StrategySchema,
   type AutopilotGoal,
   type ProgramSettings,
@@ -173,7 +174,7 @@ export async function suggestStrategy(args: {
     videoCapPerWeek: 1,
     actOnOpportunities: true,
     strategy,
-    automations: ["geo_scan"],
+    automations: [...DEFAULT_AUTOMATIONS],
     stories,
   };
   return { strategy, settings, source, hasBrand };

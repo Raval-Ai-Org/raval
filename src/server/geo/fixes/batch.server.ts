@@ -11,7 +11,8 @@
 //   merge       one verification rescans every affected page; each finding is
 //               resolved only when its own check passes
 //
-// Same invariants as single fixes: nothing is merged, base branches are never
+// Same invariants as single fixes: nothing is merged unless a person presses
+// "Merge" on the pull request they approved (mergeFixBatch), base branches are never
 // written, every write is audited, and a finding is never marked resolved
 // because a pull request exists or was merged.
 import "server-only";
@@ -35,6 +36,7 @@ import { GitHubAccessError } from "@/server/connectors/github/api.server";
 import { getGitHubConfigCheck } from "@/server/connectors/github/config.server";
 import {
   closePullRequest,
+  mergeMelloxPullRequest,
   commitToNewBranch,
   contentHash,
   createPullRequest,
@@ -1029,7 +1031,7 @@ export async function approveFixBatch(
 async function applyBatchPullRequestState(
   row: BatchRow,
   pr: Pick<PullRequestInfo, "state" | "mergedAt"> & { number: number },
-  via: "sync" | "webhook",
+  via: "sync" | "webhook" | "mellox",
 ): Promise<BatchRow> {
   if (row.pr_number !== pr.number) return row;
   const now = new Date().toISOString();
@@ -1227,6 +1229,49 @@ export async function refreshBatchChecks(
     }
   }
   return n;
+}
+
+/* ───────────────────────── merge (a person's click) ───────────────────────── */
+
+/**
+ * Merge the batch's pull request from Mellox. Admins only, and only the exact
+ * commit that was approved. The findings still resolve only after the rescan.
+ */
+export async function mergeFixBatch(
+  ctx: FixContext,
+  args: { batchId: string },
+): Promise<FixBatchView> {
+  if (!ctx.canManage) throw new FixWorkflowError("Only an admin can merge from Mellox.", 403);
+  const row = await loadBatch(ctx, args.batchId);
+  if (row.status !== "pr_open" || !row.pr_number || !row.repo_full_name || !row.commit_sha)
+    throw new FixWorkflowError("There's no open pull request to merge.", 409);
+  const { connection } = await loadSourceWithConnection(ctx, row.source_id!);
+  const pr = await withAccess(connection, ctx.userId, () =>
+    mergeMelloxPullRequest({
+      installationId: connection.external_account_id,
+      repo: row.repo_full_name!,
+      number: row.pr_number!,
+      headSha: row.commit_sha!,
+    }),
+  ).catch((error) => {
+    throw new FixWorkflowError(describeGitError(error), 409);
+  });
+  await recordAudit({
+    workspaceId: ctx.workspaceId,
+    userId: ctx.userId,
+    action: "geo.fix_batch.merged_from_mellox",
+    entity: "geo_fix_batch",
+    payload: {
+      batchId: row.id,
+      pr: row.pr_number,
+      repository: row.repo_full_name,
+      baseBranch: row.base_branch,
+      commit: row.commit_sha,
+    },
+  });
+  // GitHub's webhook may have recorded the merge already: act on the fresh row.
+  const fresh = await loadBatch(ctx, args.batchId);
+  return batchView(await applyBatchPullRequestState(fresh, pr, "mellox"));
 }
 
 /* ───────────────────────── discard ───────────────────────── */

@@ -17,9 +17,11 @@ import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
 import { CreateJobSchema, type GoalId, type StudioJob } from "@/lib/studio/jobs";
 import type { StudioType } from "@/lib/studio/formats";
 import { summarizeLearnings, type MeasuredPiece } from "@/lib/autopilot/learn";
+import { weeklyReport } from "@/lib/autopilot/report";
 import { underperformers } from "@/lib/studio/performance";
 import { agentsGloballyDisabled } from "@/server/agents/policy";
-import type { WorkspaceRole } from "@/server/api-auth";
+import { roleAtLeast, type WorkspaceRole } from "@/server/api-auth";
+import { appUrl, emailConfigured, sendEmail } from "@/server/notify/email.server";
 import { settleStudioBilling, studioBillingLink } from "@/server/billing/studio-async.server";
 import { checkFragments } from "@/server/geo/fixes/grounding";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
@@ -315,6 +317,91 @@ async function measuredPieces(workspaceId: string): Promise<MeasuredPiece[]> {
   }));
 }
 
+/* ───────────────────────── the weekly summary ───────────────────────── */
+
+/**
+ * One email to the member the program acts for: what went out in the last
+ * seven days, how it did, and what waits for them. Read from rows Mellox
+ * already holds; nothing is generated and nothing is charged.
+ */
+async function sendWeeklySummary(workspaceId: string, userId: string) {
+  if (!emailConfigured()) {
+    return { status: "skipped" as const, summary: "No weekly summary: email isn't set up yet." };
+  }
+  const now = Date.now();
+  const weekAgo = new Date(now - 7 * DAY).toISOString();
+  const [{ data: rows }, { count: ideas }, { data: ws }, { data: scan }] = await Promise.all([
+    db
+      .from("autopilot_actions")
+      .select("title, status, planned_for, updated_at, result")
+      .eq("workspace_id", workspaceId)
+      .eq("kind", "content")
+      .gte("updated_at", new Date(now - 14 * DAY).toISOString())
+      .limit(400),
+    db
+      .from("marketing_opportunities")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "new"),
+    db.from("workspaces").select("name").eq("id", workspaceId).maybeSingle(),
+    db
+      .from("geo_scans")
+      .select("overall_score")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "succeeded")
+      .not("overall_score", "is", null)
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const actions = (rows ?? []) as {
+    title: string;
+    status: string;
+    planned_for: string | null;
+    updated_at: string;
+    result: unknown;
+  }[];
+  const inWeek = (iso: string | null) => Boolean(iso) && iso! >= weekAgo;
+  const soon = new Date(now + 7 * DAY).toISOString();
+  const report = weeklyReport({
+    brand: (ws as { name?: string } | null)?.name ?? "your brand",
+    posted: actions
+      .filter((a) => ["published", "measured"].includes(a.status) && inWeek(a.planned_for))
+      .map((a) => ({
+        title: a.title,
+        views: Number(record(record(a.result).metrics).views) || 0,
+      })),
+    waiting: actions.filter((a) => a.status === "needs_approval" || a.status === "proposed").length,
+    failed: actions.filter((a) => a.status === "failed" && inWeek(a.updated_at)).length,
+    comingUp: actions.filter(
+      (a) =>
+        ["planned", "generating", "approved", "scheduled"].includes(a.status) &&
+        Boolean(a.planned_for) &&
+        a.planned_for! <= soon,
+    ).length,
+    ideas: ideas ?? 0,
+    visibilityScore: (scan as { overall_score?: number } | null)?.overall_score ?? null,
+    learnings: summarizeLearnings(await measuredPieces(workspaceId)),
+  });
+  if (!report) {
+    return { status: "skipped" as const, summary: "Nothing to report this week.", quiet: true };
+  }
+  const { data: user } = await supabaseAdmin.auth.admin.getUserById(userId);
+  const email = user?.user?.email;
+  if (!email) {
+    return { status: "skipped" as const, summary: "No weekly summary: no email on the account." };
+  }
+  const ok = await sendEmail({
+    to: email,
+    subject: report.subject,
+    text: report.text,
+    action: ["Open Autopilot", appUrl(`/w/${workspaceId}/app/autopilot`)],
+  });
+  return ok
+    ? { status: "done" as const, summary: "Sent your weekly summary by email." }
+    : { status: "skipped" as const, summary: "The weekly summary email didn't go out." };
+}
+
 /* ───────────────────────── ports ───────────────────────── */
 
 export const realPorts: AutopilotPorts = {
@@ -591,6 +678,7 @@ export const realPorts: AutopilotPorts = {
 
   tasks: {
     async run(name, { workspaceId, userId, actionId }) {
+      if (name === "weekly_report") return sendWeeklySummary(workspaceId, userId);
       if (name !== "geo_scan") return { status: "skipped", summary: "Unknown task." };
       const { data: ws } = await db
         .from("workspaces")
@@ -623,6 +711,49 @@ export const realPorts: AutopilotPorts = {
         throw error;
       }
       return { status: "done", summary: "Started this week's AI visibility scan." };
+    },
+  },
+
+  site: {
+    async publishArticle({ workspaceId, userId, role, contentItemId }) {
+      const { approvePublication, previewPublication } =
+        await import("@/server/articles/publish.server");
+      // The engine checked this member is still an editor here; the publisher
+      // checks the article, the site and the blog itself.
+      const ctx = {
+        supabase: db as never,
+        workspaceId,
+        userId,
+        canPropose: roleAtLeast(role, "editor"),
+        canManage: roleAtLeast(role, "admin"),
+      };
+      const preview = await runWithScope({ workspaceId, userId, route: "autopilot.run" }, () =>
+        previewPublication(ctx, { contentItemId }),
+      );
+      const where = preview.host ?? "your website";
+      // Already sent (a retry after a crash, or a person pressed Publish): leave it be.
+      if (
+        preview.publication &&
+        !["cancelled", "failed", "needs_attention"].includes(preview.publication.status)
+      ) {
+        return { status: "sent", summary: `On its way to ${where}:` };
+      }
+      if (!preview.canPublish) {
+        return {
+          status: "skipped",
+          summary: `Your article is ready. It wasn't sent to your website (${preview.reason ?? "no blog is set up"}):`,
+        };
+      }
+      await runWithScope({ workspaceId, userId, route: "autopilot.run" }, () =>
+        approvePublication(ctx, { contentItemId }),
+      );
+      return {
+        status: "sent",
+        summary:
+          preview.site?.provider === "github"
+            ? `Opening a pull request on ${where} with your article:`
+            : `Sent to ${where}:`,
+      };
     },
   },
 

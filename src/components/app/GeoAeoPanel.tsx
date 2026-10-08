@@ -436,6 +436,7 @@ function Panel({
                   sparkValues={sparkValues}
                   brandName={dna.brandName || null}
                   onOpenFindings={openFindings}
+                  onOpenPrompts={() => setTab("prompts")}
                 />
               ) : (
                 <EmptyState

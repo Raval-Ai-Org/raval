@@ -37,6 +37,7 @@ import { BillingError } from "./billing/errors";
 import { SsrfBlockedError } from "./safe-fetch";
 import { UpstreamError } from "./upstream";
 import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
+import { readJsonBody, RequestBodyTooLargeError } from "./request-body";
 
 type Schema<T> = ZodType<T, ZodTypeDef, unknown>;
 
@@ -118,6 +119,7 @@ export function knownErrorResponse(error: unknown): Response | null {
   }
   if (error instanceof SsrfBlockedError) return jsonError(400, "URL is not allowed");
   if (error instanceof ZodError) return jsonError(400, "Invalid request");
+  if (error instanceof RequestBodyTooLargeError) return jsonError(413, "Request body too large");
   if (error instanceof Error && /^Unauthorized/i.test(error.message)) {
     return jsonError(401, error.message);
   }
@@ -138,8 +140,9 @@ async function parseInput<TBody, TQuery>(
   let rawBody: unknown = undefined;
   if (opts.body) {
     try {
-      rawBody = await request.json();
-    } catch {
+      rawBody = await readJsonBody(request);
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) throw error;
       return { ok: false, response: jsonError(400, "Invalid request body") };
     }
   }
