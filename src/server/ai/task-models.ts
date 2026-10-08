@@ -195,6 +195,10 @@ const REGISTRY: Record<string, TaskPlan> = {
   "geo.agent.implement": tier(PREMIUM, "medium", { maxTokens: 16_000 }),
   "geo.agent.review": tier(PREMIUM, "high", { maxTokens: 8_000 }),
 
+  // Adding a blog to a site: which of the site's own class names suit it (rare,
+  // once per site; the pages themselves come from fixed templates).
+  "articles.blog-design": tier(PREMIUM, "low", { maxTokens: 4_000 }),
+
   // Proof Engine.
   "experiments.hypotheses": tier(PREMIUM, "low"),
   "experiments.values": tier(WORKHORSE, "medium"),

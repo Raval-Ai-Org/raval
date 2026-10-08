@@ -27,6 +27,12 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   rate-limit tier for anything that spends. Never name a model at a call site
   (see "Models" below).
 - **Cross-component events:** declare in `src/lib/app-events.ts`, use `emitAppEvent`.
+- **Connecting a service** (GitHub, WordPress, Webflow, Slack, Notion, Canva,
+  Google) opens a small sign-in window, never this tab: start it with
+  `useConnectWindow` (`src/components/app/connectors/`), and the page the
+  provider returns to calls `finishConnectWindow`
+  (`src/lib/connectors/connect-window.ts`). The result only means "re-read the
+  connection from the server". Same-tab is the fallback when the window is blocked.
 - **Design:** icons from `@/components/icons` (bespoke Mellox set, lucide fallback);
   primary colour is Ultra Moss lime in both themes; use `EmptyState` /
   `ErrorState` / `Skeleton` for states; feature surfaces are `AppModalShell` modals.
@@ -315,10 +321,29 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
     only ever opens a pull request.
   - Only the live-page check marks a publication `verified`. A "coming soon"
     placeholder, an empty template or noindex keeps it unverified.
-  - Mellox never invents a blog in a codebase: GitHub needs an existing posts
-    folder; Webflow can get a "Blog Posts" collection in one click.
+  - **A site with no blog can get one** ("Add a blog to my site"). Webflow: a
+    "Blog Posts" collection in one click. GitHub: one pull request with blog
+    pages that match the site (`src/lib/articles/blog-scaffold.ts`, pure;
+    `src/server/articles/blog-setup.server.ts`), on TanStack Start and the
+    Next.js App Router with TypeScript and Tailwind. Any other site says so and
+    the person's developer adds the blog.
+    - **Templates write the code; the model only proposes class names** (route
+      `articles.blog-design`). `mergeDesign` / `insertNavLink` check every value
+      and fall back to a plain default. Never let a model write a page.
+    - New files only, plus at most one "Blog" link in the site's menu. No
+      package, configuration or build file is touched. A site that already has
+      a `/blog` route is refused.
+    - Posts on that blog are one JSON file each (`post_format: data_module`,
+      `githubDataPostFile`): rendered HTML plus the article's own JSON-LD.
+      `mellox-blog.json` at the repository root is how detection finds the blog
+      after the merge.
+    - The state is `site_blog_settings.status` (`missing → creating → detected`)
+      with the branch and pull request in `setup`. The branch name is stored
+      before the commit; the claim is a compare-and-set. Mellox never merges.
   - Live checks: `tests/live/article-publish.live.ts`, `tests/live/geo-cms-fix.live.ts`
-    (writes gated behind `SITES_LIVE_WRITE=yes`).
+    (writes gated behind `SITES_LIVE_WRITE=yes`),
+    `tests/live/article-blog-setup.live.ts` (model call behind
+    `BLOG_SETUP_LIVE_AI=yes`; never writes to GitHub).
 
 ## Proof Engine (Experiments)
 

@@ -213,6 +213,15 @@ export function PublishToSite({
 
   const publication = preview?.publication ?? null;
   const active = !!publication && PUBLICATION_ACTIVE.includes(publication.status);
+  // A blog being added to the site: look again until its pull request is merged.
+  const blogPending = preview?.blog?.status === "creating";
+  useVisibleInterval(
+    () => {
+      if (blogPending) void load();
+    },
+    8000,
+    [blogPending, load],
+  );
   useVisibleInterval(
     () => {
       if (!publication || !active) return;
@@ -266,8 +275,15 @@ export function PublishToSite({
     setBusy("blog");
     try {
       await setupSiteBlog({ data: { workspaceId, action, host: preview.host } });
-      toast.success(action === "create" ? "Blog created in Webflow" : "Thanks. Ready to publish");
-      await load({ recheckBlog: action === "ready" ? false : true });
+      const github = preview.site?.provider === "github";
+      toast.success(
+        action === "ready"
+          ? "Thanks. Ready to publish"
+          : github
+            ? "Building your blog"
+            : "Blog created in Webflow",
+      );
+      await load({ recheckBlog: action === "create" && !github });
     } catch (e) {
       toast.error(errMsg(e, "That didn't work"));
     } finally {
@@ -331,13 +347,33 @@ export function PublishToSite({
           <p className="leading-relaxed text-muted-foreground">{blog.detail}</p>
           {blog.canCreate ? (
             <Button size="sm" loading={busy === "blog"} onClick={() => void setupBlog("create")}>
-              Create a blog in Webflow
+              {blog.provider === "github" ? "Add a blog to my site" : "Create a blog in Webflow"}
             </Button>
           ) : (
             <Button size="sm" variant="outline" onClick={() => void load({ recheckBlog: true })}>
               <RefreshCw className="size-3.5" /> Check again
             </Button>
           )}
+        </div>
+      ) : null}
+      {blog && blog.status === "creating" ? (
+        <div className="space-y-2 rounded-xl bg-surface-2/70 p-3 text-xs ring-1 ring-border/60">
+          <p className="flex items-start gap-2 leading-relaxed text-muted-foreground">
+            {blog.pr ? null : <Spinner className="mt-0.5 size-3.5 shrink-0 animate-spin" />}
+            {blog.detail ?? "Adding a blog to your site"}
+          </p>
+          {blog.pr ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" asChild>
+                <a href={blog.pr.url} target="_blank" rel="noopener noreferrer">
+                  Open pull request #{blog.pr.number} <ExternalLink className="size-3.5" />
+                </a>
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void load()}>
+                <RefreshCw className="size-3.5" /> Check again
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {blog && blog.status === "needs_design" ? (
@@ -356,9 +392,16 @@ export function PublishToSite({
       {blog && blog.status === "failed" ? (
         <div className="space-y-2 text-xs">
           <p className="leading-relaxed text-danger">{blog.detail}</p>
-          <Button size="sm" variant="outline" onClick={() => void load({ recheckBlog: true })}>
-            <RefreshCw className="size-3.5" /> Try again
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {blog.canCreate && blog.provider === "github" ? (
+              <Button size="sm" loading={busy === "blog"} onClick={() => void setupBlog("create")}>
+                Add a blog to my site
+              </Button>
+            ) : null}
+            <Button size="sm" variant="outline" onClick={() => void load({ recheckBlog: true })}>
+              <RefreshCw className="size-3.5" /> {blog.canCreate ? "Check again" : "Try again"}
+            </Button>
+          </div>
         </div>
       ) : null}
 

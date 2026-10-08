@@ -59,6 +59,7 @@ import {
 import {
   buildCaptionPrompt,
   buildTextPrompt,
+  completeVariants,
   countWords,
   finalizeVariant,
   finalizeVariants,
@@ -202,7 +203,7 @@ function platformsFor(type: StudioType, requested: PlatformId[]): PlatformId[] {
   const format = STUDIO_FORMATS[type];
   if (!format.platforms.length) return [];
   const allowed = requested.filter((p) => format.platforms.includes(p));
-  const picked = allowed.length ? allowed : format.defaultPlatforms;
+  const picked = [...new Set(allowed.length ? allowed : format.defaultPlatforms)];
   return format.multiPlatform ? picked : picked.slice(0, 1);
 }
 
@@ -1271,6 +1272,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       await setStage(client, job.id, "writing");
     }
     let rejected: string | null = null;
+    let usableVariants: NonNullable<StudioJobOutput["variants"]> = [];
     for (let attempt = 0; attempt < 2; attempt++) {
       partial.length = 0;
       const parsed = (await runStructuredPrompt({
@@ -1285,7 +1287,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         temperature: built.temperature,
         regenerate: true,
       })) as Record<string, unknown>;
-      const candidate = await shapeOutput({
+      let candidate = await shapeOutput({
         client,
         job,
         type,
@@ -1299,6 +1301,22 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         storyTheme,
         sourceContentId: source ? input.intent.sourceContentId : undefined,
       });
+      if (type === "social") {
+        const byPlatform = new Map(
+          [...usableVariants, ...(candidate.variants ?? [])]
+            .filter((variant) => variant.body.trim().length >= 20)
+            .map((variant) => [variant.platform, variant] as const),
+        );
+        usableVariants = [...byPlatform.values()];
+      }
+      // Give the model a second chance first; then keep the requested platform
+      // set complete even if it repeats an omission or uses an unknown id.
+      if (type === "social" && (attempt === 1 || input.refine)) {
+        candidate = {
+          ...candidate,
+          variants: completeVariants(platforms, usableVariants, input.intent.brief),
+        };
+      }
       const similar = input.refine ? null : findSimilarRecent(type, candidate, ctx.recent);
       // Same opening as an earlier piece: worth one more try, never a failure.
       const repeatedOpening =
@@ -1521,17 +1539,9 @@ async function shapeOutput(args: {
   const { client, job, type, parsed, platforms, ctx, input, angle, partial } = args;
   const title = String(parsed.title ?? "").trim() || input.intent.brief.slice(0, 80);
 
-  const noteMissing = (missing: PlatformId[]) => {
-    for (const p of missing)
-      partial.push({ target: p, error: `No ${PLATFORMS[p].label} version came back.` });
-  };
-
   switch (type) {
     case "social": {
-      const { variants, missing } = finalizeVariants(platforms, parsed as never);
-      if (!variants.length)
-        throw new StudioJobError(502, "No platform versions came back. Try again.");
-      noteMissing(missing);
+      const { variants } = finalizeVariants(platforms, parsed as never);
       return { title, variants };
     }
     case "carousel": {
@@ -1648,14 +1658,12 @@ async function shapeOutput(args: {
         });
         const result = finalizeVariants(platforms, captions);
         variants = result.variants;
-        noteMissing(result.missing);
       } catch (err) {
         partial.push({ target: "captions", error: classify(err).message });
-        variants = platforms.map((p) => finalizeVariant(p, { title, body: title, hashtags: [] }));
       }
       return {
         title,
-        variants,
+        variants: completeVariants(platforms, variants, input.intent.brief),
         ...({ concept: visual, altText: String(parsed.altText ?? "") } as object),
       };
     }

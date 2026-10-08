@@ -24,7 +24,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { after } from "next/server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { githubPostFile, webflowItemUrl } from "@/lib/articles/blog";
+import { githubDataPostFile, githubPostFile, webflowItemUrl } from "@/lib/articles/blog";
 import type { PublicationStatus, PublicationView, PublishPreview } from "@/lib/articles/contracts";
 import { PUBLICATION_ACTIVE } from "@/lib/articles/contracts";
 import {
@@ -239,9 +239,13 @@ function predictedUrl(blog: BlogSettingsRow | null, host: string, slug: string):
   return null; // WordPress decides from its permalink settings.
 }
 
-/** WordPress with the Mellox GEO plugin: Mellox writes the article's JSON-LD itself. */
-const writesStructuredData = (b: SiteBinding | null) =>
-  b?.provider === "wordpress" && b.seo === "mellox";
+/**
+ * Mellox writes the article's JSON-LD itself on WordPress with the Mellox GEO
+ * plugin, and on a blog it added to a repository (posts carry their own).
+ */
+const writesStructuredData = (b: SiteBinding | null, blog?: BlogSettingsRow | null) =>
+  (b?.provider === "wordpress" && b.seo === "mellox") ||
+  (b?.provider === "github" && blog?.post_format === "data_module");
 
 async function currentPublication(ctx: PublishContext, contentItemId: string, host: string) {
   const { data } = await (ctx.supabase as unknown as typeof db)
@@ -362,7 +366,7 @@ export async function previewPublication(
     blog: blogView(blog),
     article: { ...empty, url },
     gate,
-    structuredData: writesStructuredData(binding) ? "mellox" : "site",
+    structuredData: writesStructuredData(binding, blog) ? "mellox" : "site",
     canPublish: reason === null,
     reason,
     publication: existing ? publicationView(existing) : null,
@@ -641,13 +645,24 @@ async function publishGithub(p: PublicationRow, a: PublishableArticle, blog: Blo
   const installationId = connection.external_account_id;
   const repo = source.full_name;
   const baseBranch = source.branch ?? source.default_branch ?? "main";
-  const file = githubPostFile(
-    a,
-    { contentDir: blog.content_dir, format: blog.post_format },
-    blog.frontmatter?.keys ?? [],
-    new Date().toISOString(),
-  );
   const url = `https://${p.host}${blog.route_prefix ?? "/blog"}/${a.slug}`;
+  const date = new Date().toISOString();
+  const file =
+    blog.post_format === "data_module"
+      ? githubDataPostFile(a, {
+          contentDir: blog.content_dir,
+          url,
+          origin: `https://${p.host}`,
+          blogUrl: blog.blog_url,
+          brandName: (await workspaceFacts(p.workspace_id)).brand,
+          date,
+        })
+      : githubPostFile(
+          a,
+          { contentDir: blog.content_dir, format: blog.post_format },
+          blog.frontmatter?.keys ?? [],
+          date,
+        );
 
   let headBranch = p.head_branch;
   const branchExists = headBranch
@@ -751,7 +766,10 @@ async function verifyOne(p: PublicationRow) {
   const item = await loadItem(p.workspace_id, p.content_item_id);
   const article = toArticle(item, p.slug);
   const resolution = await resolveSite(p.workspace_id, p.host);
-  const expectStructuredData = writesStructuredData(resolution.binding);
+  const expectStructuredData = writesStructuredData(
+    resolution.binding,
+    await loadBlogSettings(p.workspace_id, p.host),
+  );
   let status = 0;
   let html = "";
   try {

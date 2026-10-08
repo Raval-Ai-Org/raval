@@ -13,6 +13,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle, Github, Loader2 } from "@/components/icons";
 import { completeGithubInstall, startGithubInstall } from "@/lib/connectors.functions";
+import {
+  announceConnectResult,
+  finishConnectWindow,
+  isConnectWindow,
+} from "@/lib/connectors/connect-window";
 import { rememberGithubConnected } from "@/lib/connectors/github-return";
 import type { ConnectionView } from "@/lib/connectors/types";
 import { ServerFnError } from "@/lib/rpc-client";
@@ -21,6 +26,7 @@ type View =
   | { kind: "working" }
   | { kind: "continuing"; step: "install" | "authorize" }
   | { kind: "connected"; connections: ConnectionView[]; next: string }
+  | { kind: "closing" }
   | { kind: "cancelled" }
   | { kind: "requested" }
   | { kind: "updated" }
@@ -63,6 +69,17 @@ export function GitHubInstallCallback() {
   const [retrying, setRetrying] = useState(false);
   const started = useRef(false);
   const workspaceId = useRef<string | null>(null);
+  // Opened as a sign-in window: the page that opened it carries on by itself.
+  const [inWindow, setInWindow] = useState(false);
+  useEffect(() => setInWindow(isConnectWindow()), []);
+  useEffect(() => {
+    if (!inWindow || (view.kind !== "cancelled" && view.kind !== "error")) return;
+    announceConnectResult({
+      provider: "github",
+      status: view.kind,
+      workspaceId: workspaceId.current,
+    });
+  }, [inWindow, view.kind]);
 
   useEffect(() => {
     // The code and state are single-use: never submit twice (Strict Mode runs effects twice in dev).
@@ -142,6 +159,17 @@ export function GitHubInstallCallback() {
           return;
         }
         hops(0);
+        if (
+          finishConnectWindow({
+            provider: "github",
+            status: "connected",
+            workspaceId: result.workspaceId,
+            accounts: result.connections.map((c) => c.accountLogin),
+          })
+        ) {
+          setView({ kind: "closing" });
+          return;
+        }
         rememberGithubConnected({
           workspaceId: result.workspaceId,
           accounts: result.connections.map((c) => c.accountLogin),
@@ -203,6 +231,17 @@ export function GitHubInstallCallback() {
     }
   }, []);
 
+  const leave = (className: string) =>
+    inWindow ? (
+      <Button variant="outline" className={className} onClick={() => window.close()}>
+        Close
+      </Button>
+    ) : (
+      <Button asChild variant="outline" className={className}>
+        <Link href={connectionsHref(workspaceId.current)}>Return to Connections</Link>
+      </Button>
+    );
+
   return (
     <main className="grid min-h-dvh place-items-center bg-background p-4 text-foreground">
       <section
@@ -224,7 +263,9 @@ export function GitHubInstallCallback() {
                   ? "GitHub connection failed"
                   : view.kind === "cancelled"
                     ? "GitHub authorization was cancelled"
-                    : "Connect GitHub"}
+                    : view.kind === "closing"
+                      ? "GitHub connected"
+                      : "Connect GitHub"}
             </h1>
           </div>
         </div>
@@ -233,6 +274,16 @@ export function GitHubInstallCallback() {
           <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground" role="status">
             <Loader2 className="size-4 animate-spin" aria-hidden />
             Completing GitHub connection…
+          </p>
+        )}
+
+        {view.kind === "closing" && (
+          <p
+            className="mt-6 flex items-center gap-2 text-sm font-medium text-success"
+            role="status"
+          >
+            <CheckCircle className="size-4" aria-hidden />
+            Connected. You can close this window.
           </p>
         )}
 
@@ -306,9 +357,7 @@ export function GitHubInstallCallback() {
               <Button className="flex-1" loading={retrying} onClick={() => void retry()}>
                 Try again
               </Button>
-              <Button asChild variant="outline" className="flex-1">
-                <Link href={connectionsHref(workspaceId.current)}>Return to Connections</Link>
-              </Button>
+              {leave("flex-1")}
             </div>
           </div>
         )}
@@ -320,9 +369,7 @@ export function GitHubInstallCallback() {
               An owner of that GitHub organization needs to approve the Mellox AI app. Once they do,
               return to Settings → Connections and connect again.
             </p>
-            <Button asChild variant="outline" className="w-full">
-              <Link href={connectionsHref(workspaceId.current)}>Return to Connections</Link>
-            </Button>
+            {leave("w-full")}
           </div>
         )}
 
@@ -362,9 +409,7 @@ export function GitHubInstallCallback() {
               <Button className="flex-1" loading={retrying} onClick={() => void retry()}>
                 Try again
               </Button>
-              <Button asChild variant="outline" className="flex-1">
-                <Link href={connectionsHref(workspaceId.current)}>Return to Connections</Link>
-              </Button>
+              {leave("flex-1")}
             </div>
           </div>
         )}

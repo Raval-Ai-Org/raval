@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import Script from "next/script";
 import { useEffect, useState } from "react";
+import { ConnectWindowReturn } from "@/components/app/connectors/ConnectWindowReturn";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/hooks/use-theme";
 
@@ -106,6 +107,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           />
         ) : null}
         <RouteProgress />
+        <ConnectWindowReturn />
         <main id="main-content">{children}</main>
         <Toaster />
       </ThemeProvider>

@@ -52,6 +52,8 @@ import {
 import { useServerFn } from "@/lib/use-server-fn";
 import { cn } from "@/lib/utils";
 import { analyticsKeys, useGoogleConnection, useSyncNow } from "./hooks";
+import { useConnectWindow } from "../connectors/useConnectWindow";
+import { openConnectWindow, type ConnectWindow } from "@/lib/connectors/connect-window";
 
 const roleRank = { viewer: 1, editor: 2, admin: 3, owner: 4 } as const;
 
@@ -113,16 +115,23 @@ function connectedDate(iso: string): string {
 function useConnect() {
   const ws = useWorkspace();
   const start = useServerFn(startGoogleConnect);
+  const qc = useQueryClient();
+  // Google signs in in its own window; this hears when it closes.
+  const googleWindow = useConnectWindow("google", ws.id, (result) => {
+    if (result?.status === "connected") toast.success("Google connected");
+    void qc.invalidateQueries({ queryKey: analyticsKeys.all(ws.id) });
+  });
   return useMutation({
-    mutationFn: async () => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("tab");
-      const returnPath = `${url.pathname}?tab=${new URL(window.location.href).searchParams.get("tab") || "overview"}`;
-      const { url: authUrl } = await start({
-        data: { workspaceId: ws.id, returnOrigin: window.location.origin, returnPath },
-      });
-      window.location.assign(authUrl);
-    },
+    // The window is reserved inside the click and handed in here.
+    mutationFn: (reserved: ConnectWindow) =>
+      googleWindow.connect(async () => {
+        const url = new URL(window.location.href);
+        const returnPath = `${url.pathname}?tab=${url.searchParams.get("tab") || "overview"}`;
+        const { url: authUrl } = await start({
+          data: { workspaceId: ws.id, returnOrigin: window.location.origin, returnPath },
+        });
+        return authUrl;
+      }, reserved),
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Couldn't start the Google connection"),
   });
@@ -136,7 +145,11 @@ export function ConnectGoogleButton({ label = "Connect Google" }: { label?: stri
       <p className="text-[12px] text-muted-foreground">Ask a workspace admin to connect Google.</p>
     );
   return (
-    <Button onClick={() => connect.mutate()} loading={connect.isPending} className="gap-2">
+    <Button
+      onClick={() => connect.mutate(openConnectWindow("google"))}
+      loading={connect.isPending}
+      className="gap-2"
+    >
       <GoogleIcon className="h-4 w-4" aria-hidden />
       {label}
     </Button>

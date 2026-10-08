@@ -5,9 +5,11 @@ import "server-only";
 //   Webflow    the CMS collection that looks like a blog (lib/articles/blog.ts);
 //              none → Mellox can create "Blog Posts" in one click, after which
 //              the person designs its template page in Webflow (needs_design)
-//   GitHub     the folder existing posts live in, their format and frontmatter;
-//              none → the person's developer adds one (Mellox won't invent a
-//              routing layer in someone's codebase)
+//   GitHub     the folder existing posts live in, their format and frontmatter,
+//              or the blog Mellox added earlier (mellox-blog.json);
+//              none → Mellox can add one with a pull request on the frameworks
+//              blog-scaffold.ts knows (blog-setup.server.ts), otherwise the
+//              person's developer adds it
 //
 // Results are stored in site_blog_settings (service role; members read).
 
@@ -17,13 +19,30 @@ import {
   frontmatterKeys,
   pickWebflowBlogCollection,
   webflowFieldMap,
+  type PostFormat,
   type WebflowFieldMap,
 } from "@/lib/articles/blog";
+import {
+  BLOG_MANIFEST_PATH,
+  parseBlogManifest,
+  planBlogScaffold,
+  type BlogFramework,
+} from "@/lib/articles/blog-scaffold";
 import type { BlogStatus, BlogView } from "@/lib/articles/contracts";
 import type { SiteBinding } from "@/server/sites/resolve.server";
 import { HttpError } from "@/server/http-error";
 
 const db = supabaseAdmin as unknown as { from: (table: string) => any };
+
+/** GitHub: how far adding a blog has got (the pull request Mellox opened). */
+export type BlogSetup = {
+  /** The framework Mellox can add a blog to; null when it can't. */
+  framework: BlogFramework | null;
+  branch?: string;
+  prNumber?: number;
+  prUrl?: string;
+  startedAt?: string;
+};
 
 export type BlogSettingsRow = {
   id: string;
@@ -39,14 +58,15 @@ export type BlogSettingsRow = {
   webflow_field_map: (WebflowFieldMap & { collectionSlug: string; collectionName: string }) | null;
   source_id: string | null;
   content_dir: string | null;
-  post_format: "md" | "mdx" | null;
+  post_format: PostFormat | null;
   route_prefix: string | null;
   frontmatter: { keys: string[] } | null;
+  setup: BlogSetup | null;
   detected_at: string | null;
 };
 
 const COLS =
-  "id, workspace_id, host, provider, status, status_detail, blog_url, wp_posts_page_id, wp_category_id, webflow_collection_id, webflow_field_map, source_id, content_dir, post_format, route_prefix, frontmatter, detected_at";
+  "id, workspace_id, host, provider, status, status_detail, blog_url, wp_posts_page_id, wp_category_id, webflow_collection_id, webflow_field_map, source_id, content_dir, post_format, route_prefix, frontmatter, setup, detected_at";
 
 const DETECT_TTL_MS = 30 * 60_000;
 const READY: BlogStatus[] = ["detected", "created"];
@@ -63,7 +83,11 @@ export async function loadBlogSettings(workspaceId: string, host: string) {
   return (data as BlogSettingsRow | null) ?? null;
 }
 
-async function save(workspaceId: string, host: string, patch: Partial<BlogSettingsRow>) {
+export async function saveBlogSettings(
+  workspaceId: string,
+  host: string,
+  patch: Partial<BlogSettingsRow>,
+) {
   const { data, error } = await db
     .from("site_blog_settings")
     .upsert(
@@ -90,7 +114,13 @@ export function blogView(b: BlogSettingsRow): BlogView {
     status: b.status,
     detail: b.status_detail,
     blogUrl: b.blog_url,
-    canCreate: b.provider === "webflow" && (b.status === "missing" || b.status === "failed"),
+    canCreate:
+      (b.status === "missing" || b.status === "failed") &&
+      (b.provider === "webflow" || (b.provider === "github" && !!b.setup?.framework)),
+    pr:
+      b.status === "creating" && b.setup?.prNumber && b.setup.prUrl
+        ? { number: b.setup.prNumber, url: b.setup.prUrl }
+        : null,
     destination,
   };
 }
@@ -114,7 +144,7 @@ async function detectWordPress(workspaceId: string, host: string) {
   } catch {
     // Settings need manage_options; posts still publish without them.
   }
-  return save(workspaceId, host, {
+  return saveBlogSettings(workspaceId, host, {
     provider: "wordpress",
     status: "detected",
     status_detail: null,
@@ -133,7 +163,7 @@ async function detectWebflow(workspaceId: string, host: string) {
   const found = pickWebflowBlogCollection(full);
   const existing = await loadBlogSettings(workspaceId, host);
   if (!found) {
-    return save(workspaceId, host, {
+    return saveBlogSettings(workspaceId, host, {
       provider: "webflow",
       status: "missing",
       status_detail: "Your Webflow site has no blog collection yet. Mellox can create one.",
@@ -149,7 +179,7 @@ async function detectWebflow(workspaceId: string, host: string) {
     (existing.status === "needs_design" || existing.status === "created")
       ? existing.status
       : "detected";
-  return save(workspaceId, host, {
+  return saveBlogSettings(workspaceId, host, {
     provider: "webflow",
     status: keep,
     status_detail:
@@ -189,17 +219,45 @@ async function detectGithub(
   if (!branch)
     throw new HttpError(409, `Branch ${branchName} was not found in ${source.full_name}.`);
   const { paths } = await git.getTreePaths(installationId, source.full_name, branch.treeSha);
+  // The blog Mellox added earlier says where it is.
+  if (paths.includes(BLOG_MANIFEST_PATH)) {
+    const file = await git
+      .readFile(installationId, source.full_name, BLOG_MANIFEST_PATH, branch.sha)
+      .catch(() => null);
+    const manifest = file ? parseBlogManifest(file.content) : null;
+    if (manifest)
+      return saveBlogSettings(workspaceId, host, {
+        provider: "github",
+        status: "detected",
+        status_detail: null,
+        source_id: source.id,
+        content_dir: manifest.contentDir,
+        post_format: "data_module",
+        route_prefix: manifest.routePrefix,
+        frontmatter: null,
+        setup: { framework: manifest.framework },
+        blog_url: `https://${host}${manifest.routePrefix}`,
+      });
+  }
   const layout = detectGithubBlog(paths);
   if (!layout) {
-    return save(workspaceId, host, {
+    const pkg = await git
+      .readFile(installationId, source.full_name, "package.json", branch.sha)
+      .catch(() => null);
+    const planned = planBlogScaffold(paths, pkg?.content ?? null);
+    return saveBlogSettings(workspaceId, host, {
       provider: "github",
       status: "missing",
-      status_detail: `No blog posts folder found in ${source.full_name}. Ask your developer to add one (for example content/blog with a page that lists its posts), then check again.`,
+      status_detail:
+        "plan" in planned
+          ? "Your site has no blog yet. Mellox can add one that matches your site's design."
+          : planned.unsupported,
       source_id: source.id,
       content_dir: null,
       post_format: null,
       route_prefix: null,
       frontmatter: null,
+      setup: { framework: "plan" in planned ? planned.plan.framework : null },
       blog_url: null,
     });
   }
@@ -211,7 +269,7 @@ async function detectGithub(
     keys = file ? frontmatterKeys(file.content) : [];
     if (keys.length) break;
   }
-  return save(workspaceId, host, {
+  return saveBlogSettings(workspaceId, host, {
     provider: "github",
     status: "detected",
     status_detail: null,
@@ -225,6 +283,8 @@ async function detectGithub(
 }
 
 /** Where articles go on this site; re-detected when stale or forced. */
+export { detectGithub as detectGithubBlogSettings };
+
 export async function ensureBlogSettings(
   workspaceId: string,
   host: string,
@@ -237,7 +297,14 @@ export async function ensureBlogSettings(
     existing.provider === binding.provider &&
     existing.detected_at &&
     Date.now() - new Date(existing.detected_at).getTime() < DETECT_TTL_MS &&
-    existing.status !== "failed";
+    existing.status !== "failed" &&
+    // Checked before Mellox could add a blog itself: look again.
+    !(existing.provider === "github" && existing.status === "missing" && !existing.setup);
+  // GitHub: a blog being added is followed through its pull request.
+  if (existing?.status === "creating" && binding.provider === "github") {
+    const { refreshGithubBlogSetup } = await import("./blog-setup.server");
+    return refreshGithubBlogSetup(existing, binding);
+  }
   if (fresh && !opts.force) return existing;
   try {
     if (binding.provider === "wordpress") return await detectWordPress(workspaceId, host);
@@ -245,7 +312,7 @@ export async function ensureBlogSettings(
     return await detectGithub(workspaceId, host, binding);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Couldn't check the blog.";
-    return save(workspaceId, host, {
+    return saveBlogSettings(workspaceId, host, {
       provider: binding.provider,
       status: "failed",
       status_detail: message.slice(0, 900),
@@ -263,7 +330,11 @@ export async function createWebflowBlog(
   const { webflowAccess } = await import("@/server/connectors/webflow/service.server");
   const api = await import("@/server/connectors/webflow/api.server");
   const { token, site } = await webflowAccess(workspaceId, { requireWrite: true });
-  await save(workspaceId, host, { provider: "webflow", status: "creating", status_detail: null });
+  await saveBlogSettings(workspaceId, host, {
+    provider: "webflow",
+    status: "creating",
+    status_detail: null,
+  });
   try {
     const created = await api.createCollection(token, site.id, {
       displayName: "Blog Posts",
@@ -278,7 +349,7 @@ export async function createWebflowBlog(
     const collection = await api.getCollection(token, created.id);
     const map = webflowFieldMap(collection);
     if (!map) throw new HttpError(502, "Webflow created the collection without its fields.");
-    return save(workspaceId, host, {
+    return saveBlogSettings(workspaceId, host, {
       provider: "webflow",
       status: "needs_design",
       status_detail:
@@ -293,7 +364,7 @@ export async function createWebflowBlog(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Webflow refused the new collection.";
-    await save(workspaceId, host, {
+    await saveBlogSettings(workspaceId, host, {
       provider: "webflow",
       status: "failed",
       status_detail: message.slice(0, 900),
@@ -307,5 +378,5 @@ export async function markBlogReady(workspaceId: string, host: string): Promise<
   const b = await loadBlogSettings(workspaceId, host);
   if (!b || b.status !== "needs_design")
     throw new HttpError(409, "There's no blog waiting for design.");
-  return save(workspaceId, host, { status: "created", status_detail: null });
+  return saveBlogSettings(workspaceId, host, { status: "created", status_detail: null });
 }

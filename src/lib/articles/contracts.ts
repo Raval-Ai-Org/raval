@@ -12,8 +12,13 @@ export type BlogView = {
   status: BlogStatus;
   detail: string | null;
   blogUrl: string | null;
-  /** Mellox can set a blog up here in one click (Webflow: a blog collection). */
+  /**
+   * Mellox can set a blog up here in one click (Webflow: a blog collection;
+   * GitHub: a pull request that adds blog pages matching the site).
+   */
   canCreate: boolean;
+  /** GitHub: the open pull request that adds the blog. */
+  pr: { number: number; url: string } | null;
   /** Where posts go, in words ("WordPress posts", "the Blog Posts collection", "src/content/blog"). */
   destination: string | null;
 };

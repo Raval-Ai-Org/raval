@@ -7970,6 +7970,7 @@ export type Database = {
           post_format: string | null;
           provider: string;
           route_prefix: string | null;
+          setup: Json | null;
           setup_run_id: string | null;
           source_id: string | null;
           status: string;
@@ -7992,6 +7993,7 @@ export type Database = {
           post_format?: string | null;
           provider: string;
           route_prefix?: string | null;
+          setup?: Json | null;
           setup_run_id?: string | null;
           source_id?: string | null;
           status?: string;
@@ -8014,6 +8016,7 @@ export type Database = {
           post_format?: string | null;
           provider?: string;
           route_prefix?: string | null;
+          setup?: Json | null;
           setup_run_id?: string | null;
           source_id?: string | null;
           status?: string;

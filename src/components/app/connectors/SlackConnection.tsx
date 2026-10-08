@@ -18,6 +18,7 @@ import { Building2, Check, Clock, Copy, User } from "@/components/icons";
 import { SlackMark } from "@/components/brand/AppMarks";
 import { ConnectionCard, ConnectionFact } from "./ConnectionCard";
 import { DisconnectDialog } from "./DisconnectDialog";
+import { useConnectWindow } from "./useConnectWindow";
 
 type State = Awaited<ReturnType<typeof getSlackConnection>>;
 type Purpose = "approvals" | "marketing" | "intelligence";
@@ -127,6 +128,14 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
       if (data?.connection?.status === "active" && !data.channels.length) setExpanded(true);
     });
   }, [refresh]);
+  // Slack signs in in its own window; this hears when it closes.
+  const slackWindow = useConnectWindow("slack", workspaceId, (result) => {
+    if (result?.status === "connected") {
+      toast.success("Slack connected");
+      setExpanded(true);
+    } else if (result?.status === "error") toast.error("Slack didn’t connect. Try again.");
+    void refresh();
+  });
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.get("slack") !== "connected") return;
@@ -160,10 +169,9 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
   const zones = useMemo(() => timeZones(prefs.brief_timezone), [prefs.brief_timezone]);
   const mapped = (purpose: Purpose) => state?.channels.find((c) => c.purpose === purpose);
   const connect = () =>
-    void run("connect", async () => {
-      const result = await startSlackConnect({ data: { workspaceId } });
-      window.location.assign(result.url);
-    });
+    void run("connect", () =>
+      slackWindow.connect(async () => (await startSlackConnect({ data: { workspaceId } })).url),
+    );
   const changeChannel = (purpose: Purpose, channelId: string) =>
     run(`channel:${purpose}`, async () => {
       const result = await setSlackChannel({
@@ -240,7 +248,13 @@ export function SlackConnection({ workspaceId }: { workspaceId: string }) {
                 disabled={!!busy || !state.configured}
                 onClick={connect}
               >
-                {busy === "connect" ? "Opening…" : conn ? "Reconnect" : "Connect"}
+                {busy === "connect"
+                  ? "Opening…"
+                  : slackWindow.waiting
+                    ? "Waiting for Slack…"
+                    : conn
+                      ? "Reconnect"
+                      : "Connect"}
               </Button>
             )
           ))

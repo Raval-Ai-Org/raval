@@ -156,8 +156,9 @@ function Timeline({ steps }: { steps: TimelineStep[] }) {
             title={s.detail ?? (s.at ? new Date(s.at).toLocaleString() : undefined)}
             className={cn(
               "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1",
+              "transition-colors duration-300",
               s.state === "done" && "bg-success/10 text-success ring-success/25",
-              s.state === "current" && "bg-primary/15 text-foreground ring-primary/40",
+              s.state === "current" && "ds-sheen bg-primary/15 text-foreground ring-primary/40",
               s.state === "waiting" && "bg-warning/10 text-warning ring-warning/30",
               s.state === "failed" && "bg-destructive/10 text-destructive ring-destructive/30",
               (s.state === "todo" || s.state === "skipped") &&
@@ -166,7 +167,7 @@ function Timeline({ steps }: { steps: TimelineStep[] }) {
             )}
           >
             {s.state === "done" ? (
-              <CheckCircle className="h-3 w-3" />
+              <CheckCircle className="ds-pop h-3 w-3" />
             ) : s.state === "current" ? (
               <Spinner className="h-3 w-3 animate-spin" />
             ) : s.state === "failed" ? (
@@ -401,7 +402,7 @@ function PlanReview({
             </Button>
           )}
           <span className="text-[11.5px] text-muted-foreground">
-            Nothing is changed in your repository until you approve the final patch.
+            Nothing changes until you approve the final change.
           </span>
         </div>
       )}
@@ -465,9 +466,7 @@ function InputsForm({
         void submit();
       }}
     >
-      <p className="text-[12.5px]">
-        The fix needs facts Mellox won't guess. They're used exactly as you write them.
-      </p>
+      <p className="text-[12.5px]">Mellox won't guess these. They're used as you write them.</p>
       {requests.map((r) => (
         <div key={r.key}>
           <label htmlFor={`in-${run.id}-${r.key}`} className="text-[12px] font-medium">
@@ -506,7 +505,6 @@ function PatchReview({
   run: AgentRunView;
   onChanged: () => void;
 }) {
-  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const proposal = run.proposal;
   const cms = run.provider !== "github";
@@ -587,28 +585,7 @@ function PatchReview({
         </ul>
       )}
       {run.actions.approvePatch && proposal?.contentHash && (
-        <div className="space-y-2 border-t border-border/50 pt-3">
-          <label className="flex items-start gap-2 text-[12px]">
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              className="mt-0.5"
-            />
-            {cms ? (
-              <span>
-                I reviewed this exact change. Apply it to my {siteName(run.provider)} site now.
-                Mellox keeps the old values so I can undo it.
-              </span>
-            ) : (
-              <span>
-                I reviewed this exact change. Open it as a pull request from a new{" "}
-                <span className="font-mono">mellox/</span> branch on{" "}
-                <span className="font-medium">{run.repository}</span> (Mellox never merges or pushes
-                to {run.baseBranch}).
-              </span>
-            )}
-          </label>
+        <div className="ds-enter space-y-2 rounded-2xl border border-primary/30 bg-primary/5 p-3">
           {cms && proposal.cms?.publishesSite && (
             <p className="flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/5 px-2 py-1.5 text-[11.5px]">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
@@ -616,10 +593,15 @@ function PatchReview({
               site, which also publishes any other unpublished edits in Webflow.
             </p>
           )}
-          <Button size="sm" loading={busy} disabled={!agreed} onClick={() => void approve()}>
-            <Wand className="h-3.5 w-3.5" />{" "}
-            {cms ? `Apply to ${siteName(run.provider)}` : "Approve & create pull request"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="sm" loading={busy} onClick={() => void approve()}>
+              <Wand className="h-3.5 w-3.5" />{" "}
+              {cms ? `Apply to ${siteName(run.provider)}` : "Open pull request"}
+            </Button>
+            <span className="min-w-0 flex-1 text-[12px] text-muted-foreground">
+              {cms ? "Goes live now. You can undo it." : `On ${run.repository}. Nothing is merged.`}
+            </span>
+          </div>
         </div>
       )}
     </div>
@@ -638,7 +620,10 @@ export function AgentPanel({
   manualSteps,
   onChanged,
   provider = "github",
+  setup,
 }: {
+  /** Shown instead of the start button while the site isn't ready (connect, repository, check). */
+  setup?: React.ReactNode;
   workspaceId: string;
   findingId: string;
   fixMode: "deterministic" | "agent" | "manual";
@@ -809,9 +794,8 @@ export function AgentPanel({
       <div className="space-y-2">
         {header}
         <p className="text-[12.5px] text-muted-foreground">
-          This finding can't be fixed safely from source code (it needs your content, business
-          facts, legal text or hosting changes). Follow the steps below; Mellox verifies the result
-          with a re-scan.
+          This one needs you: your content, business facts or hosting. Follow the steps, then
+          re-scan to confirm.
         </p>
         {manualSteps.length > 0 && (
           <ol className="list-decimal space-y-1 pl-5 text-[12.5px]">
@@ -830,8 +814,8 @@ export function AgentPanel({
         {header}
         <p className="text-[12.5px] text-muted-foreground">
           {cmsSite
-            ? `The GEO Engineer checks that this page is really on your ${platform} site, finds the exact page, prepares the change from your own content and shows you before and after. Nothing changes until you approve. A re-scan of the live page then confirms the fix, and you can undo it.`
-            : "The GEO Engineer reads your repository, finds where this is produced, proposes a plan for you to approve, writes and self-reviews the patch, validates it, and opens a pull request only after you approve the exact change. A re-scan of the live site decides whether it's fixed."}
+            ? `Mellox prepares the change on your ${platform} page and shows before and after. Nothing changes until you approve.`
+            : "Mellox finds the cause in your code and prepares the change. You approve it, then it opens a pull request."}
         </p>
         {refusal && (
           <div className="rounded-lg border border-warning/30 bg-warning/5 p-2.5 text-[12.5px]">
@@ -846,17 +830,17 @@ export function AgentPanel({
           </div>
         )}
         {!ready ? (
-          <p className="text-[12px] text-muted-foreground">
-            {notReadyReason ??
-              (cmsSite
-                ? `Connect your ${platform} site first.`
-                : "Connect and verify the repository behind this website first (see Repository setup below).")}
-          </p>
+          (setup ?? (
+            <p className="text-[12px] text-muted-foreground">
+              {notReadyReason ??
+                (cmsSite ? `Connect your ${platform} site first.` : "Connect your website first.")}
+            </p>
+          ))
         ) : !canPropose ? (
           <p className="text-[12px] text-muted-foreground">An editor can start the GEO Engineer.</p>
         ) : (
           <Button size="sm" loading={busy === "start"} onClick={() => void start()}>
-            <Wand className="h-3.5 w-3.5" /> Fix with AI Agent
+            <Wand className="h-3.5 w-3.5" /> Fix this
           </Button>
         )}
       </div>
@@ -867,6 +851,13 @@ export function AgentPanel({
     <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
       {header}
       <Timeline steps={run.timeline} />
+      {active && (
+        <div
+          role="progressbar"
+          aria-label="Working"
+          className="ds-sheen h-1 rounded-full bg-primary/25"
+        />
+      )}
       {run.statusDetail && (
         <p
           className={cn(

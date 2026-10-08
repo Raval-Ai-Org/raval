@@ -11,6 +11,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle, GoogleIcon, Loader2 } from "@/components/icons";
 import { completeGoogleConnect } from "@/lib/google-analytics.functions";
+import {
+  announceConnectResult,
+  finishConnectWindow,
+  isConnectWindow,
+} from "@/lib/connectors/connect-window";
 import { ServerFnError } from "@/lib/rpc-client";
 import { inWorkspace, workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
 
@@ -27,6 +32,12 @@ export function GoogleConnectCallback() {
   const search = useSearchParams();
   const [view, setView] = useState<View>({ kind: "working" });
   const started = useRef(false);
+  const [inWindow, setInWindow] = useState(false);
+  useEffect(() => setInWindow(isConnectWindow()), []);
+  useEffect(() => {
+    if (!inWindow || (view.kind !== "cancelled" && view.kind !== "error")) return;
+    announceConnectResult({ provider: "google", status: view.kind });
+  }, [inWindow, view.kind]);
 
   useEffect(() => {
     // The code and state are single-use: never submit twice (Strict Mode runs effects twice in dev).
@@ -61,6 +72,15 @@ export function GoogleConnectCallback() {
       try {
         const result = await completeGoogleConnect({ data: { state, code } });
         clearParams();
+        if (
+          finishConnectWindow({
+            provider: "google",
+            status: "connected",
+            workspaceId: result.workspaceId,
+            accounts: [result.email],
+          })
+        )
+          return;
         const next = result.returnPath
           ? inWorkspace(result.workspaceId, result.returnPath)
           : workspacePath(result.workspaceId, "", { tab: "website" });
@@ -166,9 +186,15 @@ export function GoogleConnectCallback() {
                 You can connect Google any time from Analytics.
               </p>
             )}
-            <Button asChild variant="outline" className="w-full">
-              <Link href={WORKSPACES_HOME}>Back to Mellox</Link>
-            </Button>
+            {inWindow ? (
+              <Button variant="outline" className="w-full" onClick={() => window.close()}>
+                Close
+              </Button>
+            ) : (
+              <Button asChild variant="outline" className="w-full">
+                <Link href={WORKSPACES_HOME}>Back to Mellox</Link>
+              </Button>
+            )}
           </div>
         )}
 

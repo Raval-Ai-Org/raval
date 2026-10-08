@@ -2,10 +2,11 @@
 
 // SiteConnectPicker — the three ways Mellox can change a website (GitHub,
 // WordPress, Webflow) as simple icon tiles. The one that serves the site is
-// marked; the rest connect in one click and bring the person back to where
-// they were. All states come from getSiteConnections.
+// marked; the rest connect in a small sign-in window, so the person never
+// leaves this page. When the window closes, `onConnected` re-reads the state.
+// All states come from getSiteConnections.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "@/lib/toast";
 import { Check } from "lucide-react";
 import { SiteLogo, SITE_PLATFORM_LABEL } from "@/components/brand/SiteLogos";
@@ -17,6 +18,7 @@ import type { SiteConnections, SiteConnectionTile, SiteProviderId } from "@/lib/
 import { cn } from "@/lib/utils";
 import { startWebflowConnect } from "@/lib/webflow.functions";
 import { startWordPressOAuth } from "@/lib/wordpress.functions";
+import { useConnectWindow } from "../connectors/useConnectWindow";
 import { useGithubInstall } from "../connectors/useGithubInstall";
 
 const STATUS: Record<SiteConnectionTile["state"], string> = {
@@ -33,16 +35,27 @@ export function SiteConnectPicker({
   selected,
   onSelect,
   returnPath = "/app?geo=findings&fix=all",
+  onConnected,
 }: {
   workspaceId: string;
   connections: SiteConnections;
   selected: SiteProviderId;
   onSelect: (p: SiteProviderId) => void;
-  /** Workspace-relative path the connect flows return to. */
+  /** Workspace-relative path the connect flows return to if the window was blocked. */
   returnPath?: string;
+  /** A sign-in window closed: re-read the connections. */
+  onConnected?: () => void;
 }) {
-  const { installing, install } = useGithubInstall(workspaceId, returnPath);
+  const { installing, install } = useGithubInstall(workspaceId, returnPath, () => onConnected?.());
   const [busy, setBusy] = useState<SiteProviderId | null>(null);
+  const wordpress = useConnectWindow("wordpress", workspaceId, (r) => {
+    if (r?.status === "connected") toast.success("WordPress connected");
+    onConnected?.();
+  });
+  const webflow = useConnectWindow("webflow", workspaceId, (r) => {
+    if (r?.status === "connected") toast.success("Webflow connected");
+    onConnected?.();
+  });
   const tile = connections.tiles.find((t) => t.provider === selected) ?? connections.tiles[0];
   const back = `/w/${workspaceId}${returnPath}`;
 
@@ -51,15 +64,26 @@ export function SiteConnectPicker({
     setBusy(p);
     try {
       const start = p === "wordpress" ? startWordPressOAuth : startWebflowConnect;
-      const { url } = await start({
-        data: { workspaceId, returnOrigin: window.location.origin, returnPath: back },
-      });
-      window.location.assign(url);
+      await (p === "wordpress" ? wordpress : webflow).connect(
+        async () =>
+          (
+            await start({
+              data: { workspaceId, returnOrigin: window.location.origin, returnPath: back },
+            })
+          ).url,
+      );
     } catch (e) {
-      setBusy(null);
       toast.error(e instanceof Error ? e.message : `Couldn't open ${SITE_PLATFORM_LABEL[p]}`);
+    } finally {
+      setBusy(null);
     }
   };
+  const waiting =
+    tile?.provider === "wordpress"
+      ? wordpress.waiting
+      : tile?.provider === "webflow"
+        ? webflow.waiting
+        : false;
   const openSettings = () => emitAppEvent("open:settings", { section: "website" });
 
   return (
@@ -109,13 +133,17 @@ export function SiteConnectPicker({
       {tile ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-muted-foreground">
-            {tile.detail}
+            {installing || waiting
+              ? `Finish in the ${SITE_PLATFORM_LABEL[tile.provider]} window. This page updates by itself.`
+              : tile.detail}
           </p>
           {tile.state === "not_connected" ? (
             connections.canManage ? (
               <Button
                 size="sm"
-                loading={tile.provider === "github" ? installing : busy === tile.provider}
+                loading={
+                  tile.provider === "github" ? installing : busy === tile.provider || waiting
+                }
                 onClick={() => void connect(tile.provider)}
               >
                 Connect {SITE_PLATFORM_LABEL[tile.provider]}
@@ -148,14 +176,21 @@ export function SiteConnectSection({
   workspaceId,
   scanId,
   returnPath,
+  onConnected,
 }: {
   workspaceId: string;
   scanId: string;
   returnPath?: string;
+  onConnected?: () => void;
 }) {
   const [connections, setConnections] = useState<SiteConnections | null>(null);
   const [selected, setSelected] = useState<SiteProviderId | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+  const connected = useCallback(() => {
+    setNonce((n) => n + 1);
+    onConnected?.();
+  }, [onConnected]);
   useEffect(() => {
     let cancelled = false;
     getSiteConnections({ data: { workspaceId, scanId } })
@@ -168,7 +203,7 @@ export function SiteConnectSection({
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, scanId]);
+  }, [workspaceId, scanId, nonce]);
   if (error) return <p className="text-[12px] text-destructive">{error}</p>;
   if (!connections || !selected) return <Skeleton className="h-28 w-full rounded-xl" />;
   return (
@@ -178,6 +213,7 @@ export function SiteConnectSection({
       selected={selected}
       onSelect={setSelected}
       returnPath={returnPath}
+      onConnected={connected}
     />
   );
 }

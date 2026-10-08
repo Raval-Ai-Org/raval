@@ -11,6 +11,7 @@ import {
   ANGLES,
   buildArticlePrompt,
   buildSocialPrompt,
+  completeVariants,
   emptyContext,
   finalizeVariant,
   finalizeVariants,
@@ -158,6 +159,32 @@ describe("prompt engine", () => {
     });
     expect(variants.map((x) => x.platform)).toEqual(["twitter"]);
     expect(missing).toEqual(["linkedin"]);
+  });
+
+  it("recovers omitted and empty platform captions from usable generated copy", () => {
+    const instagram = finalizeVariant("instagram", {
+      body: "Fresh coffee is ready at the cafe this morning.",
+      hashtags: ["coffee"],
+    });
+    const variants = completeVariants(
+      ["instagram", "linkedin", "twitter"],
+      [instagram, finalizeVariant("linkedin", { body: "", hashtags: [] })],
+      "Announce our morning coffee",
+    );
+    expect(variants.map((variant) => variant.platform)).toEqual([
+      "instagram",
+      "linkedin",
+      "twitter",
+    ]);
+    expect(variants[0]).toBe(instagram);
+    expect(variants[1].body).toContain("Fresh coffee is ready");
+    expect(variants[2].body.length).toBeGreaterThan(20);
+  });
+
+  it("uses the brief when caption generation returns no usable copy", () => {
+    const variants = completeVariants(["instagram", "linkedin"], [], "coffee");
+    expect(variants).toHaveLength(2);
+    expect(variants.every((variant) => variant.body.length >= 20)).toBe(true);
   });
 });
 

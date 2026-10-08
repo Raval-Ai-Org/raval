@@ -6,6 +6,11 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { completeWordPressOAuth, selectWordPressSite } from "@/lib/wordpress.functions";
+import {
+  announceConnectResult,
+  finishConnectWindow,
+  isConnectWindow,
+} from "@/lib/connectors/connect-window";
 import { ServerFnError } from "@/lib/rpc-client";
 import { inWorkspace, WORKSPACES_HOME, workspacePath } from "@/lib/workspace/paths";
 
@@ -38,6 +43,23 @@ export function WordPressConnectCallback() {
   const started = useRef(false);
   const [view, setView] = useState<View>({ kind: "working" });
   const [busySiteId, setBusySiteId] = useState<string | null>(null);
+  const [inWindow, setInWindow] = useState(false);
+  useEffect(() => setInWindow(isConnectWindow()), []);
+  useEffect(() => {
+    if (!inWindow || (view.kind !== "cancelled" && view.kind !== "error")) return;
+    announceConnectResult({ provider: "wordpress", status: view.kind });
+  }, [inWindow, view.kind]);
+
+  // In a sign-in window: tell the page that opened it and close. Else go back.
+  const leave = (next: string, workspaceId?: string) => {
+    if (
+      workspaceId &&
+      finishConnectWindow({ provider: "wordpress", status: "connected", workspaceId })
+    )
+      return;
+    if (inWindow) window.close();
+    else window.location.replace(next);
+  };
 
   useEffect(() => {
     if (started.current) return;
@@ -125,7 +147,7 @@ export function WordPressConnectCallback() {
       await selectWordPressSite({
         data: { workspaceId: view.workspaceId, connectionId: view.connectionId, siteId },
       });
-      window.location.replace(view.next);
+      leave(view.next, view.workspaceId);
     } catch (e) {
       setBusySiteId(null);
       setView({
@@ -208,8 +230,12 @@ export function WordPressConnectCallback() {
                 </li>
               ))}
             </ul>
-            <Button asChild variant="ghost" className="w-full">
-              <Link href={view.next}>Skip for now</Link>
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => leave(view.next, view.workspaceId)}
+            >
+              Skip for now
             </Button>
           </div>
         )}
@@ -220,8 +246,8 @@ export function WordPressConnectCallback() {
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
               {view.message}
             </p>
-            <Button asChild variant="outline" className="w-full">
-              <Link href={view.next}>Back to Mellox</Link>
+            <Button variant="outline" className="w-full" onClick={() => leave(view.next)}>
+              {inWindow ? "Close" : "Back to Mellox"}
             </Button>
           </div>
         )}
@@ -243,14 +269,20 @@ export function WordPressConnectCallback() {
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
               {view.message}
             </p>
-            <div className="flex gap-2">
-              <Button asChild variant="outline" className="flex-1">
-                <Link href={backHref}>Back to Mellox</Link>
+            {inWindow ? (
+              <Button variant="outline" className="w-full" onClick={() => window.close()}>
+                Close
               </Button>
-              <Button className="flex-1" onClick={() => window.location.assign(WORKSPACES_HOME)}>
-                <RefreshCw className="mr-2 size-3.5" /> Try again
-              </Button>
-            </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button asChild variant="outline" className="flex-1">
+                  <Link href={backHref}>Back to Mellox</Link>
+                </Button>
+                <Button className="flex-1" onClick={() => window.location.assign(WORKSPACES_HOME)}>
+                  <RefreshCw className="mr-2 size-3.5" /> Try again
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </section>

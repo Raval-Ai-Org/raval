@@ -106,7 +106,10 @@ export const recheckArticlePublication = createServerFn({ method: "POST" })
     return svc.recheckPublication(ctx, data.publicationId);
   });
 
-/** Webflow: create a blog collection; or say its template page is designed. */
+/**
+ * Add a blog to the site: a Webflow collection, or (GitHub) a pull request with
+ * blog pages that match the site. "ready" says a Webflow template page is designed.
+ */
 export const setupSiteBlog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("connector-write")])
   .inputValidator((data) =>
@@ -126,9 +129,15 @@ export const setupSiteBlog = createServerFn({ method: "POST" })
     if (!(await publishTargets(data.workspaceId, ws?.domain ?? null)).includes(target))
       throw new ForbiddenError(`${data.host} isn't one of this workspace's websites.`);
     const blog = await import("@/server/articles/blog.server");
-    const row =
-      data.action === "create"
-        ? await blog.createWebflowBlog(data.workspaceId, target)
-        : await blog.markBlogReady(data.workspaceId, target);
-    return blog.blogView(row);
+    if (data.action === "ready")
+      return blog.blogView(await blog.markBlogReady(data.workspaceId, target));
+    const { resolveSite } = await import("@/server/sites/resolve.server");
+    const provider = (await resolveSite(data.workspaceId, target)).binding?.provider;
+    if (provider === "github") {
+      const { startGithubBlogSetup } = await import("@/server/articles/blog-setup.server");
+      return blog.blogView(
+        await startGithubBlogSetup({ workspaceId: data.workspaceId, userId: ctx.userId }, target),
+      );
+    }
+    return blog.blogView(await blog.createWebflowBlog(data.workspaceId, target));
   });

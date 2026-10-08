@@ -35,6 +35,7 @@ Effort is OpenRouter `reasoning.effort`. "Max tokens" is the plan's floor for th
 | `ai-generate.*` | `google/gemini-3.8-flash` | medium | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` |  | long-form output over ~1,500 words → anthropic/claude-opus-5.5 (medium) |
 | `analytics/insights` | `google/gemini-3.8-flash` | medium | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` |  |  |
 | `analytics/insights-auto` | `google/gemini-3.8-flash` | low | `openai/gpt-5.6-terra` | `google/gemini-3.1-flash-lite` |  |  |
+| `articles.blog-design` | `anthropic/claude-opus-5.5` | low | `google/gemini-3.8-flash` | `google/gemini-3.8-flash` | 4000 |  |
 | `brand-extract` | `anthropic/claude-opus-5.5` | medium | `google/gemini-3.8-flash` | `google/gemini-3.8-flash` | 12000 |  |
 | `brand-extract.search` | `google/gemini-3.1-flash-lite` | low | `openai/gpt-5.6-luna` | `google/gemini-3.1-flash-lite` |  |  |
 | `campaign-generation` | `anthropic/claude-opus-5.5` | low | `google/gemini-3.8-flash` | `google/gemini-3.8-flash` |  |  |

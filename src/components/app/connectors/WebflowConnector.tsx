@@ -16,6 +16,7 @@ import {
 } from "./ConnectionCard";
 import { DisconnectDialog } from "./DisconnectDialog";
 import { IntegrationDetails } from "./IntegrationDetails";
+import { useConnectWindow } from "./useConnectWindow";
 import {
   disconnectWebflow,
   getWebflowConnection,
@@ -275,19 +276,29 @@ export function WebflowConnector({ workspaceId }: { workspaceId: string }) {
     void load();
   }, [load]);
 
+  // Webflow signs in in its own window; this hears when it closes.
+  const webflowWindow = useConnectWindow("webflow", workspaceId, (result) => {
+    if (result?.status === "connected") toast.success("Webflow connected");
+    void load();
+  });
   const connect = async () => {
     setBusy(true);
     try {
-      const result = await startWebflowConnect({
-        data: {
-          workspaceId,
-          returnOrigin: window.location.origin,
-          returnPath: `${window.location.pathname}${window.location.search}`,
-        },
-      });
-      window.location.assign(result.url);
+      await webflowWindow.connect(
+        async () =>
+          (
+            await startWebflowConnect({
+              data: {
+                workspaceId,
+                returnOrigin: window.location.origin,
+                returnPath: `${window.location.pathname}${window.location.search}`,
+              },
+            })
+          ).url,
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Webflow could not be connected.");
+    } finally {
       setBusy(false);
     }
   };

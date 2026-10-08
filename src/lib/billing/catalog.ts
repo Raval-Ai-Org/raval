@@ -896,6 +896,8 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "links-profile",
   "links-article-brief",
   "guardrails.image-moderation",
+  // Adding a blog to a site: once per site, part of publishing articles.
+  "articles.blog-design",
 ];
 
 export function creditsFor(action: CreditAction, quantity = 1): number {

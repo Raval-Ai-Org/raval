@@ -14,6 +14,7 @@ import {
   restoreCanvaOriginalAction,
   startCanvaConnect,
 } from "@/lib/canva.functions";
+import { onConnectResult, openConnectWindow } from "@/lib/connectors/connect-window";
 import { CanvaPanel, type CanvaPanelProps } from "./CanvaPanel";
 
 type EditState = Awaited<ReturnType<typeof getCanvaEditState>>;
@@ -58,6 +59,16 @@ export function CanvaEditButton({
     setOpened(null);
     void refresh();
   }, [refresh]);
+  // Canva was connected in its sign-in window: the button is ready to use.
+  useEffect(
+    () =>
+      onConnectResult((result) => {
+        if (result.provider !== "canva" || result.status !== "connected") return;
+        toast.success("Canva connected");
+        void refresh();
+      }),
+    [refresh],
+  );
   // Coming back from the Canva tab is when the state is most likely stale.
   useEffect(() => {
     if (!open) return;
@@ -83,8 +94,14 @@ export function CanvaEditButton({
       if (connection.status !== "active") {
         tab?.close();
         const returnPath = window.location.pathname + window.location.search;
-        const { url } = await startCanvaConnect({ data: { workspaceId, returnPath } });
-        window.location.assign(url);
+        // Reserved before asking for the address; falls back to this tab if blocked.
+        const win = openConnectWindow("canva");
+        try {
+          win.go((await startCanvaConnect({ data: { workspaceId, returnPath } })).url);
+        } catch (cause) {
+          win.close();
+          throw cause;
+        }
         return;
       }
       const result = await createCanvaEdit({ data: { workspaceId, assetId, contentId } });

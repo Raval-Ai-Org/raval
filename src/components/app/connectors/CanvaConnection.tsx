@@ -15,6 +15,7 @@ import { emitAppEvent } from "@/lib/app-events";
 import { CanvaMark } from "@/components/brand/CanvaMark";
 import { ConnectionCard } from "./ConnectionCard";
 import { DisconnectDialog } from "./DisconnectDialog";
+import { useConnectWindow } from "./useConnectWindow";
 
 type Status = Awaited<ReturnType<typeof getCanvaConnection>>;
 
@@ -37,6 +38,15 @@ export function CanvaConnection() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  // Canva signs in in its own window; this hears when it closes.
+  const canvaWindow = useConnectWindow("canva", workspaceId, (result) => {
+    if (result?.status === "connected") {
+      toast.success("Canva connected");
+      emitAppEvent("connections:changed");
+    }
+    setBusy(false);
+    void refresh();
+  });
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.get("canva") !== "connected") return;
@@ -52,10 +62,15 @@ export function CanvaConnection() {
     setBusy(true);
     setError(null);
     try {
-      const { url } = await startCanvaConnect({
-        data: { workspaceId, returnPath: `${window.location.pathname}?settings=accounts` },
-      });
-      window.location.assign(url);
+      await canvaWindow.connect(
+        async () =>
+          (
+            await startCanvaConnect({
+              data: { workspaceId, returnPath: `${window.location.pathname}?settings=accounts` },
+            })
+          ).url,
+      );
+      setBusy(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start Canva connection.");
       setBusy(false);
@@ -109,7 +124,13 @@ export function CanvaConnection() {
                 disabled={busy || !status.configured}
                 onClick={() => void connect()}
               >
-                {busy ? "Opening…" : needsAttention ? "Reconnect" : "Connect"}
+                {busy
+                  ? "Opening…"
+                  : canvaWindow.waiting
+                    ? "Waiting for Canva…"
+                    : needsAttention
+                      ? "Reconnect"
+                      : "Connect"}
               </Button>
               {needsAttention && (
                 <Button

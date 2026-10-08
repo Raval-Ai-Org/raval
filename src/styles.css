@@ -5482,6 +5482,48 @@ pre {
   }
 }
 
+/* Fix progress: a light that travels along a bar while Mellox works, and a
+ * small pop when a step lands. The sheen is a progress cue, so it keeps moving
+ * under reduced motion (slower); the pop is decoration and stops. */
+@utility ds-sheen {
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.55), transparent);
+    transform: translateX(-100%);
+    animation: ds-sheen 1.5s var(--ds-ease) infinite;
+  }
+}
+@keyframes ds-sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+@utility ds-pop {
+  animation: ds-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes ds-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-sheen::after {
+    animation-duration: 3s;
+  }
+  .ds-pop {
+    animation: none;
+  }
+}
+
 /* Brand Kit: a thin lime line that sweeps an example while Mellox studies it.
  * It is a progress cue, so it keeps moving under reduced motion (slower). */
 @utility ds-scan {
@@ -5635,6 +5677,10 @@ pre {
   }
   :root .ds-scan::after {
     animation-duration: 3.6s !important;
+    animation-iteration-count: infinite !important;
+  }
+  :root .ds-sheen::after {
+    animation-duration: 3s !important;
     animation-iteration-count: infinite !important;
   }
 

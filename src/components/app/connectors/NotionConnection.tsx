@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { NotionMark } from "@/components/brand/AppMarks";
 import { ConnectionCard, ConnectionFact } from "./ConnectionCard";
 import { DisconnectDialog } from "./DisconnectDialog";
+import { useConnectWindow } from "./useConnectWindow";
 import {
   Dialog,
   DialogContent,
@@ -95,6 +96,15 @@ export function NotionConnection({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  // Notion signs in in its own window; this hears when it closes.
+  const notionWindow = useConnectWindow("notion", workspaceId, (result) => {
+    if (result?.status === "connected") {
+      toast.success("Notion connected");
+      setSetup(true);
+      emitAppEvent("connections:changed");
+    } else if (result?.status === "error") toast.error("Notion didn’t connect. Try again.");
+    void refresh();
+  });
   useEffect(() => {
     if (compact) return;
     const url = new URL(window.location.href);
@@ -143,12 +153,16 @@ export function NotionConnection({
     }
   };
   const connect = () =>
-    void run(async () => {
-      const { url } = await startNotionConnect({
-        data: { workspaceId, returnPath: `${window.location.pathname}?settings=accounts` },
-      });
-      window.location.assign(url);
-    });
+    void run(() =>
+      notionWindow.connect(
+        async () =>
+          (
+            await startNotionConnect({
+              data: { workspaceId, returnPath: `${window.location.pathname}?settings=accounts` },
+            })
+          ).url,
+      ),
+    );
   const exportItems = () =>
     void run(async () => {
       const value = await exportToNotion({ data: { workspaceId, contentIds } });
@@ -177,7 +191,7 @@ export function NotionConnection({
         disabled={busy || !canEdit || !status?.configured}
         onClick={connect}
       >
-        {needsAttention ? "Reconnect" : "Connect"}
+        {notionWindow.waiting ? "Waiting for Notion…" : needsAttention ? "Reconnect" : "Connect"}
       </Button>
       {needsAttention && (
         <Button

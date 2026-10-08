@@ -4,6 +4,11 @@
 // website, generated in one run, reviewed once, approved once, delivered as
 // ONE GitHub pull request (WordPress / Webflow: CmsFixAllPanel). Mellox never merges it; each finding resolves only
 // after the post-merge rescan confirms its own check passes.
+//
+// Setup moves on by itself: connecting happens in a sign-in window, the
+// repository check runs as soon as a repository is chosen, and the repository
+// and branch are picked for the person (they can change them). The two clicks
+// that stay are the ones that matter: start the run, and open the pull request.
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "@/lib/toast";
@@ -39,7 +44,14 @@ import {
   listFixBranches,
 } from "@/lib/geo-fixes.functions";
 import { cn } from "@/lib/utils";
-import { CheckRow, DiffView, SetupRequirement, VerificationCard } from "./FindingDetail";
+import {
+  CheckRow,
+  DiffView,
+  SetupRequirement,
+  SetupSteps,
+  setupStepOf,
+  VerificationCard,
+} from "./FindingDetail";
 import { CmsFixAllPanel } from "./CmsFixAllPanel";
 import { Chip, pathOf, relativeTime } from "./geo-ui";
 import { SiteConnectPicker } from "./SiteConnectPicker";
@@ -77,7 +89,6 @@ function BatchReview({
   onChange: (b: FixBatchView) => void;
   onRestart: () => void;
 }) {
-  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState<"approve" | "discard" | "sync" | "close" | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const b = batch;
@@ -112,7 +123,7 @@ function BatchReview({
             data: { workspaceId, batchId: b.id, contentHash: b.contentHash! },
           }),
         );
-        toast.success("Pull request opened with all fixes");
+        toast.success("Pull request opened");
       } else if (kind === "sync") {
         onChange(await getFixBatch({ data: { workspaceId, batchId: b.id, sync: true } }));
       } else {
@@ -134,22 +145,71 @@ function BatchReview({
 
   if (b.status === "generating") {
     const pct = b.progress.total ? Math.round((b.progress.done / b.progress.total) * 100) : 0;
+    // The one being written now is the first that isn't finished.
+    const currentAt = b.items.findIndex((i) => i.status === "pending");
     return (
-      <div className="space-y-3 rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-4">
-        <p className="flex items-center gap-2 text-[13px] font-medium">
-          <Spinner className="h-4 w-4 animate-spin" /> Preparing fixes for {b.host}…
-        </p>
-        <div className="h-1.5 overflow-hidden rounded-full bg-border/50">
+      <div
+        className="ds-enter space-y-4 rounded-2xl border border-primary/25 bg-card p-4"
+        aria-busy="true"
+      >
+        <div className="flex items-center gap-3">
+          <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+            <span
+              aria-hidden
+              className="absolute inset-0 animate-ping rounded-full bg-primary/20 [animation-duration:1.8s]"
+            />
+            <Wand className="relative h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-semibold">Writing your fixes</p>
+            <p className="truncate text-[12px] text-muted-foreground">
+              {b.progress.done} of {b.progress.total} done · nothing is changed yet
+            </p>
+          </div>
+          <span className="text-[18px] font-semibold tabular-nums">{pct}%</span>
+        </div>
+        <div
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="h-1.5 overflow-hidden rounded-full bg-border/50"
+        >
           <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${pct}%` }}
+            className="ds-sheen h-full rounded-full bg-primary transition-[width] duration-700 ease-out"
+            style={{ width: `${Math.max(pct, 4)}%` }}
           />
         </div>
-        <p className="text-[12px] text-muted-foreground">
-          {b.progress.done} of {b.progress.total} findings processed
-          {b.progress.current ? ` · now: ${b.progress.current}` : ""}. Mellox reads the repository
-          and drafts each change; nothing is written to GitHub yet.
-        </p>
+        <ul className="max-h-64 space-y-1 overflow-y-auto">
+          {b.items.map((i, k) => {
+            const now = k === currentAt;
+            const done = i.status !== "pending";
+            return (
+              <li
+                key={i.findingId}
+                className={cn(
+                  "flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] transition-colors duration-300",
+                  now && "bg-primary/10",
+                  !done && !now && "opacity-50",
+                )}
+              >
+                {i.status === "generated" ? (
+                  <CheckCircle className="ds-pop h-3.5 w-3.5 shrink-0 text-success" />
+                ) : done ? (
+                  <AlertTriangle className="ds-pop h-3.5 w-3.5 shrink-0 text-warning" />
+                ) : now ? (
+                  <Spinner className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+                ) : (
+                  <span className="mx-[3px] h-2 w-2 shrink-0 rounded-full border border-muted-foreground/50" />
+                )}
+                <span className={cn("min-w-0 truncate", now && "font-medium")}>{i.title}</span>
+                <span className="ml-auto shrink-0 truncate text-[11.5px] text-muted-foreground">
+                  {pathOf(i.pageUrl)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       </div>
     );
   }
@@ -173,10 +233,74 @@ function BatchReview({
         </p>
       )}
 
+      {b.status === "draft" && (
+        <div className="ds-enter flex flex-wrap items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+          <span className="ds-pop grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+            <CheckCircle className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1 basis-[200px]">
+            <p className="text-[14px] font-semibold">
+              {included.length} fix{included.length === 1 ? "" : "es"} ready
+            </p>
+            <p className="text-[12px] text-muted-foreground">
+              {b.validation.ok
+                ? `One pull request on ${b.repoFullName}. Nothing is merged.`
+                : "A check failed, so this can't be opened."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={!b.validation.ok || busy !== null || !b.contentHash}
+              loading={busy === "approve"}
+              onClick={() => void act("approve")}
+            >
+              <GitCommit className="h-4 w-4" /> Open pull request
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={busy !== null}
+              loading={busy === "discard"}
+              onClick={() => void act("discard")}
+            >
+              Discard
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {b.status === "applying" && (
+        <div className="ds-enter flex items-center gap-3 rounded-2xl border border-primary/25 bg-card p-4">
+          <Spinner className="h-4 w-4 shrink-0 animate-spin text-primary" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <p className="text-[13px] font-medium">Opening the pull request</p>
+            <div role="progressbar" className="ds-sheen h-1 rounded-full bg-primary/25" />
+          </div>
+        </div>
+      )}
+
+      {b.status === "pr_open" && b.pr && (
+        <div className="ds-enter flex flex-wrap items-center gap-3 rounded-2xl border border-success/30 bg-success/5 p-4">
+          <span className="ds-pop grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success/15 text-success">
+            <CheckCircle className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1 basis-[200px]">
+            <p className="text-[14px] font-semibold">Pull request opened</p>
+            <p className="text-[12px] text-muted-foreground">
+              Merge it on GitHub. Mellox then checks each page on your live site.
+            </p>
+          </div>
+          <Button asChild>
+            <a href={b.pr.url} target="_blank" rel="noopener noreferrer">
+              Review on GitHub <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </Button>
+        </div>
+      )}
+
       <section className="rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
         <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Findings ({included.length} included
-          {excluded.length ? `, ${excluded.length} need manual work` : ""})
+          {included.length} included
+          {excluded.length ? ` · ${excluded.length} need you` : ""}
         </h4>
         <ul className="max-h-72 space-y-1.5 overflow-y-auto">
           {b.items.map((i) => (
@@ -221,7 +345,7 @@ function BatchReview({
       {b.files.length > 0 && (
         <section className="space-y-3 rounded-xl border border-border/60 bg-gradient-to-b from-card/90 to-card/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3.5">
           <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Combined change ({b.files.length} file{b.files.length === 1 ? "" : "s"})
+            {b.files.length} file{b.files.length === 1 ? "" : "s"} changed
           </h4>
           {b.filesPurged ? (
             <p className="text-[12px] text-muted-foreground">
@@ -244,7 +368,7 @@ function BatchReview({
             ))
           )}
           <div>
-            <p className="text-[12px] font-semibold">Checks before approval</p>
+            <p className="text-[12px] font-semibold">Checks</p>
             <ul className="mt-1">
               {b.validation.checks.map((c) => (
                 <CheckRow key={c.id} status={c.status} label={c.label} detail={c.detail} />
@@ -252,58 +376,6 @@ function BatchReview({
             </ul>
           </div>
         </section>
-      )}
-
-      {b.status === "draft" && (
-        <div className="space-y-2 rounded-xl border border-primary/30 bg-primary/5 p-3.5">
-          {!b.validation.ok ? (
-            <p className="text-[12px] text-destructive">
-              The combined change failed a check and can't be applied.
-            </p>
-          ) : (
-            <label className="flex items-start gap-2 text-[12px]">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={agreed}
-                onChange={(e) => setAgreed(e.target.checked)}
-              />
-              <span>
-                I reviewed all {included.length} fixes. Mellox will create one new{" "}
-                <span className="font-mono">mellox/</span> branch in {b.repoFullName}, commit
-                exactly these {b.files.length} file(s), and open one pull request against{" "}
-                <span className="font-mono">{b.baseBranch}</span>. Nothing is merged or pushed to{" "}
-                {b.baseBranch}.
-              </span>
-            </label>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              disabled={!agreed || !b.validation.ok || busy !== null || !b.contentHash}
-              loading={busy === "approve"}
-              onClick={() => void act("approve")}
-            >
-              <GitCommit className="h-3.5 w-3.5" /> Approve & open one pull request
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy !== null}
-              loading={busy === "discard"}
-              onClick={() => void act("discard")}
-            >
-              Discard
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {b.status === "applying" && (
-        <p className="flex items-center gap-2 text-[12.5px]">
-          <Spinner className="h-3.5 w-3.5 animate-spin" /> Creating the branch, commit and pull
-          request…
-        </p>
       )}
 
       {b.pr && (
@@ -357,10 +429,6 @@ function BatchReview({
             ))}
           {b.status === "pr_open" && (
             <>
-              <p className="text-[12px] text-muted-foreground">
-                Review and merge it on GitHub. After deploy, Mellox re-scans every affected page and
-                resolves each finding only when its own check passes.
-              </p>
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
@@ -423,6 +491,126 @@ function BatchReview({
   );
 }
 
+/** Everything is set up: one button starts the run. The repository and branch are already chosen. */
+function ReadyToFix({
+  preflight,
+  host,
+  sourceId,
+  onSource,
+  branches,
+  branch,
+  onBranch,
+  choosing,
+  onChoose,
+  starting,
+  onStart,
+}: {
+  preflight: FixAllPreflight;
+  host: string;
+  sourceId: string | null;
+  onSource: (id: string) => void;
+  branches: { name: string; protected: boolean }[] | null;
+  branch: string;
+  onBranch: (name: string) => void;
+  choosing: boolean;
+  onChoose: () => void;
+  starting: boolean;
+  onStart: () => void;
+}) {
+  const count = Math.min(preflight.fixable.length, preflight.maxFindings);
+  const sources = preflight.setup.sources.filter(
+    (s) => s.status === "active" && s.siteUrl?.includes(host),
+  );
+  const repo = sources.find((s) => s.id === sourceId)?.fullName ?? preflight.setup.source?.fullName;
+  const also = [
+    preflight.engineerCount ? `${preflight.engineerCount} more fixed one at a time` : "",
+    preflight.manualCount ? `${preflight.manualCount} need you` : "",
+    preflight.inProgressCount ? `${preflight.inProgressCount} already in progress` : "",
+  ].filter(Boolean);
+  const field = "h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-[12.5px]";
+
+  return (
+    <section className="ds-enter space-y-3 rounded-2xl border border-primary/25 bg-primary/5 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1 basis-[200px]">
+          <p className="text-[14px] font-semibold">
+            {count} issue{count === 1 ? "" : "s"} ready to fix
+          </p>
+          <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-[12px] text-muted-foreground">
+            <span className="truncate">
+              {repo ?? "Repository"} · {branch || "…"}
+            </span>
+            <button
+              type="button"
+              onClick={onChoose}
+              aria-expanded={choosing}
+              className="font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              {choosing ? "Done" : "Change"}
+            </button>
+          </p>
+        </div>
+        <Button
+          disabled={!branch || starting || !preflight.setup.canPropose}
+          loading={starting}
+          onClick={onStart}
+        >
+          <Wand className="h-4 w-4" /> Fix {count} issue{count === 1 ? "" : "s"}
+        </Button>
+      </div>
+      {choosing && (
+        <div className="ds-enter grid gap-2 sm:grid-cols-2">
+          <label className="space-y-1">
+            <span className="text-[11px] font-medium text-muted-foreground">Repository</span>
+            <select
+              value={sourceId ?? ""}
+              onChange={(e) => onSource(e.target.value)}
+              className={field}
+            >
+              {sources.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.fullName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-medium text-muted-foreground">Branch</span>
+            {branches ? (
+              <select value={branch} onChange={(e) => onBranch(e.target.value)} className={field}>
+                {branches.map((b) => (
+                  <option key={b.name} value={b.name}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Skeleton className="h-9 w-full rounded-lg" />
+            )}
+          </label>
+        </div>
+      )}
+      <details className="group">
+        <summary className="cursor-pointer text-[12px] font-medium text-muted-foreground hover:text-foreground">
+          See what will be fixed
+        </summary>
+        <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+          {preflight.fixable.slice(0, preflight.maxFindings).map((f) => (
+            <li key={f.findingId} className="flex min-w-0 items-center gap-2 text-[12px]">
+              <span className="truncate font-medium">{f.title}</span>
+              <span className="truncate text-muted-foreground">{pathOf(f.pageUrl)}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+      {also.length > 0 && <p className="text-[11.5px] text-muted-foreground">{also.join(" · ")}</p>}
+      {!preflight.setup.canPropose && (
+        <p className="text-[11.5px] text-muted-foreground">An editor can run “Fix all”.</p>
+      )}
+    </section>
+  );
+}
+
 export function FixAllPanel({
   workspaceId,
   scan,
@@ -447,6 +635,7 @@ export function FixAllPanel({
   const [branch, setBranch] = useState("");
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [choosing, setChoosing] = useState(false);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
 
@@ -513,10 +702,10 @@ export function FixAllPanel({
   const intro = !provider
     ? ""
     : github
-      ? "Every fix goes into one pull request. You review it once and merge it yourself."
-      : `You see every change before and after. Changes go live on ${
+      ? "One pull request with every fix. You merge it."
+      : `You see each change first. Nothing goes live on ${
           provider === "wordpress" ? "WordPress" : "Webflow"
-        } only when you apply them, and each can be undone.`;
+        } until you apply it.`;
 
   return (
     <div className="space-y-4">
@@ -563,7 +752,13 @@ export function FixAllPanel({
               setProvider(p);
               setStartError(null);
             }}
+            onConnected={reload}
           />
+          {github && tile?.state !== "unavailable" && (
+            <SetupSteps
+              at={tile?.state === "not_connected" ? 0 : setupStepOf(preflight.setup.requirement)}
+            />
+          )}
 
           {!github ? (
             tile?.state === "serves_site" ? (
@@ -586,75 +781,19 @@ export function FixAllPanel({
               Nothing in this scan can be fixed in code automatically. Open a finding for its steps.
             </p>
           ) : (
-            <section className="space-y-3">
-              <p className="text-[12px] text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {Math.min(preflight.fixable.length, preflight.maxFindings)} fixes
-                </span>{" "}
-                will be prepared
-                {preflight.engineerCount
-                  ? ` · ${preflight.engineerCount} more Mellox can fix one at a time from Issues`
-                  : ""}
-                {preflight.manualCount ? ` · ${preflight.manualCount} need manual work` : ""}
-                {preflight.inProgressCount
-                  ? ` · ${preflight.inProgressCount} already in progress`
-                  : ""}
-              </p>
-              <ul className="max-h-48 space-y-1 overflow-y-auto">
-                {preflight.fixable.slice(0, preflight.maxFindings).map((f) => (
-                  <li key={f.findingId} className="flex min-w-0 items-center gap-2 text-[12px]">
-                    <span className="truncate font-medium">{f.title}</span>
-                    <span className="truncate text-muted-foreground">{pathOf(f.pageUrl)}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="space-y-1">
-                  <span className="text-[11px] font-medium text-muted-foreground">Repository</span>
-                  <select
-                    value={sourceId ?? ""}
-                    onChange={(e) => setSourceId(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-[12.5px]"
-                  >
-                    {preflight.setup.sources
-                      .filter((s) => s.status === "active" && s.siteUrl?.includes(scan.host))
-                      .map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.fullName}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label className="space-y-1">
-                  <span className="text-[11px] font-medium text-muted-foreground">Into branch</span>
-                  {branches ? (
-                    <select
-                      value={branch}
-                      onChange={(e) => setBranch(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-[12.5px]"
-                    >
-                      {branches.map((b) => (
-                        <option key={b.name} value={b.name}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <Skeleton className="h-9 w-full rounded-lg" />
-                  )}
-                </label>
-              </div>
-              <Button
-                disabled={!branch || starting || !preflight.setup.canPropose}
-                loading={starting}
-                onClick={() => void start()}
-              >
-                <Wand className="h-4 w-4" /> Prepare all fixes
-              </Button>
-              {!preflight.setup.canPropose && (
-                <p className="text-[11.5px] text-muted-foreground">An editor can run “Fix all”.</p>
-              )}
-            </section>
+            <ReadyToFix
+              preflight={preflight}
+              host={scan.host}
+              sourceId={sourceId}
+              onSource={setSourceId}
+              branches={branches}
+              branch={branch}
+              onBranch={setBranch}
+              choosing={choosing}
+              onChoose={() => setChoosing((v) => !v)}
+              starting={starting}
+              onStart={() => void start()}
+            />
           )}
           {startError && (
             <p

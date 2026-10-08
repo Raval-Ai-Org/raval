@@ -5,6 +5,33 @@ import type { StudioControls } from "./jobs";
 const controls: StudioControls = { platforms: ["instagram"] };
 
 describe("Studio output quality gate", () => {
+  it("requires the requested platforms, not just the requested number of variants", () => {
+    const issue = studioOutputQualityIssue(
+      "social",
+      {
+        variants: [
+          {
+            platform: "instagram",
+            title: "A",
+            body: "Useful Instagram copy for readers.",
+            hashtags: [],
+            chars: 34,
+          },
+          {
+            platform: "twitter",
+            title: "B",
+            body: "Useful Twitter copy for readers.",
+            hashtags: [],
+            chars: 32,
+          },
+        ],
+      },
+      { platforms: ["instagram", "linkedin"] },
+      2,
+    );
+    expect(issue).toContain("missing");
+  });
+
   it("rejects an incomplete carousel before it is saved", () => {
     const issue = studioOutputQualityIssue(
       "carousel",

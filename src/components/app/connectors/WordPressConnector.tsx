@@ -25,6 +25,7 @@ import {
 } from "./ConnectionCard";
 import { DisconnectDialog } from "./DisconnectDialog";
 import { IntegrationDetails } from "./IntegrationDetails";
+import { useConnectWindow } from "./useConnectWindow";
 import { SiteList } from "./WebflowConnector";
 
 export type WordPressConnection = Awaited<ReturnType<typeof getWordPressConnection>>;
@@ -374,21 +375,31 @@ export function WordPressConnector({ workspaceId }: { workspaceId: string }) {
     }
   };
 
+  // WordPress.com signs in in its own window; this hears when it closes.
+  const wordpressWindow = useConnectWindow("wordpress", workspaceId, (result) => {
+    if (result?.status === "connected") toast.success("WordPress connected");
+    void load();
+  });
   const connectOAuth = async () => {
     setBusy(true);
     try {
-      const result = await startWordPressOAuth({
-        data: {
-          workspaceId,
-          returnOrigin: window.location.origin,
-          returnPath: `${window.location.pathname}${window.location.search}`,
-        },
-      });
-      window.location.assign(result.url);
+      await wordpressWindow.connect(
+        async () =>
+          (
+            await startWordPressOAuth({
+              data: {
+                workspaceId,
+                returnOrigin: window.location.origin,
+                returnPath: `${window.location.pathname}${window.location.search}`,
+              },
+            })
+          ).url,
+      );
     } catch (e) {
       toast.error(
         e instanceof Error ? e.message : "WordPress.com could not be reached. Please try again.",
       );
+    } finally {
       setBusy(false);
     }
   };

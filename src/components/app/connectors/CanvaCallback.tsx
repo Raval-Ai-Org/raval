@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/button";
 import { completeCanvaConnect } from "@/lib/canva.functions";
 import { emitAppEvent } from "@/lib/app-events";
 import { safeCanvaReturn } from "@/lib/canva-return";
+import {
+  announceConnectResult,
+  finishConnectWindow,
+  isConnectWindow,
+} from "@/lib/connectors/connect-window";
 import { ServerFnError } from "@/lib/rpc-client";
 
 export function CanvaCallback() {
@@ -12,6 +17,11 @@ export function CanvaCallback() {
   const started = useRef(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [detail, setDetail] = useState("");
+  const [inWindow, setInWindow] = useState(false);
+  useEffect(() => setInWindow(isConnectWindow()), []);
+  useEffect(() => {
+    if (failure && inWindow) announceConnectResult({ provider: "canva", status: "error" });
+  }, [failure, inWindow]);
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -40,6 +50,14 @@ export function CanvaCallback() {
     void completeCanvaConnect({ data: { state, code } })
       .then((result) => {
         emitAppEvent("connections:changed");
+        if (
+          finishConnectWindow({
+            provider: "canva",
+            status: "connected",
+            workspaceId: result.workspaceId,
+          })
+        )
+          return;
         const target = new URL(
           safeCanvaReturn(result.workspaceId, result.returnPath),
           window.location.origin,
@@ -73,8 +91,11 @@ export function CanvaCallback() {
                 {detail}
               </p>
             )}
-            <Button className="mt-5" onClick={() => window.location.replace("/projects")}>
-              Back to Mellox
+            <Button
+              className="mt-5"
+              onClick={() => (inWindow ? window.close() : window.location.replace("/projects"))}
+            >
+              {inWindow ? "Close" : "Back to Mellox"}
             </Button>
           </>
         ) : (

@@ -536,12 +536,15 @@ export function GitHubConnector({ workspaceId }: { workspaceId: string }) {
     void load();
   }, [load]);
 
-  const { installing, install } = useGithubInstall(workspaceId);
   const [justConnected, setJustConnected] = useState<string[] | null>(null);
+  // The sign-in window closed: re-read, and go straight to choosing a repository.
+  const { installing, install } = useGithubInstall(workspaceId, undefined, (result) => {
+    if (result?.status === "connected") setJustConnected(result.accounts ?? []);
+    void load();
+  });
   const [refreshing, setRefreshing] = useState(false);
 
-  // Back from GitHub: the callback page saved and verified the connection. The
-  // overview above is re-read from the server; go straight to choosing a repository.
+  // Back from GitHub in this tab (the browser blocked the sign-in window).
   useEffect(() => {
     const notice = takeGithubConnected(workspaceId);
     if (notice) setJustConnected(notice.accounts);

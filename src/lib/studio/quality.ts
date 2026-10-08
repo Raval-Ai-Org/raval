@@ -13,7 +13,13 @@ export function studioOutputQualityIssue(
   platformCount: number,
 ): string | null {
   if (["social", "image", "video", "carousel"].includes(type)) {
-    if ((output.variants?.length ?? 0) !== platformCount)
+    if (
+      (output.variants?.length ?? 0) !== platformCount ||
+      (controls.platforms.length === platformCount &&
+        controls.platforms.some(
+          (platform) => !output.variants?.some((v) => v.platform === platform),
+        ))
+    )
       return "A requested platform caption is missing.";
     if (output.variants?.some((variant) => variant.body.trim().length < 20))
       return "A platform caption has no useful message.";

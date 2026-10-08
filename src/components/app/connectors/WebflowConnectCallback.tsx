@@ -6,6 +6,11 @@ import { CheckCircle, Globe, Loader2 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { completeWebflowConnect, selectWebflowSite } from "@/lib/webflow.functions";
+import {
+  announceConnectResult,
+  finishConnectWindow,
+  isConnectWindow,
+} from "@/lib/connectors/connect-window";
 import { inWorkspace, workspacePath } from "@/lib/workspace/paths";
 
 type Result = Awaited<ReturnType<typeof completeWebflowConnect>>;
@@ -15,6 +20,26 @@ export function WebflowConnectCallback() {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [inWindow, setInWindow] = useState(false);
+  useEffect(() => setInWindow(isConnectWindow()), []);
+  useEffect(() => {
+    if (error && inWindow) announceConnectResult({ provider: "webflow", status: "error" });
+  }, [error, inWindow]);
+
+  // In a sign-in window: tell the page that opened it and close. Else go back.
+  const leave = () => {
+    if (
+      result &&
+      finishConnectWindow({
+        provider: "webflow",
+        status: "connected",
+        workspaceId: result.workspaceId,
+      })
+    )
+      return;
+    if (inWindow) window.close();
+    else window.location.replace(back);
+  };
 
   useEffect(() => {
     if (started.current) return;
@@ -49,7 +74,7 @@ export function WebflowConnectCallback() {
       await selectWebflowSite({
         data: { workspaceId: result.workspaceId, connectionId: result.connectionId, siteId },
       });
-      window.location.replace(back);
+      leave();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "That Webflow site could not be linked.");
       setBusy(null);
@@ -94,9 +119,7 @@ export function WebflowConnectCallback() {
         {error && (
           <div className="mt-6 space-y-4">
             <p className="text-sm text-destructive">{error}</p>
-            <Button asChild>
-              <a href={back}>Return to Mellox</a>
-            </Button>
+            <Button onClick={leave}>{inWindow ? "Close" : "Return to Mellox"}</Button>
           </div>
         )}
         {result && (
@@ -136,7 +159,7 @@ export function WebflowConnectCallback() {
                 reconnecting.
               </p>
             )}
-            <Button variant="ghost" onClick={() => window.location.replace(back)}>
+            <Button variant="ghost" onClick={leave}>
               Skip for now
             </Button>
           </div>

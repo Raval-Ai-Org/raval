@@ -4,12 +4,14 @@
 //   Webflow  the CMS collection that looks like a blog, and which of its fields
 //            take the title, slug, body, summary and meta description
 //   GitHub   the folder existing posts live in, their format, and the
-//            frontmatter keys they use, so a new post matches its neighbours
+//            frontmatter keys they use, so a new post matches its neighbours.
+//            A blog Mellox added itself (blog-scaffold.ts) stores each post as
+//            one JSON file: the rendered article plus its structured data.
 //
 // Nothing here guesses a field or folder that isn't there: no match is null,
 // and the UI asks the person to set a blog up instead.
 
-import type { PublishableArticle } from "./render";
+import { articleBodyHtml, articleJsonLd, type PublishableArticle } from "./render";
 
 /* ───────────────────────── Webflow ───────────────────────── */
 
@@ -105,10 +107,12 @@ export function webflowItemUrl(origin: string, collectionSlug: string, itemSlug:
 
 /* ───────────────────────── GitHub ───────────────────────── */
 
-export type PostFormat = "md" | "mdx";
+export type MarkdownFormat = "md" | "mdx";
+/** `data_module`: one JSON file per post, read by the blog Mellox added. */
+export type PostFormat = MarkdownFormat | "data_module";
 export type GithubBlogLayout = {
   contentDir: string;
-  format: PostFormat;
+  format: MarkdownFormat;
   routePrefix: string;
   examples: string[];
 };
@@ -186,5 +190,44 @@ export function githubPostFile(
   return {
     path: `${layout.contentDir}/${a.slug}.${layout.format}`,
     content: `---\n${fm.join("\n")}\n---\n\n${body.join("\n\n")}\n`,
+  };
+}
+
+/** A post for the blog Mellox added: one JSON file the blog's pages read. */
+export function githubDataPostFile(
+  a: PublishableArticle,
+  args: {
+    contentDir: string;
+    url: string;
+    origin: string;
+    blogUrl: string | null;
+    brandName: string;
+    date: string;
+  },
+): { path: string; content: string } {
+  const post = {
+    slug: a.slug,
+    title: a.title,
+    description: a.metaDescription,
+    dek: a.dek,
+    date: args.date,
+    category: a.category,
+    tags: a.tags,
+    html: articleBodyHtml(a),
+    faq: a.faq,
+    jsonLd: articleJsonLd({
+      article: a,
+      url: args.url,
+      origin: args.origin,
+      blogUrl: args.blogUrl,
+      brandName: args.brandName,
+      authorName: null,
+      datePublished: args.date,
+    }),
+  };
+  return {
+    path: `${args.contentDir}/${a.slug}.json`,
+    content: `${JSON.stringify(post, null, 2)}
+`,
   };
 }

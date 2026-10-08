@@ -870,6 +870,28 @@ export function finalizeVariants(
   return { variants, missing };
 }
 
+/** Keep a usable post when the model omits a requested platform or caption. */
+export function completeVariants(
+  platforms: PlatformId[],
+  variants: SocialVariant[],
+  brief: string,
+): SocialVariant[] {
+  const existing = new Map(variants.map((variant) => [variant.platform, variant]));
+  const source = variants.find((variant) => variant.body.trim().length >= 20);
+  const topic = brief.replace(/\s+/g, " ").trim().slice(0, 180);
+  const fallback =
+    topic.length >= 20 ? topic : `${topic || "This topic"}. What would you like to know?`;
+  return platforms.map((platform) => {
+    const variant = existing.get(platform);
+    if (variant && variant.body.trim().length >= 20) return variant;
+    return finalizeVariant(platform, {
+      title: variant?.title || source?.title,
+      body: source?.body || fallback,
+      hashtags: source?.hashtags ?? [],
+    });
+  });
+}
+
 export function scriptToMarkdown(script: {
   hook: string;
   beats: { time: string; visual: string; voiceover: string; onScreen?: string }[];

@@ -3,18 +3,17 @@
 // FindingDetail — one AI Visibility finding end to end: what's wrong, the
 // evidence, affected pages, the recommended fix, and the fix workflow.
 //
-//   GitHub pull request   connect → repository → branch → affected files →
-//                         proposed change + diff + checks → approval →
+//   GitHub pull request   connect → repository → check (each step moves on by
+//                         itself) → proposed change + diff + checks → approval →
 //                         branch + PR → PR status → verification rescan
 //   manual                recipe → "Verify fix" rescan
 //
 // Every state shown here comes from the server (src/server/geo/fixes). A
 // finding is shown as resolved only after a verification scan confirms it.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/lib/toast";
 import {
-  AlertTriangle,
   ArrowLeft,
   CheckCircle,
   ExternalLink,
@@ -29,7 +28,8 @@ import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import { emitAppEvent } from "@/lib/app-events";
-import { updateSource } from "@/lib/connectors.functions";
+import { updateSource, verifySourceOwnership } from "@/lib/connectors.functions";
+import { hostsMatch, ownershipIsCurrent } from "@/lib/connectors/ownership";
 import { useGithubInstall } from "../connectors/useGithubInstall";
 import type { SourceView } from "@/lib/connectors/types";
 import {
@@ -238,9 +238,173 @@ export function VerificationCard({ v }: { v: VerificationView }) {
   );
 }
 
-/* ───────────────────────── GitHub connect (contextual) ───────────────────────── */
+/* ───────────────────────── GitHub setup (shared with "Fix all") ───────────────────────── */
 
-/* ───────────────────────── GitHub setup step (shared with "Fix all") ───────────────────────── */
+// Getting a GitHub site ready is four short steps. Each one moves on by itself
+// as soon as it can: the sign-in window closing re-reads the state, choosing a
+// repository starts the check, and a passed check lands on "Fix".
+const SETUP_STEPS = ["Connect", "Repository", "Check", "Fix"] as const;
+
+export function setupStepOf(requirement: FixSetup["requirement"]): number {
+  switch (requirement) {
+    case "connect":
+    case "reconnect":
+    case "not_configured":
+      return 0;
+    case "select_repository":
+    case "access_lost":
+    case "unsupported":
+      return 1;
+    case "verify_ownership":
+    case "ownership_mismatch":
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+export function SetupSteps({ at }: { at: number }) {
+  return (
+    <ol className="flex gap-1.5" aria-label="Setup progress">
+      {SETUP_STEPS.map((label, i) => (
+        <li
+          key={label}
+          aria-current={i === at ? "step" : undefined}
+          className="flex min-w-0 flex-1 flex-col gap-1.5"
+        >
+          <span
+            className={cn(
+              "h-1 rounded-full transition-colors duration-500",
+              i < at ? "bg-primary" : i === at ? "ds-sheen bg-primary/70" : "bg-border/70",
+            )}
+          />
+          <span
+            className={cn(
+              "flex items-center gap-1 truncate text-[11px]",
+              i <= at ? "font-medium text-foreground" : "text-muted-foreground",
+            )}
+          >
+            {i < at && <CheckCircle className="ds-pop h-3 w-3 shrink-0 text-primary" />}
+            {label}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function SetupRow({
+  icon,
+  title,
+  hint,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  hint?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="ds-enter flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card/60 p-3">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-secondary">
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-medium">{title}</p>
+        {hint && <p className="text-[12px] text-muted-foreground">{hint}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Checks by itself that the repository builds this website; shows the evidence only if it can't prove it. */
+function OwnershipStep({
+  workspaceId,
+  scan,
+  setup,
+  onReload,
+}: {
+  workspaceId: string;
+  scan: Pick<GeoScanView, "host" | "origin">;
+  setup: FixSetup;
+  onReload: () => void;
+}) {
+  const source = setup.source;
+  const [checking, setChecking] = useState(false);
+  const tried = useRef<string | null>(null);
+  const o = source?.ownership;
+  // Never checked for this website, or a passed check that has gone stale.
+  const due =
+    !!o &&
+    (!o.checkedAt ||
+      !hostsMatch(o.siteHost, scan.host) ||
+      (o.status === "verified" &&
+        !ownershipIsCurrent({
+          status: o.status,
+          checkedHost: o.siteHost,
+          checkedAt: o.checkedAt,
+          siteHost: scan.host,
+        })));
+  const sourceId = source?.id;
+  const sourceName = source?.fullName;
+
+  useEffect(() => {
+    if (!sourceId || !due || !setup.canPropose || setup.requirement !== "verify_ownership") return;
+    const key = `${sourceId}:${scan.host}`;
+    if (tried.current === key) return;
+    tried.current = key;
+    setChecking(true);
+    verifySourceOwnership({ data: { workspaceId, sourceId, siteHost: scan.host } })
+      .then((updated) => {
+        if (updated.ownership.status === "verified")
+          toast.success(`${sourceName} builds ${scan.host}`);
+        onReload();
+      })
+      .catch(() => undefined)
+      .finally(() => setChecking(false));
+  }, [
+    workspaceId,
+    sourceId,
+    sourceName,
+    due,
+    scan.host,
+    setup.canPropose,
+    setup.requirement,
+    onReload,
+  ]);
+
+  if (!source) return <p className="text-[12.5px]">{setup.reason}</p>;
+  if (checking)
+    return (
+      <SetupRow
+        icon={<Spinner className="h-4 w-4 animate-spin" />}
+        title={`Checking that ${source.fullName} builds ${scan.host}`}
+        hint="A few seconds."
+      />
+    );
+  return (
+    <div className="ds-enter space-y-2">
+      <RepoOwnershipCard
+        workspaceId={workspaceId}
+        source={source}
+        siteHost={scan.host}
+        canVerify={setup.canPropose}
+        canAttest={setup.canManageConnections}
+        onChange={() => onReload()}
+      />
+      {setup.requirement === "ownership_mismatch" && setup.canManageConnections && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => emitAppEvent("open:settings", { section: "website" })}
+        >
+          Use a different repository
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export function SetupRequirement({
   workspaceId,
@@ -253,50 +417,43 @@ export function SetupRequirement({
   setup: FixSetup;
   onReload: () => void;
 }) {
-  // GitHub returns to AI Visibility on this finding's rule.
+  // Only used if the browser blocks the sign-in window and GitHub opens in this tab.
   const returnRule = "ruleId" in setup && typeof setup.ruleId === "string" ? setup.ruleId : null;
   const { installing, install } = useGithubInstall(
     workspaceId,
     `/app?geo=findings${returnRule ? `&rule=${encodeURIComponent(returnRule)}` : ""}`,
+    onReload,
   );
-  const [linking, setLinking] = useState(false);
+  const [linking, setLinking] = useState<string | null>(null);
   const a = setup;
 
   const linkSource = async (source: SourceView) => {
-    setLinking(true);
+    setLinking(source.id);
     try {
       await updateSource({ data: { workspaceId, sourceId: source.id, siteUrl: scan.origin } });
-      toast.success(`${source.fullName} linked to ${scan.host}`);
       onReload();
     } catch (e) {
-      toast.error(errMsg(e, "Couldn't link the repository"));
+      toast.error(errMsg(e, "Couldn't use that repository"));
     } finally {
-      setLinking(false);
+      setLinking(null);
     }
   };
 
   switch (a.requirement) {
     case "not_configured":
-      return (
-        <p className="text-[12.5px] text-muted-foreground">{a.reason} Follow the manual steps.</p>
-      );
+      return <p className="text-[12.5px] text-muted-foreground">{a.reason}</p>;
     case "connect":
     case "reconnect":
       return (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-gradient-to-b from-background/80 to-muted/20 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05),0_8px_24px_-16px_rgb(0_0_0/0.5)] transition-colors duration-200 hover:border-border p-3 animate-in fade-in slide-in-from-bottom-1 duration-300">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-secondary">
-            <Github className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-medium">
-              {a.requirement === "connect" ? "Connect GitHub" : "Reconnect GitHub"}
-            </p>
-            <p className="text-[12px] text-muted-foreground">
-              {installing
-                ? "Opening GitHub…"
-                : "Mellox opens reviewed pull requests — never pushes."}
-            </p>
-          </div>
+        <SetupRow
+          icon={<Github className="h-4 w-4" />}
+          title={a.requirement === "connect" ? "Connect GitHub" : "Reconnect GitHub"}
+          hint={
+            installing
+              ? "Finish in the GitHub window. This page updates by itself."
+              : "Mellox only opens pull requests. You merge them."
+          }
+        >
           {a.canManageConnections ? (
             <Button size="sm" loading={installing} onClick={() => void install()}>
               {a.requirement === "connect" ? "Connect" : "Reconnect"}
@@ -304,40 +461,34 @@ export function SetupRequirement({
           ) : (
             <span className="text-[12px] text-muted-foreground">Ask an admin</span>
           )}
-        </div>
+        </SetupRow>
       );
     case "select_repository": {
-      const unlinked = a.sources.filter((s) => s.status === "active");
+      const linked = a.sources.filter((s) => s.status === "active");
       return (
-        <div className="space-y-3">
-          <p className="text-[12.5px]">{a.reason}</p>
+        <div className="ds-enter space-y-2.5">
+          <p className="text-[13px] font-medium">Which repository builds {scan.host}?</p>
           {!a.canManageConnections ? (
-            <p className="text-[12px] text-muted-foreground">
-              Ask a workspace admin to link the repository in Settings → Connections.
-            </p>
+            <p className="text-[12px] text-muted-foreground">Ask an admin to choose it.</p>
           ) : (
             <>
-              {unlinked.length > 0 && (
+              {linked.length > 0 && (
                 <ul className="space-y-1.5">
-                  {unlinked.map((s) => (
+                  {linked.map((s) => (
                     <li
                       key={s.id}
-                      className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 px-3 py-2 text-[12px]"
+                      className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2 text-[12.5px]"
                     >
-                      <span className="font-medium">{s.fullName}</span>
-                      <span className="text-muted-foreground">
-                        {s.siteUrl
-                          ? `linked to ${s.siteUrl.replace(/^https?:\/\//, "")}`
-                          : "not linked to a website"}
-                      </span>
+                      <Github className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate font-medium">{s.fullName}</span>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="ml-auto"
-                        loading={linking}
+                        loading={linking === s.id}
+                        disabled={linking !== null}
                         onClick={() => void linkSource(s)}
                       >
-                        Use for {scan.host}
+                        Use this
                       </Button>
                     </li>
                   ))}
@@ -359,33 +510,8 @@ export function SetupRequirement({
       );
     }
     case "verify_ownership":
-    case "ownership_mismatch": {
-      const source = a.source;
-      return (
-        <div className="space-y-2">
-          <p className="text-[12.5px]">{a.reason}</p>
-          {source && (
-            <RepoOwnershipCard
-              workspaceId={workspaceId}
-              source={source}
-              siteHost={scan.host}
-              canVerify={a.canPropose}
-              canAttest={a.canManageConnections}
-              onChange={() => onReload()}
-            />
-          )}
-          {a.requirement === "ownership_mismatch" && a.canManageConnections && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => emitAppEvent("open:settings", { section: "website" })}
-            >
-              Link a different repository
-            </Button>
-          )}
-        </div>
-      );
-    }
+    case "ownership_mismatch":
+      return <OwnershipStep workspaceId={workspaceId} scan={scan} setup={a} onReload={onReload} />;
     case "access_lost":
     case "unsupported":
       return (
@@ -397,7 +523,7 @@ export function SetupRequirement({
               variant="outline"
               onClick={() => emitAppEvent("open:settings", { section: "website" })}
             >
-              Open Settings → Connections
+              Open Connections
             </Button>
           )}
         </div>
@@ -413,37 +539,6 @@ export function SetupRequirement({
 function needsSite(a: FixAvailability): boolean {
   return (
     !a.site && !a.proposal && ["connect", "reconnect", "not_configured"].includes(a.requirement)
-  );
-}
-
-/* ───────────────────────── Repository setup ───────────────────────── */
-
-// Changes are made only by the GEO Engineer (AgentPanel above): it reads the
-// repository, plans, patches, and opens the pull request you approve. This
-// section gets the repository ready for it — connect, link, verify ownership.
-function RepositorySetup({
-  workspaceId,
-  scan,
-  availability,
-  onReload,
-}: {
-  workspaceId: string;
-  scan: GeoScanView;
-  availability: FixAvailability;
-  onReload: () => void;
-}) {
-  const a = availability;
-  if (a.requirement !== "ready") {
-    return <SetupRequirement workspaceId={workspaceId} scan={scan} setup={a} onReload={onReload} />;
-  }
-  return (
-    <p className="flex flex-wrap items-center gap-1.5 text-[12.5px]">
-      <CheckCircle className="h-3.5 w-3.5 text-success" />
-      <span>
-        <span className="font-medium">{a.source?.fullName}</span> is linked to {scan.host} and
-        verified to build it. The GEO Engineer can open a pull request on it.
-      </span>
-    </p>
   );
 }
 
@@ -785,6 +880,31 @@ export function FindingDetail({
             notReadyReason={
               availability && availability.requirement !== "ready" ? availability.reason : null
             }
+            // What is still missing is set up right here, next to the button it unlocks.
+            setup={
+              error ? (
+                <ErrorState size="sm" detail={error} onRetry={reload} />
+              ) : !availability ? null : needsSite(availability) ? (
+                <SiteConnectSection
+                  workspaceId={workspaceId}
+                  scanId={scan.id}
+                  returnPath={`/app?geo=findings&rule=${encodeURIComponent(finding.ruleId)}`}
+                  onConnected={reload}
+                />
+              ) : availability.method === "github_pr" ? (
+                <div className="space-y-3">
+                  <SetupSteps at={setupStepOf(availability.requirement)} />
+                  <SetupRequirement
+                    workspaceId={workspaceId}
+                    scan={scan}
+                    setup={availability}
+                    onReload={reload}
+                  />
+                </div>
+              ) : availability.method === "cms_apply" ? (
+                <p className="text-[12.5px]">{availability.reason}</p>
+              ) : null
+            }
             manualSteps={recipe?.steps ?? (rule ? [rule.recommendation] : [])}
             onChanged={() => {
               reload();
@@ -794,84 +914,19 @@ export function FindingDetail({
         )}
       </Section>
 
-      <Section
-        title={
-          availability && needsSite(availability)
-            ? "Connect your site"
-            : availability?.site && availability.site.provider !== "github"
-              ? "Your site & manual fix"
-              : "Repository setup & manual fix"
-        }
-      >
-        {error ? (
-          <ErrorState size="sm" detail={error} onRetry={reload} />
-        ) : !availability ? (
-          <Skeleton className="h-24 w-full rounded-lg" />
-        ) : (
+      {(recipe || (availability?.site && availability.site.provider !== "github")) && (
+        <Section title="Fix it yourself">
           <div className="space-y-3">
-            {needsSite(availability) ? (
-              <SiteConnectSection
-                workspaceId={workspaceId}
-                scanId={scan.id}
-                returnPath={`/app?geo=findings&rule=${encodeURIComponent(finding.ruleId)}`}
+            {availability?.site && availability.site.provider !== "github" && (
+              <SiteConnectionCard
+                site={availability.site}
+                canManage={availability.canManageConnections}
               />
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Chip tone={availability.method === "manual" ? "muted" : "primary"}>
-                    {availability.method === "github_pr" ? (
-                      <>
-                        <Github className="h-3 w-3" /> Pull request via GitHub
-                      </>
-                    ) : availability.method === "cms_apply" ? (
-                      `Direct change on ${availability.provider === "webflow" ? "Webflow" : "WordPress"}`
-                    ) : (
-                      "Manual fix"
-                    )}
-                  </Chip>
-                  {availability.method === "cms_apply" && availability.requirement !== "ready" && (
-                    <Chip tone="warning">
-                      <AlertTriangle className="h-3 w-3" /> Setup needed
-                    </Chip>
-                  )}
-                  {availability.method === "github_pr" &&
-                    availability.requirement !== "ready" &&
-                    !availability.proposal && (
-                      <Chip tone="warning">
-                        <AlertTriangle className="h-3 w-3" /> Setup needed
-                      </Chip>
-                    )}
-                </div>
-                {availability.site && availability.site.provider !== "github" && (
-                  <SiteConnectionCard
-                    site={availability.site}
-                    canManage={availability.canManageConnections}
-                  />
-                )}
-                {availability.method === "cms_apply" && availability.requirement !== "ready" && (
-                  <p className="text-[12.5px]">{availability.reason}</p>
-                )}
-                {availability.method === "github_pr" && (
-                  <RepositorySetup
-                    workspaceId={workspaceId}
-                    scan={scan}
-                    availability={availability}
-                    onReload={reload}
-                  />
-                )}
-              </>
             )}
-            {recipe && (
-              <div>
-                <p className="mb-1 text-[12px] font-semibold">
-                  {availability.method === "manual" ? "How to fix it" : "Or fix it manually"}
-                </p>
-                <FixDrawer recipe={recipe} safety={finding.safety} />
-              </div>
-            )}
+            {recipe && <FixDrawer recipe={recipe} safety={finding.safety} />}
           </div>
-        )}
-      </Section>
+        </Section>
+      )}
 
       <Section title="Verification">
         <p className="text-[12px] text-muted-foreground">
