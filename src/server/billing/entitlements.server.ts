@@ -21,6 +21,7 @@ import {
 import { billingSchemaReady } from "./schema.server";
 import { globalBillingMode } from "./mode.server";
 import { HttpError } from "@/server/http-error";
+import { accountBillableSeatCount } from "./seat-count.server";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 type Role = "owner" | "admin" | "editor" | "viewer";
@@ -234,7 +235,7 @@ export async function getEntitlements(args: {
   }
   const workspace = args.workspaceId ? await accountForWorkspace(args.workspaceId) : null;
   const account = workspace?.account ?? (await accountForUser(args.userId));
-  const [items, spaces, wallet, expiring, seatCount] = await Promise.all([
+  const [items, spaces, wallet, expiring] = await Promise.all([
     admin
       .from("billing_subscription_items")
       .select("catalog_key,quantity")
@@ -253,11 +254,16 @@ export async function getEntitlements(args: {
       .gt("remaining", 0)
       .gte("expires_at", new Date().toISOString())
       .order("expires_at", { ascending: true }),
-    admin.rpc("account_billable_seat_count" as never, { p_account: account.id } as never),
   ]);
-  if (items.error || spaces.error || wallet.error || expiring.error || seatCount.error)
+  if (items.error || spaces.error || wallet.error || expiring.error)
     throw new Error("Could not load billing entitlements.");
   const workspaceIds = (spaces.data ?? []).map((row) => String(row.id));
+  const seatCount = await accountBillableSeatCount(
+    admin,
+    account.id,
+    account.owner_user_id,
+    workspaceIds,
+  );
   const monthStart = new Date();
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);
@@ -339,7 +345,7 @@ export async function getEntitlements(args: {
     addons: (items.data ?? []) as Addon[],
     usage: {
       brands: workspaceIds.length,
-      seats: Number(seatCount.data ?? 0),
+      seats: seatCount,
       postsThisMonth: (posts.data ?? []).reduce(
         (sum, row) => sum + Math.max(1, Number(row.targets ?? 1)),
         0,
