@@ -5,7 +5,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: [".next", ".next-*", ".test-tmp", "out", "dist", "next-env.d.ts"] },
+  { ignores: [".next", ".next-*", ".test-tmp", "mellox/**", "out", "dist", "next-env.d.ts"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -94,4 +94,9 @@ export default tseslint.config(
     },
   },
   eslintPluginPrettier,
+  {
+    files: ["src/marketing/**/*.{ts,tsx}", "src/app/(marketing)/**/*.{ts,tsx}", "src/mdx-components.tsx"],
+    // The imported marketing site keeps its upstream formatting.
+    rules: { "prettier/prettier": "off" },
+  },
 );

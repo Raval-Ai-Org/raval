@@ -60,6 +60,33 @@ export function carouselSlidePrompt(
     .join("\n\n");
 }
 
+/**
+ * The one background picture of a connected carousel. It carries no words (the
+ * slides' text is drawn over it) and is repeated mirrored across the slides,
+ * so it must have no single subject and no edge that stands out.
+ */
+export function carouselBackdropPrompt(
+  args: Omit<Common, "index"> & { slides: CarouselSlide[]; title?: string },
+): string {
+  const theme = args.spec?.theme;
+  return [
+    `Create a wide 16:9 background artwork for ${args.brandName}. It will sit behind text across a whole social media carousel, so it is atmosphere, not an illustration of one thing.`,
+    "Act as a senior art director. One continuous abstract or environmental scene that flows evenly from the left edge to the right edge: soft light, depth, texture, gentle movement. No single focal subject, no centre of attention, nothing important near any edge. Even density and brightness across the whole width.",
+    theme
+      ? `Colour: build the image in tones close to ${theme.bg}, with restrained touches of ${theme.accent}. Low contrast and calm, so ${theme.ink} text stays easy to read on top of it.`
+      : "Low contrast and calm, so text stays easy to read on top of it.",
+    `What the carousel is about, for mood only: ${[args.title, ...args.slides.map((s) => s.heading)].filter(Boolean).join(" | ").slice(0, 600)}`,
+    args.style ? `Approved style: ${args.style.block.slice(0, 1600)}` : "",
+    args.style?.mood ? `Mood and finish: ${args.style.mood}` : "",
+    args.brandContext ? `Verified brand context: ${args.brandContext.slice(0, 800)}` : "",
+    args.revision,
+    args.novelty,
+    "Absolutely no text, letters, numbers, logos, watermarks, people, faces, hands, products, frames, borders or panels. Avoid generic AI marketing imagery, plastic 3D objects and stock-photo clichés.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function storyFramePrompt(
   args: Common & { frame: StoryFrame; frames: StoryFrame[] },
 ): string {

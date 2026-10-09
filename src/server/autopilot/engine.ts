@@ -20,6 +20,7 @@
 import "server-only";
 import {
   PUBLISHABLE_TYPES,
+  StrategySchema,
   WEEKLY_AUTOMATIONS,
   type ActionRow,
   type ActionStatus,
@@ -47,15 +48,20 @@ import {
   budgetVerdict,
   cycleSlots,
   cycleStart,
+  effectiveSlot,
+  freeSlots,
   generateAt,
   isPastApproval,
   planVerdict,
   publishDecision,
   scheduleTime,
   weekOf,
+  type CalendarPost,
   type CycleSlot,
   type PlanProposal,
 } from "@/lib/autopilot/policy";
+import { shapeWeek, type SlotShape } from "@/lib/autopilot/shape";
+import { EMPTY_BRAINS, groundPicks, type BrainLists } from "@/lib/autopilot/brief";
 import { pickRepurpose, repurposeBrief } from "@/lib/autopilot/repurpose";
 import { canTransition } from "@/lib/autopilot/state";
 import { STORY_MEASURE_AFTER_MS, readStorySettings, type HourScore } from "@/lib/stories/schedule";
@@ -233,6 +239,8 @@ export type JobLite = {
   contentItemIds: string[];
   warnings: number;
   error: string | null;
+  /** The maker itself was unavailable (not the piece's fault): worth another try. */
+  retryable?: boolean;
   createdAt: string;
 };
 
@@ -243,6 +251,12 @@ export type PlanInput = {
   recentTitles: string[];
   /** What earlier results showed, in plain sentences. */
   learnings: string[];
+  /** What each post is for and which theme it sits under, by slot number. */
+  shape: Map<number, SlotShape>;
+  /** Posts a person already put on the calendar this week (never repeated). */
+  calendar: CalendarPost[];
+  /** What the brains hold, as numbered lists a proposal may point at. */
+  brains: BrainLists;
 };
 
 export interface AutopilotPorts {
@@ -262,7 +276,7 @@ export interface AutopilotPorts {
     tag(
       workspaceId: string,
       id: string,
-      tag: { actionId: string; date: string; time: string },
+      tag: { actionId: string; date: string; time: string; pillar?: string | null },
     ): Promise<void>;
     /** pending → approved, compare-and-set. Used only by Full mode. */
     approve(workspaceId: string, id: string): Promise<boolean>;
@@ -300,6 +314,20 @@ export interface AutopilotPorts {
     learnings(workspaceId: string): Promise<string[]>;
     /** Local hours this brand's own Stories reached the most people. */
     storyHours(workspaceId: string, timeZone: string): Promise<HourScore[]>;
+    /**
+     * Posts a person put on the content calendar between two dates (in the
+     * program's time zone). Autopilot's own pieces are left out.
+     */
+    calendar(
+      workspaceId: string,
+      range: { from: string; to: string; timeZone: string },
+    ): Promise<CalendarPost[]>;
+    /**
+     * What Audience, Competitors and Market hold for this workspace, and the
+     * formats working now on these platforms. Stored rows only: nothing is
+     * searched or generated to answer this.
+     */
+    brains(workspaceId: string, platforms: string[]): Promise<BrainLists>;
     propose(input: PlanInput): Promise<PlanProposal[]>;
   };
 
@@ -341,6 +369,8 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 const LEASE_SECONDS = 180;
 const MAX_ERRORS = 5;
+/** How long to wait before trying again when the maker was unavailable. */
+const RETRY_AFTER_MS = [60 * MIN, 6 * HOUR];
 /** A job that has not finished after this long is treated as failed. */
 const GENERATION_TIMEOUT_MS = 25 * MIN;
 
@@ -583,28 +613,57 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
     stories.enabled && stories.smartTiming
       ? await ports.plan.storyHours(program.workspace_id, program.timezone).catch(() => [])
       : [];
-  const slots = cycleSlots(
+  const wanted = cycleSlots(
     stories.enabled ? program : { ...program, stories: {} },
     cycle,
     now,
     undefined,
     storyHours,
   );
+  // The calendar is shared: a day and channel a person already filled is theirs.
+  const calendar = wanted.length
+    ? await ports.plan
+        .calendar(program.workspace_id, {
+          from: start,
+          to: addDaysYmd(start, 6),
+          timeZone: program.timezone,
+        })
+        .catch(() => [] as CalendarPost[])
+    : [];
+  const { slots, covered } = freeSlots(wanted, calendar);
+  const strategy = StrategySchema.safeParse(program.strategy);
+  const shape = shapeWeek(slots, {
+    goal: program.goal,
+    pillars: strategy.success ? strategy.data.pillars.map((p) => p.title) : [],
+    cycle,
+  });
   let planned = 0;
   let droppedCount = 0;
+  let brains: BrainLists = EMPTY_BRAINS;
   if (slots.length) {
     const opportunities = await store.listOpportunities(program.workspace_id, {
       statuses: ["new"],
       limit: 5,
     });
-    const recentTitles = await ports.plan.recentTitles(program.workspace_id);
+    const recentTitles = [
+      ...(await ports.plan.recentTitles(program.workspace_id)),
+      ...calendar.map((post) => post.title),
+    ].filter(Boolean);
     learnings = await ports.plan.learnings(program.workspace_id).catch(() => []);
+    brains = await ports.plan
+      .brains(program.workspace_id, [
+        ...new Set(slots.flatMap((s) => s.platforms ?? (s.platform ? [s.platform] : []))),
+      ])
+      .catch(() => EMPTY_BRAINS);
     const proposals = await ports.plan.propose({
       program,
       slots,
       opportunities,
       recentTitles,
       learnings,
+      shape,
+      calendar,
+      brains,
     });
     const usage = await store.usage(program.id, cycle);
     const verdict = planVerdict({
@@ -617,7 +676,7 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
     });
     droppedCount = verdict.dropped.length;
 
-    const rows: NewAction[] = verdict.items.map((item) => ({
+    const rows: NewAction[] = verdict.items.map((item, turn) => ({
       workspace_id: program.workspace_id,
       program_id: program.id,
       kind: "content",
@@ -636,14 +695,16 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
       opportunity_id: item.opportunity === null ? null : opportunities[item.opportunity].id,
       // Made ahead of the slot (a day for a Story, three for a post), never at it.
       next_attempt_at: generateAt(item.slot.at, now, item.type).toISOString(),
-      ...(item.type === "story"
-        ? {
-            result: {
+      // What the piece is built from is decided here, from stored records.
+      result: {
+        ...(item.type === "story"
+          ? {
               story_theme: item.slot.topic,
               story_platforms: item.slot.platforms ?? [item.slot.platform],
-            },
-          }
-        : {}),
+            }
+          : (shape.get(item.slot.index) ?? {})),
+        brains: groundPicks(item.picks, brains, cycle + turn),
+      },
     }));
     const inserted = await store.insertActions(rows);
     planned = inserted.length;
@@ -702,16 +763,27 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
     ctx,
     action,
     "done",
-    { result: { planned, dropped: droppedCount, learnings }, finished_at: now.toISOString() },
+    {
+      result: { planned, dropped: droppedCount, covered, learnings },
+      finished_at: now.toISOString(),
+      // An earlier try may have failed; this one did not.
+      last_error: null,
+    },
     {
       kind: "plan_ready",
-      summary:
+      summary: [
         planned === 0
           ? `Nothing new to plan for the week of ${start}.`
           : program.mode === "assist"
             ? `Planned ${pieces} for the week of ${start}. Waiting for your OK.`
             : `Planned ${pieces} for the week of ${start}.`,
-      data: { cycle, planned, dropped: droppedCount },
+        covered
+          ? `${covered} ${covered === 1 ? "slot already has" : "slots already have"} a post of yours on the calendar.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      data: { cycle, planned, dropped: droppedCount, covered },
     },
   );
   if (planned === 0) await maybeComplete(ctx, program);
@@ -1016,6 +1088,48 @@ async function onJob(
   const now = ports.now();
 
   if (job.status === "failed" || job.status === "cancelled") {
+    // The picture or video maker was down or out of capacity. That passes, so
+    // the piece goes back in the queue instead of waiting for a person to
+    // press Retry; after two tries, or once its time has gone, it stops.
+    const tried = Number(action.result.auto_retries ?? 0);
+    const wait = RETRY_AFTER_MS[tried];
+    const again = wait ? now.getTime() + wait : 0;
+    if (
+      job.status === "failed" &&
+      job.retryable &&
+      wait &&
+      (!action.planned_for || again < Date.parse(action.planned_for))
+    ) {
+      const at = new Date(again).toISOString();
+      const moved = await ctx.store.transition(
+        action,
+        "planned",
+        {
+          studio_job_id: null,
+          content_item_ids: [],
+          generation_attempt: action.generation_attempt + 1,
+          result: { ...action.result, auto_retries: tried + 1 },
+          next_attempt_at: at,
+          last_error: "It couldn't be made just now. Mellox will try again.",
+          ...(credits === null ? {} : { credits_charged: credits }),
+        },
+        { worker: ctx.worker },
+      );
+      if (moved) {
+        await ctx.store.addEvent({
+          workspace_id: action.workspace_id,
+          program_id: action.program_id,
+          action_id: action.id,
+          kind: "piece_waiting",
+          summary:
+            `Couldn't make the ${describePiece(action)} just now. Trying again ${when(at, program?.timezone ?? "UTC")}: ${action.title}`.slice(
+              0,
+              480,
+            ),
+        });
+      }
+      return;
+    }
     await fail(ctx, action, job.error ?? "The piece could not be made.");
     return;
   }
@@ -1043,6 +1157,7 @@ async function onJob(
       actionId: action.id,
       date: ymdInZone(new Date(slot), timeZone),
       time: hmInZone(slot, timeZone),
+      pillar: typeof action.result.pillar === "string" ? action.result.pillar : null,
     });
   }
   await finish(
@@ -1075,10 +1190,39 @@ async function generate(
   const key = `autopilot:${action.id}:${action.generation_attempt}`;
 
   if (action.status === "planned") {
+    // The worker was away past this piece's time. Making it now would spend
+    // credits on a post that can no longer go out when it was meant to.
+    // (A piece a person asked to retry is still made.)
+    if (
+      action.planned_for &&
+      !action.result.asked_again &&
+      ports.now().getTime() > Date.parse(action.planned_for)
+    ) {
+      await finish(
+        ctx,
+        action,
+        "skipped",
+        {
+          last_error: "Its time had passed before it could be made.",
+          finished_at: ports.now().toISOString(),
+        },
+        {
+          kind: "piece_skipped",
+          summary:
+            `Skipped a ${describePiece(action)}: its time had passed. Nothing was charged.`.slice(
+              0,
+              480,
+            ),
+        },
+      );
+      await maybeComplete(ctx, program);
+      return;
+    }
     if (program) {
       const used = await store.usage(program.id, action.cycle);
       const verdict = budgetVerdict({
         type: (action.content_type ?? "social") as StudioType,
+        platform: action.platform,
         usedCredits: used.credits,
         usedVideos: used.videos,
         creditCap: program.credit_cap_per_week,
@@ -1099,16 +1243,27 @@ async function generate(
         return;
       }
     }
+    // A piece that came from an idea or a reused post has no brief from the
+    // brains yet: give it a real group of customers to be written for.
+    let result = action.result;
+    if (!result.brains) {
+      const lists = await ports.plan
+        .brains(action.workspace_id, action.platform ? [action.platform] : [])
+        .catch(() => EMPTY_BRAINS);
+      const turn = action.slot ?? new Date(action.planned_for ?? ports.now()).getUTCDate();
+      const use = groundPicks(undefined, lists, turn);
+      if (Object.keys(use).length) result = { ...result, brains: use };
+    }
     // Claim the work before spending anything. A lost race stops here.
     // The lease is kept: this invocation goes straight on to make the piece.
     const claimed = await store.transition(
       action,
       "generating",
-      { attempts: 0 },
+      { attempts: 0, result },
       { worker: ctx.worker, keepLease: true },
     );
     if (!claimed) return;
-    action = { ...action, status: "generating" };
+    action = { ...action, status: "generating", result };
   }
 
   let job = action.studio_job_id
@@ -1185,13 +1340,24 @@ async function awaitApproval(
     );
     return;
   }
+  // A person may have moved the piece on the calendar: its time follows.
+  const plannedFor = effectiveSlot(
+    action.planned_for,
+    items.map((i) => i.meta),
+    program?.timezone ?? "UTC",
+  );
+  const moved = plannedFor !== action.planned_for ? { planned_for: plannedFor } : {};
   const settled = ["approved", "scheduled", "publishing", "published"];
   if (items.every((i) => settled.includes(i.status))) {
     await finish(
       ctx,
       action,
       "approved",
-      { approved_via: action.approved_via ?? "user", next_attempt_at: now.toISOString() },
+      {
+        ...moved,
+        approved_via: action.approved_via ?? "user",
+        next_attempt_at: now.toISOString(),
+      },
       action.approved_via
         ? null
         : {
@@ -1202,12 +1368,12 @@ async function awaitApproval(
     );
     return;
   }
-  if (isPastApproval(action.planned_for, now, action.content_type)) {
+  if (isPastApproval(plannedFor, now, action.content_type)) {
     await finish(
       ctx,
       action,
       "missed",
-      { finished_at: now.toISOString() },
+      { ...moved, finished_at: now.toISOString() },
       {
         kind: "piece_missed",
         summary:
@@ -1259,6 +1425,7 @@ async function awaitApproval(
           action,
           "approved",
           {
+            ...moved,
             approved_via: "auto",
             result: { ...action.result, auto_checked: true },
             next_attempt_at: now.toISOString(),
@@ -1275,12 +1442,13 @@ async function awaitApproval(
       }
     }
     await store.release(action, ctx.worker, {
+      ...moved,
       result: { ...action.result, auto_checked: true, auto_reasons: decision.reasons },
       next_attempt_at: inMs(now, 3 * MIN),
     });
     return;
   }
-  await store.release(action, ctx.worker, { next_attempt_at: inMs(now, 3 * MIN) });
+  await store.release(action, ctx.worker, { ...moved, next_attempt_at: inMs(now, 3 * MIN) });
 }
 
 async function scheduleApproved(
@@ -1368,7 +1536,13 @@ async function scheduleApproved(
   const done = (item: ContentLite) =>
     ["scheduled", "publishing", "published"].includes(item.status);
   let reason: string | null = null;
-  let at = scheduleTime(action.planned_for, now).toISOString();
+  // The calendar's day and time win when a person moved the piece there.
+  const plannedFor = effectiveSlot(
+    action.planned_for,
+    items.map((i) => i.meta),
+    timeZone,
+  );
+  let at = scheduleTime(plannedFor, now).toISOString();
   for (const item of items) {
     // The gate: only an item that reads `approved` right now is handed over.
     if (done(item) || item.status !== "approved") continue;
@@ -1394,7 +1568,12 @@ async function scheduleApproved(
       ctx,
       action,
       "scheduled",
-      { result: { ...action.result, scheduled_at: at }, next_attempt_at: at, last_error: null },
+      {
+        planned_for: plannedFor,
+        result: { ...action.result, scheduled_at: at },
+        next_attempt_at: at,
+        last_error: null,
+      },
       {
         kind: "piece_scheduled",
         summary: `Scheduled for ${when(at, timeZone)}: ${action.title}`.slice(0, 480),

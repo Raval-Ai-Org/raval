@@ -142,6 +142,33 @@ export function getCarouselStructure(id: string | null | undefined): CarouselStr
   return id ? (BY_ID.get(id) ?? null) : null;
 }
 
+const NUMBER = "(?:\\d+|two|three|four|five|six|seven|eight|nine|ten)";
+const ASKED: [RegExp, string][] = [
+  [/\bchecklist\b/i, "checklist"],
+  [/\bmyths?\b/i, "myths"],
+  [/\bmistakes?\b/i, "mistakes"],
+  [/\b(?:vs\.?|versus|before and after|compared? (?:to|with)|comparison)\b/i, "comparison"],
+  [/\bframework\b/i, "framework"],
+  [/\b(?:step[- ]by[- ]step|steps?|how to)\b/i, "steps"],
+  [/\bquestions? to ask\b|\bfaq\b/i, "questions"],
+  [new RegExp(`\\b${NUMBER} (?:ways|tips|reasons|signs|ideas|things|lessons)\\b`, "i"), "list"],
+];
+
+/**
+ * The structure a brief names outright, if it names one. Only the opening of
+ * the brief is read (its title and idea), never the context that follows it.
+ */
+export function structureFromBrief(brief: string | null | undefined): string | null {
+  const head = (brief ?? "")
+    .split(/\n\s*\n/)
+    .slice(0, 2)
+    .join(" ")
+    .slice(0, 600);
+  if (!head.trim()) return null;
+  for (const [pattern, id] of ASKED) if (pattern.test(head)) return id;
+  return null;
+}
+
 /**
  * The structure for a new carousel: the template's own, else one that suits the
  * angle and that the workspace hasn't used in its last few carousels.
@@ -153,11 +180,16 @@ export function pickCarouselStructure(args: {
   template?: string | null;
   recent?: (string | null | undefined)[];
   preferred?: string | null;
+  /** What was asked for, in the asker's words. */
+  brief?: string | null;
 }): CarouselStructure {
   const kept = getCarouselStructure(args.preferred);
   if (kept) return kept;
   const fromTemplate = getCarouselStructure(TEMPLATE_STRUCTURE[args.template ?? ""]);
   if (fromTemplate) return fromTemplate;
+  // "A four-step checklist" must come out as a checklist, not as three mistakes.
+  const asked = getCarouselStructure(structureFromBrief(args.brief));
+  if (asked) return asked;
   const used = new Set((args.recent ?? []).filter(Boolean).slice(0, 4));
   const suited = (ANGLE_STRUCTURES[args.angleId ?? ""] ?? [])
     .map((id) => BY_ID.get(id))

@@ -27,7 +27,8 @@ import {
   type Strategy,
 } from "@/lib/autopilot/contracts";
 import { totalWeeks, weekOf } from "@/lib/autopilot/policy";
-import { CANCELLABLE_STATUSES } from "@/lib/autopilot/state";
+import { brainLabels, readBrainUse } from "@/lib/autopilot/brief";
+import { CANCELLABLE_STATUSES, WORKER_STATUSES } from "@/lib/autopilot/state";
 import { addDaysYmd, isValidTimeZone, ymdInZone } from "@/lib/autopilot/time";
 import { readStorySettings, storyTimes } from "@/lib/stories/schedule";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
@@ -203,6 +204,46 @@ function kick(actionId: string): void {
   });
 }
 
+const NUDGE_LATE_MS = 90_000;
+const NUDGE_EVERY_MS = 45_000;
+const nudged = new Map<string, number>();
+
+/**
+ * The cron hook is the worker. When it is late (a missed tick, or a machine
+ * with no cron at all) a person looking at Autopilot would watch it stand
+ * still, so reading the view moves what is already overdue. It decides nothing
+ * new: every step here was due anyway, and each is claimed with the same lease
+ * as the cron sweep, so the two can never both run one.
+ */
+function nudgeOverdue(workspaceId: string, actions: ActionRow[], now: Date): void {
+  const at = now.getTime();
+  const overdue = actions
+    .filter(
+      (a) =>
+        WORKER_STATUSES.includes(a.status) &&
+        Date.parse(a.next_attempt_at) < at - NUDGE_LATE_MS &&
+        (!a.lease_until || Date.parse(a.lease_until) < at),
+    )
+    .sort((a, b) => a.next_attempt_at.localeCompare(b.next_attempt_at))
+    .slice(0, 3);
+  if (!overdue.length || at - (nudged.get(workspaceId) ?? 0) < NUDGE_EVERY_MS) return;
+  nudged.set(workspaceId, at);
+  after(async () => {
+    for (const action of overdue) {
+      try {
+        await runSweep(store, realPorts, {
+          worker: WORKER,
+          onlyId: action.id,
+          budgetMs: 100_000,
+          max: 1,
+        });
+      } catch (error) {
+        console.error(`[autopilot] catching up on ${action.id} failed`, error);
+      }
+    }
+  });
+}
+
 /** Ask for an opportunity scan (Market Brain or a competitor sweep found something). */
 export async function requestOpportunityScan(workspaceId: string): Promise<void> {
   if (!isAutopilotEnabled(workspaceId)) return;
@@ -268,6 +309,11 @@ function presentAction(row: ActionRow): ActionView {
     error: row.last_error,
     metrics: metrics && typeof metrics === "object" ? (metrics as Record<string, number>) : null,
     updatedAt: row.updated_at,
+    nextStepAt: row.next_attempt_at ?? null,
+    pillar: typeof row.result?.pillar === "string" ? row.result.pillar : null,
+    ...(row.kind === "content" && row.result?.brains
+      ? { builtFrom: brainLabels(readBrainUse(row.result.brains)) }
+      : {}),
   };
 }
 
@@ -313,9 +359,11 @@ async function readiness(
   connected: string[],
   site: { host: string } | null,
 ): Promise<ReadinessItem[]> {
-  const [{ data: ws }, { data: dna }] = await Promise.all([
+  const [{ data: ws }, { data: dna }, brains] = await Promise.all([
     admin.from("workspaces").select("website_url").eq("id", workspaceId).maybeSingle(),
     admin.from("workspace_brand_dna").select("dna").eq("workspace_id", workspaceId).maybeSingle(),
+    // What each piece's brief can draw on. Stored rows only; never a scan.
+    realPorts.plan.brains(workspaceId, []).catch(() => null),
   ]);
   const website = (ws as { website_url?: string | null } | null)?.website_url ?? null;
   const dnaSize = JSON.stringify((dna as { dna?: unknown } | null)?.dna ?? {}).length;
@@ -371,6 +419,46 @@ async function readiness(
         : "Needed for the AI visibility check.",
       cta: "Add",
     },
+    // The other three brains. None is required: a piece is still made from
+    // Brand DNA alone, it is just written for nobody in particular.
+    ...(brains
+      ? [
+          ...(isAudienceEnabled(workspaceId)
+            ? [
+                {
+                  id: "audience" as const,
+                  ok: brains.audience.length > 0,
+                  required: false,
+                  label: brains.audience.length ? "Customer groups ready" : "Add your customers",
+                  detail: brains.audience.length
+                    ? "Each post is written for one of them"
+                    : "So each post is written for someone in particular.",
+                  cta: "Add",
+                },
+              ]
+            : []),
+          {
+            id: "competitors" as const,
+            ok: brains.competitors.length > 0,
+            required: false,
+            label: brains.competitors.length ? "Competitors tracked" : "Pick your competitors",
+            detail: brains.competitors.length
+              ? "Posts show what you do differently"
+              : "So posts show what you do differently.",
+            cta: "Pick",
+          },
+          {
+            id: "market" as const,
+            ok: brains.market.length > 0,
+            required: false,
+            label: brains.market.length ? "Market read" : "Read your market",
+            detail: brains.market.length
+              ? "Posts can respond to what is happening"
+              : "So posts can respond to what is happening around you.",
+            cta: "Open",
+          },
+        ]
+      : []),
     // Asked for only when the program was told to send articles to the site.
     ...(program?.automations.includes("publish_articles")
       ? [
@@ -569,6 +657,8 @@ export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
     connectedBlog(workspaceId).catch(() => null),
   ]);
 
+  if (program?.status === "running") nudgeOverdue(workspaceId, all, now);
+
   const actions = all.filter((a) => a.kind === "content");
   const waiting = actions.filter((a) => a.status === "needs_approval");
   const previews = await loadContent(
@@ -640,6 +730,11 @@ export async function getAutopilotView(caller: Caller): Promise<AutopilotView> {
     week: weekNumbers(actions, now),
     learnings: latestLearnings(all),
     tasks: latestTasks(all),
+    nextPlanAt:
+      all
+        .filter((a) => a.kind === "plan" && a.status === "planned")
+        .map((a) => a.next_attempt_at)
+        .sort()[0] ?? null,
     visibility: await latestVisibility(workspaceId),
   };
 }
@@ -971,6 +1066,8 @@ export async function retryAction(caller: Caller, actionId: string): Promise<voi
         studio_job_id: null,
         content_item_ids: [],
         generation_attempt: action.generation_attempt + 1,
+        // A person asked: it is made even if its first time has passed.
+        result: { ...action.result, asked_again: true, auto_retries: 0 },
       });
   if (!moved) throw new HttpError(409, "That piece just changed. Refresh and try again.");
   await log(caller, "piece_retried", `Trying again: ${action.title}`, {

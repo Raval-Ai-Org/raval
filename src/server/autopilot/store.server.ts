@@ -71,7 +71,13 @@ export const supabaseAutopilotStore: AutopilotStore = {
     const data = must(
       await db
         .from("autopilot_actions")
-        .upsert(rows, { onConflict: "workspace_id,dedupe_key", ignoreDuplicates: true })
+        // Rows in one batch don't all carry the same columns (only a Story has
+        // `result`). A column a row leaves out must take its default, not NULL.
+        .upsert(rows, {
+          onConflict: "workspace_id,dedupe_key",
+          ignoreDuplicates: true,
+          defaultToNull: false,
+        })
         .select("*"),
     );
     return (data ?? []) as ActionRow[];

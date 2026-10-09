@@ -364,7 +364,7 @@ export const getWorkspaceMemberProfiles = createServerFn({ method: "GET" })
   });
 
 export const createWorkspaceInvite = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, rateLimitFor("workspace-invite")])
   .inputValidator((data) => inviteSchema.parse(data))
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "admin");
@@ -424,7 +424,34 @@ export const createWorkspaceInvite = createServerFn({ method: "POST" })
       .select("id, token, email, role")
       .single();
     if (error || !invite) throw new Error("Could not create invite");
-    return invite;
+
+    // The invite works from its link alone; the email is a convenience and is
+    // only claimed when the mail service accepted it.
+    let emailed = false;
+    try {
+      const { emailConfigured, sendEmail, appUrl } = await import("@/server/notify/email.server");
+      if (emailConfigured()) {
+        const [{ data: ws }, { data: inviter }] = await Promise.all([
+          context.supabase
+            .from("workspaces")
+            .select("name")
+            .eq("id", data.workspaceId)
+            .maybeSingle(),
+          context.supabase.from("profiles").select("name").eq("id", context.userId).maybeSingle(),
+        ]);
+        const workspaceName = ws?.name?.trim() || "a workspace";
+        const from = inviter?.name?.trim() || "A teammate";
+        emailed = await sendEmail({
+          to: email,
+          subject: `${from} invited you to ${workspaceName} on Mellox`,
+          text: `${from} invited you to work on ${workspaceName} in Mellox.\n\nSign in or create an account with ${email}, and you'll join right away.`,
+          action: ["Join the workspace", appUrl(`/app?invite_token=${invite.token}`)],
+        });
+      }
+    } catch (cause) {
+      console.error("[invite] email failed", cause instanceof Error ? cause.message : cause);
+    }
+    return { ...invite, emailed };
   });
 
 export const revokeWorkspaceInvite = createServerFn({ method: "POST" })

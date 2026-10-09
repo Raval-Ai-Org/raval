@@ -6,7 +6,9 @@ import type { ActionKind, ActionStatus } from "./contracts";
 const CONTENT: Record<ActionStatus, readonly ActionStatus[]> = {
   proposed: ["planned", "cancelled"],
   planned: ["generating", "skipped", "failed", "cancelled"],
-  generating: ["needs_approval", "skipped", "failed", "cancelled"],
+  // Back to planned: the maker was briefly unavailable and the worker will
+  // try again by itself.
+  generating: ["needs_approval", "planned", "skipped", "failed", "cancelled"],
   needs_approval: ["approved", "rejected", "missed", "cancelled"],
   // Edited after approval: the content trigger sends the item back to draft,
   // so the action goes back to waiting.

@@ -9,8 +9,11 @@ import type { CSSProperties, ReactElement } from "react";
 import { fontStack } from "@/lib/brand-look/fonts";
 import type { CarouselSlide } from "../jobs";
 import {
+  backdropTiles,
   bodySize,
   headingSize,
+  isSeamless,
+  ribbonLift,
   slideColors,
   type CarouselDesign,
   type CarouselTheme,
@@ -28,7 +31,10 @@ export type SlideArtProps = {
   brand: string;
   /** Shown on the closing slide: the website, without the protocol. */
   site?: string | null;
-  /** Generated cover picture, behind slide one. */
+  /**
+   * Generated cover picture, behind slide one. On a seamless carousel it is
+   * the one background picture that runs behind every slide.
+   */
   coverImage?: string | null;
 };
 
@@ -131,6 +137,151 @@ function Motif({
           />
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The background of a seamless carousel: one long picture, of which this slide
+ * shows its own stretch. Everything is placed by its distance from the start
+ * of the carousel, so two neighbouring slides agree at the edge they share,
+ * and the last slide agrees with the first.
+ */
+function Panorama({
+  design,
+  index,
+  count,
+  w,
+  h,
+  c,
+  picture,
+}: {
+  design: CarouselDesign;
+  index: number;
+  count: number;
+  w: number;
+  h: number;
+  c: Colors;
+  /** The generated background, shared by every slide. */
+  picture?: string | null;
+}): ReactElement {
+  const u = w / 1080;
+  const STEPS = 48;
+  // The copies of the picture that cross this slide (see backdropTiles).
+  const tile = backdropTiles(count, w, h);
+  const first = Math.floor((index * w) / tile.width + 1e-6);
+  const last = Math.ceil(((index + 1) * w) / tile.width - 1e-6) - 1;
+  const tiles = picture ? Array.from({ length: last - first + 1 }, (_, i) => first + i) : [];
+  const lift = (x: number, layer: 0 | 1) => ribbonLift(x, count, layer, design.motif) * u;
+  const edge = (layer: 0 | 1) => {
+    const pts: string[] = [];
+    for (let i = 0; i <= STEPS; i++) {
+      const x = (w * i) / STEPS;
+      const y = h - lift(index + i / STEPS, layer);
+      pts.push(`${i === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`);
+    }
+    return pts.join(" ");
+  };
+  const back = edge(0);
+  const front = edge(1);
+  const fill = (line: string) => `${line} L${w} ${h} L0 ${h} Z`;
+  const bead = 18 * u;
+  const seams = [index, index + 1];
+  return (
+    <div style={{ position: "absolute", left: 0, top: 0, width: w, height: h, display: "flex" }}>
+      {tiles.map((t) => (
+        <img
+          key={`tile-${t}`}
+          src={picture ?? ""}
+          alt=""
+          width={tile.width}
+          height={h}
+          style={{
+            position: "absolute",
+            left: t * tile.width - index * w,
+            top: 0,
+            width: tile.width,
+            height: h,
+            objectFit: "cover",
+            // Every second copy is mirrored, so neighbours meet on the same pixels.
+            ...(t % 2 ? { transform: "scaleX(-1)" } : {}),
+          }}
+        />
+      ))}
+      {picture ? (
+        // The brand's own canvas colour over the picture keeps the words readable.
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            width: w,
+            height: h,
+            display: "flex",
+            background: c.bg,
+            opacity: 0.62,
+          }}
+        />
+      ) : null}
+      {seams.map((k) => {
+        if (picture) return null;
+        const x = (k - index) * w;
+        // The same shape at the carousel's two ends, so the loop closes.
+        const j = ((k % count) + count) % count;
+        const high = j % 2 === 0;
+        if (design.motif === "blocks") {
+          const bw = w * 0.4;
+          const bh = h * 0.1;
+          return (
+            <div
+              key={k}
+              style={{
+                position: "absolute",
+                left: x - bw / 2,
+                top: high ? h * 0.1 : h * 0.52,
+                width: bw,
+                height: bh,
+                borderRadius: bh / 2,
+                background: c.accent,
+                opacity: 0.14,
+              }}
+            />
+          );
+        }
+        if (design.motif === "orbit") {
+          const r = (250 + 60 * (j % 3)) * u;
+          return (
+            <div
+              key={k}
+              style={{
+                position: "absolute",
+                left: x - r,
+                top: (high ? h * 0.3 : h * 0.56) - r,
+                width: r * 2,
+                height: r * 2,
+                borderRadius: r,
+                border: `${3 * u}px solid ${c.accent}`,
+                opacity: 0.3,
+              }}
+            />
+          );
+        }
+        return null;
+      })}
+      <svg
+        width={w}
+        height={h}
+        viewBox={`0 0 ${w} ${h}`}
+        style={{ position: "absolute", left: 0, top: 0 }}
+      >
+        <path d={fill(back)} fill={c.accent} fillOpacity={0.14} />
+        <path d={fill(front)} fill={c.accent} fillOpacity={0.2} />
+        <path d={back} stroke={c.accent} strokeWidth={4 * u} fill="none" />
+        {/* A bead on the line at each edge: half on this slide, half on the next. */}
+        {seams.map((k) => (
+          <circle key={k} cx={(k - index) * w} cy={h - lift(k, 0)} r={bead} fill={c.accent} />
+        ))}
+      </svg>
     </div>
   );
 }
@@ -242,9 +393,11 @@ export function SlideArt(props: SlideArtProps): ReactElement {
   const role = slide.role ?? "point";
   const u = w / 1080;
   const square = h / w < 1.1;
-  const art = index === 0 && props.coverImage ? props.coverImage : null;
+  // One long picture: no cover photo and no colour flip, or an edge would show.
+  const seamless = isSeamless(design);
+  const art = !seamless && index === 0 && props.coverImage ? props.coverImage : null;
 
-  const base = slideColors(theme, role);
+  const base = slideColors(theme, seamless ? "point" : role);
   // Over a picture the text is always white on a dark scrim.
   const c: Colors = art
     ? { ...base, ink: "#ffffff", muted: "rgba(255,255,255,0.78)", line: "rgba(255,255,255,0.3)" }
@@ -257,7 +410,7 @@ export function SlideArt(props: SlideArtProps): ReactElement {
   const bSize = bodySize(slide.body.length, square) * u;
   const number = pointNumber(slides, index);
   const label = number != null ? String(number).padStart(2, "0") : null;
-  const soft = design.look === "soft" && !art && role !== "cta";
+  const soft = design.look === "soft" && !art && (seamless || role !== "cta");
   const bold = design.look === "bold";
 
   const kicker = slide.kicker ? (
@@ -501,10 +654,20 @@ export function SlideArt(props: SlideArtProps): ReactElement {
               "linear-gradient(to top, rgba(0,0,0,0.86) 0%, rgba(0,0,0,0.5) 42%, rgba(0,0,0,0.18) 72%, rgba(0,0,0,0.34) 100%)",
           }}
         />
+      ) : seamless ? (
+        <Panorama
+          design={design}
+          index={index}
+          count={count}
+          w={w}
+          h={h}
+          c={c}
+          picture={props.coverImage}
+        />
       ) : (
         <Motif design={design} index={index} w={w} h={h} c={c} />
       )}
-      {design.look === "frame" && !art ? (
+      {design.look === "frame" && !art && !seamless ? (
         <div
           style={{
             position: "absolute",
@@ -560,7 +723,8 @@ export function SlideArt(props: SlideArtProps): ReactElement {
             flex: 1,
             justifyContent: role === "cover" ? "flex-end" : "center",
             paddingTop: 40 * u,
-            paddingBottom: 40 * u,
+            // The ribbon runs along the bottom of a seamless carousel.
+            paddingBottom: (seamless ? 170 : 40) * u,
           }}
         >
           {soft ? (
@@ -580,39 +744,42 @@ export function SlideArt(props: SlideArtProps): ReactElement {
           )}
         </div>
 
-        <div style={{ ...row, justifyContent: "space-between" }}>
-          <div style={{ ...row, gap: 10 * u }}>
-            {slides.map((_, i) => (
+        {/* A connected carousel has no page dots or arrow: the picture itself leads on. */}
+        {seamless ? null : (
+          <div style={{ ...row, justifyContent: "space-between" }}>
+            <div style={{ ...row, gap: 10 * u }}>
+              {slides.map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    width: (i === index ? 56 : 22) * u,
+                    height: 8 * u,
+                    borderRadius: 4 * u,
+                    background: i === index ? c.accent : c.line,
+                  }}
+                />
+              ))}
+            </div>
+            {index < count - 1 ? (
               <div
-                key={i}
                 style={{
                   display: "flex",
-                  width: (i === index ? 56 : 22) * u,
-                  height: 8 * u,
-                  borderRadius: 4 * u,
-                  background: i === index ? c.accent : c.line,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 76 * u,
+                  height: 76 * u,
+                  borderRadius: 38 * u,
+                  background: art ? "#ffffff" : c.accent,
                 }}
-              />
-            ))}
+              >
+                <Arrow size={38 * u} color={art ? "#111315" : c.accentInk} />
+              </div>
+            ) : (
+              <div style={{ display: "flex", width: 76 * u, height: 76 * u }} />
+            )}
           </div>
-          {index < count - 1 ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 76 * u,
-                height: 76 * u,
-                borderRadius: 38 * u,
-                background: art ? "#ffffff" : c.accent,
-              }}
-            >
-              <Arrow size={38 * u} color={art ? "#111315" : c.accentInk} />
-            </div>
-          ) : (
-            <div style={{ display: "flex", width: 76 * u, height: 76 * u }} />
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

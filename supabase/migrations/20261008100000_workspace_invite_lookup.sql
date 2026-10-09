@@ -109,8 +109,18 @@ REVOKE ALL ON FUNCTION public.workspace_members_page(uuid, integer, integer)
 GRANT EXECUTE ON FUNCTION public.workspace_members_page(uuid, integer, integer)
   TO service_role;
 
-CREATE INDEX IF NOT EXISTS auth_users_email_lower_lookup_idx
-  ON auth.users (lower(email));
+-- auth.users belongs to Supabase. On a hosted project the migration role does
+-- not own it and may not index it; failing here would roll back everything
+-- above. The lookup is correct without the index (auth already indexes
+-- lower(email) per instance), so a refusal is noted and skipped.
+DO $$
+BEGIN
+  CREATE INDEX IF NOT EXISTS auth_users_email_lower_lookup_idx
+    ON auth.users (lower(email));
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'auth.users is not ours to index here; skipped auth_users_email_lower_lookup_idx';
+END
+$$;
 
 CREATE INDEX IF NOT EXISTS workspace_members_listing_idx
   ON public.workspace_members (workspace_id, created_at, user_id);

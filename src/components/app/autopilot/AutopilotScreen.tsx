@@ -55,7 +55,16 @@ import { Readiness } from "./Readiness";
 import { rise, Timeline } from "./visuals";
 
 export type OpenTarget =
-  "accounts" | "brand" | "style" | "website" | "blog" | "visibility" | "calendar";
+  | "accounts"
+  | "brand"
+  | "style"
+  | "website"
+  | "blog"
+  | "visibility"
+  | "calendar"
+  | "audience"
+  | "competitors"
+  | "market";
 
 export type AutopilotHandlers = {
   start: (settings: ProgramSettings) => void;
@@ -220,6 +229,18 @@ function Approvals({ view, handlers }: { view: AutopilotView; handlers: Autopilo
                   <span className="font-medium text-foreground/80">Why this: </span>
                   {a.reason}
                 </p>
+              )}
+              {a.builtFrom && a.builtFrom.length > 1 && (
+                <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Built from">
+                  {a.builtFrom.map((label) => (
+                    <li
+                      key={label}
+                      className="rounded-full bg-[var(--ds-well-bg)] px-2.5 py-1 text-[11.5px] text-muted-foreground"
+                    >
+                      {label}
+                    </li>
+                  ))}
+                </ul>
               )}
               {a.contentType === "article" &&
                 view.program?.automations.includes("publish_articles") && (

@@ -28,7 +28,8 @@ export function describeControls(session: StudioSession): string {
     parts.push(
       `${c.durationSec ?? 6} seconds · ${{ "480P": "Basic", "720P": "HD", "1080P": "Full HD" }[c.videoResolution ?? "720P"]}`,
     );
-  if (session.type === "carousel") parts.push(`${c.slideCount ?? 6} slides`);
+  if (session.type === "carousel")
+    parts.push(`${c.slideCount ?? 6} ${c.seamless ? "connected slides" : "slides"}`);
   if (session.type === "story") {
     parts.push(
       c.storyMode === "video"
@@ -107,7 +108,7 @@ export function ControlsPanel({
 
       {session.type === "story" ? <StoryControls controls={c} set={set} /> : null}
 
-      {format.media === "optional-image" && !storyVideo ? (
+      {format.media === "optional-image" && !storyVideo && !c.seamless ? (
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-surface-3 px-3.5 py-3">
           <span>
             <span className="block text-sm font-medium text-foreground">
@@ -123,6 +124,22 @@ export function ControlsPanel({
             checked={!!c.includeImage}
             onCheckedChange={(v) => set({ includeImage: v })}
             aria-label="Add a generated visual"
+          />
+        </label>
+      ) : null}
+
+      {session.type === "carousel" ? (
+        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-surface-3 px-3.5 py-3">
+          <span>
+            <span className="block text-sm font-medium text-foreground">Connected slides</span>
+            <span className="block text-xs text-muted-foreground">
+              One long picture that runs from slide to slide and loops back to the start
+            </span>
+          </span>
+          <Switch
+            checked={!!c.seamless}
+            onCheckedChange={(v) => set({ seamless: v, ...(v ? { includeImage: false } : {}) })}
+            aria-label="Connected slides"
           />
         </label>
       ) : null}

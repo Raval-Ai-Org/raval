@@ -66,11 +66,77 @@ planned ─(3 days before its slot, within limits)→ generating ─→ needs_ap
 needs_approval ─(content item approved)→ approved ─→ scheduled ─→ published ─(+48h)→ measured
 ```
 
-Side exits: `skipped` (weekly limit), `missed` (not approved within 48 hours of
-its slot), `rejected`, `failed`, `cancelled`, and `done` for an article.
+Side exits: `skipped` (weekly limit, or its time passed before it could be
+made), `missed` (not approved within 48 hours of its slot), `rejected`,
+`failed`, `cancelled`, and `done` for an article.
 
 Approval is the content item's own status. Approving it in the Autopilot
 surface, the content calendar or the Command Center review queue all count.
+
+## One plan, one calendar, one set of rules
+
+Autopilot, the content calendar and Studio work from the same decisions.
+
+- **What makes a post worth passing on** is written once, in
+  `src/lib/studio/viral.ts`: what a piece is for (to be saved, sent, answered,
+  recognised, or acted on) and the rules every piece follows. Studio's prompts,
+  Autopilot's weekly plan and the calendar's "Plan my posts" all read it.
+- **The week is shaped before a word is written** (`src/lib/autopilot/shape.ts`):
+  each feed post gets what it is for and one of the brand's themes, rotated so
+  two weeks never start the same way. The plan then fills in the idea.
+- **Formats follow the channel** (`src/lib/autopilot/formats.ts`): carousels,
+  images and video lead on Instagram; words lead on LinkedIn and X. A text
+  post for Instagram, TikTok or YouTube is made with a picture (those channels
+  can't take words alone) and priced as an image post. The plan may still swap
+  a slot to another allowed format when the idea needs it.
+- **The calendar is shared.** A day and channel that already has a person's
+  post gets no second one from Autopilot (`freeSlots`), and those posts are
+  listed in the plan prompt so nothing repeats them. A planned piece shows on
+  the calendar as a slot before it is written, and as a normal post after.
+- **Moving a piece on the calendar moves it for Autopilot too.** The worker
+  reads the piece's calendar day and time when it checks approval and when it
+  schedules (`effectiveSlot`), in the program's time zone.
+- **The calendar's own planner** writes to the same rules: the same playbook
+  per channel, the same stored trends, the same rotation of openings, and it
+  records the opening it used so the next piece starts another way.
+
+## The brief a piece is made from
+
+Before anything is written, the plan decides what each brain adds to a piece
+(`src/lib/autopilot/brief.ts`, pure):
+
+| Brain       | What the piece gets                                          |
+| ----------- | ------------------------------------------------------------ |
+| Brand DNA   | The facts, the voice and the look. Always.                   |
+| Audience    | One customer group it is written for. Every piece gets one.  |
+| Market      | A stored market signal it responds to, when it is about one. |
+| Competitors | A tracked rival's position to stand apart from. Never named. |
+| Trends      | A format or opening that is working now, when it fits.       |
+
+The model only points at numbered entries it was shown (`groundPicks`); the
+words always come from the stored record, so a group, a rival or a signal
+cannot be invented. A sentence with a figure the brand never gave is removed
+from the brief before a writer sees it (`withoutUnknownFacts`). The plan also
+writes the opening line and, for a picture, carousel or video, what is shown
+(the subject only: the brand's look decides colours, type and logo).
+
+Studio then makes **the piece that was planned**: the job carries what the
+piece is for and how it opens (`intent.aim`, `intent.hookStyle`), so Studio
+keeps its angle to the ones that serve that purpose (`AIM_ANGLES`) and a
+carousel takes the structure its brief names (`structureFromBrief`: "a
+four-step checklist" is a checklist). A piece that came from an idea or a
+reused post gets its customer group when it is made.
+
+The approval card shows what each piece was built from. Home says how many of
+the four brains have something in them, with a button to fill an empty one
+(`readiness` ids `audience`, `competitors`, `market`; none is required).
+
+## What happens next
+
+Home, the message-box deck and the calendar's side panel say what Autopilot
+does next and when: "Writes …", "Posts …", "Plans your next week", each with
+its own due time (`src/lib/autopilot/agenda.ts`, pure). Today's row in "Next 7
+days" also keeps what already went out, so the day reads as one plan.
 
 ## More than posts
 
@@ -181,6 +247,21 @@ are opt-in: `AUTOPILOT_LIVE_GENERATE=yes` makes one real post through Studio.
 Nothing in it ever schedules a post to a real account.
 
 ## Operating notes
+
+- **The worker is the `mellox-run-schedules` cron job.** Check it is alive:
+  `select job, last_started_at, last_error from cron_heartbeats;`. If
+  `run-schedules` is old, the job is not scheduled or cannot reach the app:
+  re-run `supabase/ENABLE-CRON-JOBS.sql` once the Vault secrets are set.
+- **A picture or video that can't be made right now is tried again**: after
+  an hour, then after six, while there is still time before its slot. Only a
+  failure of the maker itself counts (out of capacity, provider down); a piece
+  that failed for its own reasons stops at once. After two tries it shows under
+  "Needs a look" with Retry.
+- When the cron is late, reading the Autopilot view moves steps that are
+  already more than 90 seconds overdue (`nudgeOverdue`, at most three, at most
+  every 45 seconds per workspace). It is a safety net for a missed tick and
+  for a machine with no cron; emails, trend refreshes and scheduled posts
+  still need the cron.
 
 - A stuck piece shows under **Activity → Needs a look** with the reason and a
   Retry button. A post that failed at the network is retried from the content

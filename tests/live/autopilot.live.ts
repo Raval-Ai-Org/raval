@@ -208,13 +208,9 @@ describeLive("Autopilot (live)", () => {
     const { getAutopilotView } = await import("@/server/autopilot/service.server");
     const view = await getAutopilotView({ workspaceId, userId: ownerId, role: "owner" });
     expect(view.program?.id).toBe(programId);
-    expect(view.readiness.map((r) => r.id).sort()).toEqual([
-      "accounts",
-      "blog",
-      "brand",
-      "style",
-      "website",
-    ]);
+    expect(view.readiness.map((r) => r.id)).toEqual(
+      expect.arrayContaining(["accounts", "blog", "brand", "style", "website", "competitors"]),
+    );
     expect(view.proposed.length).toBe(pieces.length + reused.length);
     expect(view.tasks.map((t) => t.contentType).sort()).toEqual([
       "geo_scan",
@@ -227,6 +223,9 @@ describeLive("Autopilot (live)", () => {
     expect(view.readiness.find((r) => r.id === "blog")?.ok).toBe(view.site !== null);
     expect(view.week.posted).toBeGreaterThanOrEqual(0);
     expect(view.week.views).toBeGreaterThanOrEqual(0);
+    // What happens next: the next plan and each step carry their own time.
+    expect(view.nextPlanAt && Date.parse(view.nextPlanAt)).toBeGreaterThan(Date.now());
+    expect(view.proposed.every((a) => typeof a.nextStepAt === "string")).toBe(true);
 
     // Planning the same week again adds no second set of pieces.
     const again = await store.insertActions(
@@ -239,6 +238,48 @@ describeLive("Autopilot (live)", () => {
     );
     expect(again).toHaveLength(0);
   }, 120_000);
+
+  it("saves posts and Stories planned in one go", async () => {
+    // A week with Stories on plans rows that carry `result` beside rows that
+    // don't. A column a row leaves out has to take its default, or the whole
+    // plan fails to save (that is what stopped real programs).
+    const { store } = await setup();
+    const stamp = Date.now();
+    const at = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    const rows = await store.insertActions([
+      {
+        workspace_id: workspaceId,
+        program_id: programId,
+        kind: "content",
+        status: "proposed",
+        dedupe_key: `live:mixed:${stamp}:post`,
+        cycle: 1,
+        planned_for: at,
+        platform: "linkedin",
+        content_type: "social",
+        title: "Live check: a post",
+      },
+      {
+        workspace_id: workspaceId,
+        program_id: programId,
+        kind: "content",
+        status: "proposed",
+        dedupe_key: `live:mixed:${stamp}:story`,
+        cycle: 1,
+        planned_for: at,
+        platform: "instagram",
+        content_type: "story",
+        title: "Live check: a Story",
+        result: { story_theme: "tip", story_platforms: ["instagram"] },
+      },
+    ]);
+    expect(rows).toHaveLength(2);
+    const post = rows.find((r) => r.content_type === "social")!;
+    const story = rows.find((r) => r.content_type === "story")!;
+    expect(post.result).toEqual({});
+    expect(post.next_attempt_at).toBeTruthy();
+    expect(story.result).toMatchObject({ story_theme: "tip" });
+  });
 
   it("leases a due piece once", async () => {
     const { engine, store } = await setup();

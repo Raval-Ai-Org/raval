@@ -80,16 +80,21 @@ import type {
 import { invalidateStudioContext, loadStudioContext } from "./context.server";
 import { findRepeatedOpening, findSimilarRecent, hasResearchCitation } from "@/lib/studio/novelty";
 import { pickHookStyle } from "@/lib/studio/memory";
+import { AIM_ANGLES } from "@/lib/studio/viral";
 import { normalizeSlides, pickCarouselStructure } from "@/lib/studio/carousel/story";
 import {
+  BACKDROP_RATIO,
   carouselTheme,
+  isSeamless,
   pickCarouselDesign,
   safeDesign,
   safeTheme,
+  type CarouselDesign,
 } from "@/lib/studio/carousel/design";
 import { paletteFromDnaColors } from "@/lib/brand-look/resolve";
 import type { CarouselSpecOutput } from "@/lib/studio/jobs";
-import { linkGeneratedCarousel } from "./carousel-assets.server";
+import { linkGeneratedCarousel, storeCarouselSlides } from "./carousel-assets.server";
+import { carouselRenderable } from "./carousel-render.server";
 import { linkGeneratedStory } from "./story-assets.server";
 import {
   framesFromMeta,
@@ -104,7 +109,14 @@ import { studioOutputQualityIssue } from "@/lib/studio/quality";
 import { checkMemoryConformance } from "@/lib/memory/conformance";
 import { loadMemories } from "@/server/memory/context.server";
 import { reviewGeneratedImage } from "./image-review.server";
-import { carouselSlidePrompt, storyFramePrompt } from "./visual-prompts.server";
+import {
+  carouselBackdropPrompt,
+  carouselSlidePrompt,
+  storyFramePrompt,
+} from "./visual-prompts.server";
+
+/** The media slot of a connected carousel's one background picture. */
+const BACKDROP_SLOT = "backdrop";
 import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
 
 type Db = SupabaseClient;
@@ -701,12 +713,13 @@ function carouselSpec(args: {
     heading: dnaFonts[0],
     body: dnaFonts[1] ?? dnaFonts[0],
   };
-  const design = pickCarouselDesign({
+  const picked = pickCarouselDesign({
     profileKey: `${job.workspace_id}:brand`,
     seed: input.idempotencyKey,
     previous: ctx.recent.filter((r) => r.type === "carousel" && r.design).map((r) => r.design),
     palette,
   });
+  const design: CarouselDesign = input.controls.seamless ? { ...picked, flow: "seamless" } : picked;
   return {
     structure: args.structure,
     design,
@@ -928,6 +941,39 @@ async function startMedia(args: {
         startedAt: Date.now(),
         state: "pending",
         fallbacks: [],
+        ...started,
+      },
+    ];
+  }
+
+  // A connected carousel asks for one wide background picture with no words.
+  // The slides are drawn over it by code once it is ready (pollStudioJob), so
+  // every slide edge still meets.
+  if (job.type === "carousel" && output.slides?.length && isSeamless(output.carousel?.design)) {
+    const prompt = carouselBackdropPrompt({
+      slides: output.slides,
+      title: output.title,
+      spec: output.carousel,
+      brandName: ctx.brandName,
+      brandContext: ctx.visualBrandText ?? ctx.brandText,
+      style: ctx.style ? imageStyleInput(ctx.style) : null,
+      revision: refineNote,
+      novelty: noveltyNote,
+    });
+    const started = await startImageTask({
+      prompt,
+      size: IMAGE_SIZE_BY_RATIO[BACKDROP_RATIO] as ImageSize,
+      referenceAssets: [],
+    });
+    return [
+      {
+        slot: BACKDROP_SLOT,
+        kind: "image" as const,
+        ratio: BACKDROP_RATIO,
+        prompt,
+        referenceAssets: [],
+        startedAt: Date.now(),
+        state: "pending" as const,
         ...started,
       },
     ];
@@ -1210,6 +1256,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     input.idempotencyKey,
     ctx.recent.map((r) => r.angle),
     input.refine ? ANGLE_ID(previousAngle) : undefined,
+    // A planned piece keeps to the angles that do what it is for.
+    input.intent.aim ? AIM_ANGLES[input.intent.aim] : undefined,
   );
   // A new piece opens in a way the last few didn't; a revision keeps its opening.
   const hook = input.refine
@@ -1217,6 +1265,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     : pickHookStyle(
         input.idempotencyKey,
         ctx.recent.map((r) => r.hookStyle),
+        // The plan already chose how this piece opens.
+        input.intent.hookStyle,
       );
   const carouselStructure =
     type === "carousel"
@@ -1224,6 +1274,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
           seed: input.idempotencyKey,
           angleId: angle.id,
           template: input.intent.template,
+          brief: input.intent.brief,
           recent: ctx.recent.filter((r) => r.type === "carousel").map((r) => r.structure),
           preferred: input.refine ? parent?.output?.carousel?.structure : undefined,
         })
@@ -1465,6 +1516,30 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     invalidateStudioContext(job.workspace_id);
   }
 
+  // A connected carousel is drawn by code over one generated background:
+  // pictures generated slide by slide can never meet at the slide edges.
+  // Text the slide fonts can't draw is made the ordinary way instead.
+  if (
+    type === "carousel" &&
+    output.slides?.length &&
+    output.carousel &&
+    isSeamless(output.carousel.design) &&
+    !carouselRenderable({ slides: output.slides, brand: output.carousel.brand })
+  ) {
+    const { flow: _flow, ...plain } = output.carousel.design;
+    output = {
+      ...output,
+      carousel: { ...output.carousel, design: plain },
+      warnings: [
+        ...new Set([
+          ...(output.warnings ?? []),
+          "Connected slides couldn't be drawn for this text, so each slide was made on its own.",
+        ]),
+      ],
+    };
+  }
+  const connected = type === "carousel" && isSeamless(output.carousel?.design);
+
   if (needsMedia(type, input) && !addPlatforms) {
     await setStage(client, job.id, "render");
     let referenceUrl: string | null = null;
@@ -1491,7 +1566,16 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       return; // advanced by polling
     } catch (err) {
       const classified = classify(err);
-      if (format.media === "optional-image") {
+      if (connected && output.slides && output.carousel) {
+        // No background picture this time: the slides are still drawn, plain.
+        console.warn("[studio] connected carousel drawn without a picture", classified.message);
+        await storeCarouselSlides({
+          workspaceId: job.workspace_id,
+          contentItemIds: job.content_item_ids,
+          slides: output.slides,
+          spec: output.carousel,
+        });
+      } else if (format.media === "optional-image") {
         // The copy is still good — succeed with a visible partial failure.
         output = {
           ...output,
@@ -1937,9 +2021,14 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       row.type === "carousel" ||
       row.type === "story";
     const isRefine = !!row.parent_job_id;
-    const incompleteSeries = (row.type === "carousel" || row.type === "story") && failed.length > 0;
+    // A connected carousel is drawn by code; its background picture is a
+    // bonus, so a failed one never fails the carousel.
+    const connected = row.type === "carousel" && isSeamless(row.output?.carousel?.design);
+    const incompleteSeries =
+      !connected && (row.type === "carousel" || row.type === "story") && failed.length > 0;
     if (
       failed.length &&
+      !connected &&
       mediaRequired &&
       (incompleteSeries || !media.some((m) => m.status === "ready"))
     ) {
@@ -1963,7 +2052,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           warnings: [...new Set(warnings)],
           partial: [
             ...(row.output?.partial ?? []),
-            ...failed.map((m) => ({
+            ...(connected ? [] : failed).map((m) => ({
               target: "media",
               error: m.error ?? "The visual failed to render.",
             })),
@@ -1971,7 +2060,17 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         },
       });
       let linked = true;
-      if (row.type === "carousel" && row.output?.slides && row.output.carousel) {
+      if (connected && row.output?.slides && row.output.carousel) {
+        const picture = media.find((m) => m.slot === BACKDROP_SLOT && m.status === "ready");
+        const stored = await storeCarouselSlides({
+          workspaceId: row.workspace_id,
+          contentItemIds: row.content_item_ids,
+          slides: row.output.slides,
+          spec: row.output.carousel,
+          coverPath: picture?.storagePath ?? null,
+        });
+        linked = !!stored;
+      } else if (row.type === "carousel" && row.output?.slides && row.output.carousel) {
         linked = await linkGeneratedCarousel({
           workspaceId: row.workspace_id,
           contentItemIds: row.content_item_ids,

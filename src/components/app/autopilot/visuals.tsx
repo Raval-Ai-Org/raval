@@ -42,11 +42,20 @@ export function stageCounts(view: AutopilotView): number[] {
   );
 }
 
-/** The next seven days, starting today, with the pieces planned on each. */
-export function weekDays(view: Pick<AutopilotView, "proposed" | "approvals" | "upcoming">) {
+/**
+ * The next seven days, starting today, with the pieces planned on each. Today
+ * also keeps what already went out, so the day reads as one plan.
+ */
+export function weekDays(
+  view: Pick<AutopilotView, "proposed" | "approvals" | "upcoming"> &
+    Partial<Pick<AutopilotView, "finished">>,
+) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-  const all = [...view.proposed, ...view.approvals, ...view.upcoming];
+  const posted = (view.finished ?? []).filter(
+    (a) => a.status === "published" || a.status === "measured",
+  );
+  const all = [...view.proposed, ...view.approvals, ...view.upcoming, ...posted];
   return Array.from({ length: 7 }, (_, i) => {
     const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
     const next = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i + 1);

@@ -15,6 +15,7 @@ import { SlideArt } from "@/lib/studio/carousel/SlideArt";
 import {
   canRenderText,
   carouselCanvas,
+  isSeamless,
   type CarouselDesign,
   type CarouselTheme,
 } from "@/lib/studio/carousel/design";
@@ -117,8 +118,13 @@ export async function renderCarouselSlides(input: CarouselRenderInput): Promise<
   let coverImage: string | null = null;
   if (input.coverArt?.length) {
     try {
-      const fitted = await sharp(input.coverArt)
-        .resize(width, height, { fit: "cover" })
+      // A seamless carousel lays the whole picture behind all its slides, so
+      // it is kept whole; a cover is cut to the one slide it sits on.
+      const fitted = await (
+        isSeamless(input.design)
+          ? sharp(input.coverArt).resize({ width: 1920, withoutEnlargement: true })
+          : sharp(input.coverArt).resize(width, height, { fit: "cover" })
+      )
         .jpeg({ quality: 88 })
         .toBuffer();
       coverImage = `data:image/jpeg;base64,${fitted.toString("base64")}`;

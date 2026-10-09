@@ -12,6 +12,8 @@ import {
   sealShareToken,
   shareUrl,
 } from "@/server/shares/link-token.server";
+import { approvalVerdict, contentSnapshot, type ShareContentRow } from "@/lib/shares/snapshot";
+import { contentTitle } from "@/lib/publish/queue";
 
 export const dynamic = "force-dynamic";
 
@@ -193,18 +195,25 @@ export const POST = defineRoute({
 
       const ids = (shares ?? []).map((s: any) => s.id);
       let events: any[] = [];
+      let items: any[] = [];
       if (ids.length) {
-        const { data: ev } = await supabase
-          .from("client_events")
-          .select(
-            "id, share_id, item_id, kind, body, actor_name, actor_email, actor_type, marketer_decision, marketer_read_at, client_read_at, created_at",
-          )
-          .in("share_id", ids)
-          .order("created_at", { ascending: false })
-          .limit(200);
-        events = ev ?? [];
+        const [ev, it] = await Promise.all([
+          supabase
+            .from("client_events")
+            .select(
+              "id, share_id, item_id, kind, body, actor_name, actor_email, actor_type, marketer_decision, marketer_read_at, client_read_at, created_at",
+            )
+            .in("share_id", ids)
+            .order("created_at", { ascending: false })
+            .limit(200),
+          // Titles only, so the inbox can say which post a message is about.
+          supabase.from("client_share_items").select("id, share_id, title").in("share_id", ids),
+        ]);
+        if (ev.error) return jsonError(500, ev.error.message);
+        events = ev.data ?? [];
+        items = it.data ?? [];
       }
-      return Response.json({ shares: shares ?? [], events });
+      return Response.json({ shares: shares ?? [], events, items });
     }
 
     if (action === "revoke") {
@@ -310,7 +319,7 @@ export const POST = defineRoute({
       const { eventId, decision } = DecideSchema.parse(await request.json());
       const { data: target } = await supabase
         .from("client_events")
-        .select("share_id, client_shares(workspace_id)")
+        .select("share_id, kind, item_id, actor_type, client_shares(workspace_id)")
         .eq("id", eventId)
         .maybeSingle();
       const targetWorkspace = (target as any)?.client_shares?.workspace_id;
@@ -320,6 +329,58 @@ export const POST = defineRoute({
         { minRole: "editor" },
       );
       if (!access.ok) return access.response;
+
+      // Accepting a client's approval approves the post they were shown — only
+      // if it still says the same thing, and never moving it backwards. This is
+      // decided before the event is marked, so a refusal leaves it waiting.
+      let approveContentId: string | null = null;
+      let content: "approved" | "already" | "none" = "none";
+      if (
+        decision === "accepted" &&
+        (target as any)?.kind === "approved" &&
+        (target as any)?.actor_type !== "team" &&
+        (target as any)?.item_id
+      ) {
+        const { data: item } = await supabase
+          .from("client_share_items")
+          .select("ref_id, kind, snapshot")
+          .eq("id", (target as any).item_id)
+          .eq("share_id", (target as any).share_id)
+          .maybeSingle();
+        if (item && (item as any).kind === "content_item" && (item as any).ref_id) {
+          const { data: row } = await supabase
+            .from("content_items")
+            .select("id, status, body")
+            .eq("id", (item as any).ref_id)
+            .eq("workspace_id", targetWorkspace)
+            .maybeSingle();
+          const verdict = approvalVerdict(
+            row ? { status: String((row as any).status), body: (row as any).body } : null,
+            (item as any).snapshot,
+          );
+          if (verdict === "changed") {
+            return jsonError(
+              409,
+              "This post changed after your client saw it. Share it again to get a new approval.",
+            );
+          }
+          if (verdict === "missing") return jsonError(409, "This post was deleted.");
+          if (verdict === "approve") approveContentId = (item as any).ref_id;
+          else content = "already";
+        }
+      }
+      if (approveContentId) {
+        const { data: approved, error: approveErr } = await supabase
+          .from("content_items")
+          .update({ status: "approved" })
+          .eq("id", approveContentId)
+          .eq("workspace_id", targetWorkspace)
+          .in("status", ["draft", "pending"])
+          .select("id");
+        if (approveErr) return jsonError(500, "Couldn't approve the post");
+        content = approved?.length ? "approved" : "already";
+      }
+
       const { data: ev, error: evErr } = await supabase
         .from("client_events")
         .update({
@@ -332,22 +393,7 @@ export const POST = defineRoute({
         .select("id, share_id, item_id, kind, body")
         .single();
       if (evErr) return jsonError(500, evErr.message);
-
-      // If client approved a content item and marketer accepts → flip its status to approved.
-      if (decision === "accepted" && ev && (ev as any).kind === "approved" && (ev as any).item_id) {
-        const { data: item } = await supabase
-          .from("client_share_items")
-          .select("ref_id, kind")
-          .eq("id", (ev as any).item_id)
-          .maybeSingle();
-        if (item && (item as any).kind === "content_item" && (item as any).ref_id) {
-          await supabase
-            .from("content_items")
-            .update({ status: "approved" })
-            .eq("id", (item as any).ref_id);
-        }
-      }
-      return Response.json({ ok: true, event: ev });
+      return Response.json({ ok: true, event: ev, content });
     }
 
     // Default: create
@@ -405,6 +451,34 @@ export const POST = defineRoute({
       }
     }
 
+    // A shared post is copied from the row itself, never from what the browser
+    // sent: the client must see exactly what is stored, and an approval is
+    // later checked against these words.
+    const contentIds = [
+      ...new Set(
+        body.items
+          .filter((i) => i.kind === "content_item")
+          .map((i) => i.refId)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    if (body.items.some((i) => i.kind === "content_item" && !i.refId)) {
+      return jsonError(400, "Pick a post to share");
+    }
+    const contentById = new Map<string, ShareContentRow & { title: string | null }>();
+    if (contentIds.length) {
+      const { data: contentRows, error: contentErr } = await supabase
+        .from("content_items")
+        .select("id, title, body, channel, kind, scheduled_at, hashtags, media_url, meta")
+        .eq("workspace_id", body.workspaceId)
+        .in("id", contentIds);
+      if (contentErr) return jsonError(500, "Couldn't read the posts to share");
+      for (const row of (contentRows ?? []) as any[]) contentById.set(row.id, row);
+      if (contentById.size !== contentIds.length) {
+        return jsonError(404, "One of these posts no longer exists. Refresh and try again.");
+      }
+    }
+
     const slug = makeSlug();
     const token = makeShareToken();
     const tokenHash = hashShareToken(token);
@@ -433,19 +507,33 @@ export const POST = defineRoute({
       .single();
     if (shareErr || !share) return jsonError(500, shareErr?.message ?? "create failed");
 
-    const rows = body.items.map((it, i) => ({
-      share_id: (share as any).id,
-      kind: it.kind,
-      ref_id: it.refId ?? null,
-      title: it.title ?? null,
-      description: it.description ?? null,
-      position: i,
-      // Never trust a stored snapshot for a report: it is built on view.
-      snapshot: it.kind === "experiment_report" ? {} : (it.snapshot ?? {}),
-      visible: true,
-    }));
+    const rows = body.items.map((it, i) => {
+      const post = it.kind === "content_item" && it.refId ? contentById.get(it.refId) : undefined;
+      return {
+        share_id: (share as any).id,
+        kind: it.kind,
+        ref_id: it.refId ?? null,
+        title: post ? contentTitle(post) : (it.title ?? null),
+        description: post ? (post.body ?? "").slice(0, 200) : (it.description ?? null),
+        position: i,
+        // Never trust a stored snapshot for a report: it is built on view.
+        snapshot: post
+          ? contentSnapshot(post, body.workspaceId)
+          : it.kind === "experiment_report"
+            ? {}
+            : (it.snapshot ?? {}),
+        visible: true,
+      };
+    });
     const { error: itemsErr } = await supabase.from("client_share_items").insert(rows);
-    if (itemsErr) return jsonError(500, itemsErr.message);
+    if (itemsErr) {
+      // A link with nothing in it is worse than no link.
+      await supabase
+        .from("client_shares")
+        .delete()
+        .eq("id", (share as any).id);
+      return jsonError(500, "Couldn't create the link. Try again.");
+    }
 
     return Response.json({
       id: (share as any).id,

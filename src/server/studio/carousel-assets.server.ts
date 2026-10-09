@@ -191,7 +191,8 @@ async function linkCarousel(
       .update({
         media_url: null,
         meta: mergeMeta(row.meta, {
-          carousel: { ...spec, cover_path: link.coverPath, hash: link.hash },
+          // "drawn" replaces a "model" mark left by an earlier render of this row.
+          carousel: { ...spec, render_mode: "drawn", cover_path: link.coverPath, hash: link.hash },
           asset_storage_paths: link.paths,
           // The first slide stands for the post everywhere one picture is shown.
           asset_id: link.firstAssetId,

@@ -127,6 +127,7 @@ function action(over: Partial<ActionView>): ActionView {
     error: null,
     metrics: null,
     updatedAt: new Date().toISOString(),
+    nextStepAt: new Date(Date.now() + 3 * 3_600_000).toISOString(),
     ...over,
   };
 }
@@ -221,6 +222,7 @@ function autopilotView(items: ContentItem[], mode: LabAutopilot): AutopilotView 
     readiness: [],
     learnings: [],
     tasks: [],
+    nextPlanAt: null,
     visibility: null,
     site: null,
     week: { posted: 0, views: 0, auto: 0 },

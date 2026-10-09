@@ -8,6 +8,7 @@ import { ArrowRight, Loader2, Pause, Play } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { dsGhostBtn } from "@/components/app/surface/buttons";
 import { cn } from "@/lib/utils";
+import { nextSteps, stepLine } from "@/lib/autopilot/agenda";
 import { MODE_INFO, type ActionView, type AutopilotView } from "@/lib/autopilot/contracts";
 import { pauseReasonText } from "@/lib/autopilot/status";
 import { dayLabel, pieceLabel, StatusPill } from "@/components/app/autopilot/autopilot-ui";
@@ -70,6 +71,7 @@ export function AutopilotRail({
     .sort((a, b) => (a.plannedFor ?? "").localeCompare(b.plannedFor ?? ""));
   const waiting = view.approvals.length;
   const failed = view.failed.length;
+  const next = nextSteps(view, { limit: 1 })[0];
 
   return (
     <div className="space-y-3 p-4">
@@ -142,6 +144,13 @@ export function AutopilotRail({
         >
           {failed} {failed === 1 ? "post" : "posts"} didn&apos;t go out
         </Notice>
+      )}
+
+      {next && (
+        <p className="rounded-2xl bg-[var(--ds-well-bg)] px-3 py-2.5 text-[12.5px] leading-snug">
+          <span className="text-muted-foreground">Next: </span>
+          <span className="font-medium">{stepLine(next)}</span>
+        </p>
       )}
 
       <div>

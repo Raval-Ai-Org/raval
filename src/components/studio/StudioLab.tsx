@@ -10,6 +10,7 @@ import { normalizeLibraryAsset } from "@/lib/library";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
+import { carouselTheme } from "@/lib/studio/carousel/design";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { getTemplate, templatesFor } from "@/lib/studio/templates";
 import type { StudioIdea } from "@/lib/studio/ideas";
@@ -586,6 +587,39 @@ const SCENES: Scene[] = [
     id: "review-carousel",
     label: "Review · Carousel (approved)",
     make: () => session("carousel", "review"),
+    fixtures: { rows: ROWS.carousel, distribution: true },
+  },
+  {
+    id: "review-carousel-connected",
+    label: "Review · Carousel (connected slides)",
+    make: () => {
+      const base = session("carousel", "review");
+      const job = {
+        ...base.job!,
+        output: {
+          ...base.job!.output,
+          carousel: {
+            structure: "checklist",
+            design: {
+              v: 1 as const,
+              look: "editorial",
+              colorway: "dark",
+              motif: "wave",
+              flow: "seamless",
+            },
+            theme: carouselTheme({
+              palette: { primary: "#3f5a1a", accent: "#9fbf3b" },
+              fonts: { heading: "Fraunces", body: "Inter" },
+              colorway: "dark",
+            }),
+            brand: "Slow Pour Coffee",
+            site: "slowpour.example",
+            ratio: "4:5",
+          },
+        },
+      };
+      return { ...base, job, lastGood: job };
+    },
     fixtures: { rows: ROWS.carousel, distribution: true },
   },
   {

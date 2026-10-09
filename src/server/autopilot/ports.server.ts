@@ -12,7 +12,19 @@ import { isAutopilotEnabled, isFullAutopilotEnabled, isStoriesEnabled } from "@/
 import { StrategySchema } from "@/lib/autopilot/contracts";
 import type { Candidate, Rating } from "@/lib/autopilot/opportunities";
 import { matchEvidence } from "@/lib/autopilot/opportunities";
-import { estimateCost, type PlanProposal } from "@/lib/autopilot/policy";
+import { estimateCost, type CalendarPost, type PlanProposal } from "@/lib/autopilot/policy";
+import { withPicture } from "@/lib/autopilot/formats";
+import { ymdInZone } from "@/lib/autopilot/time";
+import { formatGuide, shareAim, shareRules } from "@/lib/studio/viral";
+import {
+  creativeBrief,
+  readBrainUse,
+  withoutUnknownFacts,
+  type BrainEntry,
+  type BrainLists,
+} from "@/lib/autopilot/brief";
+import { isAudienceEnabled } from "@/lib/feature-flags";
+import { HOOK_STYLES } from "@/lib/studio/memory";
 import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
 import { CreateJobSchema, type GoalId, type StudioJob } from "@/lib/studio/jobs";
 import type { StudioType } from "@/lib/studio/formats";
@@ -63,6 +75,7 @@ function toJobLite(job: StudioJob): JobLite {
     contentItemIds: job.content_item_ids ?? [],
     warnings: (job.output?.warnings?.length ?? 0) + (job.output?.partial?.length ?? 0),
     error: job.error?.message ?? null,
+    retryable: job.error?.category === "provider" && job.error.retryable === true,
     createdAt: job.created_at,
   };
 }
@@ -148,13 +161,32 @@ const PLAN_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["slot", "type", "title", "brief", "reason", "opportunity"],
+        required: [
+          "slot",
+          "type",
+          "title",
+          "hook",
+          "brief",
+          "visual",
+          "reason",
+          "audience",
+          "market",
+          "rival",
+          "trend",
+          "opportunity",
+        ],
         properties: {
           slot: { type: "integer" },
           type: { type: "string" },
           title: { type: "string" },
+          hook: { type: "string" },
           brief: { type: "string" },
+          visual: { type: "string" },
           reason: { type: "string" },
+          audience: { type: "integer" },
+          market: { type: "integer" },
+          rival: { type: "integer" },
+          trend: { type: "integer" },
           opportunity: { type: "integer" },
         },
       },
@@ -166,24 +198,41 @@ const PLAN_SYSTEM = `You plan one week of marketing content for a single brand.
 
 The slots are already decided: each has a number, a date, a platform and a format. You do not choose dates or platforms. For each slot, decide what the piece should be about.
 
+Plan like the brand's own senior social lead: every piece has to earn a stranger's attention, and the week has to read as one brand.
+
 For every slot return:
 - "slot": the slot number exactly as given.
-- "type": the slot's format, or another format from that slot's "allowed" list if it clearly fits better.
-- "title": a short working title, under 90 characters, plain words.
-- "brief": 2 to 4 sentences telling a writer what to make: the point, the angle, and the next step for the reader. Specific to this brand.
+- "type": the slot's format, or another format from that slot's "allowed" list when the idea needs it (see "Choosing a format").
+- "title": a short working title, under 90 characters, plain words. It states the one thing the piece says, not its topic.
+- "brief": 2 to 4 sentences telling a writer what to make: the point, the angle, and the next step for the reader. For a picture, carousel or video, say what is shown. Specific to this brand.
+- "hook": the first line a reader would see, under 110 characters. It makes one specific promise or names one specific situation, written the way the slot's "opening" says. Not a topic label, not a question anyone could ask.
+- "visual": for a picture, carousel, video or Story, one sentence on what is shown: the subject and what happens, nothing else. Never colours, backgrounds, fonts or where a logo goes; the brand's look decides those. Empty for a text post or an article.
 - "reason": one plain sentence on why this piece, this week. No jargon.
+- "audience": the number of the customer group in "CUSTOMER GROUPS" this piece is written for, or -1 when there is no list. Choose the group this idea matters to most, and spread the week across the groups.
+- "market": the number of the entry in "MARKET" this piece responds to, or -1. Use one only when the piece is really about it.
+- "rival": the number of the competitor in "COMPETITORS" whose position this piece stands apart from, or -1. At most two pieces a week.
+- "trend": the number of the entry in "WORKING NOW" that shapes this piece's format or opening, or -1.
 - "opportunity": the number of the opportunity this piece responds to, or -1.
 
 Rules:
 - Serve the stated goal. Vary the angle across the week; never give two slots the same idea.
 - Do not repeat anything in "Already made".
 - Use only facts found in the brand context or in an opportunity. Never invent statistics, customer names, prices, awards or dates.
+- That includes small figures: no word counts, percentages, timings or "x times more" unless the brand context states them. Say "the opening lines", not "the first 40 words". A sentence with a figure the brand never gave is deleted before a writer sees it.
 - Use an opportunity only when it truly fits the brand, and at most once.
 - If a slot has a key date, the piece may be about it, but only if it suits the brand.
 - A slot with format "story" is an Instagram or Facebook Story: 1 to 5 vertical frames, each read in about five seconds, gone after a day. Give it a quick, timely idea that fits the slot's theme; never a long article idea. Stories in the same week must each be about something different, and different from the feed posts that week.
 - Stories can't carry link, poll or music stickers; plan replies ("reply with your pick") and "link in bio" instead.
-- Lines starting "Working now" describe formats and openings doing well on a platform. Where one suits the brand and the slot's platform, shape the piece with it and say how in the brief. Never write that something is trending.
-- Each brief must open differently from the others and from anything in "Already made".`;
+- "WORKING NOW" lists formats and openings doing well on a platform. Where one suits the brand and the slot's platform, shape the piece with it, say how in the brief, and give its number in "trend". Never write that something is trending.
+- Each brief must open differently from the others and from anything in "Already made".
+- A slot's "for" says why a stranger would care about that piece (to save it, send it, answer it, see themselves in it, or take a step). Build the idea to do exactly that.
+- On a feed post, "theme" is one of the brand's own content themes. Keep the piece inside it.
+- Nothing in "Already on the calendar" may be repeated: those posts are going out the same week.
+- Use the customers, the competitors and the market in the context: say what this brand's own customers care about, where it differs from the others, and what is happening around it. A piece that could be posted by any brand in the field is not good enough.
+- List numbers go in the number fields only. Never write "trend 3" or "group 1" in a title, a hook or a brief.
+- Point only at numbers that are on the lists. Never write a group, a competitor or a market fact of your own.
+- A competitor is never named in a title, a hook or a brief. The piece shows what this brand does differently; it does not attack anyone.
+- Before settling on an idea, check it against its group: would that person stop for the hook, and would they get something from the piece without buying anything? If not, choose another idea.`;
 
 /** The confirmed brand strategy, so every week follows it without being told again. */
 function strategyBlock(raw: Record<string, unknown>): string {
@@ -202,6 +251,8 @@ function strategyBlock(raw: Record<string, unknown>): string {
     .join("\n");
 }
 
+const opening = (id: unknown) => HOOK_STYLES.find((h) => h.id === id);
+
 function planUser(
   input: PlanInput,
   brandText: string,
@@ -211,12 +262,34 @@ function planUser(
   const { program, slots, opportunities, recentTitles } = input;
   const goal = PLAN_GOALS.find((g) => g.id === program.goal);
   const slotLines = slots
-    .map((s) =>
-      s.type === "story"
-        ? `[${s.index}] ${s.date} ${s.time} · Story on ${(s.platforms ?? [s.platform]).join(" + ")} · format: story · theme: ${getStoryTheme(s.topic)?.label ?? s.topic} (${getStoryTheme(s.topic)?.detail ?? ""})`
-        : `[${s.index}] ${s.date} ${s.time} · ${s.platform ?? "blog"} · format: ${s.type} · allowed: ${s.allowedTypes.join(", ")}${s.moment ? ` · key date: ${s.moment}` : ""}`,
-    )
+    .map((s) => {
+      if (s.type === "story") {
+        return `[${s.index}] ${s.date} ${s.time} · Story on ${(s.platforms ?? [s.platform]).join(" + ")} · format: story · theme: ${getStoryTheme(s.topic)?.label ?? s.topic} (${getStoryTheme(s.topic)?.detail ?? ""})`;
+      }
+      const shape = input.shape.get(s.index);
+      const aim = shareAim(shape?.aim);
+      return `[${s.index}] ${s.date} ${s.time} · ${s.platform ?? "blog"} · format: ${s.type} · allowed: ${s.allowedTypes.join(", ")}${aim ? ` · for: ${aim.label.toLowerCase()}` : ""}${opening(shape?.hook) ? ` · opening: ${opening(shape?.hook)!.label.toLowerCase()}` : ""}${shape?.pillar ? ` · theme: ${shape.pillar}` : ""}${s.moment ? ` · key date: ${s.moment}` : ""}`;
+    })
     .join("\n");
+  const aims = [...new Set([...input.shape.values()].map((v) => v.aim))]
+    .map(shareAim)
+    .filter((a): a is NonNullable<typeof a> => a !== null);
+  const formats = [...new Set(slots.flatMap((s) => s.allowedTypes))];
+  const openings = [...new Set([...input.shape.values()].map((v) => v.hook))]
+    .map(opening)
+    .filter((h): h is NonNullable<typeof h> => !!h);
+  const numbered = (label: string, list: BrainEntry[]) =>
+    list.length
+      ? `${label}:\n${list.map((e, i) => `[${i}] ${e.name}${e.detail ? `: ${e.detail}` : ""}`).join("\n")}`
+      : "";
+  const { brains } = input;
+  const outside = [
+    numbered("MARKET", brains.market),
+    numbered("COMPETITORS (never name them in a piece)", brains.competitors),
+    numbered("WORKING NOW (formats and openings doing well)", brains.trends),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const oppLines = opportunities
     .map(
       (o, i) =>
@@ -229,6 +302,10 @@ function planUser(
     program.goal_note ? `WHAT THE TEAM ADDED: ${program.goal_note}` : "",
     `BRAND CONTEXT:\n${brandText || "(none saved yet)"}`,
     audience ? `CUSTOMERS (who this is for): ${audience}` : "",
+    numbered("CUSTOMER GROUPS", brains.audience),
+    outside
+      ? `${wrapUntrusted("market-and-competitors", outside, { maxChars: 6_000, route: "autopilot.plan" })}\n${UNTRUSTED_DATA_RULE}`
+      : "",
     input.learnings.length
       ? [
           "WHAT YOUR OWN RESULTS SHOW (lean into this):",
@@ -237,6 +314,22 @@ function planUser(
       : "",
     extras.length ? `WHAT MELLOX ALREADY KNOWS:\n${extras.join("\n")}` : "",
     `SLOTS:\n${slotLines}`,
+    aims.length
+      ? `WHAT "FOR" MEANS:\n${aims.map((a) => `- ${a.label.toLowerCase()}: ${a.directive}`).join("\n")}`
+      : "",
+    openings.length
+      ? `WHAT "OPENING" MEANS:\n${openings.map((h) => `- ${h.label.toLowerCase()}: ${h.directive}`).join("\n")}`
+      : "",
+    formats.length > 1 ? `CHOOSING A FORMAT:\n${formatGuide(formats)}` : "",
+    `EVERY PIECE:\n${shareRules("social")
+      .map((rule) => `- ${rule}`)
+      .join("\n")}`,
+    input.calendar.length
+      ? `ALREADY ON THE CALENDAR THIS WEEK (the team's own posts):\n${input.calendar
+          .slice(0, 20)
+          .map((c) => `- ${c.date}${c.platform ? ` · ${c.platform}` : ""}: ${c.title}`)
+          .join("\n")}`
+      : "",
     opportunities.length
       ? `OPPORTUNITIES:\n${wrapUntrusted("opportunities", oppLines, { maxChars: 6_000, route: "autopilot.plan" })}\n${UNTRUSTED_DATA_RULE}`
       : "OPPORTUNITIES: none",
@@ -450,6 +543,8 @@ export const realPorts: AutopilotPorts = {
         calendar_time: tag.time,
         autopilot_action_id: tag.actionId,
         source: "autopilot",
+        // The calendar shows this as the post's topic.
+        ...(tag.pillar ? { pillar: tag.pillar } : {}),
       };
       const { error: writeError } = await db
         .from("content_items")
@@ -478,18 +573,32 @@ export const realPorts: AutopilotPorts = {
 
     async create({ workspaceId, userId, role, idempotencyKey, action, platforms, story }) {
       const type = (action.content_type ?? "social") as StudioType;
+      // Instagram, TikTok and YouTube can't take words alone: the post gets a picture.
+      const picture = withPicture(type, action.platform);
       const input = CreateJobSchema.parse({
         workspaceId,
         type,
         idempotencyKey,
         intent: {
-          brief: `${action.title}\n\n${action.brief}`.slice(0, 3_900),
+          // Everything the brains said about this piece, in stored words.
+          brief: creativeBrief({
+            title: action.title,
+            brief: action.brief,
+            aim: action.result.aim,
+            pillar: action.result.pillar,
+            use: readBrainUse(action.result.brains),
+          }),
           goal: action.goal ? STUDIO_GOAL[action.goal] : undefined,
+          // Studio follows what the plan decided rather than rotating again.
+          aim: shareAim(action.result.aim)?.id,
+          hookStyle:
+            typeof action.result.hook === "string" ? action.result.hook.slice(0, 24) : undefined,
           ideaId: action.opportunity_id ?? undefined,
           ideaSource: "autopilot",
         },
         controls: {
           platforms: platforms?.length ? platforms : action.platform ? [action.platform] : [],
+          ...(picture ? { includeImage: true } : {}),
           // Story frames are individually generated and reviewed by the image model.
           ...(story
             ? { storyMode: "frames", frameCount: story.frames, storyTheme: story.theme }
@@ -508,7 +617,7 @@ export const realPorts: AutopilotPorts = {
           charged && charge.meter === "credits"
             ? charge.amount
             : charged
-              ? estimateCost(type).credits
+              ? estimateCost(type, action.platform).credits
               : 0,
       };
     },
@@ -607,6 +716,120 @@ export const realPorts: AutopilotPorts = {
       );
     },
 
+    async calendar(workspaceId, { from, to, timeZone }) {
+      const cols = "title, channel, scheduled_at, meta";
+      const open = ["draft", "pending", "approved", "scheduled", "publishing", "published"];
+      // A day either side, so a post near midnight lands on the right date below.
+      const dayBefore = new Date(Date.parse(`${from}T00:00:00Z`) - DAY).toISOString();
+      const dayAfter = new Date(Date.parse(`${to}T00:00:00Z`) + 2 * DAY).toISOString();
+      const [placed, timed] = await Promise.all([
+        db
+          .from("content_items")
+          .select(cols)
+          .eq("workspace_id", workspaceId)
+          .in("status", open)
+          .gte("meta->>calendar_date", from)
+          .lte("meta->>calendar_date", to)
+          .limit(120),
+        db
+          .from("content_items")
+          .select(cols)
+          .eq("workspace_id", workspaceId)
+          .in("status", open)
+          .gte("scheduled_at", dayBefore)
+          .lte("scheduled_at", dayAfter)
+          .limit(120),
+      ]);
+      if (placed.error) throw new Error(placed.error.message);
+      if (timed.error) throw new Error(timed.error.message);
+      const out = new Map<string, CalendarPost>();
+      for (const row of [...(placed.data ?? []), ...(timed.data ?? [])] as Record<
+        string,
+        unknown
+      >[]) {
+        const meta = record(row.meta);
+        // Autopilot's own pieces are its plan, not somebody else's post.
+        if (typeof meta.autopilot_action_id === "string") continue;
+        const date =
+          typeof row.scheduled_at === "string"
+            ? ymdInZone(new Date(row.scheduled_at), timeZone)
+            : String(meta.calendar_date ?? "");
+        if (date < from || date > to) continue;
+        const channel = typeof row.channel === "string" ? row.channel : null;
+        const platform =
+          channel === "x" ? "twitter" : channel === "blog" || channel === "email" ? null : channel;
+        const title = typeof row.title === "string" ? row.title.trim() : "";
+        out.set(`${date}|${platform}|${title}`, { date, platform, title });
+      }
+      return [...out.values()];
+    },
+
+    async brains(workspaceId, platforms) {
+      // Cut at a word, so a brief never ends mid-word.
+      const short = (value: unknown, max: number) => {
+        const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+        if (text.length <= max) return text;
+        const cut = text.slice(0, max);
+        return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max - 40)).replace(/[,;:.\s]+$/, "")}…`;
+      };
+      const [ctx, twins, rivals] = await Promise.all([
+        context(workspaceId),
+        isAudienceEnabled(workspaceId)
+          ? import("@/server/audience/store.server")
+              .then(({ supabaseAudienceStore }) => supabaseAudienceStore.listTwins(workspaceId))
+              .catch(() => [])
+          : Promise.resolve([]),
+        db
+          .from("workspace_competitors")
+          .select("name, profile")
+          .eq("workspace_id", workspaceId)
+          .eq("status", "tracked")
+          .order("confidence", { ascending: false })
+          .limit(4),
+      ]);
+      const audience: BrainEntry[] = twins
+        .filter((t) => t.kind === "group")
+        .slice(0, 4)
+        .map((t) => {
+          const pick = (kind: string) =>
+            t.profile
+              .filter((trait) => trait.kind === kind)
+              .slice(0, 2)
+              .map((trait) => trait.text)
+              .join("; ");
+          const bits = [
+            pick("goal") && `What they want: ${pick("goal")}.`,
+            pick("pain") && `What gets in the way: ${pick("pain")}.`,
+            pick("objection") && `Why they hesitate: ${pick("objection")}.`,
+          ].filter(Boolean);
+          return {
+            name: short(t.segment ? `${t.name} (${t.segment})` : t.name, 90),
+            detail: short(bits.join(" ") || t.summary, 520),
+          };
+        })
+        .filter((e) => e.name);
+      const competitors: BrainEntry[] = ((rivals.data ?? []) as Record<string, unknown>[])
+        .map((r) => {
+          const profile = record(r.profile);
+          return {
+            name: short(r.name, 80),
+            detail: short(profile.positioning ?? profile.summary, 240),
+          };
+        })
+        .filter((e) => e.name && e.detail);
+      const market: BrainEntry[] = ctx.opportunities.slice(0, 5).map((line) => {
+        const [title, ...rest] = line.split(" — ");
+        return { name: short(title, 120), detail: short(rest.join(" — "), 240) };
+      });
+      const trends: BrainEntry[] = trendsFor(ctx.socialTrends, platforms as PlatformId[], 6).map(
+        (t) => ({
+          name: short(`${t.title} (${t.platform === "all" ? "every platform" : t.platform})`, 120),
+          detail: short(t.detail, 280),
+        }),
+      );
+      return { audience, competitors, market, trends } satisfies BrainLists;
+    },
+
     async recentTitles(workspaceId) {
       const ctx = await context(workspaceId);
       const { data } = await db
@@ -632,15 +855,9 @@ export const realPorts: AutopilotPorts = {
           .map((u) => `Already scheduled: ${u.title}${u.channel ? ` (${u.channel})` : ""}`),
         ...ctx.performanceSignals.slice(0, 3).map((s) => `Worked recently: ${s}`),
         ...ctx.competitorMoves.slice(0, 3).map((s) => `Competitor move: ${s}`),
-        ...ctx.opportunities.slice(0, 3).map((s) => `Market: ${s}`),
-        ...trendsFor(
-          ctx.socialTrends,
-          [...new Set(input.slots.map((s) => s.platform).filter(Boolean))] as PlatformId[],
-          6,
-        ).map(
-          (t) =>
-            `Working now on ${t.platform === "all" ? "every platform" : t.platform}: ${t.title}. ${t.detail}`,
-        ),
+        ...(ctx.risingQueries.length
+          ? [`People are searching for: ${ctx.risingQueries.slice(0, 6).join(", ")}`]
+          : []),
       ];
       const out = await runWithScope(
         {
@@ -660,9 +877,30 @@ export const realPorts: AutopilotPorts = {
             fallback: { items: [] },
           }),
       );
+      // A figure, date or link the brand never gave is taken out here, before
+      // a writer can repeat it: the sentence goes, the rest of the idea stays.
+      const corpus = [
+        ctx.brandText,
+        ...extras,
+        ...input.opportunities.map((o) => `${o.title} ${o.summary} ${o.why_relevant}`),
+        ...Object.values(input.brains).flatMap((list) => list.map((e) => `${e.name} ${e.detail}`)),
+        ...input.slots.map((s) => `${s.date} ${s.time} ${s.moment ?? ""}`),
+      ];
+      const known = (sentence: string) =>
+        checkFragments([{ path: "plan", text: sentence }], corpus, 0).ok;
+      // The lists are numbered for the model only; a number never reaches a writer.
+      const listRef =
+        /,?\s*\(?\b(?:matching|using|per|see|from)\s+(?:trend|market|rival|competitor|audience|group|opportunity)\s*\[?\d+\]?\)?/gi;
+      const facts = (value: unknown) =>
+        typeof value === "string"
+          ? withoutUnknownFacts(value.replace(listRef, ""), known).text
+          : "";
       const proposals: PlanProposal[] = [];
       for (const raw of Array.isArray(out.items) ? out.items : []) {
         const row = record(raw);
+        row.brief = facts(row.brief);
+        row.hook = facts(row.hook);
+        row.visual = facts(row.visual);
         proposals.push({
           slot: Number(row.slot),
           type: typeof row.type === "string" ? row.type : undefined,
@@ -670,6 +908,14 @@ export const realPorts: AutopilotPorts = {
           brief: typeof row.brief === "string" ? row.brief : "",
           reason: typeof row.reason === "string" ? row.reason : "",
           opportunity: Number.isInteger(row.opportunity) ? (row.opportunity as number) : null,
+          picks: {
+            audience: row.audience,
+            market: row.market,
+            competitor: row.rival,
+            trend: row.trend,
+            hook: row.hook,
+            visual: row.visual,
+          },
         });
       }
       return proposals;

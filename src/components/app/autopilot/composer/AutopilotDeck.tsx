@@ -30,13 +30,14 @@ import {
   type ProgramSettings,
   type ReadinessItem,
 } from "@/lib/autopilot/contracts";
+import { nextSteps, stepLine } from "@/lib/autopilot/agenda";
 import { pauseReasonText } from "@/lib/autopilot/status";
 import { statusTone } from "@/lib/autopilot/state";
 import type { PlanId } from "@/lib/billing/catalog";
 import { PLATFORMS } from "@/lib/social-platforms";
 import { settingsValid, weeklyEstimate, type SuggestionState } from "../AutopilotSetup";
 import type { Section } from "../AutopilotScreen";
-import { pieceLabel, whenLabel } from "../autopilot-ui";
+import { pieceLabel } from "../autopilot-ui";
 import { jobsFor } from "../jobs";
 import { STAGES, stageCounts, TONE_DOT, weekDays } from "../visuals";
 
@@ -396,12 +397,12 @@ export function AutopilotDeck({
 function LiveDeck({ view, handlers }: { view: AutopilotView; handlers: DeckHandlers }) {
   const program = view.program!;
   const paused = program.status !== "running";
-  const next = view.upcoming.find((a) => a.plannedFor && Date.parse(a.plannedFor) > Date.now());
+  const next = nextSteps(view, { limit: 1 })[0];
   const waiting = view.approvals.length + (view.proposed.length ? 1 : 0);
   const planning = !paused && !view.upcoming.length && !view.proposed.length && !waiting;
   const missing = view.readiness.find((r) => !r.ok && r.required);
-  const NextIcon = next?.platform
-    ? PLATFORMS[next.platform as keyof typeof PLATFORMS]?.icon
+  const NextIcon = next?.action?.platform
+    ? PLATFORMS[next.action.platform as keyof typeof PLATFORMS]?.icon
     : undefined;
 
   return (
@@ -418,8 +419,11 @@ function LiveDeck({ view, handlers }: { view: AutopilotView; handlers: DeckHandl
             ) : next ? (
               <>
                 {NextIcon && <NextIcon className="size-3.5 shrink-0" />}
-                <span className="truncate" title={`${pieceLabel(next)} · ${next.title}`}>
-                  Next · {whenLabel(next.plannedFor)}
+                <span
+                  className="truncate"
+                  title={next.action ? pieceLabel(next.action) : undefined}
+                >
+                  Next · {stepLine(next)}
                 </span>
               </>
             ) : planning ? (

@@ -8,8 +8,12 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
+  CalendarClock,
   Check,
   ChevronRight,
+  Clock,
+  Lightbulb,
+  Eye,
   ListChecks,
   Pause,
   Pencil,
@@ -19,7 +23,8 @@ import {
 } from "@/components/icons";
 import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { GroupLabel, SurfacePage, Tile } from "@/components/app/surface/SurfaceLayout";
-import type { ActionView, AutopilotView } from "@/lib/autopilot/contracts";
+import { nextSteps, stepLine, stepWhen, type NextStep } from "@/lib/autopilot/agenda";
+import { BRAIN_READINESS, type ActionView, type AutopilotView } from "@/lib/autopilot/contracts";
 import { STATUS_LABEL, statusTone } from "@/lib/autopilot/state";
 import { pauseReasonText } from "@/lib/autopilot/status";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
@@ -54,6 +59,12 @@ type Ask = {
   go: Go;
 };
 
+const BRAIN_NAME: Record<string, string> = {
+  audience: "customers",
+  competitors: "competitors",
+  market: "market",
+};
+
 function asks(view: AutopilotView): Ask[] {
   const out: Ask[] = [];
   const waiting = view.approvals.length;
@@ -71,7 +82,10 @@ function asks(view: AutopilotView): Ask[] {
       go: { section: "approvals" },
     });
   }
-  for (const item of view.readiness.filter((r) => !r.ok)) {
+  // An empty brain stops nothing, so the three share one quiet row.
+  const brains = view.readiness.filter((r) => BRAIN_READINESS.includes(r.id));
+  const empty = brains.filter((r) => !r.ok);
+  for (const item of view.readiness.filter((r) => !r.ok && !BRAIN_READINESS.includes(r.id))) {
     out.push({
       id: item.id,
       tone: "warn",
@@ -81,6 +95,17 @@ function asks(view: AutopilotView): Ask[] {
       cta: item.cta,
       primary: item.required && !waiting,
       go: { open: item.id },
+    });
+  }
+  if (empty.length) {
+    out.push({
+      id: "brains",
+      tone: "warn",
+      icon: Lightbulb,
+      title: `Posts use ${1 + brains.length - empty.length} of ${1 + brains.length} brains`,
+      detail: `Still empty: ${empty.map((r) => BRAIN_NAME[r.id] ?? r.id).join(", ")}`,
+      cta: "Fill in",
+      go: { open: empty[0].id },
     });
   }
   if (view.failed.length) {
@@ -130,6 +155,56 @@ function NeedsYou({ items, go }: { items: Ask[]; go: (target: Go) => void }) {
           );
         })}
       </ul>
+    </Tile>
+  );
+}
+
+/* ───────────────────────── what happens next ───────────────────────── */
+
+const STEP_ICON: Record<NextStep["kind"], ComponentType<{ className?: string }>> = {
+  write: Pencil,
+  post: Clock,
+  plan: CalendarClock,
+  check: Eye,
+  wait: ListChecks,
+};
+
+/** The next things Autopilot does by itself, each with its time. */
+function NextUp({ steps }: { steps: NextStep[] }) {
+  return (
+    <Tile className="overflow-hidden p-0 sm:p-0">
+      <ol className="divide-y divide-border/50" aria-label="What happens next">
+        {steps.map((step) => {
+          const Icon = STEP_ICON[step.kind];
+          const live = step.verb === "Writing now";
+          return (
+            <li key={step.id} className="flex items-center gap-3 px-4 py-2.5 sm:px-5">
+              <Icon
+                className={cn(
+                  "h-[18px] w-[18px] shrink-0",
+                  live ? "text-primary" : "text-muted-foreground",
+                )}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13.5px] font-medium">{step.title || step.verb}</p>
+                {step.action && (
+                  <p className="truncate text-[12px] text-muted-foreground">
+                    {step.verb} · {pieceLabel(step.action)}
+                  </p>
+                )}
+              </div>
+              <span
+                className={cn(
+                  "shrink-0 text-[12.5px] font-medium tabular-nums",
+                  live ? "text-primary" : "text-muted-foreground",
+                )}
+              >
+                {live ? "Now" : stepWhen(step.at)}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
     </Tile>
   );
 }
@@ -449,7 +524,8 @@ export function Home({
 }) {
   const program = view.program!;
   const paused = program.status === "paused";
-  const next = view.upcoming.find((a) => a.plannedFor && Date.parse(a.plannedFor) > Date.now());
+  const steps = nextSteps(view, { limit: 5 });
+  const next = steps[0];
   const planning =
     !paused && !view.upcoming.length && !view.proposed.length && !view.approvals.length;
   const go = (target: Go) =>
@@ -469,7 +545,7 @@ export function Home({
               {paused
                 ? `${pauseReasonText(program.pauseReason)}.`
                 : next
-                  ? `Next: ${whenLabel(next.plannedFor)} · ${pieceLabel(next)}`
+                  ? `Next: ${stepLine(next)}`
                   : planning
                     ? "Writing your first plan…"
                     : "Nothing scheduled right now."}
@@ -508,6 +584,13 @@ export function Home({
           <div className="min-w-0">
             <GroupLabel>Where your posts are</GroupLabel>
             <Pipeline view={view} onApprove={() => onSection("approvals")} />
+
+            {steps.length > 0 && (
+              <>
+                <GroupLabel>What happens next</GroupLabel>
+                <NextUp steps={steps} />
+              </>
+            )}
 
             <GroupLabel
               action={<More onClick={() => handlers.open("calendar")}>Open calendar</More>}

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ActionRow, ProgramRow } from "@/lib/autopilot/contracts";
 import type { Candidate } from "@/lib/autopilot/opportunities";
+import type { CalendarPost } from "@/lib/autopilot/policy";
+import type { BrainLists } from "@/lib/autopilot/brief";
 import {
   actionsFromOpportunity,
   enqueueScan,
@@ -35,6 +37,8 @@ type World = {
   tasksRun: string[];
   sentToSite: string[];
   blog: boolean;
+  calendar: CalendarPost[];
+  brains: BrainLists;
 };
 
 function world(): World {
@@ -57,6 +61,8 @@ function world(): World {
     tasksRun: [] as string[],
     sentToSite: [] as string[],
     blog: true,
+    calendar: [] as CalendarPost[],
+    brains: { audience: [], competitors: [], market: [], trends: [] } as BrainLists,
   } as World;
   w.store = createMemoryAutopilotStore(() => w.clock);
   let n = 0;
@@ -74,7 +80,12 @@ function world(): World {
       tag: async (_ws, id, tag) => {
         const item = w.content.get(id);
         if (item)
-          item.meta = { ...item.meta, autopilot_action_id: tag.actionId, calendar_date: tag.date };
+          item.meta = {
+            ...item.meta,
+            autopilot_action_id: tag.actionId,
+            calendar_date: tag.date,
+            calendar_time: tag.time,
+          };
       },
       approve: async (_ws, id) => {
         const item = w.content.get(id);
@@ -129,6 +140,8 @@ function world(): World {
       recentTitles: async () => [],
       learnings: async () => w.learnings,
       storyHours: async () => [],
+      calendar: async () => w.calendar,
+      brains: async () => w.brains,
       propose: async ({ slots }) =>
         slots.map((s, i) => ({
           slot: s.index,
@@ -888,5 +901,225 @@ describe("more than posts", () => {
     expect(action.status).toBe("done");
     expect(action.result.site).toBe("skipped");
     expect(w.store.events.some((e) => e.summary.includes("No blog is set up"))).toBe(true);
+  });
+});
+
+describe("the calendar and the plan stay in step", () => {
+  const planFor = async (p: ProgramRow) => {
+    await w.store.insertActions([
+      { workspace_id: WS, program_id: p.id, kind: "plan", dedupe_key: `plan:${p.id}:1`, cycle: 1 },
+    ]);
+    await sweep(w);
+    return w.store.actions.filter((a) => a.kind === "content");
+  };
+
+  it("plans around a post a person already put on the calendar", async () => {
+    const p = await program(w);
+    const free = await planFor(p);
+    expect(free.length).toBeGreaterThan(0);
+    const taken = free[0].planned_for!.slice(0, 10);
+
+    w = world();
+    w.calendar = [{ date: taken, platform: "linkedin", title: "Our autumn sale" }];
+    const again = await planFor(await program(w));
+    expect(again).toHaveLength(free.length - 1);
+    expect(again.some((a) => a.planned_for!.startsWith(taken))).toBe(false);
+    const ready = w.store.events.find((e) => e.kind === "plan_ready")!;
+    expect(ready.summary).toMatch(/already has a post of yours/);
+  });
+
+  it("gives every planned post what it is for, and a theme when the brand has them", async () => {
+    const p = await program(w, {
+      strategy: {
+        summary: "Show up with useful posts.",
+        audience: "Owners",
+        voice: "Plain",
+        pillars: [
+          { title: "Tips", detail: "One thing to use today." },
+          { title: "Proof", detail: "What customers got." },
+        ],
+      },
+    });
+    const content = await planFor(p);
+    expect(content.every((a) => typeof a.result.aim === "string")).toBe(true);
+    expect(content.map((a) => a.result.pillar).every((x) => x === "Tips" || x === "Proof")).toBe(
+      true,
+    );
+  });
+
+  it("plans posts and Stories together, each row carrying its own details", async () => {
+    const p = await program(w, {
+      platforms: ["instagram"],
+      stories: { enabled: true, perDay: 1, frames: 3, platforms: ["instagram"] },
+    });
+    const content = await planFor(p);
+    const stories = content.filter((a) => a.content_type === "story");
+    const posts = content.filter((a) => a.content_type !== "story");
+    expect(stories.length).toBeGreaterThan(0);
+    expect(posts.length).toBeGreaterThan(0);
+    // Every row has a result object: a missing one is what stopped real plans.
+    expect(content.every((a) => a.result && typeof a.result === "object")).toBe(true);
+    expect(stories.every((a) => Array.isArray(a.result.story_platforms))).toBe(true);
+  });
+
+  it("sends a piece at the time a person moved it to on the calendar", async () => {
+    const p = await program(w);
+    const action = await piece(w, p);
+    await sweep(w);
+    const item = w.content.get(action.content_item_ids[0])!;
+    expect(item.meta.calendar_time).toBe("09:00");
+
+    // Dragged to Friday evening, then approved.
+    item.meta = { ...item.meta, calendar_date: "2026-10-09", calendar_time: "18:30" };
+    item.status = "approved";
+    tick(w, 5);
+    await sweep(w);
+    await sweep(w);
+    expect(action.status).toBe("scheduled");
+    expect(w.scheduled).toEqual([{ id: item.id, at: "2026-10-09T18:30:00.000Z" }]);
+    expect(action.planned_for).toBe("2026-10-09T18:30:00.000Z");
+  });
+
+  it("does not call a piece late when it was moved to a later day", async () => {
+    const p = await program(w);
+    const action = await piece(w, p);
+    await sweep(w);
+    const item = w.content.get(action.content_item_ids[0])!;
+    item.meta = { ...item.meta, calendar_date: "2026-10-20", calendar_time: "10:00" };
+    // Well past the first slot's grace, still before the new one.
+    tick(w, 6 * 24 * 60);
+    await sweep(w);
+    expect(action.status).toBe("needs_approval");
+    expect(action.planned_for).toBe("2026-10-20T10:00:00.000Z");
+  });
+
+  it("does not make a piece whose time passed while the worker was away", async () => {
+    const p = await program(w);
+    const action = await piece(w, p, { planned_for: "2026-10-04T09:00:00.000Z" });
+    await sweep(w);
+    expect(action.status).toBe("skipped");
+    expect(w.created).toHaveLength(0);
+    expect(action.credits_charged).toBe(0);
+    expect(w.store.events.at(-1)!.summary).toMatch(/time had passed/);
+  });
+
+  it("still makes a late piece a person asked to try again", async () => {
+    const p = await program(w);
+    const action = await piece(w, p, {
+      planned_for: "2026-10-04T09:00:00.000Z",
+      generation_attempt: 1,
+      result: { asked_again: true },
+    });
+    await sweep(w);
+    expect(action.status).toBe("needs_approval");
+    expect(w.created).toHaveLength(1);
+  });
+});
+
+describe("what a piece is built from", () => {
+  it("stores the brains' own words with each planned piece, never the model's", async () => {
+    w.brains = {
+      audience: [
+        { name: "Agency owners", detail: "Wants fewer tools." },
+        { name: "In-house leads", detail: "Wants proof." },
+      ],
+      competitors: [{ name: "Rivalo", detail: "Built for enterprises." }],
+      market: [{ name: "AI answers replace clicks", detail: "Show how to be cited." }],
+      trends: [],
+    };
+    const propose = w.ports.plan.propose;
+    w.ports.plan.propose = async (input) =>
+      (await propose(input)).map((p, i) => ({
+        ...p,
+        picks:
+          i === 0
+            ? {
+                audience: 1,
+                competitor: 0,
+                market: 9,
+                hook: "Your board wants proof, not a dashboard.",
+              }
+            : { audience: 42 },
+      }));
+    const p = await program(w);
+    await w.store.insertActions([
+      { workspace_id: WS, program_id: p.id, kind: "plan", dedupe_key: `plan:${p.id}:1`, cycle: 1 },
+    ]);
+    await sweep(w);
+    const content = w.store.actions
+      .filter((a) => a.kind === "content")
+      .sort((a, b) => (a.planned_for ?? "").localeCompare(b.planned_for ?? ""));
+    expect(content.length).toBeGreaterThan(1);
+    const first = content[0].result.brains as Record<string, { name: string }>;
+    expect(first.audience.name).toBe("In-house leads");
+    expect(first.competitor.name).toBe("Rivalo");
+    expect(first.market).toBeUndefined();
+    // A number that isn't on the list: the piece still gets a real group.
+    const second = content[1].result.brains as Record<string, { name: string }>;
+    expect(["Agency owners", "In-house leads"]).toContain(second.audience.name);
+  });
+});
+
+describe("when the maker is briefly unavailable", () => {
+  const failing = (retryable: boolean) => {
+    const create = w.ports.studio.create;
+    w.ports.studio.create = async (args) => {
+      const made = await create(args);
+      const job = w.jobs.get(made.job.id)!;
+      Object.assign(job, { status: "failed", error: "The render failed.", retryable });
+      return { job, credits: 0 };
+    };
+    return () => {
+      w.ports.studio.create = create;
+    };
+  };
+
+  it("tries again by itself, then makes the piece once the maker is back", async () => {
+    const p = await program(w);
+    const action = await piece(w, p, { planned_for: "2026-10-09T09:00:00.000Z" });
+    const restore = failing(true);
+    await sweep(w);
+    expect(action.status).toBe("planned");
+    expect(action.generation_attempt).toBe(1);
+    expect(action.content_item_ids).toEqual([]);
+    expect(w.store.events.at(-1)!.kind).toBe("piece_waiting");
+    // Not before its wait is over.
+    tick(w, 10);
+    await sweep(w);
+    expect(w.created).toHaveLength(1);
+
+    restore();
+    tick(w, 60);
+    await sweep(w);
+    expect(action.status).toBe("needs_approval");
+    expect(w.created).toEqual([`autopilot:${action.id}:0`, `autopilot:${action.id}:1`]);
+  });
+
+  it("stops after two tries and says so", async () => {
+    const p = await program(w);
+    const action = await piece(w, p, { planned_for: "2026-10-09T09:00:00.000Z" });
+    failing(true);
+    await sweep(w);
+    tick(w, 61);
+    await sweep(w);
+    expect(action.status).toBe("planned");
+    tick(w, 6 * 60 + 1);
+    await sweep(w);
+    expect(action.status).toBe("failed");
+    expect(w.created).toHaveLength(3);
+  });
+
+  it("does not retry a piece that failed for its own reasons, or one with no time left", async () => {
+    const p = await program(w);
+    const own = await piece(w, p, { planned_for: "2026-10-09T09:00:00.000Z" });
+    failing(false);
+    await sweep(w);
+    expect(own.status).toBe("failed");
+
+    w = world();
+    const soon = await piece(w, await program(w), { planned_for: "2026-10-05T08:30:00.000Z" });
+    failing(true);
+    await sweep(w);
+    expect(soon.status).toBe("failed");
   });
 });

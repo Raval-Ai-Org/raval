@@ -26,6 +26,7 @@ import * as links from "./links";
 import * as mcp from "./mcp";
 import * as memory from "./memory";
 import * as notion from "./notion";
+import * as publish from "./publish";
 import * as schedules from "./schedules";
 import * as slack from "./slack";
 import * as sitePublishing from "./site-publishing";
@@ -64,6 +65,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   mcp,
   memory,
   notion,
+  publish,
   schedules,
   slack,
   "site-publishing": sitePublishing,

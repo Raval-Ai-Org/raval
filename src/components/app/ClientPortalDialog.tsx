@@ -1,9 +1,17 @@
 "use client";
 
-import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
+/**
+ * The client portal (Share → Client portal). Three places in one window:
+ * Inbox (what clients said, and what to do about it), New link (pick posts,
+ * get a link) and Links (the links that exist).
+ *
+ * Opened by the "open:client-portal" app event; AppShell mounts it once. The
+ * list is loaded once here and shared by all three, so they never disagree.
+ */
+
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { appendNote } from "@/lib/notes-store";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { AppModalShell } from "@/components/app/AppModalShell";
@@ -11,30 +19,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/empty-state";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { dsIconBtn } from "@/components/app/surface/buttons";
 import { toast } from "@/lib/toast";
 import {
   Users,
   Link as LinkIcon,
-  Copy,
   Check,
   Inbox,
-  Plus,
-  Loader2,
-  ShieldCheck,
-  Sparkles,
   ThumbsUp,
   ThumbsDown,
   Lightbulb,
-  Calendar,
-  FileText,
-  Search,
-  Trash2,
   MessageSquare,
-  Eye,
   Mail,
   RefreshCw,
+  Power,
 } from "@/components/ui/gemini-icons";
-import { LoadingIndicator } from "@/components/ui/loading-indicator";
 import { cn } from "@/lib/utils";
 
 /** A guardrail finding returned by POST /api/shares when review is needed. */
@@ -47,10 +56,6 @@ type ContentRow = {
   channel: string | null;
   status: string;
   kind: string;
-  scheduled_at: string | null;
-  hashtags: string[] | null;
-  media_url: string | null;
-  updated_at: string;
 };
 type ShareRow = {
   id: string;
@@ -74,223 +79,90 @@ type EventRow = {
   kind: string;
   body: string | null;
   actor_name: string | null;
-  actor_email: string | null;
   marketer_decision: string;
   actor_type?: "client" | "team";
-  marketer_read_at?: string | null;
-  client_read_at?: string | null;
   created_at: string;
+};
+type ItemRow = { id: string; share_id: string; title: string | null };
+
+type Portal = {
+  shares: ShareRow[];
+  events: EventRow[];
+  itemTitles: Record<string, string>;
+  loaded: boolean;
+  failed: boolean;
+  refresh: () => Promise<void>;
 };
 
 const EVENT_META: Record<string, { icon: any; tone: string; label: string }> = {
-  approved: { icon: ThumbsUp, tone: "text-emerald-600", label: "Approved" },
-  rejected: { icon: ThumbsDown, tone: "text-red-600", label: "Rejected" },
-  requested_changes: { icon: MessageSquare, tone: "text-amber-600", label: "Changes requested" },
-  suggested: { icon: Lightbulb, tone: "text-[hsl(var(--brand-blue))]", label: "Suggestion" },
+  approved: { icon: ThumbsUp, tone: "text-success", label: "Approved" },
+  rejected: { icon: ThumbsDown, tone: "text-destructive", label: "Rejected" },
+  requested_changes: { icon: MessageSquare, tone: "text-warning", label: "Asked for changes" },
+  suggested: { icon: Lightbulb, tone: "text-info", label: "Suggestion" },
   commented: { icon: MessageSquare, tone: "text-foreground/80", label: "Comment" },
-  viewed: { icon: Eye, tone: "text-muted-foreground", label: "Viewed" },
-  replied: { icon: MessageSquare, tone: "text-foreground/80", label: "Your team replied" },
+  replied: { icon: MessageSquare, tone: "text-muted-foreground", label: "You replied" },
 };
 
-/**
- * The client portal. Opened by the "open:client-portal" app event (sidebar,
- * Share menu, chat tools, Studio suggestions); AppShell mounts it once.
- */
-export function ClientPortalDialog({ workspaceId }: { workspaceId: string | null }) {
-  const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"share" | "inbox" | "manage">("inbox");
-  const [pending, setPending] = useState(0);
+const STATUS_WORDS: Record<string, string> = {
+  draft: "Draft",
+  pending: "In review",
+  approved: "Approved",
+  rejected: "Rejected",
+  scheduled: "Scheduled",
+  publishing: "Going out",
+  published: "Published",
+  failed: "Didn't go out",
+  partial_failed: "Partly sent",
+};
 
-  useEffect(() => {
-    const h = () => setOpen(true);
-    addAppEventListener("open:client-portal", h);
-    return () => removeAppEventListener("open:client-portal", h);
-  }, []);
+const isWaiting = (e: EventRow) =>
+  e.actor_type !== "team" && e.marketer_decision === "pending" && e.kind !== "viewed";
 
-  // Pending count for the Inbox tab badge, refreshed while the dialog is open.
-  useEffect(() => {
-    if (!workspaceId || !open) return;
-    let cancel = false;
-    const load = async () => {
-      try {
-        const r = await authedFetch("/api/shares?action=list", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspaceId }),
-        });
-        if (!r.ok) return;
-        const data = await r.json();
-        if (cancel) return;
-        const p = (data.events ?? []).filter(
-          (e: EventRow) =>
-            e.actor_type !== "team" && e.marketer_decision === "pending" && e.kind !== "viewed",
-        ).length;
-        setPending(p);
-      } catch {}
-    };
-    load();
-    const id = setInterval(() => {
-      if (!document.hidden) load();
-    }, 30_000);
-    return () => {
-      cancel = true;
-      clearInterval(id);
-    };
-  }, [workspaceId, open]);
+const shortDate = (iso: string) =>
+  new Date(iso).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
-  const tabs = [
-    {
-      id: "inbox" as const,
-      label: "Inbox",
-      icon: Inbox,
-      badge: pending,
-      hint: "Decide on client feedback",
-    },
-    { id: "share" as const, label: "New share", icon: Plus, badge: 0, hint: "Build a review link" },
-    {
-      id: "manage" as const,
-      label: "Links",
-      icon: ShieldCheck,
-      badge: 0,
-      hint: "Your share links",
-    },
-  ];
-
-  return (
-    <>
-      <AppModalShell
-        open={open}
-        onOpenChange={setOpen}
-        size="lg"
-        Icon={Users}
-        title="Share your work. Stay in control."
-        description="Send drafts to clients to approve"
-      >
-        <div className="px-5 sm:px-6 pt-4">
-          <div className="inline-flex w-full sm:w-auto items-center gap-0.5 rounded-full border border-border/60 bg-background/70 p-1 backdrop-blur-md shadow-sm">
-            {tabs.map((t) => {
-              const active = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  title={t.hint}
-                  className={cn(
-                    "relative inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
-                    active ? "text-background" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {active && (
-                    <motion.span
-                      layoutId="client-tab-active"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      className="absolute inset-0 rounded-full bg-gradient-to-r from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))] shadow-[0_4px_14px_-4px_hsl(var(--brand-green)/0.55)]"
-                    />
-                  )}
-                  <t.icon className="relative h-3.5 w-3.5" />
-                  <span className="relative">{t.label}</span>
-                  {t.badge > 0 && (
-                    <motion.span
-                      layout
-                      className={cn(
-                        "relative grid h-4 min-w-[16px] place-items-center rounded-full px-1 text-[9.5px] font-semibold tabular-nums",
-                        active
-                          ? "bg-background/25 text-background"
-                          : "bg-[hsl(var(--brand-green))] text-background",
-                      )}
-                    >
-                      {t.badge}
-                    </motion.span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="px-5 sm:px-6 py-5">
-          <AnimatePresence mode="wait" initial={false}>
-            {tab === "inbox" && (
-              <motion.div
-                key="inbox"
-                initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -6, filter: "blur(4px)" }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <InboxView workspaceId={workspaceId} onPendingChange={setPending} />
-              </motion.div>
-            )}
-            {tab === "share" && (
-              <motion.div
-                key="share"
-                initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -6, filter: "blur(4px)" }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <NewShareView workspaceId={workspaceId} onCreated={() => setTab("manage")} />
-              </motion.div>
-            )}
-            {tab === "manage" && (
-              <motion.div
-                key="manage"
-                initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -6, filter: "blur(4px)" }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <ManageView workspaceId={workspaceId} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </AppModalShell>
-    </>
-  );
+async function post(action: string, body: unknown): Promise<Response> {
+  return authedFetch(`/api/shares?action=${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
-/* ───────── Inbox ───────── */
-function InboxView({
-  workspaceId,
-  onPendingChange,
-}: {
-  workspaceId: string | null;
-  onPendingChange: (count: number) => void;
-}) {
-  const [events, setEvents] = useState<EventRow[]>([]);
+function usePortal(workspaceId: string | null, open: boolean): Portal {
   const [shares, setShares] = useState<ShareRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [replyTo, setReplyTo] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState("");
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [items, setItems] = useState<ItemRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
-    setLoading(true);
     try {
-      const r = await authedFetch("/api/shares?action=list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId }),
-      });
-      if (!r.ok) return;
+      const r = await post("list", { workspaceId });
+      if (!r.ok) throw new Error();
       const data = await r.json();
-      setEvents(data.events ?? []);
       setShares(data.shares ?? []);
+      setEvents(data.events ?? []);
+      setItems(data.items ?? []);
+      setFailed(false);
+      setLoaded(true);
     } catch {
-      // Keep the last good list; the next poll retries.
-    } finally {
-      setLoading(false);
+      // Keep the last good list; only a first load shows the error.
+      setFailed(true);
     }
   }, [workspaceId]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId || !open) return;
+    setLoaded(false);
+    setFailed(false);
+    void refresh();
     const channel = supabase
       .channel(`client-events-inbox:${workspaceId}`)
       .on(
@@ -306,367 +178,421 @@ function InboxView({
       window.clearInterval(interval);
       void supabase.removeChannel(channel);
     };
-  }, [refresh, workspaceId]);
+  }, [workspaceId, open, refresh]);
 
-  const decide = async (eventId: string, decision: "accepted" | "dismissed" | "applied") => {
-    setBusy(eventId);
-    try {
-      const r = await authedFetch("/api/shares?action=decide", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId, decision }),
-      });
-      if (!r.ok) throw new Error(await errorText(r));
-      toast.success(
-        decision === "accepted" ? "Accepted" : decision === "applied" ? "Applied" : "Dismissed",
-      );
-      refresh();
-    } catch (e: any) {
-      toast.error("Couldn't update", { description: e?.message });
-    } finally {
-      setBusy(null);
-    }
-  };
+  const itemTitles = useMemo(
+    () => Object.fromEntries(items.map((i) => [i.id, i.title ?? "Post"])),
+    [items],
+  );
+  return { shares, events, itemTitles, loaded, failed, refresh };
+}
 
-  const saveToMemory = async (ev: EventRow) => {
-    if (!workspaceId) return;
+export function ClientPortalDialog({ workspaceId }: { workspaceId: string | null }) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"inbox" | "new" | "links">("inbox");
+
+  useEffect(() => {
+    const h = () => setOpen(true);
+    addAppEventListener("open:client-portal", h);
+    return () => removeAppEventListener("open:client-portal", h);
+  }, []);
+
+  const portal = usePortal(workspaceId, open);
+  const waiting = portal.events.filter(isWaiting).length;
+
+  return (
+    <AppModalShell
+      open={open}
+      onOpenChange={setOpen}
+      size="lg"
+      Icon={Users}
+      title="Client portal"
+      description="Send work to a client and get their answer"
+      bodyClassName="px-5 py-5 sm:px-6"
+    >
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+        <TabsList>
+          <TabsTrigger value="inbox">
+            Inbox
+            {waiting > 0 && (
+              <span className="ml-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular-nums text-primary-foreground">
+                {waiting}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="new">New link</TabsTrigger>
+          <TabsTrigger value="links">
+            Links{portal.shares.length ? ` · ${portal.shares.length}` : ""}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="inbox" className="mt-5">
+          <InboxView workspaceId={workspaceId} portal={portal} onNew={() => setTab("new")} />
+        </TabsContent>
+        <TabsContent value="new" className="mt-5">
+          <NewShareView
+            workspaceId={workspaceId}
+            onDone={() => {
+              void portal.refresh();
+              setTab("links");
+            }}
+          />
+        </TabsContent>
+        <TabsContent value="links" className="mt-5">
+          <ManageView portal={portal} onNew={() => setTab("new")} />
+        </TabsContent>
+      </Tabs>
+    </AppModalShell>
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <div className="space-y-2" aria-label="Loading">
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} className="h-[68px] w-full rounded-[var(--ds-radius-well)]" />
+      ))}
+    </div>
+  );
+}
+
+/* ───────── Inbox ───────── */
+function InboxView({
+  workspaceId,
+  portal,
+  onNew,
+}: {
+  workspaceId: string | null;
+  portal: Portal;
+  onNew: () => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+
+  const decide = async (
+    ev: EventRow,
+    decision: "accepted" | "dismissed" | "applied",
+    quiet = false,
+  ): Promise<boolean> => {
     setBusy(ev.id);
     try {
-      // Written straight to the workspace's notes so it is kept even when the
-      // Notes panel isn't open; a mounted panel refreshes via notes:changed.
-      const text = [`Client suggestion · ${ev.actor_name ?? "client"}`, ev.body ?? ""]
-        .filter(Boolean)
-        .join("\n\n");
-      if (!appendNote(workspaceId, { text, color: "sky" })) {
-        toast.error("Couldn't save to Memory", {
-          description: "Browser storage is unavailable.",
-        });
-        return;
+      const r = await post("decide", { eventId: ev.id, decision });
+      if (!r.ok) throw new Error(await errorText(r));
+      const data = (await r.json().catch(() => null)) as { content?: string } | null;
+      if (data?.content === "approved") emitAppEvent("content:changed");
+      if (!quiet) {
+        toast.success(
+          decision === "dismissed"
+            ? "Dismissed"
+            : data?.content === "approved"
+              ? "Post approved"
+              : data?.content === "already"
+                ? "Marked as done"
+                : "Done",
+          {
+            description:
+              data?.content === "approved" ? "It's ready for a time in Publish." : undefined,
+          },
+        );
       }
-      await decide(ev.id, "applied");
-      toast.success("Saved to Memory");
+      await portal.refresh();
+      return true;
+    } catch (e: any) {
+      toast.error("Couldn't do that", { description: e?.message });
+      return false;
     } finally {
       setBusy(null);
     }
   };
 
-  const reply = async (shareId: string) => {
+  // Notes live in this browser, so the note is written first and the
+  // suggestion is only marked done once it is really kept.
+  const saveAsNote = async (ev: EventRow) => {
+    if (!workspaceId) return;
+    const text = [`Client suggestion · ${ev.actor_name ?? "client"}`, ev.body ?? ""]
+      .filter(Boolean)
+      .join("\n\n");
+    if (!appendNote(workspaceId, { text, color: "sky" })) {
+      toast.error("Couldn't save the note", { description: "Browser storage is unavailable." });
+      return;
+    }
+    if (await decide(ev, "applied", true)) toast.success("Saved to your notes");
+  };
+
+  const reply = async (ev: EventRow) => {
     if (!replyText.trim()) return;
-    setBusy(`reply:${shareId}`);
+    setBusy(`reply:${ev.id}`);
     try {
-      const r = await authedFetch("/api/shares?action=reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shareId, body: replyText.trim() }),
-      });
+      const r = await post("reply", { shareId: ev.share_id, body: replyText.trim() });
       if (!r.ok) throw new Error(await errorText(r));
       setReplyText("");
       setReplyTo(null);
-      toast.success("Reply sent to the client");
-      refresh();
+      toast.success("Reply sent", { description: "Your client sees it on their page." });
+      await portal.refresh();
     } catch (e: any) {
-      toast.error("Couldn't send reply", { description: e?.message });
+      toast.error("Couldn't send the reply", { description: e?.message });
     } finally {
       setBusy(null);
     }
   };
 
-  const pending = events.filter(
-    (e) => e.actor_type !== "team" && e.marketer_decision === "pending" && e.kind !== "viewed",
+  const sharesById = useMemo(
+    () => Object.fromEntries(portal.shares.map((s) => [s.id, s])),
+    [portal.shares],
   );
-  const recent = events
-    .filter((e) => e.marketer_decision !== "pending" || e.kind === "viewed")
-    .slice(0, 20);
-  const sharesById = useMemo(() => Object.fromEntries(shares.map((s) => [s.id, s])), [shares]);
+  const waiting = portal.events.filter(isWaiting);
+  const earlier = portal.events.filter((e) => !isWaiting(e) && e.kind !== "viewed").slice(0, 20);
 
-  useEffect(() => {
-    onPendingChange(pending.length);
-  }, [pending.length, onPendingChange]);
+  if (!portal.loaded) {
+    return portal.failed ? (
+      <ErrorState size="sm" title="Couldn't load the inbox" onRetry={() => void portal.refresh()} />
+    ) : (
+      <ListSkeleton />
+    );
+  }
 
-  if (loading && events.length === 0) {
-    return <LoadingIndicator label="Loading activity" className="py-12" />;
+  if (portal.shares.length === 0) {
+    return (
+      <EmptyState
+        icon={Inbox}
+        title="Nothing shared yet"
+        description="Send a client a link to your posts. Their answers show up here."
+        action={<Button onClick={onNew}>Make a link</Button>}
+      />
+    );
   }
 
   return (
-    <div className="space-y-4">
-      <section>
-        <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          Awaiting your decision · {pending.length}
-        </div>
-        {pending.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="relative overflow-hidden rounded-2xl border border-dashed border-border/60 bg-gradient-to-br from-[hsl(var(--brand-blue)/0.04)] to-[hsl(var(--brand-green)/0.05)] py-8 text-center"
-          >
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-[13px] font-medium">All caught up</div>
-              <div className="text-[11.5px] text-muted-foreground max-w-xs">
-                No pending approvals or suggestions. When clients act, you'll see it land here.
-              </div>
-            </div>
-          </motion.div>
+    <div className="space-y-6">
+      <div>
+        <div className="ds-label mb-2">Waiting for you · {waiting.length}</div>
+        {waiting.length === 0 ? (
+          <div className="ds-well px-4 py-6 text-center text-[13px] text-muted-foreground">
+            You&apos;re all caught up.
+          </div>
         ) : (
-          <div className="space-y-2">
-            {pending.map((ev, i) => {
+          <ul className="space-y-2">
+            {waiting.map((ev) => {
               const meta = EVENT_META[ev.kind] ?? EVENT_META.commented;
               const Icon = meta.icon;
               const share = sharesById[ev.share_id];
+              const about = ev.item_id ? portal.itemTitles[ev.item_id] : null;
+              const working = busy === ev.id;
               return (
-                <motion.div
-                  key={ev.id}
-                  layout
-                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: -20, scale: 0.96 }}
-                  transition={{ delay: i * 0.04, type: "spring", stiffness: 300, damping: 26 }}
-                  className="group relative overflow-hidden rounded-xl border border-border/60 bg-card p-3.5 transition-shadow hover:shadow-[0_4px_18px_-8px_hsl(var(--brand-green)/0.25)]"
-                >
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b",
-                      ev.kind === "approved"
-                        ? "from-emerald-400 to-emerald-600"
-                        : ev.kind === "rejected"
-                          ? "from-red-400 to-red-600"
-                          : ev.kind === "suggested"
-                            ? "from-[hsl(var(--brand-blue))] to-[hsl(var(--brand-green))]"
-                            : "from-amber-400 to-amber-600",
-                    )}
-                  />
+                <li key={ev.id} className="ds-tile p-3.5">
                   <div className="flex items-start gap-3">
-                    <div
+                    <span
                       className={cn(
-                        "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-secondary",
+                        "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)]",
                         meta.tone,
                       )}
                     >
-                      <Icon className="h-3.5 w-3.5" />
-                    </div>
+                      <Icon className="size-4" />
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 text-[12.5px]">
-                        <span className={cn("font-semibold", meta.tone)}>{meta.label}</span>
-                        <span className="text-muted-foreground">
-                          by {ev.actor_name ?? "client"}
+                      <p className="text-[13px]">
+                        <span className="font-semibold">{ev.actor_name ?? "Your client"}</span>{" "}
+                        <span className={cn("font-medium", meta.tone)}>
+                          · {meta.label.toLowerCase()}
                         </span>
-                        {share && <span className="text-muted-foreground">· {share.title}</span>}
-                        <span className="ml-auto text-[10.5px] text-muted-foreground">
-                          {new Date(ev.created_at).toLocaleString()}
-                        </span>
-                      </div>
+                      </p>
+                      <p className="truncate text-[12px] text-muted-foreground">
+                        {[about, share?.title, shortDate(ev.created_at)]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
                       {ev.body && (
-                        <p className="mt-1.5 text-[13px] whitespace-pre-wrap">{ev.body}</p>
+                        <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed">
+                          {ev.body}
+                        </p>
                       )}
-                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                        {ev.kind === "suggested" ? (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => saveToMemory(ev)}
-                              loading={busy === ev.id}
-                            >
-                              <Lightbulb className="h-3.5 w-3.5 mr-1" /> Save to Memory
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => decide(ev.id, "dismissed")}
-                              loading={busy === ev.id}
-                            >
-                              Dismiss
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => decide(ev.id, "accepted")}
-                              loading={busy === ev.id}
-                            >
-                              <Check className="h-3.5 w-3.5 mr-1" /> Accept
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => decide(ev.id, "dismissed")}
-                              loading={busy === ev.id}
-                            >
-                              Dismiss
-                            </Button>
-                          </>
-                        )}
-                        {share && (
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        {ev.kind === "approved" ? (
                           <Button
                             size="sm"
-                            variant="ghost"
-                            onClick={() => setReplyTo(replyTo === share.id ? null : share.id)}
+                            loading={working}
+                            onClick={() => decide(ev, "accepted")}
                           >
-                            Reply
+                            Approve post
+                          </Button>
+                        ) : ev.kind === "suggested" ? (
+                          <Button size="sm" loading={working} onClick={() => saveAsNote(ev)}>
+                            Save as note
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            loading={working}
+                            onClick={() => decide(ev, "accepted")}
+                          >
+                            Mark as done
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={working}
+                          onClick={() => {
+                            setReplyText("");
+                            setReplyTo(replyTo === ev.id ? null : ev.id);
+                          }}
+                        >
+                          Reply
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={working}
+                          onClick={() => decide(ev, "dismissed")}
+                        >
+                          Dismiss
+                        </Button>
                       </div>
-                      {share && replyTo === share.id && (
-                        <div className="mt-2 flex gap-2">
+                      {replyTo === ev.id && (
+                        <div className="mt-2.5 space-y-2">
                           <Textarea
                             value={replyText}
                             onChange={(e) => setReplyText(e.target.value)}
                             rows={2}
-                            placeholder="Reply to the client"
-                            className="text-[12px]"
+                            autoFocus
+                            placeholder="Write a reply"
+                            aria-label="Reply to your client"
                           />
-                          <Button
-                            size="sm"
-                            onClick={() => reply(share.id)}
-                            disabled={!replyText.trim()}
-                            loading={busy === `reply:${share.id}`}
-                          >
-                            Send
-                          </Button>
+                          <div className="flex justify-end">
+                            <Button
+                              size="sm"
+                              onClick={() => reply(ev)}
+                              disabled={!replyText.trim()}
+                              loading={busy === `reply:${ev.id}`}
+                            >
+                              Send reply
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
-                </motion.div>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
-      </section>
+      </div>
 
-      {recent.length > 0 && (
-        <section>
-          <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-            Activity
-          </div>
-          <div className="rounded-xl border border-border/60 divide-y divide-border/40">
-            {recent.map((ev) => {
+      {earlier.length > 0 && (
+        <div>
+          <div className="ds-label mb-2">Earlier</div>
+          <ul className="ds-tile divide-y divide-border/50 overflow-hidden">
+            {earlier.map((ev) => {
               const meta = EVENT_META[ev.kind] ?? EVENT_META.commented;
               const Icon = meta.icon;
               return (
-                <div key={ev.id} className="flex items-center gap-2.5 px-3 py-2 text-[12px]">
-                  <Icon className={cn("h-3.5 w-3.5 shrink-0", meta.tone)} />
-                  <span className="truncate">
-                    <span className={cn("font-medium", meta.tone)}>{meta.label}</span>
-                    {ev.actor_name ? ` by ${ev.actor_name}` : ""}
-                    {ev.body ? ` — ${ev.body.slice(0, 80)}` : ""}
+                <li key={ev.id} className="flex items-center gap-2.5 px-3.5 py-2.5 text-[12.5px]">
+                  <Icon className={cn("size-3.5 shrink-0", meta.tone)} />
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="font-medium">
+                      {ev.actor_type === "team" ? "You replied" : meta.label}
+                    </span>
+                    {ev.actor_type !== "team" && ev.actor_name ? ` · ${ev.actor_name}` : ""}
+                    {ev.body ? <span className="text-muted-foreground"> · {ev.body}</span> : null}
                   </span>
-                  <span className="ml-auto text-[10.5px] text-muted-foreground shrink-0">
-                    {new Date(ev.created_at).toLocaleString()}
+                  <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                    {shortDate(ev.created_at)}
                   </span>
-                </div>
+                </li>
               );
             })}
-          </div>
-        </section>
+          </ul>
+        </div>
       )}
     </div>
   );
 }
 
-/* ───────── New share ───────── */
-function NewShareView({
-  workspaceId,
-  onCreated,
-}: {
-  workspaceId: string | null;
-  onCreated: () => void;
-}) {
+/* ───────── New link ───────── */
+function NewShareView({ workspaceId, onDone }: { workspaceId: string | null; onDone: () => void }) {
   const [title, setTitle] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [allowComments, setAllowComments] = useState(true);
   const [allowApprovals, setAllowApprovals] = useState(true);
   const [allowDownload, setAllowDownload] = useState(false);
-  const [expiresInDays, setExpiresInDays] = useState<number>(14);
+  const [expiresInDays, setExpiresInDays] = useState("14");
   const [password, setPassword] = useState("");
+  const [showOptions, setShowOptions] = useState(false);
 
-  const [content, setContent] = useState<ContentRow[]>([]);
+  const [content, setContent] = useState<ContentRow[] | null>(null);
+  const [contentFailed, setContentFailed] = useState(false);
   const [picked, setPicked] = useState<Record<string, boolean>>({});
-  const [loadingContent, setLoadingContent] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [created, setCreated] = useState<{ url: string; slug: string } | null>(null);
+  const [created, setCreated] = useState<{ url: string } | null>(null);
   const [copied, setCopied] = useState(false);
   // Guardrail findings the server wants acknowledged before sharing (409).
   const [review, setReview] = useState<ShareFinding[] | null>(null);
 
-  useEffect(() => {
+  const loadContent = useCallback(async () => {
     if (!workspaceId) return;
-    setLoadingContent(true);
-    supabase
+    setContentFailed(false);
+    const { data, error } = await supabase
       .from("content_items")
-      .select(
-        "id, title, body, channel, status, kind, scheduled_at, hashtags, media_url, updated_at",
-      )
+      .select("id, title, body, channel, status, kind")
       .eq("workspace_id", workspaceId)
       .order("updated_at", { ascending: false })
-      .limit(50)
-      .then(({ data }) => {
-        setContent((data ?? []) as any);
-        setLoadingContent(false);
-      });
+      .limit(50);
+    if (error) setContentFailed(true);
+    else setContent((data ?? []) as ContentRow[]);
   }, [workspaceId]);
 
-  const selectedCount = Object.values(picked).filter(Boolean).length;
+  useEffect(() => {
+    void loadContent();
+  }, [loadContent]);
+
+  const selected = (content ?? []).filter((c) => picked[c.id]);
+
+  const copy = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      window.prompt("Copy this link", url);
+    }
+  };
 
   const create = async (acknowledgeWarnings = false) => {
-    if (!workspaceId) return;
-    if (!title.trim()) {
-      toast.error("Add a title");
-      return;
-    }
-    const items = content
-      .filter((c) => picked[c.id])
-      .map((c) => ({
-        kind: "content_item" as const,
-        refId: c.id,
-        title: c.title ?? "Untitled",
-        description: c.body?.slice(0, 200) ?? "",
-        snapshot: {
-          body: c.body,
-          channel: c.channel,
-          kind: c.kind,
-          scheduled_at: c.scheduled_at,
-          hashtags: c.hashtags,
-          media_url: c.media_url,
-        },
-      }));
-    if (items.length === 0) {
-      toast.error("Pick at least one item to share");
-      return;
-    }
+    if (!workspaceId || busy) return;
+    if (!title.trim()) return void toast.error("Give the link a name");
+    if (selected.length === 0) return void toast.error("Pick at least one post");
     if (password.trim() && password.trim().length < 8) {
-      toast.error("Password needs at least 8 characters");
-      return;
+      return void toast.error("The password needs at least 8 characters");
     }
     if (clientEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail.trim())) {
-      toast.error("Enter a valid client email");
-      return;
+      return void toast.error("Enter a valid client email");
     }
 
     setBusy(true);
     try {
-      const expiresAt =
-        expiresInDays > 0 ? new Date(Date.now() + expiresInDays * 86400_000).toISOString() : null;
-      const r = await authedFetch("/api/shares?action=create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId,
-          title: title.trim(),
-          clientName: clientName.trim() || undefined,
-          clientEmail: clientEmail.trim() || null,
-          password: password.trim() || null,
-          expiresAt,
-          allowComments,
-          allowApprovals,
-          allowDownload,
-          items,
-          acknowledgeWarnings,
-        }),
+      const days = Number(expiresInDays);
+      const r = await post("create", {
+        workspaceId,
+        title: title.trim(),
+        clientName: clientName.trim() || undefined,
+        clientEmail: clientEmail.trim() || null,
+        password: password.trim() || null,
+        expiresAt: days > 0 ? new Date(Date.now() + days * 86400_000).toISOString() : null,
+        allowComments,
+        allowApprovals,
+        allowDownload,
+        // The server copies each post from its own row; only the id matters.
+        items: selected.map((c) => ({ kind: "content_item" as const, refId: c.id })),
+        acknowledgeWarnings,
       });
       if (r.status === 409) {
-        const body = (await r.json().catch(() => null)) as {
+        const body = (await r
+          .clone()
+          .json()
+          .catch(() => null)) as {
           requiresAcknowledgement?: boolean;
           findings?: ShareFinding[];
         } | null;
@@ -675,17 +601,14 @@ function NewShareView({
           return;
         }
       }
+      // A plan limit shows its own upgrade notice.
+      if (r.status === 402) return;
       if (!r.ok) throw new Error(await errorText(r));
       const data = await r.json();
       setReview(null);
-      setCreated({ url: data.url, slug: data.slug });
-      try {
-        await navigator.clipboard.writeText(data.url);
-        setCopied(true);
-      } catch {}
-      toast.success("Share link created — copied to clipboard");
+      setCreated({ url: data.url });
     } catch (e: any) {
-      toast.error("Couldn't create share", { description: e?.message });
+      toast.error("Couldn't make the link", { description: e?.message });
     } finally {
       setBusy(false);
     }
@@ -693,199 +616,210 @@ function NewShareView({
 
   if (created) {
     return (
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 text-center">
-          <div className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-full bg-emerald-500/15 text-emerald-600">
-            <Check className="h-5 w-5" />
-          </div>
-          <div className="text-[14px] font-semibold">Share ready</div>
-          <div className="text-[12px] text-muted-foreground">Send this link to your client.</div>
-          <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/60 bg-background px-2.5 py-1.5">
-            <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              readOnly
-              value={created.url}
-              className="flex-1 truncate bg-transparent text-[12px] outline-none"
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(created.url);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                } catch {}
-              }}
-            >
-              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            </Button>
-          </div>
-          {password.trim() && (
-            <div className="mt-2 text-[11.5px] text-muted-foreground">
-              Send the password separately.
-            </div>
-          )}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-            <Button size="sm" variant="ghost" onClick={() => window.open(created.url, "_blank")}>
-              Preview as client
-            </Button>
-            <Button size="sm" variant="outline" asChild>
-              <a href={shareMailto(created.url, title.trim(), clientEmail.trim() || null)}>
-                <Mail className="h-3.5 w-3.5 mr-1" /> Email to client
-              </a>
-            </Button>
-            <Button size="sm" onClick={onCreated}>
-              Done
-            </Button>
-          </div>
+      <div className="ds-tile mx-auto max-w-lg p-6 text-center">
+        <span className="mx-auto grid size-11 place-items-center rounded-full bg-primary/15 text-primary">
+          <Check className="size-5" />
+        </span>
+        <p className="mt-3 text-[15px] font-semibold">Your link is ready</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          {password.trim()
+            ? "Send it to your client, and the password in a separate message."
+            : "Send it to your client. They don't need an account."}
+        </p>
+        <div className="ds-well mt-4 flex items-center gap-2 py-1.5 pl-3.5 pr-1.5">
+          <LinkIcon className="size-3.5 shrink-0 text-muted-foreground" />
+          <input
+            readOnly
+            value={created.url}
+            aria-label="Link for your client"
+            onFocus={(e) => e.currentTarget.select()}
+            className="min-w-0 flex-1 truncate bg-transparent text-[12.5px] outline-none"
+          />
+          <Button size="sm" onClick={() => copy(created.url)}>
+            {copied ? "Copied" : "Copy link"}
+          </Button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <a href={created.url} target="_blank" rel="noopener noreferrer">
+              See what they see
+            </a>
+          </Button>
+          <Button size="sm" variant="outline" asChild>
+            <a href={shareMailto(created.url, title.trim(), clientEmail.trim() || null)}>
+              <Mail /> Email it
+            </a>
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onDone}>
+            Done
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid sm:grid-cols-2 gap-2">
-        <div>
-          <Label>Title</Label>
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Acme — week of June 30"
-          />
-        </div>
-        <div>
-          <Label>Client name (optional)</Label>
-          <Input
-            value={clientName}
-            onChange={(e) => setClientName(e.target.value)}
-            placeholder="Acme Co."
-          />
-        </div>
-        <div>
-          <Label>Client email (optional)</Label>
-          <Input
-            value={clientEmail}
-            onChange={(e) => setClientEmail(e.target.value)}
-            placeholder="hello@acme.com"
-          />
-        </div>
-        <div>
-          <Label>Expires in</Label>
-          <select
-            value={expiresInDays}
-            onChange={(e) => setExpiresInDays(Number(e.target.value))}
-            className="h-9 w-full rounded-md border border-border bg-background px-2 text-[13px] outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value={3}>3 days</option>
-            <option value={7}>7 days</option>
-            <option value={14}>14 days</option>
-            <option value={30}>30 days</option>
-            <option value={0}>Never</option>
-          </select>
-        </div>
-        <div className="sm:col-span-2">
-          <Label>Password (optional)</Label>
-          <Input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Leave blank for link-only access"
-            type="text"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2">
-        <Toggle label="Allow approvals" value={allowApprovals} onChange={setAllowApprovals} />
-        <Toggle label="Allow comments" value={allowComments} onChange={setAllowComments} />
-        <Toggle label="Allow download" value={allowDownload} onChange={setAllowDownload} />
+    <div className="space-y-5">
+      <div>
+        <FieldLabel htmlFor="share-title">Name</FieldLabel>
+        <Input
+          id="share-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Posts for next week"
+          maxLength={200}
+        />
       </div>
 
       <div>
         <div className="mb-1.5 flex items-center justify-between">
-          <Label>
-            What to share <span className="text-muted-foreground">({selectedCount} picked)</span>
-          </Label>
-          <button
-            onClick={() =>
-              setPicked(Object.fromEntries(content.slice(0, 10).map((c) => [c.id, true])))
-            }
-            className="text-[11px] text-muted-foreground hover:text-foreground"
-          >
-            Pick latest 10
-          </button>
+          <FieldLabel>Posts to share{selected.length ? ` · ${selected.length}` : ""}</FieldLabel>
+          {selected.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setPicked({})}
+              className="text-[12px] text-muted-foreground hover:text-foreground"
+            >
+              Clear
+            </button>
+          )}
         </div>
-        {loadingContent ? (
-          <LoadingIndicator label="Loading content" size="sm" className="py-6" />
+        {contentFailed ? (
+          <ErrorState
+            size="sm"
+            title="Couldn't load your posts"
+            onRetry={() => void loadContent()}
+          />
+        ) : !content ? (
+          <ListSkeleton />
         ) : content.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border/60 py-6 text-center text-[12.5px] text-muted-foreground">
-            No content yet — draft a post first.
-          </div>
+          <EmptyState
+            size="sm"
+            title="No posts yet"
+            description="Make a post first, then share it here."
+            action={
+              <Button size="sm" onClick={() => emitAppEvent("open:create-launcher")}>
+                Create
+              </Button>
+            }
+          />
         ) : (
-          <div className="max-h-[300px] overflow-y-auto rounded-xl border border-border/60 divide-y divide-border/40">
-            {content.map((c) => {
-              const Icon =
-                c.kind === "post"
-                  ? Sparkles
-                  : c.kind === "blog"
-                    ? FileText
-                    : c.kind === "brief"
-                      ? Search
-                      : c.kind === "email"
-                        ? FileText
-                        : Calendar;
-              return (
-                <label
-                  key={c.id}
-                  className="flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/40 cursor-pointer"
-                >
+          <ul className="ds-tile max-h-[280px] divide-y divide-border/50 overflow-y-auto">
+            {content.map((c) => (
+              <li key={c.id}>
+                <label className="flex cursor-pointer items-center gap-3 px-3.5 py-2.5 hover:bg-[var(--ds-well-bg)]">
                   <input
                     type="checkbox"
+                    className="size-4 shrink-0 accent-[hsl(var(--primary))]"
                     checked={!!picked[c.id]}
                     onChange={(e) => setPicked((p) => ({ ...p, [c.id]: e.target.checked }))}
                   />
-                  <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12.5px] font-medium">
-                      {c.title ?? c.body?.slice(0, 60) ?? "Untitled"}
-                    </div>
-                    <div className="truncate text-[11px] text-muted-foreground">
-                      {c.channel ?? c.kind} · {c.status}
-                    </div>
-                  </div>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium">
+                      {c.title?.trim() || c.body?.slice(0, 70) || "Untitled"}
+                    </span>
+                    <span className="block truncate text-[12px] capitalize text-muted-foreground">
+                      {[c.channel ?? c.kind, STATUS_WORDS[c.status] ?? c.status].join(" · ")}
+                    </span>
+                  </span>
                 </label>
-              );
-            })}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowOptions((v) => !v)}
+          aria-expanded={showOptions}
+          className="text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
+        >
+          {showOptions ? "Hide options" : "Options: password, expiry, what clients can do"}
+        </button>
+        {showOptions && (
+          <div className="mt-3 space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <FieldLabel htmlFor="share-client">Client name</FieldLabel>
+                <Input
+                  id="share-client"
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  placeholder="Acme Co."
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="share-email">Client email</FieldLabel>
+                <Input
+                  id="share-email"
+                  type="email"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  placeholder="hello@acme.com"
+                />
+              </div>
+              <div>
+                <FieldLabel>Link works for</FieldLabel>
+                <Select value={expiresInDays} onValueChange={setExpiresInDays}>
+                  <SelectTrigger aria-label="Link works for">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">3 days</SelectItem>
+                    <SelectItem value="7">7 days</SelectItem>
+                    <SelectItem value="14">14 days</SelectItem>
+                    <SelectItem value="30">30 days</SelectItem>
+                    <SelectItem value="0">Always</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <FieldLabel htmlFor="share-password">Password</FieldLabel>
+                <Input
+                  id="share-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="None"
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+            <div className="ds-tile divide-y divide-border/50">
+              <Toggle
+                label="Clients can approve"
+                value={allowApprovals}
+                onChange={setAllowApprovals}
+              />
+              <Toggle
+                label="Clients can comment"
+                value={allowComments}
+                onChange={setAllowComments}
+              />
+              <Toggle
+                label="Clients can download"
+                value={allowDownload}
+                onChange={setAllowDownload}
+              />
+            </div>
           </div>
         )}
       </div>
 
       {review && (
-        <div
-          role="alert"
-          className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 text-[12px]"
-        >
-          <div className="font-semibold text-amber-700 dark:text-amber-400">
-            Review before sharing with your client
-          </div>
-          <p className="mt-0.5 text-muted-foreground">
-            These items contain things a client shouldn&apos;t see unchecked. Edit them, or share
-            anyway if you&apos;ve confirmed they&apos;re fine.
-          </p>
-          <ul className="mt-2 space-y-1">
+        <div role="alert" className="ds-tile border-warning/40 p-4 text-[12.5px]">
+          <p className="text-[13px] font-semibold">Check these before your client sees them</p>
+          <ul className="mt-2 space-y-1.5">
             {review.slice(0, 8).map((f, i) => (
               <li key={i} className="flex gap-2">
                 <span
+                  aria-hidden
                   className={cn(
-                    "shrink-0 rounded px-1.5 py-px text-[10px] font-semibold uppercase",
-                    f.severity === "block"
-                      ? "bg-red-500/15 text-red-600"
-                      : "bg-amber-500/15 text-amber-700",
+                    "mt-1.5 size-1.5 shrink-0 rounded-full",
+                    f.severity === "block" ? "bg-destructive" : "bg-warning",
                   )}
-                >
-                  {f.severity === "block" ? "Blocker" : "Warning"}
-                </span>
+                />
                 <span className="min-w-0">
                   <span className="font-medium">{f.itemTitle}</span>
                   <span className="text-muted-foreground"> · {f.detail}</span>
@@ -895,7 +829,7 @@ function NewShareView({
           </ul>
           <div className="mt-3 flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setReview(null)}>
-              Go back and edit
+              Go back
             </Button>
             <Button size="sm" variant="outline" onClick={() => create(true)} loading={busy}>
               Share anyway
@@ -904,80 +838,31 @@ function NewShareView({
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2 border-t border-border/40 pt-3">
-        <Button onClick={() => create()} disabled={busy || !title.trim() || selectedCount === 0}>
-          {busy ? (
-            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-          ) : (
-            <LinkIcon className="h-4 w-4 mr-2" />
-          )}
-          Create share link
+      <div className="flex justify-end">
+        <Button
+          onClick={() => create()}
+          loading={busy}
+          disabled={!title.trim() || selected.length === 0}
+        >
+          Make link
         </Button>
       </div>
     </div>
   );
 }
 
-/* ───────── Manage ───────── */
-function ManageView({ workspaceId }: { workspaceId: string | null }) {
-  const [shares, setShares] = useState<ShareRow[]>([]);
-  const [loading, setLoading] = useState(false);
+/* ───────── Links ───────── */
+function ManageView({ portal, onNew }: { portal: Portal; onNew: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    if (!workspaceId) return;
-    setLoading(true);
-    try {
-      const r = await authedFetch("/api/shares?action=list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId }),
-      });
-      if (!r.ok) throw new Error(await errorText(r));
-      const data = await r.json();
-      setShares(data.shares ?? []);
-    } catch (e: any) {
-      toast.error("Couldn't load share links", { description: e?.message });
-    } finally {
-      setLoading(false);
-    }
-  }, [workspaceId]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  const revoke = async (shareId: string) => {
-    setBusy(shareId);
-    try {
-      const r = await authedFetch("/api/shares?action=revoke", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shareId }),
-      });
-      if (!r.ok) throw new Error(await errorText(r));
-      toast.success("Link turned off", { description: "Your client can no longer open it." });
-      refresh();
-    } catch (e: any) {
-      toast.error("Couldn't turn the link off", { description: e?.message });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const [confirmRotate, setConfirmRotate] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ id: string; what: "rotate" | "off" } | null>(null);
 
   /** Ask the server for the share's link. link = same link; rotate = new one. */
   const fetchLink = async (
     shareId: string,
     action: "link" | "rotate" | "reactivate",
   ): Promise<{ url: string; rotated: boolean }> => {
-    const r = await authedFetch(`/api/shares?action=${action}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ shareId }),
-    });
+    const r = await post(action, { shareId });
     if (!r.ok) throw new Error(await errorText(r));
     const data = await r.json();
     return { url: data.url, rotated: Boolean(data.rotated) };
@@ -992,10 +877,60 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
     }
   };
 
-  const reactivate = async (shareId: string) => {
-    setBusy(shareId);
+  const run = async (id: string, failure: string, work: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(id);
+    setConfirm(null);
     try {
-      const { url, rotated } = await fetchLink(shareId, "reactivate");
+      await work();
+    } catch (e: any) {
+      toast.error(failure, { description: e?.message });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const copyLink = (s: ShareRow) =>
+    run(s.id, "Couldn't get the link", async () => {
+      const { url, rotated } = await fetchLink(s.id, "link");
+      if (!(await copyText(url))) return void window.prompt("Copy this link", url);
+      setCopiedId(s.id);
+      setTimeout(() => setCopiedId(null), 1500);
+      if (rotated) {
+        toast.success("Link copied", {
+          description: "This is a new link. The old one no longer works.",
+        });
+      }
+    });
+
+  const emailLink = (s: ShareRow) =>
+    run(s.id, "Couldn't get the link", async () => {
+      const { url } = await fetchLink(s.id, "link");
+      window.location.href = shareMailto(url, s.title, s.client_email);
+    });
+
+  const rotateLink = (s: ShareRow) =>
+    run(s.id, "Couldn't make a new link", async () => {
+      const { url } = await fetchLink(s.id, "rotate");
+      const copied = await copyText(url);
+      toast.success("New link made", {
+        description: copied
+          ? "Copied. The old link no longer works."
+          : "The old link no longer works.",
+      });
+    });
+
+  const turnOff = (s: ShareRow) =>
+    run(s.id, "Couldn't turn the link off", async () => {
+      const r = await post("revoke", { shareId: s.id });
+      if (!r.ok) throw new Error(await errorText(r));
+      toast.success("Link turned off", { description: "Your client can no longer open it." });
+      await portal.refresh();
+    });
+
+  const turnOn = (s: ShareRow) =>
+    run(s.id, "Couldn't turn the link back on", async () => {
+      const { url, rotated } = await fetchLink(s.id, "reactivate");
       const copied = await copyText(url);
       toast.success("Link is on again", {
         description: rotated
@@ -1004,203 +939,136 @@ function ManageView({ workspaceId }: { workspaceId: string | null }) {
             ? "Link copied."
             : undefined,
       });
-      refresh();
-    } catch (e: any) {
-      toast.error("Couldn't turn the link back on", { description: e?.message });
-    } finally {
-      setBusy(null);
-    }
-  };
+      await portal.refresh();
+    });
 
-  const copyLink = async (s: ShareRow) => {
-    setBusy(s.id);
-    try {
-      const { url, rotated } = await fetchLink(s.id, "link");
-      if (!(await copyText(url))) {
-        window.prompt("Copy this link", url);
-        return;
-      }
-      setCopiedId(s.id);
-      setTimeout(() => setCopiedId(null), 1500);
-      toast.success("Link copied", {
-        description: rotated ? "This is a new link. The old one no longer works." : undefined,
-      });
-    } catch (e: any) {
-      toast.error("Couldn't get the link", { description: e?.message });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const rotateLink = async (s: ShareRow) => {
-    setBusy(s.id);
-    setConfirmRotate(null);
-    try {
-      const { url } = await fetchLink(s.id, "rotate");
-      const copied = await copyText(url);
-      toast.success("New link made", {
-        description: copied
-          ? "Copied. The old link no longer works."
-          : "The old link no longer works.",
-      });
-    } catch (e: any) {
-      toast.error("Couldn't make a new link", { description: e?.message });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const emailLink = async (s: ShareRow) => {
-    setBusy(s.id);
-    try {
-      const { url } = await fetchLink(s.id, "link");
-      window.location.href = shareMailto(url, s.title, s.client_email);
-    } catch (e: any) {
-      toast.error("Couldn't get the link", { description: e?.message });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  if (loading && shares.length === 0) {
-    return <LoadingIndicator label="Loading share links" className="py-12" />;
+  if (!portal.loaded) {
+    return portal.failed ? (
+      <ErrorState
+        size="sm"
+        title="Couldn't load your links"
+        onRetry={() => void portal.refresh()}
+      />
+    ) : (
+      <ListSkeleton />
+    );
   }
 
-  if (shares.length === 0) {
+  if (portal.shares.length === 0) {
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="relative overflow-hidden rounded-2xl border border-dashed border-border/60 bg-gradient-to-br from-[hsl(var(--brand-blue)/0.04)] to-[hsl(var(--brand-green)/0.05)] py-10 text-center"
-      >
-        <div className="flex flex-col items-center gap-2">
-          <div className="text-[13.5px] font-medium">No shares yet</div>
-          <div className="text-[11.5px] text-muted-foreground max-w-xs">
-            Switch to <span className="text-foreground font-medium">New share</span> to build a
-            branded review link for your client.
-          </div>
-        </div>
-      </motion.div>
+      <EmptyState
+        icon={LinkIcon}
+        title="No links yet"
+        description="Make a link to show a client your posts."
+        action={<Button onClick={onNew}>Make a link</Button>}
+      />
     );
   }
 
   return (
-    <div className="space-y-2">
-      {shares.map((s) => (
-        <motion.div
-          key={s.id}
-          layout
-          className={cn(
-            "rounded-xl border bg-card p-3.5",
-            s.status === "active" ? "border-border/60" : "border-border/30 opacity-60",
-          )}
-        >
-          <div className="flex items-start gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-secondary text-muted-foreground">
-              <Users className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-[13px] font-semibold">
-                {s.title}
-                {s.status === "active" && s.expires_at && new Date(s.expires_at) < new Date() && (
-                  <span className="text-[10px] uppercase tracking-wide text-amber-600">
-                    Expired
-                  </span>
-                )}
-                {s.status !== "active" && (
-                  <span className="text-[10px] uppercase tracking-wide text-red-600">Off</span>
-                )}
-              </div>
-              <div className="text-[11.5px] text-muted-foreground">
-                {s.client_name ? `${s.client_name} · ` : ""}
-                {s.view_count > 0 ? `${s.view_count} views` : "Never viewed"}
-                {s.last_viewed_at ? ` · last ${new Date(s.last_viewed_at).toLocaleString()}` : ""}
-                {s.expires_at ? ` · expires ${new Date(s.expires_at).toLocaleDateString()}` : ""}
-              </div>
-              <div className="mt-1.5 flex items-center gap-1 text-[10.5px] text-muted-foreground">
-                {s.allow_approvals && <Badge>Approvals</Badge>}
-                {s.allow_comments && <Badge>Comments</Badge>}
-                {s.allow_download && <Badge>Download</Badge>}
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              {s.status === "active" && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => copyLink(s)}
-                    disabled={busy === s.id}
-                    title="Copy link"
-                    aria-label={`Copy link for ${s.title}`}
-                  >
-                    {copiedId === s.id ? (
-                      <Check className="h-3.5 w-3.5" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => emailLink(s)}
-                    loading={busy === s.id}
-                    title="Email link"
-                    aria-label={`Email link for ${s.title}`}
-                  >
-                    <Mail className="h-3.5 w-3.5" />
-                  </Button>
-                  {confirmRotate === s.id ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => rotateLink(s)}
-                      loading={busy === s.id}
-                      title="The old link will stop working"
+    <ul className="space-y-2">
+      {portal.shares.map((s) => {
+        const on = s.status === "active";
+        const expired = on && !!s.expires_at && new Date(s.expires_at) < new Date();
+        const working = busy === s.id;
+        const asking = confirm?.id === s.id ? confirm.what : null;
+        return (
+          <li key={s.id} className={cn("ds-tile p-3.5", !on && "opacity-70")}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+              <div className="min-w-0 flex-1 basis-[220px]">
+                <p className="flex items-center gap-2 text-[13.5px] font-semibold">
+                  <span className="truncate">{s.title}</span>
+                  {(expired || !on) && (
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-1.5 py-px text-[10.5px] font-medium",
+                        expired
+                          ? "bg-warning/15 text-warning"
+                          : "bg-[var(--ds-well-bg)] text-muted-foreground",
+                      )}
                     >
-                      Make new link?
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setConfirmRotate(s.id)}
-                      loading={busy === s.id}
-                      title="New link (the old one stops working)"
-                      aria-label={`New link for ${s.title}`}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </Button>
+                      {expired ? "Expired" : "Off"}
+                    </span>
                   )}
-                </>
-              )}
-              {s.status === "active" ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => revoke(s.id)}
-                  loading={busy === s.id}
-                  title="Turn link off"
-                  aria-label={`Turn off link for ${s.title}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                </Button>
+                </p>
+                <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+                  {[
+                    s.client_name,
+                    s.last_viewed_at ? `Opened ${shortDate(s.last_viewed_at)}` : "Not opened yet",
+                    s.expires_at && !expired
+                      ? `Until ${new Date(s.expires_at).toLocaleDateString([], { month: "short", day: "numeric" })}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </div>
+
+              {asking ? (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className="text-[12px] text-muted-foreground">
+                    {asking === "rotate"
+                      ? "The old link will stop working."
+                      : "Turn this link off?"}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    loading={working}
+                    onClick={() => (asking === "rotate" ? rotateLink(s) : turnOff(s))}
+                  >
+                    {asking === "rotate" ? "Make new link" : "Turn off"}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : on ? (
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button size="sm" variant="outline" loading={working} onClick={() => copyLink(s)}>
+                    {copiedId === s.id ? "Copied" : "Copy link"}
+                  </Button>
+                  <button
+                    type="button"
+                    className={dsIconBtn}
+                    disabled={!!busy}
+                    onClick={() => emailLink(s)}
+                    title="Email the link"
+                    aria-label={`Email the link for ${s.title}`}
+                  >
+                    <Mail className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className={dsIconBtn}
+                    disabled={!!busy}
+                    onClick={() => setConfirm({ id: s.id, what: "rotate" })}
+                    title="Make a new link"
+                    aria-label={`Make a new link for ${s.title}`}
+                  >
+                    <RefreshCw className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(dsIconBtn, "hover:text-destructive")}
+                    disabled={!!busy}
+                    onClick={() => setConfirm({ id: s.id, what: "off" })}
+                    title="Turn the link off"
+                    aria-label={`Turn off the link for ${s.title}`}
+                  >
+                    <Power className="size-4" />
+                  </button>
+                </div>
               ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => reactivate(s.id)}
-                  loading={busy === s.id}
-                  title="Turn link back on"
-                >
+                <Button size="sm" variant="outline" loading={working} onClick={() => turnOn(s)}>
                   Turn on
                 </Button>
               )}
             </div>
-          </div>
-        </motion.div>
-      ))}
-    </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -1216,7 +1084,7 @@ async function errorText(r: Response): Promise<string> {
     // not JSON
   }
   if (r.status === 403) return "You need editor access to do this.";
-  return text.slice(0, 200) || `Request failed (${r.status})`;
+  return "Something went wrong. Try again.";
 }
 
 /** A mailto: link that opens the user's own email app with the link filled in. */
@@ -1234,13 +1102,14 @@ function shareMailto(url: string, title: string, to: string | null): string {
 }
 
 /* ───────── Atoms ───────── */
-function Label({ children }: { children: React.ReactNode }) {
+function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
-    <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+    <label htmlFor={htmlFor} className="mb-1.5 block text-[12.5px] font-medium text-foreground/80">
       {children}
-    </div>
+    </label>
   );
 }
+
 function Toggle({
   label,
   value,
@@ -1251,37 +1120,9 @@ function Toggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onChange(!value)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onChange(!value);
-        }
-      }}
-      className={cn(
-        "flex items-center justify-between rounded-lg border px-3 py-2 text-[12px] transition",
-        value
-          ? "border-foreground/20 bg-card"
-          : "border-border/60 bg-background text-muted-foreground",
-      )}
-    >
-      <span>{label}</span>
-      <Switch
-        checked={value}
-        onCheckedChange={onChange}
-        onClick={(event) => event.stopPropagation()}
-        aria-label={label}
-      />
-    </div>
-  );
-}
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full border border-border/60 bg-background px-1.5 py-px text-[9.5px] font-medium uppercase tracking-wide">
-      {children}
-    </span>
+    <label className="flex cursor-pointer items-center justify-between gap-3 px-3.5 py-2.5 text-[13px]">
+      {label}
+      <Switch checked={value} onCheckedChange={onChange} aria-label={label} />
+    </label>
   );
 }

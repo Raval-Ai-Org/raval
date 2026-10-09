@@ -13,7 +13,7 @@ const configured = Boolean(
   process.env.SUPABASE_SERVICE_ROLE_KEY &&
   process.env.SUPABASE_PUBLISHABLE_KEY,
 );
-const BASE = "http://localhost:8080";
+const BASE = process.env.LIVE_BASE_URL ?? "http://localhost:8080";
 
 type Actor = { id: string; email: string; token: string; db: SupabaseClient };
 const users: string[] = [];
@@ -89,6 +89,15 @@ async function api(actor: Actor, path: string, data: unknown) {
       .from("workspace_members")
       .insert({ workspace_id: workspaceId, user_id: owner.id, role: "owner" });
     if (membership.error) throw new Error(membership.error.message);
+    // This suite is about sharing, not plans: the throwaway owner's account
+    // is not held to the free plan's one seat.
+    const account = await admin
+      .from("billing_accounts")
+      .upsert(
+        { owner_user_id: owner.id, enforcement_override: "off" },
+        { onConflict: "owner_user_id" },
+      );
+    if (account.error) throw new Error(account.error.message);
   }, 120_000);
 
   afterAll(async () => {
@@ -261,6 +270,133 @@ async function api(actor: Actor, path: string, data: unknown) {
       rpc(outsider, "workspaces/acceptWorkspaceInvite", { token: revokedInvite.token }),
     ).rejects.toThrow();
   }, 180_000);
+
+  it("shares the stored post and only approves what the client saw", async () => {
+    const storedPath = `workspace/${workspaceId}/assets/live-share.jpg`;
+    const post = await admin
+      .from("content_items")
+      .insert({
+        workspace_id: workspaceId,
+        agent: "spark",
+        kind: "post",
+        channel: "instagram",
+        title: "Spring sale",
+        body: "Spring is here.",
+        status: "draft",
+        created_by: owner.id,
+        meta: {
+          asset_storage_path: storedPath,
+          asset_storage_paths: [storedPath, `workspace/${randomUUID()}/assets/other.jpg`],
+        },
+      })
+      .select("id")
+      .single();
+    if (post.error) throw new Error(post.error.message);
+    const postId = post.data.id as string;
+
+    // What the browser sends about the post is ignored: the row is copied.
+    const created = await api(owner, "/api/shares?action=create", {
+      workspaceId,
+      title: "Post review",
+      items: [
+        {
+          kind: "content_item",
+          refId: postId,
+          title: "Not the title",
+          snapshot: { body: "Not what is stored", media_url: "https://example.com/x.jpg" },
+        },
+      ],
+    });
+    expect(created.status).toBe(200);
+    const share = created.body as { slug: string; token: string };
+
+    const stored = await admin
+      .from("client_share_items")
+      .select("title, snapshot")
+      .eq("ref_id", postId)
+      .single();
+    expect(stored.data?.title).toBe("Spring sale");
+    expect(stored.data?.snapshot.body).toBe("Spring is here.");
+    expect(stored.data?.snapshot.media_url).toBeNull();
+    // Only the path inside this workspace is kept.
+    expect(stored.data?.snapshot.asset_paths).toEqual([storedPath]);
+
+    const page = await (
+      await fetch(`${BASE}/api/public/share/${share.slug}?t=${share.token}`)
+    ).json();
+    const item = page.items[0];
+    expect(item.snapshot.body).toBe("Spring is here.");
+    // The client page gets links, never storage paths.
+    expect(item.snapshot.asset_paths).toBeUndefined();
+    expect(Array.isArray(item.snapshot.media)).toBe(true);
+
+    const approve = async () => {
+      const sent = await fetch(`${BASE}/api/public/share/${share.slug}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token: share.token,
+          kind: "approved",
+          itemId: item.id,
+          actorName: "Client",
+        }),
+      });
+      expect(sent.status).toBe(200);
+      const inbox = await api(owner, "/api/shares?action=list", { workspaceId });
+      expect(inbox.body.items.some((row: { id: string }) => row.id === item.id)).toBe(true);
+      return inbox.body.events.find(
+        (event: { kind: string; item_id: string; marketer_decision: string }) =>
+          event.kind === "approved" &&
+          event.item_id === item.id &&
+          event.marketer_decision === "pending",
+      ) as { id: string };
+    };
+
+    // The words changed after the client saw them: the approval is refused
+    // and stays waiting.
+    await admin.from("content_items").update({ body: "Summer is here." }).eq("id", postId);
+    const stale = await approve();
+    const refused = await api(owner, "/api/shares?action=decide", {
+      eventId: stale.id,
+      decision: "accepted",
+    });
+    expect(refused.status).toBe(409);
+    const afterRefusal = await admin
+      .from("content_items")
+      .select("status")
+      .eq("id", postId)
+      .single();
+    expect(afterRefusal.data?.status).toBe("draft");
+
+    // Back to the shared words: the same approval now approves the post.
+    await admin.from("content_items").update({ body: "Spring is here." }).eq("id", postId);
+    const accepted = await api(owner, "/api/shares?action=decide", {
+      eventId: stale.id,
+      decision: "accepted",
+    });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.content).toBe("approved");
+
+    // An approved post is in the Publish list, ready for a time.
+    const queue = await rpc<{ ready: Array<{ contentItemId?: string }> }>(
+      owner,
+      "publish/getPublishQueue",
+      { workspaceId },
+    );
+    expect(queue.ready.some((entry) => entry.contentItemId === postId)).toBe(true);
+    await expect(rpc(outsider, "publish/getPublishQueue", { workspaceId })).rejects.toThrow(/403/);
+
+    // A scheduled post is never moved back by a late approval.
+    await admin.from("content_items").update({ status: "scheduled" }).eq("id", postId);
+    const late = await approve();
+    const lateDecision = await api(owner, "/api/shares?action=decide", {
+      eventId: late.id,
+      decision: "accepted",
+    });
+    expect(lateDecision.body.content).toBe("already");
+    const final = await admin.from("content_items").select("status").eq("id", postId).single();
+    expect(final.data?.status).toBe("scheduled");
+  }, 240_000);
 
   it("keeps share links stable until a new one is asked for", async () => {
     const created = await api(owner, "/api/shares?action=create", {

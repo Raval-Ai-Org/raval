@@ -103,6 +103,76 @@ describe("renderCarouselSlides", () => {
     expect([meta.width, meta.height]).toEqual([1080, 1080]);
   }, 60_000);
 
+  it("draws connected slides that meet at every edge, and the last meets the first", async () => {
+    const column = (image: Buffer, left: number) =>
+      sharp(image).extract({ left, top: 0, width: 1, height: 1350 }).raw().toBuffer();
+    // A stand-in for the generated background: different at every point across
+    // its width, so a copy laid in the wrong place would show at an edge.
+    const [pw, ph] = [1792, 1024];
+    const pixels = Buffer.alloc(pw * ph * 3);
+    for (let y = 0; y < ph; y++) {
+      for (let x = 0; x < pw; x++) {
+        const at = (y * pw + x) * 3;
+        pixels[at] = 128 + 120 * Math.sin(x / 70);
+        pixels[at + 1] = (y * 255) / ph;
+        pixels[at + 2] = (x * 255) / pw;
+      }
+    }
+    const picture = await sharp(pixels, { raw: { width: pw, height: ph, channels: 3 } })
+      .png()
+      .toBuffer();
+    const cases = CAROUSEL_MOTIFS.flatMap((motif, i) =>
+      [null, picture].map((coverArt) => ({ motif, i, coverArt })),
+    );
+    for (const { motif, i, coverArt } of cases) {
+      const colorway = CAROUSEL_COLORWAYS[i % CAROUSEL_COLORWAYS.length];
+      const images = await renderCarouselSlides({
+        // 3, 4 and 5 slides: odd and even counts both have to close the loop.
+        slides: slides.slice(0, 3 + i),
+        design: { v: 1, look: CAROUSEL_LOOKS[i], colorway, motif, flow: "seamless" },
+        theme: carouselTheme({ palette, colorway }),
+        ratio: "4:5",
+        brand: "Slow Pour Coffee",
+        coverArt,
+      });
+      if (OUT) {
+        mkdirSync(OUT, { recursive: true });
+        const strip = await sharp({
+          create: {
+            width: 360 * (images.length + 1),
+            height: 450,
+            channels: 3,
+            background: "#888",
+          },
+        })
+          .composite(
+            await Promise.all(
+              // The first slide again at the end, to see the loop close.
+              [...images, images[0]].map(async (image, n) => ({
+                input: await sharp(image).resize(360).toBuffer(),
+                left: n * 360,
+                top: 0,
+              })),
+            ),
+          )
+          .jpeg({ quality: 90 })
+          .toBuffer();
+        writeFileSync(join(OUT, `connected-${motif}${coverArt ? "-picture" : ""}.jpg`), strip);
+      }
+      for (let n = 0; n < images.length; n++) {
+        const right = await column(images[n], 1079);
+        const left = await column(images[(n + 1) % images.length], 0);
+        let off = 0;
+        for (let p = 0; p < right.length; p++) if (Math.abs(right[p] - left[p]) > 40) off++;
+        // Two neighbouring columns of one picture: all but a few edge pixels agree.
+        expect(
+          off / right.length,
+          `${motif}${coverArt ? " with a picture" : ""}: slide ${n + 1} into the next`,
+        ).toBeLessThan(0.02);
+      }
+    }
+  }, 240_000);
+
   it("refuses scripts its fonts cannot draw", () => {
     expect(carouselRenderable({ slides, brand: "Slow Pour Coffee" })).toBe(true);
     expect(

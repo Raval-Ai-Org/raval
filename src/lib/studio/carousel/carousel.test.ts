@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { contrastRatio } from "@/lib/color";
 import {
   CAROUSEL_COLORWAYS,
+  CAROUSEL_MOTIFS,
   availableColorways,
   canRenderText,
   carouselTheme,
+  isSeamless,
   pickCarouselDesign,
+  ribbonLift,
   safeDesign,
   safeTheme,
   slideColors,
@@ -39,6 +42,35 @@ const good = [
   },
   { heading: "Save this for Sunday", body: "Then tell us how day five tastes." },
 ];
+
+describe("connected slides", () => {
+  it("joins the end of the last slide to the start of the first", () => {
+    for (const motif of CAROUSEL_MOTIFS) {
+      for (let count = 3; count <= 10; count++) {
+        for (const layer of [0, 1] as const) {
+          expect(ribbonLift(count, count, layer, motif)).toBeCloseTo(
+            ribbonLift(0, count, layer, motif),
+            6,
+          );
+          // Always on the slide, below the text.
+          for (let x = 0; x <= count; x += 0.05) {
+            const lift = ribbonLift(x, count, layer, motif);
+            expect(lift).toBeGreaterThan(40);
+            expect(lift).toBeLessThan(250);
+          }
+        }
+      }
+    }
+  });
+
+  it("keeps the flow on a stored look and ignores anything else", () => {
+    const base = { v: 1, look: "bold", colorway: "dark", motif: "wave" };
+    expect(safeDesign({ ...base, flow: "seamless" })).toEqual({ ...base, flow: "seamless" });
+    expect(isSeamless(safeDesign({ ...base, flow: "seamless" }))).toBe(true);
+    expect(safeDesign({ ...base, flow: "sideways" })).toEqual(base);
+    expect(isSeamless(safeDesign(base))).toBe(false);
+  });
+});
 
 describe("carousel story", () => {
   it("gives every position a role, with a recap only when there is room", () => {

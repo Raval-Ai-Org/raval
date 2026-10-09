@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { createHash, scrypt, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { after } from "next/server";
 import { consumeRateLimit } from "@/server/rate-limit";
+import { assetPathsFromMeta, mediaKind } from "@/lib/shares/snapshot";
+import { workspacePath } from "@/lib/workspace/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -73,8 +76,59 @@ async function tooManyPasswordAttempts(slug: string, request: Request): Promise<
   const ipKey = createHash("sha256").update(ip).digest("hex").slice(0, 24);
   const perClient = await consumeRateLimit("share-password", `${slug}:${ipKey}`);
   if (!perClient.ok) return true;
-  const perSlug = await consumeRateLimit("share-password", `${slug}:all`, { cost: 0.2 });
+  const perSlug = await consumeRateLimit("share-password-link", `${slug}:all`);
   return !perSlug.ok;
+}
+
+function hasAssetPaths(snapshot: unknown): snapshot is { asset_paths: unknown[] } {
+  return (
+    !!snapshot &&
+    typeof snapshot === "object" &&
+    Array.isArray((snapshot as { asset_paths?: unknown }).asset_paths)
+  );
+}
+
+function clientKey(request: Request): string {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  return createHash("sha256").update(ip).digest("hex").slice(0, 24);
+}
+
+/**
+ * Tell the person who made the share that their client answered. At most one
+ * email per share per hour, decided from the stored thread; never throws.
+ */
+async function notifyTeam(share: {
+  id: string;
+  title: string;
+  owner_id: string;
+  workspace_id: string;
+}): Promise<void> {
+  try {
+    const { emailConfigured, sendEmail, appUrl } = await import("@/server/notify/email.server");
+    if (!emailConfigured()) return;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const since = new Date(Date.now() - 3600_000).toISOString();
+    const { count } = await supabaseAdmin
+      .from("client_events")
+      .select("id", { count: "exact", head: true })
+      .eq("share_id", share.id)
+      .eq("actor_type", "client")
+      .neq("kind", "viewed")
+      .gte("created_at", since);
+    // This message is already stored, so more than one means we wrote recently.
+    if ((count ?? 0) > 1) return;
+    const { data: owner } = await supabaseAdmin.auth.admin.getUserById(share.owner_id);
+    const to = owner?.user?.email;
+    if (!to) return;
+    await sendEmail({
+      to,
+      subject: `Your client replied: ${share.title}`,
+      text: "Your client left feedback on the work you shared. Open the client portal to read it and answer.",
+      action: ["Open Mellox", appUrl(workspacePath(share.workspace_id))],
+    });
+  } catch (cause) {
+    console.error("[shares] team notice failed", cause instanceof Error ? cause.message : cause);
+  }
 }
 
 function json(status: number, payload: unknown, extraHeaders?: Record<string, string>) {
@@ -184,6 +238,39 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     }
   }
 
+  // Pictures and video are stored privately; the page gets short-lived links,
+  // made now. The paths come from member-editable rows, so each one is checked
+  // against this share's own workspace before it is signed.
+  const workspaceId = String((share as any).workspace_id);
+  const liveRefs = shareItems
+    .filter((i) => i.kind === "content_item" && i.ref_id && !hasAssetPaths(i.snapshot))
+    .map((i) => i.ref_id as string);
+  const liveMeta = new Map<string, unknown>();
+  if (liveRefs.length) {
+    // Shares made before snapshots kept their media: read it from the post.
+    const { data: posts } = await supabaseAdmin
+      .from("content_items")
+      .select("id, meta")
+      .eq("workspace_id", workspaceId)
+      .in("id", liveRefs);
+    for (const post of posts ?? []) liveMeta.set(String(post.id), post.meta);
+  }
+  const { signAssetPath } = await import("@/server/assets/persist.server");
+  for (const item of shareItems) {
+    if (item.kind !== "content_item") continue;
+    const snapshot = (item.snapshot ?? {}) as Record<string, unknown>;
+    const paths = hasAssetPaths(snapshot)
+      ? assetPathsFromMeta({ asset_storage_paths: snapshot.asset_paths }, workspaceId)
+      : assetPathsFromMeta(item.ref_id ? liveMeta.get(item.ref_id) : null, workspaceId);
+    const media: Array<{ url: string; kind: "image" | "video" }> = [];
+    for (const path of paths) {
+      const signed = await signAssetPath(path);
+      if (signed) media.push({ url: signed, kind: mediaKind(path) });
+    }
+    const { asset_paths: _paths, ...rest } = snapshot;
+    item.snapshot = { ...rest, media };
+  }
+
   const { data: events } = await supabaseAdmin
     .from("client_events")
     // No emails and no view pings: anyone holding the link sees this thread.
@@ -245,11 +332,26 @@ export async function POST(request: Request, ctx: { params: Promise<{ slug: stri
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: share } = await supabaseAdmin
     .from("client_shares")
-    .select("id, token_hash, password_hash, status, expires_at, allow_comments, allow_approvals")
+    .select(
+      "id, title, owner_id, workspace_id, token_hash, password_hash, status, expires_at, allow_comments, allow_approvals",
+    )
     .eq("slug", params.slug)
     .maybeSingle();
   if (!share || !tokenMatches(body.token, (share as any).token_hash))
     return json(404, { error: "Not found" });
+  // Anyone holding the link can write here, so the thread is bounded per
+  // visitor and per link.
+  const perVisitor = await consumeRateLimit("share-event", `${params.slug}:${clientKey(request)}`);
+  const perLink = perVisitor.ok
+    ? await consumeRateLimit("share-event-link", `${params.slug}:all`)
+    : perVisitor;
+  if (!perLink.ok) {
+    return json(
+      429,
+      { error: "Too many messages. Try again in a few minutes." },
+      { "Retry-After": String(perLink.retryAfterSeconds || 300) },
+    );
+  }
   if ((share as any).status !== "active") return new Response("Gone", { status: 410 });
   if ((share as any).expires_at && new Date((share as any).expires_at).getTime() < Date.now())
     return new Response("Expired", { status: 410 });
@@ -301,6 +403,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ slug: stri
     actor_type: "client",
     meta: {},
   });
-  if (insErr) return json(500, { error: insErr.message });
+  if (insErr) return json(500, { error: "Couldn't save that. Try again." });
+  if (body.kind !== "viewed") {
+    after(() =>
+      notifyTeam({
+        id: String((share as any).id),
+        title: String((share as any).title ?? "Shared work"),
+        owner_id: String((share as any).owner_id),
+        workspace_id: String((share as any).workspace_id),
+      }),
+    );
+  }
   return json(200, { ok: true });
 }

@@ -27,7 +27,17 @@ export type CarouselDesign = {
   look: CarouselLook;
   colorway: CarouselColorway;
   motif: CarouselMotif;
+  /**
+   * "seamless": the slides are one long picture cut at the slide edges, and
+   * the last slide's right edge meets the first slide's left edge, so the
+   * carousel also reads as a loop. Absent for an ordinary carousel.
+   */
+  flow?: "seamless";
 };
+
+export function isSeamless(design: { flow?: string } | null | undefined): boolean {
+  return design?.flow === "seamless";
+}
 
 export type CarouselTheme = CarouselSpecOutput["theme"];
 
@@ -190,7 +200,9 @@ export function safeDesign(raw: unknown): CarouselDesign | null {
   const look = CAROUSEL_LOOKS.find((x) => x === d.look);
   const colorway = CAROUSEL_COLORWAYS.find((x) => x === d.colorway);
   const motif = CAROUSEL_MOTIFS.find((x) => x === d.motif);
-  return look && colorway && motif ? { v: 1, look, colorway, motif } : null;
+  if (!look || !colorway || !motif) return null;
+  // Key order is part of the stored hash: `flow` always comes last.
+  return { v: 1, look, colorway, motif, ...(d.flow === "seamless" ? { flow: "seamless" } : {}) };
 }
 
 /**
@@ -222,6 +234,44 @@ export function pickCarouselDesign(args: {
   const pool = fresh.length ? fresh : combos;
   const pick = pool[hash(`combo:${args.seed}`) % pool.length];
   return { v: 1, look, ...pick };
+}
+
+/**
+ * A seamless carousel's ribbon: how high its top edge is above the bottom of
+ * the picture, `x` slides from the start, on a 1080-wide canvas.
+ *
+ * Every wave fits a whole number of times into the carousel, so the value at
+ * the end of the last slide equals the value at the start of the first: the
+ * picture joins at every slide edge and also closes into a loop.
+ */
+export function ribbonLift(
+  x: number,
+  count: number,
+  layer: 0 | 1,
+  motif: CarouselMotif = "wave",
+): number {
+  const n = Math.max(1, count);
+  const turns = Math.max(1, Math.round(n / 2)) + layer;
+  const shift = CAROUSEL_MOTIFS.indexOf(motif) * 1.3 + layer * 2.4;
+  const at = (2 * Math.PI * x) / n;
+  const [base, tall, small] = layer === 0 ? [190, 40, 16] : [104, 26, 12];
+  return (
+    base + tall * Math.sin(turns * at + shift) + small * Math.sin((turns + 1) * at + shift * 2)
+  );
+}
+
+/** The shape the background picture of a seamless carousel is generated in. */
+export const BACKDROP_RATIO = "16:9";
+
+/**
+ * How one background picture covers a whole seamless carousel. It is laid out
+ * as an even number of copies, every second one mirrored, so each copy meets
+ * its neighbour on the same pixels and the last copy meets the first.
+ */
+export function backdropTiles(count: number, w: number, h: number): { width: number; n: number } {
+  const total = Math.max(1, count) * w;
+  const pairs = Math.max(1, Math.round(total / (2 * h * (16 / 9))));
+  return { width: total / (pairs * 2), n: pairs * 2 };
 }
 
 /** The colours one slide draws with. The closing slide flips to the accent. */

@@ -45,6 +45,10 @@ export type RateLimitTier =
   | "ugc-draft"
   | "ugc-render"
   | "share-password"
+  | "share-password-link"
+  | "share-event"
+  | "share-event-link"
+  | "workspace-invite"
   | "workspace-lifecycle"
   | "firecrawl"
   | "web-research"
@@ -123,6 +127,15 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // password two or three times; 10 per 5 minutes is generous for them and
   // useless for a brute-force run.
   "share-password": { limit: 10, windowSeconds: 300, label: "password attempt" },
+  // What a client sends from a share link (approve, comment, view). The link
+  // needs no sign-in, so this bounds how fast a thread can be filled.
+  "share-event": { limit: 40, windowSeconds: 300, label: "message" },
+  // The same two, counted per link whoever sends them: caps a spread-out run.
+  // Their own tiers because the limiter counts whole requests only.
+  "share-password-link": { limit: 50, windowSeconds: 300, label: "password attempt" },
+  "share-event-link": { limit: 200, windowSeconds: 300, label: "message" },
+  // Team invites: each one may send an email.
+  "workspace-invite": { limit: 30, windowSeconds: 3600, label: "invite" },
   // Creating and deleting workspaces. Retries of one create replay its
   // idempotency key, so this only bounds genuinely new workspaces and deletes.
   "workspace-lifecycle": { limit: 20, windowSeconds: 600, label: "workspace change" },

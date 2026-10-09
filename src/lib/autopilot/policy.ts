@@ -6,16 +6,12 @@ import { buildPlanSlots, PLAN_TOPICS } from "@/lib/calendar/planner";
 import type { CalendarChannel } from "@/lib/calendar/model";
 import { creditsFor, type CreditAction } from "@/lib/billing/catalog";
 import { studioChargeFor } from "@/lib/studio/billing";
-import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
+import type { StudioType } from "@/lib/studio/formats";
 import { similarity } from "@/lib/studio/ideas";
 import type { PlatformId } from "@/lib/social-platforms";
-import {
-  isAutopilotType,
-  type AutopilotMode,
-  type AutopilotType,
-  type PlanType,
-  type ProgramRow,
-} from "./contracts";
+import { isAutopilotType, type AutopilotMode, type PlanType, type ProgramRow } from "./contracts";
+import type { BrainPicks } from "./brief";
+import { formatMix, typesFor, withPicture } from "./formats";
 import { addDaysYmd, daysBetweenYmd, zonedInstant } from "./time";
 import {
   STORY_APPROVAL_GRACE_MS,
@@ -29,9 +25,12 @@ import {
 
 export type Cost = { credits: number; videos: number };
 
-/** What one piece costs — the same price as making it by hand in Studio. */
-export function estimateCost(type: StudioType): Cost {
-  const charge = studioChargeFor({ type, includeImage: false });
+/**
+ * What one piece costs — the same price as making it by hand in Studio. A text
+ * post for a channel that needs a picture is priced with its picture.
+ */
+export function estimateCost(type: StudioType, platform?: string | null): Cost {
+  const charge = studioChargeFor({ type, includeImage: withPicture(type, platform) });
   if (charge === "studio_video") return { credits: 0, videos: 1 };
   return { credits: creditsFor(charge as CreditAction), videos: 0 };
 }
@@ -40,12 +39,13 @@ export type BudgetVerdict = { ok: true } | { ok: false; reason: "credits" | "vid
 
 export function budgetVerdict(args: {
   type: StudioType;
+  platform?: string | null;
   usedCredits: number;
   usedVideos: number;
   creditCap: number;
   videoCap: number;
 }): BudgetVerdict {
-  const cost = estimateCost(args.type);
+  const cost = estimateCost(args.type, args.platform);
   if (cost.videos > 0 && args.usedVideos + cost.videos > args.videoCap) {
     return { ok: false, reason: "videos" };
   }
@@ -82,14 +82,6 @@ function platformOf(channel: CalendarChannel): PlatformId | null {
   return channel as PlatformId;
 }
 
-function typesFor(platform: PlatformId, contentTypes: readonly string[]): AutopilotType[] {
-  const fits = contentTypes.filter(
-    (t): t is AutopilotType =>
-      isAutopilotType(t) && t !== "article" && STUDIO_FORMATS[t].platforms.includes(platform),
-  );
-  return fits.length ? fits : ["social"];
-}
-
 export function totalWeeks(program: Pick<ProgramRow, "starts_on" | "ends_on">): number {
   return Math.max(1, Math.ceil((daysBetweenYmd(program.starts_on, program.ends_on) + 1) / 7));
 }
@@ -106,7 +98,8 @@ export function weekOf(program: Pick<ProgramRow, "starts_on">, today: string): n
 
 /**
  * The dated slots for one week of a program. Days, times and platforms come
- * from the calendar planner; formats rotate through what the person allowed.
+ * from the calendar planner; formats are mixed per channel from what the person
+ * allowed (formats.ts), carrying on from the week before.
  * Slots in the past, too close to now, or after the end date are left out.
  */
 export function cycleSlots(
@@ -144,6 +137,18 @@ export function cycleSlots(
         })
       : [];
 
+  const perPlatform = new Map<PlatformId, number>();
+  for (const slot of base) {
+    const platform = platformOf(slot.channel);
+    if (platform) perPlatform.set(platform, (perPlatform.get(platform) ?? 0) + 1);
+  }
+  const mixes = new Map(
+    [...perPlatform].map(([platform, count]) => [
+      platform,
+      formatMix(platform, program.content_types, count, Math.max(0, cycle - 1) * count),
+    ]),
+  );
+
   const turn = new Map<string, number>();
   let videos = 0;
   const slots: CycleSlot[] = [];
@@ -153,7 +158,7 @@ export function cycleSlots(
     const allowed = typesFor(platform, program.content_types);
     const n = turn.get(platform) ?? 0;
     turn.set(platform, n + 1);
-    let type = allowed[n % allowed.length];
+    let type = mixes.get(platform)?.[n] ?? allowed[n % allowed.length];
     if (type === "video") {
       if (videos >= program.video_cap_per_week) {
         type = allowed.find((t) => t !== "video") ?? "social";
@@ -219,6 +224,56 @@ export function cycleSlots(
   return slots.filter((s) => s.date <= program.ends_on && Date.parse(s.at) >= earliest);
 }
 
+/* ───────────────────────── the calendar ───────────────────────── */
+
+/** A post a person already put on the content calendar. */
+export type CalendarPost = { date: string; platform: string | null; title: string };
+
+/**
+ * Leave out the slots a person has already filled: a channel that has a post
+ * of theirs on a day gets no second one from Autopilot. Stories and articles
+ * are their own thing and are kept.
+ */
+export function freeSlots(
+  slots: CycleSlot[],
+  taken: readonly CalendarPost[],
+): { slots: CycleSlot[]; covered: number } {
+  const busy = new Set(taken.filter((t) => t.platform).map((t) => `${t.date}|${t.platform}`));
+  const kept = slots.filter(
+    (s) => s.type === "story" || s.type === "article" || !busy.has(`${s.date}|${s.platform}`),
+  );
+  return { slots: kept, covered: slots.length - kept.length };
+}
+
+/**
+ * Where a piece sits on the calendar now, as an instant. A person may drag a
+ * draft to another day or time; Autopilot then sends it at that time.
+ */
+export function calendarSlot(meta: Record<string, unknown>, timeZone: string): string | null {
+  const date = meta.calendar_date;
+  const time = meta.calendar_time;
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  // Without a time there is nothing to follow: the planned time stands.
+  if (typeof time !== "string" || !/^\d{2}:\d{2}$/.test(time)) return null;
+  const at = zonedInstant(date, time, timeZone);
+  return Number.isNaN(at.getTime()) ? null : at.toISOString();
+}
+
+/** The slot a piece follows: the calendar's when a person moved it, else the plan's. */
+export function effectiveSlot(
+  plannedFor: string | null,
+  metas: readonly Record<string, unknown>[],
+  timeZone: string,
+): string | null {
+  for (const meta of metas) {
+    const moved = calendarSlot(meta, timeZone);
+    if (!moved) continue;
+    if (!plannedFor || Math.abs(Date.parse(moved) - Date.parse(plannedFor)) >= 60_000) return moved;
+    return plannedFor;
+  }
+  return plannedFor;
+}
+
 /* ───────────────────────── plan ───────────────────────── */
 
 export type PlanProposal = {
@@ -229,6 +284,8 @@ export type PlanProposal = {
   reason: string;
   /** Index into the opportunities the model was shown, if it used one. */
   opportunity?: number | null;
+  /** What the piece draws on, as numbers into the lists the model was shown. */
+  picks?: BrainPicks;
 };
 
 export type PlanItem = {
@@ -238,6 +295,8 @@ export type PlanItem = {
   brief: string;
   reason: string;
   opportunity: number | null;
+  /** Still only numbers: brief.ts turns them into stored words. */
+  picks?: BrainPicks;
 };
 
 export type PlanDrop = { slot: number; reason: "unknown_slot" | "weak" | "duplicate" | "budget" };
@@ -296,7 +355,7 @@ export function planVerdict(args: {
       isAutopilotType(proposal.type) && slot.allowedTypes.includes(proposal.type)
         ? proposal.type
         : slot.type;
-    const cost = estimateCost(type);
+    const cost = estimateCost(type, slot.platform);
     if (cost.credits > 0 && credits + cost.credits > args.creditCap) {
       dropped.push({ slot: slot.index, reason: "budget" });
       continue;
@@ -314,6 +373,7 @@ export function planVerdict(args: {
         typeof opp === "number" && Number.isInteger(opp) && opp >= 0 && opp < args.opportunityCount
           ? opp
           : null,
+      picks: proposal.picks,
     });
   }
   return { items, dropped };

@@ -77,6 +77,7 @@ const action = (over: Partial<ActionView>): ActionView => ({
   error: null,
   metrics: null,
   updatedAt: at(-1),
+  nextStepAt: at(3),
   ...over,
 });
 
@@ -116,6 +117,12 @@ const running: AutopilotView = {
       plannedFor: at(20),
       title: "The 2 a.m. roast that changed our house blend",
       reason: "It mentions a date Mellox couldn't find in your Brand DNA, so it waits for you.",
+      builtFrom: [
+        "Brand DNA",
+        "For: Café owners",
+        "Market: Home brewing is growing",
+        "Stands apart from: Big Roast Co",
+      ],
       preview: {
         contentItemId: "c1",
         status: "pending",
@@ -268,6 +275,30 @@ const running: AutopilotView = {
       detail: "Checked every week for AI visibility",
       cta: "Add",
     },
+    {
+      id: "audience",
+      ok: true,
+      required: false,
+      label: "Customer groups ready",
+      detail: "Each post is written for one of them",
+      cta: "Add",
+    },
+    {
+      id: "competitors",
+      ok: true,
+      required: false,
+      label: "Competitors tracked",
+      detail: "Posts show what you do differently",
+      cta: "Pick",
+    },
+    {
+      id: "market",
+      ok: false,
+      required: false,
+      label: "Read your market",
+      detail: "So posts can respond to what is happening around you.",
+      cta: "Open",
+    },
   ],
   learnings: [
     'Best so far: "Why your grinder matters more than your machine" (1,840 views).',
@@ -290,6 +321,7 @@ const running: AutopilotView = {
       updatedAt: at(-52),
     }),
   ],
+  nextPlanAt: at(96),
   visibility: { score: 72, scannedAt: at(-30) },
   site: { host: "beanhaus.example" },
   week: { posted: 4, views: 5210, auto: 3 },

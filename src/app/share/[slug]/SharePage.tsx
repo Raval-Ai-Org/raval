@@ -76,6 +76,11 @@ function decisionsByItem(events: PortalEvent[]): Record<string, string> {
   return out;
 }
 
+/** A share's accent is member-supplied: only a plain hex colour is used. */
+function safeAccent(value: unknown): string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : "hsl(var(--primary))";
+}
+
 export function FullPage({ title, body }: { title: string; body: string }) {
   return (
     <div className="min-h-dvh bg-background grid place-items-center px-4">
@@ -214,7 +219,11 @@ function SharePage() {
       }
       if (!res.ok) return;
       const data = await res.json().catch(() => null);
-      if (data && !data.locked && Array.isArray(data.events)) setEvents(data.events);
+      if (data && !data.locked && Array.isArray(data.events)) {
+        setEvents(data.events);
+        // Picture links last an hour; a long-open page gets fresh ones.
+        if (Array.isArray(data.items)) setItems(data.items);
+      }
     } catch {}
   }, [password, slug, token]);
 
@@ -298,7 +307,9 @@ function SharePage() {
             ? "This link is no longer active"
             : res.status === 403
               ? "That isn't allowed on this link"
-              : "Couldn't send. Try again.",
+              : res.status === 429
+                ? "Too many messages. Try again in a few minutes."
+                : "Couldn't send. Try again.",
         );
         return false;
       }
@@ -320,13 +331,13 @@ function SharePage() {
     ]);
     toast.success(
       kind === "approved"
-        ? "Approved — sent to marketer for confirmation"
+        ? "Approved. The team has been told."
         : kind === "rejected"
           ? "Rejection sent"
           : kind === "requested_changes"
             ? "Change request sent"
             : kind === "suggested"
-              ? "Suggestion sent to marketer"
+              ? "Suggestion sent"
               : "Comment sent",
     );
     return true;
@@ -362,7 +373,11 @@ function SharePage() {
               if (e.key === "Enter") submitPassword();
             }}
           />
-          {pwError && <div className="text-[12px] text-red-600">{pwError}</div>}
+          {pwError && (
+            <div role="alert" className="text-[12px] text-destructive">
+              {pwError}
+            </div>
+          )}
           <Button className="w-full" onClick={submitPassword}>
             Unlock
           </Button>
@@ -371,7 +386,7 @@ function SharePage() {
     );
   }
 
-  const accent = share.branding?.accent || "hsl(var(--brand-blue))";
+  const accent = safeAccent(share.branding?.accent);
 
   return (
     <div className="min-h-dvh bg-background">
@@ -401,7 +416,9 @@ function SharePage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-border/60 bg-card p-6 sm:p-8 shadow-sm"
-          style={{ background: `linear-gradient(135deg, ${accent}10, transparent 60%)` }}
+          style={{
+            background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 10%, transparent), transparent 60%)`,
+          }}
         >
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground mb-2">
             <Sparkles className="h-3 w-3" /> For your review
@@ -421,9 +438,9 @@ function SharePage() {
             animate={{ opacity: 1 }}
             className="rounded-xl border border-dashed border-border/70 bg-card/60 p-5"
           >
-            <div className="text-[13px] font-semibold mb-1">Tell us who you are</div>
+            <div className="text-[13px] font-semibold mb-1">Your name</div>
             <div className="text-[12px] text-muted-foreground mb-3">
-              So your marketer can attribute comments and approvals to you.
+              So the team knows who is answering.
             </div>
             <div className="grid sm:grid-cols-2 gap-2">
               <Input
@@ -458,9 +475,7 @@ function SharePage() {
                   key={event.id}
                   className={cn(
                     "rounded-xl px-3.5 py-3 text-[13px]",
-                    event.actor_type === "team"
-                      ? "bg-secondary"
-                      : "bg-[hsl(var(--brand-blue)/0.08)]",
+                    event.actor_type === "team" ? "bg-secondary" : "bg-primary/10",
                   )}
                 >
                   <div className="mb-1 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground">
@@ -506,7 +521,7 @@ function SharePage() {
         </div>
 
         <footer className="pt-8 pb-6 text-center text-[11px] text-muted-foreground">
-          Powered by Mellox AI · The team confirms every decision before anything changes.
+          Made with Mellox AI · Nothing is published until the team confirms.
         </footer>
       </section>
     </div>
@@ -543,6 +558,18 @@ function ItemCard({
   const hashtags: string[] = Array.isArray(snapshot.hashtags) ? snapshot.hashtags : [];
   const channel = snapshot.channel;
   const scheduledAt = snapshot.scheduled_at;
+  // Stored pictures and video arrive as short-lived links made by the server.
+  // Older shares only have the post's own picture address.
+  const media: Array<{ url: string; kind: "image" | "video" }> = (
+    Array.isArray(snapshot.media) ? snapshot.media : []
+  ).filter((m: any) => m && typeof m.url === "string" && /^https:\/\//.test(m.url));
+  if (
+    !media.length &&
+    typeof snapshot.media_url === "string" &&
+    /^https:\/\//.test(snapshot.media_url)
+  ) {
+    media.push({ url: snapshot.media_url, kind: "image" });
+  }
 
   const kindLabel = useMemo(() => {
     switch (item.kind) {
@@ -626,15 +653,46 @@ function ItemCard({
       {hashtags.length > 0 && (
         <div className="px-5 sm:px-6 pb-3 flex flex-wrap gap-1.5">
           {hashtags.map((h) => (
-            <span key={h} className="text-[11px] text-[hsl(var(--brand-blue))]">
+            <span key={h} className="text-[11px] text-muted-foreground">
               #{h.replace(/^#/, "")}
             </span>
           ))}
         </div>
       )}
 
-      {snapshot.media_url && (
-        <img src={snapshot.media_url} alt="" className="w-full max-h-[360px] object-cover" />
+      {media.length > 0 && (
+        <div
+          className={cn(
+            "px-5 pb-4 sm:px-6",
+            media.length > 1 && "flex snap-x gap-2 overflow-x-auto",
+          )}
+        >
+          {media.map((m, i) =>
+            m.kind === "video" ? (
+              <video
+                key={m.url}
+                src={m.url}
+                controls
+                playsInline
+                preload="metadata"
+                className="max-h-[480px] w-full rounded-xl bg-black"
+              />
+            ) : (
+              <img
+                key={m.url}
+                src={m.url}
+                alt={media.length > 1 ? `Slide ${i + 1} of ${media.length}` : ""}
+                loading="lazy"
+                className={cn(
+                  "rounded-xl border border-border/50 object-contain",
+                  media.length > 1
+                    ? "h-[340px] w-auto max-w-[85%] shrink-0 snap-center"
+                    : "max-h-[520px] w-full bg-secondary/40",
+                )}
+              />
+            ),
+          )}
+        </div>
       )}
 
       {/* Action bar */}
@@ -679,19 +737,20 @@ function ItemCard({
         )}
         {allowDownload && <ActionButton icon={Download} label="Download text" onClick={download} />}
         {allowDownload &&
-          typeof snapshot.media_url === "string" &&
-          /^https?:\/\//.test(snapshot.media_url) && (
+          media.map((m, i) => (
             <a
-              href={snapshot.media_url}
+              key={m.url}
+              href={m.url}
               target="_blank"
               rel="noopener noreferrer"
               download
               className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background px-3 py-1.5 text-[12px] font-medium transition hover:border-foreground/30 hover:bg-card"
             >
               <Download className="h-3.5 w-3.5" />
-              Image
+              {m.kind === "video" ? "Video" : "Picture"}
+              {media.length > 1 ? ` ${i + 1}` : ""}
             </a>
-          )}
+          ))}
       </div>
 
       <AnimatePresence>
@@ -716,7 +775,7 @@ function ItemCard({
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={3}
-                placeholder="Be specific — your marketer reads every word."
+                placeholder="Write it here"
               />
               <div className="flex items-center justify-end gap-2">
                 <Button
@@ -757,9 +816,9 @@ function ItemCard({
           className={cn(
             "px-5 py-2 text-[12px] flex items-center gap-1.5",
             done === "approved"
-              ? "text-emerald-600"
+              ? "text-success"
               : done === "rejected"
-                ? "text-red-600"
+                ? "text-destructive"
                 : "text-foreground",
           )}
         >

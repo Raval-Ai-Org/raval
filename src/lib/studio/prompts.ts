@@ -13,6 +13,7 @@ import { framePlanText, type StoryTheme } from "@/lib/stories/frames";
 import { consistencySection, memorySection, type HookStyle } from "./memory";
 import { playbookSection } from "./playbook";
 import { TRENDS_RULE, trendLines, type SocialTrends } from "./trends";
+import { shareSection } from "./viral";
 import { styleBlockFor } from "@/lib/brand-look/prompt";
 import type {
   StudioControls,
@@ -169,14 +170,18 @@ export function pickAngle(
   seed: string,
   recentAngles: (string | null)[],
   preferred?: string,
+  /** Only these angle ids, when the piece has a stated purpose. */
+  allowed?: readonly string[],
 ): Angle {
   if (preferred) {
     const match = ANGLES.find((a) => a.id === preferred);
     if (match) return match;
   }
+  const fitting = allowed?.length ? ANGLES.filter((a) => allowed.includes(a.id)) : [];
+  const all = fitting.length ? fitting : ANGLES;
   const recent = new Set(recentAngles.filter(Boolean).slice(0, 6));
-  const pool = ANGLES.filter((a) => !recent.has(a.id));
-  const candidates = pool.length ? pool : ANGLES;
+  const pool = all.filter((a) => !recent.has(a.id));
+  const candidates = pool.length ? pool : all;
   return candidates[hash(seed) % candidates.length];
 }
 
@@ -335,6 +340,8 @@ function sharedUser(
         : null,
     },
     { label: "How this platform and format work", body: playbookSection(type, platforms) },
+    // The same rules Autopilot and the calendar plan to (viral.ts).
+    { label: "Made to be passed on", body: shareSection(type, platforms) },
     {
       label: "What is working right now",
       body: trends

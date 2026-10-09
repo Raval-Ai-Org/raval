@@ -1,15 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useReducedMotion,
+} from "framer-motion";
 import { ChevronLeft, ChevronRight } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { ensureGoogleFonts } from "@/lib/brand-look/fonts";
 import { RATIOS, type AspectRatio } from "@/lib/studio/aspect";
-import { SlideArt } from "@/lib/studio/carousel/SlideArt";
+import { SlideArt, type SlideArtProps } from "@/lib/studio/carousel/SlideArt";
 import {
   carouselTheme,
+  isSeamless,
   pickCarouselDesign,
   safeDesign,
   safeTheme,
@@ -38,6 +46,79 @@ function useWidth<T extends HTMLElement>() {
     return () => observer.disconnect();
   }, []);
   return [ref, width] as const;
+}
+
+const mod = (n: number, m: number) => ((n % m) + m) % m;
+
+/**
+ * A connected carousel on one endless track: the slides sit edge to edge with
+ * no gap, and the track is drawn around wherever it currently is, so it can be
+ * dragged or stepped in either direction for ever without a jump.
+ */
+function SeamlessTrack({
+  page,
+  onPage,
+  width,
+  height,
+  art,
+}: {
+  /** Which slide is in view. Not wrapped: page 7 of a 5-slide carousel is slide 3. */
+  page: number;
+  onPage: (page: number) => void;
+  width: number;
+  height: number;
+  art: Omit<SlideArtProps, "index" | "width" | "height">;
+}) {
+  const reduce = useReducedMotion();
+  const count = art.slides.length;
+  const x = useMotionValue(-page * width);
+  // The slide nearest the middle of the frame right now, mid-drag included.
+  const [near, setNear] = useState(page);
+  useMotionValueEvent(x, "change", (value) => {
+    const next = Math.round(-value / width);
+    if (Number.isFinite(next)) setNear(next);
+  });
+  const sized = useRef(width);
+  useEffect(() => {
+    const target = -page * width;
+    if (reduce || sized.current !== width) {
+      sized.current = width;
+      x.set(target);
+      return;
+    }
+    const controls = animate(x, target, { duration: duration.slow, ease: ease.emphasized });
+    return () => controls.stop();
+  }, [page, width, reduce, x]);
+
+  return (
+    <motion.div
+      className="absolute inset-0 cursor-grab touch-pan-y active:cursor-grabbing"
+      style={{ x }}
+      drag="x"
+      dragMomentum={false}
+      onDragEnd={(_, info) => {
+        const flick = Math.abs(info.velocity.x) > 300 ? -Math.sign(info.velocity.x) : 0;
+        const dragged = Math.round(-x.get() / width);
+        const next = dragged === page ? page + flick : dragged;
+        if (next === page) animate(x, -page * width, { duration: duration.base });
+        else onPage(next);
+      }}
+    >
+      {[-2, -1, 0, 1, 2].map((offset) => {
+        const at = near + offset;
+        return (
+          <div
+            key={at}
+            aria-hidden={at !== page}
+            className="absolute top-0"
+            style={{ left: at * width, width, height }}
+          >
+            <SlideArt {...art} index={mod(at, count)} width={width} height={height} />
+          </div>
+        );
+      })}
+    </motion.div>
+  );
 }
 
 /**
@@ -69,9 +150,12 @@ export function CarouselPreview({
   const [[index, direction], setPage] = useState<[number, number]>([0, 0]);
   const slides = useMemo(() => withRoles(rawSlides), [rawSlides]);
   const count = slides.length;
+  // A connected carousel loops, so its page number is never clamped.
+  const seamless = isSeamless(safeDesign(spec?.design)) && !generatedSlides?.length;
   useEffect(() => {
-    if (index > count - 1) setPage([Math.max(0, count - 1), -1]);
-  }, [count, index]);
+    if (!seamless && (index > count - 1 || index < 0))
+      setPage([Math.max(0, Math.min(count - 1, index)), -1]);
+  }, [count, index, seamless]);
 
   const look = useMemo(() => {
     const design = safeDesign(spec?.design);
@@ -98,11 +182,17 @@ export function CarouselPreview({
   const height = (width * meta.h) / meta.w;
 
   const go = (next: number) => {
-    const clamped = Math.max(0, Math.min(count - 1, next));
+    const clamped = seamless ? next : Math.max(0, Math.min(count - 1, next));
     if (clamped !== index) setPage([clamped, clamped > index ? 1 : -1]);
   };
+  /** Go to slide `i` the short way round. */
+  const goToSlide = (i: number) => {
+    if (!seamless) return go(i);
+    const ahead = mod(i - index, count);
+    go(index + (ahead <= count / 2 ? ahead : ahead - count));
+  };
 
-  const current = Math.min(index, count - 1);
+  const current = seamless ? mod(index, count || 1) : Math.max(0, Math.min(index, count - 1));
   const slide = slides[current];
   if (!slide) return null;
   const coverImage = cover?.status === "ready" ? cover.url : undefined;
@@ -135,46 +225,55 @@ export function CarouselPreview({
           )}
         >
           <div ref={frameRef} className="absolute inset-0">
-            <AnimatePresence initial={false} custom={direction} mode="popLayout">
-              <motion.div
-                key={current}
-                custom={direction}
-                className="absolute inset-0"
-                variants={{
-                  enter: (d: number) => (reduce ? { opacity: 0 } : { x: `${d * 28}%`, opacity: 0 }),
-                  center: { x: 0, opacity: 1 },
-                  exit: (d: number) => (reduce ? { opacity: 0 } : { x: `${d * -28}%`, opacity: 0 }),
-                }}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: duration.slow, ease: ease.emphasized }}
-              >
-                {generatedSlides?.length ? (
-                  generatedSlides[current]?.status === "ready" && generatedSlides[current]?.url ? (
-                    <img
-                      src={generatedSlides[current].url}
-                      alt={`Slide ${current + 1}: ${slide.heading}`}
-                      className="size-full object-cover"
-                    />
-                  ) : (
-                    <div className="grid size-full place-items-center bg-surface-2 px-8 text-center text-sm text-muted-foreground">
-                      {generatedSlides[current]?.status === "failed"
-                        ? "This slide needs another render."
-                        : "Creating slide artwork…"}
-                    </div>
-                  )
-                ) : width > 0 ? (
-                  <SlideArt {...art} index={current} width={width} height={height} />
-                ) : null}
-              </motion.div>
-            </AnimatePresence>
+            {seamless ? (
+              width > 0 ? (
+                <SeamlessTrack page={index} onPage={go} width={width} height={height} art={art} />
+              ) : null
+            ) : (
+              <AnimatePresence initial={false} custom={direction} mode="popLayout">
+                <motion.div
+                  key={current}
+                  custom={direction}
+                  className="absolute inset-0"
+                  variants={{
+                    enter: (d: number) =>
+                      reduce ? { opacity: 0 } : { x: `${d * 28}%`, opacity: 0 },
+                    center: { x: 0, opacity: 1 },
+                    exit: (d: number) =>
+                      reduce ? { opacity: 0 } : { x: `${d * -28}%`, opacity: 0 },
+                  }}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: duration.slow, ease: ease.emphasized }}
+                >
+                  {generatedSlides?.length ? (
+                    generatedSlides[current]?.status === "ready" &&
+                    generatedSlides[current]?.url ? (
+                      <img
+                        src={generatedSlides[current].url}
+                        alt={`Slide ${current + 1}: ${slide.heading}`}
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      <div className="grid size-full place-items-center bg-surface-2 px-8 text-center text-sm text-muted-foreground">
+                        {generatedSlides[current]?.status === "failed"
+                          ? "This slide needs another render."
+                          : "Creating slide artwork…"}
+                      </div>
+                    )
+                  ) : width > 0 ? (
+                    <SlideArt {...art} index={current} width={width} height={height} />
+                  ) : null}
+                </motion.div>
+              </AnimatePresence>
+            )}
           </div>
         </RatioFrame>
         <button
           type="button"
           onClick={() => go(index - 1)}
-          disabled={index === 0}
+          disabled={!seamless && index === 0}
           aria-label="Previous slide"
           className={cn(NAV, "-left-4")}
         >
@@ -183,7 +282,7 @@ export function CarouselPreview({
         <button
           type="button"
           onClick={() => go(index + 1)}
-          disabled={index === count - 1}
+          disabled={!seamless && index === count - 1}
           aria-label="Next slide"
           className={cn(NAV, "-right-4")}
         >
@@ -230,7 +329,11 @@ export function CarouselPreview({
       ) : null}
 
       <div
-        className="mt-4 flex justify-center gap-2 overflow-x-auto px-1 pb-1 pt-1"
+        // Connected slides are shown touching, so the whole picture can be seen.
+        className={cn(
+          "mt-4 flex justify-center overflow-x-auto px-1 pb-1 pt-1",
+          seamless ? "gap-0" : "gap-2",
+        )}
         role="tablist"
         aria-label="Slides"
       >
@@ -241,12 +344,23 @@ export function CarouselPreview({
             role="tab"
             aria-selected={i === current}
             aria-label={`Slide ${i + 1}: ${s.heading}`}
-            onClick={() => go(i)}
+            onClick={() => goToSlide(i)}
             className={cn(
-              "relative shrink-0 overflow-hidden rounded-md transition-[box-shadow,opacity,transform] duration-[--motion-duration-base]",
-              i === current
-                ? "opacity-100 ring-2 ring-primary ring-offset-2 ring-offset-surface-1"
-                : "opacity-60 ring-1 ring-border hover:opacity-90",
+              "relative shrink-0 overflow-hidden transition-[box-shadow,opacity,transform] duration-[--motion-duration-base]",
+              seamless
+                ? cn(
+                    i === 0 && "rounded-l-md",
+                    i === count - 1 && "rounded-r-md",
+                    i === current
+                      ? "z-10 opacity-100 ring-2 ring-primary"
+                      : "opacity-60 hover:opacity-90",
+                  )
+                : cn(
+                    "rounded-md",
+                    i === current
+                      ? "opacity-100 ring-2 ring-primary ring-offset-2 ring-offset-surface-1"
+                      : "opacity-60 ring-1 ring-border hover:opacity-90",
+                  ),
             )}
             style={{ width: thumbWidth, height: (thumbWidth * meta.h) / meta.w }}
           >
@@ -269,6 +383,7 @@ export function CarouselPreview({
       </div>
       <p className="mt-2 text-center text-xs tabular-nums text-muted-foreground">
         Slide {current + 1} of {count} · {meta.label} {ratio}
+        {seamless ? " · Connected, loops" : ""}
       </p>
     </div>
   );

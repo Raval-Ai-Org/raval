@@ -233,6 +233,18 @@ generators get no memory block. Chat tools off: chat is one plain reply.
   `token_hash`.
 - The public thread never returns emails or `viewed` rows, and the page's
   background refresh (`?refresh=1`) doesn't count as a view.
+- **A shared post is copied on the server** (`contentSnapshot`,
+  `src/lib/shares/snapshot.ts`), never from what the browser sent. Stored
+  pictures are kept as paths and signed when the client's page loads, after a
+  check that they belong to the share's workspace.
+- **Accepting a client's approval approves the post only if it still says what
+  the client saw** (`approvalVerdict`), and never moves a post backwards. A
+  changed post answers 409 and the approval stays waiting.
+- **Publish (Share → Publish) is a list, not an action**
+  (`src/lib/publish/queue.ts`, RPC `src/server/fns/publish.ts`,
+  `PublishDialog.tsx`): approved and scheduled posts, articles and Mellox pull
+  requests on their way out, from rows that exist. Each row opens the place
+  that owns it; never approve, schedule or merge from there.
 - Live check: `tests/live/client-portal-collaboration.live.ts`.
 
 ## AI Visibility (GEO / AEO / SEO)
@@ -425,6 +437,35 @@ worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents p
   limits, duplicates, freshness, scores and whether a person must approve are
   decided in `policy.ts` / `opportunities.ts`. An opportunity's title, link and
   date come from the source record; a web claim with no usable link is not shown.
+- **One set of rules with the calendar and Studio.** What a piece is for and
+  the rules every piece follows live in `src/lib/studio/viral.ts`, read by
+  Studio's prompts, the weekly plan and the calendar's planner. A week's aims
+  and themes come from the pure `shapeWeek`; formats per channel from
+  `formats.ts` (a text post for Instagram, TikTok or YouTube is made with a
+  picture, `withPicture`). Add a rule there, never in one prompt only.
+- **Every piece is made from a brief built on the four brains**
+  (`src/lib/autopilot/brief.ts`). The plan points at numbered entries from
+  Audience, Market, Competitors and stored trends; `groundPicks` turns them
+  into stored words and gives every piece a real customer group;
+  `withoutUnknownFacts` drops a sentence with a figure the brand never gave.
+  A competitor is never named. Never let a model write a group, a rival or a
+  market fact into a brief directly.
+- **Studio makes the piece that was planned.** The job carries `intent.aim`
+  and `intent.hookStyle`; Studio keeps to `AIM_ANGLES` and to the carousel
+  structure the brief names (`structureFromBrief`). Don't add a second
+  rotation that can override the plan.
+- **A maker that is briefly unavailable is retried by the worker** (twice,
+  while there is time before the slot; `piece_waiting`). Only
+  `error.category === "provider"` with `retryable` counts.
+- **The calendar is shared.** A day and channel a person already filled gets
+  no Autopilot post (`freeSlots`), and a piece a person moved on the calendar
+  is sent at that time (`effectiveSlot`). Never schedule from `planned_for`
+  without it.
+- **A piece whose time passed is skipped, not made** (no charge); a retry a
+  person asked for is still made.
+- **What happens next** is the pure `nextSteps` (`agenda.ts`), from each step's
+  own due time. Reading the view also moves steps the cron left overdue
+  (`nudgeOverdue`); it never decides anything new.
 - **No duplicates:** `(workspace_id, dedupe_key)` is unique on actions,
   `(workspace_id, fingerprint)` on opportunities, and the Studio idempotency key
   is `autopilot:<actionId>:<attempt>`. Scheduling is never retried by the
@@ -619,6 +660,16 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
     and the stored look come from user-editable `meta`: both are re-validated.
   - Scripts the fonts can't draw (`canRenderText`) keep the old behaviour; it
     fails open and never fails a job.
+  - **Connected slides** (`controls.seamless` → `design.flow: "seamless"`) are
+    one long picture cut at the slide edges, and the last slide meets the
+    first. Everything in the background is placed by its distance from the
+    start of the carousel (`ribbonLift`, `backdropTiles`), in whole turns, so
+    it joins and loops; a render test compares the pixel columns at every
+    edge. The image model makes one wide background with no words (slot
+    `backdrop`, `carouselBackdropPrompt`), laid behind every slide as mirrored
+    copies; the slides are then drawn by `storeCarouselSlides`. Never generate
+    connected slides one image each: their edges can't meet. A failed
+    background still draws the carousel, plain.
 - **Social trends are one shared, stored snapshot** (`social_trend_snapshots`,
   scope `global`; `src/server/studio/social-trends.server.ts`, pure half in
   `src/lib/studio/trends.ts`). Refreshed every few days from the **existing**
@@ -810,7 +861,10 @@ originally generated content) and both off only if explicitly disabled.
 
 ## Verifying work
 
-Unit tests, typecheck and build are necessary but not sufficient. Before
+Unit tests, typecheck and build are necessary but not sufficient. When
+background work "isn't working", read `cron_heartbeats` first: every job is a
+pg_cron row that calls `public.call_app_hook(path)`; a job that is missing or
+has a URL written into its command is the fault, not the feature. Before
 calling a feature done: apply new migrations to the real database
 (`supabase migration list --db-url "$SUPABASE_DB_URL"`, dry-run then push),
 exercise the real path (`npm run test:live`, e.g. `tests/live/geo-scan.live.ts`),

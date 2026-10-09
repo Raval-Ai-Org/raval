@@ -21,6 +21,7 @@ function action(over: Partial<ActionView>): ActionView {
     error: null,
     metrics: null,
     updatedAt: "2026-10-07T00:00:00.000Z",
+    nextStepAt: null,
     ...over,
   };
 }

@@ -156,7 +156,7 @@ export type OpportunityKind =
 
 /** Something Autopilot needs before it can do its job, and where to fix it. */
 export type ReadinessItem = {
-  id: "brand" | "style" | "accounts" | "website" | "blog";
+  id: "brand" | "style" | "accounts" | "website" | "blog" | "audience" | "competitors" | "market";
   ok: boolean;
   label: string;
   detail: string;
@@ -165,6 +165,13 @@ export type ReadinessItem = {
   /** Blocks posting (accounts) rather than just limiting what Autopilot can do. */
   required: boolean;
 };
+/** The brains a piece is built from besides Brand DNA; each is optional. */
+export const BRAIN_READINESS: readonly ReadinessItem["id"][] = [
+  "audience",
+  "competitors",
+  "market",
+];
+
 export type OpportunityStatus = "new" | "accepted" | "dismissed" | "expired" | "done";
 
 /** What an opportunity can be turned into. A campaign is three linked pieces. */
@@ -335,6 +342,12 @@ export type ActionView = {
   error: string | null;
   metrics: Record<string, number> | null;
   updatedAt: string;
+  /** When the worker next touches it: writes it, schedules it, checks on it. */
+  nextStepAt: string | null;
+  /** The brand theme it sits under, when the plan gave it one. */
+  pillar?: string | null;
+  /** What it was built from: "Brand DNA", "For: Agency owners"… */
+  builtFrom?: string[];
   preview?: ActionPreview | null;
 };
 
@@ -400,6 +413,8 @@ export type AutopilotView = {
   learnings: string[];
   /** Recurring non-post work: latest run of each. */
   tasks: ActionView[];
+  /** When the next week gets planned; null when no plan is queued. */
+  nextPlanAt: string | null;
   visibility: { score: number | null; scannedAt: string | null } | null;
   /** The blog approved articles go to, when one is set up. */
   site: { host: string } | null;

@@ -46,6 +46,8 @@ export const ControlsSchema = z.object({
   tone: z.string().max(80).optional(),
   length: z.enum(["short", "standard", "long"]).optional(),
   slideCount: z.number().int().min(3).max(10).optional(),
+  /** Carousel: draw the slides as one long connected picture that loops. */
+  seamless: z.boolean().optional(),
   durationSec: z.number().int().min(4).max(90).optional(),
   videoResolution: z.enum(["480P", "720P", "1080P"]).optional(),
   audio: z.boolean().optional(),
@@ -70,6 +72,13 @@ export const IntentSchema = z.object({
   ideaSource: z.string().max(40).optional(),
   /** A StudioTemplate id; the prompt follows its structure. */
   template: z.string().max(40).optional(),
+  /**
+   * Decided by a plan before the piece is made (Autopilot): what it is for
+   * (viral.ts) and how it opens (memory.ts). Studio follows them instead of
+   * rotating on its own, so the piece is the one that was planned.
+   */
+  aim: z.enum(["save", "send", "reply", "relate", "act"]).optional(),
+  hookStyle: z.string().max(24).optional(),
   /**
    * Repurpose: an existing content item this piece is made from (a post turned
    * into a Story). Read on the server through the job's own workspace.
@@ -191,7 +200,7 @@ export type StoryOutput = {
 export type CarouselSpecOutput = {
   /** The story structure id (steps, myths, story…). */
   structure?: string;
-  design: { v: 1; look: string; colorway: string; motif: string };
+  design: { v: 1; look: string; colorway: string; motif: string; flow?: string };
   theme: {
     bg: string;
     ink: string;
