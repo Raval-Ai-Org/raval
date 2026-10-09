@@ -576,7 +576,7 @@ async function processAction(row: Inbox) {
 }
 
 async function runInbox(limit = 10) {
-  const { data, error } = await db.schema("private").rpc("claim_slack_inbox", { p_limit: limit });
+  const { data, error } = await db.rpc("claim_slack_inbox", { p_limit: limit });
   if (error) throw new Error("Could not claim Slack inbox");
   const rows = (data ?? []) as Inbox[];
   for (const row of rows) {
@@ -620,9 +620,7 @@ async function runInbox(limit = 10) {
 }
 
 async function runOutbound(limit = 15) {
-  const { data, error } = await db
-    .schema("private")
-    .rpc("claim_slack_outbound", { p_limit: limit });
+  const { data, error } = await db.rpc("claim_slack_outbound", { p_limit: limit });
   if (error) throw new Error("Could not claim Slack outbox");
   const rows = (data ?? []) as Outbound[];
   for (const row of rows) {
