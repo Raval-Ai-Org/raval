@@ -30,7 +30,7 @@ export default function Home() {
   return (
     <div className="relative flex min-h-screen flex-1 flex-col overflow-x-clip bg-[#030405] text-white">
       <JsonLd data={faqJsonLd(faqs.slice(0, FEATURED))} />
-      <main className="flex flex-1 flex-col">
+      <main className="marketing-home-main flex flex-1 flex-col">
       {/* Hero: aurora + copy + chat. Its bottom edge is where the dashboard peeks in. */}
       <section className="relative flex flex-col items-center px-5 pb-[calc(var(--hero-dash-h)+3.5rem)] pt-36 sm:pt-40">
         <HeroBackground />

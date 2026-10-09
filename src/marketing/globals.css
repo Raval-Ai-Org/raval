@@ -1,5 +1,34 @@
 @import "tailwindcss";
 
+/* The product shell sets overflow-x: hidden on html/body, which makes body a
+   scroll container and breaks this site's sticky, scroll-driven sections. */
+html:has(#marketing-root),
+body:has(#marketing-root) {
+  overflow-x: visible;
+  overflow-y: visible;
+}
+
+html:has(#marketing-root) {
+  height: 100%;
+  font-family: "Google Sans Flex", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Product-wide rhythm rules otherwise insert gaps between the copied site's
+   sections and change the timing of its scroll sequences. */
+@layer base {
+  .marketing-home-main > * + *,
+  .marketing-home-main > section:not([data-no-rhythm]) + section:not([data-no-rhythm]) {
+    margin-top: 0;
+  }
+}
+
+body:has(#marketing-root) {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  font-family: "Google Sans Flex", ui-sans-serif, system-ui, sans-serif;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {

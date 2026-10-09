@@ -41,7 +41,7 @@ export const viewport: Viewport = { themeColor: "#0d1114" };
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div id="main-content" className={`${michroma.variable} ${googleSansFlex.variable} ${micro5.variable} flex min-h-screen flex-col font-sans`}>
+    <div id="marketing-root" className={`${michroma.variable} ${googleSansFlex.variable} ${micro5.variable} flex min-h-screen flex-col font-sans`}>
       <script dangerouslySetInnerHTML={{ __html: PRELOADER_SKIP_SCRIPT }} />
       <noscript><style>{".mx-pre{display:none!important}"}</style></noscript>
       <Preloader />
