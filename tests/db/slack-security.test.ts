@@ -60,9 +60,21 @@ describe("Slack database isolation", () => {
       );
   });
   it("does not grant authenticated users the queue claim RPC", async () => {
+    const grants = await db.query<{ anon: boolean; authenticated: boolean; service_role: boolean }>(
+      "select has_function_privilege('anon','public.claim_slack_inbox(integer)','EXECUTE') as anon, has_function_privilege('authenticated','public.claim_slack_inbox(integer)','EXECUTE') as authenticated, has_function_privilege('service_role','public.claim_slack_inbox(integer)','EXECUTE') as service_role",
+    );
+    expect(grants.rows).toEqual([{ anon: false, authenticated: false, service_role: true }]);
     await expect(asAuthenticated("select * from private.claim_slack_inbox(1)")).rejects.toThrow(
       /permission denied/i,
     );
+    await expect(asAuthenticated("select * from public.claim_slack_inbox(1)")).rejects.toThrow(
+      /permission denied/i,
+    );
+    await expect(asAuthenticated("select * from public.claim_slack_outbound(1)")).rejects.toThrow(
+      /permission denied/i,
+    );
+    expect((await db.query("select * from public.claim_slack_inbox(1)")).rows).toEqual([]);
+    expect((await db.query("select * from public.claim_slack_outbound(1)")).rows).toEqual([]);
   });
   it("enforces one live installation per Mellox workspace", async () => {
     await expect(
@@ -111,6 +123,23 @@ describe("Slack database isolation", () => {
         [workspace, installation],
       ),
     ).rejects.toThrow();
+  });
+  it("claims queued Slack work through service-role-only public RPCs", async () => {
+    const inbox = await db.query<{ status: string; attempts: number }>(
+      "select status, attempts from public.claim_slack_inbox(10)",
+    );
+    expect(inbox.rows).toContainEqual(expect.objectContaining({ status: "running", attempts: 1 }));
+
+    await db.query(
+      "insert into public.slack_outbound(workspace_id,installation_id,dedupe_key,channel_id,payload) values($1,$2,'test-reply','C123','{}')",
+      [workspace, installation],
+    );
+    const outbound = await db.query<{ status: string; attempts: number }>(
+      "select status, attempts from public.claim_slack_outbound(10)",
+    );
+    expect(outbound.rows).toContainEqual(
+      expect.objectContaining({ status: "sending", attempts: 1 }),
+    );
   });
   it("deduplicates content created from one Slack shortcut", async () => {
     const meta = JSON.stringify({

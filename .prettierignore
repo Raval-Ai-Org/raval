@@ -17,3 +17,6 @@ Social-Distribtion-Engine-MelloxAI-SDE
 
 # Playwright snapshot baselines are byte-compared; reformatting breaks them.
 tests/**/*-snapshots/
+
+# Generated email HTML is intentionally compact; edit the generator instead.
+supabase/email-templates/*.html

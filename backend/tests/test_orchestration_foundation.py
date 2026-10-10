@@ -494,7 +494,7 @@ class TestSecurityAndSecretRedaction:
             run_type=RunType.ON_DEMAND_SCAN,
             actor_provenance=ActorProvenance(
                 actor_id="admin",
-                metadata={"api_key": "sk-proj-secret1234567890123456", "token": "ghp_123456789012345678901234567890123456"},
+                metadata={"api_key": "sk-proj-secret1234567890123456", "token": "ghp_123456789012345678901234567890123456"}, # secret-scan:allow synthetic test fixture
             ),
             metadata_payload={
                 "authorization": "Bearer secret_bearer_token_xyz_123",

@@ -409,7 +409,7 @@ class TestSecurityAndRedaction:
 
     def test_redact_secrets_from_strings(self):
         """Bearer tokens, GitHub PATs, OpenAI keys, and private keys are redacted."""
-        text = "Failed with token ghp_123456789012345678901234567890123456 and Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6"
+        text = "Failed with token ghp_123456789012345678901234567890123456 and Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6" # secret-scan:allow synthetic test fixture
         redacted = redact_secrets_from_string(text)
         assert "ghp_1234" not in redacted
         assert "Bearer eyJhb" not in redacted

@@ -3,6 +3,25 @@ import { slackConfig, verifySlackSignature } from "@/server/slack/security.serve
 import { hintUnlinkedSlackUser, kickSlackQueue } from "@/server/slack/kick.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
+type SlackEventBody = {
+  type?: string;
+  challenge?: string;
+  event_id?: string;
+  team_id?: string;
+  event?: {
+    type?: string;
+    bot_id?: string;
+    subtype?: string;
+    channel_type?: string;
+    channel?: string;
+    user?: string;
+    text?: string;
+    ts?: string;
+    thread_ts?: string;
+    [key: string]: unknown;
+  };
+};
+
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const raw = await request.text();
@@ -15,9 +34,9 @@ export async function POST(request: Request) {
   }
   if (!verifySlackSignature(raw, request.headers, secret))
     return new Response("Unauthorized", { status: 401 });
-  let body: Record<string, any>;
+  let body: SlackEventBody;
   try {
-    body = JSON.parse(raw);
+    body = JSON.parse(raw) as SlackEventBody;
   } catch {
     return new Response("Invalid payload", { status: 400 });
   }
@@ -29,7 +48,7 @@ export async function POST(request: Request) {
     typeof body.team_id !== "string"
   )
     return new Response("Invalid payload", { status: 400 });
-  const event = body.event as Record<string, any> | undefined;
+  const event = body.event;
   if (event?.type === "app_uninstalled") {
     await supabaseAdmin
       .from("slack_installations" as never)
@@ -42,7 +61,7 @@ export async function POST(request: Request) {
       .eq("team_id", body.team_id);
     return new Response("ok");
   }
-  if (!event || !["app_mention", "message", "app_home_opened"].includes(event.type))
+  if (!event || !["app_mention", "message", "app_home_opened"].includes(event.type ?? ""))
     return new Response("ok");
   if (event.type === "message" && (event.channel_type !== "im" || event.bot_id || event.subtype))
     return new Response("ok");

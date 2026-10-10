@@ -44,15 +44,15 @@ function expectNoForbidden(values: Array<string | null>) {
 }
 
 test.describe("SEO meta — pitch-deck messaging", () => {
-  test("landing page (/) advertises Marketing Intelligence Layer", async ({ page }) => {
+  test("landing page (/) advertises the current AI marketing product", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const meta = await readMeta(page);
 
     expect(meta.title).toMatch(/Mellox AI/);
-    expect(meta.title).toMatch(/Marketing Intelligence Layer/i);
-    expect(meta.description).toMatch(/visible inside LLMs/i);
-    expect(meta.description).toMatch(/brands and agencies/i);
-    expect(meta.ogTitle).toMatch(/Marketing Intelligence Layer/i);
+    expect(meta.title).toMatch(/AI Marketing Assistant.*AI CMO/i);
+    expect(meta.description).toMatch(/AI marketing assistant and AI CMO/i);
+    expect(meta.description).toMatch(/ChatGPT and Gemini/i);
+    expect(meta.ogTitle).toMatch(/AI Marketing Assistant.*AI CMO/i);
     expect(meta.ogDescription ?? "").not.toEqual("");
     expect(meta.ogType).toBe("website");
     expect(meta.ogSiteName).toBe("Mellox AI");
@@ -96,17 +96,17 @@ test.describe("SEO meta — pitch-deck messaging", () => {
     const res = await request.get("/sitemap.xml");
     expect(res.status()).toBe(200);
     const xml = await res.text();
-    expect(xml).toContain(`<loc>${CANONICAL_HOST}/</loc>`);
+    expect(xml).toContain(`<loc>${CANONICAL_HOST}</loc>`);
     expect(xml).not.toMatch(/threereachaisaas/i);
     expect(xml).not.toMatch(/legacy-preview\.example/i);
   });
 
-  test("llms.txt reflects Marketing Intelligence Layer positioning", async ({ request }) => {
+  test("llms.txt reflects the current product positioning", async ({ request }) => {
     const res = await request.get("/llms.txt");
     expect(res.status()).toBe(200);
     const body = await res.text();
-    expect(body).toMatch(/Marketing Intelligence Layer/i);
-    expect(body).toMatch(/visible inside LLMs/i);
+    expect(body).toMatch(/AI marketing assistant and AI CMO/i);
+    expect(body).toMatch(/ChatGPT|Gemini/i);
     expect(body).toMatch(/Brand DNA/i);
     // Guard against legacy phrasing.
     expect(body).not.toMatch(/AI marketing OS/i);

@@ -12,9 +12,12 @@
   "twitterDescription": "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies — plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
   "canonical": null,
   "hreflang": [],
-  "robots": "noindex",
+  "robots": "noindex,nofollow",
   "h1": "404",
-  "jsonLdTypes": ["Organization", "WebSite"],
+  "jsonLdTypes": [
+    "Organization",
+    "WebSite"
+  ],
   "jsonLdNodes": [
     {
       "type": "Organization",
@@ -23,7 +26,7 @@
       "name": "Mellox AI",
       "hasDescription": true,
       "publisherRef": null,
-      "logoUrl": "https://mellox.ai/favicon.svg",
+      "logoUrl": "https://mellox.ai/_next/static/media/Favicon-updated.226a0354.png",
       "offersCount": null,
       "offerPrices": null,
       "faqQuestionCount": null,
@@ -49,6 +52,7 @@
     "Marketing Intelligence Layer",
     "Get visible inside LLMs",
     "Brand DNA",
+    "Mellox",
     "Mellox AI"
   ]
 }

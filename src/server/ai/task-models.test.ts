@@ -80,6 +80,10 @@ describe("task model registry", () => {
     expect(planFor("chat").models).toEqual([WORKHORSE, "openai/gpt-5.6-terra"]);
     expect(planFor("competitors.updates").models).toEqual([ECONOMY, "openai/gpt-5.6-luna"]);
     expect(planFor("ai-generate.caption").models[0]).toBe(WORKHORSE);
+    expect(planFor("studio.upload-captions")).toMatchObject({
+      models: [WORKHORSE, "openai/gpt-5.6-terra"],
+      effort: "medium",
+    });
     expect(planFor("schedule.weekly").effort).toBe("medium");
   });
 

@@ -129,27 +129,29 @@ const ROUTES: Array<{
     mustContain: [/Workspace/i, /Mellox/i],
     noindex: true,
   },
-  {
-    label: "Onboarding (/onboarding)",
-    path: "/onboarding",
-    mustContain: [/Brand DNA/i, /AEO|GEO/i],
-    noindex: true,
-  },
-  {
-    label: "Agency (/agency)",
-    path: "/agency",
-    mustContain: [/Agency/i, /Marketing Intelligence Layer/i],
-    noindex: true,
-  },
-  {
-    label: "Workspaces (/projects)",
-    path: "/projects",
-    mustContain: [/Clients|Workspaces|client brand/i, /Marketing Intelligence Layer/i],
-    noindex: true,
-  },
 ];
 
+const PROTECTED_ROUTES = ["/onboarding", "/agency", "/projects"];
+
 test.describe("SEO meta � authenticated app + studio routes", () => {
+  for (const path of PROTECTED_ROUTES) {
+    test(`${path} redirects unauthenticated visitors to a noindex login page`, async ({
+      request,
+    }) => {
+      const redirect = await request.get(path, { maxRedirects: 0 });
+      expect(redirect.status()).toBeGreaterThanOrEqual(300);
+      expect(redirect.status()).toBeLessThan(400);
+      expect(redirect.headers().location).toContain(`/login?next=${encodeURIComponent(path)}`);
+
+      const login = await request.get(path);
+      expect(new URL(login.url()).pathname).toBe("/login");
+      const meta = snapshot(await login.text());
+      expect(meta.robots).toMatch(/noindex/i);
+      expect(meta.canonical).toBe(`${CANONICAL_HOST}/login`);
+      assertNoForbidden(meta, path);
+    });
+  }
+
   for (const route of ROUTES) {
     test(`${route.label} ships pitch-deck-aligned head metadata`, async ({ request }) => {
       const res = await request.get(route.path);

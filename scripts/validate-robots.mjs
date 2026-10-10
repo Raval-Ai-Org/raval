@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Validate public/robots.txt against the running app.
+ * Validate the running app's generated robots.txt.
  *
  * Asserts:
  *   1. A single `Sitemap:` directive is present and points at the canonical
@@ -16,13 +16,9 @@
  * Exits non-zero on any violation so CI blocks merges.
  */
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-
 const CANONICAL_HOST = process.env.APP_URL || "https://mellox.ai";
 const EXPECTED_SITEMAP = `${CANONICAL_HOST}/sitemap.xml`;
 const SERVER = process.env.SITEMAP_BASE_URL ?? "http://localhost:8080";
-const ROBOTS_PATH = resolve(process.cwd(), "public/robots.txt");
 
 function parseRobots(text) {
   const disallow = [];
@@ -75,7 +71,9 @@ function extractRobotsMeta(html) {
 
 async function main() {
   const errors = [];
-  const robotsText = readFileSync(ROBOTS_PATH, "utf8");
+  const robotsResponse = await fetch(`${SERVER}/robots.txt`);
+  if (!robotsResponse.ok) throw new Error(`robots.txt returned HTTP ${robotsResponse.status}`);
+  const robotsText = await robotsResponse.text();
   const parsed = parseRobots(robotsText);
 
   // 1. Sitemap directive

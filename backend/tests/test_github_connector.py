@@ -526,7 +526,7 @@ class TestGitHubSecurityInvariants:
 
     def test_tokens_scrubbed_from_exceptions_and_metadata(self, github_connector):
         """Tokens are never exposed in exception strings, operation records, or metadata."""
-        secret_token = "ghp_supersecretgithubpersonalaccesstoken12345"
+        secret_token = "ghp_supersecretgithubpersonalaccesstoken12345" # secret-scan:allow synthetic test fixture
         sanitized = github_connector.connect({"token": secret_token})
         assert "supersecret" not in str(sanitized.metadata)
 

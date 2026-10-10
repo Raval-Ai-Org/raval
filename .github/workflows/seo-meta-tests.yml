@@ -20,8 +20,9 @@ env:
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_only
   SUPABASE_URL: https://ci-build-only.supabase.co
   SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_only
-  APP_URL: http://localhost:8080
-  NEXT_PUBLIC_APP_URL: http://localhost:8080
+  APP_URL: https://mellox.ai
+  NEXT_PUBLIC_APP_URL: https://mellox.ai
+  NEXT_PUBLIC_SITE_URL: https://mellox.ai
 
 concurrency:
   group: seo-meta-${{ github.ref }}

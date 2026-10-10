@@ -13,8 +13,11 @@
   "canonical": "https://mellox.ai/login",
   "hreflang": [],
   "robots": "noindex,nofollow",
-  "h1": "Your AI marketing team.",
-  "jsonLdTypes": ["Organization", "WebSite"],
+  "h1": "Welcome back",
+  "jsonLdTypes": [
+    "Organization",
+    "WebSite"
+  ],
   "jsonLdNodes": [
     {
       "type": "Organization",
@@ -23,7 +26,7 @@
       "name": "Mellox AI",
       "hasDescription": true,
       "publisherRef": null,
-      "logoUrl": "https://mellox.ai/favicon.svg",
+      "logoUrl": "https://mellox.ai/_next/static/media/Favicon-updated.226a0354.png",
       "offersCount": null,
       "offerPrices": null,
       "faqQuestionCount": null,
@@ -45,5 +48,9 @@
       "inLanguage": "en"
     }
   ],
-  "approvedPhrasesPresent": ["Marketing Intelligence Layer", "Mellox AI"]
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "Mellox",
+    "Mellox AI"
+  ]
 }

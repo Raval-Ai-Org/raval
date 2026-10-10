@@ -1,20 +1,25 @@
 {
   "path": "/",
-  "title": "Mellox AI � The Marketing Intelligence Layer",
-  "description": "Mellox AI is the AI-native platform that helps brands and agencies plan, create, optimize and grow their marketing from one workspace � powered by Brand DNA, AEO/GEO intelligence and multi-client operations to get you visible inside LLMs.",
-  "ogTitle": "Mellox AI � The Marketing Intelligence Layer",
-  "ogDescription": "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies � plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
+  "title": "Mellox AI: AI Marketing Assistant & AI CMO for Brands",
+  "description": "Mellox is your AI marketing assistant and AI CMO. It learns your brand, creates on-brand posts, images and articles, publishes them for you, and gets you recommended by ChatGPT and Gemini.",
+  "ogTitle": "Mellox AI: AI Marketing Assistant & AI CMO for Brands",
+  "ogDescription": "Mellox is your AI marketing assistant and AI CMO. It learns your brand, creates on-brand posts, images and articles, publishes them for you, and gets you recommended by ChatGPT and Gemini.",
   "ogType": "website",
   "ogSiteName": "Mellox AI",
-  "ogUrl": "https://mellox.ai/",
+  "ogUrl": "https://mellox.ai",
   "twitterCard": "summary_large_image",
-  "twitterTitle": "Mellox AI � The Marketing Intelligence Layer",
-  "twitterDescription": "Get visible inside LLMs. Mellox AI is the AI-native marketing platform for brands and agencies � plan, create, optimize and grow from one workspace grounded in your Brand DNA.",
-  "canonical": "https://mellox.ai/",
+  "twitterTitle": "Mellox AI: AI Marketing Assistant & AI CMO for Brands",
+  "twitterDescription": "Mellox is your AI marketing assistant and AI CMO. It learns your brand, creates on-brand posts, images and articles, publishes them for you, and gets you recommended by ChatGPT and Gemini.",
+  "canonical": "https://mellox.ai",
   "hreflang": [],
-  "robots": null,
-  "h1": null,
-  "jsonLdTypes": ["FAQPage", "Organization", "SoftwareApplication", "WebSite"],
+  "robots": "index, follow",
+  "h1": "Don’t just rank. Be recommended.Don’t just rank.Be recommended.",
+  "jsonLdTypes": [
+    "FAQPage",
+    "Organization",
+    "SoftwareApplication",
+    "WebSite"
+  ],
   "jsonLdNodes": [
     {
       "type": "FAQPage",
@@ -26,7 +31,7 @@
       "logoUrl": null,
       "offersCount": null,
       "offerPrices": null,
-      "faqQuestionCount": 3,
+      "faqQuestionCount": 8,
       "breadcrumbDepth": null,
       "inLanguage": null
     },
@@ -37,7 +42,21 @@
       "name": "Mellox AI",
       "hasDescription": true,
       "publisherRef": null,
-      "logoUrl": "https://mellox.ai/favicon.svg",
+      "logoUrl": "https://mellox.ai/_next/static/media/Favicon-updated.226a0354.png",
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "Organization",
+      "id": "https://mellox.ai/#organization",
+      "url": "https://mellox.ai",
+      "name": "Mellox AI",
+      "hasDescription": false,
+      "publisherRef": null,
+      "logoUrl": "https://mellox.ai/icon-512.png",
       "offersCount": null,
       "offerPrices": null,
       "faqQuestionCount": null,
@@ -46,14 +65,19 @@
     },
     {
       "type": "SoftwareApplication",
-      "id": null,
-      "url": "https://mellox.ai/",
+      "id": "https://mellox.ai/#software",
+      "url": "https://mellox.ai",
       "name": "Mellox AI",
       "hasDescription": true,
-      "publisherRef": null,
+      "publisherRef": "https://mellox.ai/#organization",
       "logoUrl": null,
-      "offersCount": 3,
-      "offerPrices": ["USD29", "USD79", "USD9"],
+      "offersCount": 4,
+      "offerPrices": [
+        "USD0",
+        "USD149",
+        "USD449",
+        "USD49"
+      ],
       "faqQuestionCount": null,
       "breadcrumbDepth": null,
       "inLanguage": null
@@ -71,14 +95,24 @@
       "faqQuestionCount": null,
       "breadcrumbDepth": null,
       "inLanguage": "en"
+    },
+    {
+      "type": "WebSite",
+      "id": "https://mellox.ai/#website",
+      "url": "https://mellox.ai",
+      "name": "Mellox AI",
+      "hasDescription": false,
+      "publisherRef": "https://mellox.ai/#organization",
+      "logoUrl": null,
+      "offersCount": null,
+      "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
     }
   ],
   "approvedPhrasesPresent": [
-    "Marketing Intelligence Layer",
-    "Get visible inside LLMs",
-    "Brand DNA",
-    "AEO",
-    "GEO",
+    "Mellox",
     "Mellox AI"
   ]
 }

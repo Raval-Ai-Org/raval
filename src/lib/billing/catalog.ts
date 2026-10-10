@@ -638,7 +638,7 @@ export const CREDIT_ACTIONS = {
     unit: "per batch",
     feature: "studio",
     expectedCostUsd: 0.014,
-    routes: ["studio.ideas", "studio.prompt"],
+    routes: ["studio.ideas", "studio.prompt", "studio.upload-captions"],
   },
   // /api/ai-generate is priced by what it actually does: normal size = social_multi;
   // size "long" on WORKHORSE = article_standard; escalated to PREMIUM = article_premium

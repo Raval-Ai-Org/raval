@@ -27,9 +27,9 @@
 --      (32+ recommended). The hooks return 503 below 16.
 --   3. Migration 20260911000100_add_app_hook_caller.sql has been applied.
 --
--- Migration 20260911120600 schedules the same job list automatically once
--- both Vault secrets exist; this file is the manual path (and the rotation
--- reference). Keep the two job lists identical.
+-- The base migration schedules its initial jobs once both Vault secrets
+-- exist. Feature migrations add their own schedules; this file is the manual
+-- recovery/reconciliation path. Keep every active hook represented here.
 --
 -- =============================================================================
 
@@ -118,7 +118,11 @@ BEGIN
       ('mellox-ugc-renders',     '* * * * *',    '/api/public/hooks/ugc-renders'),
       -- Google Analytics 4 + Search Console: enqueues daily incremental syncs
       -- and resumes initial 180-day backfills.
-      ('mellox-analytics-sync',  '*/10 * * * *', '/api/public/hooks/analytics-sync')
+      ('mellox-analytics-sync',  '*/10 * * * *', '/api/public/hooks/analytics-sync'),
+      -- Advances queued Slack events and outbound messages.
+      ('mellox-slack',           '* * * * *',    '/api/public/hooks/slack'),
+      -- Syncs experiment pull requests and advances due Proof Engine jobs.
+      ('mellox-experiments',     '*/5 * * * *',  '/api/public/hooks/experiments')
     ) AS t(jobname, schedule, path)
   LOOP
     IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = v_job.jobname) THEN
