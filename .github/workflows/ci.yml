@@ -142,6 +142,8 @@ jobs:
     name: Promptfoo evals (grounding · injection resistance)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      OPENROUTER_API_KEY_EVALS: ${{ secrets.OPENROUTER_API_KEY_EVALS }}
     # Live-model quality gate (ADR-0020): calls the real Claude gateway
     # through evals/providers/*.provider.ts, so a legitimate sampling
     # variance can occasionally trip a deterministic-looking assertion.
@@ -172,10 +174,10 @@ jobs:
       # SDKs) is much heavier than this app's runtime needs, so it's fetched
       # on demand via npx, isolated from the app's own lockfile.
       - name: Run evals when configured
-        if: ${{ secrets.OPENROUTER_API_KEY_EVALS != '' }}
+        if: ${{ env.OPENROUTER_API_KEY_EVALS != '' }}
         run: npm run eval
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_EVALS }}
+          OPENROUTER_API_KEY: ${{ env.OPENROUTER_API_KEY_EVALS }}
 
   sdr:
     name: SDR service · pytest · ruff
