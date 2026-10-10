@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sun, Moon, Settings, ChevronDown } from "@/components/brand/icons";
 import { LogOut, HelpCircle } from "@/components/ui/gemini-icons";
-import { Brain, Shield, Wallet } from "@/components/icons";
+import { Brain, Compass, Shield, Wallet } from "@/components/icons";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/hooks/use-theme";
@@ -181,6 +181,16 @@ export function AccountMenu({
         <AdminMenuItem />
         <DropdownMenuItem
           onSelect={() => {
+            emitAppEvent("open:tour");
+            onClose?.();
+          }}
+          className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
+        >
+          <Compass className="h-4 w-4 text-muted-foreground" />
+          Take the tour
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
             window.open("mailto:support@mellox.ai", "_blank", "noopener,noreferrer");
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
@@ -289,6 +299,12 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           <Wallet className="h-4 w-4 text-primary" /> Plan & billing
         </DropdownMenuItem>
         <AdminMenuItem />
+        <DropdownMenuItem
+          onSelect={() => emitAppEvent("open:tour")}
+          className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
+        >
+          <Compass className="h-4 w-4 text-muted-foreground" /> Take the tour
+        </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => window.open("mailto:support@mellox.ai", "_blank", "noopener,noreferrer")}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"

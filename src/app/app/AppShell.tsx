@@ -14,7 +14,7 @@ import { getProofEngineStatus } from "@/lib/experiments.functions";
 import { useAutopilotStatus } from "@/components/app/autopilot/hooks";
 import { AutopilotBeacon } from "@/components/app/autopilot/composer/AutopilotDeck";
 import { autopilotPath } from "@/components/app/autopilot/composer/useComposerAutopilot";
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
 import { brainPath, conversationIdFromPath, workspacePath } from "@/lib/workspace/paths";
@@ -94,6 +94,9 @@ const CreateLauncher = lazy(() =>
 const BrainPulse = lazy(() =>
   import("@/components/app/brain/BrainPulse").then((m) => ({ default: m.BrainPulse })),
 );
+const AppTour = lazy(() =>
+  import("@/components/app/tour/AppTour").then((m) => ({ default: m.AppTour })),
+);
 
 import { useStudioEntry } from "@/hooks/use-studio";
 import { StudioDock } from "@/components/studio/StudioDock";
@@ -112,6 +115,13 @@ import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import { PlanLock } from "@/components/app/billing/billing-ui";
 import { PLANS, type FeatureKey } from "@/lib/billing/catalog";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
+import { useAppTourSeen } from "@/hooks/use-app-tour";
+import {
+  TOUR_FIRST_POST_PROMPT,
+  tourStops,
+  type TourFinishAction,
+  type TourStop,
+} from "@/lib/tour/steps";
 
 function AppShell() {
   // The workspace comes from the route and is verified by WorkspaceProvider
@@ -318,6 +328,68 @@ function AppShell() {
     setChatOpen(false);
   }, [path]);
 
+  // The app tour: a new person gets one look around, once per account. It
+  // waits for a quiet chat screen and never opens over another window. Anyone
+  // can take it again from the account menu (`open:tour`).
+  const {
+    ready: tourReady,
+    seen: tourWasSeen,
+    firstName: tourName,
+    markSeen: markTourSeen,
+  } = useAppTourSeen();
+  const [tourOpen, setTourOpen] = useState(false);
+  const navOpenRef = useRef(navOpen);
+  navOpenRef.current = navOpen;
+  const navBeforeTour = useRef(false);
+  const tourList = useMemo(
+    () => tourStops({ autopilot: Boolean(autopilot?.enabled) }),
+    [autopilot?.enabled],
+  );
+  const startTour = useCallback(() => {
+    navBeforeTour.current = navOpenRef.current;
+    setTourOpen(true);
+  }, []);
+  const onChatScreen = path.replace(/\/$/, "") === homeHref || Boolean(activeConversationId);
+  useEffect(() => {
+    if (!tourReady || tourWasSeen || tourOpen || !onChatScreen) return;
+    const timer = window.setInterval(() => {
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+      if (!document.querySelector('[data-tour="chat"]')) return;
+      markTourSeen();
+      startTour();
+    }, 900);
+    return () => window.clearInterval(timer);
+  }, [tourReady, tourWasSeen, tourOpen, onChatScreen, markTourSeen, startTour]);
+  useEffect(() => {
+    // After the account menu has closed and handed its focus back.
+    const onTour = () => window.setTimeout(startTour, 160);
+    addAppEventListener("open:tour", onTour);
+    return () => removeAppEventListener("open:tour", onTour);
+  }, [startTour]);
+  const onTourStop = useCallback(
+    (stop: TourStop | null) => {
+      if (stop?.sidebar) setNavOpen(true);
+      // On a phone the sidebar is a drawer that would cover the rest.
+      else if (isCompact) setNavOpen(false);
+    },
+    [isCompact],
+  );
+  const closeTour = useCallback(
+    (action?: TourFinishAction) => {
+      setTourOpen(false);
+      setNavOpen(isCompact ? false : navBeforeTour.current);
+      if (!action) return;
+      // Once the tour has gone and given focus back.
+      window.setTimeout(() => {
+        if (action === "post") {
+          emitAppEvent("chat:prefill", { text: TOUR_FIRST_POST_PROMPT, focus: true });
+        } else if (action === "brain") openBrain();
+        else emitAppEvent("open:settings", { section: "accounts" });
+      }, 80);
+    },
+    [isCompact, openBrain],
+  );
+
   const sidebarAction = (opts: {
     icon: LucideIcon;
     label: string;
@@ -326,6 +398,8 @@ function AppShell() {
     accent?: string;
     /** Paid feature: when the plan locks it, show the plan and open the upgrade screen. */
     feature?: FeatureKey;
+    /** The app tour's name for this entry (`data-tour`). */
+    tour?: string;
   }) => {
     const Icon = opts.icon;
     const lock =
@@ -335,6 +409,7 @@ function AppShell() {
     return (
       <button
         key={opts.label}
+        data-tour={opts.tour}
         onClick={() => {
           if (lock && opts.feature) openFeatureUpgrade(opts.feature);
           else opts.onClick();
@@ -427,6 +502,7 @@ function AppShell() {
         <div className="pt-1">
           <button
             type="button"
+            data-tour="library"
             onClick={() => {
               setNavOpen(false);
               emitAppEvent("open:library");
@@ -448,6 +524,7 @@ function AppShell() {
             icon: BrainIcon,
             label: "Brain",
             hint: brainNews ? `${brainNews} new` : undefined,
+            tour: "brain",
             onClick: () => openBrain(),
           })}
           {sidebarAction({
@@ -455,12 +532,14 @@ function AppShell() {
             label: "Analytics",
             hint: "⌘.",
             accent: "hsl(var(--brand-green))",
+            tour: "analytics",
             onClick: () => setAnalyticsOpen(true),
           })}
           {sidebarAction({
             icon: CalendarIcon,
             label: "Content calendar",
             accent: "hsl(var(--brand-blue))",
+            tour: "calendar",
             onClick: () => emitAppEvent("open:content-calendar"),
           })}
         </SidebarSection>
@@ -474,6 +553,7 @@ function AppShell() {
             label: "AI Visibility",
             hint: "GEO · AEO",
             accent: "hsl(var(--brand-blue))",
+            tour: "visibility",
             onClick: () => {
               emitAppEvent("open:ai-visibility");
               setNavOpen(false);
@@ -534,7 +614,7 @@ function AppShell() {
 
         <FreeSidebarCard className="mx-1 mt-2" />
 
-        <div className="mt-2 border-t border-border/50 pt-2">
+        <div data-tour="account" className="mt-2 border-t border-border/50 pt-2">
           <AccountMenu
             onOpenSettings={() => emitAppEvent("open:settings")}
             onClose={() => setNavOpen(false)}
@@ -807,6 +887,7 @@ function AppShell() {
                 onClick={() => emitAppEvent("toggle:studio")}
                 aria-label="Open Studio"
                 title="Open Studio"
+                data-tour="studio"
                 className="group relative inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-primary-border bg-primary-surface px-3 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-primary-surface hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97] sm:h-8 sm:rounded-md sm:px-2.5"
               >
                 <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
@@ -818,6 +899,7 @@ function AppShell() {
                   <button
                     aria-label="Share"
                     title="Share"
+                    data-tour="share"
                     className="group relative inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-xl bg-primary px-2.5 text-[12px] font-semibold tracking-tight text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md active:scale-[0.97] data-[state=open]:bg-primary/90 sm:h-8 sm:min-w-8 sm:rounded-md sm:px-3"
                   >
                     <span
@@ -998,6 +1080,11 @@ function AppShell() {
         />
         <ContentCalendar workspaceId={workspaceId} />
       </Suspense>
+      {tourOpen && (
+        <Suspense fallback={null}>
+          <AppTour stops={tourList} name={tourName} onStop={onTourStop} onClose={closeTour} />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -122,6 +122,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
   return (
     <div
       ref={shellRef}
+      data-tour="chat"
       className={cn("mx-composer group/composer", hero && "mx-composer--hero")}
       data-autopilot={autopilot && autopilot !== "off" ? autopilot : undefined}
       data-covered={covered ? "" : undefined}

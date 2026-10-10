@@ -122,6 +122,7 @@ export function AutopilotToggle({
       }
       onClick={onClick}
       className="ap-toggle"
+      data-tour="autopilot"
       data-state={state}
     >
       <span className="ap-toggle__track" aria-hidden>

@@ -212,6 +212,23 @@ generators get no memory block. Chat tools off: chat is one plain reply.
   them with sample data in development (`tests/integration/memory-lab.spec.ts`).
 - Live check: `tests/live/memory.live.ts`.
 
+## App tour (a new person's first look around)
+
+- **Once per account, never per workspace.** `profiles.app_tour_seen_at`
+  (`src/hooks/use-app-tour.ts`) is set the moment the tour opens. Anything
+  short of a clear "not yet" (a failed read, a missing row) counts as seen.
+  Accounts older than the tour were marked seen by the migration.
+- It opens by itself only on the chat screen, and never over another window
+  (`AppShell`). Anyone can take it again from Account menu → Take the tour
+  (`open:tour`).
+- **Stops are data** (`src/lib/tour/steps.ts`, pure, with `placeCard`). A stop
+  points at a real control by its `data-tour` name; add a stop there and the
+  attribute on the control. A control that isn't on screen shows the stop
+  centred, so a layout change never breaks the tour.
+- `AppTour` (`src/components/app/tour/`) is presentational and starts nothing:
+  the last card's first steps are a person's click. `/tour-lab` renders it on
+  a stand-in shell in development (`tests/integration/tour-lab.spec.ts`).
+
 ## Sharing (team invites and the client portal)
 
 - **Team invites:** `src/server/fns/workspaces.ts` + `ShareDialog.tsx`.

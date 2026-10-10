@@ -7583,6 +7583,7 @@ export type Database = {
       };
       profiles: {
         Row: {
+          app_tour_seen_at: string | null;
           avatar_url: string | null;
           created_at: string;
           id: string;
@@ -7591,6 +7592,7 @@ export type Database = {
           persona_set_at: string | null;
         };
         Insert: {
+          app_tour_seen_at?: string | null;
           avatar_url?: string | null;
           created_at?: string;
           id: string;
@@ -7599,6 +7601,7 @@ export type Database = {
           persona_set_at?: string | null;
         };
         Update: {
+          app_tour_seen_at?: string | null;
           avatar_url?: string | null;
           created_at?: string;
           id?: string;

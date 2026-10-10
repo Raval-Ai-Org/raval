@@ -140,6 +140,8 @@ export type AppEventMap = {
   "open:share": undefined;
   "open:studio": undefined;
   "open:tasks": undefined;
+  /** Take the app tour again (account menu). Only ever fired by a button. */
+  "open:tour": undefined;
   /**
    * Open the upgrade screen. With a block it explains that block (locked
    * feature, empty balance, limit); without one it offers the next plan.
