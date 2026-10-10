@@ -38,10 +38,23 @@ return 429 until the period resets.
 ## Cron and Vault
 
 Jobs call `public.call_app_hook(path)`, which reads `mellox_app_base_url` and
-`mellox_cron_secret` from Vault. Migration `20260911120600` schedules the
-`mellox-*` jobs only once both secrets exist.
+`mellox_cron_secret` from Vault. The base scheduler migration is guarded by
+those secrets; feature migrations add schedules for their own hooks. A guarded
+migration that ran before Vault was configured does not schedule itself later.
 
 - **First setup / re-schedule**: [supabase/ENABLE-CRON-JOBS.sql](../supabase/ENABLE-CRON-JOBS.sql).
+- **Slack heartbeat says `Could not claim Slack inbox/outbox`**: apply
+  migration `20261016090000_repair_slack_claims_and_experiments_schedule.sql`.
+  The worker calls service-role-only `public.claim_slack_*` RPCs; the migration
+  exposes wrappers for the private atomic claim functions.
+- **Experiments heartbeat is stale and `mellox-experiments` is absent**: the
+  guarded experiments schedule was not created (or was later removed). Confirm
+  both Vault secrets are present, then apply the repair migration above or run
+  STEP 3 of `supabase/ENABLE-CRON-JOBS.sql` to re-create the schedule.
+- **After recovery**: verify `cron.job` has active `mellox-slack` (every minute)
+  and `mellox-experiments` (every five minutes), inspect `net._http_response`
+  for HTTP 200, and confirm the matching `cron_heartbeats.last_succeeded_at`
+  advances within three expected intervals.
 - **AI Visibility scans stuck in "running"**: check `mellox-geo-scans` (every
   minute, migration `20260914120000`) and the `geo-scans` heartbeat. Scans whose
   lease expired are resumed by that hook; a scan claimed 60+ times is failed.

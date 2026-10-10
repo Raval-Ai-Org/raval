@@ -235,7 +235,7 @@ class TestSafeApplyAndRedaction:
 
     def test_secret_redaction_in_trace_errors(self):
         def stage_with_secret_leak(ctx, st):
-            secret_token = "ghp_1234567890abcdef1234567890abcdef1234"
+            secret_token = "ghp_1234567890abcdef1234567890abcdef1234" # secret-scan:allow synthetic test fixture
             api_key = "sk-proj-9876543210secretapikeyvalue"
             raise ValueError(f"Failed to authenticate with token {secret_token} and key {api_key}")
 
@@ -252,7 +252,7 @@ class TestSafeApplyAndRedaction:
         error_msg = connector_st.error_message or ""
 
         # Raw secrets must be redacted
-        assert "ghp_1234567890abcdef1234567890abcdef1234" not in error_msg
+        assert "ghp_1234567890abcdef1234567890abcdef1234" not in error_msg # secret-scan:allow synthetic test fixture
         assert "sk-proj-9876543210secretapikeyvalue" not in error_msg
         assert "[REDACTED]" in error_msg
 

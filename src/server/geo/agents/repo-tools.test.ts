@@ -65,11 +65,11 @@ const FILES = {
   "app/layout.tsx":
     'export const metadata = { title: "Acme" };\nexport default function L({children}){return children}\n',
   "app/page.tsx": "export default function Page(){ return <h1>Acme</h1> }\n",
-  ".env.local": "ANTHROPIC_API_KEY=sk-ant-abcdefghijklmnopqrstuvwxyz0123\n",
-  "config/keys.pem": "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n",
+  ".env.local": "ANTHROPIC_API_KEY=sk-ant-abcdefghijklmnopqrstuvwxyz0123\n", // secret-scan:allow synthetic test fixture
+  "config/keys.pem": "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n", // secret-scan:allow synthetic test fixture
   "node_modules/next/index.js": "module.exports = {}",
   "lib/site.ts":
-    'export const token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789AB";\nexport const url = "https://acme.test";\n',
+    'export const token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789AB";\nexport const url = "https://acme.test";\n', // secret-scan:allow synthetic test fixture
 };
 
 describe("repo tool helpers", () => {
@@ -90,7 +90,7 @@ describe("repo tool helpers", () => {
 
   it("redacts credential-shaped strings", () => {
     const out = redactSecrets(
-      'const t = "ghp_abcdefghijklmnopqrstuvwxyz0123456789AB"; STRIPE_SECRET_KEY=sk_live_abcdefgh',
+      'const t = "ghp_abcdefghijklmnopqrstuvwxyz0123456789AB"; STRIPE_SECRET_KEY=sk_live_abcdefgh', // secret-scan:allow synthetic test fixture
     );
     expect(out).not.toContain("ghp_abcdefghij");
     expect(out).toContain("[REDACTED]");

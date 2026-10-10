@@ -536,9 +536,9 @@ class TestGitHubClosedLoopE2E:
         assert any("ssrf" in issue.lower() or "private" in issue.lower() for issue in report_ssrf.blocking_issues)
 
         # 3. Secret Protection: Redacts tokens from diagnostic messages
-        secret_msg = "Failed with token ghp_012345678901234567890123456789012345"
+        secret_msg = "Failed with token ghp_012345678901234567890123456789012345" # secret-scan:allow synthetic test fixture
         redacted = redact_secrets_from_string(secret_msg)
-        assert "ghp_012345678901234567890123456789012345" not in redacted
+        assert "ghp_012345678901234567890123456789012345" not in redacted # secret-scan:allow synthetic test fixture
         assert "[REDACTED]" in redacted
 
 

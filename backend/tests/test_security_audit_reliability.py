@@ -309,7 +309,7 @@ class TestAuthorizationAndIsolation:
 class TestSecretScrubbing:
 
     def test_bearer_and_oauth_token_scrubbing(self):
-        raw = "Header: Bearer ghp_1234567890abcdef1234567890abcdef1234 and sk-12345678901234567890abcdef"
+        raw = "Header: Bearer ghp_1234567890abcdef1234567890abcdef1234 and sk-12345678901234567890abcdef" # secret-scan:allow synthetic test fixture
         sanitized = redact_secrets_from_string(raw)
         assert "ghp_" not in sanitized
         assert "sk-" not in sanitized

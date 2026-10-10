@@ -5,7 +5,7 @@ import { checkEnv } from "@/server/env";
 import { cronSecretError, defineCronRoute, setHeartbeatSink } from "@/server/cron";
 import { missedHeartbeats, runOpsWatch, spendAnomaly } from "@/server/observability/ops-watch";
 
-const SECRET = "cron-secret-for-tests-0123456789";
+const SECRET = "cron-secret-for-tests-0123456789"; // secret-scan:allow synthetic test fixture
 
 const PROD_OK = {
   NODE_ENV: "production",

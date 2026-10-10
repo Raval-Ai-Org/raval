@@ -32,7 +32,7 @@ describe("GitHub App config", () => {
     expect(normalizePrivateKey(`"${PEM}"`)).toBe(PEM.trim());
     expect(normalizePrivateKey(Buffer.from(PEM).toString("base64"))).toBe(PEM.trim());
     // A value truncated to its first line (unquoted multiline .env) is rejected.
-    expect(normalizePrivateKey("-----BEGIN RSA PRIVATE KEY-----")).toBeNull();
+    expect(normalizePrivateKey("-----BEGIN RSA PRIVATE KEY-----")).toBeNull(); // secret-scan:allow synthetic test fixture
     expect(normalizePrivateKey(undefined)).toBeNull();
   });
 

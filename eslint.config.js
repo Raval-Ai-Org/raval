@@ -95,7 +95,11 @@ export default tseslint.config(
   },
   eslintPluginPrettier,
   {
-    files: ["src/marketing/**/*.{ts,tsx}", "src/app/(marketing)/**/*.{ts,tsx}", "src/mdx-components.tsx"],
+    files: [
+      "src/marketing/**/*.{ts,tsx}",
+      "src/app/(marketing)/**/*.{ts,tsx}",
+      "src/mdx-components.tsx",
+    ],
     // The imported marketing site keeps its upstream formatting.
     rules: { "prettier/prettier": "off" },
   },

@@ -109,7 +109,12 @@ export const POST = defineRoute({
             },
           ]) || "Generate a useful default response.";
 
-        const json: any = await chatCompletion({
+        type AiGenerateResponse = {
+          choices?: Array<{ message?: { content?: string | null } }>;
+          _truncated?: boolean;
+        };
+
+        const json: AiGenerateResponse = await chatCompletion({
           messages: [
             { role: "system", content: system },
             { role: "user", content: user },

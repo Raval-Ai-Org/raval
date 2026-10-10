@@ -8,6 +8,34 @@ import { slackConfig, verifySlackSignature } from "@/server/slack/security.serve
 import { kickSlackQueue, slackEphemeral } from "@/server/slack/kick.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
+type SlackPayload = {
+  type?: string;
+  callback_id?: string;
+  team?: { id?: string };
+  user?: { id?: string };
+  message?: { text?: string; ts?: string };
+  response_url?: string;
+  trigger_id?: string;
+  channel?: { id?: string };
+  view?: {
+    state?: {
+      values?: Record<
+        string,
+        Record<
+          string,
+          {
+            selected_option?: { value?: string };
+            value?: string;
+          }
+        >
+      >;
+    };
+    private_metadata?: string;
+  };
+  actions?: Array<{ value?: string }>;
+  [key: string]: unknown;
+};
+
 export const dynamic = "force-dynamic";
 const table = (name: string) => supabaseAdmin.from(name as never);
 export async function POST(request: Request) {
@@ -21,9 +49,9 @@ export async function POST(request: Request) {
   }
   if (!verifySlackSignature(raw, request.headers, secret))
     return new Response("Unauthorized", { status: 401 });
-  let payload: Record<string, any>;
+  let payload: SlackPayload;
   try {
-    payload = JSON.parse(new URLSearchParams(raw).get("payload") ?? "");
+    payload = JSON.parse(new URLSearchParams(raw).get("payload") ?? "") as SlackPayload;
   } catch {
     return new Response("Invalid payload", { status: 400 });
   }

