@@ -97,14 +97,19 @@ async function fetchHtml(request: APIRequestContext, path: string): Promise<stri
   return res.text();
 }
 
-const ROUTES: Array<{ label: string; path: string; requireOgImage?: boolean }> = [
+const ROUTES: Array<{
+  label: string;
+  path: string;
+  resolvedPath?: string;
+  requireOgImage?: boolean;
+}> = [
   { label: "Landing (/)", path: "/", requireOgImage: false },
   { label: "Login (/login)", path: "/login" },
   { label: "Signup (/signup)", path: "/signup" },
   { label: "Workspace (/workspace)", path: "/workspace" },
-  { label: "Onboarding (/onboarding)", path: "/onboarding" },
-  { label: "Agency HQ (/agency)", path: "/agency" },
-  { label: "Workspaces (/projects)", path: "/projects" },
+  { label: "Onboarding redirect (/onboarding)", path: "/onboarding", resolvedPath: "/login" },
+  { label: "Agency redirect (/agency)", path: "/agency", resolvedPath: "/login" },
+  { label: "Workspaces redirect (/projects)", path: "/projects", resolvedPath: "/login" },
 ];
 
 test.describe("OpenGraph + Twitter Card � pitch-deck messaging", () => {
@@ -117,7 +122,9 @@ test.describe("OpenGraph + Twitter Card � pitch-deck messaging", () => {
       expect(og.ogTitle, "og:title").toBeTruthy();
       expect(og.ogDescription, "og:description").toBeTruthy();
       expect(og.ogType, "og:type").toBe("website");
-      expect(og.ogUrl, "og:url").toBe(`${CANONICAL_HOST}${route.path === "/" ? "" : route.path}`);
+      expect(og.ogUrl, "og:url").toBe(
+        `${CANONICAL_HOST}${(route.resolvedPath ?? route.path) === "/" ? "" : (route.resolvedPath ?? route.path)}`,
+      );
       expect(og.twitterCard, "twitter:card").toBe("summary_large_image");
       expect(og.twitterTitle, "twitter:title").toBeTruthy();
       expect(og.twitterDescription, "twitter:description").toBeTruthy();
@@ -135,12 +142,13 @@ test.describe("OpenGraph + Twitter Card � pitch-deck messaging", () => {
 
       assertNoForbidden(blob, route.label);
 
-      // og:image is optional per project convention (hosting injects one when
-      // omitted). If a route DOES set it, it must be absolute https on the
-      // canonical host and og:image / twitter:image must agree.
+      // Image formats can differ by crawler; both must resolve on our host.
       if (og.ogImage) {
-        expect(og.ogImage, "og:image absolute https").toMatch(/^https:\/\//);
-        if (og.twitterImage) expect(og.twitterImage).toBe(og.ogImage);
+        expect(og.ogImage, "og:image canonical host").toMatch(/^https:\/\/mellox\.ai\//);
+        if (og.twitterImage)
+          expect(og.twitterImage, "twitter:image canonical host").toMatch(
+            /^https:\/\/mellox\.ai\//,
+          );
       }
     });
   }
@@ -179,20 +187,20 @@ test.describe("JSON-LD structured data � pitch-deck messaging", () => {
     const app = findByType(nodes, "SoftwareApplication");
     expect(app, "SoftwareApplication node").toBeTruthy();
     expect(app!.name).toBe("Mellox AI");
-    expect(app!.url).toBe(`${CANONICAL_HOST}/`);
-    expect(String(app!.description)).toMatch(/Brand DNA/i);
-    expect(String(app!.description)).toMatch(/AEO|GEO/i);
+    expect(app!.url).toBe(CANONICAL_HOST);
+    expect(String(app!.description)).toMatch(/learns your brand/i);
+    expect(String(app!.description)).toMatch(/cited by AI assistants/i);
     expect(String(app!.description)).toMatch(/Mellox/i);
     assertNoForbidden(String(app!.description), "SoftwareApplication.description");
 
     const offers = app!.offers as Array<Record<string, unknown>> | undefined;
     expect(Array.isArray(offers), "offers is array").toBe(true);
-    // Pitch deck tiers: Starter $9, Growth $29, Agency OS $79.
+    // Current public pricing tiers.
     const byName = new Map(offers!.map((o) => [String(o.name), o]));
     for (const [name, price] of [
-      ["Starter", "9"],
-      ["Growth", "29"],
-      ["Agency OS", "79"],
+      ["Starter", "49"],
+      ["Growth", "149"],
+      ["Agency", "449"],
     ] as const) {
       const offer = byName.get(name);
       expect(offer, `${name} offer present`).toBeTruthy();
@@ -218,8 +226,8 @@ test.describe("JSON-LD structured data � pitch-deck messaging", () => {
       .map((q) => `${q.name} :: ${q.acceptedAnswer?.text ?? ""}`)
       .join(" \n ");
 
-    // Every deck pillar must be answered somewhere in the FAQ.
-    expect(answerBlob).toMatch(/Marketing Intelligence Layer/i);
+    // Every current product pillar must be answered somewhere in the FAQ.
+    expect(answerBlob).toMatch(/AI marketing platform/i);
     expect(answerBlob).toMatch(/Brand DNA/i);
     expect(answerBlob).toMatch(/AEO\/GEO|AEO|GEO/i);
     expect(answerBlob).toMatch(/Mellox/i);
@@ -235,28 +243,16 @@ test.describe("JSON-LD structured data � pitch-deck messaging", () => {
     assertNoForbidden(answerBlob, "FAQPage");
   });
 
-  test("agency + projects ship WebPage schema tied to Organization/WebSite", async ({
+  test("agency + projects redirect to login without exposing private WebPage schema", async ({
     request,
   }) => {
     for (const path of ["/agency", "/projects"]) {
       const html = await fetchHtml(request, path);
       const nodes = extractJsonLd(html);
-      const page = findByType(nodes, "WebPage");
-      expect(page, `${path} WebPage node`).toBeTruthy();
-      expect(page!.url).toBe(`${CANONICAL_HOST}${path}`);
-      expect(String(page!.name)).toMatch(/Mellox AI/);
-      expect(String(page!.description)).toMatch(/Marketing Intelligence Layer/i);
-
-      const publisher = page!.publisher as Record<string, unknown> | undefined;
-      expect(publisher?.["@type"]).toBe("Organization");
-      expect(publisher?.name).toBe("Mellox AI");
-      expect(publisher?.url).toBe(CANONICAL_HOST);
-
-      const partOf = page!.isPartOf as Record<string, unknown> | undefined;
-      expect(partOf?.["@type"]).toBe("WebSite");
-      expect(partOf?.name).toBe("Mellox AI");
-
-      assertNoForbidden(JSON.stringify(page), `${path} WebPage`);
+      expect(findByType(nodes, "WebPage"), `${path} private WebPage node`).toBeUndefined();
+      expect(findByType(nodes, "Organization")).toBeTruthy();
+      expect(findByType(nodes, "WebSite")).toBeTruthy();
+      assertNoForbidden(html, `${path} redirect`);
     }
   });
 

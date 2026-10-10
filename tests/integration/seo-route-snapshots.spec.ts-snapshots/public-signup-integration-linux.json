@@ -1,20 +1,23 @@
 {
   "path": "/signup",
-  "title": "Create account � Mellox AI",
-  "description": "Create your Mellox AI workspace � the Marketing Intelligence Layer for brands and agencies.",
-  "ogTitle": "Create account � Mellox AI",
+  "title": "Create Account · Mellox AI",
+  "description": "Create your Mellox AI workspace — the Marketing Intelligence Layer for brands and agencies.",
+  "ogTitle": "Create Account · Mellox AI",
   "ogDescription": "Start your Mellox AI workspace and get visible inside LLMs with AEO/GEO, Brand DNA and multi-client operations.",
   "ogType": "website",
   "ogSiteName": "Mellox AI",
   "ogUrl": "https://mellox.ai/signup",
   "twitterCard": "summary_large_image",
-  "twitterTitle": "Create account � Mellox AI",
+  "twitterTitle": "Create Account · Mellox AI",
   "twitterDescription": "Start your Mellox AI workspace and get visible inside LLMs with AEO/GEO, Brand DNA and multi-client operations.",
   "canonical": "https://mellox.ai/signup",
   "hreflang": [],
   "robots": "noindex,nofollow",
-  "h1": "Your AI marketing team.",
-  "jsonLdTypes": ["Organization", "WebSite"],
+  "h1": "Create account",
+  "jsonLdTypes": [
+    "Organization",
+    "WebSite"
+  ],
   "jsonLdNodes": [
     {
       "type": "Organization",
@@ -23,7 +26,7 @@
       "name": "Mellox AI",
       "hasDescription": true,
       "publisherRef": null,
-      "logoUrl": "https://mellox.ai/favicon.svg",
+      "logoUrl": "https://mellox.ai/_next/static/media/Favicon-updated.226a0354.png",
       "offersCount": null,
       "offerPrices": null,
       "faqQuestionCount": null,
@@ -51,6 +54,7 @@
     "Brand DNA",
     "AEO",
     "GEO",
+    "Mellox",
     "Mellox AI"
   ]
 }

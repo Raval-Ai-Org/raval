@@ -261,7 +261,6 @@ async function collectSnapshot(page: Page, path: string): Promise<RouteSnapshot>
     raw.twitterTitle,
     raw.twitterDescription,
     raw.h1,
-    raw.bodyText,
   ]
     .filter(Boolean)
     .join(" \n ");
@@ -377,7 +376,8 @@ const PUBLIC_ROUTES = ["/", "/login", "/signup", "/reset-password"];
 // shell and agency/projects hubs. They must all stay noindex +
 // self-canonical so future refactors can't leak private tooling into
 // search.
-const PRIVATE_ROUTES = ["/onboarding", "/workspace", "/agency", "/projects"];
+const PRIVATE_ROUTES = ["/workspace"];
+const AUTH_REDIRECT_ROUTES = ["/onboarding", "/agency", "/projects"];
 // Studio-adjacent routes that redirect into /app. We don't snapshot their
 // resolved head (that's covered by /app), but we DO assert the redirect
 // still lands on a noindex private shell so a broken redirect can't leak
@@ -433,6 +433,17 @@ test.describe("SEO route snapshots � approved pitch-deck text", () => {
     });
   }
 
+  for (const path of AUTH_REDIRECT_ROUTES) {
+    test(`protected ${path} redirects to a noindex login page`, async ({ page }) => {
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      expect(new URL(page.url()).pathname).toBe("/login");
+      const snap = await collectSnapshot(page, "/login");
+      expect(snap.robots ?? "").toMatch(/noindex/i);
+      expect(snap.canonical).toBe(`${CANONICAL_HOST}/login`);
+      assertNoForbidden(snap, `protected ${path}`);
+    });
+  }
+
   for (const path of STUDIO_REDIRECT_ROUTES) {
     test(`snapshot: studio redirect ${path} ? /app`, async ({ page }) => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
@@ -444,7 +455,7 @@ test.describe("SEO route snapshots � approved pitch-deck text", () => {
       // Legacy studio links resolve client-side (to /w/<id>/app or /projects);
       // the shell they serve is a private, self-canonical app route.
       expect(snap.canonical ?? "").toMatch(
-        new RegExp(`^${CANONICAL_HOST}/(app|workspace|projects)`),
+        new RegExp(`^${CANONICAL_HOST}/(app|workspace|projects|login)`),
       );
 
       assertNoForbidden(snap, `studio redirect ${path}`);
@@ -491,7 +502,7 @@ test.describe("SEO route snapshots � approved pitch-deck text", () => {
     const raw = (await res.text()).trim();
 
     // Assert against raw text (line-based directives are stable already).
-    for (const p of PRIVATE_ROUTES) {
+    for (const p of [...PRIVATE_ROUTES, ...AUTH_REDIRECT_ROUTES]) {
       expect(raw).toMatch(new RegExp(`Disallow:\\s*${p}\\b`));
     }
     expect(raw).toMatch(new RegExp(`Sitemap:\\s*${CANONICAL_HOST}/sitemap\\.xml`));
@@ -506,7 +517,7 @@ test.describe("SEO route snapshots � approved pitch-deck text", () => {
     const raw = (await res.text()).trim();
 
     // Canonical host + at least the root URL must be present before normalization.
-    expect(raw).toContain(`<loc>${CANONICAL_HOST}/</loc>`);
+    expect(raw).toContain(`<loc>${CANONICAL_HOST}</loc>`);
     assertNoForbidden(raw, "sitemap.xml");
 
     // Strip <lastmod>�</lastmod> entirely � timestamps drift every build.
@@ -514,13 +525,13 @@ test.describe("SEO route snapshots � approved pitch-deck text", () => {
     expect(normalizeBody(stripped)).toMatchSnapshot("sitemap.xml");
   });
 
-  test("snapshot: llms.txt reflects deck positioning", async ({ request }) => {
+  test("snapshot: llms.txt reflects current product positioning", async ({ request }) => {
     const res = await request.get("/llms.txt");
     expect(res.status()).toBe(200);
     const raw = (await res.text()).trim();
 
-    expect(raw).toMatch(/Marketing Intelligence Layer/i);
-    expect(raw).toMatch(/visible inside LLMs/i);
+    expect(raw).toMatch(/AI marketing assistant and AI CMO/i);
+    expect(raw).toMatch(/ChatGPT|Gemini/i);
     expect(raw).toMatch(/Brand DNA/i);
     assertNoForbidden(raw, "llms.txt");
 

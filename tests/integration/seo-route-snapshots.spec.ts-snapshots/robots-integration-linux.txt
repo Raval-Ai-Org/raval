@@ -1,1 +1,1 @@
-User-agent: * Allow: / Disallow: /app Disallow: /app/ Disallow: /login Disallow: /signup Disallow: /onboarding Disallow: /projects Disallow: /agency Disallow: /auth/ Disallow: /reset-password Disallow: /api/ Sitemap: https://mellox.ai/sitemap.xml
+User-Agent: * Allow: / Disallow: /app Disallow: /app/ Disallow: /workspace Disallow: /workspaces Disallow: /login Disallow: /signup Disallow: /onboarding Disallow: /projects Disallow: /agency Disallow: /auth/ Disallow: /reset-password Disallow: /share/ Disallow: /api/ Disallow: /admin Sitemap: https://mellox.ai/sitemap.xml
