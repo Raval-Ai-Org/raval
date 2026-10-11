@@ -31,6 +31,7 @@ const columns: { title: string; links: { label: string; href: string; external?:
       { label: "Security and trust", href: "/security" },
       { label: "Privacy policy", href: "/privacy" },
       { label: "Terms of Service", href: "/terms" },
+      { label: "AI safety & acceptable use", href: "/safety" },
       { label: "Cookie Policy", href: "/cookies" },
     ],
   },
@@ -54,7 +55,11 @@ const columns: { title: string; links: { label: string; href: string; external?:
       { label: "Instagram", href: "https://www.instagram.com/mellox.ai/", external: true },
       { label: "LinkedIn", href: "https://www.linkedin.com/company/mellox/", external: true },
       { label: "Facebook", href: "https://www.facebook.com/melloxai", external: true },
-      { label: "YouTube", href: "https://www.youtube.com/channel/UCUc41UqAxB9j4JZRqpqrETQ", external: true },
+      {
+        label: "YouTube",
+        href: "https://www.youtube.com/channel/UCUc41UqAxB9j4JZRqpqrETQ",
+        external: true,
+      },
       { label: "TikTok", href: "https://www.tiktok.com/@mellox.ai", external: true },
       { label: "X / Twitter", href: "https://x.com/mellox_ai", external: true },
     ],
@@ -101,7 +106,10 @@ export default function Footer() {
             <ul>
               {col.links.map((l) => (
                 <li key={l.label}>
-                  <a href={l.href} {...(l.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+                  <a
+                    href={l.href}
+                    {...(l.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                  >
                     {l.label}
                   </a>
                 </li>
@@ -113,7 +121,9 @@ export default function Footer() {
 
       <div className="mx-bottom">
         <div className="mx-bottom-row">
-          <p className="mx-copy">&copy; {new Date().getFullYear()} mellox.ai. All rights reserved.</p>
+          <p className="mx-copy">
+            &copy; {new Date().getFullYear()} mellox.ai. All rights reserved.
+          </p>
           <CookieSettingsButton className="mx-cookie-btn">Cookie Settings</CookieSettingsButton>
           <p className="mx-credit">
             Website designed and engineered by{" "}

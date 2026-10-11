@@ -5,6 +5,7 @@
 // and Search tabs and in Settings → Connections. Admins connect and choose;
 // editors can sync; viewers read.
 import { useState } from "react";
+import { GOOGLE_DISCLOSURE, GOOGLE_DISCLOSURE_VERSION } from "@/marketing/lib/google-disclosure";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
@@ -128,7 +129,12 @@ function useConnect() {
         const url = new URL(window.location.href);
         const returnPath = `${url.pathname}?tab=${url.searchParams.get("tab") || "overview"}`;
         const { url: authUrl } = await start({
-          data: { workspaceId: ws.id, returnOrigin: window.location.origin, returnPath },
+          data: {
+            workspaceId: ws.id,
+            returnOrigin: window.location.origin,
+            returnPath,
+            disclosureVersion: GOOGLE_DISCLOSURE_VERSION,
+          },
         });
         return authUrl;
       }, reserved),
@@ -140,19 +146,50 @@ function useConnect() {
 export function ConnectGoogleButton({ label = "Connect Google" }: { label?: string }) {
   const connect = useConnect();
   const ws = useWorkspace();
+  const [disclosureOpen, setDisclosureOpen] = useState(false);
   if (roleRank[ws.role] < roleRank.admin)
     return (
       <p className="text-[12px] text-muted-foreground">Ask a workspace admin to connect Google.</p>
     );
   return (
-    <Button
-      onClick={() => connect.mutate(openConnectWindow("google"))}
-      loading={connect.isPending}
-      className="gap-2"
-    >
-      <GoogleIcon className="h-4 w-4" aria-hidden />
-      {label}
-    </Button>
+    <>
+      <Button onClick={() => setDisclosureOpen(true)} loading={connect.isPending} className="gap-2">
+        <GoogleIcon className="h-4 w-4" aria-hidden />
+        {label}
+      </Button>
+      <AlertDialog open={disclosureOpen} onOpenChange={setDisclosureOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Connect Google to your marketing workspace</AlertDialogTitle>
+            <AlertDialogDescription>{GOOGLE_DISCLOSURE}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <nav
+            aria-label="Google connection policies"
+            className="flex flex-wrap gap-4 text-sm underline underline-offset-4"
+          >
+            <a href="/privacy#google-data" target="_blank" rel="noopener noreferrer">
+              Privacy Policy
+            </a>
+            <a href="/terms" target="_blank" rel="noopener noreferrer">
+              Terms of Service
+            </a>
+            <a href="/safety" target="_blank" rel="noopener noreferrer">
+              AI safety
+            </a>
+          </nav>
+          <p className="text-sm text-muted-foreground">
+            By continuing, you authorize this processing and sharing for your workspace. Choose
+            which read-only permissions to grant on Google&apos;s next screen.
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => connect.mutate(openConnectWindow("google"))}>
+              Agree and continue to Google
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -417,12 +454,16 @@ export function GoogleConnectCard({
 
   const disconnectMut = useMutation({
     mutationFn: () => disconnect({ data: { workspaceId: ws.id } }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       setConfirming(false);
       void qc.invalidateQueries({ queryKey: analyticsKeys.all(ws.id) });
       emitAppEvent("analytics:changed");
       emitAppEvent("connections:changed");
       toast.success("Google disconnected");
+      if (!result.googleRevoked)
+        toast.warning(
+          "Mellox data access was removed locally. Also remove Mellox in your Google account's third-party connections; revocation could not be confirmed.",
+        );
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't disconnect"),
   });
@@ -545,7 +586,8 @@ export function GoogleConnectCard({
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/70 px-3 py-2.5">
             <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <ShieldCheck className="size-3.5 text-primary" aria-hidden />
-              Your Google data stays in this workspace. Mellox never edits Google properties.
+              Reports are scoped to this workspace; AI insights use the providers disclosed before
+              connection.
             </p>
             <p className="text-[10.5px] text-muted-foreground">Secure OAuth + encrypted tokens</p>
           </div>
@@ -623,13 +665,24 @@ export function GoogleConnectCard({
         </div>
       )}
 
+      {conn?.requiresAiConsent && (
+        <div className="space-y-2 border-t border-border p-4 text-sm">
+          <p>
+            A workspace admin must review the updated Google data and AI processing disclosure. Your
+            existing read-only dashboard connection continues to work.
+          </p>
+          <ConnectGoogleButton label="Review and reconnect Google" />
+        </div>
+      )}
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Disconnect Google?</AlertDialogTitle>
             <AlertDialogDescription>
               Mellox removes its access and deletes the Google Analytics and Search Console data it
-              stored for this workspace. You can connect again later.
+              stored for this workspace&apos;s dashboard. Saved chat, experiment results and
+              exported reports may contain other copies; contact privacy@mellox.ai to request their
+              deletion. You can connect again later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

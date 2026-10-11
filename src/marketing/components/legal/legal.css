@@ -1,5 +1,7 @@
 /* ---------- Legal pages (terms, privacy) ---------- */
-.px-hero.lg-hero { min-height: clamp(420px, 36vw, 560px); }
+.px-hero.lg-hero {
+  min-height: clamp(420px, 36vw, 560px);
+}
 .px-hero h1.lg-h1 {
   max-width: 14ch;
   font-size: clamp(2.5rem, 6.2vw, 5.2rem);
@@ -12,7 +14,9 @@
   align-items: start;
 }
 @media (max-width: 960px) {
-  .lg-wrap { grid-template-columns: 1fr; }
+  .lg-wrap {
+    grid-template-columns: 1fr;
+  }
 }
 
 .lg-toc {
@@ -26,7 +30,10 @@
   background: rgb(255 255 255 / 0.025);
 }
 @media (max-width: 960px) {
-  .lg-toc { position: static; max-height: none; }
+  .lg-toc {
+    position: static;
+    max-height: none;
+  }
 }
 .lg-toc p {
   padding: 0 10px 12px;
@@ -44,7 +51,9 @@
   font-size: 14.5px;
   line-height: 1.35;
   color: #8b97c2;
-  transition: background-color 0.25s, color 0.25s;
+  transition:
+    background-color 0.25s,
+    color 0.25s;
 }
 .lg-toc a span {
   flex: none;
@@ -58,8 +67,13 @@
   outline: none;
 }
 
-.lg-doc { padding: clamp(24px, 4vw, 56px); }
-.lg-intro p + p { margin-top: 14px; }
+.lg-doc {
+  padding: clamp(24px, 4vw, 56px);
+  overflow-wrap: anywhere;
+}
+.lg-intro p + p {
+  margin-top: 14px;
+}
 .lg-intro {
   padding-bottom: 28px;
   font-size: 18px;
@@ -67,7 +81,11 @@
   color: rgb(255 255 255 / 0.85);
 }
 .lg-intro a,
-.lg-doc a { color: var(--brand-lime); text-decoration: underline; text-underline-offset: 4px; }
+.lg-doc a {
+  color: var(--brand-lime);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
 
 .lg-sec {
   scroll-margin-top: 24px;
@@ -105,7 +123,10 @@
   letter-spacing: -0.015em;
   color: #fff;
 }
-.lg-sec strong { font-weight: 600; color: #e6eaf7; }
+.lg-sec strong {
+  font-weight: 600;
+  color: #e6eaf7;
+}
 .lg-sec ul,
 .lg-sec ol {
   display: flex;
@@ -114,8 +135,13 @@
   margin-top: 16px;
   max-width: 72ch;
 }
-.lg-sec ol { list-style: none; counter-reset: lgstep; }
-.lg-sec ol li { counter-increment: lgstep; }
+.lg-sec ol {
+  list-style: none;
+  counter-reset: lgstep;
+}
+.lg-sec ol li {
+  counter-increment: lgstep;
+}
 .lg-sec li {
   position: relative;
   padding-left: 26px;
@@ -159,6 +185,11 @@
   cursor: pointer;
   background: var(--brand-lime);
   box-shadow: 0 0 30px -8px rgb(203 233 96 / 0.7);
-  transition: transform 0.25s, box-shadow 0.25s;
+  transition:
+    transform 0.25s,
+    box-shadow 0.25s;
 }
-.lg-btn:hover { transform: translateY(-2px); box-shadow: 0 0 40px -4px rgb(203 233 96 / 0.85); }
+.lg-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 40px -4px rgb(203 233 96 / 0.85);
+}

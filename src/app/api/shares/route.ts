@@ -2,8 +2,9 @@ import { z } from "zod";
 import { randomBytes } from "crypto";
 import { checkWorkspaceMembership, jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
+import { HttpError } from "@/server/http-error";
 import { checkOutput } from "@/server/guardrails/output-check";
-import { moderateImage } from "@/server/guardrails/moderation";
+import { assertSafePublishingItems } from "@/server/guardrails/publishing-safety.server";
 import { logGuardrailEvent } from "@/server/guardrails/events";
 import {
   hashShareToken,
@@ -100,20 +101,27 @@ async function reviewShareItems(
   if (!ids.length) return { findings, blocking: [] };
 
   // RLS-bound read: only the caller's own workspace content is reviewed.
-  const [{ data: rows }, { data: ws }] = await Promise.all([
-    supabase
-      .from("content_items")
-      .select("id, title, body, media_url")
-      .eq("workspace_id", workspaceId)
-      .in("id", ids),
-    supabase.from("workspaces").select("brand_voice").eq("id", workspaceId).maybeSingle(),
-  ]);
+  const [{ data: rows, error: contentError }, { data: ws, error: workspaceError }] =
+    await Promise.all([
+      supabase
+        .from("content_items")
+        .select("id, title, body, media_url")
+        .eq("workspace_id", workspaceId)
+        .in("id", ids),
+      supabase.from("workspaces").select("brand_voice").eq("id", workspaceId).maybeSingle(),
+    ]);
+  if (contentError || workspaceError || (rows ?? []).length !== new Set(ids).size) {
+    throw new HttpError(503, "Content safety review could not complete. Sharing is paused.");
+  }
   const dont = (ws?.brand_voice as { dont?: unknown } | null)?.dont;
   const brandDont = Array.isArray(dont)
     ? dont.map(String)
     : typeof dont === "string"
       ? dont.split(/[,;\n]/)
       : [];
+
+  // Media refusals are terminal; acknowledgeWarnings only applies to editorial findings.
+  await assertSafePublishingItems(supabase, workspaceId, ids);
 
   for (const row of (rows ?? []) as Array<{
     id: string;
@@ -129,20 +137,6 @@ async function reviewShareItems(
         severity: f.severity,
         detail: f.snippet,
       });
-    }
-    if (row.media_url && /^https:\/\//.test(row.media_url)) {
-      const m = await moderateImage(row.media_url);
-      if (m.verdict !== "safe") {
-        findings.push({
-          itemTitle,
-          rule: m.verdict === "flagged" ? "image:flagged" : "image:unverified",
-          severity: "block",
-          detail:
-            m.verdict === "flagged"
-              ? `Image flagged: ${m.categories.join(", ") || "policy"}`
-              : "Image could not be checked for safety",
-        });
-      }
     }
   }
   if (findings.length) {
@@ -416,8 +410,18 @@ export const POST = defineRoute({
     // Output guardrails before anything reaches a client portal (proposal D):
     // shared content is checked for personal data, unsubstantiated/medical/
     // financial claims, profanity and brand don'ts, and shared images are
-    // moderated. Blocking findings need an explicit acknowledgement.
+    // moderated. Media safety blocks can never be acknowledged away.
     const review = await reviewShareItems(supabase, body.workspaceId, body.items);
+    if (review.blocking.some((f) => f.rule.startsWith("image:"))) {
+      return Response.json(
+        {
+          error: "Media safety review blocked sharing. Review /safety or request support review.",
+          requiresAcknowledgement: false,
+          findings: review.findings,
+        },
+        { status: 422 },
+      );
+    }
     if (review.blocking.length && !body.acknowledgeWarnings) {
       return Response.json(
         {

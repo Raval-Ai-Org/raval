@@ -1,0 +1,3 @@
+export const GOOGLE_DISCLOSURE_VERSION = "2026-10-11";
+export const GOOGLE_DISCLOSURE =
+  "Mellox requests read-only Google Analytics and Search Console access to show traffic, engagement, search queries and page performance for the property and site you select. Your workspace uses these reports for dashboards, marketing insights and SEO experiments. Relevant Google-derived signals and summaries are processed by OpenRouter and its routed AI model providers for automatic explanations and requested chat. Tokens are encrypted on the server. Disconnect removes credentials and dashboard data; request deletion of saved chat, experiment results and other copies through our privacy contact.";

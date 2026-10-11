@@ -60,7 +60,7 @@ export default function LegalPage({
               </ol>
             </aside>
 
-            <article className="px-card lg-doc" data-reveal>
+            <article className="px-card lg-doc">
               <div className="lg-intro">{intro}</div>
               {sections.map((s, i) => (
                 <section key={s.id} id={s.id} className="lg-sec">

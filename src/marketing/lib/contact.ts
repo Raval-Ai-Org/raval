@@ -1,5 +1,12 @@
 export type Field =
-  | { name: string; label: string; type: "text" | "email" | "url"; placeholder?: string; required?: boolean; half?: boolean }
+  | {
+      name: string;
+      label: string;
+      type: "text" | "email" | "url";
+      placeholder?: string;
+      required?: boolean;
+      half?: boolean;
+    }
   | { name: string; label: string; type: "select"; options: string[] }
   | { name: string; label: string; type: "textarea"; placeholder?: string; required?: boolean };
 
@@ -15,8 +22,22 @@ export type FormConfig = {
 };
 
 const person: Field[] = [
-  { name: "name", label: "Name", type: "text", placeholder: "Your name", required: true, half: true },
-  { name: "email", label: "Email", type: "email", placeholder: "you@company.com", required: true, half: true },
+  {
+    name: "name",
+    label: "Name",
+    type: "text",
+    placeholder: "Your name",
+    required: true,
+    half: true,
+  },
+  {
+    name: "email",
+    label: "Email",
+    type: "email",
+    placeholder: "you@company.com",
+    required: true,
+    half: true,
+  },
 ];
 
 export const SUPPORT_FORM: FormConfig = {
@@ -26,8 +47,28 @@ export const SUPPORT_FORM: FormConfig = {
   submit: "Send message",
   fields: [
     ...person,
-    { name: "topic", label: "Topic", type: "select", options: ["General question", "Billing or account", "Scale plan and volume pricing", "Agency onboarding", "Report a problem"] },
-    { name: "message", label: "Message", type: "textarea", placeholder: "How can we help?", required: true },
+    {
+      name: "topic",
+      label: "Topic",
+      type: "select",
+      options: [
+        "General question",
+        "Billing or account",
+        "Scale plan and volume pricing",
+        "Agency onboarding",
+        "Report a problem",
+        "AI safety / NCII report",
+        "Privacy / data deletion request",
+        "Appeal a safety decision",
+      ],
+    },
+    {
+      name: "message",
+      label: "Message",
+      type: "textarea",
+      placeholder: "How can we help?",
+      required: true,
+    },
   ],
 };
 
@@ -38,12 +79,55 @@ export const PRESS_FORM: FormConfig = {
   submit: "Send request",
   fields: [
     ...person,
-    { name: "outlet", label: "Publication or outlet", type: "text", placeholder: "Where will this appear?", required: true, half: true },
-    { name: "role", label: "Your role", type: "text", placeholder: "Journalist, editor, host", half: true },
-    { name: "type", label: "Request type", type: "select", options: ["Interview", "Article or feature", "Podcast or video", "Product demo", "Data or quote", "Other"] },
-    { name: "deadline", label: "Deadline", type: "text", placeholder: "e.g. Friday 12 June", half: true },
-    { name: "link", label: "Link to your outlet", type: "url", placeholder: "https://", half: true },
-    { name: "message", label: "What do you need?", type: "textarea", placeholder: "Tell us about the story and the questions you have.", required: true },
+    {
+      name: "outlet",
+      label: "Publication or outlet",
+      type: "text",
+      placeholder: "Where will this appear?",
+      required: true,
+      half: true,
+    },
+    {
+      name: "role",
+      label: "Your role",
+      type: "text",
+      placeholder: "Journalist, editor, host",
+      half: true,
+    },
+    {
+      name: "type",
+      label: "Request type",
+      type: "select",
+      options: [
+        "Interview",
+        "Article or feature",
+        "Podcast or video",
+        "Product demo",
+        "Data or quote",
+        "Other",
+      ],
+    },
+    {
+      name: "deadline",
+      label: "Deadline",
+      type: "text",
+      placeholder: "e.g. Friday 12 June",
+      half: true,
+    },
+    {
+      name: "link",
+      label: "Link to your outlet",
+      type: "url",
+      placeholder: "https://",
+      half: true,
+    },
+    {
+      name: "message",
+      label: "What do you need?",
+      type: "textarea",
+      placeholder: "Tell us about the story and the questions you have.",
+      required: true,
+    },
   ],
 };
 
@@ -54,15 +138,58 @@ export const PARTNER_FORM: FormConfig = {
   submit: "Start the conversation",
   fields: [
     ...person,
-    { name: "company", label: "Company", type: "text", placeholder: "Company name", required: true, half: true },
-    { name: "website", label: "Website", type: "url", placeholder: "https://", required: true, half: true },
-    { name: "kind", label: "Partnership type", type: "select", options: ["Integration or API", "Agency or reseller", "Technology partner", "Co-marketing", "Affiliate or referral", "Other"] },
-    { name: "size", label: "Team size", type: "select", options: ["1 to 10", "11 to 50", "51 to 200", "200+"] },
-    { name: "message", label: "How could we work together?", type: "textarea", placeholder: "Tell us about your product, audience and what you have in mind.", required: true },
+    {
+      name: "company",
+      label: "Company",
+      type: "text",
+      placeholder: "Company name",
+      required: true,
+      half: true,
+    },
+    {
+      name: "website",
+      label: "Website",
+      type: "url",
+      placeholder: "https://",
+      required: true,
+      half: true,
+    },
+    {
+      name: "kind",
+      label: "Partnership type",
+      type: "select",
+      options: [
+        "Integration or API",
+        "Agency or reseller",
+        "Technology partner",
+        "Co-marketing",
+        "Affiliate or referral",
+        "Other",
+      ],
+    },
+    {
+      name: "size",
+      label: "Team size",
+      type: "select",
+      options: ["1 to 10", "11 to 50", "51 to 200", "200+"],
+    },
+    {
+      name: "message",
+      label: "How could we work together?",
+      type: "textarea",
+      placeholder: "Tell us about your product, audience and what you have in mind.",
+      required: true,
+    },
   ],
 };
 
-export const DEMO_INTERESTS = ["Agency (multiple client brands)", "Startup or growing team", "In-house marketing team", "Scale plan and volume pricing", "Not sure yet"];
+export const DEMO_INTERESTS = [
+  "Agency (multiple client brands)",
+  "Startup or growing team",
+  "In-house marketing team",
+  "Scale plan and volume pricing",
+  "Not sure yet",
+];
 
 export const DEMO_FORM: FormConfig = {
   key: "demo",
@@ -76,14 +203,61 @@ export const DEMO_FORM: FormConfig = {
   },
   fields: [
     ...person,
-    { name: "company", label: "Company", type: "text", placeholder: "Company name", required: true, half: true },
-    { name: "website", label: "Website", type: "url", placeholder: "https://", required: true, half: true },
-    { name: "role", label: "Your role", type: "text", placeholder: "e.g. Founder, Head of Marketing", half: true },
-    { name: "size", label: "Team size", type: "select", options: ["1 to 10", "11 to 50", "51 to 200", "200+"] },
-    { name: "interest", label: "What best describes you?", type: "select", options: DEMO_INTERESTS },
-    { name: "brands", label: "Brands or clients you manage", type: "text", placeholder: "e.g. 1, 5, 20+", half: true },
-    { name: "timing", label: "Preferred days and times", type: "text", placeholder: "e.g. weekday mornings, UK time", half: true },
-    { name: "message", label: "Anything we should know?", type: "textarea", placeholder: "What are you hoping to solve? Optional." },
+    {
+      name: "company",
+      label: "Company",
+      type: "text",
+      placeholder: "Company name",
+      required: true,
+      half: true,
+    },
+    {
+      name: "website",
+      label: "Website",
+      type: "url",
+      placeholder: "https://",
+      required: true,
+      half: true,
+    },
+    {
+      name: "role",
+      label: "Your role",
+      type: "text",
+      placeholder: "e.g. Founder, Head of Marketing",
+      half: true,
+    },
+    {
+      name: "size",
+      label: "Team size",
+      type: "select",
+      options: ["1 to 10", "11 to 50", "51 to 200", "200+"],
+    },
+    {
+      name: "interest",
+      label: "What best describes you?",
+      type: "select",
+      options: DEMO_INTERESTS,
+    },
+    {
+      name: "brands",
+      label: "Brands or clients you manage",
+      type: "text",
+      placeholder: "e.g. 1, 5, 20+",
+      half: true,
+    },
+    {
+      name: "timing",
+      label: "Preferred days and times",
+      type: "text",
+      placeholder: "e.g. weekday mornings, UK time",
+      half: true,
+    },
+    {
+      name: "message",
+      label: "Anything we should know?",
+      type: "textarea",
+      placeholder: "What are you hoping to solve? Optional.",
+    },
   ],
 };
 
@@ -114,4 +288,9 @@ export const CONTACT_FAQS = [
   },
 ];
 
-export const FORMS: Record<FormKey, FormConfig> = { support: SUPPORT_FORM, press: PRESS_FORM, partner: PARTNER_FORM, demo: DEMO_FORM };
+export const FORMS: Record<FormKey, FormConfig> = {
+  support: SUPPORT_FORM,
+  press: PRESS_FORM,
+  partner: PARTNER_FORM,
+  demo: DEMO_FORM,
+};

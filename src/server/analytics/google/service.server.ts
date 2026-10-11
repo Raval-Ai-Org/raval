@@ -7,6 +7,7 @@
 // this module writes with the service role. Every change is audited without
 // tokens. One Google connection per workspace (one brand = one workspace).
 import "server-only";
+import { GOOGLE_DISCLOSURE_VERSION } from "@/marketing/lib/google-disclosure";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Database } from "@/integrations/supabase/types";
@@ -231,7 +232,7 @@ export async function completeConnect(args: {
         revoked_at: null,
         revoked_reason: null,
         permissions: scopes,
-        metadata: {},
+        metadata: { disclosureVersion: GOOGLE_DISCLOSURE_VERSION, aiProcessing: true },
       },
       { onConflict: "workspace_id,provider,external_account_id" },
     )
@@ -363,7 +364,11 @@ async function replaceSource(args: {
   if (existing && existing.external_id !== args.externalId) {
     const { error } = await supabaseAdmin.from("analytics_sources").delete().eq("id", existing.id);
     if (error) throw new Error(error.message);
-    await supabaseAdmin.from("analytics_insights").delete().eq("workspace_id", args.workspaceId);
+    const { error: insightError } = await supabaseAdmin
+      .from("analytics_insights")
+      .delete()
+      .eq("workspace_id", args.workspaceId);
+    if (insightError) throw new Error(insightError.message);
   }
   const row = {
     workspace_id: args.workspaceId,
@@ -468,42 +473,54 @@ export async function removeSource(args: {
     .eq("workspace_id", args.workspaceId)
     .eq("kind", args.kind);
   if (error) throw new Error(error.message);
-  await supabaseAdmin.from("analytics_insights").delete().eq("workspace_id", args.workspaceId);
+  const { error: insightError } = await supabaseAdmin
+    .from("analytics_insights")
+    .delete()
+    .eq("workspace_id", args.workspaceId);
+  if (insightError) throw new Error(insightError.message);
   await audit(args.workspaceId, args.userId, "source_removed", { kind: args.kind });
 }
 
 export async function disconnect(args: { workspaceId: string; userId: string }) {
   const { data: conns, error } = await supabaseAdmin
     .from("workspace_connections")
-    .select("id")
+    .select("id, status")
     .eq("workspace_id", args.workspaceId)
-    .eq("provider", "google")
-    .neq("status", "revoked");
+    .eq("provider", "google");
   if (error) throw new Error(error.message);
-  let revoked = false;
+  let revoked = true;
   for (const conn of conns ?? []) {
     const token = await readRefreshToken(conn.id);
-    if (token) revoked = (await revokeToken(token)) || revoked;
+    if (token) revoked = (await revokeToken(token)) && revoked;
+    else if (conn.status !== "revoked") revoked = false;
     await deleteCredentials(conn.id);
     // Sources cascade to every stored GA4 / Search Console row and sync run.
-    await supabaseAdmin
+    const { error: sourceError } = await supabaseAdmin
       .from("analytics_sources")
       .delete()
       .eq("connection_id", conn.id)
       .eq("workspace_id", args.workspaceId);
-    await supabaseAdmin
+    if (sourceError) throw new Error(sourceError.message);
+    const { error: connectionError } = await supabaseAdmin
       .from("workspace_connections")
       .update({
         status: "revoked",
         revoked_at: new Date().toISOString(),
         revoked_reason: "disconnected",
         permissions: {},
+        metadata: {},
+        account_login: "Disconnected Google account",
       })
       .eq("id", conn.id);
+    if (connectionError) throw new Error(connectionError.message);
   }
-  await supabaseAdmin.from("analytics_insights").delete().eq("workspace_id", args.workspaceId);
+  const { error: insightError } = await supabaseAdmin
+    .from("analytics_insights")
+    .delete()
+    .eq("workspace_id", args.workspaceId);
+  if (insightError) throw new Error(insightError.message);
   await audit(args.workspaceId, args.userId, "disconnected", { googleRevoked: revoked });
-  return { disconnected: (conns ?? []).length > 0 };
+  return { disconnected: (conns ?? []).length > 0, googleRevoked: revoked };
 }
 
 // ── Sync now ────────────────────────────────────────────────────────────────

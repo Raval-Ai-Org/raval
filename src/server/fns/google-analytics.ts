@@ -1,6 +1,7 @@
 import "server-only";
 import { createServerFn } from "@/server/server-fn";
 import { z } from "zod";
+import { GOOGLE_DISCLOSURE_VERSION } from "@/marketing/lib/google-disclosure";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rateLimitFor } from "@/server/rate-limit";
 import { requireWorkspaceRole } from "@/server/workspace-access.server";
@@ -29,6 +30,7 @@ export const startGoogleConnect = createServerFn({ method: "POST" })
     z
       .object({
         workspaceId: uuid,
+        disclosureVersion: z.literal(GOOGLE_DISCLOSURE_VERSION),
         returnOrigin: z.string().url().max(200).optional(),
         returnPath: z.string().max(300).optional(),
       })
@@ -41,6 +43,7 @@ export const startGoogleConnect = createServerFn({ method: "POST" })
     const result = await createAuthUrl({
       workspaceId: data.workspaceId,
       userId: context.userId,
+      disclosureVersion: data.disclosureVersion,
       returnOrigin: data.returnOrigin ?? null,
       returnPath: data.returnPath ?? null,
     });
@@ -49,6 +52,7 @@ export const startGoogleConnect = createServerFn({ method: "POST" })
       userId: context.userId,
       action: "connector.google.connect_started",
       entity: "connector",
+      payload: { disclosureVersion: data.disclosureVersion, aiProcessing: true },
     });
     return result;
   });

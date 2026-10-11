@@ -1,10 +1,12 @@
+import GoogleDataDisclosure from "@/marketing/components/GoogleDataDisclosure";
 import type { Metadata } from "next";
 import HeroBackground from "@/marketing/components/HeroBackground";
 import GlassFilter from "@/marketing/components/GlassFilter";
 import Clients from "@/marketing/components/Clients";
 import HeroChat from "@/marketing/components/HeroChat";
 import HeroHeadline from "@/marketing/components/HeroHeadline";
-import HeroWall from "@/marketing/components/HeroWall";import IntroSection from "@/marketing/components/IntroSection";
+import HeroWall from "@/marketing/components/HeroWall";
+import IntroSection from "@/marketing/components/IntroSection";
 import Brains from "@/marketing/components/Brains";
 import Problems from "@/marketing/components/Problems";
 import Footer from "@/marketing/components/Footer";
@@ -57,7 +59,10 @@ export default function Home() {
               <HeroHeadline />
             </div>
 
-            <div className="hero-in mt-10 flex w-full justify-center" style={{ "--d": 2 } as React.CSSProperties}>
+            <div
+              className="hero-in mt-10 flex w-full justify-center"
+              style={{ "--d": 2 } as React.CSSProperties}
+            >
               <HeroChat />
             </div>
 
@@ -88,6 +93,8 @@ export default function Home() {
         <Clients />
 
         <IntroSection />
+
+        <GoogleDataDisclosure />
 
         <Problems />
 

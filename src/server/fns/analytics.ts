@@ -444,6 +444,8 @@ export const getAnalyticsChatContext = createServerFn({ method: "POST" })
     await requireWorkspaceRole(context, data.workspaceId, "viewer");
     const { getOverviewReport } = await import("@/server/analytics/read.server");
     const { buildChatContext } = await import("@/lib/analytics/chat-context");
+    const { requireGoogleAiConsent } = await import("@/server/analytics/google/consent.server");
+    await requireGoogleAiConsent(context.supabase, data.workspaceId);
     const report = await getOverviewReport(context.supabase, data.workspaceId, { preset: "28d" });
     return { text: buildChatContext(report) };
   });

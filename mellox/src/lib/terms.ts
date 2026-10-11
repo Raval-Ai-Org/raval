@@ -1,13 +1,20 @@
 // Terms of Service content for /terms. Billing and credit rules mirror the pricing page.
 // This is a plain-language draft and should be reviewed by a lawyer before launch.
 
-export const TERMS_UPDATED = "5 October 2026";
+export const TERMS_UPDATED = "11 October 2026";
 
 /** One piece of a section, rendered in order: a sub-heading, a paragraph, a bulleted list or a numbered list. */
 export type LegalBlock = { h: string } | { p: string } | { ul: string[] } | { ol: string[] };
 
 /** A section is either simple (paras, list, after) or a free sequence of blocks. */
-export type TermsSection = { id: string; title: string; paras?: string[]; list?: string[]; after?: string; blocks?: LegalBlock[] };
+export type TermsSection = {
+  id: string;
+  title: string;
+  paras?: string[];
+  list?: string[];
+  after?: string;
+  blocks?: LegalBlock[];
+};
 
 export const TERMS: TermsSection[] = [
   {
@@ -22,7 +29,7 @@ export const TERMS: TermsSection[] = [
     id: "service",
     title: "What Mellox does",
     paras: [
-      "Mellox is an AI marketing platform. It learns your brand from your website, helps you plan and create on-brand content, publishes to the channels you connect, and monitors how AI assistants such as ChatGPT, Gemini and Perplexity describe your brand.",
+      "Mellox AI provides AI marketing, text/image/video content creation, analytics, SEO/GEO, scheduling and integrations for businesses and agencies. It helps you understand your brand, create content, manage connected channels and measure website, search and AI visibility performance.",
       "We keep improving the product. Features, limits and supported channels can change over time, and some features may be offered in beta.",
     ],
   },
@@ -39,7 +46,9 @@ export const TERMS: TermsSection[] = [
   {
     id: "plans",
     title: "Plans, credits and billing",
-    paras: ["Mellox is offered on a free plan, a 14 day Growth trial and paid plans (Starter, Growth, Agency and Scale). Current prices and allowances are shown on our pricing page, in US dollars."],
+    paras: [
+      "Mellox is offered on a free plan, a 14 day Growth trial and paid plans (Starter, Growth, Agency and Scale). Current prices and allowances are shown on our pricing page, in US dollars.",
+    ],
     list: [
       "Credits pay for AI work such as posts, images, articles, research and audits. One credit is worth $0.01 at face value, and the cost of each job is shown before you run it.",
       "Video has its own allowance of video credits, separate from regular credits.",
@@ -50,7 +59,8 @@ export const TERMS: TermsSection[] = [
       "Scale plans are quoted individually and governed by the order you sign with us.",
       "Taxes may be added where required. You authorise us, through our payment provider, to charge the payment method you give us for the fees that apply.",
     ],
-    after: "We may change prices or plan features. We will give you notice before a change affects your next renewal, and you can cancel before it takes effect.",
+    after:
+      "We may change prices or plan features. We will give you notice before a change affects your next renewal, and you can cancel before it takes effect.",
   },
   {
     id: "cancel",
@@ -87,7 +97,7 @@ export const TERMS: TermsSection[] = [
     title: "Connected accounts and publishing",
     list: [
       "When you connect a social, CMS or analytics account, you authorise Mellox to act on it as you direct, for example to schedule and publish approved posts.",
-      "Every generated draft goes to a Needs Approval queue. Nothing is scheduled or published until you review and confirm it.",
+      "Review generated content before publishing. If you enable Autopilot or other automation, your configuration authorizes the actions allowed by that mode; you remain responsible for those instructions and content.",
       "You must follow the rules of each connected platform. Platforms can change or limit access, and a post can fail to publish for reasons outside our control.",
       "The same applies to assistants and apps you connect, such as Claude and ChatGPT through MCP, Slack, Notion and Canva. You choose what to connect, and their own terms apply to your use of them.",
       "You can disconnect an account at any time from your workspace settings.",
@@ -98,6 +108,12 @@ export const TERMS: TermsSection[] = [
     title: "Acceptable use",
     paras: ["You agree not to use Mellox to:"],
     list: [
+      "create, request, edit, upload, distribute or facilitate non-consensual intimate imagery (NCII), including AI-generated NCII, deepfake pornography, sexualized impersonation or non-consensual synthetic sexual content involving an identifiable person;",
+      "create or facilitate sexual exploitation, sexual content involving minors, trafficking, coercion, harassment or threats to publish intimate content;",
+      "deceptively impersonate people or businesses, fabricate endorsements, violate privacy or misuse another person's face, voice or likeness without the necessary rights and consent;",
+      "misuse third-party intellectual property, copyrighted works, trademarks or confidential material, or create unlawful content;",
+      "use Google APIs, Google-derived data or any connected service to enable prohibited content or evade its terms, including the Google APIs Terms of Service at https://developers.google.com/terms;",
+      "bypass safety reviews, repeat requests to circumvent a refusal, or switch models/providers to evade safety controls;",
       "break the law or infringe someone's rights, or publish content that is unlawful, hateful, deceptive, or abusive;",
       "send spam, run fake reviews or impersonate a person or brand you do not represent;",
       "try to access other customers' data, probe or disrupt the service, or bypass limits, security or rate controls;",
@@ -105,7 +121,8 @@ export const TERMS: TermsSection[] = [
       "use output to train a competing AI product, or use the service to build one;",
       "upload malware or content that you are not allowed to share.",
     ],
-    after: "We may suspend or remove content or access that breaks these rules or puts others at risk.",
+    after:
+      "Mellox can refuse requests, block sharing, remove content or suspend/terminate access for violations. Acknowledging a warning does not authorize prohibited content. Report abuse or appeal an enforcement decision to support@mellox.ai or https://mellox.ai/contact, without attaching intimate imagery. See the AI safety statement at https://mellox.ai/safety and data practices at https://mellox.ai/privacy.",
   },
   {
     id: "third-party",
@@ -143,7 +160,7 @@ export const TERMS: TermsSection[] = [
     title: "Suspension and termination",
     paras: [
       "You may stop using Mellox at any time. We may suspend or end your access if you break these Terms, if payment fails, if required by law, or if your use puts the service or others at risk. Where it is reasonable, we will tell you first.",
-      "After termination you lose access to your workspace. You can ask us to export your data before then, and we will delete or anonymise it after a reasonable period unless we must keep it by law. Sections that by their nature should survive, such as ownership, disclaimers and liability, continue to apply.",
+      "After termination you lose access to your workspace. Request export or deletion through privacy@mellox.ai or our contact page; the Privacy Policy explains existing deletion controls, retained copies and records requiring operational review. OWNER CONFIRMATION REQUIRED: termination retention procedures and legally required records. Sections that by their nature should survive, such as ownership, disclaimers and liability, continue to apply.",
     ],
   },
   {
@@ -163,6 +180,8 @@ export const TERMS: TermsSection[] = [
   {
     id: "contact",
     title: "Contact us",
-    paras: ["Questions about these Terms? Email support@mellox.ai or use our contact page and we will get back to you."],
+    paras: [
+      "Questions about these Terms? Email support@mellox.ai or use our contact page and we will get back to you.",
+    ],
   },
 ];

@@ -216,6 +216,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   "ugc.notes": tier(WORKHORSE, "low"),
 
   "guardrails.image-moderation": tier(ECONOMY, "low"),
+  "guardrails.media-safety": tier(ECONOMY, "low"),
 };
 
 /**

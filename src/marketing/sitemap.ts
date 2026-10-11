@@ -20,9 +20,17 @@ const parse = (human: string) => {
   const d = new Date(`${human} UTC`);
   return d.getTime() > Date.now() ? new Date() : d;
 };
-const LATEST_RELEASE = RELEASES.map((r) => r.date).sort().at(-1) ?? "2026-10-01";
+const LATEST_RELEASE =
+  RELEASES.map((r) => r.date)
+    .sort()
+    .at(-1) ?? "2026-10-01";
 
-type Page = { path: string; priority: number; changeFrequency: Entry["changeFrequency"]; lastModified?: Date };
+type Page = {
+  path: string;
+  priority: number;
+  changeFrequency: Entry["changeFrequency"];
+  lastModified?: Date;
+};
 
 const PAGES: Page[] = [
   { path: "", priority: 1, changeFrequency: "weekly" },
@@ -39,20 +47,40 @@ const PAGES: Page[] = [
   { path: "/contact", priority: 0.5, changeFrequency: "yearly" },
   { path: "/contact/partner", priority: 0.4, changeFrequency: "yearly" },
   { path: "/contact/press", priority: 0.4, changeFrequency: "yearly" },
-  { path: "/privacy", priority: 0.3, changeFrequency: "yearly", lastModified: parse(PRIVACY_UPDATED) },
+  {
+    path: "/privacy",
+    priority: 0.3,
+    changeFrequency: "yearly",
+    lastModified: parse(PRIVACY_UPDATED),
+  },
+  {
+    path: "/safety",
+    priority: 0.3,
+    changeFrequency: "yearly",
+    lastModified: parse("11 October 2026"),
+  },
   { path: "/terms", priority: 0.3, changeFrequency: "yearly", lastModified: parse(TERMS_UPDATED) },
-  { path: "/cookies", priority: 0.3, changeFrequency: "yearly", lastModified: parse(COOKIES_UPDATED) },
+  {
+    path: "/cookies",
+    priority: 0.3,
+    changeFrequency: "yearly",
+    lastModified: parse(COOKIES_UPDATED),
+  },
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const posts = await getPosts();
-  const newestPost = posts.map((p) => p.date).sort().at(-1);
+  const newestPost = posts
+    .map((p) => p.date)
+    .sort()
+    .at(-1);
   const productDate = iso(LATEST_RELEASE);
 
   return [
     ...PAGES.map((p) => ({
       url: `${SITE_URL}${p.path}`,
-      lastModified: p.lastModified ?? (p.path === "/blog" && newestPost ? iso(newestPost) : productDate),
+      lastModified:
+        p.lastModified ?? (p.path === "/blog" && newestPost ? iso(newestPost) : productDate),
       changeFrequency: p.changeFrequency,
       priority: p.priority,
     })),

@@ -55,6 +55,7 @@ export type GoogleConnectionView = {
     status: "active" | "suspended" | "revoked" | "error";
     lastError: string | null;
     connectedAt: string;
+    requiresAiConsent?: boolean;
     scopes: { analytics: boolean; searchConsole: boolean };
   };
   ga4: AnalyticsSourceView | null;

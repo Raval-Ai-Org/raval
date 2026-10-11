@@ -12,6 +12,7 @@
 // editor asks for a refresh. Results save to the workspace id captured at the
 // start of the request.
 import "server-only";
+import { requireGoogleAiConsent } from "./google/consent.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { runStructuredPrompt } from "@/lib/ai";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -121,6 +122,7 @@ export async function generateInsights(
   workspaceId: string,
   input: RangeInput,
 ): Promise<InsightsView> {
+  const consentConnections = await requireGoogleAiConsent(db, workspaceId);
   const { view, rangeKey } = await loadView(db, workspaceId, input, true);
   if (view.insight || view.signals.length === 0) return { ...view, canGenerate: false };
 
@@ -143,6 +145,9 @@ export async function generateInsights(
     task: "generate",
   });
   const items = groundInsights(raw.insights, view.signals);
+  if ((await requireGoogleAiConsent(db, workspaceId)) !== consentConnections) {
+    throw new Error("Google connection changed during insight generation. Refresh your dashboard.");
+  }
   const { data: saved, error } = await supabaseAdmin
     .from("analytics_insights")
     .upsert(

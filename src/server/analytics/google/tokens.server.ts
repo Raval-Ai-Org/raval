@@ -75,12 +75,9 @@ async function markReconnectNeeded(connectionId: string): Promise<void> {
  * per provider instance, so one sync slice never refreshes twice at once.
  */
 export function accessTokenProvider(connectionId: string, workspaceId: string): TokenProvider {
-  let cached: { token: string; expiresAt: number } | null = null;
   let inflight: Promise<string> | null = null;
 
   async function load(forceRefresh: boolean): Promise<string> {
-    if (!forceRefresh && cached && cached.expiresAt - EXPIRY_SKEW_MS > Date.now())
-      return cached.token;
     const key = googleTokenKey();
     const { data: row, error } = await supabaseAdmin
       .from("google_oauth_credentials")
@@ -94,7 +91,6 @@ export function accessTokenProvider(connectionId: string, workspaceId: string): 
     const expiresAt = row.access_token_expires_at ? Date.parse(row.access_token_expires_at) : 0;
     if (!forceRefresh && row.access_token_enc && expiresAt - EXPIRY_SKEW_MS > Date.now()) {
       const token = decryptWithKey(row.access_token_enc, key);
-      cached = { token, expiresAt };
       return token;
     }
     const refreshToken = decryptWithKey(row.refresh_token_enc, key);
@@ -106,7 +102,7 @@ export function accessTokenProvider(connectionId: string, workspaceId: string): 
         await markReconnectNeeded(connectionId);
       throw e;
     }
-    await supabaseAdmin
+    const { data: saved, error: saveError } = await supabaseAdmin
       .from("google_oauth_credentials")
       .update({
         access_token_enc: encryptWithKey(fresh.accessToken, key),
@@ -117,15 +113,19 @@ export function accessTokenProvider(connectionId: string, workspaceId: string): 
           : {}),
         ...(fresh.scopes.length ? { scopes: fresh.scopes } : {}),
       })
-      .eq("connection_id", connectionId);
-    cached = { token: fresh.accessToken, expiresAt: fresh.expiresAt.getTime() };
+      .eq("connection_id", connectionId)
+      .select("connection_id")
+      .maybeSingle();
+    if (saveError) throw new Error(saveError.message);
+    if (!saved)
+      throw new GoogleApiError("token_expired", "Google isn't connected for this workspace.");
     return fresh.accessToken;
   }
 
   return (opts) => {
     const force = opts?.forceRefresh === true;
-    if (!force && cached && cached.expiresAt - EXPIRY_SKEW_MS > Date.now())
-      return Promise.resolve(cached.token);
+    // Check the stored grant on every use: a worker must not keep using an
+    // in-memory access token after another request disconnects the account.
     if (!inflight) {
       inflight = load(force).finally(() => {
         inflight = null;

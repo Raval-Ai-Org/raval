@@ -43,7 +43,7 @@ ENV REDIS_URL=
 # (src/server/assets/image-metadata.server.ts, vendor/image-metadata-toolkit).
 # On by default (FEATURE_FLAG_ASSET_METADATA_ENABLED); fails open if missing.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends chromium fonts-liberation python3 libimage-exiftool-perl \
+  && apt-get install -y --no-install-recommends chromium fonts-liberation python3 libimage-exiftool-perl ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 ENV GEO_RENDER_EXECUTABLE=/usr/bin/chromium
 

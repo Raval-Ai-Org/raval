@@ -2,13 +2,10 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
-import Script from "next/script";
 import { useEffect, useState } from "react";
 import { ConnectWindowReturn } from "@/components/app/connectors/ConnectWindowReturn";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/hooks/use-theme";
-
-const clarityId = process.env.NEXT_PUBLIC_CLARITY_ID;
 
 function makeQueryClient() {
   return new QueryClient({
@@ -99,16 +96,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        {clarityId ? (
-          <Script id="microsoft-clarity" strategy="afterInteractive">
-            {`(function(w,d,id){
-              w.clarity=w.clarity||function(){(w.clarity.q=w.clarity.q||[]).push(arguments)};
-              var tag=d.createElement("script");tag.async=true;
-              tag.src="https://www.clarity.ms/tag/"+id;
-              d.head.appendChild(tag);
-            })(window,document,${JSON.stringify(clarityId)});`}
-          </Script>
-        ) : null}
+        {/* Public website analytics are consent-gated by MarketingLayout.
+            Never record authenticated workspace/Google reports with Clarity. */}
         <RouteProgress />
         <ConnectWindowReturn />
         <main id="main-content">{children}</main>

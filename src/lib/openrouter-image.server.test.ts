@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setMediaSafetyClassifier } from "@/server/guardrails/media-safety.server";
+import { setModerationClassifier } from "@/server/guardrails/moderation";
 
 const usage = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[] }));
 vi.mock("@/server/ai/budget", async (importOriginal) => {
@@ -25,9 +27,13 @@ const asUser = <T>(fn: () => Promise<T>) =>
 
 let restore: (() => void) | null = null;
 beforeEach(() => {
+  setMediaSafetyClassifier(async () => ({ safe: true, categories: [] }));
+  setModerationClassifier(async () => ({ safe: true, categories: [] }));
   usage.rows = [];
 });
 afterEach(() => {
+  setMediaSafetyClassifier(null);
+  setModerationClassifier(null);
   restore?.();
   restore = null;
   vi.unstubAllGlobals();

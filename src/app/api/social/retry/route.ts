@@ -8,6 +8,8 @@ import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { retryHandler as retryPostForMe } from "@/lib/postforme/handlers";
 import { withPostForMe } from "@/lib/postforme/route.server";
 import { assertPublishingAction } from "@/server/billing/social-profiles.server";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { assertSafePublishingItems } from "@/server/guardrails/publishing-safety.server";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,7 @@ export const POST = defineRoute({
   minRole: "editor",
   handler: async ({ body, workspaceId, userId, role }) => {
     await assertPublishingAction({ workspaceId, userId, role, action: "social_retry" });
+    await assertSafePublishingItems(supabaseAdmin, workspaceId, [body.contentItemId]);
     if (getDistributionProviderForWorkspace(workspaceId) === "postforme") {
       return withPostForMe(workspaceId, (deps) =>
         retryPostForMe({ workspaceId, userId, contentItemId: body.contentItemId }, deps),

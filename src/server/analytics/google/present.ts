@@ -1,6 +1,7 @@
 // present.ts — the only shapes of Google connector data that reach the
 // browser. Whitelisted fields; never tokens, never raw Google responses.
 import type { Tables } from "@/integrations/supabase/types";
+import { GOOGLE_DISCLOSURE_VERSION } from "@/marketing/lib/google-disclosure";
 import { runProgress } from "../sync/runner.server";
 import type {
   AnalyticsSourceView,
@@ -10,7 +11,7 @@ import type {
 } from "@/lib/analytics/types";
 
 export const GOOGLE_CONNECTION_COLS =
-  "id, workspace_id, status, account_login, last_error, created_at, permissions" as const;
+  "id, workspace_id, status, account_login, last_error, created_at, permissions, metadata" as const;
 export const SOURCE_COLS =
   "id, workspace_id, connection_id, kind, external_id, display_name, account_name, site_host, time_zone, status, last_error, last_synced_at, last_synced_date, backfill_completed_at" as const;
 export const RUN_COLS =
@@ -18,7 +19,14 @@ export const RUN_COLS =
 
 type ConnRow = Pick<
   Tables<"workspace_connections">,
-  "id" | "workspace_id" | "status" | "account_login" | "last_error" | "created_at" | "permissions"
+  | "id"
+  | "workspace_id"
+  | "status"
+  | "account_login"
+  | "last_error"
+  | "created_at"
+  | "permissions"
+  | "metadata"
 >;
 type SourceRow = Pick<
   Tables<"analytics_sources">,
@@ -112,6 +120,9 @@ export function presentConnectionView(args: {
       ? {
           id: args.connection.id,
           email: args.connection.account_login,
+          requiresAiConsent:
+            (args.connection.metadata as { disclosureVersion?: string } | null)
+              ?.disclosureVersion !== GOOGLE_DISCLOSURE_VERSION,
           status: args.connection.status as "active" | "suspended" | "revoked" | "error",
           lastError: args.connection.last_error,
           connectedAt: args.connection.created_at,

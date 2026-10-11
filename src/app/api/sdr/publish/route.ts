@@ -19,6 +19,7 @@ import { withSocialApi } from "@/lib/socialapi/route.server";
 import { publishHandler as publishPostForMe } from "@/lib/postforme/handlers";
 import { withPostForMe } from "@/lib/postforme/route.server";
 import { assertPublishingAction } from "@/server/billing/social-profiles.server";
+import { assertSafePublishingItems } from "@/server/guardrails/publishing-safety.server";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,7 @@ export const POST = defineRoute({
       const out = await handleSdrDisabled({ workspaceId, contentItemIds, kind: "publish" });
       return Response.json(out.body, { status: out.status });
     }
+    await assertSafePublishingItems(supabaseAdmin, workspaceId, contentItemIds);
 
     if (provider === "postforme") {
       const { tiktokPrivacyLevel } = readDistributionOptions(body.options);

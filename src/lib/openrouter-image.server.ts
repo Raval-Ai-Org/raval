@@ -16,6 +16,11 @@
 //                          each Studio poll reads it. Job leases, idempotency
 //                          keys and persistAsset stay exactly as they were.
 import "server-only";
+import {
+  assertSafeMediaPrompt,
+  assertSafeMediaImages,
+  MediaSafetyError,
+} from "@/server/guardrails/media-safety.server";
 import { randomUUID } from "node:crypto";
 import { fetchWithRetry } from "@/server/upstream";
 import { cache, digest, recordCacheLookup } from "@/server/cache/store";
@@ -210,6 +215,8 @@ export type GenerateImageResult = GeneratedImage & {
 export async function generateImage(opts: GenerateImageOpts): Promise<GenerateImageResult> {
   const size = opts.size ?? "1024x1024";
   const references = usableReferences(opts.routing?.referenceAssets);
+  await assertSafeMediaPrompt(opts.prompt);
+  await assertSafeMediaImages(references);
   const requiresReference = Boolean(
     opts.routing?.hasReference ||
     opts.routing?.editing ||
@@ -252,6 +259,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
     const hit = await cache.get<GeneratedImage>(key);
     recordCacheLookup("image", Boolean(hit));
     if (hit) {
+      await assertSafeMediaImages([`data:${hit.mimeType};base64,${hit.b64}`]);
       recordUsage({
         provider: "openrouter",
         model,
@@ -282,6 +290,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
               estCostUsd: image.costUsd,
               latencyMs: Date.now() - started,
             });
+            await assertSafeMediaImages([`data:${image.mimeType};base64,${image.b64}`]);
             await cache.set(key, image, IMAGE_CACHE_TTL_SECONDS);
             return image;
           } catch (error) {
@@ -304,6 +313,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
       const image = await pending;
       return { ...image, route: plan.route, attempt, cached: false };
     } catch (error) {
+      if (error instanceof MediaSafetyError) throw error;
       lastError = error;
       log.warn("openrouter.image.failed", {
         model,

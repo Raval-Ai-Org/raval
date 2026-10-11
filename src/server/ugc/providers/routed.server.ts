@@ -13,6 +13,12 @@
 // render row, `provider` on a Studio task); status checks and downloads go to
 // that provider.
 import "server-only";
+import { assertSafeVideo } from "@/server/guardrails/video-safety.server";
+import {
+  assertSafeMediaPrompt,
+  assertSafeMediaImages,
+  MediaSafetyError,
+} from "@/server/guardrails/media-safety.server";
 import {
   coerceRenderSettings,
   specFor,
@@ -82,6 +88,19 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
     },
 
     async submit(req: VideoRenderRequest): Promise<SubmitResult> {
+      try {
+        await assertSafeMediaPrompt(req.prompt);
+        await assertSafeMediaImages(req.imageUrls);
+      } catch (error) {
+        if (!(error instanceof MediaSafetyError)) throw error;
+        return {
+          ok: false,
+          code: error.code,
+          message: error.message,
+          retryable: error.code === "safety_unavailable",
+          definite: true,
+        };
+      }
       const first = deps.primary ? primary() : req.model.provider;
       const firstReq = requestFor(req, first);
       let result: SubmitResult | null = firstReq ? await providers[first].submit(firstReq) : null;
@@ -89,7 +108,11 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
 
       const second = first === "kie" ? fallback(first) : null;
       const refusedOutright =
-        !result || (!result.ok && result.definite === true && FALLBACK_CODES.has(result.code));
+        !result ||
+        (!result.ok &&
+          result.definite === true &&
+          FALLBACK_CODES.has(result.code) &&
+          !/safety|policy|nsfw|content.?filter|refus/i.test(result.message));
       if (!second || !refusedOutright) {
         return (
           result ?? {
@@ -126,8 +149,27 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
       return result;
     },
 
-    check(taskId: string, provider?: string): Promise<ProviderCheck> {
-      return pick(provider).check(taskId);
+    async check(taskId: string, provider?: string): Promise<ProviderCheck> {
+      const chosen = pick(provider);
+      const result = await chosen.check(taskId);
+      if (result.state !== "success") return result;
+      try {
+        const downloaded = await chosen.download?.(result.videoUrl, provider);
+        await assertSafeVideo(downloaded?.dataUrl ?? result.videoUrl);
+        return result;
+      } catch (error) {
+        if (!(error instanceof MediaSafetyError)) throw error;
+        if (error.code === "safety_unavailable")
+          return { state: "pending", providerState: "safety_review_pending" };
+        return {
+          state: "failed",
+          providerState: "safety_blocked",
+          meta: {},
+          code: "refusal",
+          message: error.message,
+          retryable: false,
+        };
+      }
     },
 
     async download(videoUrl: string, provider?: string) {

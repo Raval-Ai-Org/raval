@@ -19,6 +19,7 @@ import { scheduleHandler as schedulePostForMe } from "@/lib/postforme/handlers";
 import { withPostForMe } from "@/lib/postforme/route.server";
 import { assertPublishingAction } from "@/server/billing/social-profiles.server";
 import { jsonError, type WorkspaceRole } from "@/server/api-auth";
+import { assertSafePublishingItems } from "@/server/guardrails/publishing-safety.server";
 
 /** The caller must have verified workspace membership and the role. */
 export async function scheduleForWorkspace(args: {
@@ -43,6 +44,11 @@ export async function scheduleForWorkspace(args: {
     });
     return Response.json(out.body, { status: out.status });
   }
+  await assertSafePublishingItems(
+    supabaseAdmin,
+    workspaceId,
+    items.map((item) => item.contentItemId),
+  );
 
   if (provider === "postforme") {
     return withPostForMe(workspaceId, (deps) =>

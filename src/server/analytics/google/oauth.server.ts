@@ -10,6 +10,7 @@
 //
 // Tokens are never logged, returned to the browser or written to audit rows.
 import "server-only";
+import { GOOGLE_DISCLOSURE_VERSION } from "@/marketing/lib/google-disclosure";
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -61,7 +62,8 @@ export function buildAuthUrl(
   // offline + consent: always return a refresh token, even on reconnect.
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
-  url.searchParams.set("include_granted_scopes", "true");
+  // Do not silently combine unrelated permissions from an earlier grant.
+  url.searchParams.set("include_granted_scopes", "false");
   url.searchParams.set("state", state);
   url.searchParams.set("code_challenge", codeChallenge);
   url.searchParams.set("code_challenge_method", "S256");
@@ -72,10 +74,13 @@ export function buildAuthUrl(
 export async function createAuthUrl(args: {
   workspaceId: string;
   userId: string;
+  disclosureVersion: typeof GOOGLE_DISCLOSURE_VERSION;
   returnOrigin?: string | null;
   returnPath?: string | null;
   loginHint?: string | null;
 }): Promise<{ url: string; expiresInSeconds: number }> {
+  if (args.disclosureVersion !== GOOGLE_DISCLOSURE_VERSION)
+    throw new GoogleConnectError("Review the current Google data disclosure before connecting.");
   const config = requireGoogleConfig(args.workspaceId);
   const returnOrigin = allowedGoogleReturnOrigin(args.returnOrigin, {
     allowLocal: process.env.NODE_ENV !== "production",
@@ -101,7 +106,10 @@ export async function createAuthUrl(args: {
     expires_at: new Date(now + STATE_TTL_MS).toISOString(),
     return_origin: returnOrigin,
     return_path: safeReturnPath(args.returnPath),
-    pkce_verifier_enc: encryptWithKey(verifier, googleTokenKey()),
+    pkce_verifier_enc: encryptWithKey(
+      JSON.stringify({ verifier, disclosureVersion: args.disclosureVersion }),
+      googleTokenKey(),
+    ),
   });
   if (error) throw new Error(`Couldn't start the Google connection: ${error.message}`);
   return {
@@ -146,6 +154,21 @@ export async function readAuthState(state: string, userId: string): Promise<Auth
   }
   if (Date.parse(row.expires_at) < Date.now()) throw new GoogleConnectError(EXPIRED);
   if (!row.pkce_verifier_enc) throw new GoogleConnectError(EXPIRED);
+  // Bind the acknowledged disclosure to this specific encrypted OAuth state.
+  // Legacy pending flows must restart instead of implicitly acquiring consent.
+  let consent: { verifier: string; disclosureVersion: string };
+  try {
+    consent = z
+      .object({
+        verifier: z.string().min(43),
+        disclosureVersion: z.literal(GOOGLE_DISCLOSURE_VERSION),
+      })
+      .parse(JSON.parse(decryptWithKey(row.pkce_verifier_enc, googleTokenKey())));
+  } catch {
+    throw new GoogleConnectError(
+      "Review the updated Google data disclosure and start the connection again.",
+    );
+  }
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -153,7 +176,7 @@ export async function readAuthState(state: string, userId: string): Promise<Auth
     createdAt: row.created_at,
     consumedAt: row.consumed_at,
     returnPath: safeReturnPath(row.return_path),
-    verifier: decryptWithKey(row.pkce_verifier_enc, googleTokenKey()),
+    verifier: consent.verifier,
   };
 }
 

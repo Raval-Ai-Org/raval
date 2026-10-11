@@ -1,4 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setMediaSafetyClassifier } from "@/server/guardrails/media-safety.server";
+import { setModerationClassifier } from "@/server/guardrails/moderation";
+beforeEach(() => {
+  setMediaSafetyClassifier(async () => ({ safe: true, categories: [] }));
+  setModerationClassifier(async () => ({ safe: true, categories: [] }));
+});
+afterEach(() => {
+  setMediaSafetyClassifier(null);
+  setModerationClassifier(null);
+});
 import {
   canonicalModelKey,
   isKnownUgcModelKey,

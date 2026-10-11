@@ -2,6 +2,30 @@
 
 These HTML files are ready to paste into **Supabase Dashboard → Authentication → Email Templates**. Each file is a complete email body; paste its contents into the matching template and set the subject shown below. The files are generated from `scripts/supabase-auth-templates.mjs`. Commit changes to that script and regenerate with `node scripts/supabase-auth-templates.mjs` if you edit the design.
 
+## Design and local review
+
+All six templates reinterpret the landing page in a light theme: warm off-white canvas (`#F6F7F2`), white cards, dark slate text (`#243037`), and Mellox’s lime (`#CBE960`), purple (`#B489D1`), orange (`#FE7032`), and blue (`#0756E7`) accents. The pastel aurora hero, rounded pill, four-color rule, circular artwork, and softly tinted note cards are adapted from `hero-background.css`, `brains.css`, and `intro.css`. Dark green headline accents and deeper purple/orange label colors keep text readable on light surfaces. Light color-scheme metadata communicates the intended appearance to supporting email clients. The shared 600px layout includes a real brand-kit PNG logo, an early action button or verification code, three flow-specific next steps, security guidance, and support links. Action emails also include a copyable fallback URL.
+
+Typography matches the landing page layout: **Google Sans Flex** for copy and headlines, **Michroma** for the wordmark, and **Micro 5** for decorative note labels. A Google Fonts stylesheet loads these fonts where supported. Inline system-font fallbacks and an Outlook-specific Arial override preserve readability when web fonts are blocked. Gradients and shadows also have solid-color fallbacks.
+
+The decorative artwork gently floats and turns for two cycles in clients that support CSS animation. Reduced-motion preferences disable it. Clients that remove animation or head styles receive the complete static design with inline styling; authentication never depends on motion, images, JavaScript, or external stylesheets. The emails use presentation tables, Outlook width/DPI fallbacks, solid background colors, and a mobile breakpoint. Actual inbox rendering can vary, especially classic Outlook rounding and automatic dark-mode recoloring.
+
+Generate and review entirely locally:
+
+```sh
+node scripts/supabase-auth-templates.mjs
+npx vitest run tests/unit/email-confirmation.test.ts
+node scripts/preview-auth-emails.mjs
+node scripts/preview-auth-emails.mjs --fonts
+node scripts/preview-auth-emails.mjs --fonts --check-only
+```
+
+The preview command requires the repository’s Playwright Chromium browser. It creates an ignored `.tmp-run/auth-email-previews/index.html` gallery, six example-token HTML previews, and mobile/desktop screenshots. It checks all six templates at 320, 375, 600, and 900px, blocked-image/style-stripped fallbacks, reduced motion, button touch targets, logo rendering, and HTML size. The default run blocks web fonts to check fallback layouts. `--fonts` downloads the three actual Latin font faces from Google Fonts, verifies they load in every template, and checks the same widths with those fonts. It does not send mail, click authentication links, or contact Supabase. Preview tokens are dummy values; use the files in this directory for the actual templates.
+
+Use `--check-only` to run layout, text contrast, font, and fallback checks without writing preview artifacts. Text is checked for a minimum 4.5:1 contrast ratio against its solid background fallback.
+
+No deployment or live Supabase settings change is performed by either script. The following Dashboard instructions are for a future, separately authorized rollout.
+
 | Dashboard template   | HTML file               | Subject                             |
 | -------------------- | ----------------------- | ----------------------------------- |
 | Confirm signup       | `confirmation.html`     | Confirm your Mellox AI email        |
