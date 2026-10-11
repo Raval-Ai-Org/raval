@@ -14,7 +14,8 @@ for (const { width, height } of [
     await page.goto("/chat-lab", { waitUntil: "domcontentloaded" });
     const composer = page.getByRole("textbox", { name: "Message Mellox" });
     await expect(composer).toBeVisible();
-    await expect(page.locator(".mx-greeting > span")).toHaveClass(/opacity-100/);
+    await expect(page.locator(".mx-greeting > span")).toBeVisible();
+    await expect(page.locator(".mx-greeting")).not.toHaveText(/^Hello,/, { timeout: 30_000 });
     await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
     await expect
       .poll(() =>

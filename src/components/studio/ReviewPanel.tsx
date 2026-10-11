@@ -1100,6 +1100,7 @@ export function ReviewPanel({
                     type="button"
                     role="tab"
                     aria-selected={selected}
+                    aria-label={spec.label}
                     onClick={() => setActive(p)}
                     className={cn(
                       "relative inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors duration-[--motion-duration-fast]",

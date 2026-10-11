@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Filter, Plus, Search, X } from "@/components/icons";
 import { dsGhostBtn, dsIconBtn } from "@/components/app/surface/buttons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { cn } from "@/lib/utils";
 import {
   CALENDAR_CHANNELS,
@@ -278,15 +278,13 @@ export function CalendarToolbar({
           <SearchBox value={filter.query} onChange={(query) => onFilter({ ...filter, query })} />
           <FilterMenu filter={filter} onChange={onFilter} />
           {showViews && (
-            <Tabs value={view} onValueChange={(v) => onView(v as CalendarViewId)}>
-              <TabsList className="h-8">
-                {(["month", "week", "list"] as const).map((id) => (
-                  <TabsTrigger key={id} value={id} className="px-2.5 text-[12px] capitalize">
-                    {id}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+            <SegmentedControl
+              label="Calendar view"
+              value={view}
+              onValueChange={onView}
+              itemClassName="capitalize"
+              options={(["month", "week", "list"] as const).map((id) => ({ value: id, label: id }))}
+            />
           )}
           <button
             type="button"

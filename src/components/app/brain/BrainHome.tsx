@@ -235,7 +235,7 @@ function StrategyBar({
               </span>
             )}
             {strategy.status === "draft" && (
-              <span className="inline-flex h-5 items-center rounded-full bg-warning/15 px-2 text-[11px] font-medium leading-none text-warning">
+              <span className="inline-flex h-5 items-center rounded-full bg-warning-surface px-2 text-[11px] font-medium leading-none text-warning">
                 Draft
               </span>
             )}

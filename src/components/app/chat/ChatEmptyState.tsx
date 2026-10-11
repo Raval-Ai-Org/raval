@@ -61,23 +61,23 @@ export function ChatGreeting({
       initial={reducedMotion ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="flex flex-col items-center px-4 text-center"
+      className="flex shrink-0 flex-col items-center px-4 text-center"
     >
       <motion.span
         initial={reducedMotion ? false : { scale: 0.6, rotate: -30, opacity: 0 }}
         animate={{ scale: 1, rotate: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 220, damping: 16, delay: 0.05 }}
-        className="mb-4 grid size-12 place-items-center"
+        className="mb-4 grid size-12 place-items-center [@media(max-height:500px)]:hidden"
       >
         <Logo height={40} markOnly />
       </motion.span>
-      <h2 className="mx-greeting">
-        <span className={greeting ? "opacity-100" : "opacity-0"}>
+      <h2 className="mx-greeting [@media(max-height:500px)]:text-xl">
+        <span>
           {greeting ?? "Hello"}
           {first ? `, ${first}` : ""}
         </span>
       </h2>
-      <p className="mt-2 text-[15px] text-muted-foreground">
+      <p className="mt-2 text-[15px] text-muted-foreground [@media(max-height:500px)]:mt-1 [@media(max-height:500px)]:text-xs">
         {brand ? `What should we do for ${brand} today?` : "What should we work on today?"}
       </p>
     </motion.div>

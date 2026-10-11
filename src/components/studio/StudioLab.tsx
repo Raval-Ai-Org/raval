@@ -975,6 +975,7 @@ export function StudioLab() {
   const [scene, setScene] = useState(SCENES[0].id);
   const [device, setDevice] = useState<Device>("window");
   const [dark, setDark] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -984,6 +985,7 @@ export function StudioLab() {
     if (d === "mobile" || d === "phone") setDevice("phone");
     else if (d === "tablet" || d === "wide") setDevice(d);
     if (url.searchParams.get("theme") === "dark") setDark(true);
+    setReady(true);
   }, []);
 
   // The app's ThemeProvider owns the <html> class; go through it so it doesn't
@@ -998,12 +1000,13 @@ export function StudioLab() {
   const [runKey, setRunKey] = useState(0);
 
   return (
-    <div className="min-h-dvh bg-surface-1 text-foreground">
+    <div data-ready={ready} className="min-h-dvh bg-surface-1 text-foreground">
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border bg-surface-3 px-4 py-2">
         <strong className="mr-2 text-sm">Studio lab</strong>
         <select
           value={scene}
           onChange={(e) => setScene(e.target.value)}
+          aria-label="Studio scene"
           className="h-8 rounded-md border border-input bg-surface-3 px-2 text-sm"
         >
           {SCENES.map((s) => (

@@ -3,6 +3,7 @@
 import { emitAppEvent } from "@/lib/app-events";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { useNavigate } from "@/lib/navigation";
 import {
   DropdownMenu,
@@ -28,10 +29,9 @@ function useCurrentUser() {
   const [u, setU] = useState<UserInfo | null>(null);
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
-      if (cancelled || !user) return;
+    const applyUser = (user: User | null) => {
+      if (cancelled) return;
+      if (!user) return setU(null);
       const meta = (user.user_metadata || {}) as Record<string, any>;
       const name =
         meta.full_name ||
@@ -41,8 +41,16 @@ function useCurrentUser() {
       const avatar = meta.avatar_url || meta.picture || null;
       setU({ email: user.email || "", name, avatar });
     };
-    load();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => load());
+    const load = async () => {
+      const { data } = await supabase.auth.getUser();
+      applyUser(data.user);
+    };
+    void load();
+    // Auth notifies listeners while holding its session lock. Awaiting another
+    // auth call here deadlocks getSession/getUser throughout the workspace.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      applyUser(session?.user ?? null);
+    });
     return () => {
       cancelled = true;
       sub.subscription.unsubscribe();

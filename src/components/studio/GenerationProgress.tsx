@@ -233,7 +233,7 @@ export function GenerationProgress({
                     "text-sm leading-6 transition-colors duration-[--motion-duration-slow]",
                     state === "current" && "font-medium text-foreground",
                     state === "done" && "text-muted-foreground",
-                    state === "todo" && "text-muted-foreground/60",
+                    state === "todo" && "text-muted-foreground",
                   )}
                 >
                   {s.label}

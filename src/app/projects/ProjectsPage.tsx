@@ -888,7 +888,7 @@ function WorkspaceMetrics({ workspace: w }: { workspace: Workspace }) {
     <div
       className={cn(
         "mt-0.5 truncate text-[11px]",
-        w.health === "attention" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
+        w.health === "attention" ? "text-warning" : "text-muted-foreground",
       )}
     >
       {items.join(" · ")}

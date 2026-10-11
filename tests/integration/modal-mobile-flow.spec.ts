@@ -12,9 +12,11 @@ for (const { width, height } of [
   test(`analytics workspace modal fits at ${width}x${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.goto("/analytics-lab", { waitUntil: "domcontentloaded" });
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: "In the modal" }).click();
     const dialog = page.getByRole("dialog");
+    await expect(async () => {
+      await page.getByRole("button", { name: "In the modal" }).click();
+      await expect(dialog).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 30_000 });
     await expect(dialog).toBeVisible();
     await expect
       .poll(async () => {

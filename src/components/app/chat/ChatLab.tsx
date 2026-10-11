@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/use-theme";
 import type { ChatToolCall } from "@/lib/chat-tools";
 import { ChatComposer, CHAT_MODELS, type ChatComposerHandle } from "./ChatComposer";
 import { ChatGreeting, ChatStarters } from "./ChatEmptyState";
@@ -55,6 +56,7 @@ const LAB_BRAND = {
 };
 
 export function ChatLab() {
+  const { toggle } = useTheme();
   const [messages, setMessages] = useState<LabMsg[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -149,11 +151,7 @@ export function ChatLab() {
         >
           Sample conversation
         </button>
-        <button
-          type="button"
-          className="mx-pill-btn"
-          onClick={() => document.documentElement.classList.toggle("dark")}
-        >
+        <button type="button" className="mx-pill-btn" onClick={toggle}>
           Theme
         </button>
       </div>
@@ -162,7 +160,9 @@ export function ChatLab() {
           <div
             className={cn(
               "mx-scroll min-h-0 overflow-y-auto",
-              empty ? "flex flex-[1_1_0%] flex-col justify-end pb-7" : "flex-1",
+              empty
+                ? "flex flex-[1_1_0%] flex-col [justify-content:safe_flex-end] pb-7 [@media(max-height:500px)]:pb-2"
+                : "flex-1",
             )}
           >
             {empty ? (

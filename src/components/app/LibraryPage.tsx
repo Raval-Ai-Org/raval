@@ -749,21 +749,18 @@ function PostCard({ group, thumb, onOpen }: { group: Group; thumb?: string; onOp
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen();
-        }
-      }}
       className={cn(
-        `studio-tone-${type} group flex h-full w-full flex-col overflow-hidden rounded-2xl bg-surface-3 text-left shadow-1 ring-1 ring-border/70`,
+        `studio-tone-${type} group relative flex h-full w-full flex-col overflow-hidden rounded-2xl bg-surface-3 text-left shadow-1 ring-1 ring-border/70`,
         "transition-[box-shadow,translate] duration-[--motion-duration-base] ease-[--motion-ease-emphasized] hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-18px_hsl(var(--tone)/0.5)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--tone))]",
       )}
     >
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open content: ${group.title}`}
+        className="absolute inset-0 z-10 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[hsl(var(--tone))]"
+      />
       <span className="relative block aspect-[4/3] w-full overflow-hidden bg-gradient-to-br from-[hsl(var(--tone)/0.16)] to-[hsl(var(--tone)/0.04)]">
         {thumb && group.mediaType === "image" ? (
           <img
@@ -790,7 +787,7 @@ function PostCard({ group, thumb, onOpen }: { group: Group; thumb?: string; onOp
         )}
         <StatusBadge status={group.status} className="absolute left-2.5 top-2.5" />
         {thumb ? (
-          <span className="absolute right-2.5 top-2.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <span className="absolute right-2.5 top-2.5 z-20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
             <DownloadAssetButton
               url={thumb}
               filename={downloadName}
@@ -820,19 +817,13 @@ function MediaCard({ asset, onOpen }: { asset: LibraryAsset; onOpen: () => void 
   const kind = mediaKind(asset);
   const downloadName = `mellox-${kind}-${new Date().toISOString().slice(0, 10)}`;
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen();
-        }
-      }}
-      aria-label={`Open ${kind}: ${asset.name}`}
-      className="group relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-surface-2 shadow-1 ring-1 ring-border/70 transition-[box-shadow,translate] duration-[--motion-duration-base] hover:-translate-y-0.5 hover:shadow-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
-    >
+    <div className="group relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-surface-2 shadow-1 ring-1 ring-border/70 transition-[box-shadow,translate] duration-[--motion-duration-base] hover:-translate-y-0.5 hover:shadow-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open ${kind}: ${asset.name}`}
+        className="absolute inset-0 z-10 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/55"
+      />
       {kind === "video" && asset.url ? (
         <video
           src={asset.url}
@@ -861,7 +852,7 @@ function MediaCard({ asset, onOpen }: { asset: LibraryAsset; onOpen: () => void 
         {kind === "video" ? <VideoIcon className="size-3" /> : <ImageIcon className="size-3" />}
         {kind === "video" ? "Video" : "Image"}
       </span>
-      <span className="absolute right-2.5 top-2.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+      <span className="absolute right-2.5 top-2.5 z-20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
         <DownloadAssetButton
           url={asset.url}
           filename={downloadName}
@@ -889,18 +880,13 @@ function ListRow({ item, thumb, onOpen }: { item: Item; thumb?: string; onOpen: 
   const kind = isPost ? item.group.mediaType : mediaKind(item.asset);
   const downloadName = `mellox-${isPost ? (item.group.mediaType ?? "asset") : kind}-${new Date().toISOString().slice(0, 10)}`;
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen();
-        }
-      }}
-      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors first:rounded-t-2xl last:rounded-b-2xl hover:bg-surface-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/55"
-    >
+    <div className="relative flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors first:rounded-t-2xl last:rounded-b-2xl hover:bg-surface-2/70">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open ${isPost ? "content" : kind}: ${item.title}`}
+        className="absolute inset-0 z-10 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/55"
+      />
       <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border/60">
         {thumb && kind === "image" ? (
           <img src={thumb} alt="" loading="lazy" className="size-full object-cover" />
@@ -940,7 +926,7 @@ function ListRow({ item, thumb, onOpen }: { item: Item; thumb?: string; onOpen: 
         filename={downloadName}
         mimeType={isPost ? undefined : item.asset.mimeType}
         compact
-        className="shrink-0"
+        className="relative z-20 shrink-0"
       />
     </div>
   );

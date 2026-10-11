@@ -353,13 +353,13 @@ export function CarouselPreview({
                     i === count - 1 && "rounded-r-md",
                     i === current
                       ? "z-10 opacity-100 ring-2 ring-primary"
-                      : "opacity-60 hover:opacity-90",
+                      : "opacity-100 hover:brightness-95",
                   )
                 : cn(
                     "rounded-md",
                     i === current
                       ? "opacity-100 ring-2 ring-primary ring-offset-2 ring-offset-surface-1"
-                      : "opacity-60 ring-1 ring-border hover:opacity-90",
+                      : "opacity-100 ring-1 ring-border hover:brightness-95",
                   ),
             )}
             style={{ width: thumbWidth, height: (thumbWidth * meta.h) / meta.w }}

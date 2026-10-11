@@ -168,17 +168,8 @@ export function MonthView({
           return (
             <div
               key={date}
-              role="button"
-              tabIndex={0}
-              aria-label={`${longDay(d)}, ${total} ${total === 1 ? "post" : "posts"}`}
-              onClick={() => onPickDate(date)}
-              onKeyDown={(ev) => {
-                if (ev.target !== ev.currentTarget) return;
-                if (ev.key === "Enter" || ev.key === " ") {
-                  ev.preventDefault();
-                  onPickDate(date);
-                }
-              }}
+              role="group"
+              aria-label={longDay(d)}
               {...drop.props(date)}
               className={cn(
                 "group @container relative flex min-h-[72px] min-w-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-2xl border p-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/40",
@@ -190,7 +181,13 @@ export function MonthView({
                 drop.over === date && "border-solid border-primary bg-primary/10",
               )}
             >
-              <div className="flex h-5 shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onPickDate(date)}
+                aria-label={`${longDay(d)}, ${total} ${total === 1 ? "post" : "posts"}`}
+                className="absolute inset-0 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60"
+              />
+              <div className="pointer-events-none relative flex h-5 shrink-0 items-center gap-1">
                 <span
                   className={cn(
                     "grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1 text-[11px] font-semibold tabular-nums",
@@ -206,14 +203,14 @@ export function MonthView({
                     ev.stopPropagation();
                     onAdd(date);
                   }}
-                  className="absolute right-1 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                  className="pointer-events-auto absolute right-1 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                   aria-label={`Add a post on ${longDay(d)}`}
                   title="Add a post"
                 >
                   <Plus className="h-3 w-3" />
                 </button>
               </div>
-              <div className="flex min-h-0 flex-col gap-0.5">
+              <div className="pointer-events-none relative flex min-h-0 flex-col gap-0.5 [&>button]:pointer-events-auto">
                 {shownItems.map((e) => {
                   const { color } = channelInfo(e.channel);
                   const open = e.status === "draft" || e.status === "review";

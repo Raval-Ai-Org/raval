@@ -149,7 +149,7 @@ export function ChipButton({
       disabled={disabled}
       title={title}
       className={cn(
-        "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors duration-[--motion-duration-fast] lg:min-h-8",
+        "inline-flex min-h-11! items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors duration-[--motion-duration-fast] lg:min-h-8!",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 disabled:opacity-50",
         selected
           ? "border-primary-border bg-primary-surface text-foreground"

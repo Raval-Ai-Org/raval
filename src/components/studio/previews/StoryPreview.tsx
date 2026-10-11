@@ -189,7 +189,10 @@ export function StoryPreview({
         </div>
 
         {/* The app's own chrome, drawn over the frame like on a phone. */}
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 p-2.5">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent p-2.5"
+        >
           <div className="flex gap-1">
             {Array.from({ length: count }, (_, i) => (
               <span key={i} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/35">
@@ -212,7 +215,7 @@ export function StoryPreview({
               {brand.initial}
             </span>
             <span className="text-xs font-semibold text-white drop-shadow">{brand.name}</span>
-            <span className="text-xs text-white/70 drop-shadow">now</span>
+            <span className="rounded bg-black/65 px-1 text-xs text-white drop-shadow">now</span>
           </div>
         </div>
         <div

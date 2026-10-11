@@ -10,8 +10,13 @@ for (const { width, height } of [
   test(`Studio phone controls remain reachable at ${width}x${height}`, async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width, height });
+    await page.route(/^https?:\/\/(?!localhost:8080)/, (route) => route.abort());
+    await page.route("**/api/**", (route) =>
+      route.fulfill({ status: 503, json: { error: "Local UI fixture" } }),
+    );
     await page.goto("/studio-lab", { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(300);
+    await expect(page.locator('[data-ready="true"]')).toBeVisible({ timeout: 30_000 });
+    await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
     await page.getByRole("combobox", { name: "Window size" }).selectOption("phone");
 
     const close = page.getByRole("button", { name: "Close", exact: true });

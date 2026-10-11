@@ -90,7 +90,12 @@ export function ConnectionLogo({
 /** What a connection card looks like while its status loads. */
 export function ConnectionSkeleton({ label }: { label: string }) {
   return (
-    <div className="ds-tile flex items-center gap-4 p-4 sm:p-5" aria-label={label} aria-busy="true">
+    <div
+      role="status"
+      className="ds-tile flex items-center gap-4 p-4 sm:p-5"
+      aria-label={label}
+      aria-busy="true"
+    >
       <Skeleton className="size-11 rounded-[14px]" />
       <div className="min-w-0 flex-1 space-y-2">
         <Skeleton className="h-4 w-32 rounded-full" />

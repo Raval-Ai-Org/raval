@@ -100,11 +100,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         {clarityId ? (
-          <Script
-            id="microsoft-clarity"
-            src={`https://www.clarity.ms/tag/${clarityId}`}
-            strategy="afterInteractive"
-          />
+          <Script id="microsoft-clarity" strategy="afterInteractive">
+            {`(function(w,d,id){
+              w.clarity=w.clarity||function(){(w.clarity.q=w.clarity.q||[]).push(arguments)};
+              var tag=d.createElement("script");tag.async=true;
+              tag.src="https://www.clarity.ms/tag/"+id;
+              d.head.appendChild(tag);
+            })(window,document,${JSON.stringify(clarityId)});`}
+          </Script>
         ) : null}
         <RouteProgress />
         <ConnectWindowReturn />

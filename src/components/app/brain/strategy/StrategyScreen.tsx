@@ -202,7 +202,7 @@ function MixRing({ pillars }: { pillars: MarketingStrategy["pillars"] }) {
 function WeekDots({ count }: { count: number }) {
   const lit = Math.min(7, count);
   return (
-    <span className="flex items-center gap-1" aria-label={`${count} a week`}>
+    <span role="img" className="flex items-center gap-1" aria-label={`${count} posts a week`}>
       {Array.from({ length: 7 }).map((_, i) => (
         <motion.span
           key={i}
@@ -408,7 +408,7 @@ export function StrategyScreen({
       {/* ── status and actions ── */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {isDraft ? (
-          <span className="rounded-full bg-warning/15 px-2.5 py-1 text-[12px] font-medium text-warning">
+          <span className="rounded-full bg-warning-surface px-2.5 py-1 text-[12px] font-medium text-warning">
             Draft
           </span>
         ) : (

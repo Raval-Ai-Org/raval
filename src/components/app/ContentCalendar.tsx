@@ -24,7 +24,7 @@ import { AppModalShell } from "@/components/app/AppModalShell";
 import { dsIconBtn } from "@/components/app/surface/buttons";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useNavigate } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
@@ -803,19 +803,31 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
     );
   const planLabel = apView ? "Autopilot" : "Plan";
   const railTabs = (
-    <Tabs value={activeRail} onValueChange={(v) => setRail(v as "plan" | "day")}>
-      <TabsList className="h-8 w-full">
-        <TabsTrigger value="day" className="flex-1 text-[12px]">
-          Day
-        </TabsTrigger>
-        <TabsTrigger value="plan" className="flex-1 gap-1.5 text-[12px]">
-          {planLabel}
-          {apView && apView.approvals.length + (apView.proposed.length ? 1 : 0) > 0 && (
-            <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-label="Needs you" />
-          )}
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
+    <SegmentedControl
+      label="Calendar sidebar"
+      value={activeRail}
+      onValueChange={setRail}
+      className="w-full"
+      itemClassName="flex-1"
+      options={[
+        { value: "day", label: "Day" },
+        {
+          value: "plan",
+          label: (
+            <>
+              {planLabel}
+              {apView && apView.approvals.length + (apView.proposed.length ? 1 : 0) > 0 && (
+                <span
+                  role="img"
+                  className="h-1.5 w-1.5 rounded-full bg-warning"
+                  aria-label="Needs you"
+                />
+              )}
+            </>
+          ),
+        },
+      ]}
+    />
   );
 
   const nothingAtAll = entries.length === 0 && slots.length === 0;

@@ -1542,7 +1542,9 @@ export function ChatPanel({
           onScroll={onChatScroll}
           className={cn(
             "mx-scroll min-h-0 overflow-y-auto overscroll-contain",
-            empty ? "flex flex-[1_1_0%] flex-col justify-end pb-7" : "flex-1",
+            empty
+              ? "flex flex-[1_1_0%] flex-col [justify-content:safe_flex-end] pb-7 [@media(max-height:500px)]:pb-2"
+              : "flex-1",
           )}
         >
           {empty ? (
