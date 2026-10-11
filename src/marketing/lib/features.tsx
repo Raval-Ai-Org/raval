@@ -128,7 +128,7 @@ export const FEATURES: Feature[] = [
       { icon: Eye, title: "ChatGPT, Gemini and Perplexity", text: "See whether each engine mentions you, how it describes you, and who it names instead." },
       { icon: Swords, title: "Competitor view", text: "The Competitor Brain shows how rivals appear in AI answers and points at the gap most worth closing." },
       { icon: Wrench, title: "Fix proposals", text: "Every gap comes with a suggested fix, which you can turn into a draft in one click and approve before it goes live." },
-      { icon: Code2, title: "CMS and code fixes", text: "Push fixes to WordPress and Webflow on Growth, and open GitHub pull requests with the GEO Engineer agent on Agency." },
+      { icon: Code2, title: "CMS and code fixes", text: "Push fixes to WordPress and Webflow, or open GitHub pull requests with the GEO Engineer agent, on Growth and above." },
     ],
     table: {
       title: "How much you get on each plan",
@@ -140,7 +140,7 @@ export const FEATURES: Feature[] = [
         "Competitors tracked",
         "GEO fix proposals",
         "CMS fixes, WordPress and Webflow",
-        "GitHub PR fixes and GEO Engineer agent",
+        "GEO Engineer and Fix all",
       ],
     },
     faqs: [
@@ -227,8 +227,8 @@ export const FEATURES: Feature[] = [
     ],
     table: {
       title: "Publishing on each plan",
-      intro: "How many posts you can publish each month, and the tools that help you plan them.",
-      rows: ["Social posts published per month", "Campaign plans", "Approval workflows"],
+      intro: "Where you can publish, and the tools that help you plan and approve posts.",
+      rows: ["Posting to every social network", "Campaign plans", "Approval workflows"],
     },
     faqs: [
       {
@@ -329,7 +329,7 @@ export const FEATURES: Feature[] = [
     table: {
       title: "Autopilot on each plan",
       intro: "Autopilot is part of the paid plans, alongside the publishing and planning tools it works with.",
-      rows: ["Autopilot mode", "Social posts published per month", "Campaign plans"],
+      rows: ["Autopilot mode", "Posting to every social network", "Campaign plans"],
     },
     faqs: [
       {
