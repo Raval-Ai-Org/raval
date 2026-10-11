@@ -45,13 +45,6 @@
   opacity: 1;
   transform: none;
 }
-@media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {
-  .px [data-reveal] {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-}
 
 /* ---------- Section heading (label, rule, title + blurb) ---------- */
 .px-label {
@@ -874,9 +867,6 @@
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.1 -0.1'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
   background-size: 220px 220px;
 }
-@media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {
-  .pxh-streak { animation: none; }
-}
 
 /* dark outlined nav like the reference, instead of picking up the aurora colours */
 .px-hero nav.glass {
@@ -898,4 +888,304 @@
 .px .hero-cta:hover {
   transform: translateY(-2px);
   box-shadow: -6px 0 32px -4px rgb(203 233 96 / 0.7), 6px 0 36px -4px rgb(7 86 231 / 0.85);
+}
+
+/* ---------- Plans (PricingPlans.tsx) ----------
+   The product's own plan cards (the upgrade window), at this page's size: a plain tile with the name, who it is
+   for, the price, the button, three lines of monthly numbers and what the plan adds. The plan most people pick
+   has the lime edge and the lime button. */
+.pp-plans {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 32px;
+}
+.pp-card,
+.pp-strip {
+  position: relative;
+  border-radius: 24px;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  background: rgb(13 16 21 / 0.86);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+.pp-card {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(20px, 2vw, 28px);
+}
+.pp-card.featured {
+  border-color: var(--brand-lime);
+  background: linear-gradient(rgb(203 233 96 / 0.06), rgb(203 233 96 / 0.06)), rgb(13 16 21 / 0.9);
+  box-shadow: 0 0 0 1px var(--brand-lime), 0 26px 60px -34px rgb(203 233 96 / 0.75);
+}
+.pp-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-height: 32px;
+}
+.pp-top h3 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.pp-badge {
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #11170a;
+  background: var(--brand-lime);
+}
+.pp-fit {
+  margin-top: 4px;
+  font-size: 15px;
+  color: #8b97c2;
+}
+.pp-price {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.pp-price .old {
+  font-size: 17px;
+  color: rgb(255 255 255 / 0.42);
+  text-decoration: line-through;
+}
+.pp-price .now {
+  font-size: clamp(2.3rem, 3.2vw, 2.9rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.pp-price .per {
+  font-size: 15px;
+  color: #8b97c2;
+}
+.pp-billed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 26px;
+  margin-top: 10px;
+  font-size: 14px;
+  color: #8b97c2;
+  font-variant-numeric: tabular-nums;
+}
+.pp-save {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-weight: 600;
+  color: var(--brand-lime);
+  background: rgb(203 233 96 / 0.12);
+}
+.pp-billed button {
+  font-weight: 500;
+  color: var(--brand-lime);
+}
+.pp-billed button:hover {
+  text-decoration: underline;
+}
+
+/* the button: a quiet pill, lime on the plan most people pick */
+.pp-buy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  margin-top: 18px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: rgb(255 255 255 / 0.05);
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.pp-buy:hover {
+  border-color: rgb(255 255 255 / 0.3);
+  background: rgb(255 255 255 / 0.1);
+}
+.pp-buy.lime {
+  border-color: transparent;
+  background: var(--brand-lime);
+  color: #11170a;
+  box-shadow: 0 0 34px -8px rgb(203 233 96 / 0.6);
+}
+.pp-buy.lime:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 46px -6px rgb(203 233 96 / 0.85);
+}
+.pp-buy:focus-visible,
+.pp-talk:focus-visible,
+.pp-billed button:focus-visible {
+  outline: 2px solid var(--brand-lime);
+  outline-offset: 3px;
+}
+
+/* what you get every month */
+.pp-numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid rgb(255 255 255 / 0.09);
+}
+.pp-numbers li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 15px;
+}
+.pp-numbers svg {
+  flex: none;
+  color: var(--brand-lime);
+}
+.pp-numbers b {
+  font-weight: 600;
+}
+.pp-numbers span {
+  font-size: 14px;
+  color: #8b97c2;
+}
+.pp-label {
+  margin-top: 22px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6f7aa3;
+}
+.pp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 12px;
+}
+.pp-list li {
+  display: flex;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: rgb(255 255 255 / 0.88);
+}
+.pp-tick {
+  display: grid;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--brand-lime);
+  background: rgb(203 233 96 / 0.15);
+}
+.pp-tick svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* the biggest plan, as one row under the cards */
+.pp-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  margin-top: 16px;
+  padding: 18px clamp(20px, 2vw, 28px);
+}
+.pp-strip-text {
+  flex: 1;
+  min-width: min(100%, 320px);
+}
+.pp-strip h3 {
+  font-size: 18px;
+  font-weight: 600;
+}
+.pp-strip h3 span {
+  margin-left: 10px;
+  font-size: 15px;
+  font-weight: 400;
+  color: #8b97c2;
+}
+.pp-strip-text p {
+  margin-top: 4px;
+  font-size: 15px;
+  color: #8b97c2;
+}
+.pp-strip-price {
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pp-strip-price span {
+  font-size: 14px;
+  font-weight: 400;
+  color: #8b97c2;
+}
+.pp-strip-buttons {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.pp-strip .pp-buy {
+  height: 44px;
+  margin-top: 0;
+}
+.pp-talk {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--brand-lime);
+}
+.pp-talk:hover {
+  text-decoration: underline;
+}
+
+.pp-promises {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 26px;
+  margin-top: 22px;
+  font-size: 14px;
+  color: #8b97c2;
+}
+.pp-promises li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pp-promises svg {
+  color: var(--brand-lime);
+}
+
+/* tablets and phones: one card a row, the plan most people pick first */
+@media (max-width: 1023px) {
+  .pp-plans {
+    grid-template-columns: 1fr;
+    max-width: 560px;
+    margin-inline: auto;
+  }
+  .pp-card.featured {
+    order: -1;
+  }
+  .pp-strip {
+    max-width: 560px;
+    margin-inline: auto;
+  }
+  .pp-strip-buttons {
+    width: 100%;
+    justify-content: space-between;
+  }
 }

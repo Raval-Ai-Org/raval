@@ -37,7 +37,7 @@ function Row({ hidden = false }: { hidden?: boolean }) {
 /** Slow, endless grey logo strip with faded edges. */
 export default function Clients() {
   return (
-    <section aria-label="Trusted by" className="relative z-20 pb-24 pt-16 sm:pb-32 sm:pt-24">
+    <section aria-label="Trusted by" className="relative z-20 pb-24 pt-8 sm:pb-32 sm:pt-10">
       <div className="logo-marquee">
         <div className="logo-track">
           <Row />

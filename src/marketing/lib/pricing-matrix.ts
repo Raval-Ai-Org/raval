@@ -1,16 +1,20 @@
-// Pricing content for /pricing. Source of truth: "Mellox AI Pricing.html".
+// The plan comparison table on /pricing. Keep every row in step with src/lib/billing/catalog.ts (plans, limits and
+// each feature's `minPlan`): this table must never promise more than the product gives.
+import { PLANS } from "@/lib/billing/catalog";
 
 export type Cell = string | boolean;
 export type MatrixRow = { label: string; values: Cell[] };
 export type MatrixGroup = { title: string; rows: MatrixRow[] };
 
+// The column prices come from the product's own catalog, so they can't drift from what the product charges.
 export const MATRIX_COLUMNS = [
   { name: "Free", price: "$0" },
-  { name: "Starter", price: "$49 /mo" },
-  { name: "Growth", price: "$149 /mo", highlight: true },
-  { name: "Agency", price: "$449 /mo" },
-  { name: "Scale", price: "Contact us" },
-] as const;
+  ...(["starter", "growth", "agency", "scale"] as const).map((id) => ({
+    name: PLANS[id].label,
+    price: `$${PLANS[id].priceMonthlyUsd.toLocaleString("en-US")} /mo`,
+    ...(id === "growth" ? { highlight: true } : {}),
+  })),
+];
 
 export const MATRIX: MatrixGroup[] = [
   {
@@ -23,7 +27,7 @@ export const MATRIX: MatrixGroup[] = [
           "1",
           "3",
           "10",
-          "30+"
+          "30"
         ]
       },
       {
@@ -109,7 +113,7 @@ export const MATRIX: MatrixGroup[] = [
       {
         "label": "Posts, images, carousels, ads, scripts",
         "values": [
-          false,
+          "100 credits to try",
           true,
           true,
           true,
@@ -147,13 +151,13 @@ export const MATRIX: MatrixGroup[] = [
         ]
       },
       {
-        "label": "Social posts published per month",
+        "label": "Posting to every social network",
         "values": [
-          false,
-          "100",
-          "500",
-          "3,000",
-          "10,000"
+          "Unlimited",
+          "Unlimited",
+          "Unlimited",
+          "Unlimited",
+          "Unlimited"
         ]
       }
     ]
@@ -257,11 +261,11 @@ export const MATRIX: MatrixGroup[] = [
         ]
       },
       {
-        "label": "GitHub PR fixes and GEO Engineer agent",
+        "label": "GEO Engineer and Fix all",
         "values": [
           false,
           false,
-          false,
+          true,
           true,
           true
         ]
@@ -310,6 +314,16 @@ export const MATRIX: MatrixGroup[] = [
           true,
           true
         ]
+      },
+      {
+        "label": "Test posts on your audience first",
+        "values": [
+          false,
+          true,
+          true,
+          true,
+          true
+        ]
       }
     ]
   },
@@ -318,6 +332,16 @@ export const MATRIX: MatrixGroup[] = [
     "rows": [
       {
         "label": "Client portal and share links",
+        "values": [
+          false,
+          false,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "label": "Backlinks on real, relevant sites",
         "values": [
           false,
           false,
@@ -337,20 +361,20 @@ export const MATRIX: MatrixGroup[] = [
         ]
       },
       {
-        "label": "SSO, API access, SLA",
+        "label": "SSO and API access",
         "values": [
           false,
           false,
           false,
           false,
-          true
+          "Coming soon"
         ]
       },
       {
         "label": "Credit rollover on annual plans",
         "values": [
           false,
-          false,
+          "Up to 1 month",
           "Up to 1 month",
           "Up to 1 month",
           "Up to 1 month"
@@ -361,7 +385,14 @@ export const MATRIX: MatrixGroup[] = [
   {
     "title": "Connections and automation",
     "rows": [
-      { "label": "Autopilot mode", "values": [false, true, true, true, true] },
+      { "label": "Autopilot mode",
+        "values": [
+          false,
+          false,
+          true,
+          true,
+          true
+        ] },
       { "label": "MCP connection (Claude and ChatGPT)", "values": [false, true, true, true, true] },
       { "label": "Slack and Notion", "values": [false, true, true, true, true] },
       { "label": "Edit generated images in Canva", "values": [false, true, true, true, true] }

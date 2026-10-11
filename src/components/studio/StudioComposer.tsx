@@ -288,7 +288,8 @@ export function ComposerBody({
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: duration.base, ease: ease.standard }}
           >
-            <DialogPrimitive.Title className="truncate text-sm font-semibold tracking-tight text-foreground">
+            {/* line-clamp, not truncate: the narrow-screen rule in styles.css lets `truncate` wrap, and a wrapped title spills out of the header. */}
+            <DialogPrimitive.Title className="line-clamp-1 break-all text-sm font-semibold tracking-tight text-foreground">
               {title}
             </DialogPrimitive.Title>
           </motion.div>

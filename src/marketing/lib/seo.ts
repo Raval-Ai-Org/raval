@@ -1,3 +1,4 @@
+import { FOUNDERS, founderPath } from "./about";
 import { PLANS } from "./pricing";
 
 export const PRODUCTION_URL = "https://mellox.ai";
@@ -58,6 +59,13 @@ export const organizationJsonLd = {
   url: SITE_URL,
   logo: `${SITE_URL}/icon-512.png`,
   sameAs: SOCIAL_PROFILES,
+  // Who founded the company. The same people, by the same names, as the About page (src/marketing/lib/about.ts).
+  founder: FOUNDERS.map((f) => ({
+    "@type": "Person",
+    name: f.name,
+    jobTitle: f.role,
+    url: `${SITE_URL}${f.profile ? founderPath(f.profile.slug) : "/about"}`,
+  })),
   contactPoint: [
     {
       "@type": "ContactPoint",

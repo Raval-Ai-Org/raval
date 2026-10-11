@@ -108,7 +108,7 @@ export function MediaLightbox({
                     "relative min-h-0 flex-1",
                     zoom
                       ? "overflow-auto"
-                      : "grid place-items-center overflow-hidden px-3 pb-8 sm:px-10",
+                      : "grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center overflow-hidden px-3 pb-8 sm:px-10",
                   )}
                   onClick={(e) => {
                     if (e.target === e.currentTarget) onOpenChange(false);

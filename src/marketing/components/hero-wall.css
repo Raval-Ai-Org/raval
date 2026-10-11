@@ -1,0 +1,134 @@
+/* ---------- The arc under the home hero (HeroWall.tsx) ----------
+   Vertical video cards on the inside of a cylinder, seen from near its centre: the middle cards sit back, the
+   edge cards come forward and turn in. All sizes hang off one unit (--u), so the arc keeps its shape at every width.
+
+   --a      a card's starting angle on the arc; from then on HeroWall writes the card's transform every frame
+            (the cards travel round without stopping)
+   --p      scroll progress 0..1, from HeroWall
+   Only transforms move. */
+.hw {
+  /* one hundredth of the screen, but never so small that a tablet's cards turn into stamps, and growing only
+     slowly past 1500px so a wide monitor is filled without giant cards */
+  --u: clamp(10.5px, 1vw, calc(15px + (100vw - 1500px) * 0.004));
+  --w: calc(var(--u) * 18); /* card width */
+  --R: calc(var(--u) * (60 + 8 * var(--p, 0))); /* radius: the arc opens out as you scroll */
+  --P: calc(var(--u) * 62); /* how far the eye is */
+  --C: calc(var(--u) * 30); /* how far the cylinder's centre is pulled towards the eye */
+  position: relative;
+  width: 100%;
+  height: calc(var(--u) * 34);
+  perspective: var(--P);
+  perspective-origin: 50% 46%;
+  /* it lifts as it arrives */
+  transform: translate3d(0, calc((1 - var(--p, 0)) * 28px), 0);
+  will-change: transform;
+  /* the cards melt away towards both sides of the screen: HeroWall fades each one as it nears the edge */
+}
+/* phones: fewer, larger cards, in a box no taller than the tallest of them (a card is drawn at about 0.7 of
+   its width here, so a 9:16 one is about 54vw high) */
+@media (max-width: 760px) {
+  .hw {
+    --u: 1vw;
+    --w: 42vw;
+    --R: calc(1vw * (150 + 8 * var(--p, 0)));
+    --P: 170vw;
+    --C: 60vw;
+    height: 60vw;
+  }
+}
+
+.hw-turn,
+.hw-slot {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+.hw-turn { transform: translateZ(var(--C)); }
+.hw-slot {
+  transform: rotateY(var(--a, 0deg)) translateZ(calc(var(--R) * -1));
+  will-change: transform;
+}
+
+/* ---- a card: one vertical video ---- */
+.hw-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  width: var(--w);
+  aspect-ratio: 9 / 16;
+  translate: -50% -50%;
+  overflow: hidden;
+  /* the dots are sized in em of this, so they scale with the card */
+  font-size: calc(var(--w) / 15);
+  color: #fff;
+  border-radius: 1.5em;
+  /* shown until the clip has loaded */
+  background: linear-gradient(160deg, #1a1f23, #0a0c0e);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 2.6em 4.4em -2em rgb(0 0 0 / 0.95);
+}
+.hw-media {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* a thin highlight on the edge, like glass */
+.hw-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.3);
+  pointer-events: none;
+}
+
+/* ---- a picture post: it slides through its pictures by itself ----
+   The card takes the pictures' own shape (set inline; a video card is 9:16), so nothing is cropped. HeroWall moves
+   the track one picture at a time while the card is in view. The first picture is repeated at the end of the
+   track, so the loop is always one more step forward and never a slide back. */
+.hw-track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  transition: transform 0.6s cubic-bezier(0.65, 0, 0.15, 1);
+  will-change: transform;
+}
+.hw-track img {
+  flex: none;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* which picture you are on */
+.hw-count {
+  position: absolute;
+  left: 50%;
+  bottom: 0.9em;
+  z-index: 1;
+  display: flex;
+  gap: 0.4em;
+  padding: 0.4em 0.55em;
+  translate: -50% 0;
+  border-radius: 99em;
+  background: rgb(5 6 8 / 0.55);
+}
+.hw-count i {
+  display: block;
+  width: 0.45em;
+  height: 0.45em;
+  border-radius: 99em;
+  background: #fff;
+  opacity: 0.4;
+  transition: width 0.4s ease, opacity 0.4s ease, background-color 0.4s ease;
+}
+.hw-count i.is-on {
+  width: 1.1em;
+  background: #cbe960;
+  opacity: 1;
+}

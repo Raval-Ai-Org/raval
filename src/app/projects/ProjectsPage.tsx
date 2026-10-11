@@ -21,6 +21,8 @@ import { onboardingPath, workspacePath, WORKSPACES_HOME } from "@/lib/workspace/
 import { readLastWorkspace } from "@/lib/workspace/last-opened";
 import { Logo } from "@/components/brand/Logo";
 import { SecondaryBrandSymbols } from "@/components/brand/SecondaryBrandSymbols";
+import { AURORA, MelloxAurora } from "@/components/brand/MelloxAurora";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -35,22 +37,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
   Plus,
@@ -76,7 +67,6 @@ import { BillingPanel, WalletPill } from "@/components/app/BillingPanel";
 import { FeatureGate, openFeatureUpgrade, useFeatureLocked } from "@/components/app/FeatureGate";
 import { emitAppEvent } from "@/lib/app-events";
 import { ServerFnError } from "@/lib/rpc-client";
-import { pageHead, webPageLd } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 import { usePersona, type PersonaCopy } from "@/hooks/use-persona";
 
@@ -250,107 +240,110 @@ function ProjectsPage() {
   return (
     <div
       data-mellox-app
-      className="relative min-h-[100dvh] overflow-hidden bg-background text-foreground"
+      className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-background text-foreground"
     >
-      <AuroraBackdrop />
       {sessionReady && <BillingPanel />}
 
-      {/* Top bar */}
-      <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-5">
-        <Link
-          to={WORKSPACES_HOME}
-          aria-label="Mellox AI home"
-          className="flex h-9 shrink-0 items-center"
-        >
-          <Logo height={30} />
-        </Link>
-        <div className="flex items-center gap-2 sm:gap-3">
-          {sessionReady && <WalletPill />}
-          <AgencyHqPill
-            waiting={workspaces.reduce(
-              (n, w) => n + w.pendingApprovals + w.draftCount + w.failedCount,
-              0,
+      <ProjectsStage>
+        {/* Top bar */}
+        <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-4 sm:px-5">
+          <Link
+            to={WORKSPACES_HOME}
+            aria-label="Mellox AI home"
+            className="flex h-9 shrink-0 items-center"
+          >
+            <Logo height={30} />
+          </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {sessionReady && <WalletPill />}
+            <AgencyHqPill
+              waiting={workspaces.reduce(
+                (n, w) => n + w.pendingApprovals + w.draftCount + w.failedCount,
+                0,
+              )}
+            />
+            <AccountMenu
+              email={userEmail}
+              name={userName}
+              avatarUrl={userAvatar}
+              onSignOut={signOut}
+            />
+          </div>
+        </header>
+
+        {/* Hero */}
+        <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-16 pt-10 text-center sm:pb-20 sm:pt-12">
+          <SecondaryBrandSymbols size="lg" className="mx-auto mb-8 justify-center gap-3 sm:gap-5" />
+          <motion.h1
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
+            className="font-display mt-4 text-[40px] leading-[1.05] tracking-tight sm:text-[52px]"
+          >
+            {loading ? (
+              <span className="mx-loader__label">{`Loading your ${copy.nounPlural}…`}</span>
+            ) : workspaceListFailed ? (
+              "Your workspaces couldn't load"
+            ) : workspaces.length === 0 ? (
+              copy.firstHeadline(userName ? userName.split(" ")[0] : undefined)
+            ) : (
+              copy.returningHeadline(userEmail ? userEmail.split("@")[0] : undefined)
             )}
-          />
-          <AccountMenu
-            email={userEmail}
-            name={userName}
-            avatarUrl={userAvatar}
-            onSignOut={signOut}
-          />
-        </div>
-      </header>
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.15, duration: 0.4 }}
+            className="mt-2 text-[14px] text-muted-foreground"
+          >
+            {workspaceListFailed
+              ? workspaceRouteMissing
+                ? "The workspace service is unavailable in this app session."
+                : "Retry the request to see your workspace list."
+              : workspaces.length === 0
+                ? copy.firstSubhead
+                : copy.returningSubhead}
+          </motion.p>
 
-      {/* Hero */}
-      <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pt-14 pb-8 text-center">
-        <SecondaryBrandSymbols size="lg" className="mx-auto mb-8 justify-center gap-3 sm:gap-5" />
-        <motion.h1
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-          className="font-display mt-4 text-[40px] leading-[1.05] tracking-tight sm:text-[52px]"
-        >
-          {loading ? (
-            <span className="mx-loader__label">{`Loading your ${copy.nounPlural}…`}</span>
-          ) : workspaceListFailed ? (
-            "Your workspaces couldn't load"
-          ) : workspaces.length === 0 ? (
-            copy.firstHeadline(userName ? userName.split(" ")[0] : undefined)
-          ) : (
-            copy.returningHeadline(userEmail ? userEmail.split("@")[0] : undefined)
-          )}
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.15, duration: 0.4 }}
-          className="mt-2 text-[14px] text-muted-foreground"
-        >
-          {workspaceListFailed
-            ? workspaceRouteMissing
-              ? "The workspace service is unavailable in this app session."
-              : "Retry the request to see your workspace list."
-            : workspaces.length === 0
-              ? copy.firstSubhead
-              : copy.returningSubhead}
-        </motion.p>
-
-        <motion.div
-          initial={{ opacity: 0, y: 12, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="mx-auto mt-8 w-full max-w-xl"
-        >
-          {workspaceListFailed ? (
-            <ErrorState
-              title="Couldn't load your workspaces"
-              description={
-                workspaceRouteMissing
-                  ? "Refresh the page and retry. If this continues, contact support so your app server can be checked."
-                  : "Your account may already have workspaces. Retry before creating another."
-              }
-              detail={workspacesQuery.error instanceof Error ? workspacesQuery.error.message : null}
-              onRetry={() => void workspacesQuery.refetch()}
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="mx-auto mt-8 w-full max-w-xl"
+          >
+            {workspaceListFailed ? (
+              <ErrorState
+                title="Couldn't load your workspaces"
+                description={
+                  workspaceRouteMissing
+                    ? "Refresh the page and retry. If this continues, contact support so your app server can be checked."
+                    : "Your account may already have workspaces. Retry before creating another."
+                }
+                detail={
+                  workspacesQuery.error instanceof Error ? workspacesQuery.error.message : null
+                }
+                onRetry={() => void workspacesQuery.refetch()}
+              />
+            ) : (
+              <PasteLinkBar
+                existing={workspaces}
+                onCreated={(result) => afterCreate(result, "onboarding")}
+                onOpenAdvanced={() => setDialogOpen(true)}
+              />
+            )}
+            <NewProjectDialog
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
+              copy={copy}
+              onCreated={(result) => afterCreate(result, "app")}
             />
-          ) : (
-            <PasteLinkBar
-              existing={workspaces}
-              onCreated={(result) => afterCreate(result, "onboarding")}
-              onOpenAdvanced={() => setDialogOpen(true)}
-            />
-          )}
-          <NewProjectDialog
-            open={dialogOpen}
-            onOpenChange={setDialogOpen}
-            copy={copy}
-            onCreated={(result) => afterCreate(result, "app")}
-          />
-        </motion.div>
-      </section>
+          </motion.div>
+        </section>
+      </ProjectsStage>
 
       {/* Projects panel — only shown when at least one client exists */}
       {!loading && workspaces.length > 0 && (
-        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-20">
+        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
           <div className="rounded-3xl border border-border/70 bg-card/70 p-5 backdrop-blur-xl sm:p-7">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
@@ -436,7 +429,7 @@ function ProjectsPage() {
       )}
 
       {loading && (
-        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-20">
+        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <div
@@ -448,6 +441,8 @@ function ProjectsPage() {
           </div>
         </section>
       )}
+
+      <ProjectsFoot />
 
       {/* Rename dialog */}
       <RenameDialog
@@ -650,7 +645,7 @@ function AccountMenu({
   );
 }
 
-function ProjectCard({
+export function ProjectCard({
   workspace,
   index,
   lastOpened = false,
@@ -901,24 +896,7 @@ function WorkspaceMetrics({ workspace: w }: { workspace: Workspace }) {
   );
 }
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <div className="grid place-items-center rounded-2xl border border-dashed border-border/70 bg-background/40 px-6 py-14 text-center">
-      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-aura via-aura-purple to-aura-pink text-primary-foreground">
-        <Sparkles className="h-5 w-5" />
-      </div>
-      <h3 className="mt-3 text-[15px] font-semibold tracking-tight">No projects yet</h3>
-      <p className="mt-1 max-w-sm text-[12.5px] text-muted-foreground">
-        Add your first website and Mellox AI will set up a workspace for it in seconds.
-      </p>
-      <Button onClick={onAdd} className="btn-aura mt-5 h-9 gap-1.5 rounded-full px-4">
-        <Plus className="h-3.5 w-3.5" /> Add a project
-      </Button>
-    </div>
-  );
-}
-
-function PasteLinkBar({
+export function PasteLinkBar({
   existing,
   onCreated,
   onOpenAdvanced,
@@ -980,17 +958,19 @@ function PasteLinkBar({
         data-no-rhythm
         onSubmit={submit}
         className={cn(
-          "group relative flex h-14 items-center gap-1.5 rounded-full border border-border/70 bg-card/95 pl-1.5 pr-1.5 shadow-[0_10px_28px_-18px_hsl(var(--foreground)/0.32),0_1px_0_hsl(var(--foreground)/0.04)_inset] backdrop-blur-xl",
-          "transition focus-within:border-primary-border",
+          // Same shape as the website bar on the public site's hero.
+          "group relative flex h-14 items-center gap-1 rounded-full border border-border/70 bg-card/95 pl-1.5 pr-1.5 shadow-[0_18px_44px_-24px_hsl(var(--foreground)/0.4),0_1px_0_hsl(var(--foreground)/0.04)_inset] backdrop-blur-xl",
+          "transition-[border-color,box-shadow] duration-300 focus-within:border-primary/60 focus-within:shadow-[0_18px_44px_-24px_hsl(var(--foreground)/0.4),0_0_0_4px_hsl(var(--primary)/0.12)]",
         )}
       >
         <button
           type="button"
           onClick={onPasteShortcut}
           aria-label="Paste from clipboard"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          title="Paste from clipboard"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground group-focus-within:text-primary"
         >
-          <Plus className="h-5 w-5" strokeWidth={2} />
+          <Globe className="h-[18px] w-[18px]" strokeWidth={1.8} />
         </button>
 
         <input
@@ -1011,7 +991,7 @@ function PasteLinkBar({
           className={cn(
             "!mt-0 grid h-11 w-11 shrink-0 place-items-center rounded-full transition",
             isValid && !saving
-              ? "bg-gradient-to-br from-aura via-aura-purple to-aura-pink text-primary-foreground shadow-[0_8px_24px_-10px_hsl(var(--aura)/0.7)] hover:-translate-y-0.5"
+              ? "bg-primary text-primary-foreground shadow-[0_8px_24px_-10px_hsl(var(--primary)/0.7)] hover:scale-105"
               : "bg-secondary text-muted-foreground",
           )}
         >
@@ -1184,37 +1164,101 @@ function RenameDialog({
   );
 }
 
-function AuroraBackdrop() {
+/**
+ * The top of the page: the public site's hero sky behind the top bar, the
+ * heading and the website bar. The `dark` class gives everything inside the
+ * dark theme's colours, so it reads the same in both app themes.
+ */
+export function ProjectsStage({ children }: { children: React.ReactNode }) {
+  const reduce = useReducedMotionSafe();
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 -z-0 overflow-hidden">
+    <div className="relative z-10 px-2 pt-2 sm:px-3 sm:pt-3">
       <div
-        className="absolute -top-32 left-1/2 h-[520px] w-[1100px] -translate-x-1/2 rounded-[50%] opacity-80 blur-3xl"
-        style={{
-          background: "radial-gradient(closest-side, hsl(var(--aura)/0.55), transparent 70%)",
-        }}
-      />
-      <div
-        className="absolute top-40 left-[8%] h-[420px] w-[520px] rounded-full opacity-70 blur-3xl"
-        style={{
-          background: "radial-gradient(closest-side, hsl(var(--aura-pink)/0.55), transparent 70%)",
-        }}
-      />
-      <div
-        className="absolute top-24 right-[6%] h-[460px] w-[560px] rounded-full opacity-70 blur-3xl"
-        style={{
-          background:
-            "radial-gradient(closest-side, hsl(var(--aura-purple)/0.55), transparent 70%)",
-        }}
-      />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,hsl(var(--background)),transparent_60%)]" />
+        className="dark relative isolate overflow-hidden rounded-[28px] text-foreground ring-1 ring-inset ring-white/[0.08]"
+        style={{ backgroundColor: AURORA.sky }}
+      >
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <MelloxAurora reduce={reduce} />
+        </div>
+        {children}
+      </div>
     </div>
   );
 }
 
-function hashCode(s: string) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  return h;
+const FOOT_LINKS = [
+  { label: "Docs", href: "/docs" },
+  { label: "Changelog", href: "/changelog" },
+  { label: "Pricing", href: "/pricing" },
+  { label: "Privacy", href: "/privacy" },
+  { label: "Terms", href: "/terms" },
+] as const;
+
+/**
+ * The foot of the page: the public site's aurora and wordmark on a dark panel
+ * (dark in both app themes, like the sign-in showcase), then a quiet row of
+ * links. Decoration and links only; it starts nothing.
+ */
+export function ProjectsFoot() {
+  const reduce = useReducedMotionSafe();
+  return (
+    <footer className="relative z-10 mx-auto mt-auto w-full max-w-6xl px-5 pb-6 pt-6">
+      <div
+        className="relative isolate h-[280px] overflow-hidden rounded-[28px] text-white ring-1 ring-inset ring-white/[0.08] sm:h-[320px]"
+        style={{ backgroundColor: AURORA.sky }}
+      >
+        <MelloxAurora reduce={reduce} />
+
+        <div className="relative flex flex-col items-center px-6 pt-10 text-center sm:pt-12">
+          <p className="font-display text-[26px] leading-[1.1] tracking-tight sm:text-[34px]">
+            Don&apos;t just rank. <span style={{ color: AURORA.lime }}>Be recommended.</span>
+          </p>
+          <p className="mt-3 max-w-md text-[13.5px] leading-relaxed text-white/60">
+            Everything your marketing needs, in one workspace.
+          </p>
+        </div>
+
+        {/* the wordmark rising out of the light, as on the site's footer */}
+        <div
+          aria-hidden
+          className="absolute inset-x-0 bottom-0 translate-y-[24%] select-none text-center font-display text-[clamp(72px,17vw,210px)] font-semibold leading-none tracking-[0.12em]"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.08) 62%, transparent 90%)",
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+            color: "transparent",
+          }}
+        >
+          MELLOX
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-col items-center justify-between gap-3 px-1 text-[12px] text-muted-foreground sm:flex-row">
+        <span>&copy; {new Date().getFullYear()} Mellox AI</span>
+        <nav
+          aria-label="Footer"
+          className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1"
+        >
+          {FOOT_LINKS.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="underline-offset-4 transition-colors hover:text-foreground hover:underline"
+            >
+              {link.label}
+            </a>
+          ))}
+          <a
+            href="mailto:support@mellox.ai?subject=Mellox%20AI%20support"
+            className="underline-offset-4 transition-colors hover:text-foreground hover:underline"
+          >
+            Help
+          </a>
+        </nav>
+      </div>
+    </footer>
+  );
 }
 
 function formatRelative(iso: string) {

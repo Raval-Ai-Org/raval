@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/integrations/supabase/types";
-import { safeNextPath } from "@/lib/redirects";
+import { authNextPath, safeNextPath, START_PATH } from "@/lib/redirects";
 
 function getSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -46,6 +46,7 @@ export async function proxy(request: NextRequest) {
   const isAuthPage = pathname === "/login" || pathname === "/signup";
   const isProtectedPage =
     pathname === "/projects" ||
+    pathname === START_PATH ||
     pathname === "/app" ||
     pathname.startsWith("/app/") ||
     pathname === "/agency" ||
@@ -65,9 +66,8 @@ export async function proxy(request: NextRequest) {
   if (user && (isRoot || isAuthPage)) {
     // Already signed in: go where the login was headed (an invite link, a
     // workspace page), not always /projects.
-    const next = isAuthPage
-      ? safeNextPath(request.nextUrl.searchParams.get("next"), "/projects")
-      : "/projects";
+    // A website typed on the landing page (?url=) goes straight to its scan.
+    const next = isAuthPage ? authNextPath(request.nextUrl.searchParams) : "/projects";
     return NextResponse.redirect(new URL(next, request.url));
   }
 
@@ -87,6 +87,7 @@ export const config = {
     "/login",
     "/signup",
     "/projects/:path*",
+    "/start",
     "/app/:path*",
     "/agency/:path*",
     "/onboarding/:path*",

@@ -1,16 +1,13 @@
-// One definition of "this visitor gets a static site", shared by the JS gates and mirrored in CSS.
-//
-// Static = prefers-reduced-motion, or a touch-first device (phones, tablets: primary pointer is coarse / cannot hover).
-// Desktops, laptops and touchscreen laptops (primary pointer is a mouse/trackpad) keep the full animated experience.
-// CSS mirrors this exact list in `@media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none)`.
+// The public site is fully animated for every visitor: phones, tablets, laptops, any browser, and whatever the
+// system's "reduce motion" setting says. Nothing here or in the marketing CSS switches an animation off, and
+// src/styles.css leaves #marketing-root out of the app's reduced-motion rules. Do not add a "static site" gate back.
 
-export const STATIC_MOTION_QUERY = "(prefers-reduced-motion: reduce), (pointer: coarse), (hover: none)";
-export const COARSE_QUERY = "(pointer: coarse), (hover: none)";
-
+/** Always false: no visitor gets a static site. Kept so the components that asked keep one place to ask. */
 export function prefersStaticMotion(): boolean {
-  return typeof window !== "undefined" && window.matchMedia(STATIC_MOTION_QUERY).matches;
+  return false;
 }
 
+/** Phones and tablets. Only for input differences (native touch scrolling), never to drop an animation. */
 export function isTouchFirst(): boolean {
-  return typeof window !== "undefined" && window.matchMedia(COARSE_QUERY).matches;
+  return typeof window !== "undefined" && window.matchMedia("(pointer: coarse), (hover: none)").matches;
 }

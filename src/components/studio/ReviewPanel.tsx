@@ -1125,31 +1125,21 @@ export function ReviewPanel({
                 );
               })}
             </div>
-          ) : (
+          ) : platforms[0] ? (
+            // The window header already names the format; only the channel is new here.
             <span
               className={cn(
-                "pointer-events-auto inline-flex h-10 items-center gap-2 px-4 text-xs text-muted-foreground",
+                "pointer-events-auto inline-flex h-10 items-center gap-2 px-4 text-xs font-medium text-foreground",
                 FLOAT,
               )}
             >
-              {platforms[0] ? (
-                <>
-                  {(() => {
-                    const Icon = PLATFORMS[platforms[0]].icon;
-                    return <Icon className="size-3.5 text-foreground" />;
-                  })()}
-                  <span className="font-medium text-foreground">
-                    {PLATFORMS[platforms[0]].label}
-                  </span>{" "}
-                  preview
-                </>
-              ) : (
-                <>
-                  <span className="font-medium text-foreground">{format.label}</span> preview
-                </>
-              )}
+              {(() => {
+                const Icon = PLATFORMS[platforms[0]].icon;
+                return <Icon className="size-3.5" />;
+              })()}
+              {PLATFORMS[platforms[0]].label}
             </span>
-          )}
+          ) : null}
 
           <AnimatePresence initial={false}>
             {!editing ? (

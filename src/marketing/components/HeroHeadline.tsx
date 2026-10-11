@@ -90,7 +90,7 @@ export default function HeroHeadline() {
   const caretOnFirst = animating && c2 === 0;
 
   return (
-    <h1 className="mt-7 max-w-5xl text-center text-[clamp(2.1rem,5.2vw,4.35rem)] font-semibold leading-[1.03] tracking-[-0.035em]">
+    <h1 className="mt-7 max-w-5xl text-center text-[clamp(2.3rem,6vw,5rem)] font-semibold leading-[1.02] tracking-[-0.04em]">
       {/* the stable heading for crawlers and screen readers; the animated copy below is decoration */}
       <span className="sr-only">{HEADLINES[0][0]} {HEADLINES[0][1]}</span>
       <span aria-hidden="true" className="block">

@@ -96,7 +96,7 @@ export const AUDIENCES = [
 
 export const FOUNDERS = [
   {
-    name: "Zain Mudassir Iqbal",
+    name: "Zain Mudassar Iqbal",
     role: "Founder and CEO",
     photo: "/about/zain-new.webp",
     accent: "#cbe960",

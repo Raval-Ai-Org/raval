@@ -3,9 +3,36 @@ import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { safeNextPath } from "@/lib/redirects";
 
-export { safeNextPath } from "@/lib/redirects";
+export { authNextPath, safeNextPath } from "@/lib/redirects";
 
 const AUTH_NEXT_KEY = "mellox:auth-next";
+/** A confirmation email is usually opened in a new tab, which has no sessionStorage. */
+const AUTH_NEXT_TTL_MS = 24 * 60 * 60 * 1000;
+
+function rememberNextPath(next: string) {
+  try {
+    window.sessionStorage.setItem(AUTH_NEXT_KEY, next);
+    if (next === "/projects") window.localStorage.removeItem(AUTH_NEXT_KEY);
+    else window.localStorage.setItem(AUTH_NEXT_KEY, JSON.stringify({ next, at: Date.now() }));
+  } catch {
+    /* storage unavailable: the link's own ?next= still carries it */
+  }
+}
+
+function takeRememberedNextPath(): string | null {
+  try {
+    const fromTab = window.sessionStorage.getItem(AUTH_NEXT_KEY);
+    const raw = window.localStorage.getItem(AUTH_NEXT_KEY);
+    window.sessionStorage.removeItem(AUTH_NEXT_KEY);
+    window.localStorage.removeItem(AUTH_NEXT_KEY);
+    if (fromTab) return fromTab;
+    const saved = raw ? (JSON.parse(raw) as { next?: unknown; at?: unknown }) : null;
+    if (typeof saved?.next !== "string" || typeof saved.at !== "number") return null;
+    return Date.now() - saved.at < AUTH_NEXT_TTL_MS ? saved.next : null;
+  } catch {
+    return null;
+  }
+}
 
 // Workspace / session-scoped localStorage keys cleared on sign-out so the
 // next user never inherits the previous account's context.
@@ -78,6 +105,7 @@ export async function signOutAndRedirect(queryClient?: QueryClient) {
       clearAccountData(window.localStorage);
       clearAccountData(window.sessionStorage);
       window.sessionStorage.removeItem(AUTH_NEXT_KEY);
+      window.localStorage.removeItem(AUTH_NEXT_KEY);
     } catch {}
     emitAppEvent("workspace:changed", { id: null });
     window.location.replace("/");
@@ -86,17 +114,14 @@ export async function signOutAndRedirect(queryClient?: QueryClient) {
 
 export function authCallbackUrl(nextPath = "/projects") {
   const next = safeNextPath(nextPath);
-  if (typeof window !== "undefined") {
-    window.sessionStorage.setItem(AUTH_NEXT_KEY, next);
-  }
+  if (typeof window !== "undefined") rememberNextPath(next);
   return `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
 }
 
 export function consumeStoredNextPath(fallback = "/projects") {
   if (typeof window === "undefined") return fallback;
   const fromQuery = new URLSearchParams(window.location.search).get("next");
-  const fromStorage = window.sessionStorage.getItem(AUTH_NEXT_KEY);
-  window.sessionStorage.removeItem(AUTH_NEXT_KEY);
+  const fromStorage = takeRememberedNextPath();
   return safeNextPath(fromQuery || fromStorage, fallback);
 }
 

@@ -866,17 +866,11 @@
   .wf-copy ul { display: none; }
 }
 
-@media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {
-  .wf [data-reveal] { opacity: 1; transform: none; transition: none; }
-  .wf-ill * { animation: none !important; }
-  .rv, .post { opacity: 1; }
-  .typed, .p-text { width: auto; border: 0; }
-  .g-fg { stroke-dashoffset: 13; }
-}
 
 /* ---------- short screens (landscape phones, small windows) ----------
-   Same idea as the brains section: no pinning, show all five steps stacked. */
-@media (max-height: 620px) {
+   Same idea as the brains section: no pinning, show all five steps stacked. Same low limit, for the same
+   reason. */
+@media (max-height: 499px) {
   .wf-pin {
     height: auto;
   }
@@ -906,4 +900,10 @@
   .wf-card:not(.is-active) .wf-ill * {
     animation-play-state: running !important;
   }
+}
+
+/* A window between that limit and a tall one (a small laptop, a browser side panel): keep the scroll effect and
+   shrink the pinned stage to the window, so the card's bottom edge stays on screen. */
+@media (min-height: 500px) and (max-height: 760px) {
+  .wf-pin { --stage-h: calc(100svh - 104px); }
 }

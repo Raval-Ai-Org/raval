@@ -196,12 +196,4 @@
   .cn-logo { border-radius: 12px; }
 }
 
-@media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {
-  .ap-on i, .ap-steps::after, .ap-steps b, .ap-dot, .ap-feed li, .ap-bar,
-  .cn-pulse, .cn-ring, .cn-node { animation: none; }
-  .ap-steps::after { transform: scaleX(0.34); }
-  .ap-feed li { opacity: 1; }
-  .ap-dot { color: #11170a; background: var(--brand-lime); border-color: var(--brand-lime); }
-  .ap-steps li:not(:first-child) .ap-dot { color: #aab4dc; background: #0d1118; border-color: rgb(255 255 255 / 0.18); }
-  .cn-ring { display: none; }
-}
+

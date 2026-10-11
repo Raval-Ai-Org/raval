@@ -7,7 +7,8 @@ import { motion } from "framer-motion";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Eye, EyeOff, ArrowRight } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
-import { signInWithGoogle, friendlyAuthError, safeNextPath, authCallbackUrl } from "@/lib/auth";
+import { signInWithGoogle, friendlyAuthError, authNextPath, authCallbackUrl } from "@/lib/auth";
+import { siteFromNextPath } from "@/lib/redirects";
 import { ensureAuthWorkspace } from "@/lib/workspaces.functions";
 import { BASE_URL } from "@/lib/seo";
 import { Button } from "@/components/ui/button";
@@ -43,8 +44,11 @@ function SignupPage() {
   const ensureWorkspace = useServerFn(ensureAuthWorkspace);
   const nextPath = useMemo(() => {
     if (typeof window === "undefined") return "/projects";
-    return safeNextPath(new URLSearchParams(window.location.search).get("next"), "/projects");
+    return authNextPath(window.location.search);
   }, []);
+  // Set after mount: the server render has no query to read.
+  const [site, setSite] = useState<string | null>(null);
+  useEffect(() => setSite(siteFromNextPath(nextPath)), [nextPath]);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -140,6 +144,7 @@ function SignupPage() {
   return (
     <AuthShell
       title="Create account"
+      subtitle={site ? `Then we'll scan ${site}.` : undefined}
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}

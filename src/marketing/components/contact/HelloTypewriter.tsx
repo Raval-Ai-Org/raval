@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { COARSE_QUERY, STATIC_MOTION_QUERY } from "@/marketing/lib/motion";
+import { useEffect, useState } from "react";
 
 type Greeting = { text: string; lang: string; rtl?: boolean };
 
@@ -32,18 +31,6 @@ const GREETINGS: Greeting[] = [
 const segmenter = typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter() : null;
 const chars = (s: string) => (segmenter ? Array.from(segmenter.segment(s), (x) => x.segment) : Array.from(s));
 
-function useMedia(query: string) {
-  return useSyncExternalStore(
-    (cb) => {
-      const m = window.matchMedia(query);
-      m.addEventListener("change", cb);
-      return () => m.removeEventListener("change", cb);
-    },
-    () => window.matchMedia(query).matches,
-    () => false,
-  );
-}
-
 const TYPE_MS = 120;
 const ERASE_MS = 60;
 const HOLD_MS = 1300;
@@ -53,14 +40,10 @@ export default function HelloTypewriter() {
   const [index, setIndex] = useState(0);
   const [count, setCount] = useState(GREETINGS[0].text.length);
   const [phase, setPhase] = useState<"typing" | "holding" | "erasing">("holding");
-  const reduced = useMedia(STATIC_MOTION_QUERY);
-  const touchFirst = useMedia(COARSE_QUERY);
-
   const g = GREETINGS[index];
   const parts = chars(g.text);
 
   useEffect(() => {
-    if (reduced) return;
     let t: ReturnType<typeof setTimeout>;
     if (phase === "typing") {
       t =
@@ -79,40 +62,13 @@ export default function HelloTypewriter() {
             }, GAP_MS);
     }
     return () => clearTimeout(t);
-  }, [phase, count, parts.length, reduced]);
-
-  if (touchFirst) {
-    // touch-first devices are fully static: one fixed greeting
-    return (
-      <span className="ct-type" lang={GREETINGS[0].lang}>
-        {GREETINGS[0].text}
-      </span>
-    );
-  }
-  if (reduced) {
-    // no motion: rotate slowly without typing
-    return <StaticRotator />;
-  }
+  }, [phase, count, parts.length]);
 
   return (
     <span className="ct-type" lang={g.lang} dir={g.rtl ? "rtl" : "ltr"}>
       <span className="sr-only">Hello in many languages</span>
       <span aria-hidden="true">{parts.slice(0, count).join("")}</span>
       <span className="ct-caret" aria-hidden="true" />
-    </span>
-  );
-}
-
-function StaticRotator() {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setI((v) => (v + 1) % GREETINGS.length), 2500);
-    return () => clearInterval(t);
-  }, []);
-  const g = GREETINGS[i];
-  return (
-    <span className="ct-type" lang={g.lang} dir={g.rtl ? "rtl" : "ltr"}>
-      {g.text}
     </span>
   );
 }

@@ -1,0 +1,152 @@
+/* ---------- Customers on a dotted map of the United States (CustomerMap.tsx) ----------
+   The heading sits over the top of the map; the map is wider than the screen, so the coasts run off the edges
+   and the country fills the section. The dots are drawn on a canvas by CustomerMap, pins are laid over it in
+   percentages. */
+.cm {
+  --bg: #030405;
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
+  padding: 0 0 20px;
+  background: var(--bg);
+}
+
+.cm-head {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 56px 24px 0;
+  text-align: center;
+}
+.cm-head h2 {
+  font-size: clamp(2.1rem, 3.6vw, 3rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  color: #fff;
+}
+.cm-head p {
+  max-width: 560px;
+  font-size: 18px;
+  line-height: 1.6;
+  letter-spacing: -0.02em;
+  color: #8b97c2;
+}
+
+.cm-map {
+  position: relative;
+  left: 50%;
+  width: 126%;
+  translate: -50% 0;
+}
+.cm-map canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 77 / 41;
+}
+
+/* ---- pins ---- */
+.cm-pins,
+.cm-fade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.cm-pin {
+  position: absolute;
+  translate: -50% -100%;
+  transition: opacity 0.35s ease;
+}
+.cm-pin-pop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: 50% 100%;
+  animation: cm-pin-pop 0.48s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes cm-pin-pop {
+  from { opacity: 0; transform: scale(0.3); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.cm-pin img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  object-fit: cover;
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.5), 0 0 22px rgb(203 233 96 / 0.28);
+}
+/* a ring keeps spreading from the spot the pin stands on */
+.cm-pin::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 18px;
+  height: 18px;
+  translate: -50% 0;
+  border-radius: 50%;
+  border: 1.5px solid #cbe960;
+  animation: cm-ping 1.6s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+@keyframes cm-ping {
+  from { opacity: 0.9; transform: scale(0.3); }
+  to   { opacity: 0; transform: scale(3.4); }
+}
+/* the pin's point */
+.cm-pin i {
+  width: 0;
+  height: 0;
+  margin-top: -2px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 8px solid #fff;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.4));
+}
+
+.cm-fade {
+  background: radial-gradient(62% 44% at 50% 0%, var(--bg) 0%, var(--bg) 34%, transparent 78%);
+}
+
+/* phones and small tablets: the heading comes first, left-aligned, and the whole map fits the screen so no
+   pin falls off the side */
+@media (max-width: 767px) {
+  .cm {
+    padding: 28px 0 16px;
+  }
+  .cm-head {
+    position: relative;
+    align-items: flex-start;
+    padding: 0 20px;
+    text-align: left;
+  }
+  .cm-head h2 {
+    font-size: 34px;
+  }
+  .cm-head p {
+    font-size: 16px;
+  }
+  .cm-map {
+    width: 118%;
+    margin-top: 4px;
+  }
+  .cm-fade {
+    background: linear-gradient(180deg, var(--bg) 0%, transparent 14%);
+  }
+  .cm-pin img {
+    width: 32px;
+    height: 32px;
+    border-width: 2px;
+  }
+  .cm-pin i {
+    border-left-width: 5px;
+    border-right-width: 5px;
+    border-top-width: 6px;
+  }
+}

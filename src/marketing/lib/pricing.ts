@@ -1,13 +1,28 @@
-// Pricing content for /pricing. Source of truth: "Mellox AI Pricing.html".
+// Pricing content for /pricing and the other public pages.
+//
+// Plans, packs and add-ons come from the product's own catalog (src/lib/billing/catalog.ts), so this page can
+// never show a price, an allowance or a feature the product doesn't really sell. Change a number there, not here.
+import {
+  ADDONS as CATALOG_ADDONS,
+  CREDIT_ACTIONS,
+  CREDIT_PACKS as CATALOG_CREDIT_PACKS,
+  PLANS as CATALOG_PLANS,
+  VIDEO_PACKS as CATALOG_VIDEO_PACKS,
+  VIDEO_UNITS_PER_VC,
+  type AddonKey,
+  type PaidPlanId,
+} from "@/lib/billing/catalog";
 import type { Faq } from "./faqs";
 import { NEW_FAQS } from "./whats-new";
 
+const n = (value: number) => Math.round(value).toLocaleString("en-US");
+
 export type Plan = {
-  id: "starter" | "growth" | "agency" | "scale";
+  id: PaidPlanId;
   name: string;
   badge?: string;
   tagline: string;
-  /** Monthly price in USD; null = custom pricing */
+  /** Monthly price in USD. Every plan has one; `null` is kept for the pages that still check for it. */
   monthly: number | null;
   credits: string;
   imagePosts: string;
@@ -21,101 +36,33 @@ export type Plan = {
   featured?: boolean;
 };
 
-export const PLANS: Plan[] = [
-  {
-    id: "starter",
-    name: "Starter",
-    tagline: "For one brand getting started",
-    monthly: 49,
-    credits: "2,000 credits/mo",
-    imagePosts: "~ 66 image posts",
-    articles: "~ 20 premium articles",
-    video: "+ 4 video credits (about 4 Standard videos)",
-    chips: ["1 brand", "2 seats"],
-    cta: "Get Starter",
-    features: [
-      "Brand DNA scan and Brand Kit included",
-      "30 Mellox Pro chat messages, 800 Flash chat",
-      "25 tracked AI prompts, checked weekly",
-      "4 site scans a month, up to 50 pages",
-      "Track 3 competitors",
-      "Weekly Market Brain update and Coach briefing",
-      "Publish up to 100 posts a month",
-      "Autopilot, Claude and ChatGPT over MCP, Slack, Notion and Canva",
-      "Email support",
+/** The paid plans, cheapest first. */
+export const PAID_PLANS: PaidPlanId[] = ["starter", "growth", "agency", "scale"];
+
+export const PLANS: Plan[] = PAID_PLANS.map((id, i) => {
+  const def = CATALOG_PLANS[id];
+  const videos = def.allowances.videoUnits / VIDEO_UNITS_PER_VC;
+  const below = PAID_PLANS[i - 1];
+  return {
+    id,
+    name: def.label,
+    badge: def.badge,
+    tagline: def.fit,
+    monthly: def.priceMonthlyUsd,
+    credits: `${n(def.allowances.credits)} credits/mo`,
+    imagePosts: `~ ${n(Math.floor(def.allowances.credits / CREDIT_ACTIONS.image_post.credits))} image posts`,
+    articles: `~ ${n(Math.floor(def.allowances.credits / CREDIT_ACTIONS.article_premium.credits))} premium articles`,
+    video: `+ ${n(videos)} videos a month`,
+    chips: [
+      `${n(def.brands)} ${def.brands === 1 ? "brand" : "brands"}`,
+      def.seats === null ? "Unlimited seats" : `${n(def.seats)} seats`,
     ],
-  },
-  {
-    id: "growth",
-    name: "Growth",
-    badge: "Most popular",
-    tagline: "For teams publishing every week",
-    monthly: 149,
-    credits: "6,000 credits/mo",
-    imagePosts: "~ 200 image posts",
-    articles: "~ 60 premium articles",
-    video: "+ 12 video credits (about 12 Standard videos)",
-    chips: ["3 brands", "5 seats"],
-    cta: "Get Growth",
-    featuresIntro: "Everything in Starter, plus:",
-    features: [
-      "Pooled credits across brands",
-      "100 tracked prompts across 3 AI engines",
-      "Campaign plans and approval workflows",
-      "Client portal and share links",
-      "CMS fixes for WordPress and Webflow",
-      "1080p, premium and long take video",
-      "Credit rollover on annual plans",
-      "Email support with 24 hour replies",
-    ],
-    featured: true,
-  },
-  {
-    id: "agency",
-    name: "Agency",
-    badge: "Best for agencies",
-    tagline: "For agencies running client brands",
-    monthly: 449,
-    credits: "18,000 credits/mo",
-    imagePosts: "~ 600 image posts",
-    articles: "~ 180 premium articles",
-    video: "+ 40 video credits, pooled across brands",
-    chips: ["10 brands", "Unlimited seats"],
-    cta: "Get Agency",
-    featuresIntro: "Everything in Growth, plus:",
-    features: [
-      "Agency command center, white label ready",
-      "300 pooled tracked prompts",
-      "GitHub PR fixes and GEO Engineer agent",
-      "Cinematic video, 4 renders at once",
-      "Track 30 competitors",
-      "Publish up to 3,000 posts a month",
-      "Priority support and an onboarding call",
-    ],
-  },
-  {
-    id: "scale",
-    name: "Scale",
-    badge: "Custom",
-    tagline: "For networks and large teams",
-    monthly: null,
-    credits: "50,000 credits/mo",
-    imagePosts: "~ 1,600 image posts",
-    articles: "~ 500 premium articles",
-    video: "+ 100 video credits, pooled across brands",
-    chips: ["30+ brands", "Unlimited seats"],
-    cta: "Book a demo",
-    ctaNote: "Talk to us about your roster",
-    featuresIntro: "Everything in Agency, plus:",
-    features: [
-      "1,000 tracked prompts, 90 competitors",
-      "8 video renders at once",
-      "SSO, API access and an SLA",
-      "A dedicated success manager",
-      "Volume pricing built around your roster",
-    ],
-  },
-];
+    cta: `Get ${def.label}`,
+    featuresIntro: below ? `Everything in ${CATALOG_PLANS[below].label}, plus:` : undefined,
+    features: def.highlights,
+    featured: id === "growth",
+  };
+});
 
 export const TRY_FIRST = [
   {
@@ -147,29 +94,33 @@ export const TRY_FIRST = [
   },
 ];
 
-export const CREDIT_PACKS = [
-  { price: 25, credits: 2500, bonus: 0 },
-  { price: 100, credits: 10500, bonus: 5 },
-  { price: 250, credits: 27500, bonus: 10 },
-  { price: 500, credits: 57500, bonus: 15 },
-];
+export const CREDIT_PACKS = CATALOG_CREDIT_PACKS.map((pack) => ({
+  price: pack.usd,
+  credits: pack.credits + pack.bonusCredits,
+  bonus: Math.round((pack.bonusCredits / pack.credits) * 100),
+}));
 
-export const VIDEO_PACKS = [
-  { credits: 10, rate: "$2.90", price: "$29" },
-  { credits: 30, rate: "$2.63", price: "$79" },
-  { credits: 100, rate: "$2.49", price: "$249" },
-];
+export const VIDEO_PACKS = CATALOG_VIDEO_PACKS.map((pack) => {
+  const videos = pack.videoUnits / VIDEO_UNITS_PER_VC;
+  return { credits: videos, rate: `$${(pack.usd / videos).toFixed(2)}`, price: `$${pack.usd}` };
+});
 
-export const ADDONS = [
-  { name: "Extra brand", price: "$39", desc: "One more workspace with its own tracked prompts, credits and weekly Market Brain. Growth, Agency, Scale." },
-  { name: "+100 tracked prompts", price: "$39", desc: "One hundred more prompts, checked weekly on your plan's engines." },
-  { name: "Daily tracking", price: "$149", desc: "Moves 100 prompts from weekly checks to daily checks." },
-  { name: "Google AI Overviews engine", price: "$15", desc: "Adds real AI Overview capture, per 100 prompts." },
-  { name: "Daily Market Brain", price: "$29", desc: "Refreshes market intelligence every day instead of weekly, per brand." },
-  { name: "+200 Mellox Pro messages", price: "$29", desc: "Extra Pro chat for strategy heavy months." },
-  { name: "Extra seat", price: "$15", desc: "One more teammate. Starter and Growth." },
-  { name: "White label domain", price: "$49", desc: "Serve the client portal on your agency's own domain. Agency and Scale." },
-];
+// What each add-on is, in a sentence. Only add-ons the product sells today are listed: one the catalog marks
+// "later" is never promised here.
+const ADDON_TEXT: Record<AddonKey, { name: string; desc: string }> = {
+  extra_brand: { name: "Extra brand", desc: "One more workspace with its own tracked prompts, credits and weekly Market Brain. Growth, Agency, Scale." },
+  prompts_100: { name: "+100 tracked prompts", desc: "One hundred more prompts, checked weekly on your plan's engines." },
+  daily_tracking_100: { name: "Daily tracking", desc: "Moves 100 prompts from weekly checks to daily checks." },
+  ai_overviews_100: { name: "Google AI Overviews engine", desc: "Adds real AI Overview capture, per 100 prompts." },
+  daily_market_brain: { name: "Daily Market Brain", desc: "Refreshes market intelligence every day instead of weekly, per brand." },
+  pro_200: { name: "+200 Mellox Pro messages", desc: "Extra Pro chat for strategy heavy months." },
+  extra_seat: { name: "Extra seat", desc: "One more teammate. Starter and Growth." },
+  white_label_domain: { name: "White label domain", desc: "Serve the client portal on your agency's own domain. Agency and Scale." },
+};
+
+export const ADDONS = Object.values(CATALOG_ADDONS)
+  .filter((addon) => addon.availability === "launch")
+  .map((addon) => ({ ...ADDON_TEXT[addon.key], price: `$${addon.usdPerMonth}` }));
 
 export const CREDIT_MENU: [string, string][] = [
   ["Social post set, up to 3 platforms", "12"],
@@ -207,7 +158,7 @@ export const PRICING_FAQS: Faq[] = [
   },
   {
     q: "Do unused credits roll over?",
-    a: "Not on monthly plans. On annual Growth, Agency and Scale plans, up to one month of your allowance carries over. Credit packs and video packs you buy never expire.",
+    a: "Not on monthly plans. On annual plans, up to one month of your allowance carries over. Credit packs and video packs you buy never expire.",
   },
   {
     q: "What happens when I run out?",
@@ -215,7 +166,7 @@ export const PRICING_FAQS: Faq[] = [
   },
   {
     q: "How does annual billing work?",
-    a: "You pay for 10 months and get 12. Starter is $490 a year, Growth $1,490 and Agency $4,490, which works out to the per month prices shown above.",
+    a: `You pay for 10 months and get 12. ${PLANS.map((p) => `${p.name} is $${n(CATALOG_PLANS[p.id].priceAnnualUsd)} a year`).join(", ")}, which works out to the per month prices shown above.`,
   },
   {
     q: "Can I pause instead of cancelling?",
@@ -226,8 +177,8 @@ export const PRICING_FAQS: Faq[] = [
     a: "Extra brands are $39 a month on Growth, Agency and Scale. Extra seats are $15 a month on Starter and Growth. Agency already has unlimited seats.",
   },
   {
-    q: "What does Contact us include?",
-    a: "Scale is built for networks and large teams: 30 or more brands, 50,000 credits, 100 video credits, SSO, API access, an SLA and a dedicated success manager. Pricing is built around your roster, so we quote it.",
+    q: "What does Scale include?",
+    a: `Scale is for large teams: ${n(CATALOG_PLANS.scale.brands)} brands, ${n(CATALOG_PLANS.scale.allowances.credits)} credits and ${n(CATALOG_PLANS.scale.allowances.videoUnits / VIDEO_UNITS_PER_VC)} videos a month, a dedicated account manager and support with a guaranteed response time. It is $${n(CATALOG_PLANS.scale.priceMonthlyUsd)} a month, or $${n(CATALOG_PLANS.scale.priceAnnualUsd)} a year. SSO and API access are coming soon.`,
   },
   ...NEW_FAQS,
 ];

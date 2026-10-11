@@ -11,7 +11,6 @@ import { setSmoothScroll } from "@/marketing/lib/smooth-scroll";
  * - It keeps the browser's real scroll position, so every scroll-driven section (pinned intro, brains, workflow,
  *   dashboard tilt) keeps working unchanged, just fed with smoother values.
  * - Touch devices keep their native, momentum-based scrolling (it is already smooth and feels right under the finger).
- * - Off for visitors who prefer reduced motion.
  * - Paused while the intro preloader holds the page (`html.mx-lock`).
  * - Scrollable panels (mobile menu, cookie dialog, contents list) opt out with `data-lenis-prevent`.
  * - Performance: the library is not part of the initial JavaScript. It is fetched and started when the browser is idle,
@@ -19,8 +18,6 @@ import { setSmoothScroll } from "@/marketing/lib/smooth-scroll";
  */
 export default function SmoothScroll() {
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (reduce.matches) return;
     // touch / coarse pointers keep native scrolling, so do not even download the library
     if (isTouchFirst()) return;
 
@@ -54,14 +51,7 @@ export default function SmoothScroll() {
       observer.observe(root, { attributes: true, attributeFilter: ["class"] });
       syncLock();
 
-      // if the visitor turns on reduced motion while the page is open, hand scrolling back to the browser
-      const onReduce = () => {
-        if (reduce.matches) lenis.destroy();
-      };
-      reduce.addEventListener("change", onReduce);
-
       teardown = () => {
-        reduce.removeEventListener("change", onReduce);
         observer.disconnect();
         cancelAnimationFrame(raf);
         setSmoothScroll(null);

@@ -11,6 +11,9 @@ import SectionHead from "@/marketing/components/pricing/SectionHead";
 import { AUDIENCES, BRAINS, FOUNDERS, PRINCIPLES, STACK_REPLACED, STATS, STEPS } from "@/marketing/lib/about";
 import "@/marketing/components/pricing/pricing.css";
 import "@/marketing/components/about/about.css";
+import Founders from "@/marketing/components/about/Founders";
+import JsonLd from "@/marketing/components/JsonLd";
+import { founderPersonLd } from "@/marketing/lib/founder-ld";
 import CtaBand from "@/marketing/components/cta/CtaBand";
 import WhatsNew from "@/marketing/components/whats-new/WhatsNew";
 
@@ -43,6 +46,24 @@ export default function AboutPage() {
       </header>
 
       <main>
+        {/* Founders: first, so the people behind Mellox are the first thing on the page */}
+        <section id="founders" className="px-section ab-founders-first">
+          <div className="px-inner">
+            <SectionHead
+              icon={<UserRound size={32} strokeWidth={1.4} aria-hidden="true" />}
+              label="The founders"
+              title="Meet the people behind Mellox."
+              blurb="A founder and a co-founder building the AI marketing team they wanted for their own brands."
+              wide
+            />
+            <Founders />
+            {/* who the founders are and which accounts are theirs, for search and AI engines */}
+            <JsonLd
+              data={{ "@context": "https://schema.org", "@graph": FOUNDERS.map(founderPersonLd) }}
+            />
+          </div>
+        </section>
+
         {/* Mission */}
         <section id="mission" className="px-section">
           <div className="px-inner">
@@ -100,42 +121,6 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* Founders */}
-        <section id="founders" className="px-section">
-          <div className="px-inner">
-            <SectionHead
-              icon={<UserRound size={32} strokeWidth={1.4} aria-hidden="true" />}
-              label="The founders"
-              title="Meet the people behind Mellox."
-              blurb="A founder and a co-founder building the AI marketing team they wanted for their own brands."
-              wide
-            />
-            <div className="ab-founders">
-              {FOUNDERS.map((f, i) => (
-                <article
-                  key={f.name}
-                  className="ab-founder"
-                  data-reveal
-                  style={{ transitionDelay: `${i * 100}ms`, "--accent": f.accent } as React.CSSProperties}
-                >
-                  <div className="ab-photo">
-                    <Image
-                      src={f.photo}
-                      alt={`${f.name}, ${f.role} of Mellox`}
-                      width={800}
-                      height={1000}
-                      sizes="(max-width: 700px) 90vw, 560px"
-                    />
-                    <div className="ab-photo-cap">
-                      <span className="ab-role">{f.role}</span>
-                      <h3>{f.name}</h3>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
 
         {/* Brains */}
         <section id="brains" className="px-section">

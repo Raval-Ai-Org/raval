@@ -3,7 +3,8 @@
 /**
  * The product showcase on the left of the sign-in screens.
  *
- * A light stage that plays four short scenes of Mellox at work, drawn as
+ * A dark aurora stage, in the same look as the public site's hero, that plays
+ * four short scenes of Mellox at work, drawn as
  * interface cards rather than a video: write a post on brand, get found in AI
  * answers, schedule the week, see what grew. Each scene runs ~6.5s and hands
  * over with a soft blur, the way Apple and Lovable present product.
@@ -15,6 +16,7 @@
 import { AnimatePresence, animate, motion, type TargetAndTransition } from "framer-motion";
 import { useEffect, useState, type ReactNode } from "react";
 import { BrandLogo, type BrandKey } from "@/components/brand/BrandLogo";
+import { AURORA, MelloxAurora } from "@/components/brand/MelloxAurora";
 import { ArrowUp, Calendar, Check, Sparkles, TrendingUp } from "@/components/icons";
 import { ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -22,11 +24,17 @@ import { cn } from "@/lib/utils";
 const SCENE_MS = 6500;
 const EASE = [...ease.emphasized] as [number, number, number, number];
 
-/* Fixed light palette: the stage is light in both app themes. */
-const INK = "text-[#15190f]";
-const MUTED = "text-[#6b7263]";
-const MOSS = "#2f6b08";
-const LIME = "#d2e861";
+/* The public site's dark palette (see MelloxAurora). Dark in both app themes. */
+const INK = "text-white";
+const MUTED = "text-white/55";
+const {
+  lime: LIME,
+  onLime: ON_LIME,
+  purple: PURPLE,
+  blue: BLUE,
+  orange: ORANGE,
+  sky: SKY,
+} = AURORA;
 
 type SceneProps = { reduce: boolean };
 
@@ -51,9 +59,10 @@ export function AuthShowcase({ reduce }: { reduce: boolean }) {
   return (
     <div
       aria-hidden
-      className="absolute inset-3 isolate overflow-hidden rounded-[28px] bg-[#f3f5ec] text-[#15190f] ring-1 ring-inset ring-black/[0.05]"
+      className="absolute inset-3 isolate overflow-hidden rounded-[28px] text-white ring-1 ring-inset ring-white/[0.08]"
+      style={{ backgroundColor: SKY }}
     >
-      <Backdrop reduce={reduce} />
+      <MelloxAurora reduce={reduce} />
 
       <div className="relative flex h-full items-center justify-center px-10 pb-16">
         <motion.div
@@ -95,71 +104,32 @@ export function AuthShowcase({ reduce }: { reduce: boolean }) {
 /* Stage                                                               */
 /* ------------------------------------------------------------------ */
 
-function Backdrop({ reduce }: { reduce: boolean }) {
-  const drift = (x: number[], y: number[], seconds: number) =>
-    reduce
-      ? {}
-      : {
-          animate: { x, y },
-          transition: { duration: seconds, repeat: Infinity, ease: "easeInOut" as const },
-        };
-  return (
-    <>
-      <motion.div
-        className="absolute -left-[25%] -top-[30%] h-[80%] w-[80%] rounded-full"
-        style={{ background: `radial-gradient(closest-side, ${LIME}73, transparent)` }}
-        {...drift([0, 50, 0], [0, 30, 0], 22)}
-      />
-      <motion.div
-        className="absolute -bottom-[30%] -right-[25%] h-[85%] w-[85%] rounded-full"
-        style={{ background: "radial-gradient(closest-side, #cfe7c2b3, transparent)" }}
-        {...drift([0, -40, 0], [0, -30, 0], 28)}
-      />
-      <div
-        className="absolute inset-0 opacity-70"
-        style={{
-          backgroundImage: "radial-gradient(rgba(21,25,15,0.09) 1px, transparent 1px)",
-          backgroundSize: "20px 20px",
-          maskImage: "radial-gradient(ellipse 65% 55% at 50% 45%, #000 20%, transparent 80%)",
-          WebkitMaskImage: "radial-gradient(ellipse 65% 55% at 50% 45%, #000 20%, transparent 80%)",
-        }}
-      />
-      <div
-        className="absolute inset-0"
-        style={{
-          background: "radial-gradient(45% 35% at 50% 45%, rgba(255,255,255,0.75), transparent)",
-        }}
-      />
-    </>
-  );
-}
-
 function Progress({ index, reduce }: { index: number; reduce: boolean }) {
   return (
     <div className="absolute inset-x-0 bottom-8 flex justify-center">
-      <div className="flex items-center gap-5 rounded-full bg-white/70 px-5 py-2.5 shadow-[0_1px_2px_rgba(16,24,8,0.05),0_8px_24px_-12px_rgba(16,24,8,0.2)] ring-1 ring-black/[0.05] backdrop-blur">
+      <div className="flex items-center gap-5 rounded-full bg-[#0b0d0e]/80 px-5 py-2.5 shadow-[0_18px_50px_-22px_rgba(0,0,0,0.9)] ring-1 ring-white/10 backdrop-blur-xl">
         {SCENES.map((s, i) => (
           <div key={s.label} className="flex w-[64px] flex-col items-center gap-1.5">
             <span
               className={cn(
                 "text-[11.5px] font-medium transition-colors duration-500",
-                i === index ? INK : "text-[#9aa092]",
+                i === index ? INK : "text-white/40",
               )}
             >
               {s.label}
             </span>
-            <span className="relative h-[3px] w-full overflow-hidden rounded-full bg-black/[0.07]">
+            <span className="relative h-[3px] w-full overflow-hidden rounded-full bg-white/10">
               {i === index && (
                 <motion.span
                   key={index}
                   className="absolute inset-y-0 left-0 rounded-full"
-                  style={{ background: MOSS }}
+                  style={{ background: LIME }}
                   initial={{ width: reduce ? "100%" : "0%" }}
                   animate={{ width: "100%" }}
                   transition={{ duration: reduce ? 0 : SCENE_MS / 1000, ease: "linear" }}
                 />
               )}
-              {i < index && <span className="absolute inset-0 rounded-full bg-black/[0.18]" />}
+              {i < index && <span className="absolute inset-0 rounded-full bg-white/30" />}
             </span>
           </div>
         ))}
@@ -176,8 +146,9 @@ function Card({ className, children }: { className?: string; children: ReactNode
   return (
     <div
       className={cn(
-        "rounded-[20px] bg-white ring-1 ring-black/[0.06]",
-        "shadow-[0_1px_2px_rgba(16,24,8,0.04),0_20px_44px_-16px_rgba(16,24,8,0.2)]",
+        // dark glass, like the website bar in the site's hero
+        "rounded-[20px] bg-[#0b0d0e]/85 ring-1 ring-white/10 backdrop-blur-xl",
+        "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_24px_60px_-24px_rgba(0,0,0,0.95)]",
         className,
       )}
     >
@@ -255,7 +226,11 @@ function CountUp({
 
 function Logo({ name, size = 14 }: { name: BrandKey; size?: number }) {
   return (
-    <span className="grid size-7 place-items-center rounded-full bg-white ring-1 ring-black/[0.07] shadow-[0_2px_6px_-2px_rgba(16,24,8,0.15)]">
+    // Brand marks keep their own colours, so they sit on a small light disc.
+    <span
+      className="grid shrink-0 place-items-center rounded-full bg-white/95 ring-1 ring-white/20"
+      style={{ width: size * 2, height: size * 2 }}
+    >
       <BrandLogo name={name} brand size={size} />
     </span>
   );
@@ -278,7 +253,7 @@ function CreateScene({ reduce }: SceneProps) {
         <Card className="flex items-center gap-3 p-2.5 pl-3.5">
           <span
             className="grid size-7 shrink-0 place-items-center rounded-full"
-            style={{ background: `${LIME}66`, color: MOSS }}
+            style={{ background: `${LIME}26`, color: LIME }}
           >
             <Sparkles size={15} />
           </span>
@@ -286,19 +261,20 @@ function CreateScene({ reduce }: SceneProps) {
             {typed}
             {!done && (
               <motion.span
-                className="ml-px inline-block h-[15px] w-[1.5px] translate-y-[3px] bg-[#15190f]"
+                className="ml-px inline-block h-[15px] w-[1.5px] translate-y-[3px] bg-white"
                 animate={{ opacity: [1, 0, 1] }}
                 transition={{ duration: 0.9, repeat: Infinity }}
               />
             )}
           </p>
           <motion.span
-            className="grid size-8 shrink-0 place-items-center rounded-full text-white"
+            className="grid size-8 shrink-0 place-items-center rounded-full"
+            style={{ color: ON_LIME }}
             animate={
               reduce
-                ? { backgroundColor: "#15190f" }
+                ? { backgroundColor: LIME }
                 : {
-                    backgroundColor: done ? "#15190f" : "#c9cdc2",
+                    backgroundColor: done ? LIME : "#3a3f42",
                     scale: done ? [1, 0.86, 1] : 1,
                   }
             }
@@ -317,13 +293,13 @@ function CreateScene({ reduce }: SceneProps) {
               style={{ background: `linear-gradient(135deg, ${LIME}, #7fb33a)` }}
             />
             <div className="flex-1 space-y-1.5">
-              <div className="h-2 w-24 rounded-full bg-[#e6e9df]" />
-              <div className="h-2 w-14 rounded-full bg-[#eff1ea]" />
+              <div className="h-2 w-24 rounded-full bg-white/[0.14]" />
+              <div className="h-2 w-14 rounded-full bg-white/[0.08]" />
             </div>
             <motion.span
               {...pop(reduce, 4.1)}
               className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium"
-              style={{ background: `${LIME}59`, color: MOSS }}
+              style={{ background: `${LIME}26`, color: LIME }}
             >
               <Check size={12} /> On brand
             </motion.span>
@@ -343,7 +319,7 @@ function CreateScene({ reduce }: SceneProps) {
             ))}
           </p>
 
-          <div className="mt-3 flex items-center gap-1.5 border-t border-black/[0.05] pt-3">
+          <div className="mt-3 flex items-center gap-1.5 border-t border-white/[0.08] pt-3">
             {(["instagram", "linkedin", "x", "tiktok"] as BrandKey[]).map((p, i) => (
               <motion.span key={p} {...pop(reduce, 3.7 + i * 0.1)}>
                 <Logo name={p} size={13} />
@@ -374,28 +350,30 @@ function PostArt({ reduce }: { reduce: boolean }) {
   return (
     <div
       className="relative mt-3 aspect-[16/8] overflow-hidden rounded-[14px]"
-      style={{ background: "linear-gradient(140deg, #eef5d6 0%, #dcebc0 45%, #f6efd9 100%)" }}
+      style={{
+        background: `radial-gradient(70% 90% at 50% 110%, ${LIME}40, transparent 70%), linear-gradient(140deg, #0a1410 0%, #0d1118 55%, #140f1c 100%)`,
+      }}
     >
       <motion.div
         className="absolute -left-6 top-6 size-28 rounded-full"
-        style={{ background: `radial-gradient(circle at 35% 35%, #f4f9e1, ${LIME})` }}
+        style={{ background: `radial-gradient(circle at 35% 35%, #eef8c4, ${LIME} 55%, #5e8a1c)` }}
         {...float([0, -8, 0], 5)}
       />
       <motion.div
         className="absolute right-10 top-4 size-20 rounded-[28%] rotate-12"
-        style={{ background: "linear-gradient(160deg, #ffffff, #cfe3b0)" }}
+        style={{ background: `linear-gradient(160deg, #d9c2ec, ${PURPLE} 55%, #5b3a7c)` }}
         {...float([0, 7, 0], 6)}
       />
       <motion.div
         className="absolute bottom-[-18px] left-[42%] h-20 w-32 rounded-full"
-        style={{ background: "linear-gradient(90deg, #9cc45a, #6d9f2c)", opacity: 0.85 }}
+        style={{ background: `linear-gradient(90deg, #3d7bf0, ${BLUE})`, opacity: 0.85 }}
         {...float([0, -5, 0], 7)}
       />
       {!reduce && (
         <motion.div
           className="absolute inset-y-0 w-1/3"
           style={{
-            background: "linear-gradient(100deg, transparent, rgba(255,255,255,0.55), transparent)",
+            background: "linear-gradient(100deg, transparent, rgba(255,255,255,0.22), transparent)",
           }}
           initial={{ x: "-120%" }}
           animate={{ x: "360%" }}
@@ -431,7 +409,7 @@ function VisibilityScene({ reduce }: SceneProps) {
             <motion.span
               {...pop(reduce, 2.2)}
               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
-              style={{ background: `${LIME}59`, color: MOSS }}
+              style={{ background: `${LIME}26`, color: LIME }}
             >
               <TrendingUp size={12} /> +24
             </motion.span>
@@ -443,10 +421,17 @@ function VisibilityScene({ reduce }: SceneProps) {
                 <defs>
                   <linearGradient id="auth-gauge" x1="0" y1="0" x2="1" y2="1">
                     <stop offset="0%" stopColor={LIME} />
-                    <stop offset="100%" stopColor="#5e9a1c" />
+                    <stop offset="100%" stopColor="#7fb33a" />
                   </linearGradient>
                 </defs>
-                <circle cx="58" cy="58" r={R} fill="none" stroke="#eef0e8" strokeWidth="9" />
+                <circle
+                  cx="58"
+                  cy="58"
+                  r={R}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.09)"
+                  strokeWidth="9"
+                />
                 <motion.circle
                   cx="58"
                   cy="58"
@@ -478,23 +463,23 @@ function VisibilityScene({ reduce }: SceneProps) {
                   {...enter(reduce, 0.5 + i * 0.14, { opacity: 0, x: 10 })}
                   className="flex items-center gap-2.5"
                 >
-                  <BrandLogo name={e.key} brand size={14} />
+                  <Logo name={e.key} size={11} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
                       <span className={cn("text-[11.5px] font-medium", INK)}>{e.name}</span>
                       <motion.span {...pop(reduce, 1.9 + i * 0.14)}>
                         <span
-                          className="grid size-3.5 place-items-center rounded-full text-white"
-                          style={{ background: MOSS }}
+                          className="grid size-3.5 place-items-center rounded-full"
+                          style={{ background: LIME, color: ON_LIME }}
                         >
                           <Check size={9} />
                         </span>
                       </motion.span>
                     </div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#eef0e8]">
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.09]">
                       <motion.div
                         className="h-full rounded-full"
-                        style={{ background: `linear-gradient(90deg, ${LIME}, #6ea62a)` }}
+                        style={{ background: `linear-gradient(90deg, #7fb33a, ${LIME})` }}
                         initial={{ width: reduce ? `${e.value}%` : "0%" }}
                         animate={{ width: `${e.value}%` }}
                         transition={{ delay: 0.7 + i * 0.14, duration: 1.2, ease: EASE }}
@@ -515,7 +500,7 @@ function VisibilityScene({ reduce }: SceneProps) {
         <Card className="flex items-center gap-3 p-3">
           <span
             className="grid size-8 shrink-0 place-items-center rounded-xl"
-            style={{ background: `${LIME}59`, color: MOSS }}
+            style={{ background: `${LIME}26`, color: LIME }}
           >
             <Sparkles size={15} />
           </span>
@@ -524,7 +509,8 @@ function VisibilityScene({ reduce }: SceneProps) {
             <p className={cn("truncate text-[11px]", MUTED)}>Fix ready · 3 pages</p>
           </div>
           <motion.span
-            className="rounded-full bg-[#15190f] px-3 py-1.5 text-[11px] font-semibold text-white"
+            className="rounded-full px-3 py-1.5 text-[11px] font-semibold"
+            style={{ background: LIME, color: ON_LIME }}
             animate={reduce ? undefined : { scale: [1, 1, 0.92, 1] }}
             transition={{ delay: 4.4, duration: 0.5, times: [0, 0.4, 0.7, 1] }}
           >
@@ -542,14 +528,14 @@ function VisibilityScene({ reduce }: SceneProps) {
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 const POSTS: { day: number; slot: number; key: BrandKey; tint: string }[] = [
-  { day: 0, slot: 0, key: "instagram", tint: "#fde7f0" },
-  { day: 1, slot: 1, key: "linkedin", tint: "#e3effb" },
-  { day: 2, slot: 0, key: "x", tint: "#eceeea" },
-  { day: 2, slot: 2, key: "tiktok", tint: "#e6f7f5" },
-  { day: 3, slot: 1, key: "instagram", tint: "#fde7f0" },
-  { day: 4, slot: 0, key: "linkedin", tint: "#e3effb" },
-  { day: 5, slot: 2, key: "youtube", tint: "#fde8e6" },
-  { day: 6, slot: 1, key: "x", tint: "#eceeea" },
+  { day: 0, slot: 0, key: "instagram", tint: `${PURPLE}38` },
+  { day: 1, slot: 1, key: "linkedin", tint: `${BLUE}47` },
+  { day: 2, slot: 0, key: "x", tint: "rgba(255,255,255,0.1)" },
+  { day: 2, slot: 2, key: "tiktok", tint: `${LIME}2e` },
+  { day: 3, slot: 1, key: "instagram", tint: `${PURPLE}38` },
+  { day: 4, slot: 0, key: "linkedin", tint: `${BLUE}47` },
+  { day: 5, slot: 2, key: "youtube", tint: `${ORANGE}3d` },
+  { day: 6, slot: 1, key: "x", tint: "rgba(255,255,255,0.1)" },
 ];
 
 function PublishScene({ reduce }: SceneProps) {
@@ -562,9 +548,9 @@ function PublishScene({ reduce }: SceneProps) {
               <Calendar size={15} /> This week
             </span>
             <div className="flex gap-1">
-              <span className="size-1.5 rounded-full bg-[#dfe2d8]" />
-              <span className="size-1.5 rounded-full bg-[#dfe2d8]" />
-              <span className="size-1.5 rounded-full bg-[#dfe2d8]" />
+              <span className="size-1.5 rounded-full bg-white/20" />
+              <span className="size-1.5 rounded-full bg-white/20" />
+              <span className="size-1.5 rounded-full bg-white/20" />
             </div>
           </div>
 
@@ -575,23 +561,23 @@ function PublishScene({ reduce }: SceneProps) {
                 <span
                   className={cn(
                     "grid size-6 place-items-center rounded-full text-[11px] font-semibold",
-                    i === 2 ? "bg-[#15190f] text-white" : INK,
+                    i === 2 ? "bg-[#cbe960] text-[#11170a]" : INK,
                   )}
                 >
                   {12 + i}
                 </span>
-                <div className="relative grid h-[150px] w-full grid-rows-3 gap-1.5 rounded-xl bg-[#f6f7f2] p-1">
+                <div className="relative grid h-[150px] w-full grid-rows-3 gap-1.5 rounded-xl bg-white/[0.04] p-1">
                   {[0, 1, 2].map((slot) => {
                     const post = POSTS.find((p) => p.day === i && p.slot === slot);
                     const order = post ? POSTS.indexOf(post) : 0;
                     return (
                       <div
                         key={slot}
-                        className="rounded-lg border border-dashed border-black/[0.06]"
+                        className="rounded-lg border border-dashed border-white/[0.09]"
                       >
                         {post && (
                           <motion.div
-                            className="flex h-full flex-col items-center justify-center gap-1 rounded-lg ring-1 ring-black/[0.05] shadow-[0_4px_10px_-4px_rgba(16,24,8,0.18)]"
+                            className="flex h-full flex-col items-center justify-center gap-1 rounded-lg ring-1 ring-white/10 shadow-[0_6px_14px_-6px_rgba(0,0,0,0.8)]"
                             style={{ background: post.tint }}
                             {...(reduce
                               ? { initial: false as const }
@@ -606,8 +592,8 @@ function PublishScene({ reduce }: SceneProps) {
                                   },
                                 })}
                           >
-                            <BrandLogo name={post.key} brand size={13} />
-                            <span className="h-1 w-3/5 rounded-full bg-black/[0.12]" />
+                            <Logo name={post.key} size={10} />
+                            <span className="h-1 w-3/5 rounded-full bg-white/20" />
                           </motion.div>
                         )}
                       </div>
@@ -624,10 +610,10 @@ function PublishScene({ reduce }: SceneProps) {
         {...enter(reduce, 3.4, { opacity: 0, y: 18, scale: 0.95 }, 0.6)}
         className="absolute -bottom-6 left-1/2 z-10 -translate-x-1/2"
       >
-        <div className="flex items-center gap-2.5 whitespace-nowrap rounded-full bg-[#15190f] py-2 pl-2 pr-4 text-[12.5px] font-medium text-white shadow-[0_14px_30px_-10px_rgba(16,24,8,0.5)]">
+        <div className="flex items-center gap-2.5 whitespace-nowrap rounded-full bg-[#14181a] py-2 pl-2 pr-4 text-[12.5px] font-medium text-white ring-1 ring-white/15 shadow-[0_14px_30px_-10px_rgba(0,0,0,0.9)]">
           <span
             className="grid size-6 place-items-center rounded-full"
-            style={{ background: LIME, color: "#15190f" }}
+            style={{ background: LIME, color: ON_LIME }}
           >
             <Check size={13} />
           </span>
@@ -668,7 +654,7 @@ function GrowScene({ reduce }: SceneProps) {
             <motion.span
               {...pop(reduce, 1.9)}
               className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11.5px] font-semibold"
-              style={{ background: `${LIME}59`, color: MOSS }}
+              style={{ background: `${LIME}26`, color: LIME }}
             >
               <TrendingUp size={12} /> +38%
             </motion.span>
@@ -682,7 +668,15 @@ function GrowScene({ reduce }: SceneProps) {
               </linearGradient>
             </defs>
             {[35, 70, 105].map((y) => (
-              <line key={y} x1="0" x2="320" y1={y} y2={y} stroke="#eef0e8" strokeDasharray="3 4" />
+              <line
+                key={y}
+                x1="0"
+                x2="320"
+                y1={y}
+                y2={y}
+                stroke="rgba(255,255,255,0.09)"
+                strokeDasharray="3 4"
+              />
             ))}
             <motion.path
               d={AREA}
@@ -694,7 +688,7 @@ function GrowScene({ reduce }: SceneProps) {
             <motion.path
               d={LINE}
               fill="none"
-              stroke="#4f8a14"
+              stroke={LIME}
               strokeWidth="2.5"
               strokeLinecap="round"
               initial={{ pathLength: reduce ? 1 : 0 }}
@@ -714,7 +708,7 @@ function GrowScene({ reduce }: SceneProps) {
                   transition={{ delay: 2.1, duration: 1.6, repeat: Infinity }}
                 />
               )}
-              <circle cx="320" cy="14" r="5" fill="#fff" stroke="#4f8a14" strokeWidth="2.5" />
+              <circle cx="320" cy="14" r="5" fill="#0b0d0e" stroke={LIME} strokeWidth="2.5" />
             </motion.g>
           </svg>
         </Card>
@@ -775,7 +769,10 @@ function MiniStat({
             <motion.span
               key={i}
               className="w-[5px] origin-bottom rounded-full"
-              style={{ height: `${h}%`, background: i === bars.length - 1 ? "#4f8a14" : "#dfe8cc" }}
+              style={{
+                height: `${h}%`,
+                background: i === bars.length - 1 ? LIME : "rgba(255,255,255,0.16)",
+              }}
               initial={{ scaleY: reduce ? 1 : 0 }}
               animate={{ scaleY: 1 }}
               transition={{ delay: delay + 0.3 + i * 0.07, duration: 0.5, ease: EASE }}

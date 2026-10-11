@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { FOUNDERS, founderPath } from "@/marketing/lib/about";
 import { getPosts } from "@/marketing/lib/blog";
 import { RELEASES } from "@/marketing/lib/changelog";
 import { FEATURES } from "@/marketing/lib/features";
@@ -55,6 +56,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: p.changeFrequency,
       priority: p.priority,
     })),
+    // a founder's own page: the first-party answer to a search for their name
+    ...FOUNDERS.flatMap((f) =>
+      f.profile
+        ? [
+            {
+              url: `${SITE_URL}${founderPath(f.profile.slug)}`,
+              lastModified: productDate,
+              changeFrequency: "monthly" as const,
+              priority: 0.7,
+            },
+          ]
+        : [],
+    ),
     ...FEATURES.map((f) => ({
       url: `${SITE_URL}/features/${f.slug}`,
       lastModified: productDate,

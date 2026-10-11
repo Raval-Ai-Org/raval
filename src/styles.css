@@ -547,11 +547,13 @@
 
 /* ═══ Reduced motion — authoritative override ═══
  * Kills every non-essential animation, transition, transform, and
- * scroll behavior. Runs LAST so nothing below can re-enable motion. */
+ * scroll behavior. Runs LAST so nothing below can re-enable motion.
+ * The public site (#marketing-root) is left out on purpose: it is always
+ * fully animated, on every device. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  :where(:not(#marketing-root, #marketing-root *)),
+  :where(:not(#marketing-root, #marketing-root *))::before,
+  :where(:not(#marketing-root, #marketing-root *))::after {
     animation-duration: 1ms !important;
     animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
@@ -562,8 +564,12 @@
   }
   /* Utility hover transforms (for example buttons and tabs) must also
      respect reduced motion, even when they do not use a named hover class. */
-  :where(button, a, [role="button"], [role="tab"], [role="menuitem"], summary):hover,
-  :where(button, a, [role="button"], [role="tab"], [role="menuitem"], summary):active {
+  :where(button, a, [role="button"], [role="tab"], [role="menuitem"], summary):where(
+      :not(#marketing-root *)
+    ):hover,
+  :where(button, a, [role="button"], [role="tab"], [role="menuitem"], summary):where(
+      :not(#marketing-root *)
+    ):active {
     transform: none !important;
   }
   /* Suppress ambient / decorative loops entirely. */
@@ -3180,11 +3186,11 @@ html {
   color: hsl(var(--foreground));
 }
 
-/* Prefer-reduced-motion — kill everything decorative */
+/* Prefer-reduced-motion — kill everything decorative (not the public site) */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  :where(:not(#marketing-root, #marketing-root *)),
+  :where(:not(#marketing-root, #marketing-root *))::before,
+  :where(:not(#marketing-root, #marketing-root *))::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
@@ -3319,10 +3325,10 @@ button[aria-busy="true"] {
 
 /* Reduced motion — kill shake/press ring/shimmer */
 @media (prefers-reduced-motion: reduce) {
-  input,
-  textarea,
-  select,
-  button {
+  input:where(:not(#marketing-root *)),
+  textarea:where(:not(#marketing-root *)),
+  select:where(:not(#marketing-root *)),
+  button:where(:not(#marketing-root *)) {
     animation: none !important;
   }
 }
@@ -3579,16 +3585,18 @@ svg [data-series="bar"]:hover rect:not(:hover) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  a,
-  button,
-  [role="button"],
-  [role="menuitem"],
-  [role="tab"],
-  [role="option"],
-  summary,
-  .interactive,
-  .icon-tap,
-  .surface-hover {
+  :is(
+      a,
+      button,
+      [role="button"],
+      [role="menuitem"],
+      [role="tab"],
+      [role="option"],
+      summary,
+      .interactive,
+      .icon-tap,
+      .surface-hover
+    ):where(:not(#marketing-root *)) {
     transition: none !important;
     transform: none !important;
   }

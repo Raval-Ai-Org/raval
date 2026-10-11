@@ -65,7 +65,7 @@ export default function PricingPage() {
 
       <main>
         <PricingPlans />
-        <WhatsNew title="New in Mellox" blurb="Included on the paid plans: Autopilot, Claude and ChatGPT over MCP, Slack and Notion, and Canva editing." />
+        <WhatsNew title="New in Mellox" blurb="Autopilot on Growth and up, plus Claude and ChatGPT over MCP, Slack and Notion, and Canva editing." />
         <PricingTry />
         <PricingTopups />
         <PricingMenu />

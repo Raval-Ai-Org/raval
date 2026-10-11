@@ -52,6 +52,9 @@ export default function MotionGate() {
     } else {
       window.addEventListener("load", afterLoad, { once: true });
       cleanups.push(() => window.removeEventListener("load", afterLoad));
+      // A slow phone or connection can take a long time to reach "load". Never leave the hero frozen that long.
+      const late = window.setTimeout(whenUnlocked, 4000);
+      cleanups.push(() => clearTimeout(late));
     }
 
     // pause the hero backdrop while it is off screen

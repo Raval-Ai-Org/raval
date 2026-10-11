@@ -1,4 +1,4 @@
-import { BRAINS, FOUNDERS, PRINCIPLES, STACK_REPLACED, STATS, STEPS } from "./about";
+import { BRAINS, FOUNDERS, PRINCIPLES, STACK_REPLACED, STATS, STEPS, founderPath } from "./about";
 import type { PostIndexEntry } from "./blog-index";
 import { FAQS as INTEGRATION_FAQS, GROUPS } from "./integrations";
 import { DOC_FAQS } from "./docs";
@@ -81,6 +81,10 @@ export const QUICK_ANSWERS: { q: string; a: string }[] = [
     q: "Can I use Mellox inside Claude or ChatGPT?",
     a: "Yes. Mellox connects to Claude and ChatGPT over MCP, and also connects to Slack and Notion.",
   },
+  {
+    q: "Who founded Mellox AI?",
+    a: `${FOUNDERS.map((f) => `${f.name} (${f.role})`).join(" and ")}.`,
+  },
 ];
 
 export function buildLlmsTxt(posts: PostIndexEntry[]): string {
@@ -134,6 +138,9 @@ export function buildLlmsTxt(posts: PostIndexEntry[]): string {
 
   add("## Company");
   add(`- [About](${abs("/about")}): Who builds Mellox, what it believes and who it is for.`);
+  for (const f of FOUNDERS) {
+    if (f.profile) add(`- [${f.name}](${abs(founderPath(f.profile.slug))}): ${f.profile.summary}`);
+  }
   add(`- [Security and trust](${abs("/security")}): What stays private, what customers control and who to ask.`);
   add(`- [Contact](${abs("/contact")}): Support, press and partnership enquiries.`);
   add();
@@ -183,6 +190,40 @@ export function buildLlmsFullTxt(posts: PostIndexEntry[]): string {
   add();
   add(`**Founders:** ${FOUNDERS.map((f) => `${f.name} (${f.role})`).join("; ")}.`);
   add();
+  // each founder in full, so an assistant asked about the person can answer from here
+  for (const f of FOUNDERS) {
+    const p = f.profile;
+    add(`### ${f.name}, ${f.role} (${abs(p ? founderPath(p.slug) : "/about")})`);
+    add(p ? p.summary : f.bio);
+    add();
+    if (p) {
+      add(
+        `Full name: ${p.fullName}. Also known as: ${p.alsoKnownAs.join(", ")}.${p.country ? ` Country: ${p.country}.` : ""}`,
+      );
+      add();
+      for (const para of p.story) {
+        add(para);
+        add();
+      }
+      if (p.vision) {
+        add(`Vision: ${p.vision}`);
+        add();
+      }
+      if (p.quote) {
+        add(`In ${f.name.split(" ")[0]}'s words: "${p.quote}"`);
+        add();
+      }
+      add(`Expertise: ${p.expertise.join("; ")}.`);
+      add();
+    }
+    if (f.recognition.length) {
+      add(`Recognition: ${f.recognition.map((r) => `${r.title} (${r.note})${r.href ? ` ${r.href}` : ""}`).join("; ")}.`);
+      add();
+    }
+    add(`Official accounts: ${f.socials.map((s) => s.href).join(", ")}.`);
+    add();
+    if (p) faq(p.faqs);
+  }
   add("**How it works:**");
   STEPS.forEach((s, i) => add(`${i + 1}. ${s.title}: ${s.text}`));
   add();

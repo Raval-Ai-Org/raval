@@ -35,18 +35,16 @@ export default function CookieBanner() {
   return (
     <div className="ck-banner" role="region" aria-label="Cookie consent">
       <div className="ck-text">
-        <b>We value your privacy</b>
         <p>
-          We use essential cookies to make Mellox work. With your permission we may also use analytics and marketing
-          cookies. Read our <Link href="/cookies">Cookie Policy</Link>.
+          We use cookies. <Link href="/cookies">Learn more</Link>
         </p>
       </div>
       <div className="ck-actions">
         <button type="button" className="ck-btn" onClick={() => choose(false)}>
-          Reject non-essential
+          Essential only
         </button>
         <button type="button" className="ck-btn lime" onClick={() => choose(true)}>
-          Accept all
+          Accept
         </button>
       </div>
     </div>

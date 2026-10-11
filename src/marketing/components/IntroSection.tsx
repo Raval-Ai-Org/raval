@@ -3,10 +3,10 @@
 import { useEffect, useRef } from "react";
 import "./intro.css";
 import "./skip-link.css";
-import { prefersStaticMotion } from "@/marketing/lib/motion";
+import { isTouchFirst, prefersStaticMotion } from "@/marketing/lib/motion";
 
 const TEXT =
-  "We help enterprises reimagine business growth with our AI Platform, Work Solutions, and Intelligent Marketplace. Unlock efficiency, automation, and innovation across every workflow.";
+  "Mellox is your AI marketing team. It learns your brand, your audience and your competitors, then makes your posts, videos and articles, publishes them everywhere, and gets you found on Google and ChatGPT.";
 
 const words = TEXT.split(" ");
 
@@ -90,10 +90,18 @@ export default function IntroSection() {
     let sizeKey = "";
     let raf = 0;
 
+    // On phones the address bar slides away while scrolling and changes the window height. Re-measuring then would
+    // change the section's height mid-scroll and make the page jump, so there only a new width counts.
+    const touch = isTouchFirst();
+    const key = () =>
+      touch
+        ? `${window.innerWidth}x${track.scrollWidth}`
+        : `${window.innerWidth}x${window.innerHeight}x${track.scrollWidth}`;
+
     const measure = () => {
       const vh = window.innerHeight;
       const vw = window.innerWidth;
-      sizeKey = `${vw}x${vh}x${track.scrollWidth}`;
+      sizeKey = key();
       revealPx = vh * 1.1;
       // slide until the very last app logo has left the screen (not just until the track ends)
       const last = nodeRefs.current[nodeRefs.current.length - 1];
@@ -107,7 +115,7 @@ export default function IntroSection() {
     const update = () => {
       raf = 0;
       const vw = window.innerWidth;
-      if (sizeKey !== `${vw}x${window.innerHeight}x${track.scrollWidth}`) measure();
+      if (sizeKey !== key()) measure();
       const top = section.getBoundingClientRect().top;
       const scrolled = clamp(-top, 0, revealPx + travel + floodPx + holdPx);
 

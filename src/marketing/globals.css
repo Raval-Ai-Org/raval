@@ -220,22 +220,4 @@ html:not(.mx-live) .hero-bg *::after {
   contain-intrinsic-size: auto 1100px;
 }
 
-@media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {
-  html {
-    scroll-behavior: auto !important;
-  }
 
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-delay: 0s !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    transition-delay: 0s !important;
-  }
-
-  .glass-interactive {
-    transition: none;
-  }
-}

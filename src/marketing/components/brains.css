@@ -777,18 +777,12 @@
   .bi-brand .rule { margin-top: 5px; }
 }
 
-@media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {
-  .brains [data-reveal] { opacity: 1; transform: none; transition: none; }
-  .bi *, .bglow .g { animation: none !important; }
-  .intent, .shift-tag, .pulse-dot { opacity: 1 !important; }
-  .plot .line { stroke-dashoffset: 0; }
-  .plot .area { opacity: 1; }
-}
 
 /* ---------- short screens (landscape phones, small windows) ----------
-   The pinned stage needs ~540px of height. Below that it would be cut off, so
-   drop the pinning and simply stack the four cards. */
-@media (max-height: 620px) {
+   The pinned stage needs ~500px of height. Below that it would be cut off, so
+   drop the pinning and simply stack the four cards. Keep this limit low: a small laptop window or a browser
+   side panel is often only 550-620px tall and should still get the scroll animation. */
+@media (max-height: 499px) {
   .brains-pin {
     height: auto;
   }
@@ -812,4 +806,10 @@
     opacity: 1 !important;
     pointer-events: auto !important;
   }
+}
+
+/* A window between that limit and a tall one (a small laptop, a browser side panel): keep the scroll effect and
+   shrink the pinned stage to the window, so the card's bottom edge stays on screen. */
+@media (min-height: 500px) and (max-height: 760px) {
+  .brains-pin { --stage-h: calc(100svh - 108px); }
 }

@@ -286,17 +286,6 @@ html.mx-lock {
   to { transform: translateX(260%); }
 }
 
-@media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {
-  .mx-pre-field, .mx-pre-mark .ring, .mx-pre-mark svg, .mx-pre-field .b,
-  .mx-load-glow, .mx-load-mark, .mx-load-bar span { animation: none !important; }
-  .mx-pre-field { transform: translate(-50%, -50%); opacity: 0.7; }
-  .mx-pre-mark .ring { opacity: 0.8; }
-  .mx-pre-mark .ring-2 { opacity: 0.4; }
-  .mx-pre-mark .outline { animation: none; stroke-dashoffset: 0; }
-  .mx-pre-mark .fill { animation: none; opacity: 1; }
-  .mx-pre-word span, .mx-pre-tag { animation: none; opacity: 1; transform: none; filter: none; }
-  .mx-pre-panel, .mx-pre-content { transition-duration: 0.4s; transition-delay: 0s; }
-}
 
 /* cheaper grain: a full-screen blend mode is expensive, a faint plain overlay looks the same on near-black */
 .mx-pre .mx-pre-grain {

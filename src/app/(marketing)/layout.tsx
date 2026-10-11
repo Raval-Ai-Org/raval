@@ -13,7 +13,7 @@ const michroma = Michroma({ variable: "--font-michroma", weight: "400", subsets:
 const micro5 = Micro_5({ variable: "--font-micro5", weight: "400", subsets: ["latin"], preload: false });
 const googleSansFlex = Google_Sans_Flex({ variable: "--font-google-sans-flex", subsets: ["latin"] });
 const PRELOADER_SKIP_SCRIPT =
-  "try{if(sessionStorage.getItem('mx-preloaded')||matchMedia('(pointer: coarse), (hover: none)').matches)document.documentElement.setAttribute('data-preloaded','1')}catch(e){}";
+  "try{if(sessionStorage.getItem('mx-preloaded'))document.documentElement.setAttribute('data-preloaded','1')}catch(e){}";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -43,7 +43,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
   return (
     <div id="marketing-root" className={`${michroma.variable} ${googleSansFlex.variable} ${micro5.variable} flex min-h-screen flex-col font-sans`}>
       <script dangerouslySetInnerHTML={{ __html: PRELOADER_SKIP_SCRIPT }} />
-      <noscript><style>{".mx-pre{display:none!important}"}</style></noscript>
+      <noscript><style>{".mx-pre{display:none!important}.hero-in{animation:none!important}"}</style></noscript>
       <Preloader />
       <MotionGate />
       <SmoothScroll />
