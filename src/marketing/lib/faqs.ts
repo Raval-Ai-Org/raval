@@ -6,7 +6,11 @@ export const FEATURED = 8;
 export const faqs: Faq[] = [
   {
     q: "What is Mellox?",
-    a: "Mellox is an AI marketing platform that turns your website into a full growth workflow: it learns your brand, plans and creates on-brand content, publishes it to your channels, and works to get your brand cited by AI assistants like ChatGPT and Gemini.",
+    a: "Mellox is an AI marketing platform for businesses and agencies that turns your website into a full growth workflow: it learns your brand, plans and creates on-brand content, publishes it to your channels, and works to get your brand cited by AI assistants like ChatGPT and Gemini.",
+  },
+  {
+    q: "Why connect Google Analytics and Google Search Console?",
+    a: "Connecting is optional. With your permission, Mellox uses read-only reports from your selected property and site to show traffic and search performance in your own marketing dashboards. Relevant signals and summaries are processed by AI to explain changes and suggest next steps. You can disconnect at any time. Our Privacy Policy explains the data accessed, AI providers, storage and deletion.",
   },
   {
     q: "How does Mellox learn my brand?",

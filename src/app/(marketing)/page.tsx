@@ -1,4 +1,3 @@
-import GoogleDataDisclosure from "@/marketing/components/GoogleDataDisclosure";
 import type { Metadata } from "next";
 import HeroBackground from "@/marketing/components/HeroBackground";
 import GlassFilter from "@/marketing/components/GlassFilter";
@@ -93,8 +92,6 @@ export default function Home() {
         <Clients />
 
         <IntroSection />
-
-        <GoogleDataDisclosure />
 
         <Problems />
 

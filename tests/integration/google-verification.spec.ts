@@ -55,13 +55,19 @@ for (const [path, title] of [
 
 test("homepage explains Google access, AI processing, purpose and policies", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  const section = page.locator('section[aria-labelledby="google-marketing-data"]');
-  await expect(section).toContainText("Google Analytics and Google Search Console");
-  await expect(section).toContainText("read-only");
-  await expect(section).toContainText("processed by AI");
-  await expect(section).toContainText("businesses and agencies");
-  for (const link of ["/privacy#google-data", "/terms", "/safety"])
-    await expect(section.locator(`a[href="${link}"]`)).toHaveCount(1);
+  await expect(page.locator('section[aria-labelledby="google-marketing-data"]')).toHaveCount(0);
+  const question = page.getByRole("button", {
+    name: "Why connect Google Analytics and Google Search Console?",
+  });
+  await question.click();
+  const answer = page.locator(`[id="${await question.getAttribute("aria-controls")}"]`);
+  await expect(answer).toBeVisible();
+  await expect(answer).toContainText("read-only");
+  await expect(answer).toContainText("processed by AI");
+  await expect(answer).toContainText("own marketing dashboards");
+  await expect(page.locator(".faq-item").first()).toContainText("businesses and agencies");
+  for (const link of ["/privacy", "/terms", "/safety"])
+    await expect(page.locator(`footer a[href="${link}"]`)).toHaveCount(1);
 });
 
 test("privacy accurately discloses Google fields, AI providers, revocation and deletion limits", async ({

@@ -26,7 +26,7 @@ export const PRIVACY: TermsSection[] = [
     id: "google-data",
     title: "Google Analytics and Search Console: data and purpose",
     paras: [
-      "A workspace admin starts the Google connection, authorizes access through Google's consent screen and selects a GA4 property and/or Search Console site. Mellox reads reports for your workspace dashboards, traffic/search trends, marketing insights and SEO experiment measurement. It cannot edit Google properties, site settings or search results.",
+      "Connecting Google Analytics and Google Search Console is optional. With your permission, Mellox reads reports from your selected property and site to bring website traffic, engagement and search performance into your own marketing dashboards and insights. A workspace admin starts the connection through Google's consent screen and selects a GA4 property and/or Search Console site. These read-only reports also support traffic/search trends and SEO experiment measurement; Mellox cannot edit Google properties, site settings or search results. The next section explains how relevant signals and summaries are processed by AI.",
     ],
     list: [
       "Permissions: https://www.googleapis.com/auth/analytics.readonly and https://www.googleapis.com/auth/webmasters.readonly. The connector also requests openid and email to label and identify the connected account. It does not request Gmail, Drive, contacts or Analytics/Search Console write access.",
