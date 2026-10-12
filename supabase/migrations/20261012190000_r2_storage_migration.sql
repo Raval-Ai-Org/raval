@@ -78,7 +78,7 @@ create or replace function public.resolve_media_storage_paths(paths text[])
 returns table(source_path text,target_path text,status text)
 language sql security definer set search_path = '' as $$
   select m.source_path,m.target_path,m.status from private.media_storage_migrations m
-  where m.source_bucket='generated-assets' and m.source_path=any(paths)
+  where m.source_bucket='generated-assets' and (m.source_path=any(paths) or m.target_path=any(paths))
 ;
 $$;
 revoke all on function public.resolve_media_storage_paths(text[]) from public, anon, authenticated;
@@ -91,5 +91,31 @@ returns void language sql security definer set search_path = '' as $$
 $$;
 revoke all on function public.tombstone_migrated_media(text[]) from public, anon, authenticated;
 grant execute on function public.tombstone_migrated_media(text[]) to service_role;
+
+-- Retained originals are backups after activation. Ordinary members cannot
+-- mint fresh Supabase URLs for active/deleted backups, or mutate any checkpointed
+-- original. Operators retain access for integrity verification and rollback.
+create or replace function private.media_source_is_visible(p_bucket text, p_path text, p_mutation boolean default false)
+returns boolean language plpgsql stable security definer set search_path = '' as $$
+begin
+  if p_bucket <> 'generated-assets' then return true; end if;
+  if p_path !~* '^workspace/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/assets/' then return false; end if;
+  if not exists(select 1 from public.workspace_members where workspace_id=split_part(p_path,'/',2)::uuid and user_id=auth.uid()) then return false; end if;
+  return not exists(select 1 from private.media_storage_migrations m
+    where m.source_bucket=p_bucket and m.source_path=p_path
+      and (p_mutation or m.status in ('active','deleted')));
+end $$;
+revoke all on function private.media_source_is_visible(text,text,boolean) from public, anon;
+grant execute on function private.media_source_is_visible(text,text,boolean) to authenticated;
+do $$ begin
+  if to_regclass('storage.objects') is not null then
+    execute 'drop policy if exists r2_retained_source_read on storage.objects';
+    execute 'create policy r2_retained_source_read on storage.objects as restrictive for select to authenticated using (private.media_source_is_visible(bucket_id,name,false))';
+    execute 'drop policy if exists r2_retained_source_update on storage.objects';
+    execute 'create policy r2_retained_source_update on storage.objects as restrictive for update to authenticated using (private.media_source_is_visible(bucket_id,name,true)) with check (private.media_source_is_visible(bucket_id,name,true))';
+    execute 'drop policy if exists r2_retained_source_delete on storage.objects';
+    execute 'create policy r2_retained_source_delete on storage.objects as restrictive for delete to authenticated using (private.media_source_is_visible(bucket_id,name,true))';
+  end if;
+end $$;
 
 notify pgrst, 'reload schema';

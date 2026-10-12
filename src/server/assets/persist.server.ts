@@ -31,6 +31,8 @@ export type PersistAssetInput = {
   workspaceId: string;
   idempotencyKey: string;
   bytes?: Buffer;
+  /** Server-owned upload option: preserve customer media without generated-image attribution. */
+  preserveBytes?: boolean;
   dataUrl?: string;
   sourceUrl?: string;
   /** Content items to link. The first becomes assets.content_item_id. */
@@ -265,13 +267,9 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
     };
   }
 
-  const finalized = await tryFinalizeImageMetadata(
-    supabase,
-    workspaceId,
-    assetType,
-    mimeType,
-    bytes,
-  );
+  const finalized = input.preserveBytes
+    ? { bytes, report: null }
+    : await tryFinalizeImageMetadata(supabase, workspaceId, assetType, mimeType, bytes);
   bytes = finalized.bytes;
 
   // Only link content items that really belong to this workspace.

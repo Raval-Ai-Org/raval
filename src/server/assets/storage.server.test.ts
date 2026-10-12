@@ -40,6 +40,42 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("private R2 and legacy Supabase storage", () => {
+  it("tombstones pending copies and refuses fresh URLs for deleted migration destinations", async () => {
+    const target = legacy.replace("/assets/", "/assets/r2/migrated/");
+    mocks.rpc.mockImplementation(async (name) => ({
+      data:
+        name === "resolve_media_storage_paths"
+          ? [{ source_path: legacy, target_path: target, status: "verified" }]
+          : null,
+      error: null,
+    }));
+    await removeAssetObjects([legacy], db);
+    expect(mocks.rpc).toHaveBeenCalledWith("tombstone_migrated_media", { paths: [target] });
+    expect(from).not.toHaveBeenCalled();
+    mocks.rpc.mockResolvedValue({
+      data: [{ source_path: legacy, target_path: target, status: "deleted" }],
+      error: null,
+    });
+    expect((await signStoragePaths(db, [target])).size).toBe(0);
+  });
+
+  it("routes cached migration destination paths back to Supabase after rollback", async () => {
+    const target = legacy.replace("/assets/", "/assets/r2/migrated/");
+    mocks.rpc.mockResolvedValue({
+      data: [{ source_path: legacy, target_path: target, status: "rolled_back" }],
+      error: null,
+    });
+    from.mockReturnValue({
+      createSignedUrls: vi.fn().mockResolvedValue({
+        data: [{ path: legacy, signedUrl: "https://supabase.example/restored" }],
+        error: null,
+      }),
+    });
+    expect((await signStoragePaths(db, [target])).get(target)).toBe(
+      "https://supabase.example/restored",
+    );
+    expect(mocks.sign).not.toHaveBeenCalled();
+  });
   it("protects migration originals when production R2 credentials are missing", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("R2_ACCESS_KEY_ID", "");

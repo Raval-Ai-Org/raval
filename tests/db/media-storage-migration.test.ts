@@ -11,6 +11,18 @@ describe("media migration transaction and isolation", () => {
     const db = new PGlite();
     try {
       await db.exec(`create schema private; create role anon; create role authenticated; create role service_role;
+        create schema auth; create schema storage;
+        create function auth.uid() returns uuid language sql stable as 'select nullif(current_setting(''request.jwt.claim.sub'',true),'''')::uuid';
+        create table public.workspace_members(workspace_id uuid,user_id uuid);
+        insert into public.workspace_members values('${workspace}','11111111-1111-4111-8111-111111111111');
+        create table storage.objects(name text,bucket_id text);
+        insert into storage.objects values('${oldPath}','generated-assets');
+        alter table storage.objects enable row level security;
+        grant usage on schema storage,private to authenticated;
+        grant select,update,delete on storage.objects to authenticated;
+        create policy fixture_read on storage.objects for select to authenticated using(true);
+        create policy fixture_update on storage.objects for update to authenticated using(true) with check(true);
+        create policy fixture_delete on storage.objects for delete to authenticated using(true);
         create table public.media(id int primary key, path text, meta jsonb);
         create table public.content_items(id int primary key, workspace_id uuid, media_url text, meta jsonb);
         insert into public.content_items values(1,'${workspace}','https://example.supabase.co/storage/v1/object/sign/generated-assets/${oldPath}?token=expired','{"asset_storage_path":"${oldPath}"}');
@@ -56,13 +68,24 @@ describe("media migration transaction and isolation", () => {
           newPath.replace(workspace, "00000000-0000-4000-8000-000000000002"),
         ]),
       ).rejects.toThrow("Invalid workspace");
-      await db.exec("set role authenticated");
+      await db.exec(
+        "set request.jwt.claim.sub='11111111-1111-4111-8111-111111111111'; set role authenticated",
+      );
+      expect((await db.query("select * from storage.objects")).rows).toHaveLength(0);
       await expect(db.query("select * from private.media_storage_migrations")).rejects.toThrow(
         /permission denied/,
       );
       await expect(
         db.query("select * from public.resolve_media_storage_paths($1)", [[oldPath]]),
       ).rejects.toThrow(/permission denied/);
+      await db.exec(
+        "reset role; update private.media_storage_migrations set status='rolled_back'; set role authenticated",
+      );
+      expect((await db.query("select * from storage.objects")).rows).toHaveLength(1);
+      expect((await db.query("update storage.objects set name=name")).affectedRows).toBe(0);
+      expect((await db.query("delete from storage.objects")).affectedRows).toBe(0);
+      await db.exec("set request.jwt.claim.sub='22222222-2222-4222-8222-222222222222'");
+      expect((await db.query("select * from storage.objects")).rows).toHaveLength(0);
       await db.exec("reset role; set role service_role");
       expect(
         (await db.query("select * from public.resolve_media_storage_paths($1)", [[oldPath]])).rows,
@@ -76,6 +99,15 @@ describe("media migration transaction and isolation", () => {
           )
         ).rows[0].status,
       ).toBe("deleted");
+      expect(
+        (await db.query("select * from public.resolve_media_storage_paths($1)", [[newPath]])).rows,
+      ).toHaveLength(1);
+      await db.exec(
+        "reset role; set request.jwt.claim.sub='11111111-1111-4111-8111-111111111111'; set role authenticated",
+      );
+      expect((await db.query("select * from storage.objects")).rows).toHaveLength(0);
+      await db.exec("reset role");
+      expect((await db.query("select * from storage.objects")).rows).toHaveLength(1);
     } finally {
       await db.close();
     }

@@ -13,6 +13,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { targetPath, hashStream, assertIntegrity, assertCheckpoint } from "./migration-core.mjs";
@@ -142,10 +143,21 @@ async function copy(row) {
         }),
       );
     const verified = await verify({ ...row, sha256: source.sha256, size_bytes: size });
-    await db.query(
-      "update private.media_storage_migrations set sha256=$1,size_bytes=$2,status=case when exists(select 1 from public.workspaces w where w.id=workspace_id) then 'verified' else 'deleted' end,verified_at=now(),updated_at=now() where source_bucket=$3 and source_path=$4 and status in ('pending','rolled_back')",
+    const checkpoint = await db.query(
+      "update private.media_storage_migrations set sha256=$1,size_bytes=$2,status=case when exists(select 1 from public.workspaces w where w.id=workspace_id) then 'verified' else 'deleted' end,verified_at=now(),updated_at=now() where source_bucket=$3 and source_path=$4 and status in ('pending','rolled_back') returning status",
       [verified.sha256, verified.size, row.source_bucket, row.source_path],
     );
+    const status =
+      checkpoint.rows[0]?.status ??
+      (
+        await db.query(
+          "select status from private.media_storage_migrations where source_bucket=$1 and source_path=$2",
+          [row.source_bucket, row.source_path],
+        )
+      ).rows[0]?.status;
+    // A concurrent user/workspace deletion must not leave a readable copied object.
+    if (status === "deleted")
+      await r2.send(new DeleteObjectCommand({ Bucket, Key: row.target_path }));
   } finally {
     const absoluteDir = resolve(dir);
     if (

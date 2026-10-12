@@ -2,7 +2,7 @@
 // Creates temporary users, a workspace, one generated image, and one legacy Supabase
 // object; all are removed after the test.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 try {
@@ -135,6 +135,70 @@ async function requestRoute(
     }
     if (failures.length) throw new Error(`R2 test cleanup failed: ${failures.join("; ")}`);
   }, 120_000);
+
+  it.skipIf(!process.env.SUPABASE_DB_URL)(
+    "keeps migration originals private, honors tombstones, and preserves backup bytes",
+    async () => {
+      const { Client } = await import("pg");
+      const connection = new Client({ connectionString: process.env.SUPABASE_DB_URL });
+      const source = `workspace/${workspaceId}/assets/retention-${randomUUID()}.txt`;
+      const target = source.replace("/assets/", "/assets/r2/migrated/");
+      const bytes = Buffer.from("disposable retention test original");
+      await connection.connect();
+      let cleanupFailed = false;
+      try {
+        const upload = await alice.db.storage
+          .from("generated-assets")
+          .upload(source, bytes, { contentType: "text/plain" });
+        expect(upload.error).toBeNull();
+        const { uploadAssetObject } = await import("@/server/assets/storage.server");
+        await uploadAssetObject(target, bytes, "text/plain");
+        extraPaths.push(target);
+        await connection.query(
+          "insert into private.media_storage_migrations(source_bucket,source_path,target_path,workspace_id,status,sha256,size_bytes) values('generated-assets',$1,$2,$3,'verified',$4,$5)",
+          [
+            source,
+            target,
+            workspaceId,
+            createHash("sha256").update(bytes).digest("hex"),
+            bytes.length,
+          ],
+        );
+        await alice.db.storage.from("generated-assets").remove([source]);
+        const retained = await admin.storage.from("generated-assets").download(source);
+        expect(retained.error).toBeNull();
+        expect(Buffer.from(await retained.data!.arrayBuffer()).equals(bytes)).toBe(true);
+        await connection.query(
+          "update private.media_storage_migrations set status='active' where source_path=$1",
+          [source],
+        );
+        expect(
+          (await alice.db.storage.from("generated-assets").createSignedUrl(source, 60)).error,
+        ).toBeTruthy();
+        const active = await signRequest(alice, [source, target]);
+        expect(active.status).toBe(200);
+        expect((await active.json()).urls).toHaveLength(2);
+        await removeAssetObjects([source]);
+        const deleted = await signRequest(alice, [source, target]);
+        expect((await deleted.json()).urls).toHaveLength(0);
+        expect(
+          (await alice.db.storage.from("generated-assets").createSignedUrl(source, 60)).error,
+        ).toBeTruthy();
+        expect((await admin.storage.from("generated-assets").download(source)).error).toBeNull();
+      } finally {
+        // Only these test-created disposable resources are retired, never customer originals.
+        await connection.query(
+          "delete from private.media_storage_migrations where source_path=$1 and workspace_id=$2",
+          [source, workspaceId],
+        );
+        const removed = await admin.storage.from("generated-assets").remove([source]);
+        await connection.end();
+        cleanupFailed = Boolean(removed.error);
+      }
+      if (cleanupFailed) throw new Error("Temporary retention fixture cleanup failed");
+    },
+    120000,
+  );
 
   it("uploads user media to R2 and rejects unauthorized or mislabeled uploads", async () => {
     const { POST } = await import("@/app/api/assets/upload/route");

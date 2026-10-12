@@ -11,6 +11,8 @@ Production persistence requires R2; a missing configuration returns an error.
 Report logos also use R2. Generated Studio, carousel, Story, UGC, Canva and
 background publishing flows share the existing storage service. Downloads use
 short-lived signed attachment URLs and video seeking uses R2 byte-range responses.
+User-uploaded bytes are preserved; generated-image attribution does not rewrite
+customer uploads. Content and agency readers refresh metadata-only media paths.
 
 ## Operation
 
@@ -56,6 +58,11 @@ Migration-source objects are excluded from application cleanup, including pendin
 copies and rolled-back migrations. Deleting a migrated R2 copy writes a tombstone
 so a retry cannot resurrect it. Deleted workspaces are not copied or activated.
 Repeat inventory and copy after deployment to catch uploads made during copying.
+Migration tombstones cover both original and destination paths, including pending
+copies. Retained Supabase originals become hidden from ordinary members after
+activation or deletion, and checkpointed originals cannot be changed or removed
+through member storage credentials. Operators can still verify and roll back them.
+Production signing and cleanup fail closed if the retention RPCs are unavailable.
 
 ## Rollback and retention
 

@@ -57,6 +57,7 @@ export const POST = defineRoute({
       workspaceId,
       idempotencyKey: `upload:${query.requestId}`,
       bytes,
+      preserveBytes: true,
       mimeType,
       filename: query.filename,
       assetType: mimeType.startsWith("video/") ? "video" : "image",
