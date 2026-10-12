@@ -172,7 +172,7 @@ export function createPostForMeAdapter(
         { external_id: [workspaceId], status: ["connected"], limit: 50, offset },
         options,
       );
-      accounts.push(...page.data);
+      accounts.push(...page.data.filter((account) => account.external_id === workspaceId));
       if (!page.meta.next || page.data.length === 0) break;
     }
     return accounts;

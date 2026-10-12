@@ -292,6 +292,9 @@ async function sourceImages(workspaceId: string, source: { assetId?: string; con
       .maybeSingle();
     if (!data || data.asset_type !== "image" || data.status !== "ready" || !data.storage_path)
       throw new HttpError(404, "Image is unavailable.");
+    if (!isWorkspaceStoragePath(data.storage_path, workspaceId)) {
+      throw new HttpError(403, "Stored media is outside this workspace.");
+    }
     let contentId = (data.content_item_id as string | null) ?? null;
     if (source.contentId) {
       const { data: item } = await db

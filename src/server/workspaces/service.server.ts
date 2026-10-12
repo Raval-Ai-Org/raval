@@ -242,12 +242,15 @@ const defaultDeleteDeps: DeleteDeps = {
     if (!process.env.POST_FOR_ME_API_KEY) return;
     const { createPostForMeAdapter } = await import("@/lib/postforme/client.server");
     const call = createPostForMeAdapter(workspaceId);
-    const listed = await call<{ data: Array<{ id: string; status: string }> }>({
+    const listed = await call<{ data: Array<{ id: string; status: string; brand_id?: string }> }>({
       path: "/accounts",
     });
     if (listed.status !== 200) throw new Error("Could not list connected social accounts");
     for (const account of listed.data.data) {
       if (account.status !== "active") continue;
+      if (account.brand_id !== workspaceId) {
+        throw new Error("A connected account is outside this workspace");
+      }
       const removed = await call({
         method: "DELETE",
         path: `/accounts/${encodeURIComponent(account.id)}`,
@@ -297,7 +300,9 @@ export async function deleteWorkspace(
     .eq("workspace_id", args.workspaceId)
     .maybeSingle();
 
-  const objects = await deps.listObjects(args.workspaceId).catch(() => [] as string[]);
+  const objects = await deps.listObjects(args.workspaceId).catch(() => {
+    throw new HttpError(503, "Could not list this workspace's stored media. Try again.");
+  });
   if (deps.disconnectCanva) await deps.disconnectCanva(args.workspaceId, args.userId);
 
   if (deps.disconnectPostForMeAccounts) {
@@ -321,7 +326,15 @@ export async function deleteWorkspace(
 
   // The rows are gone; external cleanup is best effort and never re-reported
   // as a failed delete.
-  if (objects.length) await deps.removeObjects(objects).catch(() => undefined);
+  let storageObjectsRemoved = 0;
+  if (objects.length) {
+    try {
+      await deps.removeObjects(objects);
+      storageObjectsRemoved = objects.length;
+    } catch {
+      console.error("[workspaces] storage cleanup requires retry", args.workspaceId);
+    }
+  }
   const brandId = (social?.brand_id as string | null) ?? null;
   if (brandId) await deps.releaseSocialBrand(brandId).catch(() => undefined);
 
@@ -331,8 +344,8 @@ export async function deleteWorkspace(
     domain: ws.domain,
     owner_id: ws.owner_id,
     deleted_by: args.userId,
-    storage_objects_removed: objects.length,
+    storage_objects_removed: storageObjectsRemoved,
   });
 
-  return { id: args.workspaceId, name: ws.name as string, storageObjectsRemoved: objects.length };
+  return { id: args.workspaceId, name: ws.name as string, storageObjectsRemoved };
 }

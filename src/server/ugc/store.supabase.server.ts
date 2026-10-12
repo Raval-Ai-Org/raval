@@ -8,6 +8,7 @@ import type { Json } from "@/integrations/supabase/types";
 import type { RenderStatus } from "@/lib/ugc/schemas";
 import { persistAsset } from "@/server/assets/persist.server";
 import { signStoragePaths } from "@/server/assets/storage.server";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { ugcBillingColumnReady } from "@/server/billing/schema.server";
 import type {
   NewRenderRow,
@@ -200,7 +201,7 @@ export const supabaseUgcStore: UgcRenderStore = {
     if (error) throw new Error(error.message);
     const byId = new Map(
       ((data ?? []) as Array<{ id: string; storage_path: string | null }>)
-        .filter((a) => a.storage_path)
+        .filter((a) => isWorkspaceStoragePath(a.storage_path, workspaceId))
         .map((a) => [a.id, a.storage_path as string]),
     );
     const paths = assetIds.map((id) => byId.get(id)).filter((p): p is string => Boolean(p));

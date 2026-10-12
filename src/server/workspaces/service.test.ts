@@ -154,6 +154,30 @@ describe("deleteWorkspace", () => {
     expect(d.removeObjects).not.toHaveBeenCalled();
   });
 
+  it("preserves the workspace when media enumeration fails", async () => {
+    const db = seed();
+    const d = deps();
+    d.listObjects.mockRejectedValueOnce(new Error("R2 unavailable"));
+    await expect(
+      deleteWorkspace({ workspaceId: A, userId: OWNER, confirmation: "CONFIRM" }, d, db as never),
+    ).rejects.toThrow(/stored media/i);
+    expect(db.rows("workspaces")).toHaveLength(2);
+    expect(d.removeObjects).not.toHaveBeenCalled();
+  });
+
+  it("does not report unsuccessful storage cleanup as completed", async () => {
+    const db = seed();
+    const d = deps();
+    d.removeObjects.mockRejectedValueOnce(new Error("R2 unavailable"));
+    const out = await deleteWorkspace(
+      { workspaceId: A, userId: OWNER, confirmation: "CONFIRM" },
+      d,
+      db as never,
+    );
+    expect(out.storageObjectsRemoved).toBe(0);
+    expect(db.rows("workspace_deletions")[0].storage_objects_removed).toBe(0);
+  });
+
   it("deletes only that workspace, cleans its storage and provider brand, and records it", async () => {
     const db = seed();
     const d = deps();

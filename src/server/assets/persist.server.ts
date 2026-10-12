@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { ResponseTooLargeError, safeFetch } from "@/server/safe-fetch";
 import { mergeMeta } from "@/lib/content-lifecycle";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { isAssetMetadataFinalizeEnabled } from "@/lib/feature-flags";
 import {
   ASSET_BUCKET,
@@ -96,6 +97,7 @@ function extensionFor(assetType: "image" | "video", mimeType: string) {
   if (assetType === "video") {
     return mimeType.includes("webm") ? "webm" : mimeType.includes("quicktime") ? "mov" : "mp4";
   }
+  if (mimeType === "image/gif") return "gif";
   return mimeType.includes("png") ? "png" : mimeType.includes("webp") ? "webp" : "jpg";
 }
 
@@ -171,7 +173,7 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
   const { data: existing, error: existingError } = await supabase
     .from("assets")
     .select(
-      "id, workspace_id, content_item_id, status, public_url, storage_path, filename, mime_type",
+      "id, workspace_id, content_item_id, status, public_url, storage_path, filename, mime_type, deleted_at, updated_at",
     )
     .eq("workspace_id", workspaceId)
     .eq("idempotency_key", idempotencyKey)
@@ -184,7 +186,25 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
         "Persistent asset storage is not configured. Apply the latest Supabase migration and retry.",
     };
   }
+  if (existingError) {
+    return { ok: false, status: 503, message: "Could not check persistent asset storage" };
+  }
+  if (existing?.deleted_at) {
+    return { ok: false, status: 410, message: "This asset has been deleted" };
+  }
+  const leaseExpired =
+    existing?.updated_at && Date.now() - Date.parse(existing.updated_at) > 15 * 60_000;
+  if (existing?.status === "persisting" && !leaseExpired) {
+    return {
+      ok: false,
+      status: 409,
+      message: "This asset is already being stored. Retry shortly.",
+    };
+  }
   if (existing?.status === "ready") {
+    if (existing.storage_path && !isWorkspaceStoragePath(existing.storage_path, workspaceId)) {
+      return { ok: false, status: 403, message: "Stored media is outside this workspace" };
+    }
     const url = (await signAssetPath(existing.storage_path)) ?? existing.public_url ?? null;
     if (url) return { ok: true, asset: { ...existing, public_url: url }, deduplicated: true };
   }
@@ -221,6 +241,24 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
   }
   if (!bytes.length || bytes.length > MAX_ASSET_BYTES) {
     return { ok: false, status: 413, message: "Generated asset is too large" };
+  }
+
+  const supportedTypes =
+    assetType === "image"
+      ? ["image/png", "image/jpeg", "image/webp", "image/gif"]
+      : ["video/mp4", "video/webm", "video/quicktime"];
+  if (!supportedTypes.includes(mimeType)) {
+    return { ok: false, status: 415, message: "Unsupported generated media type" };
+  }
+  let useR2: boolean;
+  try {
+    useR2 = isR2StorageEnabled();
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      message: "Generated media storage is not configured correctly",
+    };
   }
 
   const finalized = await tryFinalizeImageMetadata(
@@ -282,7 +320,7 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
         ? { ...(input.metadata ?? {}), image_metadata_finalization: finalized.report }
         : (input.metadata ?? {}),
     });
-    if (insertError && !String(insertError.message).toLowerCase().includes("duplicate")) {
+    if (insertError && insertError.code !== "23505") {
       return {
         ok: false,
         status: 500,
@@ -293,25 +331,50 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
       const { data: raced } = await supabase
         .from("assets")
         .select(
-          "id, workspace_id, content_item_id, status, public_url, storage_path, filename, mime_type",
+          "id, workspace_id, content_item_id, status, public_url, storage_path, filename, mime_type, deleted_at",
         )
         .eq("workspace_id", workspaceId)
         .eq("idempotency_key", idempotencyKey)
         .single();
       assetId = raced?.id;
+      if (raced?.deleted_at) {
+        return { ok: false, status: 410, message: "This asset has been deleted" };
+      }
       if (raced?.status === "ready") {
+        if (raced.storage_path && !isWorkspaceStoragePath(raced.storage_path, workspaceId)) {
+          return { ok: false, status: 403, message: "Stored media is outside this workspace" };
+        }
         const url = (await signAssetPath(raced.storage_path)) ?? raced.public_url ?? null;
         if (url) return { ok: true, asset: { ...raced, public_url: url }, deduplicated: true };
       }
+      return {
+        ok: false,
+        status: 409,
+        message: "This asset is already being stored. Retry shortly.",
+      };
     }
   } else {
-    await supabase.from("assets").update({ status: "persisting" }).eq("id", assetId);
+    let claim = supabase
+      .from("assets")
+      .update({ status: "persisting", updated_at: new Date().toISOString() })
+      .eq("id", assetId)
+      .eq("status", existing!.status)
+      .is("deleted_at", null);
+    if (existing!.updated_at) claim = claim.eq("updated_at", existing!.updated_at);
+    const { data: claimed, error: claimError } = await claim.select("id").maybeSingle();
+    if (claimError || !claimed) {
+      return {
+        ok: false,
+        status: 409,
+        message: "This asset is already being stored. Retry shortly.",
+      };
+    }
   }
   if (!assetId)
     return { ok: false, status: 500, message: "Could not resolve persistent asset record" };
 
   const filename = `original.${extensionFor(assetType, mimeType)}`;
-  const path = isR2StorageEnabled()
+  const path = useR2
     ? r2AssetPath(workspaceId, assetId, filename)
     : `workspace/${workspaceId}/assets/${assetId}/${filename}`;
   const markFailed = async (reason: string | undefined) => {
@@ -319,6 +382,14 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
       .from("assets")
       .update({ status: "persistence_failed", metadata: { persistence_error: reason } })
       .eq("id", assetId);
+  };
+  const cleanupFailed = async (reason: string) => {
+    try {
+      await removeAssetObjects([path]);
+    } catch {
+      console.warn("[assets] failed upload cleanup could not be completed", assetId);
+    }
+    await markFailed(reason);
   };
 
   try {
@@ -344,13 +415,11 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
   try {
     signedUrl = await signAssetPath(path);
   } catch (error) {
-    await removeAssetObjects([path]);
-    await markFailed(error instanceof Error ? error.message : "signed URL unavailable");
+    await cleanupFailed(error instanceof Error ? error.message : "signed URL unavailable");
     return { ok: false, status: 502, message: "Generated asset could not receive a signed URL" };
   }
   if (!signedUrl) {
-    await removeAssetObjects([path]);
-    await markFailed("signed URL unavailable");
+    await cleanupFailed("signed URL unavailable");
     return { ok: false, status: 502, message: "Generated asset could not receive a signed URL" };
   }
 
@@ -368,8 +437,7 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
     )
     .single();
   if (readyError || !ready) {
-    await removeAssetObjects([path]);
-    await markFailed(errorMessage(readyError));
+    await cleanupFailed(errorMessage(readyError));
     return {
       ok: false,
       status: 500,

@@ -38,6 +38,7 @@ import {
 } from "@/lib/ugc/schemas";
 import { BudgetExceededError } from "@/server/ai/budget";
 import { signStoragePath, signStoragePaths } from "@/server/assets/storage.server";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { getAppUrl } from "@/server/env";
 import { HttpError } from "@/server/http-error";
 import { getPlanLimits } from "@/server/plans";
@@ -339,7 +340,7 @@ async function assetPaths(workspaceId: string, ids: string[]) {
     .in("id", [...new Set(ids)]);
   return new Map(
     ((data ?? []) as Array<{ id: string; storage_path: string | null; filename: string }>)
-      .filter((a) => a.storage_path)
+      .filter((a) => isWorkspaceStoragePath(a.storage_path, workspaceId))
       .map((a) => [a.id, { path: a.storage_path as string, filename: a.filename }]),
   );
 }

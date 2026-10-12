@@ -43,9 +43,9 @@ describe("generated asset storage security posture", () => {
   });
 
   it("uses signed URLs in both persistence and library responses", () => {
-    expect(persistRoute).toMatch(/createSignedUrl\(/);
+    expect(persistRoute).toMatch(/signAssetPath\(/);
     expect(persistRoute).not.toMatch(/getPublicUrl\(/);
-    expect(libraryRoute).toMatch(/createSignedUrls\(/);
+    expect(libraryRoute).toMatch(/signStoragePaths\(/);
     expect(libraryRoute).not.toMatch(/getPublicUrl\(/);
     // The library reads through the caller's RLS-bound client from the route
     // kernel, never the service role.
@@ -53,7 +53,7 @@ describe("generated asset storage security posture", () => {
     expect(libraryRoute).toMatch(/ctx\.supabase/);
     expect(persistRoute).toMatch(/media_url: null/);
     expect(persistRoute).toMatch(/asset_storage_path: (asset\.)?path/);
-    expect(contentFn).toMatch(/createSignedUrls\(paths, 3600\)/);
+    expect(contentFn).toMatch(/signStoragePaths\(context.supabase, paths, 3600\)/);
     expect(sdrHandlers).toMatch(/resolveMediaUrl/);
   });
 

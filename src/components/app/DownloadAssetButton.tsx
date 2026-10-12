@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "@/lib/toast";
 import { Download, Spinner } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { authedFetch } from "@/lib/authed-fetch";
 
 function extensionFrom(url: string, mimeType?: string | null): string {
   const mimeExtension: Record<string, string> = {
@@ -30,7 +31,8 @@ function safeFilename(value: string): string {
     value
       .trim()
       .replace(/[^a-z0-9._-]+/gi, "-")
-      .replace(/^-+|-+$/g, "") || "mellox-asset"
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 140) || "mellox-asset"
   );
 }
 
@@ -55,6 +57,34 @@ export function DownloadAssetButton({
     if (!url || busy) return;
     setBusy(true);
     try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.hostname.endsWith(".r2.cloudflarestorage.com")) {
+        const path = decodeURIComponent(
+          parsed.pathname.slice(parsed.pathname.indexOf("/workspace/") + 1),
+        );
+        const workspaceId = path.split("/")[1];
+        const response = await authedFetch("/api/assets/download", {
+          method: "POST",
+          workspaceId,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId,
+            path,
+            filename: `${safeFilename(filename)}.${extensionFrom(url, mimeType)}`,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || typeof payload.url !== "string") {
+          throw new Error("The asset could not be downloaded.");
+        }
+        // Attachment navigation needs no bucket CORS and does not buffer a video in the browser.
+        const link = document.createElement("a");
+        link.href = payload.url;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        return;
+      }
       const response = await fetch(url);
       if (!response.ok) throw new Error("The asset could not be downloaded.");
       const blob = await response.blob();

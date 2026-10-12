@@ -109,7 +109,10 @@ async function settle(renderId: string, maxMs = 6 * 60_000) {
       const paths = (assets ?? [])
         .map((a: { storage_path: string | null }) => a.storage_path)
         .filter(Boolean) as string[];
-      if (paths.length) await admin.storage.from("generated-assets").remove(paths);
+      if (paths.length) {
+        const { removeAssetObjects } = await import("@/server/assets/storage.server");
+        await removeAssetObjects(paths);
+      }
       await admin.from("ugc_renders").delete().eq("workspace_id", workspaceId);
       await admin.from("ai_usage_reservations").delete().eq("workspace_id", workspaceId);
       await admin.from("workspaces").delete().eq("id", workspaceId);

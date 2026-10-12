@@ -32,6 +32,7 @@ import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib
 import { authedFetch } from "@/lib/authed-fetch";
 import { normalizeLibraryAsset, type LibraryAsset } from "@/lib/library";
 import { getSignedAssetUrls } from "@/lib/persistent-assets";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
@@ -57,6 +58,7 @@ type LibraryApiAsset = {
   type: string;
   name: string;
   url: string | null;
+  thumbnailUrl?: string | null;
   createdAt: string;
   updatedAt: string;
   workspaceId: string;
@@ -155,6 +157,7 @@ export function LibraryPage({
   const [view, setView] = useState<View>("grid");
   const [selected, setSelected] = useState<Item | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const loadVersion = useRef(0);
 
   useEffect(() => setTab(initialTab), [initialTab]);
   useEffect(() => setStatus(initialStatus ?? "all"), [initialStatus]);
@@ -203,6 +206,7 @@ export function LibraryPage({
   }, []);
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     if (fixtures) return;
     if (!workspaceId) {
       setAssets([]);
@@ -231,9 +235,10 @@ export function LibraryPage({
       };
       if (!assetRes.ok) throw new Error(payload.error || "Could not load your library");
       if (posts.error) throw new Error(posts.error.message);
+      if (version !== loadVersion.current) return;
       setAssets(
-        (payload.assets ?? []).map((asset) =>
-          normalizeLibraryAsset({
+        (payload.assets ?? []).map((asset) => ({
+          ...normalizeLibraryAsset({
             id: asset.id,
             title: asset.name,
             media_url: asset.url,
@@ -247,7 +252,8 @@ export function LibraryPage({
             metadata: asset.metadata,
             source: "generated",
           }),
-        ),
+          thumbnailUrl: asset.thumbnailUrl ?? asset.url,
+        })),
       );
       const rows = (posts.data ?? []) as ContentRow[];
       setGroups(groupRows(rows));
@@ -255,13 +261,14 @@ export function LibraryPage({
         ...new Set(
           rows
             .map((r) => r.meta?.asset_storage_path)
-            .filter((p): p is string => typeof p === "string"),
+            .filter((p): p is string => isWorkspaceStoragePath(p, workspaceId)),
         ),
       ];
-      if (paths.length) {
-        setThumbs(await getSignedAssetUrls(workspaceId, paths));
-      }
+      const signed = paths.length ? await getSignedAssetUrls(workspaceId, paths) : {};
+      if (version !== loadVersion.current) return;
+      setThumbs(signed);
     } catch (cause) {
+      if (version !== loadVersion.current) return;
       console.error("Library query failed", cause);
       setError(cause instanceof Error ? cause.message : "The request failed.");
     }
@@ -269,15 +276,26 @@ export function LibraryPage({
   }, [workspaceId, fixtures]);
 
   useEffect(() => {
+    if (!fixtures) {
+      setAssets([]);
+      setGroups([]);
+      setThumbs({});
+      setSelected(null);
+    }
     void load();
     const refresh = () => void load();
     addAppEventListener("assets:changed", refresh);
     addAppEventListener("content:changed", refresh);
+    const timer = fixtures ? null : window.setInterval(refresh, 45 * 60_000);
+    if (!fixtures) window.addEventListener("focus", refresh);
     return () => {
+      loadVersion.current++;
+      if (timer !== null) window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
       removeAppEventListener("assets:changed", refresh);
       removeAppEventListener("content:changed", refresh);
     };
-  }, [load]);
+  }, [load, fixtures]);
 
   const presentFormats = useMemo(
     () => STUDIO_TYPE_ORDER.filter((t) => groups.some((g) => g.type === t)),
