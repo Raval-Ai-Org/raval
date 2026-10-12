@@ -46,6 +46,7 @@ function r2Config(): R2Config | null {
     parsed.hostname !== `${accountId}.r2.cloudflarestorage.com` ||
     parsed.username ||
     parsed.password ||
+    parsed.port ||
     parsed.search ||
     parsed.hash ||
     (parsed.pathname !== "" && parsed.pathname !== "/")
@@ -259,6 +260,9 @@ export async function removeAssetObjects(
 }
 
 export async function listR2WorkspaceAssetPaths(workspaceId: string): Promise<string[]> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(workspaceId)) {
+    throw new Error("Invalid workspace ID");
+  }
   const config = r2Config();
   if (!config) return [];
   const prefix = `workspace/${workspaceId}/assets/r2/`;

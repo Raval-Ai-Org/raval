@@ -173,6 +173,13 @@ export function createMemoryDb(
         const rows = Array.isArray(res.data) ? res.data : [];
         return { data: rows[0] ?? null, error: res.error };
       },
+      single: async () => {
+        const res = exec();
+        const rows = Array.isArray(res.data) ? res.data : [];
+        return rows.length === 1
+          ? { data: rows[0], error: res.error }
+          : { data: null, error: res.error ?? { code: "PGRST116", message: "Expected one row" } };
+      },
       then: (resolve: (v: any) => unknown, reject?: (e: unknown) => unknown) => {
         try {
           return Promise.resolve(exec()).then(resolve, reject);
@@ -192,6 +199,13 @@ export function createMemoryDb(
     from: (table: string) => query(table),
     storage: {
       from: (bucket: string) => ({
+        createSignedUrls: async (paths: string[]) => ({
+          data: paths.map((path) => ({
+            path,
+            signedUrl: `https://storage.test/${bucket}/${path}?token=signed`,
+          })),
+          error: null,
+        }),
         createSignedUrl: async (path: string) => ({
           data: { signedUrl: `https://storage.test/${bucket}/${path}?token=signed` },
           error: null,

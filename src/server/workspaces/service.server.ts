@@ -297,7 +297,9 @@ export async function deleteWorkspace(
     .eq("workspace_id", args.workspaceId)
     .maybeSingle();
 
-  const objects = await deps.listObjects(args.workspaceId).catch(() => [] as string[]);
+  const objects = await deps.listObjects(args.workspaceId).catch(() => {
+    throw new HttpError(503, "Could not list this workspace's stored media. Try again.");
+  });
   if (deps.disconnectCanva) await deps.disconnectCanva(args.workspaceId, args.userId);
 
   if (deps.disconnectPostForMeAccounts) {
@@ -321,7 +323,15 @@ export async function deleteWorkspace(
 
   // The rows are gone; external cleanup is best effort and never re-reported
   // as a failed delete.
-  if (objects.length) await deps.removeObjects(objects).catch(() => undefined);
+  let storageObjectsRemoved = 0;
+  if (objects.length) {
+    try {
+      await deps.removeObjects(objects);
+      storageObjectsRemoved = objects.length;
+    } catch {
+      console.error("[workspaces] storage cleanup requires retry", args.workspaceId);
+    }
+  }
   const brandId = (social?.brand_id as string | null) ?? null;
   if (brandId) await deps.releaseSocialBrand(brandId).catch(() => undefined);
 
@@ -331,8 +341,8 @@ export async function deleteWorkspace(
     domain: ws.domain,
     owner_id: ws.owner_id,
     deleted_by: args.userId,
-    storage_objects_removed: objects.length,
+    storage_objects_removed: storageObjectsRemoved,
   });
 
-  return { id: args.workspaceId, name: ws.name as string, storageObjectsRemoved: objects.length };
+  return { id: args.workspaceId, name: ws.name as string, storageObjectsRemoved };
 }

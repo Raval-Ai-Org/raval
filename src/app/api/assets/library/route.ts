@@ -3,6 +3,7 @@ import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { signStoragePaths } from "@/server/assets/storage.server";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,8 @@ function normalizeAsset(row: Record<string, unknown>, signedUrls: Map<string, st
     name: String(row.filename ?? "Generated asset"),
     storagePath,
     url,
-    thumbnailUrl: typeof row.thumbnail_path === "string" ? row.thumbnail_path : url,
+    thumbnailUrl:
+      (typeof row.thumbnail_path === "string" && signedUrls.get(row.thumbnail_path)) || url,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
     workspaceId: String(row.workspace_id),
@@ -55,8 +57,8 @@ export const GET = defineRoute({
     if (assetsError) return jsonError(500, assetsError.message);
 
     const storagePaths = (rows ?? [])
-      .map((row) => row.storage_path)
-      .filter((path): path is string => typeof path === "string");
+      .flatMap((row) => [row.storage_path, row.thumbnail_path])
+      .filter((path): path is string => isWorkspaceStoragePath(path, workspaceId));
     const signedUrls = await signStoragePaths(supabase, storagePaths, 3600);
     const assets = (rows ?? []).map((row) =>
       normalizeAsset(row as Record<string, unknown>, signedUrls),

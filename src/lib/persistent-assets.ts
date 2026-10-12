@@ -36,11 +36,23 @@ export async function getSignedAssetUrls(
   workspaceId: string,
   paths: string[],
 ): Promise<Record<string, string>> {
+  const unique = [...new Set(paths.filter(Boolean))];
+  if (!unique.length) return {};
+  if (unique.length > 100) {
+    const signed: Record<string, string> = {};
+    for (let offset = 0; offset < unique.length; offset += 100) {
+      Object.assign(
+        signed,
+        await getSignedAssetUrls(workspaceId, unique.slice(offset, offset + 100)),
+      );
+    }
+    return signed;
+  }
   const response = await authedFetch("/api/assets/sign", {
     method: "POST",
     workspaceId,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId, paths }),
+    body: JSON.stringify({ workspaceId, paths: unique }),
   });
   const payload = (await response.json().catch(() => ({}))) as {
     urls?: Array<{ path: string; url: string }>;

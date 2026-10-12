@@ -29,6 +29,7 @@ let workspaceId: string;
 let assetId: string | null = null;
 let r2Path: string | null = null;
 let legacyPath: string | null = null;
+const extraPaths: string[] = [];
 let removeAssetObjects: typeof import("@/server/assets/storage.server").removeAssetObjects;
 
 async function makeActor(tag: string): Promise<Actor> {
@@ -62,16 +63,21 @@ async function makeActor(tag: string): Promise<Actor> {
 
 async function signRequest(actor: Actor, paths: string[]) {
   const { POST } = await import("@/app/api/assets/sign/route");
-  return POST(
-    new Request("http://localhost/api/assets/sign", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${actor.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ workspaceId, paths }),
-    }),
-  );
+  return requestRoute(actor, "/api/assets/sign", POST, { workspaceId, paths });
+}
+
+async function requestRoute(
+  actor: Actor,
+  path: string,
+  local: (request: Request) => Promise<Response>,
+  body?: unknown,
+) {
+  const request = new Request(new URL(path, process.env.R2_SMOKE_BASE_URL || "http://localhost"), {
+    ...(body ? { method: "POST" } : {}),
+    headers: { Authorization: `Bearer ${actor.token}`, "Content-Type": "application/json" },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  return process.env.R2_SMOKE_BASE_URL ? fetch(request) : local(request);
 }
 
 (configured ? describe : describe.skip)("Cloudflare R2 asset storage (live)", () => {
@@ -100,10 +106,12 @@ async function signRequest(actor: Actor, paths: string[]) {
         failures.push(`${name}: ${error instanceof Error ? error.message : "cleanup failed"}`);
       }
     };
-    if (admin && (r2Path || legacyPath)) {
+    if (admin && (r2Path || legacyPath || extraPaths.length)) {
       await cleanup(
         () =>
-          removeAssetObjects([r2Path, legacyPath].filter((path): path is string => Boolean(path))),
+          removeAssetObjects(
+            [r2Path, legacyPath, ...extraPaths].filter((path): path is string => Boolean(path)),
+          ),
         "storage objects",
       );
     }
@@ -132,15 +140,24 @@ async function signRequest(actor: Actor, paths: string[]) {
     const { persistAsset } = await import("@/server/assets/persist.server");
     const png =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l2cAAAAASUVORK5CYII=";
-    const persisted = await persistAsset({
+    const input = {
       workspaceId,
       idempotencyKey: `r2-live-${randomUUID()}`,
       dataUrl: png,
-      assetType: "image",
+      assetType: "image" as const,
       mimeType: "image/png",
       filename: "r2-live-check.png",
       provider: "live-test",
-    });
+    };
+    const persisted = process.env.R2_SMOKE_BASE_URL
+      ? await (async () => {
+          const { POST } = await import("@/app/api/assets/persist/route");
+          const response = await requestRoute(alice, "/api/assets/persist", POST, input);
+          const payload = await response.json();
+          if (!response.ok) throw new Error(`Production persistence failed (${response.status})`);
+          return { ok: true as const, asset: payload.asset };
+        })()
+      : await persistAsset(input);
     expect(persisted.ok).toBe(true);
     if (!persisted.ok) throw new Error(persisted.message);
     assetId = persisted.asset.id;
@@ -167,11 +184,10 @@ async function signRequest(actor: Actor, paths: string[]) {
     expect((await range.arrayBuffer()).byteLength).toBe(8);
 
     const libraryRoute = await import("@/app/api/assets/library/route");
-    const libraryResponse = await libraryRoute.GET(
-      new Request(
-        `http://localhost/api/assets/library?workspaceId=${encodeURIComponent(workspaceId)}`,
-        { headers: { Authorization: `Bearer ${alice.token}` } },
-      ),
+    const libraryResponse = await requestRoute(
+      alice,
+      `/api/assets/library?workspaceId=${encodeURIComponent(workspaceId)}`,
+      libraryRoute.GET,
     );
     expect(libraryResponse.status).toBe(200);
     const library = (await libraryResponse.json()) as {
@@ -203,5 +219,34 @@ async function signRequest(actor: Actor, paths: string[]) {
     r2Path = null;
     const deletedRead = await fetch(signedUrl!);
     expect([403, 404]).toContain(deletedRead.status);
+  }, 120_000);
+
+  it("persists video, supports seeking and attachment downloads, and denies outsiders", async () => {
+    const { POST: persist } = await import("@/app/api/assets/persist/route");
+    const response = await requestRoute(alice, "/api/assets/persist", persist, {
+      workspaceId,
+      idempotencyKey: `r2-video-${randomUUID()}`,
+      sourceUrl: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      assetType: "video",
+      mimeType: "video/mp4",
+      filename: "r2-video-check.mp4",
+    });
+    expect(response.status).toBe(200);
+    const { asset } = await response.json();
+    extraPaths.push(asset.storage_path);
+    expect(asset.storage_path).toContain("/assets/r2/");
+    const range = await fetch(asset.public_url, { headers: { Range: "bytes=0-1023" } });
+    expect(range.status).toBe(206);
+    expect(range.headers.get("content-type")).toContain("video/mp4");
+    expect((await range.arrayBuffer()).byteLength).toBe(1024);
+    const { POST: download } = await import("@/app/api/assets/download/route");
+    const body = { workspaceId, path: asset.storage_path, filename: "r2-video-check.mp4" };
+    const permitted = await requestRoute(alice, "/api/assets/download", download, body);
+    expect(permitted.status).toBe(200);
+    const attachment = await fetch((await permitted.json()).url);
+    expect(attachment.status).toBe(200);
+    expect(attachment.headers.get("content-disposition")).toContain("attachment;");
+    await attachment.body?.cancel();
+    expect((await requestRoute(bob, "/api/assets/download", download, body)).status).toBe(403);
   }, 120_000);
 });

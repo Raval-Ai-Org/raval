@@ -9,6 +9,7 @@ import { AiOutputError, runJsonPrompt, runStructuredPrompt } from "@/lib/ai";
 import { contentBatchPrompt, nextPostPrompt, regeneratePrompt } from "@/lib/ai/prompts";
 import { isNearDuplicateCopy } from "@/lib/studio/novelty";
 import { signStoragePaths } from "@/server/assets/storage.server";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { validContentBatch } from "@/lib/content-batch-quality";
 import { loadStudioContext, invalidateStudioContext } from "@/server/studio/context.server";
 import { buildNextSteps } from "@/lib/ai/deterministic-suggestions";
@@ -136,7 +137,12 @@ export const listContentItems = createServerFn({ method: "POST" })
       .not("storage_path", "is", null)
       // Oldest first, so the newest picture is the one a post ends up with.
       .order("created_at", { ascending: true });
-    const assets = (assetRows ?? []) as AssetRow[];
+    const workspaceByContentId = new Map(items.map((item) => [item.id, item.workspace_id]));
+    const assets = ((assetRows ?? []) as AssetRow[]).filter(
+      (asset) =>
+        asset.content_item_id &&
+        isWorkspaceStoragePath(asset.storage_path, workspaceByContentId.get(asset.content_item_id)),
+    );
     const paths = assets
       .map((asset) => asset.storage_path)
       .filter((path): path is string => typeof path === "string");
