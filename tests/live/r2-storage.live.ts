@@ -2,7 +2,7 @@
 // Creates temporary users, a workspace, one generated image, and one legacy Supabase
 // object; all are removed after the test.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 try {
@@ -134,6 +134,159 @@ async function requestRoute(
       await cleanup(() => admin.auth.admin.deleteUser(bob.id), "outsider user");
     }
     if (failures.length) throw new Error(`R2 test cleanup failed: ${failures.join("; ")}`);
+  }, 120_000);
+
+  it.skipIf(!process.env.SUPABASE_DB_URL)(
+    "keeps migration originals private, honors tombstones, and preserves backup bytes",
+    async () => {
+      const { Client } = await import("pg");
+      const connection = new Client({ connectionString: process.env.SUPABASE_DB_URL });
+      const source = `workspace/${workspaceId}/assets/retention-${randomUUID()}.txt`;
+      const target = source.replace("/assets/", "/assets/r2/migrated/");
+      const bytes = Buffer.from("disposable retention test original");
+      await connection.connect();
+      let cleanupFailed = false;
+      try {
+        const upload = await alice.db.storage
+          .from("generated-assets")
+          .upload(source, bytes, { contentType: "text/plain" });
+        expect(upload.error).toBeNull();
+        const { uploadAssetObject } = await import("@/server/assets/storage.server");
+        await uploadAssetObject(target, bytes, "text/plain");
+        extraPaths.push(target);
+        await connection.query(
+          "insert into private.media_storage_migrations(source_bucket,source_path,target_path,workspace_id,status,sha256,size_bytes) values('generated-assets',$1,$2,$3,'verified',$4,$5)",
+          [
+            source,
+            target,
+            workspaceId,
+            createHash("sha256").update(bytes).digest("hex"),
+            bytes.length,
+          ],
+        );
+        await alice.db.storage.from("generated-assets").remove([source]);
+        const retained = await admin.storage.from("generated-assets").download(source);
+        expect(retained.error).toBeNull();
+        expect(Buffer.from(await retained.data!.arrayBuffer()).equals(bytes)).toBe(true);
+        await connection.query(
+          "update private.media_storage_migrations set status='active' where source_path=$1",
+          [source],
+        );
+        expect(
+          (await alice.db.storage.from("generated-assets").createSignedUrl(source, 60)).error,
+        ).toBeTruthy();
+        const active = await signRequest(alice, [source, target]);
+        expect(active.status).toBe(200);
+        expect((await active.json()).urls).toHaveLength(2);
+        await removeAssetObjects([source]);
+        const deleted = await signRequest(alice, [source, target]);
+        expect((await deleted.json()).urls).toHaveLength(0);
+        expect(
+          (await alice.db.storage.from("generated-assets").createSignedUrl(source, 60)).error,
+        ).toBeTruthy();
+        expect((await admin.storage.from("generated-assets").download(source)).error).toBeNull();
+      } finally {
+        // Only these test-created disposable resources are retired, never customer originals.
+        await connection.query(
+          "delete from private.media_storage_migrations where source_path=$1 and workspace_id=$2",
+          [source, workspaceId],
+        );
+        const removed = await admin.storage.from("generated-assets").remove([source]);
+        await connection.end();
+        cleanupFailed = Boolean(removed.error);
+      }
+      if (cleanupFailed) throw new Error("Temporary retention fixture cleanup failed");
+    },
+    120000,
+  );
+
+  it("uploads user media to R2 and rejects unauthorized or mislabeled uploads", async () => {
+    const { POST } = await import("@/app/api/assets/upload/route");
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l2cAAAAASUVORK5CYII=",
+      "base64",
+    );
+    const params = new URLSearchParams({
+      workspaceId,
+      requestId: randomUUID(),
+      filename: "upload.png",
+    });
+    const url = new URL(
+      `/api/assets/upload?${params}`,
+      process.env.R2_SMOKE_BASE_URL || "http://localhost",
+    );
+    const send = async (actor: Actor | null, body: Buffer, type = "image/png") => {
+      const request = new Request(url, {
+        method: "POST",
+        headers: {
+          ...(actor ? { Authorization: `Bearer ${actor.token}` } : {}),
+          "Content-Type": type,
+        },
+        body: new Uint8Array(body),
+      });
+      return process.env.R2_SMOKE_BASE_URL ? fetch(request) : POST(request);
+    };
+    expect((await send(null, png)).status).toBe(401);
+    expect((await send(bob, png)).status).toBe(403);
+    expect((await send(alice, Buffer.from("<script>bad</script>"))).status).toBe(415);
+    const response = await send(alice, png);
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.asset.storage_path).toContain(`/workspace/${workspaceId}/`.slice(1));
+    expect(result.asset.storage_path).toContain("/assets/r2/");
+    extraPaths.push(result.asset.storage_path);
+    expect((await send(alice, png)).status).toBe(200);
+    const download = await fetch(result.asset.public_url);
+    expect(download.status).toBe(200);
+    expect(Buffer.from(await download.arrayBuffer()).equals(png)).toBe(true);
+    const { data: post, error: postError } = await admin
+      .from("content_items")
+      .insert({
+        workspace_id: workspaceId,
+        agent: "echo",
+        kind: "image",
+        status: "draft",
+        title: "Metadata-only upload",
+        media_url: null,
+        meta: { asset_storage_path: result.asset.storage_path },
+      })
+      .select("id")
+      .single();
+    expect(postError).toBeNull();
+    const { POST: rpc } = await import("@/app/api/rpc/[...fn]/route");
+    const contentResponse = await requestRoute(
+      alice,
+      "/api/rpc/content/listContentItems",
+      (request) =>
+        rpc(request, { params: Promise.resolve({ fn: ["content", "listContentItems"] }) }),
+      { data: { workspaceId } },
+    );
+    expect(contentResponse.status).toBe(200);
+    const content = await contentResponse.json();
+    expect(
+      content.result.find((row: { id: string }) => row.id === post?.id)?.media_url,
+    ).toBeTruthy();
+    const agencyResponse = await requestRoute(
+      alice,
+      "/api/rpc/content/listAgencyFeed",
+      (request) => rpc(request, { params: Promise.resolve({ fn: ["content", "listAgencyFeed"] }) }),
+      { data: {} },
+    );
+    expect(agencyResponse.status).toBe(200);
+    const agency = await agencyResponse.json();
+    expect(
+      agency.result.items.find((row: { id: string }) => row.id === post?.id)?.media_url,
+    ).toBeTruthy();
+    const { error } = await admin
+      .from("workspace_members")
+      .insert({ workspace_id: workspaceId, user_id: bob.id, role: "viewer" });
+    expect(error).toBeNull();
+    expect((await send(bob, png)).status).toBe(403);
+    await admin
+      .from("workspace_members")
+      .delete()
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", bob.id);
   }, 120_000);
 
   it("persists, signs, streams, authorizes, and deletes generated media while retaining Supabase reads", async () => {

@@ -6,11 +6,16 @@ const mocks = vi.hoisted(() => ({
   upload: vi.fn(),
   sign: vi.fn(),
   remove: vi.fn(),
+  metadataEnabled: vi.fn(),
+  finalizeMetadata: vi.fn(),
 }));
 vi.mock("@/integrations/supabase/client.server", () => ({
   supabaseAdmin: { from: (table: string) => mocks.db!.from(table) },
 }));
-vi.mock("@/lib/feature-flags", () => ({ isAssetMetadataFinalizeEnabled: () => false }));
+vi.mock("@/lib/feature-flags", () => ({ isAssetMetadataFinalizeEnabled: mocks.metadataEnabled }));
+vi.mock("@/server/assets/image-metadata.server", () => ({
+  finalizeImageMetadata: mocks.finalizeMetadata,
+}));
 vi.mock("@/server/assets/storage.server", () => ({
   ASSET_BUCKET: "generated-assets",
   isR2StorageEnabled: () => true,
@@ -34,9 +39,19 @@ beforeEach(() => {
   mocks.upload.mockResolvedValue(undefined);
   mocks.sign.mockResolvedValue("https://r2.example/signed");
   mocks.remove.mockResolvedValue(undefined);
+  mocks.metadataEnabled.mockReturnValue(false);
 });
 
 describe("generated media persistence", () => {
+  it("preserves original upload bytes even when generated-image metadata processing is enabled", async () => {
+    mocks.metadataEnabled.mockReturnValue(true);
+    const bytes = Buffer.from("original customer media");
+    expect(
+      (await persistAsset({ ...input, bytes, mimeType: "image/png", preserveBytes: true })).ok,
+    ).toBe(true);
+    expect(mocks.upload).toHaveBeenCalledWith(expect.any(String), bytes, "image/png");
+    expect(mocks.finalizeMetadata).not.toHaveBeenCalled();
+  });
   it("stores durable paths while keeping signed URLs out of database rows", async () => {
     const result = await persistAsset(input);
     expect(result.ok).toBe(true);

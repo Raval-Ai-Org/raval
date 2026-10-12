@@ -1,5 +1,5 @@
 import "server-only";
-import { createServerFn } from "@/server/server-fn";
+import { createServerFn, type ServerFnContext } from "@/server/server-fn";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rateLimitFor } from "@/server/rate-limit";
@@ -10,6 +10,7 @@ import { contentBatchPrompt, nextPostPrompt, regeneratePrompt } from "@/lib/ai/p
 import { isNearDuplicateCopy } from "@/lib/studio/novelty";
 import { signStoragePaths } from "@/server/assets/storage.server";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
+import { assetPathsFromMeta } from "@/lib/shares/snapshot";
 import { validContentBatch } from "@/lib/content-batch-quality";
 import { loadStudioContext, invalidateStudioContext } from "@/server/studio/context.server";
 import { buildNextSteps } from "@/lib/ai/deterministic-suggestions";
@@ -98,6 +99,45 @@ export type ContentItem = {
   updated_at: string;
 };
 
+/** Refresh every durable media reference, including migrated metadata-only uploads. */
+async function refreshContentMedia(items: ContentItem[], supabase: ServerFnContext["supabase"]) {
+  const contentIds = items.map((item) => item.id);
+  if (!contentIds.length) return items;
+
+  type AssetRow = { content_item_id: string | null; storage_path: string | null };
+  const { data: assetRows } = await supabase
+    .from("assets")
+    .select("content_item_id, storage_path")
+    .in("content_item_id", contentIds)
+    .is("deleted_at", null)
+    .not("storage_path", "is", null)
+    // Oldest first, so the newest picture is the one a post ends up with.
+    .order("created_at", { ascending: true });
+  const workspaceByContentId = new Map(items.map((item) => [item.id, item.workspace_id]));
+  const assets = ((assetRows ?? []) as AssetRow[]).filter(
+    (asset) =>
+      asset.content_item_id &&
+      isWorkspaceStoragePath(asset.storage_path, workspaceByContentId.get(asset.content_item_id)),
+  );
+  const pathByContentId = new Map(
+    assets.map((asset) => [asset.content_item_id!, asset.storage_path!] as const),
+  );
+  // Uploads, shared frames and migrated snapshots can have a durable metadata
+  // path without a primary assets.content_item_id relationship. Refresh them too.
+  for (const item of items) {
+    const path = assetPathsFromMeta(item.meta, item.workspace_id)[0];
+    if (path) pathByContentId.set(item.id, path);
+  }
+  const paths = [...new Set(pathByContentId.values())];
+  if (!paths.length) return items;
+  const signedByPath = await signStoragePaths(supabase, paths, 3600);
+  return items.map((item) => {
+    const path = pathByContentId.get(item.id);
+    const url = path ? signedByPath.get(path) : undefined;
+    return path ? { ...item, media_url: url ?? null } : item;
+  }) as ContentItem[];
+}
+
 /* ------------------------------------------------------------ */
 /* List content                                                  */
 /* ------------------------------------------------------------ */
@@ -124,41 +164,7 @@ export const listContentItems = createServerFn({ method: "POST" })
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     const items = (rows ?? []) as ContentItem[];
-    const contentIds = items.map((item) => item.id);
-    if (!contentIds.length) return items;
-
-    type AssetRow = { content_item_id: string | null; storage_path: string | null };
-    const assetDb = context.supabase as any;
-    const { data: assetRows } = await assetDb
-      .from("assets")
-      .select("content_item_id, storage_path")
-      .in("content_item_id", contentIds)
-      .is("deleted_at", null)
-      .not("storage_path", "is", null)
-      // Oldest first, so the newest picture is the one a post ends up with.
-      .order("created_at", { ascending: true });
-    const workspaceByContentId = new Map(items.map((item) => [item.id, item.workspace_id]));
-    const assets = ((assetRows ?? []) as AssetRow[]).filter(
-      (asset) =>
-        asset.content_item_id &&
-        isWorkspaceStoragePath(asset.storage_path, workspaceByContentId.get(asset.content_item_id)),
-    );
-    const paths = assets
-      .map((asset) => asset.storage_path)
-      .filter((path): path is string => typeof path === "string");
-    if (!paths.length) return items;
-
-    const signedByPath = await signStoragePaths(context.supabase, paths, 3600);
-    const pathByContentId = new Map(
-      (assets ?? [])
-        .filter((asset) => asset.content_item_id && asset.storage_path)
-        .map((asset) => [asset.content_item_id, asset.storage_path] as const),
-    );
-    return items.map((item) => {
-      const path = pathByContentId.get(item.id);
-      const url = path ? signedByPath.get(path) : undefined;
-      return url ? { ...item, media_url: url } : item;
-    }) as ContentItem[];
+    return refreshContentMedia(items, context.supabase);
   });
 
 /* ------------------------------------------------------------ */
@@ -1118,7 +1124,7 @@ export const listAgencyFeed = createServerFn({ method: "POST" })
       .limit(50);
 
     return {
-      items: (rows ?? []) as ContentItem[],
+      items: await refreshContentMedia((rows ?? []) as ContentItem[], context.supabase),
       runs: runs ?? [],
     };
   });

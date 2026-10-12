@@ -15,13 +15,12 @@ import {
   Spinner,
 } from "@/components/icons";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
-import { supabase } from "@/integrations/supabase/client";
 import { createContentItem, updateContentItem } from "@/lib/content.functions";
 import { authedFetch } from "@/lib/authed-fetch";
+import { supabase } from "@/integrations/supabase/client";
 import { emitAppEvent } from "@/lib/app-events";
 import { cn } from "@/lib/utils";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
-import { workspaceStoragePrefix } from "@/lib/workspace/storage-path";
 import { publishContentItems, scheduleContentItems } from "@/lib/sdr.functions";
 import { StudioPublishFlow } from "./StudioPublishFlow";
 import { ChipButton, FieldLabel, Segmented } from "./studio-ui";
@@ -143,6 +142,7 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
         `${kind === "photo" ? "Photos" : "Videos"} must be under ${MAX_BYTES[kind] / 1024 / 1024} MB.`,
       );
     setFile(next);
+    setGroupId(crypto.randomUUID());
     setStoredPath(null);
     setStoredUrl(null);
   };
@@ -211,17 +211,22 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
       let path = storedPath;
       let url = storedUrl;
       if (kind !== "text" && file && !path) {
-        const extension =
-          file.name.split(".").pop()?.toLowerCase() ?? (kind === "photo" ? "jpg" : "mp4");
-        path = `${workspaceStoragePrefix(workspaceId)}uploads/${crypto.randomUUID()}.${extension}`;
-        const uploaded = await supabase.storage
-          .from("generated-assets")
-          .upload(path, file, { contentType: file.type, upsert: false });
-        if (uploaded.error) throw uploaded.error;
-        const signed = await supabase.storage.from("generated-assets").createSignedUrl(path, 3600);
-        if (signed.error || !signed.data?.signedUrl)
-          throw signed.error ?? new Error("Could not preview uploaded media.");
-        url = signed.data.signedUrl;
+        const params = new URLSearchParams({
+          workspaceId,
+          requestId: groupId,
+          filename: file.name,
+        });
+        const response = await authedFetch(`/api/assets/upload?${params}`, {
+          method: "POST",
+          workspaceId,
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        const result = await response.json();
+        if (!response.ok || !result.asset?.storage_path || !result.asset?.public_url)
+          throw new Error(result.error ?? "Could not upload media.");
+        path = result.asset.storage_path;
+        url = result.asset.public_url;
         setStoredPath(path);
         setStoredUrl(url);
       }

@@ -11,10 +11,17 @@ import type { ChangeType, ExperimentMetric } from "@/lib/experiments/constants";
 import type { ExperimentReport, ReportBrandingView, ResultView } from "@/lib/experiments/contracts";
 import { unitOf } from "@/lib/experiments/series";
 import type { Verdict } from "@/lib/experiments/verdict";
-import { isWorkspaceStoragePath, workspaceStoragePrefix } from "@/lib/workspace/storage-path";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { ExperimentError, type ExperimentCtx, type ExperimentRow } from "./core.server";
 
-const BUCKET = "generated-assets";
+import {
+  r2AssetPath,
+  uploadAssetObject,
+  signStoragePath,
+  removeAssetObjects,
+} from "@/server/assets/storage.server";
+import { randomUUID } from "node:crypto";
+import { matchesMediaType } from "@/server/assets/upload-validation";
 const LOGO_TYPES: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -33,8 +40,7 @@ export async function brandingView(workspaceId: string): Promise<ReportBrandingV
   ]);
   let logoUrl: string | null = null;
   if (row?.logo_path && isWorkspaceStoragePath(row.logo_path, workspaceId)) {
-    const { data } = await supabaseAdmin.storage.from(BUCKET).createSignedUrl(row.logo_path, 3600);
-    logoUrl = data?.signedUrl ?? null;
+    logoUrl = await signStoragePath(supabaseAdmin, row.logo_path, 3600);
   }
   return {
     displayName: row?.display_name ?? null,
@@ -52,6 +58,9 @@ export async function setBranding(
   },
 ): Promise<ReportBrandingView> {
   if (!ctx.canManage) throw new ExperimentError("Only admins can change report branding.", 403);
+  const name = input.displayName?.trim() || null;
+  if (name && name.length > 80)
+    throw new ExperimentError("Keep the name under 80 characters.", 400);
   const { data: current } = await supabaseAdmin
     .from("workspace_report_branding")
     .select("logo_path")
@@ -65,16 +74,13 @@ export async function setBranding(
     if (!bytes.length || bytes.length > MAX_LOGO_BYTES) {
       throw new ExperimentError("The logo must be under 1 MB.", 400);
     }
-    const path = `${workspaceStoragePrefix(ctx.workspaceId)}branding/logo-${Date.now()}.${ext}`;
-    const { error } = await supabaseAdmin.storage
-      .from(BUCKET)
-      .upload(path, bytes, { contentType: input.logo.contentType, upsert: false });
-    if (error) throw new Error(error.message);
+    if (!matchesMediaType(bytes, input.logo.contentType)) {
+      throw new ExperimentError("The logo does not match its image type.", 400);
+    }
+    const path = r2AssetPath(ctx.workspaceId, "branding", `logo-${randomUUID()}.${ext}`);
+    await uploadAssetObject(path, bytes, input.logo.contentType);
     logoPath = path;
   }
-  const name = input.displayName?.trim() || null;
-  if (name && name.length > 80)
-    throw new ExperimentError("Keep the name under 80 characters.", 400);
   const { error } = await supabaseAdmin.from("workspace_report_branding").upsert(
     {
       workspace_id: ctx.workspaceId,
@@ -84,12 +90,14 @@ export async function setBranding(
     },
     { onConflict: "workspace_id" },
   );
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (logoPath && logoPath !== current?.logo_path)
+      await removeAssetObjects([logoPath]).catch(() => null);
+    throw new Error(error.message);
+  }
   if (current?.logo_path && current.logo_path !== logoPath) {
-    await supabaseAdmin.storage
-      .from(BUCKET)
-      .remove([current.logo_path])
-      .catch(() => null);
+    if (isWorkspaceStoragePath(current.logo_path, ctx.workspaceId))
+      await removeAssetObjects([current.logo_path]).catch(() => null);
   }
   return brandingView(ctx.workspaceId);
 }

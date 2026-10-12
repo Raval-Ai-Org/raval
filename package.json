@@ -29,7 +29,8 @@
     "test:robots": "node scripts/validate-robots.mjs",
     "test:hreflang": "node scripts/validate-hreflang.mjs",
     "eval": "npx --yes promptfoo@latest eval -c evals/competitor-intel.promptfooconfig.yaml -c evals/campaign-generation.promptfooconfig.yaml -c evals/security.promptfooconfig.yaml",
-    "eval:watch": "npx --yes promptfoo@latest eval -c evals/competitor-intel.promptfooconfig.yaml -c evals/campaign-generation.promptfooconfig.yaml -c evals/security.promptfooconfig.yaml --watch"
+    "eval:watch": "npx --yes promptfoo@latest eval -c evals/competitor-intel.promptfooconfig.yaml -c evals/campaign-generation.promptfooconfig.yaml -c evals/security.promptfooconfig.yaml --watch",
+    "storage:migrate": "node scripts/storage/migrate-to-r2.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",
@@ -105,6 +106,7 @@
     "@eslint/js": "^9.32.0",
     "@playwright/test": "1.56.0",
     "@types/node": "^22.16.5",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "axe-core": "^4.12.1",
@@ -113,6 +115,7 @@
     "eslint-plugin-prettier": "^5.2.6",
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^15.15.0",
+    "pg": "^8.23.1",
     "prettier": "^3.7.3",
     "trigger.dev": "^4.6.2",
     "typescript-eslint": "^8.56.1",

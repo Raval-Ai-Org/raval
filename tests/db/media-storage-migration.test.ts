@@ -1,0 +1,115 @@
+import { describe, it, expect } from "vitest";
+import { PGlite } from "@electric-sql/pglite";
+import { readFileSync } from "node:fs";
+
+const workspace = "00000000-0000-4000-8000-000000000001";
+const oldPath = `workspace/${workspace}/assets/upload/original.mp4`;
+const newPath = `workspace/${workspace}/assets/r2/migrated/upload/original.mp4`;
+
+describe("media migration transaction and isolation", () => {
+  it("rewrites exact nested references, rolls back, and restricts alias access", async () => {
+    const db = new PGlite();
+    try {
+      await db.exec(`create schema private; create role anon; create role authenticated; create role service_role;
+        create schema auth; create schema storage;
+        create function auth.uid() returns uuid language sql stable as 'select nullif(current_setting(''request.jwt.claim.sub'',true),'''')::uuid';
+        create table public.workspace_members(workspace_id uuid,user_id uuid);
+        insert into public.workspace_members values('${workspace}','11111111-1111-4111-8111-111111111111');
+        create table storage.objects(name text,bucket_id text);
+        insert into storage.objects values('${oldPath}','generated-assets');
+        alter table storage.objects enable row level security;
+        grant usage on schema storage,private to authenticated;
+        grant select,update,delete on storage.objects to authenticated;
+        create policy fixture_read on storage.objects for select to authenticated using(true);
+        create policy fixture_update on storage.objects for update to authenticated using(true) with check(true);
+        create policy fixture_delete on storage.objects for delete to authenticated using(true);
+        create table public.media(id int primary key, path text, meta jsonb);
+        create table public.content_items(id int primary key, workspace_id uuid, media_url text, meta jsonb);
+        insert into public.content_items values(1,'${workspace}','https://example.supabase.co/storage/v1/object/sign/generated-assets/${oldPath}?token=expired','{"asset_storage_path":"${oldPath}"}');
+        insert into public.content_items values(2,'00000000-0000-4000-8000-000000000002',null,'{"asset_storage_path":"${oldPath}"}');
+        insert into public.media values (1,'${oldPath}','{"paths":["${oldPath}"],"nested":{"path":"${oldPath}"},"text":"prefix ${oldPath}"}');`);
+      await db.exec(
+        readFileSync("supabase/migrations/20261012190000_r2_storage_migration.sql", "utf8"),
+      );
+      await db.query(
+        "insert into private.media_storage_migrations(source_bucket,source_path,target_path,workspace_id,status) values('generated-assets',$1,$2,$3,'active')",
+        [oldPath, newPath, workspace],
+      );
+      await db.query("select private.switch_media_references($1,$2)", [oldPath, newPath]);
+      const { rows } = await db.query<{
+        path: string;
+        meta: { paths: string[]; nested: { path: string }; text: string };
+      }>("select * from public.media");
+      expect(rows[0].path).toBe(newPath);
+      expect(rows[0].meta.paths).toEqual([newPath]);
+      expect(rows[0].meta.nested.path).toBe(newPath);
+      expect(rows[0].meta.text).toBe(`prefix ${oldPath}`);
+      expect(
+        (
+          await db.query<{ meta: { asset_storage_path: string } }>(
+            "select meta from public.content_items where id=2",
+          )
+        ).rows[0].meta.asset_storage_path,
+      ).toBe(oldPath);
+      expect(
+        (
+          await db.query<{ media_url: string | null; meta: { asset_storage_path: string } }>(
+            "select * from public.content_items where id=1",
+          )
+        ).rows[0],
+      ).toMatchObject({ media_url: null, meta: { asset_storage_path: newPath } });
+      await db.query("select private.switch_media_references($1,$2)", [newPath, oldPath]);
+      expect((await db.query<{ path: string }>("select path from public.media")).rows[0].path).toBe(
+        oldPath,
+      );
+      await expect(
+        db.query("select private.switch_media_references($1,$2)", [
+          oldPath,
+          newPath.replace(workspace, "00000000-0000-4000-8000-000000000002"),
+        ]),
+      ).rejects.toThrow("Invalid workspace");
+      await db.exec(
+        "set request.jwt.claim.sub='11111111-1111-4111-8111-111111111111'; set role authenticated",
+      );
+      expect((await db.query("select * from storage.objects")).rows).toHaveLength(0);
+      await expect(db.query("select * from private.media_storage_migrations")).rejects.toThrow(
+        /permission denied/,
+      );
+      await expect(
+        db.query("select * from public.resolve_media_storage_paths($1)", [[oldPath]]),
+      ).rejects.toThrow(/permission denied/);
+      await db.exec(
+        "reset role; update private.media_storage_migrations set status='rolled_back'; set role authenticated",
+      );
+      expect((await db.query("select * from storage.objects")).rows).toHaveLength(1);
+      expect((await db.query("update storage.objects set name=name")).affectedRows).toBe(0);
+      expect((await db.query("delete from storage.objects")).affectedRows).toBe(0);
+      await db.exec("set request.jwt.claim.sub='22222222-2222-4222-8222-222222222222'");
+      expect((await db.query("select * from storage.objects")).rows).toHaveLength(0);
+      await db.exec("reset role; set role service_role");
+      expect(
+        (await db.query("select * from public.resolve_media_storage_paths($1)", [[oldPath]])).rows,
+      ).toHaveLength(1);
+      await db.query("select public.tombstone_migrated_media($1)", [[newPath]]);
+      expect(
+        (
+          await db.query<{ status: string }>(
+            "select * from public.resolve_media_storage_paths($1)",
+            [[oldPath]],
+          )
+        ).rows[0].status,
+      ).toBe("deleted");
+      expect(
+        (await db.query("select * from public.resolve_media_storage_paths($1)", [[newPath]])).rows,
+      ).toHaveLength(1);
+      await db.exec(
+        "reset role; set request.jwt.claim.sub='11111111-1111-4111-8111-111111111111'; set role authenticated",
+      );
+      expect((await db.query("select * from storage.objects")).rows).toHaveLength(0);
+      await db.exec("reset role");
+      expect((await db.query("select * from storage.objects")).rows).toHaveLength(1);
+    } finally {
+      await db.close();
+    }
+  }, 30000);
+});
