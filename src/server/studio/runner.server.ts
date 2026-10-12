@@ -250,11 +250,14 @@ export async function presentJob(row: JobRow): Promise<StudioJob> {
   const media = row.output?.media;
   if (!media?.length) return job;
   const signed = await Promise.all(
-    media.map(async (m) =>
-      m.status === "ready" && m.storagePath
+    media.map(async (m) => {
+      if (m.storagePath && !isWorkspaceStoragePath(m.storagePath, row.workspace_id)) {
+        return { ...m, url: undefined };
+      }
+      return m.status === "ready" && m.storagePath
         ? { ...m, url: (await signAssetPath(m.storagePath)) ?? undefined }
-        : m,
-    ),
+        : m;
+    }),
   );
   return { ...job, output: { ...row.output, media: signed } };
 }

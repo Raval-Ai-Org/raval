@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { ResponseTooLargeError, safeFetch } from "@/server/safe-fetch";
 import { mergeMeta } from "@/lib/content-lifecycle";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { isAssetMetadataFinalizeEnabled } from "@/lib/feature-flags";
 import {
   ASSET_BUCKET,
@@ -201,6 +202,9 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
     };
   }
   if (existing?.status === "ready") {
+    if (existing.storage_path && !isWorkspaceStoragePath(existing.storage_path, workspaceId)) {
+      return { ok: false, status: 403, message: "Stored media is outside this workspace" };
+    }
     const url = (await signAssetPath(existing.storage_path)) ?? existing.public_url ?? null;
     if (url) return { ok: true, asset: { ...existing, public_url: url }, deduplicated: true };
   }
@@ -337,6 +341,9 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
         return { ok: false, status: 410, message: "This asset has been deleted" };
       }
       if (raced?.status === "ready") {
+        if (raced.storage_path && !isWorkspaceStoragePath(raced.storage_path, workspaceId)) {
+          return { ok: false, status: 403, message: "Stored media is outside this workspace" };
+        }
         const url = (await signAssetPath(raced.storage_path)) ?? raced.public_url ?? null;
         if (url) return { ok: true, asset: { ...raced, public_url: url }, deduplicated: true };
       }

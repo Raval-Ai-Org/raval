@@ -83,6 +83,18 @@ describe("generated media persistence", () => {
     expect(mocks.upload).not.toHaveBeenCalled();
   });
 
+  it("rejects forged ready asset paths before signing them during deduplication", async () => {
+    await mocks.db!.from("assets").insert({
+      id: "forged",
+      workspace_id: workspaceId,
+      idempotency_key: input.idempotencyKey,
+      status: "ready",
+      storage_path: "workspace/00000000-0000-4000-8000-000000000002/assets/r2/other/file.png",
+    });
+    expect(await persistAsset(input)).toMatchObject({ ok: false, status: 403 });
+    expect(mocks.sign).not.toHaveBeenCalled();
+  });
+
   it("can retry after signing and cleanup both fail", async () => {
     mocks.sign.mockRejectedValueOnce(new Error("signing failed"));
     mocks.remove.mockRejectedValueOnce(new Error("cleanup unavailable"));
